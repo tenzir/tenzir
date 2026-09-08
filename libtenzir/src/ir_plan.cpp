@@ -61,11 +61,20 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   const auto up_degree = up.nominal_parallelism;
   const auto down_degree = down.nominal_parallelism;
   const auto down_keyed = down.partition_keys and down_degree > 1;
-  // A channel pairs lanes directly if both sides run at the same nominal degree
-  // and the downstream accepts any row on any instance. A keyed downstream must
-  // receive a hash-partitioned exchange, so its input is never a direct
-  // lane-to-lane channel even at matched parallelism.
-  const auto matched = up_degree == down_degree and not down_keyed
+  // A channel pairs lanes directly if both sides run at the same degree and the
+  // downstream accepts any row on any instance. A keyed downstream must receive
+  // a hash-partitioned exchange, so its input is never a direct lane-to-lane
+  // channel even at matched parallelism.
+  //
+  // Both the nominal and the actual degree have to agree. The nominal degree
+  // keeps the plan's shape invariant between a serial and a parallel run, but
+  // it has a floor of two, so an actual degree of one reads as nominal two and
+  // matches a `parallel 2` block. That boundary is a real scatter: one upstream
+  // instance feeds two downstream ones, and a fused channel blocks the sender
+  // until the receiver's next receive, so the sender would lockstep-alternate
+  // between the legs and serialize the block.
+  const auto matched = up_degree == down_degree
+                       and up.parallelism == down.parallelism and not down_keyed
                        and up.op->parallelizable()
                        and down.op->parallelizable();
   if (matched and par_scopes_.back().fuse == parallelism::Fusing::parallel) {

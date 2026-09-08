@@ -1,0 +1,14 @@
+// parallelism: 1
+// Regression test for a `parallel 2` block that ran serialized. The nominal
+// degree of a node has a floor of two, so a surrounding scope at actual degree
+// one and a `parallel 2` block both read as nominal two. Matching on the
+// nominal degree alone fused the scatter into the block and the gather out of
+// it, and a fused channel blocks the sender until the receiver's next receive,
+// so the two legs lockstep-alternated instead of running concurrently. Both
+// boundaries must be tiny (`╎`), not fused (`║`).
+from {x: 1}
+repeat
+optimize_barrier
+where true
+parallel 2 { where x > 0 }
+discard

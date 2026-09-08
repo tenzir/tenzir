@@ -356,8 +356,8 @@ enum class Fusing : uint8_t {
   /// Fuse only those channels that would be matched lane-to-lane channels
   /// between parallel operators when the pipeline is parallelized, i.e.,
   /// channels between two parallelizable operators that run at the same
-  /// nominal degree and do not need a hash-partitioned exchange. This is the
-  /// default.
+  /// nominal *and* actual degree and do not need a hash-partitioned exchange.
+  /// This is the default.
   parallel,
   /// Never fuse any channel.
   none,
@@ -446,10 +446,17 @@ struct PlannedOperator {
   size_t parallelism = 1;
   /// The number of instances to assume when deriving the kind of this node's
   /// channels. This is the parallelism the node would run at with at least two
-  /// instances available, so that the shape of the plan does not depend on
-  /// whether the pipeline actually runs in parallel. Derived in the node's own
-  /// parallelism scope, which may differ from the scope that adds its
+  /// instances available, so that the shape of the plan mostly does not depend
+  /// on whether the pipeline actually runs in parallel. Derived in the node's
+  /// own parallelism scope, which may differ from the scope that adds its
   /// channels.
+  ///
+  /// Channel kinds consider this degree *and* `parallelism`: the nominal floor
+  /// of two makes a scope at actual degree one read as nominal two, which would
+  /// otherwise match an adjacent explicitly parallel block across a boundary
+  /// that really is a scatter. Requiring both degrees to agree keeps such a
+  /// boundary unfused, at the cost of the plan's shape differing between a
+  /// serial and a parallel run in exactly that case.
   size_t nominal_parallelism = 1;
   /// The key that constrains how input is partitioned across the instances
   Option<ast::expression> partition_keys;
@@ -657,16 +664,13 @@ private:
   auto assign_ids(std::vector<IdEntry> const& entries, std::string_view prefix)
     -> void;
 
-  /// The number of instances `node` would run at if the pipeline were
-  /// parallelized, i.e., its degree derived with a degree of at least two. All
-  /// channel-kind decisions use this instead of `PlannedOperator::parallelism`
-  /// so that plans at degree one and two agree on which channels are fused and
-  /// tiny.
-
   /// How a channel between two adjacent planned operators should be realized,
-  /// honoring the configured parallelism strategy. The decision only depends on
-  /// the nominal degrees of the two operators and the fusing strategy, not on
-  /// the configured degree.
+  /// honoring the configured parallelism strategy. The decision depends on the
+  /// fusing strategy and on both the nominal and the actual degrees of the two
+  /// operators: the nominal degrees keep the plan's shape largely independent
+  /// of the configured degree, and the actual degrees additionally distinguish
+  /// a matched lane-to-lane boundary from a scatter into an explicitly parallel
+  /// block, which the nominal floor of two would otherwise conflate.
   auto derive_kind(const PlannedOperator& up, const PlannedOperator& down,
                    element_type_tag type) const -> ChannelKind;
 

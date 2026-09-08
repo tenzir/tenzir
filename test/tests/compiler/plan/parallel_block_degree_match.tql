@@ -1,0 +1,10 @@
+// parallelism: 2
+// The counterpart of `parallel_block_degree_mismatch.tql`. Here the
+// surrounding scope actually runs at degree two, so the block boundaries pair
+// lanes directly and stay fused (`║`).
+from {x: 1}
+repeat
+optimize_barrier
+where true
+parallel 2 { where x > 0 }
+discard

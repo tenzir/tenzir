@@ -1,0 +1,15 @@
+● {input}
+│
+● from
+│
+● repeat
+╎
+● where(x2)
+║
+● where(x2)
+║
+● discard(x2)
+│
+● pass
+│
+● {output}

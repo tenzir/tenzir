@@ -1,0 +1,13 @@
+● {input}
+│
+● from
+│
+● repeat
+╎
+● where
+╎
+● where(x2)
+╎
+● discard
+│
+● {output}
