@@ -131,6 +131,17 @@ WITH_FIXTURE(fixture) {
     CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "5.6.7.8");
   }
 
+  TEST("qualified compaction slots override the environment") {
+    env("TENZIR_COMPACTION_SLOTS", "2");
+    parse("--tenzir.compaction-slots=4");
+    CHECK_EQUAL(get<int64_t>("tenzir.compaction-slots"), 4);
+  }
+
+  TEST("compaction slots support the unqualified root option") {
+    parse("--compaction-slots=3");
+    CHECK_EQUAL(get<int64_t>("tenzir.compaction-slots"), 3);
+  }
+
   TEST("command line no value for list generates empty list value") {
     parse("--plugins=");
     CHECK(get_vec<std::string>("tenzir.plugins").empty());

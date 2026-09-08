@@ -94,6 +94,9 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "active-partition-timeout",
                             "timespan after which an active partition is "
                             "forcibly flushed (default: 30s)");
+  cmd.options.add<int64_t>("?tenzir", "compaction-slots",
+                           "maximum number of concurrent compaction "
+                           "transforms");
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "deprecated; automatic rebuild collects hourly "
                             "(zero still disables automatic rebuild)");
