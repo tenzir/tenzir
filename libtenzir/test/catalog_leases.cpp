@@ -13,6 +13,7 @@
 #include "tenzir/io/save.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
@@ -342,6 +343,21 @@ TEST("marker finalization retains claims through failed writes") {
   CHECK(state->marker_referenced(marker));
   f.inject_exit(catalog);
   f.inject_exit(fs);
+}
+
+TEST("erasure tombstones replay without a policy history invalidation") {
+  auto f = fixture{};
+  const auto input = f.add_partition();
+  REQUIRE(f.await_shutdown());
+  std::filesystem::create_directories(f.paths.markers_dir);
+  REQUIRE(not io::save(f.paths.marker(uuid::random()),
+                       as_bytes(create_marker({input}, {},
+                                              keep_original_partition::no)))
+                .valid());
+  f.start();
+  auto reader = caf::scoped_actor{f.sys};
+  CHECK(f.candidates(reader, uuid::random()).empty());
+  CHECK(not std::filesystem::exists(f.dbdir / invalid_policy_history_path));
 }
 
 TEST("failed quarantine replay retains its marker across restarts") {

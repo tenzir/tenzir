@@ -923,9 +923,15 @@ auto catalog_state::make_policy() -> caf::error {
 
 auto catalog_state::replay_policy_transforms() -> caf::error {
   auto held_markers = std::vector<std::filesystem::path>{};
-  for (auto& replayed : replayed_transforms) {
+  for (const auto& replayed : replayed_transforms) {
     if (not replayed.marker.empty()) {
-      held_markers.push_back(replayed.marker);
+      if (not policy and replayed.erasure) {
+        // An erasure creates no replacement lineage. Its independent file
+        // disposal references still keep the tombstone alive as needed.
+        release_marker_hold(replayed.marker);
+      } else {
+        held_markers.push_back(replayed.marker);
+      }
     }
   }
   if (not policy) {
