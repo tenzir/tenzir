@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// The same input must fail when the corrupted column is requested.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+head 1

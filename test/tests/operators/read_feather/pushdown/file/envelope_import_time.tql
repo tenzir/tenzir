@@ -1,0 +1,7 @@
+// Keep event import_time distinct from envelope import-time metadata.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/envelope" {
+  read_feather
+}
+select id, import_time
+head 1
+timestamp = @import_time

@@ -29,8 +29,18 @@ hints. `export` also records the field selection, which you can inspect with
 The `export` operator now honors the limit: it stops opening partitions once it
 has enough matching events. Filters that require local evaluation
 conservatively read everything.
-
 The `subscribe` source now acts on these hints: it stops after the requested
 number of matching events and drops unneeded top-level fields before forwarding
 events. Nested field selections retain the containing record until `select`
 applies the exact selection.
+
+The `read_parquet` and `read_feather` operators honor both hints, including
+inside an explicit `from_file` subpipeline. They retain filter-required fields,
+skip decoding unrelated top-level columns, and stop after enough matching rows.
+Feather supports this for IPC files and streams, including concatenated streams
+with different column orders. Filters containing function calls conservatively
+retain all columns.
+
+Parquet still buffers its full byte input before reading the footer. These
+optimizations reduce decoding work, not the bytes fetched from the source;
+random-access file I/O is not part of `read_parquet`.

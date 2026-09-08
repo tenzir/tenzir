@@ -1,0 +1,6 @@
+// The unsupported decimal256 column must not reach slice conversion.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+select id
+head 2

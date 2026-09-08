@@ -1,0 +1,7 @@
+error: failed to decode Feather input
+ --> tests/operators/read_feather/pushdown/file/corrupt_unprojected.tql:7:3
+  |
+7 |   read_feather
+  |   ^^^^^^^^^^^^
+  |
+  = note: !! format_error: failed to read record batch: IOError: ZSTD decompression failed: Unknown frame descriptor

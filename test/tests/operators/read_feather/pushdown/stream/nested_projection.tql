@@ -1,0 +1,6 @@
+// Read the top-level struct; select removes its unrequested sibling.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_feather
+}
+select nested.x
+head 1

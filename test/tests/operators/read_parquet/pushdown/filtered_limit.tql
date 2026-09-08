@@ -1,0 +1,7 @@
+// Skip the first batch, retain the filter column, and count only matches.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+where nested.x >= 54
+select id
+head 2

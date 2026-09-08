@@ -1,0 +1,15 @@
+warning: field `absent` not found
+ --> tests/operators/read_feather/pushdown/file/partially_missing_projection.tql:5:12
+  |
+5 | select id, absent
+  |            ~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  id: 0,
+  absent: null,
+}
+{
+  id: 1,
+  absent: null,
+}

@@ -1,0 +1,6 @@
+// A zero limit must not emit events or decode the unsupported column.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+select id
+head 0

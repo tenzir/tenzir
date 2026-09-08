@@ -1,0 +1,6 @@
+// A literal dot in a field name must not become a nested path.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+select this["literal.dot"]
+head 1

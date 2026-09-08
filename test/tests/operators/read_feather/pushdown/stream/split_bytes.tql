@@ -1,0 +1,8 @@
+// Exercise projection and filter-aware limits with one-byte input chunks.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  split_bytes 1
+  read_feather
+}
+where nested.x >= 54
+select id
+head 2

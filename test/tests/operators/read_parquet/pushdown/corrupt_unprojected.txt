@@ -1,0 +1,4 @@
+error: IOError: Couldn't deserialize thrift: TProtocolException: Invalid data
+Deserializing page header failed.
+
+  = note: failed read record batch

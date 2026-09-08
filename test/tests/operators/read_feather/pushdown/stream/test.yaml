@@ -1,0 +1,3 @@
+fixtures:
+  - read_pushdown:
+      format: ipc_stream

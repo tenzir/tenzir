@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// Without projection, the decimal256 column must still fail conversion.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_feather
+}
+head 1

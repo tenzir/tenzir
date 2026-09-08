@@ -1,0 +1,8 @@
+// Rebind projected column indices after the concatenated stream changes field order.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/concatenated" {
+  split_bytes 1
+  read_feather
+}
+where nested.x >= 52
+select id
+head 4

@@ -1,0 +1,6 @@
+from_file "events.parquet" {
+  read_parquet
+}
+where nested.x >= 4
+select id
+head 2

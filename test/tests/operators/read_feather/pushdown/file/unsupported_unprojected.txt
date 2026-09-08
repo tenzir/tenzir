@@ -1,0 +1,7 @@
+error: Feather input contains unsupported types
+ --> tests/operators/read_feather/pushdown/file/unsupported_unprojected.tql:7:3
+  |
+7 |   read_feather
+  |   ^^^^^^^^^^^^
+  |
+  = note: unsupported arrow type `decimal256(50, 0)`

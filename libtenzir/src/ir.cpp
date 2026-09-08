@@ -115,6 +115,28 @@ auto ir::merge_projection(Option<OptimizeProjection>& projection,
   }
 }
 
+auto ir::intersect_projection(Option<OptimizeProjection>& projection,
+                              const Option<OptimizeProjection>& other) -> void {
+  if (not other) {
+    return;
+  }
+  if (not projection) {
+    projection = other;
+    return;
+  }
+  auto result = Option<OptimizeProjection>{OptimizeProjection{}};
+  for (auto const& lhs : *projection) {
+    for (auto const& rhs : *other) {
+      if (is_field_path_prefix(lhs, rhs)) {
+        add_to_projection(result, rhs);
+      } else if (is_field_path_prefix(rhs, lhs)) {
+        add_to_projection(result, lhs);
+      }
+    }
+  }
+  projection = std::move(result);
+}
+
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   // TODO: This should just be a `where_ir{std::move(filter)}`.
   const auto* where = plugins::find<operator_compiler_plugin>("tql2.where");

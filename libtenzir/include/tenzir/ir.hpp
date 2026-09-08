@@ -338,6 +338,11 @@ auto add_refs_to_projection(Option<OptimizeProjection>& projection,
 auto merge_projection(Option<OptimizeProjection>& projection,
                       const Option<OptimizeProjection>& other) -> void;
 
+/// Intersects `projection` with `other`, retaining the narrower path when one
+/// path contains the other. `None` is unrestricted and acts as the identity.
+auto intersect_projection(Option<OptimizeProjection>& projection,
+                          Option<OptimizeProjection> const& other) -> void;
+
 /// Strategies that control how the planner assigns parallelism to
 /// parallelizable operators.
 namespace parallelism {

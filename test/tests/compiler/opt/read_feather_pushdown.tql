@@ -1,0 +1,6 @@
+from_file "events.feather" {
+  read_feather
+}
+where nested.x >= 4
+select id
+head 2

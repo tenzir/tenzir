@@ -1,0 +1,7 @@
+// Apply pushdown to event fields inside the Feather store envelope.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/envelope" {
+  read_feather
+}
+where nested.x >= 54
+select id
+head 2

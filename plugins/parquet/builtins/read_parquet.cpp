@@ -14,6 +14,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/read_detection.hpp>
+#include <tenzir/read_pushdown.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::parquet {
@@ -142,6 +143,9 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
 
 struct ReadParquetArgs {
   Option<located<std::string>> decimal_format;
+  ir::OptimizeFilter filter;
+  Option<uint64_t> limit;
+  Option<ir::OptimizeProjection> projection;
 };
 
 class ReadParquet final : public Operator<chunk_ptr, table_slice> {
@@ -150,7 +154,10 @@ public:
     : decimal_format_{args.decimal_format ? from_string<decimal_format>(
                                               args.decimal_format->inner)
                                               .value_or(decimal_format::string)
-                                          : decimal_format::string} {
+                                          : decimal_format::string},
+      filter_{std::move(args.filter)},
+      remaining_{args.limit},
+      projection_{read_projection(std::move(args.projection), filter_)} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
@@ -160,7 +167,15 @@ public:
     // seeing the footer, so we buffer and parse in `finalize()`. This also
     // means checkpointing is currently unsupported: restoring would require
     // persisting potentially huge buffered input and parser progress.
-    if (not input or input->size() == 0) {
+    //
+    // This operator is the streaming fallback and must keep working behind
+    // any byte source, including non-seekable ones such as `decompress_gzip`
+    // or `load_tcp`. Avoiding the whole-file buffer for seekable sources is
+    // planned as a separate random-access scan that the planner substitutes
+    // for eligible `from_file { read_parquet }` compositions (TNZ-1034). The
+    // pushed-down filter, limit, and projection below are the inputs that scan
+    // consumes as well; keep them reader-agnostic.
+    if (remaining_ == uint64_t{0} or not input or input->size() == 0) {
       co_return;
     }
     chunks_.push_back(std::move(input));
@@ -168,6 +183,9 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
+    if (remaining_ == uint64_t{0}) {
+      co_return FinalizeBehavior::done;
+    }
     auto parquet_chunk = join_chunks(std::move(chunks_));
     if (parquet_chunk->size() == 0) {
       co_return FinalizeBehavior::done;
@@ -178,6 +196,9 @@ public:
     parquet_reader_properties.enable_buffered_stream();
     auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
     arrow_reader_properties.set_batch_size(defaults::import::table_slice_size);
+    // The input already is an in-memory buffer. Pre-buffering would coalesce
+    // and copy the selected column chunks a second time without any I/O win.
+    arrow_reader_properties.set_pre_buffer(false);
     std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
     try {
       auto input_buffer = ::parquet::ParquetFileReader::Open(
@@ -196,7 +217,31 @@ public:
         .emit(ctx);
       co_return FinalizeBehavior::done;
     }
-    auto rb_reader = out_buffer->GetRecordBatchReader();
+    auto metadata = out_buffer->parquet_reader()->metadata();
+    auto columns = std::vector<int>{};
+    for (auto i = 0; i < metadata->num_columns(); ++i) {
+      auto const& name = metadata->schema()->GetColumnRoot(i)->name();
+      if (not projection_
+          or std::ranges::find(*projection_, name) != projection_->end()) {
+        columns.push_back(i);
+      }
+    }
+    // Keep cardinality and missing-field diagnostics when no field matches.
+    if (columns.empty()) {
+      for (auto i = 0; i < metadata->num_columns(); ++i) {
+        columns.push_back(i);
+      }
+    }
+    auto row_groups = std::vector<int>{};
+    auto available = uint64_t{0};
+    for (auto i = 0; i < metadata->num_row_groups(); ++i) {
+      row_groups.push_back(i);
+      available += metadata->RowGroup(i)->num_rows();
+      if (filter_.empty() and remaining_ and available >= *remaining_) {
+        break;
+      }
+    }
+    auto rb_reader = out_buffer->GetRecordBatchReader(row_groups, columns);
     if (not rb_reader.ok()) {
       diagnostic::error("{}", rb_reader.status().ToStringWithoutContextLines())
         .note("failed create record batches from input data")
@@ -232,9 +277,21 @@ public:
           .emit(ctx);
         co_return FinalizeBehavior::done;
       }
-      co_await push(std::move(*maybe_slice));
+      auto slice = apply_read_pushdown(std::move(*maybe_slice), filter_,
+                                       remaining_, ctx.dh());
+      if (slice.rows() != 0) {
+        co_await push(std::move(slice));
+      }
+      if (remaining_ == uint64_t{0}) {
+        break;
+      }
     }
     co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return remaining_ == uint64_t{0} ? OperatorState::done
+                                     : OperatorState::normal;
   }
 
   auto snapshot(Serde&) -> void override {
@@ -247,6 +304,9 @@ public:
 private:
   decimal_format decimal_format_ = decimal_format::string;
   std::vector<chunk_ptr> chunks_;
+  ir::OptimizeFilter filter_;
+  Option<uint64_t> remaining_;
+  Option<std::vector<std::string>> projection_;
 };
 
 class Plugin final : public virtual ReadOperatorPlugin {
@@ -269,7 +329,9 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    d.optimize_limit(&ReadParquetArgs::limit);
+    d.optimize_projection(&ReadParquetArgs::projection);
+    return d.optimize_filter(&ReadParquetArgs::filter);
   }
 
   auto read_detection_candidates() const

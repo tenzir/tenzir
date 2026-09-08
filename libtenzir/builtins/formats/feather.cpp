@@ -25,6 +25,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
+#include <tenzir/read_pushdown.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -117,6 +118,32 @@ auto is_store_envelope(std::shared_ptr<arrow::RecordBatch> const& batch)
          and has_tenzir_metadata(event_field->metadata());
 }
 
+auto projected_read_options(std::shared_ptr<arrow::Schema> const& schema,
+                            Option<std::vector<std::string>> const& projection)
+  -> arrow::ipc::IpcReadOptions {
+  auto options = arrow_ipc_read_options();
+  if (not projection) {
+    return options;
+  }
+  // The store envelope puts all event fields in one struct. Arrow only
+  // supports top-level IPC selection, so retain that envelope intact.
+  if (schema->num_fields() == 2 and schema->field(0)->name() == "import_time"
+      and schema->field(1)->name() == "event"
+      and schema->field(1)->type()->id() == arrow::Type::STRUCT
+      and has_tenzir_metadata(schema->field(1)->metadata())) {
+    return options;
+  }
+  for (auto i = 0; i < schema->num_fields(); ++i) {
+    if (std::ranges::find(*projection, schema->field(i)->name())
+        != projection->end()) {
+      options.included_fields.push_back(i);
+    }
+  }
+  // An empty selection means "all columns" to Arrow, which conveniently keeps
+  // cardinality and missing-field diagnostics when no requested field exists.
+  return options;
+}
+
 namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
@@ -177,14 +204,26 @@ auto import_time_hour(time import_time) {
 }
 
 /// Decode an Arrow IPC file.
-auto decode_ipc_file(chunk_ptr chunk) -> caf::expected<
-  generator<caf::expected<std::shared_ptr<arrow::RecordBatch>>>> {
+auto decode_ipc_file(chunk_ptr chunk,
+                     Option<std::vector<std::string>> projection = {})
+  -> caf::expected<
+    generator<caf::expected<std::shared_ptr<arrow::RecordBatch>>>> {
   if (not starts_with_arrow_magic(chunk)) {
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
                                              "Arrow IPC file");
   }
-  auto open_reader_result = arrow::ipc::RecordBatchFileReader::Open(
-    as_arrow_file(std::move(chunk)), arrow_ipc_read_options());
+  auto file = as_arrow_file(std::move(chunk));
+  auto options = arrow_ipc_read_options();
+  if (projection) {
+    auto schema_reader = arrow::ipc::RecordBatchFileReader::Open(file, options);
+    if (not schema_reader.ok()) {
+      return caf::make_error(ec::format_error,
+                             schema_reader.status().ToString());
+    }
+    options = projected_read_options((*schema_reader)->schema(), projection);
+  }
+  auto open_reader_result
+    = arrow::ipc::RecordBatchFileReader::Open(file, options);
   if (not open_reader_result.ok()) {
     return caf::make_error(ec::format_error,
                            fmt::format("failed to open reader: {}",
@@ -755,6 +794,9 @@ private:
 
 struct ReadFeatherArgs {
   location operator_location = location::unknown;
+  ir::OptimizeFilter filter;
+  Option<uint64_t> limit;
+  Option<ir::OptimizeProjection> projection;
 };
 
 enum class ReadFeatherMode {
@@ -767,6 +809,8 @@ class ReadFeather final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadFeather(ReadFeatherArgs args)
     : args_{std::move(args)},
+      projection_{read_projection(args_.projection, args_.filter)},
+      done_{args_.limit == uint64_t{0}},
       listener_{std::make_shared<callback_listener>()},
       stream_decoder_{std::in_place, listener_, arrow_ipc_read_options()} {
   }
@@ -874,10 +918,11 @@ private:
         // we only ever feed exactly `required_size` bytes, so their bytes are
         // retained. The next read requests a new stream's magic bytes, and if
         // the input is exhausted the short/empty-payload path below returns.
-        auto reset_result = stream_decoder_->Reset();
-        TENZIR_ASSERT(reset_result.ok(), reset_result.ToString().c_str());
+        stream_decoder_ = Box<arrow::ipc::StreamDecoder>{
+          std::in_place, listener_, arrow_ipc_read_options()};
         truncated_bytes_ = 0;
         listener_->schema_decoded = false;
+        schema_chunks_.clear();
         continue;
       }
       auto payload = take(required_size);
@@ -885,6 +930,9 @@ private:
         co_return;
       }
       truncated_bytes_ += payload->size();
+      if (projection_ and not listener_->schema_decoded) {
+        schema_chunks_.push_back(payload);
+      }
       auto decode_result = stream_decoder_->Consume(as_arrow_buffer(payload));
       if (not decode_result.ok()) {
         if (decoded_once_ and not listener_->schema_decoded) {
@@ -910,6 +958,26 @@ private:
         done_ = true;
         co_return;
       }
+      if (listener_->schema_decoded and not schema_chunks_.empty()) {
+        // We fed exactly the schema framing, never batch data. Replay this
+        // small prefix into a decoder configured for this stream's schema.
+        auto options
+          = projected_read_options(stream_decoder_->schema(), projection_);
+        stream_decoder_ = Box<arrow::ipc::StreamDecoder>{
+          std::in_place, listener_, std::move(options)};
+        for (auto const& chunk : schema_chunks_) {
+          auto status = stream_decoder_->Consume(as_arrow_buffer(chunk));
+          if (not status.ok()) {
+            emit_with_location(
+              diagnostic::error("failed to decode Feather input")
+                .note("{}", status.ToStringWithoutContextLines()),
+              dh, args_.operator_location);
+            done_ = true;
+            co_return;
+          }
+        }
+        schema_chunks_.clear();
+      }
       if (stream_decoder_->next_required_size() == 0) {
         truncated_bytes_ = 0;
       }
@@ -924,15 +992,28 @@ private:
           done_ = true;
           co_return;
         }
-        co_await push(std::move(*slice));
+        co_await emit_slice(std::move(*slice), push, dh);
+        if (done_) {
+          co_return;
+        }
       }
     }
+  }
+
+  auto emit_slice(table_slice slice, Push<table_slice>& push,
+                  diagnostic_handler& dh) -> Task<void> {
+    slice
+      = apply_read_pushdown(std::move(slice), args_.filter, args_.limit, dh);
+    if (slice.rows() != 0) {
+      co_await push(std::move(slice));
+    }
+    done_ = args_.limit == uint64_t{0};
   }
 
   auto parse_file(Push<table_slice>& push, diagnostic_handler& dh)
     -> Task<void> {
     auto input = join_chunks(std::move(file_chunks_));
-    auto batches = store::decode_ipc_file(std::move(input));
+    auto batches = store::decode_ipc_file(std::move(input), projection_);
     if (not batches) {
       emit_with_location(diagnostic::error("failed to decode Feather input")
                            .note("{}", batches.error()),
@@ -955,7 +1036,10 @@ private:
         done_ = true;
         co_return;
       }
-      co_await push(std::move(*slice));
+      co_await emit_slice(std::move(*slice), push, dh);
+      if (done_) {
+        break;
+      }
     }
     buffer_ = chunk::make_empty();
     offset_ = 0;
@@ -964,6 +1048,8 @@ private:
   }
 
   ReadFeatherArgs args_;
+  Option<std::vector<std::string>> projection_;
+  std::vector<chunk_ptr> schema_chunks_;
   chunk_ptr buffer_ = chunk::make_empty();
   size_t offset_ = 0;
   size_t truncated_bytes_ = 0;
@@ -1255,7 +1341,9 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadFeatherArgs, ReadFeather>{};
     d.operator_location(&ReadFeatherArgs::operator_location);
-    return d.without_optimize();
+    d.optimize_limit(&ReadFeatherArgs::limit);
+    d.optimize_projection(&ReadFeatherArgs::projection);
+    return d.optimize_filter(&ReadFeatherArgs::filter);
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

@@ -1,0 +1,2 @@
+error: parquet file contains unsupported types
+  = note: unsupported arrow type `decimal256(50, 0)`

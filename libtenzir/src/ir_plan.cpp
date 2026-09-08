@@ -135,8 +135,8 @@ auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
 
 auto ir::optimize(pipeline pipe, OptimizeCtx octx) -> pipeline {
   TENZIR_ASSERT(pipe.lets.empty());
-  auto opt = std::move(pipe).optimize(
-    OptimizeRequest{.filter = {}, .order = EventOrder::ordered}, octx);
+  auto request = OptimizeRequest{.filter = {}, .order = EventOrder::ordered};
+  auto opt = std::move(pipe).optimize(std::move(request), octx);
   TENZIR_ASSERT(opt.replacement.lets.empty());
   pipe = std::move(opt.replacement);
   // Leftover filters become leading `where` operators. A leftover limit or

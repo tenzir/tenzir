@@ -1070,7 +1070,9 @@ public:
   ///
   /// The projection is a hint: the operator may omit all other fields, but the
   /// `select` that produced it stays in the pipeline. Repeated `optimize()`
-  /// calls take the union.
+  /// calls intersect the projections: an unrestricted request preserves an
+  /// earlier restriction, and a narrower request can refine it further.
+  /// Operators must also retain the fields needed by accumulated filters.
   auto optimize_projection(Option<ir::OptimizeProjection> Args::* ptr) {
     TENZIR_ASSERT(not desc_.set_projection);
     desc_.set_projection

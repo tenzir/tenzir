@@ -1,0 +1,6 @@
+// Keep existing columns and diagnose the missing column.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_feather
+}
+select id, absent
+head 2

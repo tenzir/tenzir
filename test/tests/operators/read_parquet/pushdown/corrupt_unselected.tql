@@ -1,0 +1,6 @@
+// Physical projection must skip decoding the corrupted first column.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+select id
+head 2

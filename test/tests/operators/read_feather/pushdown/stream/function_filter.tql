@@ -1,0 +1,7 @@
+// Function predicates require conservative full-schema reads.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_feather
+}
+where string(id) == "7"
+select id
+head 1

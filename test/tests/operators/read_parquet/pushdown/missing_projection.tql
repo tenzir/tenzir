@@ -1,0 +1,6 @@
+// All-missing projections must retain cardinality and report the missing field.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_parquet
+}
+select absent
+head 2

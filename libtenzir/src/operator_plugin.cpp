@@ -688,11 +688,16 @@ public:
     if (pipeline_ and desc_->pipeline) {
       switch (desc_->pipeline->sub_optimize) {
         case SubOptimize::from_downstream: {
-          // apply downstream filter and order to the subpipeline directly
+          // The subpipeline produces our output, so it can consume downstream
+          // hints too. Repeated subpipelines may overproduce, but downstream
+          // head/select still enforce the global result.
           auto sub
             = std::move(pipeline_->pipeline.inner)
                 .optimize(ir::OptimizeRequest{.filter = std::move(filter),
-                                              .order = order},
+                                              .order = order,
+                                              .limit = req.limit,
+                                              .projection
+                                              = std::move(req.projection)},
                           octx);
           // use sub's request instead of the downstream one
           filter = std::move(sub.filter);
@@ -738,12 +743,10 @@ public:
       req.limit = None{};
     }
     if (desc_->set_projection) {
-      if (has_projection_) {
-        ir::merge_projection(projection_, req.projection);
-      } else {
-        projection_ = std::move(req.projection);
-        has_projection_ = true;
-      }
+      // This operator already incorporates earlier pushdown. A later pass
+      // may narrow its output further, but must not undo those restrictions
+      // when optimizing a subpipeline without its enclosing consumer.
+      ir::intersect_projection(projection_, req.projection);
       req.projection = None{};
     }
     // run optimizer
@@ -822,14 +825,8 @@ private:
   Option<uint64_t> limit_;
 
   /// The projection passed to `optimize` (only if the operator wants to consume
-  /// it). `None` means that every field is needed.
+  /// it). Repeated passes intersect the hints; `None` is unrestricted.
   Option<ir::OptimizeProjection> projection_;
-
-  /// Whether an `optimize()` call has set `projection_` yet. This tells a
-  /// pushed-down "every field" apart from "nothing pushed yet" when merging
-  /// repeated calls. Not serialized: a copy starts over, which only matters if
-  /// `optimize()` runs more than once on the same operator.
-  bool has_projection_ = false;
 
   /// The object describing the available parameters.
   SharedDescription desc_;

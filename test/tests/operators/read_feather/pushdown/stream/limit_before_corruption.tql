@@ -1,0 +1,6 @@
+// Stop decoding at the limit without inspecting the corrupt trailing stream.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/trailing" {
+  read_feather
+}
+select id
+head 1

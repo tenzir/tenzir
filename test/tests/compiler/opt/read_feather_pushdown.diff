@@ -1,0 +1,196 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `from_file` @ [1]:0..9 from 0
+         ],
+         ref: std::from_file/op
+       },
+       desc: "tql2.from_file",
+       args: [
+         located {
+           buffer: {
+             chunk: chunk(size=60),
+             table-offset: 12
+           }
+         } @ [1]:10..26 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               op: {
+                 path: [
+                   `read_feather` @ [1]:31..43 from 0
+                 ],
+                 ref: std::read_feather/op
+               },
+               desc: "read_feather",
+               args: [
+                 
+               ],
+               filter: [
+-                
++                binary_expr {
++                  left: field_access {
++                    left: root_field {
++                      id: `nested` @ [1]:52..58 from 0,
++                      has_question_mark: false
++                    },
++                    has_question_mark: false,
++                    name: `x` @ [1]:59..60 from 0,
++                    location: [1]:52..60 from 0
++                  },
++                  op: "geq",
++                  right: constant int64 4 @ [1]:64..65 from 0,
++                  location: [1]:52..65 from 0
++                }
+               ],
+               order: "ordered",
++              limit: 2,
++              projection: [
++                {
++                  expr: root_field {
++                    id: `id` @ [1]:73..75 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `id` @ [1]:73..75 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                },
++                {
++                  expr: field_access {
++                    left: root_field {
++                      id: `nested` @ [1]:52..58 from 0,
++                      has_question_mark: false
++                    },
++                    has_question_mark: false,
++                    name: `x` @ [1]:59..60 from 0,
++                    location: [1]:52..60 from 0
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `nested` @ [1]:52..58 from 0,
++                      has_question_mark: false
++                    },
++                    {
++                      id: `x` @ [1]:59..60 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                }
++              ],
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ [1]:27..45 from 0,
+         let_ids: {
+           "0": 1
+         }
+-      }
+-    },
+-    where_ir {
+-      self: [1]:46..51 from 0,
+-      predicate: binary_expr {
+-        left: field_access {
+-          left: root_field {
+-            id: `nested` @ [1]:52..58 from 0,
+-            has_question_mark: false
+-          },
+-          has_question_mark: false,
+-          name: `x` @ [1]:59..60 from 0,
+-          location: [1]:52..60 from 0
+-        },
+-        op: "geq",
+-        right: constant int64 4 @ [1]:64..65 from 0,
+-        location: [1]:52..65 from 0
+       }
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:73..75 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:73..75 from 0,
+             has_question_mark: false
+           },
+           location: [1]:73..75 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ [1]:76..80 from 0
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 2 @ [1]:81..82 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:82..82 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

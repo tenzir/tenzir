@@ -1,0 +1,6 @@
+// An empty projection must preserve row counts across batches.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_feather
+}
+head 4
+summarize n=count()
