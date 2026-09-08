@@ -351,7 +351,11 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
         }
         const auto* bound_expr = self->state().bind_expr(type, info.exp);
         if (not bound_expr) {
-          // failing to bind is not an error.
+          // Failing to bind is not an error, but these candidates will never
+          // be read. Unrelated queued schemas must not keep their files pinned.
+          for (const auto& partition : info.partition_infos) {
+            self->state().release_candidate(partition.uuid);
+          }
           continue;
         }
         auto ctx = query_context;

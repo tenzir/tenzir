@@ -135,18 +135,26 @@ auto extract_partition_synopsis(
                   std::span{chunk_out->data(), chunk_out->size()});
 }
 
-auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
+auto catalog_state::replay_markers()
+  -> caf::expected<std::unordered_set<uuid>> {
   auto replayed_inputs = std::unordered_set<uuid>{};
   auto err = std::error_code{};
   if (not std::filesystem::is_directory(paths.markers_dir, err)) {
+    if (err and err != std::errc::no_such_file_or_directory) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to inspect transform markers "
+                                         "at {}: {}",
+                                         paths.markers_dir, err.message()));
+    }
     return replayed_inputs;
   }
   auto marker_iter
     = std::filesystem::directory_iterator(paths.markers_dir, err);
   if (err) {
-    TENZIR_WARN("{} failed to list directory contents of {}: {}", *self,
-                paths.markers_dir, err.message());
-    return replayed_inputs;
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to list transform markers at "
+                                       "{}: {}",
+                                       paths.markers_dir, err.message()));
   }
   // Files in the marker directory that an unfinished replay still needs; the
   // stray sweep at the end must not remove them.
@@ -157,25 +165,38 @@ auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
     }
     auto chunk = chunk::mmap(entry.path());
     if (not chunk) {
-      TENZIR_WARN("{} failed to mmap chunk at {}: {}", *self, entry.path(),
-                  chunk.error());
-      continue;
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("cannot read transform marker at {}: "
+                                         "{}; repair it before "
+                                         "restarting",
+                                         entry.path(), chunk.error()));
     }
     auto maybe_flatbuffer
       = flatbuffer<fbs::PartitionTransform>::make(std::move(*chunk));
     if (not maybe_flatbuffer) {
-      TENZIR_WARN("{} failed to open transform {}: {}", *self, entry.path(),
-                  maybe_flatbuffer.error());
-      continue;
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("malformed transform marker at {}: {}; repair it before "
+                    "restarting",
+                    entry.path(), maybe_flatbuffer.error()));
     }
     auto& transform_flatbuffer = *maybe_flatbuffer;
     if (transform_flatbuffer->transform_type()
         != fbs::partition_transform::PartitionTransform::v0) {
-      TENZIR_WARN("{} detected unknown transform version at {}", *self,
-                  entry.path());
-      continue;
+      return caf::make_error(ec::format_error,
+                             fmt::format("unknown transform marker version at "
+                                         "{}; repair it before "
+                                         "restarting",
+                                         entry.path()));
     }
     const auto* transform_v0 = transform_flatbuffer->transform_as_v0();
+    if (not transform_v0) {
+      return caf::make_error(ec::format_error,
+                             fmt::format("missing transform marker payload at "
+                                         "{}; repair it before "
+                                         "restarting",
+                                         entry.path()));
+    }
     const auto quarantine = transform_v0->quarantine();
     const auto finalized = transform_v0->finalized();
     // A preserve-input marker omits the input vector entirely -- the schema
@@ -489,6 +510,9 @@ auto catalog_state::load_from_disk() -> caf::error {
   }
   // Start by finishing up any in-progress transforms.
   const auto replayed_inputs = replay_markers();
+  if (not replayed_inputs) {
+    return replayed_inputs.error();
+  }
   auto dir_iter = std::filesystem::directory_iterator(paths.index_dir, err);
   if (err) {
     return caf::make_error(ec::filesystem_error,
@@ -532,7 +556,7 @@ auto catalog_state::load_from_disk() -> caf::error {
       }
       continue;
     }
-    if (replayed_inputs.contains(partition_uuid)) {
+    if (replayed_inputs->contains(partition_uuid)) {
       // A marker sentences this partition to erasure; the deletion runs
       // asynchronously (or, after a failure, at the next startup). Loading it
       // now would resurrect it in memory next to its finalized replacements

@@ -482,8 +482,9 @@ public:
   /// inputs. Part of `load_from_disk`. Returns every input uuid the markers
   /// name, so the startup scan skips them: their erasure runs asynchronously,
   /// and scanning them back in would resurrect them in memory while their
-  /// files disappear underneath.
-  auto replay_markers() -> std::unordered_set<uuid>;
+  /// files disappear underneath. Unreadable or malformed markers fail startup
+  /// without removing their recovery evidence.
+  auto replay_markers() -> caf::expected<std::unordered_set<uuid>>;
 
   /// Creates the catalog from a set of partition synopses.
   auto initialize(std::vector<partition_synopsis_pair> partitions)

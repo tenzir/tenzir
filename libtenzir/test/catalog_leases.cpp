@@ -8,7 +8,11 @@
 
 #include "tenzir/catalog.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/export_bridge.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/fbs/partition_transform.hpp"
+#include "tenzir/fbs/utils.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/partition_paths.hpp"
@@ -22,6 +26,7 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/make_copy_on_write.hpp>
@@ -289,6 +294,70 @@ TEST("a disk scan exits without its catalog processing the response") {
   CHECK(f.await_shutdown());
 }
 
+TEST("export releases unbound schemas while other candidates remain queued") {
+  auto f = caf::test::fixture::deterministic{};
+  const auto skipped = uuid::random();
+  const auto queued = uuid::random();
+  const auto good = type{"good", record_type{{"msg", string_type{}}}};
+  const auto bad = type{"bad", record_type{{"other", string_type{}}}};
+  const auto expr
+    = expression{predicate{field_extractor{"msg"}, relational_operator::equal,
+                           data{std::string{"value"}}}};
+  auto lease = uuid{};
+  auto released = std::vector<uuid>{};
+  auto released_all = false;
+  auto catalog = f.sys.spawn([&]() -> catalog_actor::behavior_type {
+    return {
+      caf::partial_behavior_init,
+      [&](atom::candidates, const query_context& query) {
+        lease = query.id;
+        auto result = catalog_lookup_result{};
+        result.candidate_infos[good]
+          = {expr, {{queued, 1, tenzir::time{}, good, 0}}};
+        result.candidate_infos[bad]
+          = {expr, {{skipped, 1, tenzir::time{}, bad, 0}}};
+        return result;
+      },
+      [&](atom::release, const uuid& id, const std::vector<uuid>& ids) {
+        CHECK_EQUAL(id, lease);
+        released.insert(released.end(), ids.begin(), ids.end());
+      },
+      [&](atom::release, const uuid&) {
+        released_all = true;
+      },
+    };
+  });
+  auto importer = f.sys.spawn([]() -> importer_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [](atom::get, const receiver_actor<table_slice>&, bool, bool, bool,
+               bool) {
+              return std::vector<table_slice>{};
+            }};
+  });
+  auto fs = f.sys.spawn([]() -> filesystem_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [](atom::erase, const std::filesystem::path&) {
+              return atom::done_v;
+            }};
+  });
+  f.sys.registry().put("tenzir.catalog", catalog);
+  f.sys.registry().put("tenzir.importer", importer);
+  auto mode = export_mode{};
+  mode.internal = true;
+  // Keep valid candidates queued without scheduling any partition reads.
+  mode.parallel = 0;
+  auto bridge = spawn_export_bridge(
+    f.sys, expr, mode, fs, std::make_unique<null_diagnostic_handler>());
+  f.dispatch_messages();
+  CHECK_NOT_EQUAL(lease, uuid{});
+  CHECK_EQUAL(released, std::vector{skipped});
+  CHECK(not released_all);
+  f.inject_exit(bridge);
+  f.inject_exit(catalog);
+  f.inject_exit(importer);
+  f.inject_exit(fs);
+}
+
 TEST("marker finalization retains claims through failed writes") {
   auto f = caf::test::fixture::deterministic{};
   auto writes = size_t{0};
@@ -343,6 +412,47 @@ TEST("marker finalization retains claims through failed writes") {
   CHECK(state->marker_referenced(marker));
   f.inject_exit(catalog);
   f.inject_exit(fs);
+}
+
+TEST("malformed transform markers refuse startup and retain recovery files") {
+  auto f = fixture{};
+  const auto input = f.add_partition();
+  REQUIRE(f.await_shutdown());
+  std::filesystem::create_directories(f.paths.markers_dir);
+  const auto marker = f.paths.marker(uuid::random());
+  const auto valid = create_marker({input}, {}, keep_original_partition::no);
+  auto unknown_builder = flatbuffers::FlatBufferBuilder{};
+  fbs::FinishPartitionTransformBuffer(
+    unknown_builder, fbs::CreatePartitionTransform(unknown_builder));
+  const auto unknown = fbs::release(unknown_builder);
+  for (const auto& bytes : {std::span<const std::byte>{},
+                            as_bytes(valid).first(4), as_bytes(unknown)}) {
+    REQUIRE(not io::save(marker, bytes).valid());
+    for (auto restart = 0; restart < 2; ++restart) {
+      f.start();
+      {
+        auto reader = caf::scoped_actor{f.sys};
+        reader->mail(atom::status_v, status_verbosity::info, duration::zero())
+          .request(f.catalog, timeout)
+          .receive(
+            [](const record&) {
+              FAIL("catalog accepted a malformed transform marker");
+            },
+            [](const caf::error& error) {
+              CHECK(error.valid());
+            });
+      }
+      REQUIRE(f.await_shutdown());
+      CHECK_EQUAL(std::filesystem::file_size(marker), bytes.size());
+      for (const auto& path : f.files_of(input)) {
+        CHECK(std::filesystem::exists(path));
+      }
+    }
+  }
+  REQUIRE(not io::save(marker, as_bytes(valid)).valid());
+  f.start();
+  auto reader = caf::scoped_actor{f.sys};
+  CHECK(f.candidates(reader, uuid::random()).empty());
 }
 
 TEST("erasure tombstones replay without a policy history invalidation") {
