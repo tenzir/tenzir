@@ -211,6 +211,21 @@ make_application(std::string_view path) {
       },
     };
   }
+  if (name == "tenzir-rebuild") {
+    const auto* rebuild = plugins::find<command_plugin>("offline-rebuild");
+    TENZIR_ASSERT(rebuild);
+    auto [cmd, cmd_factory] = rebuild->make_command();
+    TENZIR_ASSERT(cmd);
+    add_root_opts(*cmd);
+    TENZIR_ASSERT(cmd_factory.contains("offline-rebuild"));
+    cmd->name = "";
+    return {
+      std::move(cmd),
+      command::factory{
+        {"", cmd_factory["offline-rebuild"]},
+      },
+    };
+  }
   TENZIR_ASSERT(name == "tenzir-ctl");
   auto root = make_root_command(name);
   auto root_factory = command::factory{};

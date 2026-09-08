@@ -1,0 +1,10 @@
+phase1-seed-small-partitions: ok
+phase2-refuse-live-state-directory: ok
+phase3-dry-run-changes-nothing: ok
+phase4-consolidate: ok
+phase5-data-survives-consolidation: ok
+phase6-undersized-cutoff-drives-grouping: ok
+phase7-full-partition-is-a-barrier: ok
+phase8-span-cuts-by-timestamp-field: ok
+phase9-selector-aborts: ok
+phase10-selector-narrows-plan: ok

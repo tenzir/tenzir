@@ -70,6 +70,13 @@ extract_partition_synopsis(const std::filesystem::path& partition_path,
                            const std::filesystem::path& partition_synopsis_path,
                            bool verify = false);
 
+/// Creates a partition transform marker that records the inputs and outputs
+/// of an in-progress partition transformation, so that an interrupted
+/// transformation can be finished on the next startup.
+tenzir::chunk_ptr
+create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
+              keep_original_partition keep);
+
 /// Flatbuffer integration. Note that this is only one-way, restoring
 /// the index state needs additional runtime information.
 // TODO: Pull out the persisted part of the state into a separate struct

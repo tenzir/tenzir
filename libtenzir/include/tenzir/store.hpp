@@ -19,6 +19,7 @@
 #include <caf/message_priority.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <functional>
 #include <variant>
 
 namespace tenzir {
@@ -81,6 +82,44 @@ public:
   /// @returns A chunk containing the serialized store contents, or an error on
   /// failure.
   [[nodiscard]] virtual caf::expected<chunk_ptr> finish() = 0;
+
+  /// Set the origin of this store's data.
+  /// Expected values: "ingest", "rebuild", "compaction".
+  void set_origin(std::string value) {
+    origin_ = std::move(value);
+  }
+
+  /// The origin of this store's data (default: "ingest").
+  [[nodiscard]] auto origin() const -> const std::string& {
+    return origin_;
+  }
+
+private:
+  std::string origin_ = "ingest";
+};
+
+/// A sink that receives the serialized bytes of a store in order.
+using chunk_sink = std::function<caf::error(chunk_ptr)>;
+
+/// A base class for store writers that stream their contents to a sink
+/// incrementally. Unlike `active_store`, which buffers all slices in memory
+/// until `finish`, implementations flush serialized data to the sink as
+/// slices arrive and keep only bounded state, so writing a store does not
+/// require holding all of its events in memory at once.
+class store_writer {
+public:
+  virtual ~store_writer() noexcept = default;
+
+  /// Add a set of slices to the store, streaming serialized data to the sink
+  /// as it becomes available.
+  /// @returns An error on failure.
+  [[nodiscard]] virtual auto add(std::vector<table_slice> slices) -> caf::error
+    = 0;
+
+  /// Finalize the store, flushing all remaining data to the sink.
+  /// @returns The total number of bytes written to the sink, or an error on
+  /// failure.
+  [[nodiscard]] virtual auto finish() -> caf::expected<uint64_t> = 0;
 
   /// Set the origin of this store's data.
   /// Expected values: "ingest", "rebuild", "compaction".

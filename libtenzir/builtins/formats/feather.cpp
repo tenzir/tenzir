@@ -550,6 +550,155 @@ private:
   mutable size_t rebatch_rows_ = {};
 };
 
+/// An Arrow output stream that forwards all writes to a `chunk_sink`.
+class chunk_sink_output_stream final : public arrow::io::OutputStream {
+public:
+  explicit chunk_sink_output_stream(chunk_sink sink) : sink_{std::move(sink)} {
+  }
+
+  auto Close() -> arrow::Status override {
+    closed_ = true;
+    return arrow::Status::OK();
+  }
+
+  auto closed() const -> bool override {
+    return closed_;
+  }
+
+  auto Tell() const -> arrow::Result<int64_t> override {
+    return position_;
+  }
+
+  auto Write(const void* data, int64_t nbytes) -> arrow::Status override {
+    if (auto error
+        = sink_(chunk::copy(data, detail::narrow_cast<size_t>(nbytes)));
+        error.valid()) {
+      return arrow::Status::IOError(fmt::format("{}", error));
+    }
+    position_ += nbytes;
+    return arrow::Status::OK();
+  }
+
+private:
+  chunk_sink sink_;
+  int64_t position_ = 0;
+  bool closed_ = false;
+};
+
+/// A store writer that streams record batches to a sink as they complete,
+/// keeping at most one table slice worth of rows buffered. Produces the same
+/// on-disk format as `active_feather_store`, including its rebatching by
+/// import-time hour.
+class streaming_feather_store final : public store_writer {
+public:
+  streaming_feather_store(int64_t zstd_compression_level, chunk_sink sink)
+    : compression_level_{zstd_compression_level},
+      stream_{std::make_shared<chunk_sink_output_stream>(std::move(sink))} {
+  }
+
+  [[nodiscard]] auto add(std::vector<table_slice> new_slices)
+    -> caf::error override {
+    for (auto& slice : new_slices) {
+      if (slice.offset() == invalid_id) {
+        slice.offset(num_events_);
+      }
+      TENZIR_ASSERT(slice.offset() == num_events_);
+      num_events_ += slice.rows();
+      if (not pending_.empty()
+          and import_time_hour(pending_.back().import_time())
+                != import_time_hour(slice.import_time())) {
+        if (auto error = flush_pending(); error.valid()) {
+          return error;
+        }
+      }
+      if (pending_.empty()
+          and slice.rows() == defaults::import::table_slice_size) {
+        if (auto error = write_slice(slice); error.valid()) {
+          return error;
+        }
+        continue;
+      }
+      pending_.push_back(std::move(slice));
+      while (rows(pending_) >= defaults::import::table_slice_size) {
+        auto [lhs, rhs]
+          = split(std::move(pending_), defaults::import::table_slice_size);
+        if (auto error = write_slice(concatenate(std::move(lhs)));
+            error.valid()) {
+          return error;
+        }
+        pending_ = std::move(rhs);
+      }
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto finish() -> caf::expected<uint64_t> override {
+    if (auto error = flush_pending(); error.valid()) {
+      return error;
+    }
+    if (not writer_) {
+      return caf::make_error(ec::logic_error,
+                             "cannot finish an empty feather store");
+    }
+    if (auto status = writer_->Close(); not status.ok()) {
+      return caf::make_error(ec::system_error, status.ToString());
+    }
+    if (auto status = stream_->Close(); not status.ok()) {
+      return caf::make_error(ec::system_error, status.ToString());
+    }
+    auto position = stream_->Tell();
+    TENZIR_ASSERT(position.ok());
+    return detail::narrow_cast<uint64_t>(*position);
+  }
+
+private:
+  auto flush_pending() -> caf::error {
+    if (pending_.empty()) {
+      return {};
+    }
+    auto slice = concatenate(std::move(pending_));
+    pending_ = {};
+    return write_slice(slice);
+  }
+
+  auto write_slice(const table_slice& slice) -> caf::error {
+    auto batch = wrap_record_batch(slice);
+    if (not writer_) {
+      // Attach origin metadata to the schema, mirroring the buffered store.
+      auto metadata = batch->schema()->metadata()
+                        ? batch->schema()->metadata()->Copy()
+                        : std::make_shared<arrow::KeyValueMetadata>();
+      metadata->Append("TENZIR:store:origin", origin());
+      schema_ = batch->schema()->WithMetadata(std::move(metadata));
+      auto options = arrow::ipc::IpcWriteOptions::Defaults();
+      auto codec = arrow::util::Codec::Create(arrow::Compression::ZSTD,
+                                              compression_level_);
+      if (not codec.ok()) {
+        return caf::make_error(ec::system_error, codec.status().ToString());
+      }
+      options.codec = codec.MoveValueUnsafe();
+      auto writer = arrow::ipc::MakeFileWriter(stream_, schema_, options);
+      if (not writer.ok()) {
+        return caf::make_error(ec::system_error, writer.status().ToString());
+      }
+      writer_ = writer.MoveValueUnsafe();
+    }
+    if (auto status = writer_->WriteRecordBatch(*batch); not status.ok()) {
+      return caf::make_error(ec::format_error,
+                             fmt::format("failed to write record batch: {}",
+                                         status.ToStringWithoutContextLines()));
+    }
+    return {};
+  }
+
+  int64_t compression_level_;
+  size_t num_events_ = 0;
+  std::vector<table_slice> pending_ = {};
+  std::shared_ptr<chunk_sink_output_stream> stream_;
+  std::shared_ptr<arrow::Schema> schema_ = {};
+  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer_ = {};
+};
+
 } // namespace store
 
 auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
@@ -1327,6 +1476,12 @@ class plugin final : public virtual parser_plugin<feather_parser>,
   [[nodiscard]] auto make_active_store() const
     -> caf::expected<std::unique_ptr<active_store>> override {
     return std::make_unique<store::active_feather_store>(compression_level_);
+  }
+
+  [[nodiscard]] auto make_store_writer(chunk_sink sink) const
+    -> caf::expected<std::unique_ptr<store_writer>> override {
+    return std::make_unique<store::streaming_feather_store>(compression_level_,
+                                                            std::move(sink));
   }
 
 private:

@@ -458,6 +458,7 @@ caf::error index_state::load_from_disk() {
     TENZIR_VERBOSE("{} found no prior state, starting with a clean slate",
                    *self);
     self->mail(atom::start_v, std::vector<partition_synopsis_pair>{})
+      .urgent()
       .request(catalog, caf::infinite)
       .then([](atom::ok) {},
             [this](caf::error err) {
@@ -477,6 +478,7 @@ caf::error index_state::load_from_disk() {
                                            "of {}: {}",
                                            *self, dir, err.message()));
       }
+      auto kept_markers = false;
       for (auto const& entry : transforms_dir_iter) {
         if (entry.path().extension() != ".marker") {
           continue;
@@ -485,6 +487,7 @@ caf::error index_state::load_from_disk() {
         if (not chunk) {
           TENZIR_WARN("{} failed to mmap chunk at {}: {}", *self, entry.path(),
                       chunk.error());
+          kept_markers = true;
           continue;
         }
         auto maybe_flatbuffer
@@ -493,6 +496,7 @@ caf::error index_state::load_from_disk() {
         if (not maybe_flatbuffer) {
           TENZIR_WARN("{} failed to open transform {}: {}", *self, entry.path(),
                       err.message());
+          kept_markers = true;
           continue;
         }
         auto& transform_flatbuffer = *maybe_flatbuffer;
@@ -500,9 +504,136 @@ caf::error index_state::load_from_disk() {
             != tenzir::fbs::partition_transform::PartitionTransform::v0) {
           TENZIR_WARN("{} detected unknown transform version at {}", *self,
                       entry.path());
+          kept_markers = true;
           continue;
         }
         auto const* transform_v0 = transform_flatbuffer->transform_as_v0();
+        // Validate every output before installing anything, and install
+        // everything before touching any input, so that a failure keeps the
+        // marker and all data recoverable and never leaves a marker's outputs
+        // partially installed alongside its inputs. A store staged by the
+        // offline rebuild tool remains at a temporary path until its
+        // transform marker is durable, so promote it first; promotion only
+        // affects the archive, which the partition scan below ignores. The
+        // synopsis is regenerated from the partition file when missing, so
+        // only the store and the partition itself are essential.
+        auto outputs_usable = true;
+        for (auto const* id : *transform_v0->output_partitions()) {
+          const auto uuid = tenzir::uuid::from_flatbuffer(*id);
+          auto have_store = false;
+          for (const auto* ext : {"store", "feather", "parquet"}) {
+            const auto store_path
+              = archive_dir() / fmt::format("{}.{}", uuid, ext);
+            const auto tmp_path
+              = std::filesystem::path{store_path.string() + ".tmp"};
+            auto store_ec = std::error_code{};
+            if (std::filesystem::exists(tmp_path, store_ec)) {
+              std::filesystem::rename(tmp_path, store_path, store_ec);
+              if (store_ec) {
+                TENZIR_WARN("failed to rename '{}' to '{}': {}", tmp_path,
+                            store_path, store_ec.message());
+              }
+            }
+            store_ec.clear();
+            if (std::filesystem::exists(store_path, store_ec)) {
+              have_store = true;
+            }
+          }
+          const auto staged_partition = std::filesystem::path{fmt::format(
+            TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid)};
+          auto partition_ec = std::error_code{};
+          const auto have_partition
+            = std::filesystem::exists(staged_partition, partition_ec)
+              or std::filesystem::exists(partition_path(uuid), partition_ec);
+          if (not have_store or not have_partition) {
+            outputs_usable = false;
+          }
+        }
+        // Whenever a marker cannot be applied in full, every output must
+        // leave the live index again—including outputs that a previous
+        // crashed run already moved to their final locations—so that the
+        // scan below never catalogs a marker's outputs alongside its inputs.
+        const auto restage_outputs = [&] {
+          const auto restage = [&](const std::filesystem::path& final_path,
+                                   const std::filesystem::path& staged_path) {
+            auto ec = std::error_code{};
+            if (not std::filesystem::exists(final_path, ec)) {
+              return;
+            }
+            if (std::filesystem::exists(staged_path, ec)) {
+              std::filesystem::remove(final_path, ec);
+            } else {
+              std::filesystem::rename(final_path, staged_path, ec);
+            }
+            if (ec) {
+              TENZIR_WARN("{} failed to move the partially installed "
+                          "transform output {} back into the staging "
+                          "directory: {}",
+                          *self, final_path, ec.message());
+            }
+          };
+          for (auto const* id : *transform_v0->output_partitions()) {
+            const auto uuid = tenzir::uuid::from_flatbuffer(*id);
+            const auto staged_partition = std::filesystem::path{fmt::format(
+              TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid)};
+            restage(partition_path(uuid), staged_partition);
+            const auto staged_synopsis = std::filesystem::path{
+              fmt::format(TENZIR_FMT_RUNTIME(
+                            transformer_partition_synopsis_path_template()),
+                          uuid)};
+            restage(partition_synopsis_path(uuid), staged_synopsis);
+          }
+        };
+        if (not outputs_usable) {
+          restage_outputs();
+          TENZIR_WARN("{} keeps transform marker {} because an output store "
+                      "or partition is missing",
+                      *self, entry.path());
+          kept_markers = true;
+          continue;
+        }
+        // Install the validated outputs. Should a rename still fail, move
+        // every output of this marker back into the staging directory and
+        // keep the marker.
+        const auto install = [](const std::filesystem::path& from,
+                                const std::filesystem::path& to) -> bool {
+          auto ec = std::error_code{};
+          if (std::filesystem::exists(to, ec)) {
+            std::filesystem::remove(from, ec);
+            return true;
+          }
+          if (not std::filesystem::exists(from, ec)) {
+            return false;
+          }
+          std::filesystem::rename(from, to, ec);
+          return not ec;
+        };
+        auto install_ok = true;
+        for (auto const* id : *transform_v0->output_partitions()) {
+          const auto uuid = tenzir::uuid::from_flatbuffer(*id);
+          const auto staged_partition = std::filesystem::path{fmt::format(
+            TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid)};
+          if (not install(staged_partition, partition_path(uuid))) {
+            install_ok = false;
+            break;
+          }
+          const auto staged_synopsis = std::filesystem::path{fmt::format(
+            TENZIR_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
+            uuid)};
+          if (not install(staged_synopsis, partition_synopsis_path(uuid))) {
+            TENZIR_DEBUG("{} regenerates the missing synopsis of transformed "
+                         "partition {} later",
+                         *self, uuid);
+          }
+        }
+        if (not install_ok) {
+          restage_outputs();
+          TENZIR_WARN("{} keeps transform marker {} because installing its "
+                      "outputs failed",
+                      *self, entry.path());
+          kept_markers = true;
+          continue;
+        }
         for (auto const* id : *transform_v0->input_partitions()) {
           auto uuid = tenzir::uuid::from_flatbuffer(*id);
           auto path = partition_path(uuid);
@@ -527,36 +658,16 @@ caf::error index_state::load_from_disk() {
                 });
           }
         }
-        for (auto const* id : *transform_v0->output_partitions()) {
-          const auto uuid = tenzir::uuid::from_flatbuffer(*id);
-          const auto from_partition = fmt::format(
-            TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid);
-          const auto to_partition = partition_path(uuid);
-          const auto from_partition_synopsis = fmt::format(
-            TENZIR_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
-            uuid);
-          const auto to_partition_synopsis = partition_synopsis_path(uuid);
-          auto ec = std::error_code{};
-          std::filesystem::rename(from_partition, to_partition, ec);
-          if (ec) {
-            TENZIR_WARN("failed to rename '{}' to '{}': {}", from_partition,
-                        to_partition, ec.message());
-          }
-          ec.clear();
-          std::filesystem::rename(from_partition_synopsis,
-                                  to_partition_synopsis, ec);
-          if (ec) {
-            TENZIR_WARN("failed to rename '{}' to '{}': {}",
-                        from_partition_synopsis, to_partition_synopsis,
-                        ec.message());
-          }
-        }
+        auto remove_ec = std::error_code{};
+        std::filesystem::remove(entry.path(), remove_ec);
       }
-      // TODO: This does not handle store files, which may already have been
-      // written. Since a store file may also be written before the partition
-      // itself, there does not currently seem to be a bulletproof way of
-      // handling this.
-      std::filesystem::remove_all(markersdir);
+      // TODO: This does not handle input store files, which may already have
+      // been written. Since a store file may also be written before the
+      // partition itself, there does not currently seem to be a bulletproof
+      // way of handling this.
+      if (not kept_markers) {
+        std::filesystem::remove_all(markersdir);
+      }
       return caf::none;
     }();
     if (error.valid()) {
@@ -868,6 +979,7 @@ caf::error index_state::load_from_disk() {
   TENZIR_DEBUG("{} requesting bulk merge of {} partitions", *self,
                synopses.size());
   self->mail(atom::start_v, std::move(synopses))
+    .urgent()
     .request(catalog, caf::infinite)
     .then(
       [this](atom::ok) {
@@ -1080,6 +1192,7 @@ void index_state::decommission_active_partition(
         // down.
         auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
         self->mail(atom::merge_v, std::move(apsv))
+          .urgent()
           .request(catalog, caf::infinite)
           .then(
             [=, this](atom::ok) {
@@ -1567,6 +1680,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // since CAF guarantees message order within the same inbound queue
       // they will all be part of the response vector.
       self->mail(atom::get_v)
+        .urgent()
         .request(self->state().catalog, caf::infinite)
         .then(
           [=](std::vector<partition_synopsis_pair>& v) {
@@ -2095,6 +2209,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         if (keep == keep_original_partition::yes) {
                           if (not apsv.empty()) {
                             self->mail(atom::merge_v, apsv)
+                              .urgent()
                               .request(self->state().catalog, caf::infinite)
                               .then(
                                 [self, deliver, transformed_input_partitions,
@@ -2127,6 +2242,7 @@ index(index_actor::stateful_pointer<index_state> self,
                           }
                         } else { // keep == keep_original_partition::no
                           self->mail(atom::replace_v, old_partition_ids, apsv)
+                            .urgent()
                             .request(self->state().catalog, caf::infinite)
                             .then(
                               [self, deliver, old_partition_ids,

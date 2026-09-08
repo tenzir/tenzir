@@ -517,6 +517,15 @@ auto store_plugin::make_store_builder(filesystem_actor fs,
   return builder_and_header{store_builder, header};
 }
 
+auto store_plugin::make_store_writer(chunk_sink sink) const
+  -> caf::expected<std::unique_ptr<store_writer>> {
+  TENZIR_UNUSED(sink);
+  return caf::make_error(ec::unimplemented,
+                         fmt::format("store backend `{}` does not support "
+                                     "streaming writes",
+                                     name()));
+}
+
 auto store_plugin::make_store(filesystem_actor fs,
                               std::span<const std::byte> header,
                               caf::message_priority priority) const

@@ -10,6 +10,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/plugin/base.hpp"
+#include "tenzir/store.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/expected.hpp>
@@ -78,6 +79,13 @@ public:
   [[nodiscard]] virtual auto make_active_store() const
     -> caf::expected<std::unique_ptr<active_store>>
     = 0;
+
+  /// Create a store writer that streams serialized data to `sink` as slices
+  /// arrive, keeping only bounded state in memory. The default implementation
+  /// returns an error for store backends that only support buffered writes
+  /// via `make_active_store`.
+  [[nodiscard]] virtual auto make_store_writer(chunk_sink sink) const
+    -> caf::expected<std::unique_ptr<store_writer>>;
 
 private:
   [[nodiscard]] auto make_store_builder(filesystem_actor fs, const uuid& id,
