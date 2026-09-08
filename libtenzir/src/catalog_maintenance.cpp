@@ -405,6 +405,13 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
   run.batch_byte_budget = budget;
   if (budget == 0) {
     TENZIR_WARN("{} has no memory budget for a rebuild batch", name);
+    run.stopping = true;
+    if (not run.failure) {
+      run.failure = caf::make_error(
+        ec::out_of_memory,
+        "no per-batch rebuild memory budget; increase "
+        "tenzir.rebuild-memory-budget or reduce rebuild parallelism");
+    }
     return {};
   }
   // Restrict the pool to the run's expression. A trivially true expression --

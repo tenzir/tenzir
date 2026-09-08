@@ -195,6 +195,16 @@ try:
         result = tenzir.run(f'from {{index: {index}}}\n@name = "{SCHEMA}"\nimport\n')
         assert result.returncode == 0, f"import failed: {result.stderr.decode()}"
         node.stop()
+    node.memory_budget = "1"
+    node.start()
+    tenzir = Executor.from_env(node.env)
+    result = run_ctl(node, "rebuild", "--undersized", "--parallel=2")
+    assert result.returncode != 0, "zero per-batch budget reported success"
+    assert "no per-batch rebuild memory budget" in result.stderr, result.stderr
+    assert partition_count(tenzir) == 6
+    print("zero-per-batch-memory-rejected: ok")
+    node.stop()
+    node.memory_budget = "0"
     node.start()
     tenzir = Executor.from_env(node.env)
     assert partition_count(tenzir) == 6

@@ -155,6 +155,37 @@ TEST("an explicit rebuild memory budget is divided among concurrent batches") {
   CHECK_EQUAL(f.state.select_rebuild_batch(run).size(), size_t{4});
 }
 
+TEST("zero per-batch memory fails the run and retains automatic work") {
+  for (const auto automatic : {false, true}) {
+    for (const auto configured : {false, true}) {
+      auto f = fixture{};
+      f.add("test", 10);
+      f.add("test", 10);
+      const auto expected = f.state.open_rebuild_groups;
+      auto run = f.make_run(automatic ? automatic_options() : all_options());
+      run.horizon = f.state.admission_sequence;
+      run.collected_groups = std::exchange(f.state.open_rebuild_groups, {});
+      if (configured) {
+        f.state.maintenance.rebuild_memory_budget = 1;
+        run.options.parallel = 2;
+      } else {
+        run.options.parallel = std::numeric_limits<size_t>::max();
+      }
+      f.state.rebuild = std::move(run);
+      f.state.schedule_rebuild(f.clock);
+      CHECK(not f.state.rebuild);
+      REQUIRE(f.state.last_rebuild);
+      REQUIRE(f.state.last_rebuild->failure);
+      CHECK_EQUAL(f.state.last_rebuild->failure->code(),
+                  static_cast<uint8_t>(ec::out_of_memory));
+      CHECK_EQUAL(f.state.last_rebuild->selected, size_t{0});
+      CHECK(f.state.closed_rebuild_groups.empty());
+      CHECK_EQUAL(f.state.open_rebuild_groups,
+                  automatic ? expected : RebuildGroups{});
+    }
+  }
+}
+
 TEST("transform progress is reported by the catalog") {
   auto f = fixture{};
   auto const id = f.add("test", 10);

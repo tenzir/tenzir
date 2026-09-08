@@ -1,4 +1,5 @@
 negative-memory-budget-rejected: ok
 invalid-merge-margin-rejected: ok
 invalid-timezone-rejected: ok
+zero-per-batch-memory-rejected: ok
 six-tiny-partitions-merged: ok
