@@ -345,8 +345,8 @@ struct deferred_erase {
 auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
                    keep_original_partition keep, bool quarantine = false,
                    std::string_view policy_token = {},
-                   Option<uuid> token_input = None{}, bool finalized = false)
-  -> chunk_ptr;
+                   Option<uuid> token_input = None{}, bool finalized = false,
+                   uint64_t sequence = 0) -> chunk_ptr;
 
 /// A rebuild run in progress inside the catalog.
 using RebuildGroups = std::set<std::pair<type, int64_t>>;
@@ -965,8 +965,11 @@ public:
     /// the commit stays replayable until the policy has persisted it.
     std::filesystem::path marker = {};
     bool erasure = false;
+    uint64_t sequence = 0;
   };
   std::vector<replayed_transform> replayed_transforms = {};
+  /// Highest issued or replayed marker sequence; claims serialize shared inputs.
+  uint64_t marker_sequence = 0;
 
   std::unordered_set<uuid> retiring = {};
 

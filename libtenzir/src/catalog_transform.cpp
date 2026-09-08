@@ -122,7 +122,7 @@ auto catalog_state::active_transformations_status() const -> record {
 auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
                    keep_original_partition keep, bool quarantine,
                    std::string_view policy_token, Option<uuid> token_input,
-                   bool finalized) -> chunk_ptr {
+                   bool finalized, uint64_t sequence) -> chunk_ptr {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto in_offsets
     = flatbuffers::Offset<flatbuffers::Vector<const fbs::UUID*>>{};
@@ -148,7 +148,7 @@ auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
   }
   auto v0_offset = fbs::partition_transform::Createv0(
     builder, in_offsets, out_offsets, quarantine, token_offset,
-    token_input ? &token_uuid : nullptr, finalized);
+    token_input ? &token_uuid : nullptr, finalized, sequence);
   auto transform_offset = fbs::CreatePartitionTransform(
     builder, fbs::partition_transform::PartitionTransform::v0,
     v0_offset.Union());
@@ -284,6 +284,7 @@ void catalog_state::transform(
     std::move(transformer_addr), std::move(completion_disposable));
   TENZIR_ASSERT(inserted);
   auto marker_path = paths.marker(uuid::random());
+  const auto sequence = ++marker_sequence;
   // Engaged when the transform ends in a state only a restart can finish:
   // the marker is durable and some outputs may already sit in the index
   // directory, so the marker must survive to replay, and the inputs *it
@@ -335,8 +336,8 @@ void catalog_state::transform(
   self->mail(atom::persist_v)
     .request(transformer, caf::infinite)
     .then(
-      [this, deliver, keep, marker_path, commit_at_restart, output_claims,
-       policy_token = std::move(policy_token), transformer,
+      [this, deliver, keep, marker_path, sequence, commit_at_restart,
+       output_claims, policy_token = std::move(policy_token), transformer,
        progress](partition_transformer_result& transform_result) mutable {
         if (transform_result.skipped) {
           deliver(partition_apply_result{.input_partitions = {},
@@ -391,7 +392,7 @@ void catalog_state::transform(
         }
         auto marker_chunk
           = create_marker(old_partition_ids, new_partition_ids, keep, false,
-                          policy_token, token_input);
+                          policy_token, token_input, false, sequence);
         self->mail(atom::write_v, marker_path, marker_chunk)
           .request(filesystem, caf::infinite)
           .then(
@@ -460,7 +461,8 @@ void catalog_state::transform(
                       finalize_marker(
                         marker_path,
                         create_marker({}, new_partition_ids, keep, false,
-                                      policy_token, token_input, true),
+                                      policy_token, token_input, true,
+                                      sequence),
                         [=]() mutable {
                           deliver(partition_apply_result{
                             .input_partitions
@@ -505,7 +507,7 @@ void catalog_state::transform(
                       marker_path,
                       create_marker(old_partition_ids, new_partition_ids,
                                     keep_original_partition::no, false,
-                                    policy_token, token_input, true),
+                                    policy_token, token_input, true, sequence),
                       [=, this]() mutable {
                         deliver(partition_apply_result{
                           .input_partitions

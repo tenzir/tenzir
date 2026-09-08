@@ -455,6 +455,30 @@ TEST("malformed transform markers refuse startup and retain recovery files") {
   CHECK(f.candidates(reader, uuid::random()).empty());
 }
 
+TEST("marker replay restores the highest issued sequence") {
+  auto f = fixture{};
+  REQUIRE(f.await_shutdown());
+  std::filesystem::create_directories(f.paths.markers_dir);
+  for (const auto sequence : {uint64_t{42}, uint64_t{17}}) {
+    REQUIRE(not io::save(f.paths.marker(uuid::random()),
+                         as_bytes(create_marker(
+                           {}, {}, keep_original_partition::yes, false,
+                           "policy token", uuid::random(), true, sequence)))
+                  .valid());
+  }
+  auto state = catalog_state{};
+  state.paths = f.paths;
+  REQUIRE(state.replay_markers());
+  CHECK_EQUAL(state.marker_sequence, uint64_t{42});
+  REQUIRE_EQUAL(state.replayed_transforms.size(), size_t{2});
+  auto sequences = std::vector<uint64_t>{};
+  for (const auto& replayed : state.replayed_transforms) {
+    sequences.push_back(replayed.sequence);
+  }
+  std::ranges::sort(sequences);
+  CHECK_EQUAL(sequences, (std::vector<uint64_t>{17, 42}));
+}
+
 TEST("erasure tombstones replay without a policy history invalidation") {
   auto f = fixture{};
   const auto input = f.add_partition();

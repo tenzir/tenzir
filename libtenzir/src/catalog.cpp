@@ -1005,6 +1005,15 @@ auto catalog_state::replay_policy_transforms() -> caf::error {
         if (&other == &transform) {
           return false;
         }
+        // Two preserving commits both write back onto the same input. The
+        // later one depends on the earlier one, not vice versa. Equal (legacy
+        // zero) sequences remain ambiguous and fail below rather than guessing.
+        if (transform.inputs.empty() and other.inputs.empty()
+            and transform.token_input
+            and transform.token_input == other.token_input
+            and other.sequence > transform.sequence) {
+          return false;
+        }
         return (transform.token_input
                 and writes_onto(other, *transform.token_input))
                or std::ranges::any_of(transform.inputs, [&](const auto& input) {
@@ -1013,9 +1022,10 @@ auto catalog_state::replay_policy_transforms() -> caf::error {
       });
     });
     if (chosen == pending.end()) {
-      // Fresh output ids cannot form a cycle; if a corrupt marker
-      // manufactures one anyway, taking the front keeps this loop finite.
-      chosen = pending.begin();
+      return caf::make_error(
+        ec::format_error,
+        "cannot order transform marker replay; ambiguous or cyclic markers "
+        "are retained and must be repaired before restarting");
     }
     ordered.push_back(std::move(*chosen));
     pending.erase(chosen);

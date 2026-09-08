@@ -199,6 +199,7 @@ auto catalog_state::replay_markers()
     }
     const auto quarantine = transform_v0->quarantine();
     const auto finalized = transform_v0->finalized();
+    marker_sequence = std::max(marker_sequence, transform_v0->sequence());
     // A preserve-input marker omits the input vector entirely -- the schema
     // allows it, and create_marker writes it only for replacements -- so the
     // accessor can be null.
@@ -283,6 +284,7 @@ auto catalog_state::replay_markers()
     // phantoms in memory next to their finalized replacements.
     {
       auto replayed = replayed_transform{};
+      replayed.sequence = transform_v0->sequence();
       for (const auto& input : marker_input_ids) {
         replayed_inputs.insert(input);
         replayed.inputs.push_back(input);

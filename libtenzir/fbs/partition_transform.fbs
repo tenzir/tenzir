@@ -28,6 +28,10 @@ table v0 {
 	/// legitimately -- and only erases the inputs and hands the policy
 	/// payload back.
 	finalized: bool = false;
+
+	/// Catalog-issued order for commits that preserve the same input. Zero
+	/// identifies legacy markers without recorded chronology.
+	sequence: ulong = 0;
 }
 
 union PartitionTransform {
