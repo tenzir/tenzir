@@ -275,6 +275,65 @@ TEST("a failed automatic run defers unfinished groups until the next hour") {
   CHECK_EQUAL(f.state.open_rebuild_groups, expected);
 }
 
+TEST("policy-blocked automatic runs finish and retain their groups") {
+  struct BlockedPolicy final : storage_policy {
+    uuid blocked;
+    auto blocks_rebuild(const uuid& id, const partition_synopsis&,
+                        tenzir::time) const -> bool override {
+      return id == blocked;
+    }
+  };
+  auto f = fixture{};
+  const auto blocked = f.add("blocked", 10);
+  auto policy = std::make_unique<BlockedPolicy>();
+  policy->blocked = blocked;
+  f.state.policy = std::move(policy);
+  auto run = f.make_run(automatic_options());
+  const auto expected = f.state.open_rebuild_groups;
+  run.collected_groups = std::exchange(f.state.open_rebuild_groups, {});
+  f.state.rebuild = std::move(run);
+  f.state.schedule_rebuild(f.clock);
+  CHECK(not f.state.rebuild);
+  REQUIRE(f.state.last_rebuild);
+  CHECK_EQUAL(f.state.last_rebuild->deferred, size_t{1});
+  CHECK(f.state.closed_rebuild_groups.empty());
+  CHECK_EQUAL(f.state.open_rebuild_groups, expected);
+  // The next collection can process unrelated arrivals even if the old
+  // policy block never clears. Its blocked group remains eligible for retry.
+  const auto first = f.add("free", 10);
+  const auto second = f.add("free", 10);
+  f.state.closed_rebuild_groups
+    = std::exchange(f.state.open_rebuild_groups, {});
+  f.state.closed_admission = f.state.admission_sequence;
+  REQUIRE(not f.state.begin_rebuild(automatic_options()).valid());
+  REQUIRE(f.state.rebuild);
+  f.state.rebuild->started_at = f.clock;
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(*f.state.rebuild)),
+              (std::vector{first, second}));
+  CHECK_EQUAL(f.state.rebuild->deferred, size_t{1});
+}
+
+TEST("finishing a run drains an already closed collection inline") {
+  auto f = fixture{};
+  f.state.policy_pending.insert(f.add("old", 10));
+  auto run = f.make_run(automatic_options());
+  run.collected_groups = std::exchange(f.state.open_rebuild_groups, {});
+  f.state.rebuild = std::move(run);
+  f.state.policy_pending.insert(f.add("new", 10));
+  f.state.closed_rebuild_groups
+    = std::exchange(f.state.open_rebuild_groups, {});
+  f.state.closed_admission = f.state.admission_sequence;
+  f.state.maintenance.automatic_rebuild = 1;
+  f.state.maintenance.rebuild_interval = std::chrono::hours{1};
+  f.state.maintenance_ready = true;
+  f.state.next_collection = tenzir::time::max();
+  f.state.next_disposal_check = tenzir::time::max();
+  f.state.advance_maintenance(f.clock);
+  CHECK(not f.state.rebuild);
+  CHECK(f.state.closed_rebuild_groups.empty());
+  CHECK_EQUAL(f.state.open_rebuild_groups.size(), size_t{2});
+}
+
 TEST("selection skips partitions erased after the run started") {
   auto f = fixture{};
   const auto first = f.add("test", 10);

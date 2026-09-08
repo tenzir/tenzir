@@ -208,40 +208,25 @@ void catalog_state::advance_maintenance(time now) {
   auto const automatic_enabled
     = maintenance.automatic_rebuild > 0
       and maintenance.rebuild_interval > duration::zero();
-  if (automatic_enabled and not closed_rebuild_groups.empty() and rebuild
-      and rebuild->options.automatic and rebuild->running == 0) {
-    // A closed hour can extend the pending work without letting an old
-    // policy conflict hold up unrelated groups indefinitely.
-    if (rebuild->groups) {
-      for (auto const& group : *rebuild->groups) {
-        for (auto const& input : group) {
-          auto synopsis = find_synopsis(input.uuid);
-          if (synopsis
-              and is_rebuild_candidate(input.uuid, *synopsis, *rebuild)) {
-            closed_rebuild_groups.emplace(input.schema,
-                                          rebuild_day(input.max_import_time));
-          }
-        }
+  for (;;) {
+    if (automatic_enabled and not closed_rebuild_groups.empty() and not rebuild
+        and not pending_rebuild) {
+      auto error = begin_rebuild(rebuild_options{
+        .undersized = true,
+        .parallel = maintenance.automatic_rebuild,
+        .expression = trivially_true_expression(),
+        .automatic = true,
+      });
+      if (error) {
+        TENZIR_WARN("{} failed to start automatic rebuild: {}", *self, error);
       }
     }
-    finish_rebuild();
-  }
-  if (automatic_enabled and not closed_rebuild_groups.empty() and not rebuild
-      and not pending_rebuild) {
-    auto error = begin_rebuild(rebuild_options{
-      .undersized = true,
-      .parallel = maintenance.automatic_rebuild,
-      .expression = trivially_true_expression(),
-      .automatic = true,
-    });
-    if (error) {
-      TENZIR_WARN("{} failed to start automatic rebuild: {}", *self, error);
+    if (not rebuild) {
+      break;
     }
-  }
-  while (rebuild) {
     auto const generation = rebuild->generation;
     schedule_rebuild(now);
-    if (not rebuild or rebuild->generation == generation) {
+    if (rebuild and rebuild->generation == generation) {
       break;
     }
   }
@@ -674,12 +659,14 @@ void catalog_state::finish_rebuild() {
   }
   auto stop_requests = std::exchange(run.stop_requests, {});
   const auto failure = run.failure;
-  if (run.options.automatic and run.stopping and run.collected_groups) {
+  if (run.options.automatic and (run.stopping or run.deferred > 0)
+      and run.collected_groups) {
     // A filtered manual run need not cover the automatic work it interrupts.
     // Preserve unfinished groups, but not visited inputs or fresh arrivals.
-    // After an I/O failure, wait for the next hourly collection before retrying.
-    auto& pending_groups
-      = failure ? open_rebuild_groups : closed_rebuild_groups;
+    // Failed or policy-blocked work waits for the next hourly collection.
+    // A policy block need not ever clear, so it must not keep this run active.
+    auto& pending_groups = failure or run.deferred > 0 ? open_rebuild_groups
+                                                       : closed_rebuild_groups;
     for (const auto& [schema, partitions] : *synopses_per_type) {
       for (const auto& [id, synopsis] : *partitions) {
         auto group = std::pair{schema, rebuild_day(synopsis->max_import_time)};
@@ -910,10 +897,6 @@ void catalog_state::schedule_rebuild(time now) {
       std::move(options));
   }
   if (rebuild->running == 0) {
-    if (rebuild->options.automatic and rebuild->deferred > 0
-        and not rebuild->stopping) {
-      return;
-    }
     if (rebuild->deferred > 0 and not rebuild->options.automatic
         and not rebuild->failure) {
       rebuild->failure = caf::make_error(
