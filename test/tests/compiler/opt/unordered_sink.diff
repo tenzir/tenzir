@@ -4,163 +4,166 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
 -    UnorderedIr {
+-      pipeline: {
+-        lets: [
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_file` @ [1]:30..37 from 0
-+        ],
-+        ref: std::to_file/op
-+      },
 +      desc: "tql2.to_file",
-+      args: [
-+        located {
-+          buffer: {
-+            chunk: chunk(size=60),
-+            table-offset: 12
-+          }
-+        } @ [1]:38..53 from 0
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_file` @ [1]:30..37 from 0
++          ],
++          ref: std::to_file/op
++        },
++        args: [
++          located {
++            buffer: {
++              chunk: chunk(size=60),
++              table-offset: 12
++            }
++          } @ [1]:38..53 from 0
++        ],
++        named_args: [
+           
+         ],
+-        operators: [
+-          GenericIr {
+-            desc: "tql2.sort",
+-            store: {
+-              op: {
+-                path: [
+-                  `sort` @ [1]:21..25 from 0
+-                ],
+-                ref: std::sort/op
+-              },
+-              args: [
+-                expression root_field {
+-                  id: `x` @ [1]:26..27 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
+-              named_args: [
+-                
+-              ]
+-            },
+-            filter: [
++        pipeline: {
++          pipeline: {
++            lets: [
+               
+             ],
+-            order: "ordered"
+-          },
+-          GenericIr {
+-            desc: "tql2.to_file",
+-            store: {
+-              op: {
+-                path: [
+-                  `to_file` @ [1]:30..37 from 0
+-                ],
+-                ref: std::to_file/op
+-              },
+-              args: [
+-                located {
+-                  buffer: {
+-                    chunk: chunk(size=60),
+-                    table-offset: 12
+-                  }
+-                } @ [1]:38..53 from 0
+-              ],
+-              named_args: [
+-                
+-              ],
+-              pipeline: {
+-                pipeline: {
+-                  lets: [
++            operators: [
++              GenericIr {
++                desc: "write_ndjson",
++                store: {
++                  op: {
++                    path: [
++                      `write_ndjson` @ [1]:60..72 from 0
++                    ],
++                    ref: std::write_ndjson/op
++                  },
++                  args: [
+                     
+                   ],
+-                  operators: [
+-                    GenericIr {
+-                      desc: "write_ndjson",
+-                      store: {
+-                        op: {
+-                          path: [
+-                            `write_ndjson` @ [1]:60..72 from 0
+-                          ],
+-                          ref: std::write_ndjson/op
+-                        },
+-                        args: [
+-                          
+-                        ],
+-                        named_args: [
+-                          
+-                        ]
+-                      },
+-                      filter: [
+-                        
+-                      ],
+-                      order: "ordered"
+-                    }
++                  named_args: [
++                    
+                   ]
+-                } @ [1]:54..76 from 0,
+-                let_ids: {
++                },
++                filter: [
+                   
+-                }
++                ],
++                order: "unordered"
+               }
+-            },
+-            filter: [
+-              
+-            ],
+-            order: "ordered"
++            ]
++          } @ [1]:54..76 from 0,
++          let_ids: {
++            
+           }
+-        ]
++        }
+       },
+-      loc: [1]:7..16 from 0
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ],
-       pipeline: {
--        lets: [
-+        pipeline: {
-+          lets: [
-+            
-+          ],
-+          operators: [
-+            GenericIr {
-+              op: {
-+                path: [
-+                  `write_ndjson` @ [1]:60..72 from 0
-+                ],
-+                ref: std::write_ndjson/op
-+              },
-+              desc: "write_ndjson",
-+              args: [
-+                
-+              ],
-+              filter: [
-+                
-+              ],
-+              order: "unordered",
-+              named_args: [
-+                
-+              ]
-+            }
-+          ]
-+        } @ [1]:54..76 from 0,
-+        let_ids: {
-           
--        ],
--        operators: [
--          GenericIr {
--            op: {
--              path: [
--                `sort` @ [1]:21..25 from 0
--              ],
--              ref: std::sort/op
--            },
--            desc: "tql2.sort",
--            args: [
--              expression root_field {
--                id: `x` @ [1]:26..27 from 0,
--                has_question_mark: false
--              }
--            ],
--            filter: [
--              
--            ],
--            order: "ordered",
--            named_args: [
--              
--            ]
--          },
--          GenericIr {
--            op: {
--              path: [
--                `to_file` @ [1]:30..37 from 0
--              ],
--              ref: std::to_file/op
--            },
--            desc: "tql2.to_file",
--            args: [
--              located {
--                buffer: {
--                  chunk: chunk(size=60),
--                  table-offset: 12
--                }
--              } @ [1]:38..53 from 0
--            ],
--            filter: [
--              
--            ],
--            order: "ordered",
--            named_args: [
--              
--            ],
--            pipeline: {
--              pipeline: {
--                lets: [
--                  
--                ],
--                operators: [
--                  GenericIr {
--                    op: {
--                      path: [
--                        `write_ndjson` @ [1]:60..72 from 0
--                      ],
--                      ref: std::write_ndjson/op
--                    },
--                    desc: "write_ndjson",
--                    args: [
--                      
--                    ],
--                    filter: [
--                      
--                    ],
--                    order: "ordered",
--                    named_args: [
--                      
--                    ]
--                  }
--                ]
--              } @ [1]:54..76 from 0,
--              let_ids: {
--                
--              }
--            }
--          }
--        ]
--      },
--      loc: [1]:7..16 from 0
-+        }
-+      }
++      order: "ordered"
      }
    ]
  }

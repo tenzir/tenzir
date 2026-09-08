@@ -4,88 +4,105 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:113..119 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:113..119 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `load_balance` @ [1]:120..132 from 0
-         ],
-         ref: std::load_balance/op
-       },
        desc: "load_balance",
-       args: [
-         located [
-           string "a",
-           string "b"
-         ] @ [1]:133..138 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `load_balance` @ [1]:120..132 from 0
+           ],
+           ref: std::load_balance/op
+         },
+         args: [
+           located [
+             string "a",
+             string "b"
+           ] @ [1]:133..138 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               where_ir {
+                 op: {
+                   path: [
+-                    `where` @ [1]:143..148 from 0
++                    
+                   ],
+-                  ref: std::where/op
++                  ref: unresolved
+                 },
+                 args: [
+                   Incomplete binary_expr {
+                     left: dollar_var `$over` -> 2 @ [1]:149..154 from 0,
+                     op: "eq",
+                     right: constant string "a" @ [1]:158..161 from 0,
+                     location: [1]:149..161 from 0
+                   }
+                 ],
+                 named_args: [
+                   
+                 ]
+               },
+               GenericIr {
+                 desc: "discard",
+                 store: {
+                   op: {
+                     path: [
+                       `discard` @ [1]:164..171 from 0
+                     ],
+                     ref: std::discard/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:139..173 from 0,
+           let_ids: {
+             "0": 2
+           }
+         }
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             where_ir {
--              self: [1]:143..148 from 0,
-+              self: [0]:0..0 from 0,
-               predicate: binary_expr {
-                 left: dollar_var `$over` -> 2 @ [1]:149..154 from 0,
-                 op: "eq",
-                 right: constant string "a" @ [1]:158..161 from 0,
-                 location: [1]:149..161 from 0
-               }
-             },
-             GenericIr {
-               op: {
-                 path: [
-                   `discard` @ [1]:164..171 from 0
-                 ],
-                 ref: std::discard/op
-               },
-               desc: "discard",
-               args: [
-                 
-               ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         } @ [1]:139..173 from 0,
-         let_ids: {
-           "0": 2
-         }
-       }
+-      order: "ordered"
++      order: "unordered"
      }
    ]
  }

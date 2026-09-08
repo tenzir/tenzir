@@ -4,80 +4,88 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `reverse` @ [1]:7..14 from 0
-         ],
-         ref: std::reverse/op
-       },
        desc: "tql2.reverse",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `reverse` @ [1]:7..14 from 0
+           ],
+           ref: std::reverse/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `head` @ [1]:15..19 from 0
-         ],
-         ref: std::head/op
-       },
        desc: "head",
-       args: [
-         located 1 @ [1]:20..21 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:15..19 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 1 @ [1]:20..21 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:21..21 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:21..21 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
++      order: "ordered"
      }
    ]
  }

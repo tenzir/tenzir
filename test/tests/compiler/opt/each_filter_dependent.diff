@@ -4,108 +4,125 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:109..115 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:109..115 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `each` @ [1]:116..120 from 0
-         ],
-         ref: std::each/op
-       },
        desc: "each",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `each` @ [1]:116..120 from 0
+           ],
+           ref: std::each/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               from_ir {
+                 events: [
+                   record {
+                     begin: [1]:130..131 from 0,
+                     items: [
+                       field {
+                         name: `x` @ [1]:131..132 from 0,
+                         expr: field_access {
+                           left: dollar_var `$this` -> 1 @ [1]:134..139 from 0,
+                           has_question_mark: false,
+                           name: `n` @ [1]:140..141 from 0,
+                           location: [1]:134..141 from 0
+                         }
+                       }
+                     ],
+                     end: [1]:141..142 from 0
+                   }
+                 ],
+                 self: [1]:125..129 from 0
+               },
+               where_ir {
+                 op: {
+                   path: [
+-                    `where` @ [1]:145..150 from 0
++                    
+                   ],
+-                  ref: std::where/op
++                  ref: unresolved
+                 },
+                 args: [
+                   Incomplete binary_expr {
+                     left: field_access {
+                       left: dollar_var `$this` -> 1 @ [1]:151..156 from 0,
+                       has_question_mark: false,
+                       name: `n` @ [1]:157..158 from 0,
+                       location: [1]:151..158 from 0
+                     },
+                     op: "gt",
+                     right: constant int64 1 @ [1]:161..162 from 0,
+                     location: [1]:151..162 from 0
+                   }
+                 ],
+                 named_args: [
+                   
+                 ]
+               },
+               GenericIr {
+                 desc: "discard",
+                 store: {
+                   op: {
+                     path: [
+                       `discard` @ [1]:165..172 from 0
+                     ],
+                     ref: std::discard/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:121..174 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             from_ir {
-               events: [
-                 record {
-                   begin: [1]:130..131 from 0,
-                   items: [
-                     field {
-                       name: `x` @ [1]:131..132 from 0,
-                       expr: field_access {
-                         left: dollar_var `$this` -> 1 @ [1]:134..139 from 0,
-                         has_question_mark: false,
-                         name: `n` @ [1]:140..141 from 0,
-                         location: [1]:134..141 from 0
-                       }
-                     }
-                   ],
-                   end: [1]:141..142 from 0
-                 }
-               ],
-               self: [1]:125..129 from 0
-             },
-             where_ir {
--              self: [1]:145..150 from 0,
-+              self: [0]:0..0 from 0,
-               predicate: binary_expr {
-                 left: field_access {
-                   left: dollar_var `$this` -> 1 @ [1]:151..156 from 0,
-                   has_question_mark: false,
-                   name: `n` @ [1]:157..158 from 0,
-                   location: [1]:151..158 from 0
-                 },
-                 op: "gt",
-                 right: constant int64 1 @ [1]:161..162 from 0,
-                 location: [1]:151..162 from 0
-               }
-             },
-             GenericIr {
-               op: {
-                 path: [
-                   `discard` @ [1]:165..172 from 0
-                 ],
-                 ref: std::discard/op
-               },
-               desc: "discard",
-               args: [
-                 
-               ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         } @ [1]:121..174 from 0,
-         let_ids: {
-           "0": 1
-         }
-       }
+       order: "ordered"
      }
    ]
  }

@@ -4,115 +4,139 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
+-      order: "ordered"
 +      order: "unordered",
-+      limit: 10,
-+      named_args: [
-+        
-+      ]
-+    },
-+    GenericIr {
-+      op: {
-+        path: [
-+          `head` @ [1]:21..25 from 0
-+        ],
-+        ref: std::head/op
-+      },
-+      desc: "head",
-+      args: [
-+        
-+      ],
-+      filter: [
-+        
-+      ],
-+      order: "unordered",
-+      named_args: [
-+        
-+      ]
-+    },
-+    where_ir {
-+      self: [0]:0..0 from 0,
-+      predicate: binary_expr {
-+        left: root_field {
-+          id: `foo` @ [1]:34..37 from 0,
-+          has_question_mark: false
-+        },
-+        op: "eq",
-+        right: constant int64 42 @ [1]:41..43 from 0,
-+        location: [1]:34..43 from 0
-+      }
-+    },
-+    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:45..45 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
-+      desc: "to_stdout",
-+      args: [
-+        
-+      ],
-+      filter: [
-+        
-+      ],
-       order: "ordered",
-       named_args: [
-         
-       ]
--    },
++      limit: 10
+     },
 -    UnorderedIr {
 -      pipeline: {
 -        lets: [
--          
--        ],
++    GenericIr {
++      desc: "head",
++      store: {
++        op: {
++          path: [
++            `head` @ [1]:21..25 from 0
++          ],
++          ref: std::head/op
++        },
++        args: [
+           
+         ],
 -        operators: [
 -          GenericIr {
--            op: {
--              path: [
--                `head` @ [1]:21..25 from 0
--              ],
--              ref: std::head/op
--            },
 -            desc: "head",
--            args: [
--              
--            ],
+-            store: {
+-              op: {
+-                path: [
+-                  `head` @ [1]:21..25 from 0
+-                ],
+-                ref: std::head/op
+-              },
+-              args: [
+-                
+-              ],
+-              named_args: [
+-                
+-              ]
+-            },
 -            filter: [
 -              
 -            ],
--            order: "ordered",
+-            order: "ordered"
+-          },
+-          where_ir {
+-            op: {
+-              path: [
+-                `where` @ [1]:28..33 from 0
+-              ],
+-              ref: std::where/op
+-            },
+-            args: [
+-              expression binary_expr {
+-                left: root_field {
+-                  id: `foo` @ [1]:34..37 from 0,
+-                  has_question_mark: false
+-                },
+-                op: "eq",
+-                right: constant int64 42 @ [1]:41..43 from 0,
+-                location: [1]:34..43 from 0
+-              }
+-            ],
 -            named_args: [
 -              
 -            ]
--          },
--          where_ir {
--            self: [1]:28..33 from 0,
--            predicate: binary_expr {
--              left: root_field {
--                id: `foo` @ [1]:34..37 from 0,
--                has_question_mark: false
--              },
--              op: "eq",
--              right: constant int64 42 @ [1]:41..43 from 0,
--              location: [1]:34..43 from 0
--            }
 -          }
--        ]
--      },
++        named_args: [
++          
+         ]
+       },
 -      loc: [1]:7..16 from 0
++      filter: [
++        
++      ],
++      order: "unordered"
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `foo` @ [1]:34..37 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 42 @ [1]:41..43 from 0,
++          location: [1]:34..43 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:45..45 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
      }
    ]
  }

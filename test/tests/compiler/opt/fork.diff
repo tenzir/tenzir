@@ -4,24 +4,26 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:40..46 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:40..46 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      fork_ir {
        keyword: [1]:47..51 from 0,
@@ -32,58 +34,74 @@
          ],
          operators: [
            GenericIr {
-             op: {
-               path: [
-                 `discard` @ [1]:54..61 from 0
-               ],
-               ref: std::discard/op
-             },
              desc: "discard",
-             args: [
-               
-             ],
+             store: {
+               op: {
+                 path: [
+                   `discard` @ [1]:54..61 from 0
+                 ],
+                 ref: std::discard/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
-             order: "ordered",
-             named_args: [
-               
-             ]
+             order: "ordered"
            }
          ]
        }
      },
      where_ir {
--      self: [1]:64..69 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `x` @ [1]:70..71 from 0,
-           has_question_mark: false
-         },
-         op: "gt",
-         right: constant int64 1 @ [1]:74..75 from 0,
-         location: [1]:70..75 from 0
-       }
-     },
-     GenericIr {
        op: {
          path: [
-           `discard` @ [1]:76..83 from 0
+-          `where` @ [1]:64..69 from 0
++          
          ],
-         ref: std::discard/op
+-        ref: std::where/op
++        ref: unresolved
        },
-       desc: "discard",
        args: [
-         
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `x` @ [1]:70..71 from 0,
+             has_question_mark: false
+           },
+           op: "gt",
+           right: constant int64 1 @ [1]:74..75 from 0,
+           location: [1]:70..75 from 0
+         }
        ],
-       filter: [
-         
-       ],
-       order: "ordered",
        named_args: [
          
        ]
+     },
+     GenericIr {
+       desc: "discard",
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:76..83 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
      }
    ]
  }

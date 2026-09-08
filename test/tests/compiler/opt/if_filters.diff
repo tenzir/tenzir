@@ -4,24 +4,26 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      If {
        condition: constant bool true @ [1]:10..14 from 0,
@@ -31,24 +33,47 @@
          ],
          operators: [
            where_ir {
--            self: [1]:19..24 from 0,
-+            self: [0]:0..0 from 0,
-             predicate: root_field {
-               id: `a` @ [1]:25..26 from 0,
-               has_question_mark: false
-+            }
+             op: {
+               path: [
+-                `where` @ [1]:19..24 from 0
+-              ],
+-              ref: std::where/op
++                
++              ],
++              ref: unresolved
+             },
+             args: [
+-              expression root_field {
++              Incomplete root_field {
+                 id: `a` @ [1]:25..26 from 0,
+                 has_question_mark: false
+               }
+             ],
+             named_args: [
+               
+             ]
 +          },
 +          where_ir {
-+            self: [0]:0..0 from 0,
-+            predicate: binary_expr {
-+              left: root_field {
-+                id: `foo` @ [1]:92..95 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant int64 42 @ [1]:99..101 from 0,
-+              location: [1]:92..101 from 0
-             }
++            op: {
++              path: [
++                
++              ],
++              ref: unresolved
++            },
++            args: [
++              Incomplete binary_expr {
++                left: root_field {
++                  id: `foo` @ [1]:92..95 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant int64 42 @ [1]:99..101 from 0,
++                location: [1]:92..101 from 0
++              }
++            ],
++            named_args: [
++              
++            ]
            }
          ]
        },
@@ -65,24 +90,49 @@
                ],
                operators: [
                  where_ir {
--                  self: [1]:47..52 from 0,
-+                  self: [0]:0..0 from 0,
-                   predicate: root_field {
-                     id: `b` @ [1]:53..54 from 0,
-                     has_question_mark: false
-+                  }
+                   op: {
+                     path: [
+-                      `where` @ [1]:47..52 from 0
+-                    ],
+-                    ref: std::where/op
+-                  },
+-                  args: [
+-                    expression root_field {
++                      
++                    ],
++                    ref: unresolved
++                  },
++                  args: [
++                    Incomplete root_field {
+                       id: `b` @ [1]:53..54 from 0,
+                       has_question_mark: false
++                    }
++                  ],
++                  named_args: [
++                    
++                  ]
 +                },
 +                where_ir {
-+                  self: [0]:0..0 from 0,
-+                  predicate: binary_expr {
-+                    left: root_field {
-+                      id: `foo` @ [1]:92..95 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "eq",
-+                    right: constant int64 42 @ [1]:99..101 from 0,
-+                    location: [1]:92..101 from 0
-                   }
++                  op: {
++                    path: [
++                      
++                    ],
++                    ref: unresolved
++                  },
++                  args: [
++                    Incomplete binary_expr {
++                      left: root_field {
++                        id: `foo` @ [1]:92..95 from 0,
++                        has_question_mark: false
++                      },
++                      op: "eq",
++                      right: constant int64 42 @ [1]:99..101 from 0,
++                      location: [1]:92..101 from 0
+                     }
+                   ],
+                   named_args: [
+                     
+                   ]
                  }
                ]
              },
@@ -92,69 +142,121 @@
                ],
                operators: [
                  where_ir {
--                  self: [1]:66..71 from 0,
-+                  self: [0]:0..0 from 0,
-                   predicate: root_field {
-                     id: `c` @ [1]:72..73 from 0,
-                     has_question_mark: false
-                   }
+                   op: {
+                     path: [
+-                      `where` @ [1]:66..71 from 0
+-                    ],
+-                    ref: std::where/op
+-                  },
+-                  args: [
+-                    expression root_field {
++                      
++                    ],
++                    ref: unresolved
++                  },
++                  args: [
++                    Incomplete root_field {
+                       id: `c` @ [1]:72..73 from 0,
+                       has_question_mark: false
+                     }
+                   ],
+                   named_args: [
+                     
+                   ]
                  },
                  where_ir {
--                  self: [1]:76..81 from 0,
-+                  self: [0]:0..0 from 0,
-                   predicate: root_field {
-                     id: `d` @ [1]:82..83 from 0,
-                     has_question_mark: false
-+                  }
+                   op: {
+                     path: [
+-                      `where` @ [1]:76..81 from 0
+-                    ],
+-                    ref: std::where/op
+-                  },
+-                  args: [
+-                    expression root_field {
++                      
++                    ],
++                    ref: unresolved
++                  },
++                  args: [
++                    Incomplete root_field {
+                       id: `d` @ [1]:82..83 from 0,
+                       has_question_mark: false
++                    }
++                  ],
++                  named_args: [
++                    
++                  ]
 +                },
 +                where_ir {
-+                  self: [0]:0..0 from 0,
-+                  predicate: binary_expr {
-+                    left: root_field {
-+                      id: `foo` @ [1]:92..95 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "eq",
-+                    right: constant int64 42 @ [1]:99..101 from 0,
-+                    location: [1]:92..101 from 0
-                   }
++                  op: {
++                    path: [
++                      
++                    ],
++                    ref: unresolved
++                  },
++                  args: [
++                    Incomplete binary_expr {
++                      left: root_field {
++                        id: `foo` @ [1]:92..95 from 0,
++                        has_question_mark: false
++                      },
++                      op: "eq",
++                      right: constant int64 42 @ [1]:99..101 from 0,
++                      location: [1]:92..101 from 0
+                     }
+                   ],
+                   named_args: [
+                     
+                   ]
                  }
                ]
              }
            }
          ]
--      }
+       }
 -    },
 -    where_ir {
--      self: [1]:86..91 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `foo` @ [1]:92..95 from 0,
--          has_question_mark: false
--        },
--        op: "eq",
--        right: constant int64 42 @ [1]:99..101 from 0,
--        location: [1]:92..101 from 0
-       }
+-      op: {
+-        path: [
+-          `where` @ [1]:86..91 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `foo` @ [1]:92..95 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 42 @ [1]:99..101 from 0,
+-          location: [1]:92..101 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:102..109 from 0
-         ],
-         ref: std::discard/op
-       },
        desc: "discard",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:102..109 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

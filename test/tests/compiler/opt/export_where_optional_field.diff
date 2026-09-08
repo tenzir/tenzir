@@ -4,62 +4,69 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:71..77 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:71..77 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
-+        binary_expr {
-+          left: root_field {
-+            id: `foo` @ [1]:84..87 from 0,
-+            has_question_mark: true
-+          },
-+          op: "eq",
-+          right: constant int64 42 @ [1]:92..94 from 0,
-+          location: [1]:84..94 from 0
-+        }
-+      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
-+    },
-+    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:94..94 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
-+      desc: "to_stdout",
-+      args: [
-+        
-+      ],
-+      filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+-        
+-      ],
+-      order: "ordered"
 -    },
 -    where_ir {
--      self: [1]:78..83 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `foo` @ [1]:84..87 from 0,
--          has_question_mark: true
--        },
--        op: "eq",
--        right: constant int64 42 @ [1]:92..94 from 0,
--        location: [1]:84..94 from 0
--      }
+-      op: {
+-        path: [
+-          `where` @ [1]:78..83 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `foo` @ [1]:84..87 from 0,
+             has_question_mark: true
+           },
+           op: "eq",
+           right: constant int64 42 @ [1]:92..94 from 0,
+           location: [1]:84..94 from 0
+         }
+       ],
+-      named_args: [
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:94..94 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
      }
    ]
  }

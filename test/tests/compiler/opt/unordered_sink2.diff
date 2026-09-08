@@ -4,150 +4,162 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
--          `sort` @ [1]:7..11 from 0
-+          `to_file` @ [1]:28..35 from 0
-         ],
--        ref: std::sort/op
-+        ref: std::to_file/op
-       },
 -      desc: "tql2.sort",
 +      desc: "tql2.to_file",
-       args: [
--        expression root_field {
--          id: `x` @ [1]:12..13 from 0,
--          has_question_mark: false
--        }
-+        located {
-+          buffer: {
-+            chunk: chunk(size=60),
-+            table-offset: 12
+       store: {
+         op: {
+           path: [
+-            `sort` @ [1]:7..11 from 0
++            `to_file` @ [1]:28..35 from 0
+           ],
+-          ref: std::sort/op
++          ref: std::to_file/op
+         },
+         args: [
+-          expression root_field {
+-            id: `x` @ [1]:12..13 from 0,
+-            has_question_mark: false
+-          }
++          located {
++            buffer: {
++              chunk: chunk(size=60),
++              table-offset: 12
++            }
++          } @ [1]:36..51 from 0
+         ],
+         named_args: [
+           
+-        ]
++        ],
++        pipeline: {
++          pipeline: {
++            lets: [
++              
++            ],
++            operators: [
++              GenericIr {
++                desc: "write_ndjson",
++                store: {
++                  op: {
++                    path: [
++                      `write_ndjson` @ [1]:58..70 from 0
++                    ],
++                    ref: std::write_ndjson/op
++                  },
++                  args: [
++                    
++                  ],
++                  named_args: [
++                    
++                  ]
++                },
++                filter: [
++                  
++                ],
++                order: "unordered"
++              }
++            ]
++          } @ [1]:52..74 from 0,
++          let_ids: {
++            
 +          }
-+        } @ [1]:36..51 from 0
-       ],
++        }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
--      ]
+       order: "ordered"
 -    },
 -    UnorderedIr {
-+      ],
-       pipeline: {
+-      pipeline: {
 -        lets: [
-+        pipeline: {
-+          lets: [
-+            
-+          ],
-+          operators: [
-+            GenericIr {
-+              op: {
-+                path: [
-+                  `write_ndjson` @ [1]:58..70 from 0
-+                ],
-+                ref: std::write_ndjson/op
-+              },
-+              desc: "write_ndjson",
-+              args: [
-+                
-+              ],
-+              filter: [
-+                
-+              ],
-+              order: "unordered",
-+              named_args: [
-+                
-+              ]
-+            }
-+          ]
-+        } @ [1]:52..74 from 0,
-+        let_ids: {
-           
+-          
 -        ],
 -        operators: [
 -          GenericIr {
--            op: {
--              path: [
--                `to_file` @ [1]:28..35 from 0
--              ],
--              ref: std::to_file/op
--            },
 -            desc: "tql2.to_file",
--            args: [
--              located {
--                buffer: {
--                  chunk: chunk(size=60),
--                  table-offset: 12
+-            store: {
+-              op: {
+-                path: [
+-                  `to_file` @ [1]:28..35 from 0
+-                ],
+-                ref: std::to_file/op
+-              },
+-              args: [
+-                located {
+-                  buffer: {
+-                    chunk: chunk(size=60),
+-                    table-offset: 12
+-                  }
+-                } @ [1]:36..51 from 0
+-              ],
+-              named_args: [
+-                
+-              ],
+-              pipeline: {
+-                pipeline: {
+-                  lets: [
+-                    
+-                  ],
+-                  operators: [
+-                    GenericIr {
+-                      desc: "write_ndjson",
+-                      store: {
+-                        op: {
+-                          path: [
+-                            `write_ndjson` @ [1]:58..70 from 0
+-                          ],
+-                          ref: std::write_ndjson/op
+-                        },
+-                        args: [
+-                          
+-                        ],
+-                        named_args: [
+-                          
+-                        ]
+-                      },
+-                      filter: [
+-                        
+-                      ],
+-                      order: "ordered"
+-                    }
+-                  ]
+-                } @ [1]:52..74 from 0,
+-                let_ids: {
+-                  
 -                }
--              } @ [1]:36..51 from 0
--            ],
+-              }
+-            },
 -            filter: [
 -              
 -            ],
--            order: "ordered",
--            named_args: [
--              
--            ],
--            pipeline: {
--              pipeline: {
--                lets: [
--                  
--                ],
--                operators: [
--                  GenericIr {
--                    op: {
--                      path: [
--                        `write_ndjson` @ [1]:58..70 from 0
--                      ],
--                      ref: std::write_ndjson/op
--                    },
--                    desc: "write_ndjson",
--                    args: [
--                      
--                    ],
--                    filter: [
--                      
--                    ],
--                    order: "ordered",
--                    named_args: [
--                      
--                    ]
--                  }
--                ]
--              } @ [1]:52..74 from 0,
--              let_ids: {
--                
--              }
--            }
+-            order: "ordered"
 -          }
 -        ]
 -      },
 -      loc: [1]:14..23 from 0
-+        }
-+      }
      }
    ]
  }

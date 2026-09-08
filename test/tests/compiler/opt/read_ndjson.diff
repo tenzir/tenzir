@@ -4,74 +4,80 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `from_tcp` @ [1]:0..8 from 0
-         ],
-         ref: std::from_tcp/op
-       },
        desc: "tql2.from_tcp",
-       args: [
-         located "127.0.0.1:8000" @ [1]:9..25 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `from_tcp` @ [1]:0..8 from 0
+           ],
+           ref: std::from_tcp/op
+         },
+         args: [
+           located "127.0.0.1:8000" @ [1]:9..25 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "read_ndjson",
+                 store: {
+                   op: {
+                     path: [
+                       `read_ndjson` @ [1]:30..41 from 0
+                     ],
+                     ref: std::read_ndjson/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+-                order: "ordered"
++                order: "unordered"
+               }
+             ]
+           } @ [1]:26..43 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               op: {
-                 path: [
-                   `read_ndjson` @ [1]:30..41 from 0
-                 ],
-                 ref: std::read_ndjson/op
-               },
-               desc: "read_ndjson",
-               args: [
-                 
-               ],
-               filter: [
-                 
-               ],
--              order: "ordered",
-+              order: "unordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         } @ [1]:26..43 from 0,
-         let_ids: {
-           "0": 1
-         }
-       }
+       order: "ordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:44..51 from 0
-         ],
-         ref: std::discard/op
-       },
        desc: "discard",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:44..51 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

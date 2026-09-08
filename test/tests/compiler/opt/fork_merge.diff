@@ -4,24 +4,26 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:72..78 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:72..78 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      fork_merge_ir {
        keyword: [1]:79..89 from 0,
@@ -36,34 +38,42 @@
            ],
            operators: [
 -            GenericIr {
--              op: {
--                path: [
--                  `pass` @ [1]:92..96 from 0
--                ],
--                ref: std::pass/op
--              },
 -              desc: "pass",
--              args: [
--                
--              ],
--              filter: [
--                
--              ],
--              order: "ordered",
--              named_args: [
--                
--              ]
+-              store: {
+-                op: {
+-                  path: [
+-                    `pass` @ [1]:92..96 from 0
+-                  ],
+-                  ref: std::pass/op
+-                },
+-                args: [
 +            where_ir {
-+              self: [0]:0..0 from 0,
-+              predicate: binary_expr {
-+                left: root_field {
-+                  id: `x` @ [1]:115..116 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "gt",
-+                right: constant int64 1 @ [1]:119..120 from 0,
-+                location: [1]:115..120 from 0
-+              }
++              op: {
++                path: [
+                   
+                 ],
+-                named_args: [
+-                  
+-                ]
++                ref: unresolved
+               },
+-              filter: [
++              args: [
++                Incomplete binary_expr {
++                  left: root_field {
++                    id: `x` @ [1]:115..116 from 0,
++                    has_question_mark: false
++                  },
++                  op: "gt",
++                  right: constant int64 1 @ [1]:119..120 from 0,
++                  location: [1]:115..120 from 0
++                }
++              ],
++              named_args: [
+                 
+-              ],
+-              order: "ordered"
++              ]
              }
            ]
          },
@@ -73,69 +83,89 @@
            ],
            operators: [
 -            GenericIr {
--              op: {
--                path: [
--                  `pass` @ [1]:102..106 from 0
--                ],
--                ref: std::pass/op
--              },
 -              desc: "pass",
--              args: [
--                
--              ],
--              filter: [
--                
--              ],
--              order: "ordered",
--              named_args: [
--                
--              ]
+-              store: {
+-                op: {
+-                  path: [
+-                    `pass` @ [1]:102..106 from 0
+-                  ],
+-                  ref: std::pass/op
+-                },
+-                args: [
 +            where_ir {
-+              self: [0]:0..0 from 0,
-+              predicate: binary_expr {
-+                left: root_field {
-+                  id: `x` @ [1]:115..116 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "gt",
-+                right: constant int64 1 @ [1]:119..120 from 0,
-+                location: [1]:115..120 from 0
-+              }
++              op: {
++                path: [
+                   
+                 ],
+-                named_args: [
+-                  
+-                ]
++                ref: unresolved
+               },
+-              filter: [
++              args: [
++                Incomplete binary_expr {
++                  left: root_field {
++                    id: `x` @ [1]:115..116 from 0,
++                    has_question_mark: false
++                  },
++                  op: "gt",
++                  right: constant int64 1 @ [1]:119..120 from 0,
++                  location: [1]:115..120 from 0
++                }
++              ],
++              named_args: [
+                 
+-              ],
+-              order: "ordered"
++              ]
              }
            ]
          }
-       ]
+-      ]
 -    },
 -    where_ir {
--      self: [1]:109..114 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `x` @ [1]:115..116 from 0,
--          has_question_mark: false
--        },
--        op: "gt",
--        right: constant int64 1 @ [1]:119..120 from 0,
--        location: [1]:115..120 from 0
--      }
+-      op: {
+-        path: [
+-          `where` @ [1]:109..114 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `x` @ [1]:115..116 from 0,
+-            has_question_mark: false
+-          },
+-          op: "gt",
+-          right: constant int64 1 @ [1]:119..120 from 0,
+-          location: [1]:115..120 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+       ]
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:121..128 from 0
-         ],
-         ref: std::discard/op
-       },
        desc: "discard",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:121..128 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

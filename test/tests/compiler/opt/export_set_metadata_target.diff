@@ -4,20 +4,26 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
+-      order: "ordered"
++      order: "ordered",
 +      projection: [
 +        {
 +          expr: root_field {
@@ -45,10 +51,7 @@
 +            }
 +          ]
 +        }
-+      ],
-       named_args: [
-         
-       ]
++      ]
      },
      SetIr {
        assignments: [
@@ -94,23 +97,25 @@
        order: "ordered"
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:43..43 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:43..43 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
++      order: "ordered"
      }
    ]
  }

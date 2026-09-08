@@ -4,90 +4,98 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `sort` @ [1]:7..11 from 0
-         ],
-         ref: std::sort/op
-       },
        desc: "tql2.sort",
-       args: [
-         expression root_field {
-           id: `x` @ [1]:12..13 from 0,
-           has_question_mark: false
-         }
-       ],
-       filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         
-       ]
-     },
-     GenericIr {
-       op: {
-         path: [
-           `python` @ [1]:14..20 from 0
-         ],
-         ref: std::python/op
-       },
-       desc: "python",
-       args: [
-         located {
-           buffer: {
-             chunk: chunk(size=52),
-             table-offset: 12
+       store: {
+         op: {
+           path: [
+             `sort` @ [1]:7..11 from 0
+           ],
+           ref: std::sort/op
+         },
+         args: [
+           expression root_field {
+             id: `x` @ [1]:12..13 from 0,
+             has_question_mark: false
            }
-         } @ [1]:21..27 from 0
-       ],
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:28..35 from 0
+       desc: "python",
+       store: {
+         op: {
+           path: [
+             `python` @ [1]:14..20 from 0
+           ],
+           ref: std::python/op
+         },
+         args: [
+           located {
+             buffer: {
+               chunk: chunk(size=52),
+               table-offset: 12
+             }
+           } @ [1]:21..27 from 0
          ],
-         ref: std::discard/op
+         named_args: [
+           
+         ]
        },
-       desc: "discard",
-       args: [
-         
-       ],
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
+-      order: "ordered"
++      order: "unordered"
+     },
+     GenericIr {
+       desc: "discard",
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:28..35 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
          
-       ]
+       ],
+       order: "ordered"
      }
    ]
  }

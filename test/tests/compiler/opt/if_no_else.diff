@@ -4,23 +4,25 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      If {
        condition: constant bool true @ [1]:10..14 from 0,
@@ -30,65 +32,71 @@
          ],
          operators: [
            GenericIr {
-             op: {
-               path: [
-                 `write_lines` @ [1]:19..30 from 0
-               ],
-               ref: std::write_lines/op
-             },
              desc: "write_lines",
-             args: [
-               
-             ],
+             store: {
+               op: {
+                 path: [
+                   `write_lines` @ [1]:19..30 from 0
+                 ],
+                 ref: std::write_lines/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
-             order: "ordered",
-             named_args: [
-               
-             ]
+             order: "ordered"
            },
            GenericIr {
-             op: {
-               path: [
-                 `read_ndjson` @ [1]:33..44 from 0
-               ],
-               ref: std::read_ndjson/op
-             },
              desc: "read_ndjson",
-             args: [
-               
-             ],
+             store: {
+               op: {
+                 path: [
+                   `read_ndjson` @ [1]:33..44 from 0
+                 ],
+                 ref: std::read_ndjson/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
--            order: "ordered",
-+            order: "unordered",
-             named_args: [
-               
-             ]
+-            order: "ordered"
++            order: "unordered"
            }
          ]
        }
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:47..54 from 0
-         ],
-         ref: std::discard/op
-       },
        desc: "discard",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:47..54 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

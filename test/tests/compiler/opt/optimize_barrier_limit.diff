@@ -4,64 +4,70 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
 -    OptimizeBarrierIr {
 -      loc: [1]:7..23 from 0
 -    },
      GenericIr {
-       op: {
-         path: [
-           `head` @ [1]:24..28 from 0
-         ],
-         ref: std::head/op
-       },
        desc: "head",
-       args: [
-         located 5 @ [1]:29..30 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:24..28 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:29..30 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:30..30 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:30..30 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
++      order: "ordered"
      }
    ]
  }

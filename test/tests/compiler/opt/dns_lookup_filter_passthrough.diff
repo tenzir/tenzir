@@ -4,16 +4,21 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
 +        binary_expr {
 +          left: root_field {
@@ -25,51 +30,52 @@
 +          location: [1]:42..48 from 0
 +        }
 +      ],
-+      order: "unordered",
-+      named_args: [
-+        
-+      ]
++      order: "unordered"
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `dns_lookup` @ [1]:21..31 from 0
-+        ],
-+        ref: std::dns_lookup/op
-+      },
 +      desc: "dns_lookup",
-+      args: [
-+        expression root_field {
-+          id: `x` @ [1]:32..33 from 0,
-+          has_question_mark: false
-+        }
-+      ],
++      store: {
++        op: {
++          path: [
++            `dns_lookup` @ [1]:21..31 from 0
++          ],
++          ref: std::dns_lookup/op
++        },
++        args: [
++          expression root_field {
++            id: `x` @ [1]:32..33 from 0,
++            has_question_mark: false
++          }
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "unordered",
-+      named_args: [
-+        
-+      ]
++      order: "unordered"
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:50..50 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:50..50 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
 -    },
 -    UnorderedIr {
 -      pipeline: {
@@ -78,38 +84,50 @@
 -        ],
 -        operators: [
 -          GenericIr {
--            op: {
--              path: [
--                `dns_lookup` @ [1]:21..31 from 0
--              ],
--              ref: std::dns_lookup/op
--            },
 -            desc: "dns_lookup",
--            args: [
--              expression root_field {
--                id: `x` @ [1]:32..33 from 0,
--                has_question_mark: false
--              }
--            ],
+-            store: {
+-              op: {
+-                path: [
+-                  `dns_lookup` @ [1]:21..31 from 0
+-                ],
+-                ref: std::dns_lookup/op
+-              },
+-              args: [
+-                expression root_field {
+-                  id: `x` @ [1]:32..33 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
+-              named_args: [
+-                
+-              ]
+-            },
 -            filter: [
 -              
 -            ],
--            order: "ordered",
+-            order: "ordered"
+-          },
+-          where_ir {
+-            op: {
+-              path: [
+-                `where` @ [1]:36..41 from 0
+-              ],
+-              ref: std::where/op
+-            },
+-            args: [
+-              expression binary_expr {
+-                left: root_field {
+-                  id: `x` @ [1]:42..43 from 0,
+-                  has_question_mark: false
+-                },
+-                op: "eq",
+-                right: constant int64 1 @ [1]:47..48 from 0,
+-                location: [1]:42..48 from 0
+-              }
+-            ],
 -            named_args: [
 -              
 -            ]
--          },
--          where_ir {
--            self: [1]:36..41 from 0,
--            predicate: binary_expr {
--              left: root_field {
--                id: `x` @ [1]:42..43 from 0,
--                has_question_mark: false
--              },
--              op: "eq",
--              right: constant int64 1 @ [1]:47..48 from 0,
--              location: [1]:42..48 from 0
--            }
 -          }
 -        ]
 -      },

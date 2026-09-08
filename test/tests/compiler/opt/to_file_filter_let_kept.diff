@@ -4,97 +4,114 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:254..260 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:254..260 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `to_file` @ [1]:261..268 from 0
-         ],
-         ref: std::to_file/op
-       },
        desc: "tql2.to_file",
-       args: [
-         located {
-           buffer: {
-             chunk: chunk(size=56),
-             table-offset: 12
+       store: {
+         op: {
+           path: [
+             `to_file` @ [1]:261..268 from 0
+           ],
+           ref: std::to_file/op
+         },
+         args: [
+           located {
+             buffer: {
+               chunk: chunk(size=56),
+               table-offset: 12
+             }
+           } @ [1]:269..280 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               {
+                 ident: `$x` @ [1]:289..291 from 0,
+                 expr: field_access {
+                   left: this_ [1]:294..298 from 0,
+                   has_question_mark: false,
+                   name: `n` @ [1]:299..300 from 0,
+                   location: [1]:294..300 from 0
+                 },
+                 id: 1
+               }
+             ],
+             operators: [
+               where_ir {
+                 op: {
+                   path: [
+-                    `where` @ [1]:303..308 from 0
++                    
+                   ],
+-                  ref: std::where/op
++                  ref: unresolved
+                 },
+                 args: [
+                   Incomplete binary_expr {
+                     left: dollar_var `$x` -> 1 @ [1]:309..311 from 0,
+                     op: "gt",
+                     right: constant int64 1 @ [1]:314..315 from 0,
+                     location: [1]:309..315 from 0
+                   }
+                 ],
+                 named_args: [
+                   
+                 ]
+               },
+               GenericIr {
+                 desc: "tql2.write_json",
+                 store: {
+                   op: {
+                     path: [
+                       `write_json` @ [1]:318..328 from 0
+                     ],
+                     ref: std::write_json/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:281..330 from 0,
+           let_ids: {
+             
            }
-         } @ [1]:269..280 from 0
-       ],
+         }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             {
-               ident: `$x` @ [1]:289..291 from 0,
-               expr: field_access {
-                 left: this_ [1]:294..298 from 0,
-                 has_question_mark: false,
-                 name: `n` @ [1]:299..300 from 0,
-                 location: [1]:294..300 from 0
-               },
-               id: 1
-             }
-           ],
-           operators: [
-             where_ir {
--              self: [1]:303..308 from 0,
-+              self: [0]:0..0 from 0,
-               predicate: binary_expr {
-                 left: dollar_var `$x` -> 1 @ [1]:309..311 from 0,
-                 op: "gt",
-                 right: constant int64 1 @ [1]:314..315 from 0,
-                 location: [1]:309..315 from 0
-               }
-             },
-             GenericIr {
-               op: {
-                 path: [
-                   `write_json` @ [1]:318..328 from 0
-                 ],
-                 ref: std::write_json/op
-               },
-               desc: "tql2.write_json",
-               args: [
-                 
-               ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         } @ [1]:281..330 from 0,
-         let_ids: {
-           
-         }
-       }
+       order: "ordered"
      }
    ]
  }

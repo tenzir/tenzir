@@ -9,36 +9,49 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:68..74 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:68..74 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+           `where` @ [1]:75..80 from 0
+         ],
+         ref: std::where/op
+       },
+       args: [
+-        Incomplete binary_expr {
++        expression binary_expr {
+           left: root_field {
+             id: `foo` @ [1]:81..84 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+-          right: dollar_var `$foo` -> 1 @ [1]:88..92 from 0,
++          right: constant int64 42 @ [1]:88..92 from 0,
+           location: [1]:81..92 from 0
+         }
+       ],
        named_args: [
          
        ]
-     },
-     where_ir {
-       self: [1]:75..80 from 0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `foo` @ [1]:81..84 from 0,
-           has_question_mark: false
-         },
-         op: "eq",
--        right: dollar_var `$foo` -> 1 @ [1]:88..92 from 0,
-+        right: constant int64 42 @ [1]:88..92 from 0,
-         location: [1]:81..92 from 0
-       }
      }
    ]
  }

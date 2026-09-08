@@ -19,16 +19,26 @@
        self: [1]:0..4 from 0
      },
 +    where_ir {
-+      self: [0]:0..0 from 0,
-+      predicate: binary_expr {
-+        left: root_field {
-+          id: `domain` @ [1]:56..62 from 0,
-+          has_question_mark: false
-+        },
-+        op: "eq",
-+        right: constant string "tenzir.com" @ [1]:66..78 from 0,
-+        location: [1]:56..78 from 0
-+      }
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `domain` @ [1]:56..62 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant string "tenzir.com" @ [1]:66..78 from 0,
++          location: [1]:56..78 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
 +    },
      SetIr {
        assignments: [
@@ -47,48 +57,72 @@
        order: "ordered"
      },
      where_ir {
--      self: [1]:50..55 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `domain` @ [1]:56..62 from 0,
--          has_question_mark: false
--        },
--        op: "eq",
--        right: constant string "tenzir.com" @ [1]:66..78 from 0,
--        location: [1]:56..78 from 0
--      }
+       op: {
+         path: [
+-          `where` @ [1]:50..55 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `domain` @ [1]:56..62 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant string "tenzir.com" @ [1]:66..78 from 0,
+-          location: [1]:56..78 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
 -    },
 -    where_ir {
--      self: [1]:79..84 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `resolved` @ [1]:85..93 from 0,
-           has_question_mark: false
-         },
-         op: "neq",
-         right: constant none_t {} @ [1]:97..101 from 0,
-         location: [1]:85..101 from 0
-       }
+-      op: {
+-        path: [
+-          `where` @ [1]:79..84 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `resolved` @ [1]:85..93 from 0,
+             has_question_mark: false
+           },
+           op: "neq",
+           right: constant none_t {} @ [1]:97..101 from 0,
+           location: [1]:85..101 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:101..101 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:101..101 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
++      order: "ordered"
      }
    ]
  }

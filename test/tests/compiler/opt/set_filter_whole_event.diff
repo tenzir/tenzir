@@ -39,36 +39,50 @@
 +      order: "unordered"
      },
      where_ir {
--      self: [1]:26..31 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `x` @ [1]:32..33 from 0,
-           has_question_mark: false
-         },
-         op: "eq",
-         right: constant int64 2 @ [1]:37..38 from 0,
-         location: [1]:32..38 from 0
-       }
-     },
-     GenericIr {
        op: {
          path: [
-           `discard` @ [1]:39..46 from 0
+-          `where` @ [1]:26..31 from 0
++          
          ],
-         ref: std::discard/op
+-        ref: std::where/op
++        ref: unresolved
        },
-       desc: "discard",
        args: [
-         
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `x` @ [1]:32..33 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 2 @ [1]:37..38 from 0,
+           location: [1]:32..38 from 0
+         }
        ],
-       filter: [
-         
-       ],
-       order: "ordered",
        named_args: [
          
        ]
+     },
+     GenericIr {
+       desc: "discard",
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:39..46 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
      }
    ]
  }

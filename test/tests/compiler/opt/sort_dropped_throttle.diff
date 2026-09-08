@@ -4,88 +4,96 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
--      named_args: [
--        
--      ]
+-      order: "ordered"
 -    },
 -    GenericIr {
--      op: {
--        path: [
--          `sort` @ [1]:7..11 from 0
--        ],
--        ref: std::sort/op
--      },
 -      desc: "tql2.sort",
--      args: [
--        expression root_field {
--          id: `x` @ [1]:12..13 from 0,
--          has_question_mark: false
--        }
--      ],
+-      store: {
+-        op: {
+-          path: [
+-            `sort` @ [1]:7..11 from 0
+-          ],
+-          ref: std::sort/op
+-        },
+-        args: [
+-          expression root_field {
+-            id: `x` @ [1]:12..13 from 0,
+-            has_question_mark: false
+-          }
+-        ],
+-        named_args: [
+-          
+-        ]
+-      },
 -      filter: [
 -        
 -      ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `throttle` @ [1]:14..22 from 0
-         ],
-         ref: std::throttle/op
-       },
        desc: "throttle",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `throttle` @ [1]:14..22 from 0
+           ],
+           ref: std::throttle/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located 10 @ [1]:28..30 from 0
+           }
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         {
-           index: 0,
-           value: located 10 @ [1]:28..30 from 0
-         }
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:31..38 from 0
-         ],
-         ref: std::discard/op
-       },
        desc: "discard",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:31..38 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

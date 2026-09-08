@@ -4,23 +4,25 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      If {
        condition: constant bool true @ [1]:10..14 from 0,
@@ -30,23 +32,25 @@
          ],
          operators: [
            GenericIr {
-             op: {
-               path: [
-                 `head` @ [1]:19..23 from 0
-               ],
-               ref: std::head/op
-             },
              desc: "head",
-             args: [
-               
-             ],
+             store: {
+               op: {
+                 path: [
+                   `head` @ [1]:19..23 from 0
+                 ],
+                 ref: std::head/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
-             order: "ordered",
-             named_args: [
-               
-             ]
+             order: "ordered"
            }
          ]
        },
@@ -56,76 +60,82 @@
          ],
          operators: [
            GenericIr {
-             op: {
-               path: [
-                 `head` @ [1]:35..39 from 0
-               ],
-               ref: std::head/op
-             },
              desc: "head",
-             args: [
-               
-             ],
+             store: {
+               op: {
+                 path: [
+                   `head` @ [1]:35..39 from 0
+                 ],
+                 ref: std::head/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
-             order: "ordered",
-             named_args: [
-               
-             ]
+             order: "ordered"
            }
          ]
        }
      },
      GenericIr {
-       op: {
-         path: [
-           `to_stdout` @ [1]:42..51 from 0
-         ],
-         ref: std::to_stdout/op
-       },
        desc: "to_stdout",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `to_stdout` @ [1]:42..51 from 0
+           ],
+           ref: std::to_stdout/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "write_tql",
+                 store: {
+                   op: {
+                     path: [
+                       `write_tql` @ [1]:56..65 from 0
+                     ],
+                     ref: std::write_tql/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:52..67 from 0,
+           let_ids: {
+             
+           }
+         }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               op: {
-                 path: [
-                   `write_tql` @ [1]:56..65 from 0
-                 ],
-                 ref: std::write_tql/op
-               },
-               desc: "write_tql",
-               args: [
-                 
-               ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         } @ [1]:52..67 from 0,
-         let_ids: {
-           
-         }
-       }
+       order: "ordered"
      }
    ]
  }

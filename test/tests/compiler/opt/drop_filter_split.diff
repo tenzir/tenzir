@@ -32,100 +32,136 @@
        self: [1]:0..4 from 0
 +    },
 +    where_ir {
-+      self: [0]:0..0 from 0,
-+      predicate: binary_expr {
-+        left: root_field {
-+          id: `x` @ [1]:46..47 from 0,
-+          has_question_mark: false
-+        },
-+        op: "eq",
-+        right: constant int64 1 @ [1]:51..52 from 0,
-+        location: [1]:46..52 from 0
-+      }
-     },
-     GenericIr {
-       op: {
-         path: [
-           `drop` @ [1]:27..31 from 0
-         ],
-         ref: std::drop/op
-       },
-       desc: "tql2.drop",
-       args: [
-         field_path {
-           expr: field_access {
-             left: root_field {
-               id: `foo` @ [1]:32..35 from 0,
-               has_question_mark: false
-             },
-             has_question_mark: false,
-             name: `bar` @ [1]:36..39 from 0,
-             location: [1]:32..39 from 0
-           },
-           has_this: false,
-           path: [
-             {
-               id: `foo` @ [1]:32..35 from 0,
-               has_question_mark: false
-             },
-             {
-               id: `bar` @ [1]:36..39 from 0,
-               has_question_mark: false
-             }
-           ]
-         }
-       ],
-       filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         
-       ]
-     },
-     where_ir {
--      self: [1]:40..45 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `x` @ [1]:46..47 from 0,
--          has_question_mark: false
--        },
--        op: "eq",
--        right: constant int64 1 @ [1]:51..52 from 0,
--        location: [1]:46..52 from 0
--      }
--    },
--    where_ir {
--      self: [1]:53..58 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `foo` @ [1]:59..62 from 0,
-           has_question_mark: false
-         },
-         op: "neq",
-         right: constant none_t {} @ [1]:66..70 from 0,
-         location: [1]:59..70 from 0
-       }
-+    },
-+    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ [1]:70..70 from 0
++          
 +        ],
-+        ref: std::to_stdout/op
++        ref: unresolved
 +      },
-+      desc: "to_stdout",
 +      args: [
-+        
++        Incomplete binary_expr {
++          left: root_field {
++            id: `x` @ [1]:46..47 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:51..52 from 0,
++          location: [1]:46..52 from 0
++        }
 +      ],
-+      filter: [
-+        
-+      ],
-+      order: "ordered",
 +      named_args: [
 +        
 +      ]
+     },
+     GenericIr {
+       desc: "tql2.drop",
+       store: {
+         op: {
+           path: [
+             `drop` @ [1]:27..31 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `foo` @ [1]:32..35 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `bar` @ [1]:36..39 from 0,
+               location: [1]:32..39 from 0
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `foo` @ [1]:32..35 from 0,
+                 has_question_mark: false
+               },
+               {
+                 id: `bar` @ [1]:36..39 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:40..45 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `x` @ [1]:46..47 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:51..52 from 0,
+-          location: [1]:46..52 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:53..58 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `foo` @ [1]:59..62 from 0,
+             has_question_mark: false
+           },
+           op: "neq",
+           right: constant none_t {} @ [1]:66..70 from 0,
+           location: [1]:59..70 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:70..70 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
      }
    ]
  }

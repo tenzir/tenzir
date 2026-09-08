@@ -4,69 +4,81 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `every` @ [1]:0..5 from 0
-         ],
-         ref: std::every/op
-       },
        desc: "tql2.every",
-       args: [
--        Incomplete constant duration "1s" @ [1]:6..8 from 0
-+        located "1s" @ [1]:6..8 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `every` @ [1]:0..5 from 0
+           ],
+           ref: std::every/op
+         },
+         args: [
+-          Incomplete constant duration "1s" @ [1]:6..8 from 0
++          located "1s" @ [1]:6..8 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               {
+                 ident: `$ts` @ [1]:128..131 from 0,
+                 expr: binary_expr {
+                   left: function_call {
+                     fn: {
+                       path: [
+                         `now` @ [1]:134..137 from 0
+                       ],
+                       ref: std::now/fn
+                     },
+                     args: [
+                       
+                     ],
+                     method: false,
+                     location: [1]:134..139 from 0
+                   },
+                   op: "sub",
+                   right: constant duration "10min" @ [1]:142..147 from 0,
+                   location: [1]:134..147 from 0
+                 },
+                 id: 1
+               }
+             ],
+             operators: [
+               where_ir {
+                 op: {
+                   path: [
+                     `where` @ [1]:150..155 from 0
+                   ],
+                   ref: std::where/op
+                 },
+                 args: [
+                   Incomplete binary_expr {
+                     left: root_field {
+                       id: `time` @ [1]:156..160 from 0,
+                       has_question_mark: false
+                     },
+                     op: "lt",
+                     right: dollar_var `$ts` -> 1 @ [1]:163..166 from 0,
+                     location: [1]:156..166 from 0
+                   }
+                 ],
+                 named_args: [
+                   
+                 ]
+               }
+             ]
+           } @ [1]:9..168 from 0,
+           let_ids: {
+             
+           }
+         }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             {
-               ident: `$ts` @ [1]:128..131 from 0,
-               expr: binary_expr {
-                 left: function_call {
-                   fn: {
-                     path: [
-                       `now` @ [1]:134..137 from 0
-                     ],
-                     ref: std::now/fn
-                   },
-                   args: [
-                     
-                   ],
-                   method: false,
-                   location: [1]:134..139 from 0
-                 },
-                 op: "sub",
-                 right: constant duration "10min" @ [1]:142..147 from 0,
-                 location: [1]:134..147 from 0
-               },
-               id: 1
-             }
-           ],
-           operators: [
-             where_ir {
-               self: [1]:150..155 from 0,
-               predicate: binary_expr {
-                 left: root_field {
-                   id: `time` @ [1]:156..160 from 0,
-                   has_question_mark: false
-                 },
-                 op: "lt",
-                 right: dollar_var `$ts` -> 1 @ [1]:163..166 from 0,
-                 location: [1]:156..166 from 0
-               }
-             }
-           ]
-         } @ [1]:9..168 from 0,
-         let_ids: {
-           
-         }
-       }
+       order: "ordered"
      }
    ]
  }

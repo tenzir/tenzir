@@ -11,6 +11,7 @@
 #include "tenzir/any.hpp"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/concepts.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
@@ -18,6 +19,7 @@
 #include "tenzir/let_id.hpp"
 #include "tenzir/operator/optimization.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <functional>
@@ -110,7 +112,7 @@ enum class SubOptimize {
 };
 
 struct Pipeline {
-  Pipeline(Setter<located<ir::pipeline>> setter,
+  Pipeline(Option<Setter<located<ir::pipeline>>> setter,
            std::vector<LetBinding> let_bindings, bool required,
            SubOptimize sub_optimize)
     : setter{std::move(setter)},
@@ -119,10 +121,18 @@ struct Pipeline {
       sub_optimize{sub_optimize} {
   }
 
-  Setter<located<ir::pipeline>> setter;
+  /// Assigns the compiled subpipeline to a member of `Args`, or `None` if the
+  /// operator reads it from the `ArgumentStore` instead. Materializing it is
+  /// a deep copy, so operators that lower the subpipeline themselves keep it
+  /// out of `Args`.
+  Option<Setter<located<ir::pipeline>>> setter;
   std::vector<LetBinding> let_bindings;
   bool required = false;
   SubOptimize sub_optimize = SubOptimize::off;
+  /// Whether the subpipeline is instantiated together with the enclosing
+  /// pipeline. Operators that spawn their subpipeline at runtime keep it
+  /// uninstantiated and bind it themselves.
+  bool instantiate = false;
 };
 
 template <class Args, class Input, class Output,
@@ -594,6 +604,182 @@ private:
   diagnostic_handler* dh_;
 };
 
+/// Renders the usage string for `desc`, for example `head [n:int]`.
+auto get_usage(const Description& desc) -> std::string;
+
+/// Storage for the arguments of an operator invocation.
+///
+/// `parse()` matches the arguments of an invocation against a `Description`,
+/// but leaves their values as unevaluated expressions. `substitute()` resolves
+/// them as soon as the referenced `let` bindings are known, after which
+/// `materialize()` yields the typed argument bundle.
+///
+/// `GenericIr` uses this to implement `OperatorPlugin`. Bespoke `ir::Operator`
+/// implementations should use `OperatorArguments` instead, which pairs this
+/// class with a statically known description.
+class ArgumentStore {
+public:
+  ArgumentStore() = default;
+
+  /// Parses `args` against `desc`, emitting usage and docs diagnostics.
+  static auto parse(const Description& desc, ast::entity op,
+                    std::vector<ast::expression> args, compile_ctx ctx)
+    -> failure_or<ArgumentStore>;
+
+  /// Resolves the arguments that have become constant and validates them.
+  auto substitute(const Description& desc, substitute_ctx ctx, bool instantiate)
+    -> failure_or<void>;
+
+  /// Materializes the typed argument bundle.
+  ///
+  /// All arguments must be resolved, which is guaranteed after `substitute()`
+  /// was called with `instantiate == true`. Arguments that the operator
+  /// receives as an `ast::expression` need no resolution and are available
+  /// right after parsing.
+  ///
+  /// `consumed` holds the parts of the optimization request that the operator
+  /// took over from downstream, which the description maps onto `Args`.
+  auto materialize(const Description& desc, ir::OptimizeRequest consumed
+                                            = {}) const -> Any;
+
+  /// Creates a context for the description's callbacks.
+  auto describe_ctx(const Description& desc, diagnostic_handler& dh) const
+    -> DescribeCtx;
+
+  /// The entity that the operator was invoked with.
+  auto op() const -> const ast::entity& {
+    return op_;
+  }
+
+  auto main_location() const -> location {
+    return op_.get_location();
+  }
+
+  /// The compiled subpipeline argument, if the invocation had one.
+  auto pipeline() const -> const Option<PipelineArg>& {
+    return pipeline_;
+  }
+
+  auto pipeline() -> Option<PipelineArg>& {
+    return pipeline_;
+  }
+
+  friend auto inspect(auto& f, ArgumentStore& x) -> bool {
+    return f.object(x).fields(f.field("op", x.op_), f.field("args", x.args_),
+                              f.field("named_args", x.named_args_),
+                              f.field("pipeline", x.pipeline_));
+  }
+
+private:
+  /// The entity that this operator was created for.
+  ast::entity op_;
+
+  /// Contains expression for positional arguments that are not yet evaluated.
+  std::vector<Arg> args_;
+
+  /// Contains named arguments with their indices.
+  std::vector<NamedArg> named_args_;
+
+  /// Pre-compiled pipeline with source location and let_ids.
+  Option<PipelineArg> pipeline_;
+};
+
+/// Parses the arguments of a bespoke `ir::Operator` into a typed bundle.
+///
+/// `Describe` is an invocable that returns the operator's `Description`,
+/// usually built with a `Describer`. It is invoked at most once.
+///
+/// Hold this as a member of an `ir::Operator` implementation, forward
+/// `substitute()` to it, and use `get()` to obtain the typed arguments once
+/// they are resolved. Operators that only need argument parsing should be an
+/// `OperatorPlugin` instead; this class exists for operators that also
+/// customize planning or optimization in ways a `Description` cannot express.
+template <class Args, auto Describe>
+  requires std::same_as<std::invoke_result_t<decltype(Describe)>, Description>
+class OperatorArguments {
+public:
+  OperatorArguments() = default;
+
+  /// The description of the operator, created on first use.
+  static auto description() -> const Description& {
+    static const auto desc = std::invoke([] {
+      auto result = Describe();
+      TENZIR_ASSERT(not result.name.empty(),
+                    "description of a bespoke operator must set a name");
+      if (result.docs.empty()) {
+        result.docs
+          = "https://tenzir.com/docs/reference/operators/" + result.name;
+      }
+      return result;
+    });
+    return desc;
+  }
+
+  /// Parses the arguments of `inv`, emitting usage and docs diagnostics.
+  static auto parse(ast::invocation inv, compile_ctx ctx)
+    -> failure_or<OperatorArguments> {
+    TRY(auto store, ArgumentStore::parse(description(), std::move(inv.op),
+                                         std::move(inv.args), ctx));
+    return OperatorArguments{std::move(store)};
+  }
+
+  /// Resolves the arguments that have become constant and validates them.
+  auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void> {
+    return store_.substitute(description(), ctx, instantiate);
+  }
+
+  /// Materializes the typed arguments.
+  ///
+  /// All arguments must be resolved, which is guaranteed after instantiation.
+  /// This copies the subpipeline, if any; use `take_pipe()` when lowering it.
+  auto get() const -> Args {
+    return store_.materialize(description()).template as<Args>();
+  }
+
+  /// Moves the compiled subpipeline out of the arguments.
+  auto take_pipe() -> located<ir::pipeline> {
+    TENZIR_ASSERT(store_.pipeline());
+    return std::move(store_.pipeline()->pipeline);
+  }
+
+  /// The entity that the operator was invoked with.
+  auto op() const -> const ast::entity& {
+    return store_.op();
+  }
+
+  auto main_location() const -> location {
+    return store_.main_location();
+  }
+
+  /// The compiled subpipeline argument, if the invocation had one.
+  ///
+  /// Unlike the arguments themselves, the subpipeline is available directly
+  /// after parsing, which makes it usable during type inference.
+  auto pipe() -> Option<located<ir::pipeline>&> {
+    if (not store_.pipeline()) {
+      return None{};
+    }
+    return store_.pipeline()->pipeline;
+  }
+
+  auto pipe() const -> Option<const located<ir::pipeline>&> {
+    if (not store_.pipeline()) {
+      return None{};
+    }
+    return store_.pipeline()->pipeline;
+  }
+
+  friend auto inspect(auto& f, OperatorArguments& x) -> bool {
+    return f.apply(x.store_);
+  }
+
+private:
+  explicit OperatorArguments(ArgumentStore store) : store_{std::move(store)} {
+  }
+
+  ArgumentStore store_;
+};
+
 /// For some types, we do not want to implicitly default to a generic string.
 /// If your code fails to compile because of this constraint, add a third
 /// parameter which describes the argument "type".
@@ -638,8 +824,24 @@ public:
     desc_.docs = std::move(url);
   }
 
+  /// Sets the operator name used in usage strings and diagnostics.
+  ///
+  /// `OperatorPlugin` derives the name from the plugin name, so this is only
+  /// needed in combination with `OperatorArguments`.
+  auto name(std::string name) -> void {
+    desc_.name = std::move(name);
+  }
+
   auto parallelizable() -> void {
     desc_.parallelizable = true;
+  }
+
+  /// Declares that the subpipeline is part of the enclosing pipeline and is
+  /// therefore instantiated together with it, instead of being bound and
+  /// instantiated by the operator at runtime.
+  auto inline_pipeline() -> void {
+    TENZIR_ASSERT(desc_.pipeline);
+    desc_.pipeline->instantiate = true;
   }
 
   /// Declare that parallelizability depends on the parsed arguments.
@@ -732,6 +934,23 @@ public:
       make_setter(ptr),
     });
     return Argument<Args, T>{ArgumentType::positional, index};
+  }
+
+  /// Adds a required subpipeline argument that is not part of `Args`.
+  ///
+  /// Use this with `OperatorArguments` and read the subpipeline through
+  /// `pipe()` or `take_pipe()`, which avoids the deep copy that
+  /// materializing it into `Args` would incur.
+  auto pipeline(SubOptimize sub_optimize)
+    -> Argument<Args, located<ir::pipeline>> {
+    TENZIR_ASSERT(not desc_.pipeline);
+    desc_.pipeline = Pipeline{
+      None{},
+      {},
+      true,
+      sub_optimize,
+    };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
   auto pipeline(located<ir::pipeline> Args::* ptr, SubOptimize sub_optimize)
@@ -1102,6 +1321,14 @@ public:
     return std::move(desc_);
   }
 
+  /// Finalizes a description that is only used for argument parsing.
+  ///
+  /// Operators that use `OperatorArguments` implement `optimize()` themselves,
+  /// so no optimizer is registered.
+  auto only_arguments() -> Description {
+    return std::move(desc_);
+  }
+
   /// Declares this operator an optimization barrier.
   ///
   /// The filters are not propagated.
@@ -1182,10 +1409,12 @@ private:
 } // namespace _::operator_plugin
 
 using _::operator_plugin::Argument;
+using _::operator_plugin::ArgumentStore;
 using _::operator_plugin::DescribeCtx;
 using _::operator_plugin::Describer;
 using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
+using _::operator_plugin::OperatorArguments;
 using _::operator_plugin::OperatorPlugin;
 using _::operator_plugin::Optimization;
 using _::operator_plugin::Optimizer;

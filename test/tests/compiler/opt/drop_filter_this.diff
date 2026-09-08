@@ -32,93 +32,109 @@
        self: [1]:0..4 from 0
      },
      GenericIr {
-       op: {
-         path: [
-           `drop` @ [1]:27..31 from 0
-         ],
-         ref: std::drop/op
-       },
        desc: "tql2.drop",
-       args: [
-         field_path {
-           expr: field_access {
-             left: root_field {
-               id: `foo` @ [1]:32..35 from 0,
-               has_question_mark: false
-             },
-             has_question_mark: false,
-             name: `bar` @ [1]:36..39 from 0,
-             location: [1]:32..39 from 0
-           },
-           has_this: false,
+       store: {
+         op: {
            path: [
-             {
-               id: `foo` @ [1]:32..35 from 0,
-               has_question_mark: false
+             `drop` @ [1]:27..31 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `foo` @ [1]:32..35 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `bar` @ [1]:36..39 from 0,
+               location: [1]:32..39 from 0
              },
-             {
-               id: `bar` @ [1]:36..39 from 0,
-               has_question_mark: false
-             }
-           ]
-         }
-       ],
+             has_this: false,
+             path: [
+               {
+                 id: `foo` @ [1]:32..35 from 0,
+                 has_question_mark: false
+               },
+               {
+                 id: `bar` @ [1]:36..39 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      where_ir {
--      self: [1]:40..45 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: binary_expr {
-         left: this_ [1]:46..50 from 0,
-         op: "eq",
-         right: record {
-           begin: [1]:54..55 from 0,
-           items: [
-             field {
-               name: `foo` @ [1]:55..58 from 0,
-               expr: record {
-                 begin: [1]:60..61 from 0,
-                 items: [
-                   
-                 ],
-                 end: [1]:61..62 from 0
-               }
-             },
-             field {
-               name: `x` @ [1]:64..65 from 0,
-               expr: constant int64 1 @ [1]:67..68 from 0
-             }
-           ],
-           end: [1]:68..69 from 0
-         },
-         location: [1]:46..69 from 0
-       }
-     },
-     GenericIr {
        op: {
          path: [
-           `discard` @ [1]:70..77 from 0
+-          `where` @ [1]:40..45 from 0
++          
          ],
-         ref: std::discard/op
+-        ref: std::where/op
++        ref: unresolved
        },
-       desc: "discard",
        args: [
-         
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: this_ [1]:46..50 from 0,
+           op: "eq",
+           right: record {
+             begin: [1]:54..55 from 0,
+             items: [
+               field {
+                 name: `foo` @ [1]:55..58 from 0,
+                 expr: record {
+                   begin: [1]:60..61 from 0,
+                   items: [
+                     
+                   ],
+                   end: [1]:61..62 from 0
+                 }
+               },
+               field {
+                 name: `x` @ [1]:64..65 from 0,
+                 expr: constant int64 1 @ [1]:67..68 from 0
+               }
+             ],
+             end: [1]:68..69 from 0
+           },
+           location: [1]:46..69 from 0
+         }
        ],
-       filter: [
-         
-       ],
-       order: "ordered",
        named_args: [
          
        ]
+     },
+     GenericIr {
+       desc: "discard",
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:70..77 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
      }
    ]
  }

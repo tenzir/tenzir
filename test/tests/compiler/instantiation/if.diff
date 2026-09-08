@@ -9,23 +9,25 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:14..20 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:14..20 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      If {
        condition: binary_expr {
@@ -46,31 +48,42 @@
          ],
          operators: [
            where_ir {
-             self: [1]:53..58 from 0,
-             predicate: binary_expr {
-               left: binary_expr {
-                 left: root_field {
-                   id: `foo` @ [1]:59..62 from 0,
-                   has_question_mark: false
+             op: {
+               path: [
+                 `where` @ [1]:53..58 from 0
+               ],
+               ref: std::where/op
+             },
+             args: [
+-              Incomplete binary_expr {
++              expression binary_expr {
+                 left: binary_expr {
+                   left: root_field {
+                     id: `foo` @ [1]:59..62 from 0,
+                     has_question_mark: false
+                   },
+                   op: "eq",
+-                  right: dollar_var `$foo` -> 1 @ [1]:66..70 from 0,
++                  right: constant int64 1 @ [1]:66..70 from 0,
+                   location: [1]:59..70 from 0
                  },
-                 op: "eq",
--                right: dollar_var `$foo` -> 1 @ [1]:66..70 from 0,
-+                right: constant int64 1 @ [1]:66..70 from 0,
-                 location: [1]:59..70 from 0
-               },
-               op: "and_",
-               right: binary_expr {
-                 left: root_field {
-                   id: `bar` @ [1]:75..78 from 0,
-                   has_question_mark: false
+                 op: "and_",
+                 right: binary_expr {
+                   left: root_field {
+                     id: `bar` @ [1]:75..78 from 0,
+                     has_question_mark: false
+                   },
+                   op: "eq",
+-                  right: dollar_var `$bar` -> 2 @ [1]:82..86 from 0,
++                  right: constant int64 2 @ [1]:82..86 from 0,
+                   location: [1]:75..86 from 0
                  },
-                 op: "eq",
--                right: dollar_var `$bar` -> 2 @ [1]:82..86 from 0,
-+                right: constant int64 2 @ [1]:82..86 from 0,
-                 location: [1]:75..86 from 0
-               },
-               location: [1]:59..86 from 0
-             }
+                 location: [1]:59..86 from 0
+               }
+             ],
+             named_args: [
+               
+             ]
            }
          ]
        },
@@ -85,31 +98,42 @@
          ],
          operators: [
            where_ir {
-             self: [1]:113..118 from 0,
-             predicate: binary_expr {
-               left: binary_expr {
-                 left: root_field {
-                   id: `foo` @ [1]:119..122 from 0,
-                   has_question_mark: false
+             op: {
+               path: [
+                 `where` @ [1]:113..118 from 0
+               ],
+               ref: std::where/op
+             },
+             args: [
+-              Incomplete binary_expr {
++              expression binary_expr {
+                 left: binary_expr {
+                   left: root_field {
+                     id: `foo` @ [1]:119..122 from 0,
+                     has_question_mark: false
+                   },
+                   op: "eq",
+-                  right: dollar_var `$foo` -> 1 @ [1]:126..130 from 0,
++                  right: constant int64 1 @ [1]:126..130 from 0,
+                   location: [1]:119..130 from 0
                  },
-                 op: "eq",
--                right: dollar_var `$foo` -> 1 @ [1]:126..130 from 0,
-+                right: constant int64 1 @ [1]:126..130 from 0,
-                 location: [1]:119..130 from 0
-               },
-               op: "and_",
-               right: binary_expr {
-                 left: root_field {
-                   id: `bar` @ [1]:135..138 from 0,
-                   has_question_mark: false
+                 op: "and_",
+                 right: binary_expr {
+                   left: root_field {
+                     id: `bar` @ [1]:135..138 from 0,
+                     has_question_mark: false
+                   },
+                   op: "eq",
+-                  right: dollar_var `$bar` -> 3 @ [1]:142..146 from 0,
++                  right: constant int64 3 @ [1]:142..146 from 0,
+                   location: [1]:135..146 from 0
                  },
-                 op: "eq",
--                right: dollar_var `$bar` -> 3 @ [1]:142..146 from 0,
-+                right: constant int64 3 @ [1]:142..146 from 0,
-                 location: [1]:135..146 from 0
-               },
-               location: [1]:119..146 from 0
-             }
+                 location: [1]:119..146 from 0
+               }
+             ],
+             named_args: [
+               
+             ]
            }
          ]
        }

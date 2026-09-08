@@ -4,78 +4,77 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
-+        binary_expr {
-+          left: root_field {
-+            id: `foo` @ [1]:13..16 from 0,
-+            has_question_mark: false
-+          },
-+          op: "in",
-+          right: list {
-+            begin: [1]:20..21 from 0,
-+            items: [
-+              expression constant int64 1 @ [1]:21..22 from 0,
-+              expression constant int64 2 @ [1]:24..25 from 0,
-+              expression constant int64 3 @ [1]:27..28 from 0
-+            ],
-+            end: [1]:28..29 from 0
-+          },
-+          location: [1]:13..29 from 0
-+        }
-+      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
-+    },
-+    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:29..29 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
-+      desc: "to_stdout",
-+      args: [
-+        
-+      ],
-+      filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+-        
+-      ],
+-      order: "ordered"
 -    },
 -    where_ir {
--      self: [1]:7..12 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `foo` @ [1]:13..16 from 0,
--          has_question_mark: false
--        },
--        op: "in",
--        right: list {
--          begin: [1]:20..21 from 0,
--          items: [
--            expression constant int64 1 @ [1]:21..22 from 0,
--            expression constant int64 2 @ [1]:24..25 from 0,
--            expression constant int64 3 @ [1]:27..28 from 0
--          ],
--          end: [1]:28..29 from 0
--        },
--        location: [1]:13..29 from 0
--      }
+-      op: {
+-        path: [
+-          `where` @ [1]:7..12 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `foo` @ [1]:13..16 from 0,
+             has_question_mark: false
+           },
+           op: "in",
+           right: list {
+             begin: [1]:20..21 from 0,
+             items: [
+               expression constant int64 1 @ [1]:21..22 from 0,
+               expression constant int64 2 @ [1]:24..25 from 0,
+               expression constant int64 3 @ [1]:27..28 from 0
+             ],
+             end: [1]:28..29 from 0
+           },
+           location: [1]:13..29 from 0
+         }
+       ],
+-      named_args: [
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:29..29 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
      }
    ]
  }

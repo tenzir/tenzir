@@ -23,6 +23,7 @@
 #include <tenzir/expression.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/modules.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -846,13 +847,26 @@ private:
   ast::expression expr_;
 };
 
-// TODO: Don't want to write this fully ourselves.
+struct WhereArgs {
+  location keyword;
+  ast::expression predicate;
+};
+
+auto describe_where() -> Description {
+  auto d = Describer<WhereArgs>{};
+  d.name("where");
+  d.operator_location(&WhereArgs::keyword);
+  d.positional("predicate", &WhereArgs::predicate, "bool");
+  return d.only_arguments();
+}
+
+using WhereArguments = OperatorArguments<WhereArgs, describe_where>;
+
 class where_ir final : public ir::Operator {
 public:
   where_ir() = default;
 
-  where_ir(location self, ast::expression predicate)
-    : self_{self}, predicate_{std::move(predicate)} {
+  explicit where_ir(WhereArguments args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -861,21 +875,21 @@ public:
 
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
-    (void)instantiate;
-    TRY(predicate_.substitute(ctx));
-    return {};
+    return args_.substitute(ctx, instantiate);
   }
 
   auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return Where{predicate_}.with_name("where");
+    return Where{args_.get().predicate}.with_name("where");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>()) {
       // TODO: Do not duplicate these messages across the codebase.
-      diagnostic::error("operator expects events").primary(self_).emit(dh);
+      diagnostic::error("operator expects events")
+        .primary(args_.main_location())
+        .emit(dh);
       return failure::promise();
     }
     return tag_v<table_slice>;
@@ -888,8 +902,9 @@ public:
     // The predicate joins the front of the filter chain, so a limit still
     // counts events after the whole chain and passes unchanged. The projection
     // must cover what the predicate references.
-    ir::add_refs_to_projection(req.projection, predicate_);
-    req.filter.insert(req.filter.begin(), std::move(predicate_));
+    auto predicate = args_.get().predicate;
+    ir::add_refs_to_projection(req.projection, predicate);
+    req.filter.insert(req.filter.begin(), std::move(predicate));
     return {
       .filter = std::move(req.filter),
       .order = req.order,
@@ -904,13 +919,11 @@ public:
   }
 
   friend auto inspect(auto& f, where_ir& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_),
-                              f.field("predicate", x.predicate_));
+    return f.apply(x.args_);
   }
 
 private:
-  location self_;
-  ast::expression predicate_;
+  WhereArguments args_;
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::Operator, where_ir>)
@@ -935,18 +948,8 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::CompileResult> override {
-    auto expr = ast::expression{};
-    // TODO: We don't want to create a session here. This is just a test to see
-    // how far we could go with the existing argument parser.
-    auto provider = session_provider::make(ctx);
-    auto loc = inv.op.get_location();
-    TRY(argument_parser2::operator_("where")
-          .positional("predicate", expr, "bool")
-          .parse(operator_factory_invocation{std::move(inv.op),
-                                             std::move(inv.args)},
-                 provider.as_session()));
-    TRY(expr.bind(ctx));
-    return where_ir{loc, std::move(expr)};
+    TRY(auto args, WhereArguments::parse(std::move(inv), ctx));
+    return where_ir{std::move(args)};
   }
 
   auto is_deterministic() const -> bool override {

@@ -4,16 +4,21 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
 -        
 +        binary_expr {
@@ -26,11 +31,7 @@
 +          location: [1]:27..36 from 0
 +        }
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
 -    },
 -    UnorderedIr {
 -      pipeline: {
@@ -39,39 +40,52 @@
 -        ],
 -        operators: [
 -          where_ir {
--            self: [1]:21..26 from 0,
--            predicate: binary_expr {
--              left: root_field {
--                id: `foo` @ [1]:27..30 from 0,
--                has_question_mark: false
--              },
--              op: "eq",
--              right: constant int64 42 @ [1]:34..36 from 0,
--              location: [1]:27..36 from 0
--            }
+-            op: {
+-              path: [
+-                `where` @ [1]:21..26 from 0
+-              ],
+-              ref: std::where/op
+-            },
+-            args: [
+-              expression binary_expr {
+-                left: root_field {
+-                  id: `foo` @ [1]:27..30 from 0,
+-                  has_question_mark: false
+-                },
+-                op: "eq",
+-                right: constant int64 42 @ [1]:34..36 from 0,
+-                location: [1]:27..36 from 0
+-              }
+-            ],
+-            named_args: [
+-              
+-            ]
 -          }
 -        ]
 -      },
 -      loc: [1]:7..16 from 0
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `to_stdout` @ [1]:39..48 from 0
-         ],
-         ref: std::to_stdout/op
-       },
        desc: "to_stdout",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `to_stdout` @ [1]:39..48 from 0
+           ],
+           ref: std::to_stdout/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

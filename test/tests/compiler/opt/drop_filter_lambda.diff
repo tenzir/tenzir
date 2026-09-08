@@ -38,122 +38,138 @@
        self: [1]:0..4 from 0
      },
      GenericIr {
-       op: {
-         path: [
-           `drop` @ [1]:30..34 from 0
-         ],
-         ref: std::drop/op
-       },
        desc: "tql2.drop",
-       args: [
-         field_path {
-           expr: field_access {
-             left: root_field {
-               id: `foo` @ [1]:35..38 from 0,
-               has_question_mark: false
-             },
-             has_question_mark: false,
-             name: `bar` @ [1]:39..42 from 0,
-             location: [1]:35..42 from 0
-           },
-           has_this: false,
+       store: {
+         op: {
            path: [
-             {
-               id: `foo` @ [1]:35..38 from 0,
-               has_question_mark: false
+             `drop` @ [1]:30..34 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `foo` @ [1]:35..38 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `bar` @ [1]:39..42 from 0,
+               location: [1]:35..42 from 0
              },
-             {
-               id: `bar` @ [1]:39..42 from 0,
-               has_question_mark: false
-             }
-           ]
-         }
-       ],
+             has_this: false,
+             path: [
+               {
+                 id: `foo` @ [1]:35..38 from 0,
+                 has_question_mark: false
+               },
+               {
+                 id: `bar` @ [1]:39..42 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:43..48 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression unary_expr {
++        Incomplete unary_expr {
+           op: "not_",
+           expr: function_call {
+             fn: {
+               path: [
+                 `is_empty` @ [1]:81..89 from 0
+               ],
+               ref: std::is_empty/fn
+             },
+             args: [
+               function_call {
+                 fn: {
+                   path: [
+                     `where` @ [1]:56..61 from 0
+                   ],
+                   ref: std::where/fn
+                 },
+                 args: [
+                   root_field {
+                     id: `xs` @ [1]:53..55 from 0,
+                     has_question_mark: false
+                   },
+                   lambda_expr {
+                     params: [
+                       `x` @ [1]:62..63 from 0
+                     ],
+                     body: binary_expr {
+                       left: root_field {
+                         id: `x` @ [1]:67..68 from 0,
+                         has_question_mark: false
+                       },
+                       op: "eq",
+                       right: field_access {
+                         left: root_field {
+                           id: `foo` @ [1]:72..75 from 0,
+                           has_question_mark: false
+                         },
+                         has_question_mark: false,
+                         name: `bar` @ [1]:76..79 from 0,
+                         location: [1]:72..79 from 0
+                       },
+                       location: [1]:67..79 from 0
+                     },
+                     location: [1]:62..79 from 0
+                   }
+                 ],
+                 method: true,
+                 location: [1]:53..80 from 0
+               }
+             ],
+             method: true,
+             location: [1]:53..91 from 0
+           },
+           location: [1]:49..91 from 0
+         }
+       ],
        named_args: [
          
        ]
-     },
-     where_ir {
--      self: [1]:43..48 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: unary_expr {
-         op: "not_",
-         expr: function_call {
-           fn: {
-             path: [
-               `is_empty` @ [1]:81..89 from 0
-             ],
-             ref: std::is_empty/fn
-           },
-           args: [
-             function_call {
-               fn: {
-                 path: [
-                   `where` @ [1]:56..61 from 0
-                 ],
-                 ref: std::where/fn
-               },
-               args: [
-                 root_field {
-                   id: `xs` @ [1]:53..55 from 0,
-                   has_question_mark: false
-                 },
-                 lambda_expr {
-                   params: [
-                     `x` @ [1]:62..63 from 0
-                   ],
-                   body: binary_expr {
-                     left: root_field {
-                       id: `x` @ [1]:67..68 from 0,
-                       has_question_mark: false
-                     },
-                     op: "eq",
-                     right: field_access {
-                       left: root_field {
-                         id: `foo` @ [1]:72..75 from 0,
-                         has_question_mark: false
-                       },
-                       has_question_mark: false,
-                       name: `bar` @ [1]:76..79 from 0,
-                       location: [1]:72..79 from 0
-                     },
-                     location: [1]:67..79 from 0
-                   },
-                   location: [1]:62..79 from 0
-                 }
-               ],
-               method: true,
-               location: [1]:53..80 from 0
-             }
-           ],
-           method: true,
-           location: [1]:53..91 from 0
-         },
-         location: [1]:49..91 from 0
-       }
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:91..91 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:91..91 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
++      order: "ordered"
      }
    ]
  }

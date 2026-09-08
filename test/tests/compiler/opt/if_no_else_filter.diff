@@ -4,24 +4,26 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
++      order: "unordered"
      },
      If {
        condition: binary_expr {
@@ -39,62 +41,62 @@
          ],
          operators: [
 +          where_ir {
-+            self: [0]:0..0 from 0,
-+            predicate: binary_expr {
-+              left: root_field {
-+                id: `b` @ [1]:36..37 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant int64 2 @ [1]:41..42 from 0,
-+              location: [1]:36..42 from 0
-+            }
++            op: {
++              path: [
++                
++              ],
++              ref: unresolved
++            },
++            args: [
++              Incomplete binary_expr {
++                left: root_field {
++                  id: `b` @ [1]:36..37 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant int64 2 @ [1]:41..42 from 0,
++                location: [1]:36..42 from 0
++              }
++            ],
++            named_args: [
++              
++            ]
 +          },
            GenericIr {
-             op: {
-               path: [
-                 `drop` @ [1]:21..25 from 0
-               ],
-               ref: std::drop/op
-             },
              desc: "tql2.drop",
-             args: [
-               field_path {
-                 expr: root_field {
-                   id: `a` @ [1]:26..27 from 0,
-                   has_question_mark: false
-                 },
-                 has_this: false,
+             store: {
+               op: {
                  path: [
-                   {
+                   `drop` @ [1]:21..25 from 0
+                 ],
+                 ref: std::drop/op
+               },
+               args: [
+                 field_path {
+                   expr: root_field {
                      id: `a` @ [1]:26..27 from 0,
                      has_question_mark: false
-                   }
-                 ]
-               }
-             ],
+                   },
+                   has_this: false,
+                   path: [
+                     {
+                       id: `a` @ [1]:26..27 from 0,
+                       has_question_mark: false
+                     }
+                   ]
+                 }
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
--            order: "ordered",
-+            order: "unordered",
-             named_args: [
-               
-             ]
-           }
-         ]
--      }
--    },
--    where_ir {
--      self: [1]:30..35 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `b` @ [1]:36..37 from 0,
--          has_question_mark: false
--        },
--        op: "eq",
--        right: constant int64 2 @ [1]:41..42 from 0,
--        location: [1]:36..42 from 0
+-            order: "ordered"
++            order: "unordered"
++          }
++        ]
 +      },
 +      alternative: {
 +        lets: [
@@ -102,38 +104,72 @@
 +        ],
 +        operators: [
 +          where_ir {
-+            self: [0]:0..0 from 0,
-+            predicate: binary_expr {
-+              left: root_field {
-+                id: `b` @ [1]:36..37 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant int64 2 @ [1]:41..42 from 0,
-+              location: [1]:36..42 from 0
-+            }
-+          }
-+        ]
++            op: {
++              path: [
++                
++              ],
++              ref: unresolved
++            },
++            args: [
++              Incomplete binary_expr {
++                left: root_field {
++                  id: `b` @ [1]:36..37 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant int64 2 @ [1]:41..42 from 0,
++                location: [1]:36..42 from 0
++              }
++            ],
++            named_args: [
++              
++            ]
+           }
+         ]
        }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:30..35 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `b` @ [1]:36..37 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 2 @ [1]:41..42 from 0,
+-          location: [1]:36..42 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
      },
      GenericIr {
-       op: {
-         path: [
-           `discard` @ [1]:43..50 from 0
-         ],
-         ref: std::discard/op
-       },
        desc: "discard",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:43..50 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

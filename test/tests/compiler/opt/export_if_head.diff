@@ -4,23 +4,25 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      },
      If {
        condition: binary_expr {
@@ -38,64 +40,70 @@
          ],
          operators: [
            GenericIr {
-             op: {
-               path: [
-                 `head` @ [1]:21..25 from 0
-               ],
-               ref: std::head/op
-             },
              desc: "head",
-             args: [
-               located 3 @ [1]:26..27 from 0
-             ],
+             store: {
+               op: {
+                 path: [
+                   `head` @ [1]:21..25 from 0
+                 ],
+                 ref: std::head/op
+               },
+               args: [
+                 located 3 @ [1]:26..27 from 0
+               ],
+               named_args: [
+                 
+               ]
+             },
              filter: [
                
              ],
-             order: "ordered",
-             named_args: [
-               
-             ]
+             order: "ordered"
            }
          ]
        }
      },
      GenericIr {
-       op: {
-         path: [
-           `head` @ [1]:30..34 from 0
-         ],
-         ref: std::head/op
-       },
        desc: "head",
-       args: [
-         located 5 @ [1]:35..36 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:30..34 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:35..36 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
 +    },
 +    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ [1]:36..36 from 0
-+        ],
-+        ref: std::to_stdout/op
-+      },
 +      desc: "to_stdout",
-+      args: [
-+        
-+      ],
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:36..36 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
++      order: "ordered"
      }
    ]
  }

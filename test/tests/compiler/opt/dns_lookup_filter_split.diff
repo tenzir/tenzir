@@ -19,97 +19,133 @@
        self: [1]:0..4 from 0
 +    },
 +    where_ir {
-+      self: [0]:0..0 from 0,
-+      predicate: binary_expr {
-+        left: root_field {
-+          id: `domain` @ [1]:69..75 from 0,
-+          has_question_mark: false
-+        },
-+        op: "eq",
-+        right: constant string "tenzir.com" @ [1]:79..91 from 0,
-+        location: [1]:69..91 from 0
-+      }
-     },
-     GenericIr {
-       op: {
-         path: [
-           `dns_lookup` @ [1]:28..38 from 0
-         ],
-         ref: std::dns_lookup/op
-       },
-       desc: "dns_lookup",
-       args: [
-         expression root_field {
-           id: `domain` @ [1]:39..45 from 0,
-           has_question_mark: false
-         }
-       ],
-       filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         {
-           index: 0,
-           value: field_path {
-             expr: root_field {
-               id: `resolved` @ [1]:54..62 from 0,
-               has_question_mark: false
-             },
-             has_this: false,
-             path: [
-               {
-                 id: `resolved` @ [1]:54..62 from 0,
-                 has_question_mark: false
-               }
-             ]
-           }
-         }
-       ]
-     },
-     where_ir {
--      self: [1]:63..68 from 0,
--      predicate: binary_expr {
--        left: root_field {
--          id: `domain` @ [1]:69..75 from 0,
--          has_question_mark: false
--        },
--        op: "eq",
--        right: constant string "tenzir.com" @ [1]:79..91 from 0,
--        location: [1]:69..91 from 0
--      }
--    },
--    where_ir {
--      self: [1]:92..97 from 0,
-+      self: [0]:0..0 from 0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `resolved` @ [1]:98..106 from 0,
-           has_question_mark: false
-         },
-         op: "neq",
-         right: constant none_t {} @ [1]:110..114 from 0,
-         location: [1]:98..114 from 0
-       }
-+    },
-+    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ [1]:114..114 from 0
++          
 +        ],
-+        ref: std::to_stdout/op
++        ref: unresolved
 +      },
-+      desc: "to_stdout",
 +      args: [
-+        
++        Incomplete binary_expr {
++          left: root_field {
++            id: `domain` @ [1]:69..75 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant string "tenzir.com" @ [1]:79..91 from 0,
++          location: [1]:69..91 from 0
++        }
 +      ],
-+      filter: [
-+        
-+      ],
-+      order: "ordered",
 +      named_args: [
 +        
 +      ]
+     },
+     GenericIr {
+       desc: "dns_lookup",
+       store: {
+         op: {
+           path: [
+             `dns_lookup` @ [1]:28..38 from 0
+           ],
+           ref: std::dns_lookup/op
+         },
+         args: [
+           expression root_field {
+             id: `domain` @ [1]:39..45 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: field_path {
+               expr: root_field {
+                 id: `resolved` @ [1]:54..62 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `resolved` @ [1]:54..62 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:63..68 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `domain` @ [1]:69..75 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant string "tenzir.com" @ [1]:79..91 from 0,
+-          location: [1]:69..91 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:92..97 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `resolved` @ [1]:98..106 from 0,
+             has_question_mark: false
+           },
+           op: "neq",
+           right: constant none_t {} @ [1]:110..114 from 0,
+           location: [1]:98..114 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:114..114 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
      }
    ]
  }

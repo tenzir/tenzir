@@ -1,4 +1,4 @@
-error: duplicate `pipeline` argument
+error: duplicate pipeline argument
  --> tests/operators/parallel/duplicate_pipeline.tql:6:20
   |
 6 | parallel { pass }, { pass }
@@ -7,3 +7,5 @@ error: duplicate `pipeline` argument
 6 | parallel { pass }, { pass }
   |          -------- previously provided here
   |
+  = usage: parallel [jobs:int, fuse=string, limit_partitions=int, route_by=field]
+  = docs: https://tenzir.com/docs/reference/operators/parallel

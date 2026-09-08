@@ -4,46 +4,50 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `export` @ [1]:0..6 from 0
-         ],
-         ref: std::export/op
-       },
        desc: "export",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
--      order: "ordered",
-+      order: "unordered",
-       named_args: [
-         
-       ]
+-      order: "ordered"
 -    },
 -    OptimizeReorderIr {
 -      loc: [1]:7..23 from 0
++      order: "unordered"
      },
      GenericIr {
-       op: {
-         path: [
-           `to_stdout` @ [1]:24..33 from 0
-         ],
-         ref: std::to_stdout/op
-       },
        desc: "to_stdout",
-       args: [
-         
-       ],
+       store: {
+         op: {
+           path: [
+             `to_stdout` @ [1]:24..33 from 0
+           ],
+           ref: std::to_stdout/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+       order: "ordered"
      }
    ]
  }

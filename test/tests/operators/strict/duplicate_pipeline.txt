@@ -1,0 +1,11 @@
+error: duplicate pipeline argument
+ --> tests/operators/strict/duplicate_pipeline.tql:6:18
+  |
+6 | strict { pass }, { drop x }
+  |                  ^^^^^^^^^^
+  ⋮
+6 | strict { pass }, { drop x }
+  |        -------- previously provided here
+  |
+  = usage: strict
+  = docs: https://tenzir.com/docs/reference/operators/strict

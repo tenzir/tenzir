@@ -12,6 +12,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -25,6 +26,23 @@ enum class mode {
   top,
   rare,
 };
+
+struct TopRareArgs {
+  location keyword;
+  /// The field to count occurrences of. Kept as an expression because the
+  /// operator compiles into `summarize` and `sort`, which happens before
+  /// substitution.
+  ast::expression x;
+};
+
+template <mode Mode>
+auto describe_top_rare() -> Description {
+  auto d = Describer<TopRareArgs>{};
+  d.name(Mode == mode::top ? "top" : "rare");
+  d.operator_location(&TopRareArgs::keyword);
+  d.positional("x", &TopRareArgs::x, "field");
+  return d.only_arguments();
+}
 
 auto make_replacement_ir(mode which, ast::field_path selector, location self,
                          compile_ctx ctx) -> failure_or<ir::pipeline> {
@@ -120,16 +138,17 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::CompileResult> override {
-    auto selector = ast::field_path{};
-    auto provider = session_provider::make(ctx);
-    auto self = inv.op.get_location();
-    TRY(argument_parser2::operator_(name())
-          .positional("x", selector)
-          .parse(operator_factory_invocation{std::move(inv.op),
-                                             std::move(inv.args)},
-                 provider.as_session()));
+    using Arguments = OperatorArguments<TopRareArgs, describe_top_rare<Mode>>;
+    TRY(auto parsed, Arguments::parse(std::move(inv), ctx));
+    auto args = parsed.get();
+    auto loc = args.x.get_location();
+    auto selector = ast::field_path::try_from(std::move(args.x));
+    if (not selector) {
+      diagnostic::error("expected a field path").primary(loc).emit(ctx);
+      return failure::promise();
+    }
     TRY(auto replacement,
-        make_replacement_ir(Mode, std::move(selector), self, ctx));
+        make_replacement_ir(Mode, std::move(*selector), args.keyword, ctx));
     return replacement;
   }
 };

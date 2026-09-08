@@ -71,6 +71,37 @@ reference section, between arguments and examples.
 Use `d.spawner(...)` only when validation or instantiation depends on the input
 type.
 
+## Bespoke IR operators
+
+An operator that customizes planning or optimization beyond what a
+`Description` expresses implements `ir::Operator` itself. Parse its arguments
+with `OperatorArguments` instead of `argument_parser2`:
+
+```cpp
+auto describe_my_op() -> Description {
+  auto d = Describer<Args>{};
+  d.name("my_op");
+  d.operator_location(&Args::keyword);
+  d.positional("capacity", &Args::capacity);
+  d.pipeline(SubOptimize::off);
+  d.inline_pipeline();
+  return d.only_arguments();
+}
+
+using MyArguments = OperatorArguments<Args, describe_my_op>;
+```
+
+Hold `MyArguments` as the operator's state, forward `substitute()` to it, and
+call `get()` for the typed arguments. Arguments that are constants only resolve
+during substitution, so `infer_type()` may only use the operator location, the
+subpipeline via `pipe()`, and arguments declared as `ast::expression`.
+
+Declare the subpipeline without a member pointer and read it through `pipe()`
+or `take_pipe()`. Materializing it into `Args` deep-copies the subpipeline on
+every `get()`, which is quadratic in the nesting depth. Call
+`d.inline_pipeline()` when the subpipeline is part of the enclosing pipeline
+instead of being bound at runtime.
+
 ## Reader auto-detection
 
 When you add a parser, account for `read_auto` in the same change. If the format

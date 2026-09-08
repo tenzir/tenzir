@@ -4,70 +4,74 @@
    ],
    operators: [
      GenericIr {
-       op: {
-         path: [
-           `every` @ [1]:107..112 from 0
-         ],
-         ref: std::every/op
-       },
        desc: "tql2.every",
-       args: [
--        Incomplete constant duration "1s" @ [1]:113..115 from 0
-+        located "1s" @ [1]:113..115 from 0
-       ],
+       store: {
+         op: {
+           path: [
+             `every` @ [1]:107..112 from 0
+           ],
+           ref: std::every/op
+         },
+         args: [
+-          Incomplete constant duration "1s" @ [1]:113..115 from 0
++          located "1s" @ [1]:113..115 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               from_ir {
+                 events: [
+                   record {
+                     begin: [1]:125..126 from 0,
+                     items: [
+                       field {
+                         name: `x` @ [1]:126..127 from 0,
+                         expr: constant int64 1 @ [1]:129..130 from 0
+                       }
+                     ],
+                     end: [1]:130..131 from 0
+                   }
+                 ],
+                 self: [1]:120..124 from 0
+               },
+               GenericIr {
+                 desc: "discard",
+                 store: {
+                   op: {
+                     path: [
+                       `discard` @ [1]:134..141 from 0
+                     ],
+                     ref: std::discard/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:116..143 from 0,
+           let_ids: {
+             
+           }
+         }
+       },
        filter: [
          
        ],
-       order: "ordered",
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             from_ir {
-               events: [
-                 record {
-                   begin: [1]:125..126 from 0,
-                   items: [
-                     field {
-                       name: `x` @ [1]:126..127 from 0,
-                       expr: constant int64 1 @ [1]:129..130 from 0
-                     }
-                   ],
-                   end: [1]:130..131 from 0
-                 }
-               ],
-               self: [1]:120..124 from 0
-             },
-             GenericIr {
-               op: {
-                 path: [
-                   `discard` @ [1]:134..141 from 0
-                 ],
-                 ref: std::discard/op
-               },
-               desc: "discard",
-               args: [
-                 
-               ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         } @ [1]:116..143 from 0,
-         let_ids: {
-           
-         }
-       }
+       order: "ordered"
      }
    ]
  }
