@@ -479,6 +479,46 @@ TEST("marker replay restores the highest issued sequence") {
   CHECK_EQUAL(sequences, (std::vector<uint64_t>{17, 42}));
 }
 
+TEST("marker replay requires stores and promotes offline staged stores") {
+  auto f = fixture{};
+  REQUIRE(f.await_shutdown());
+  std::filesystem::create_directories(f.paths.markers_dir);
+  const auto input = uuid::random();
+  const auto output = uuid::random();
+  const auto marker = f.paths.marker(uuid::random());
+  REQUIRE(
+    not io::save(marker, as_bytes(create_marker({input}, {output},
+                                                keep_original_partition::no)))
+          .valid());
+  REQUIRE(not io::save(f.paths.transformer_partition(output),
+                       as_bytes(std::string_view{"partition"}))
+                .valid());
+  auto state = catalog_state{};
+  state.paths = f.paths;
+  // An index file alone must not authorize erasing the source data.
+  for (auto attempt = 0; attempt < 2; ++attempt) {
+    const auto excluded = state.replay_markers();
+    REQUIRE(excluded);
+    CHECK(excluded->contains(output));
+    CHECK(not excluded->contains(input));
+    CHECK(state.replayed_transforms.empty());
+    CHECK(std::filesystem::exists(marker));
+  }
+  const auto staged_store
+    = std::filesystem::path{f.store_of(output).string() + ".tmp"};
+  REQUIRE(
+    not io::save(staged_store, as_bytes(std::string_view{"store"})).valid());
+  const auto excluded = state.replay_markers();
+  REQUIRE(excluded);
+  CHECK(excluded->contains(input));
+  CHECK(not excluded->contains(output));
+  CHECK(std::filesystem::exists(f.store_of(output)));
+  CHECK(not std::filesystem::exists(staged_store));
+  REQUIRE_EQUAL(state.replayed_transforms.size(), size_t{1});
+  CHECK_EQUAL(state.replayed_transforms.front().inputs, (std::vector{input}));
+  CHECK(std::filesystem::exists(marker));
+}
+
 TEST("erasure tombstones replay without a policy history invalidation") {
   auto f = fixture{};
   const auto input = f.add_partition();

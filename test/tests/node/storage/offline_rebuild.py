@@ -250,6 +250,30 @@ try:
     assert "would merge" in r.stderr, f"missing plan output:\n{r.stderr}"
     files_after = sorted(p.name for p in index_dir.iterdir())
     assert files_before == files_after, "dry run modified the state directory"
+    invalidation = node.state_dir / "policy-history.invalid"
+    assert not invalidation.exists(), "dry run invalidated policy history"
+    # Generated with flatc from partition_transform.fbs and this JSON:
+    # {"transform_type":"v0","transform":{"input_partitions":[],
+    #  "output_partitions":[],"finalized":true}}
+    finalized_marker = bytes.fromhex(
+        "100000007650545408000c0007000800"
+        "08000000000000011400000010001000"
+        "08000c00000000000000070010000000"
+        "000000010c0000000400000000000000"
+        "00000000"
+    )
+    marker_dir = index_dir / "markers"
+    marker_dir.mkdir(exist_ok=True)
+    marker = marker_dir / "catalog-finalized.marker"
+    marker.write_bytes(finalized_marker)
+    try:
+        r = run_rebuild(node)
+        assert r.returncode != 0, "offline rebuild accepted a catalog-only marker"
+        assert "start the node once" in r.stderr, r.stderr
+        assert marker.read_bytes() == finalized_marker, "recovery marker changed"
+        assert not invalidation.exists(), "refused recovery invalidated history"
+    finally:
+        marker.unlink()
     print("phase3-dry-run-changes-nothing: ok")
 
     # --- Phase 4: consolidate ----------------------------------------------
@@ -257,6 +281,7 @@ try:
     r = run_rebuild(node, "--parallel=3")
     assert r.returncode == 0, f"offline rebuild failed: {r.stderr}"
     assert "done: merged" in r.stderr, f"missing summary output:\n{r.stderr}"
+    assert invalidation.exists(), "offline rebuild left policy history trusted"
     print("phase4-consolidate: ok")
 
     # --- Phase 5: all events survive with fewer partitions ----------------

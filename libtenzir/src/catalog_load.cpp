@@ -221,8 +221,8 @@ auto catalog_state::replay_markers()
       }
     }
     // Outputs first, and confirmed: the inputs may only die once every
-    // output *partition* is verifiably at its destination -- a successful
-    // rename, or a destination that is already there from a previous replay
+    // output store and partition are verifiably at their destinations -- a
+    // successful rename, or a destination already there from a previous replay
     // or the transform itself. Anything less, including a source and
     // destination that are both invisible or an `exists` that itself fails,
     // keeps the marker and the inputs: erasing them on an unconfirmed output
@@ -237,6 +237,31 @@ auto catalog_state::replay_markers()
     if (not finalized) {
       for (const auto* id : *transform_v0->output_partitions()) {
         const auto output = uuid::from_flatbuffer(*id);
+        // Offline rebuilds stage stores until their marker is durable. A
+        // partition without its store is not a recoverable replacement.
+        auto have_store = false;
+        for (const auto* extension : {"store", "feather", "parquet"}) {
+          const auto store
+            = paths.archive_dir / fmt::format("{}.{}", output, extension);
+          const auto staged = std::filesystem::path{store.string() + ".tmp"};
+          auto ec = std::error_code{};
+          if (std::filesystem::exists(staged, ec)) {
+            std::filesystem::rename(staged, store, ec);
+          }
+          if (ec) {
+            outputs_in_place = false;
+          }
+          ec.clear();
+          if (std::filesystem::exists(store, ec)) {
+            have_store = true;
+          }
+          if (ec) {
+            outputs_in_place = false;
+          }
+        }
+        if (not have_store) {
+          outputs_in_place = false;
+        }
         {
           auto ec = std::error_code{};
           std::filesystem::rename(paths.transformer_partition(output),
@@ -248,7 +273,7 @@ auto catalog_state::replay_markers()
             if (ec or not in_place) {
               TENZIR_WARN("{} keeps the marker at {} because output partition "
                           "{} is not confirmed at {}",
-                          *self, entry.path(), output, paths.partition(output));
+                          name, entry.path(), output, paths.partition(output));
               outputs_in_place = false;
             }
           }

@@ -8,7 +8,28 @@
 
 #include "tenzir/plugin/storage_policy.hpp"
 
+#include "tenzir/error.hpp"
+#include "tenzir/io/save.hpp"
+
 namespace tenzir {
+
+auto invalidate_policy_history(const std::filesystem::path& database_dir)
+  -> caf::error {
+  const auto path = database_dir / invalid_policy_history_path;
+  auto error = std::error_code{};
+  const auto exists = std::filesystem::exists(path, error);
+  if (error) {
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to probe {}: {}", path, error));
+  }
+  if (exists) {
+    return {};
+  }
+  return io::save(path, as_bytes(std::string_view{
+                          "Partitions were replaced without a storage policy. "
+                          "Reset the stale policy history before removing this "
+                          "file.\n"}));
+}
 
 // A policy contributes only the parts it cares about; the rest default to
 // "nothing to say", which leaves the catalog on its built-in behavior.

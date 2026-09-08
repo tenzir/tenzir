@@ -33,6 +33,10 @@ namespace tenzir {
 inline constexpr auto invalid_policy_history_path
   = std::string_view{"policy-history.invalid"};
 
+/// Durably disable stale policy history before dropping replacement lineage.
+auto invalidate_policy_history(const std::filesystem::path& database_dir)
+  -> caf::error;
+
 // -- storage policy ----------------------------------------------------------
 
 /// What to do with a partition.

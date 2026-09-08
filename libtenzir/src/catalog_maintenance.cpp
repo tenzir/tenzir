@@ -843,6 +843,7 @@ void catalog_state::schedule_rebuild(time now) {
           self
             ->mail(atom::erase_v, atom::extract_v, *corrupt,
                    fmt::to_string(error))
+            .urgent()
             .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
             .then(
               [this, generation](atom::done) {

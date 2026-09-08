@@ -246,6 +246,7 @@ void index_state::decommission_active_partition(
         // down.
         auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
         self->mail(atom::merge_v, std::move(apsv))
+          .urgent()
           .request(catalog, caf::infinite)
           .then(
             [=, this](atom::ok) {

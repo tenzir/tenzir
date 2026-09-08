@@ -791,20 +791,7 @@ void catalog_state::release_marker_hold(const std::filesystem::path& marker) {
 }
 
 auto catalog_state::invalidate_policy_history() -> caf::error {
-  auto const path = paths.database_dir / invalid_policy_history_path;
-  auto error = std::error_code{};
-  auto const exists = std::filesystem::exists(path, error);
-  if (error) {
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to probe {}: {}", path, error));
-  }
-  if (exists) {
-    return {};
-  }
-  return io::save(path, as_bytes(std::string_view{
-                          "Partitions were replaced without a storage policy. "
-                          "Reset the stale policy history before removing this "
-                          "file.\n"}));
+  return tenzir::invalidate_policy_history(paths.database_dir);
 }
 
 void catalog_state::release_marker_after_flush(std::filesystem::path marker) {
