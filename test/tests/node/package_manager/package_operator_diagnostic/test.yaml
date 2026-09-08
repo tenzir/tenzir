@@ -1,0 +1,5 @@
+suite: package-manager
+runner: python
+fixtures:
+  - node
+timeout: 120

@@ -317,7 +317,9 @@ auto main(int argc, char** argv) -> int try {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
-    auto dh = make_diagnostic_printer(color_diagnostics::yes, std::cerr);
+    auto source_map = SourceMap{};
+    auto dh
+      = make_diagnostic_printer(source_map, color_diagnostics::yes, std::cerr);
     auto provider = session_provider::make(*dh);
     auto ctx = provider.as_session();
     struct config_udo {
@@ -345,6 +347,7 @@ auto main(int argc, char** argv) -> int try {
       }
       auto source = Source::new_source(
         *definition, fmt::format("tenzir.operators.{}", name), true);
+      source_map.add_source(source);
       auto pipe = parse(*source, ctx);
       if (not pipe) {
         TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);

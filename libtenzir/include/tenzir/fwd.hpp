@@ -13,6 +13,7 @@
 #include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
 #include <arrow/util/config.h>
+#include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
 #include <caf/type_id.hpp>
@@ -505,6 +506,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::secret))
   TENZIR_ADD_TYPE_ID((tenzir::secret_resolution_result))
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
+  TENZIR_ADD_TYPE_ID((tenzir::SourceMap))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
   TENZIR_ADD_TYPE_ID((tenzir::taxonomies))
@@ -563,6 +565,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
+
+// A source map may accompany diagnostics in a message so that their locations
+// stay resolvable for the receiver. The source ids it contains are only
+// meaningful within the process that created them, hence it is not
+// serializable and must not leave the node.
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::SourceMap)
 
 #undef TENZIR_CAF_ATOM_ALIAS
 #undef TENZIR_ADD_ATOM
