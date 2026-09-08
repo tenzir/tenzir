@@ -278,6 +278,16 @@ try:
 
     # --- Phase 4: consolidate ----------------------------------------------
 
+    # Failure before a durable marker must not disable policy history. Block
+    # staging with a regular file, then repair it and run the same plan.
+    marker_dir.rmdir()
+    marker_dir.write_text("block staging")
+    try:
+        r = run_rebuild(node, "--parallel=3")
+        assert r.returncode != 0, "offline rebuild ignored failed staging"
+        assert not invalidation.exists(), "failed rebuild invalidated history"
+    finally:
+        marker_dir.unlink()
     r = run_rebuild(node, "--parallel=3")
     assert r.returncode == 0, f"offline rebuild failed: {r.stderr}"
     assert "done: merged" in r.stderr, f"missing summary output:\n{r.stderr}"

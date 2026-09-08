@@ -11,10 +11,15 @@
 #include "tenzir/error.hpp"
 #include "tenzir/io/save.hpp"
 
+#include <mutex>
+
 namespace tenzir {
 
 auto invalidate_policy_history(const std::filesystem::path& database_dir)
   -> caf::error {
+  // Parallel offline merges share io::save's temporary file name.
+  static auto mutex = std::mutex{};
+  const auto guard = std::scoped_lock{mutex};
   const auto path = database_dir / invalid_policy_history_path;
   auto error = std::error_code{};
   const auto exists = std::filesystem::exists(path, error);

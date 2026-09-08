@@ -1350,6 +1350,12 @@ auto execute_merge(const merge_group& group,
   // The swap is durable now; perform it. Failures below leave the marker in
   // place so that the next run or the node finishes the swap.
   cleanup_staged.disable();
+  cleanup_tmp.disable();
+  // No history changes are needed until a replacement is durable. If this
+  // fails, keep every staged output so node recovery can finish the swap.
+  if (auto error = invalidate_policy_history(state_dir); error.valid()) {
+    return error;
+  }
   std::filesystem::rename(store_tmp_path, store_out_path, err);
   if (err) {
     return caf::make_error(ec::filesystem_error,
@@ -1618,11 +1624,6 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
   }
   // Phase 3: consolidate. Groups are disjoint—distinct inputs, fresh output
   // ids, and randomly named markers—so they can merge in parallel.
-  // The offline tool cannot transfer policy watermarks. Use the same durable
-  // invalidation as catalog replacements performed without a policy plugin.
-  if (auto error = invalidate_policy_history(state_dir); error.valid()) {
-    return caf::make_message(std::move(error));
-  }
   auto merged_partitions = std::atomic<size_t>{0};
   auto merged_events = std::atomic<uint64_t>{0};
   auto bytes_before = std::atomic<uint64_t>{0};
