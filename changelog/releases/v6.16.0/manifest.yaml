@@ -1,0 +1,10 @@
+created: 2026-09-08
+title: Automatic Sigma Matching for OCSF
+intro: >-
+  Tenzir now matches stock Sigma rules against Open Cybersecurity Schema Framework
+  events automatically and collects Microsoft 365 audit activity. This release also
+  improves query performance, expands identity federation support, and fixes issues
+  with Sigma matching, context loading, memory metrics, and automatic rebuilds.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.15.0
