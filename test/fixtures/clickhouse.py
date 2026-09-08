@@ -49,6 +49,9 @@ def _start_clickhouse(runtime: RuntimeSpec, port: int) -> ManagedContainer:
         f"{port}:9000",
         "-e",
         f"CLICKHOUSE_PASSWORD={CLICKHOUSE_PASSWORD}",
+        # Lets tests create users with their own settings profiles.
+        "-e",
+        "CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1",
         CLICKHOUSE_IMAGE,
     ]
     logger.info("Starting ClickHouse container with %s", runtime.binary)

@@ -43,6 +43,21 @@ defaults explicitly in validation callbacks.
 Use `d.order_invariant()` only for pure row transforms that can be reordered.
 Use `d.without_optimize()` otherwise.
 
+A source that can act on optimizer hints opts in with `d.optimize_filter(...)`,
+`d.optimize_limit(...)`, and `d.optimize_projection(...)`. Opting into the
+filter moves the entire downstream filter chain into the operator, so the
+operator must apply every predicate: push what it can translate exactly and
+evaluate the rest locally with `filter2`. The limit counts events after the
+whole chain, so push it only when the chain went along. See `from_clickhouse`
+for the pattern and `export` for the storage-engine variant.
+
+Every source that opts in documents an `## Optimizations` section on its
+reference page in `tenzir/content`, placed after the argument descriptions and
+before the examples. State which hints the operator acts on and in which modes,
+which predicates it pushes and which stay local, and how to verify with
+`tenzir --dump-opt-ir`. Describe the contract, not the mechanism: what a user
+can rely on, never how the operator achieves it.
+
 Use `d.spawner(...)` only when validation or instantiation depends on the input
 type.
 

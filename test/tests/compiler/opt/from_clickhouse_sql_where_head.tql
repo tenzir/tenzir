@@ -1,0 +1,3 @@
+from_clickhouse sql="SELECT * FROM tbl"
+where x > 0
+head 5

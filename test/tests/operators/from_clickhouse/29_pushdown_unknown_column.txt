@@ -1,0 +1,11 @@
+warning: field `nope` not found
+ --> tests/operators/from_clickhouse/29_pushdown_unknown_column.tql:8:12
+  |
+8 | select id, nope
+  |            ~~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  id: 1,
+  nope: null,
+}

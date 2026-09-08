@@ -1,0 +1,10 @@
+{
+  id: 1,
+  n: null,
+  s: null,
+}
+{
+  id: 4,
+  n: null,
+  s: "foo",
+}

@@ -1,0 +1,9 @@
+// Filter, projection, and limit all travel into the SQL query.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where x > 0 or y == "foo" and z in [1, 2, 3]
+select id, x, y
+head 3

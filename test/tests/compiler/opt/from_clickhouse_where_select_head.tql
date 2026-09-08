@@ -1,0 +1,4 @@
+from_clickhouse table="db.tbl"
+where x > 0 or y == "foo" and z in [1, 2, 3]
+select x, y
+head 42

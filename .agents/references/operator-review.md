@@ -26,6 +26,18 @@ Review TQL operators for correctness, resource handling, and executor behavior.
 - Are external callbacks or helper tasks coordinated through queues or channels
   rather than mutating operator state directly?
 
+## Optimizer hints
+
+- If the operator opts into `optimize_filter`, does it apply every predicate,
+  either pushed or evaluated locally with `filter2`?
+- Is every pushed predicate exact, including for `null` operands and type
+  mismatches where TQL yields `null` but the backend would fail or coerce?
+- Is the limit pushed only when the entire filter chain was pushed?
+- Does a test assert what the operator actually sent to the backend, not only
+  the pipeline output?
+- Does the reference page have an `## Optimizations` section that states the
+  contract? See `operators.md`.
+
 ## Sink operators
 
 For sink operators, `prepare_snapshot()` must return only after all pending

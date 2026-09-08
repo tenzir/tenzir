@@ -1,0 +1,9 @@
+// `x > 0` goes into SQL; `starts_with` stays local, and so does the limit.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where x > 0 and y.starts_with("b")
+head 1
+select id, x, y

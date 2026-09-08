@@ -48,6 +48,10 @@ Database source operators should use this common query surface:
   queries against system catalogs.
 - If a backend supports polling or incremental reads, use `live` and
   `tracking_column` for that API.
+- In `table` mode, act on the optimizer's filter, limit, and projection hints
+  by rewriting the generated query, following `from_clickhouse`. Push only
+  predicates whose backend semantics match TQL exactly and evaluate the rest
+  locally. Leave a user-provided `sql` query untouched.
 
 ## Destination operators
 
@@ -73,3 +77,5 @@ When reviewing a database operator, check that it:
 - documents backend-specific extensions or unsupported shared arguments
   explicitly
 - stays aligned with existing operators where semantics already exist
+- documents an `## Optimizations` section on its reference page when it acts
+  on optimizer hints (see `operators.md`)

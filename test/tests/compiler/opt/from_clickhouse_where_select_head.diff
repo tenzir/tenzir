@@ -1,0 +1,236 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `from_clickhouse` @ [1]:0..15 from 0
+         ],
+         ref: std::from_clickhouse/op
+       },
+       desc: "from_clickhouse",
+       args: [
+         
+       ],
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `x` @ [1]:37..38 from 0,
++              has_question_mark: false
++            },
++            op: "gt",
++            right: constant int64 0 @ [1]:41..42 from 0,
++            location: [1]:37..42 from 0
++          },
++          op: "or_",
++          right: binary_expr {
++            left: binary_expr {
++              left: root_field {
++                id: `y` @ [1]:46..47 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant string "foo" @ [1]:51..56 from 0,
++              location: [1]:46..56 from 0
++            },
++            op: "and_",
++            right: binary_expr {
++              left: root_field {
++                id: `z` @ [1]:61..62 from 0,
++                has_question_mark: false
++              },
++              op: "in",
++              right: list {
++                begin: [1]:66..67 from 0,
++                items: [
++                  expression constant int64 1 @ [1]:67..68 from 0,
++                  expression constant int64 2 @ [1]:70..71 from 0,
++                  expression constant int64 3 @ [1]:73..74 from 0
++                ],
++                end: [1]:74..75 from 0
++              },
++              location: [1]:61..75 from 0
++            },
++            location: [1]:46..75 from 0
++          },
++          location: [1]:37..75 from 0
++        }
+       ],
+       order: "ordered",
++      limit: 42,
++      projection: [
++        {
++          expr: root_field {
++            id: `y` @ [1]:86..87 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `y` @ [1]:86..87 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `x` @ [1]:83..84 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `x` @ [1]:83..84 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `z` @ [1]:61..62 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `z` @ [1]:61..62 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
+       named_args: [
+         {
+           index: 1,
+           value: located "db.tbl" @ [1]:22..30 from 0
+         }
+       ]
+-    },
+-    where_ir {
+-      self: [1]:31..36 from 0,
+-      predicate: binary_expr {
+-        left: binary_expr {
+-          left: root_field {
+-            id: `x` @ [1]:37..38 from 0,
+-            has_question_mark: false
+-          },
+-          op: "gt",
+-          right: constant int64 0 @ [1]:41..42 from 0,
+-          location: [1]:37..42 from 0
+-        },
+-        op: "or_",
+-        right: binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `y` @ [1]:46..47 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant string "foo" @ [1]:51..56 from 0,
+-            location: [1]:46..56 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `z` @ [1]:61..62 from 0,
+-              has_question_mark: false
+-            },
+-            op: "in",
+-            right: list {
+-              begin: [1]:66..67 from 0,
+-              items: [
+-                expression constant int64 1 @ [1]:67..68 from 0,
+-                expression constant int64 2 @ [1]:70..71 from 0,
+-                expression constant int64 3 @ [1]:73..74 from 0
+-              ],
+-              end: [1]:74..75 from 0
+-            },
+-            location: [1]:61..75 from 0
+-          },
+-          location: [1]:46..75 from 0
+-        },
+-        location: [1]:37..75 from 0
+-      }
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `x` @ [1]:83..84 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `x` @ [1]:83..84 from 0,
+             has_question_mark: false
+           },
+           location: [1]:83..84 from 0
+         },
+         {
+           left: root_field {
+             id: `y` @ [1]:86..87 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `y` @ [1]:86..87 from 0,
+             has_question_mark: false
+           },
+           location: [1]:86..87 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ [1]:88..92 from 0
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 42 @ [1]:93..95 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:95..95 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

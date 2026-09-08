@@ -1,0 +1,8 @@
+// Tuple elements are addressed as nested fields.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where meta.source == "b" and meta.level > 2
+select id, meta

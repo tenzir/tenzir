@@ -1,0 +1,9 @@
+// TQL treats `null` as a value in `==`, so `not (n == 1)` keeps null rows. The
+// pushed SQL must agree.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where not (n == 1)
+select id, n

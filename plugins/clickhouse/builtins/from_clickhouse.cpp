@@ -9,11 +9,13 @@
 #include "clickhouse/arguments.hpp"
 #include "clickhouse/block_to_table_slice.hpp"
 #include "clickhouse/easy_client.hpp"
+#include "clickhouse/sql_pushdown.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/filter.hpp"
@@ -44,11 +46,31 @@ struct FromClickhouseArgs {
   Option<located<std::string>> sql;
   Option<located<data>> tls;
   location operator_location;
+  /// The filter chain that follows the operator, moved into it by the
+  /// optimizer. Every predicate must be applied: in SQL where the translation
+  /// is exact, locally otherwise.
+  ir::OptimizeFilter filter;
+  /// An upper bound on the events needed after `filter`, if any.
+  Option<uint64_t> limit;
+  /// The fields needed downstream, or `None` for all of them.
+  Option<ir::OptimizeProjection> projection;
 };
 
 struct QueryPlan {
-  std::string query;
+  /// The table to read from; `None` when the user provided `sql`.
+  Option<std::string> table;
+  /// The user-provided SQL; empty when `table` is set.
+  std::string sql;
   std::string schema_name;
+  ir::OptimizeFilter filter;
+  Option<uint64_t> limit;
+  Option<ir::OptimizeProjection> projection;
+};
+
+/// Announces the predicates that the operator evaluates itself. Sent before
+/// the first slice so that `process_task` never sees data it cannot filter.
+struct PlanMessage {
+  ir::OptimizeFilter local_filter;
 };
 
 struct SliceMessage {
@@ -57,7 +79,7 @@ struct SliceMessage {
 
 struct DoneMessage {};
 
-using Message = variant<SliceMessage, DoneMessage>;
+using Message = variant<PlanMessage, SliceMessage, DoneMessage>;
 using MessageQueue = folly::coro::BoundedQueue<Message, true, true>;
 constexpr auto message_queue_capacity = uint32_t{16};
 constexpr auto message_queue_backoff = std::chrono::milliseconds{1};
@@ -77,8 +99,17 @@ struct RuntimeState {
   Option<type> first_schema;
   Atomic<bool> stop_requested = false;
 
+  auto produce_plan(ir::OptimizeFilter local_filter) -> void {
+    produce(PlanMessage{std::move(local_filter)});
+  }
+
   auto produce_data(table_slice slice) -> void {
-    auto msg = SliceMessage{std::move(slice)};
+    produce(SliceMessage{std::move(slice)});
+  }
+
+  /// Enqueues from the blocking query thread, giving up once downstream has
+  /// declared that it needs no more data.
+  auto produce(Message msg) -> void {
     while (not stop_requested.load(std::memory_order_acquire)) {
       if (queue.try_enqueue(msg)) {
         return;
@@ -160,20 +191,21 @@ public:
       }
     }
     auto options = client_args.make_options();
-    // Build the query plan: for table mode, fetch the schema first so we can
-    // push only conjuncts that reference existing columns.
-    auto plan = QueryPlan{};
+    // The query text is only decided on the query thread: with optimizer hints
+    // in table mode, it depends on the table's schema.
+    auto plan = QueryPlan{
+      .table = None{},
+      .sql = {},
+      .schema_name = "clickhouse.query",
+      .filter = args_.filter,
+      .limit = args_.limit,
+      .projection = args_.projection,
+    };
     if (args_.table) {
-      auto qualified = std::string{args_.table->inner};
-      plan = {
-        .query = fmt::format("SELECT * FROM {}", qualified),
-        .schema_name = make_schema_name_from_table(args_.table->inner),
-      };
+      plan.table = args_.table->inner;
+      plan.schema_name = make_schema_name_from_table(args_.table->inner);
     } else {
-      plan = {
-        .query = args_.sql->inner,
-        .schema_name = "clickhouse.query",
-      };
+      plan.sql = args_.sql->inner;
     }
     // Helper task to shutdown our query on cancellation.
     ctx.spawn_task([runtime = runtime_]() mutable -> Task<void> {
@@ -202,18 +234,45 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(ctx);
     auto message = std::move(result).as<Message>();
     co_await co_match(
       std::move(message),
+      [&](PlanMessage x) -> Task<void> {
+        local_filter_ = std::move(x.local_filter);
+        co_return;
+      },
       [&](SliceMessage x) -> Task<void> {
         if (runtime_->stop_requested.load(std::memory_order_acquire)) {
           co_return;
         }
-        co_await push(std::move(x.slice));
+        auto slice = std::move(x.slice);
+        // Predicates without an exact SQL translation run here, with the same
+        // semantics as the `where` they came from.
+        for (auto const& expr : local_filter_) {
+          slice = filter2(slice, expr, ctx.dh(), false);
+          if (slice.rows() == 0) {
+            co_return;
+          }
+        }
+        // The limit counts events after the filter chain. When it went into
+        // the SQL query this is a no-op; otherwise it ends the query early.
+        if (args_.limit) {
+          auto remaining = *args_.limit - emitted_;
+          if (slice.rows() > remaining) {
+            slice = subslice(slice, 0, remaining);
+          }
+        }
+        emitted_ += slice.rows();
+        if (slice.rows() > 0) {
+          co_await push(std::move(slice));
+        }
+        if (args_.limit and emitted_ >= *args_.limit) {
+          runtime_->request_cancellation();
+          done_ = true;
+        }
       },
       [&](DoneMessage) -> Task<void> {
-        saw_done_msg_ = true;
+        done_ = true;
         co_return;
       });
   }
@@ -225,7 +284,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return saw_done_msg_ ? OperatorState::done : OperatorState::normal;
+    return done_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:
@@ -249,24 +308,81 @@ private:
     return fmt::format("clickhouse.{}", table_name);
   }
 
+  /// Reads the columns of `table` that `SELECT *` returns.
+  static auto fetch_schema(::clickhouse::Client& client, std::string_view table)
+    -> SqlSchema {
+    // Any privilege on the table grants `DESCRIBE`, so this cannot fail where
+    // the `SELECT` that follows would succeed.
+    auto query = ::clickhouse::Query{fmt::format("DESCRIBE TABLE {}", table)};
+    auto schema = SqlSchema{};
+    query.OnData([&](::clickhouse::Block const& block) {
+      if (block.GetColumnCount() < 3) {
+        return;
+      }
+      auto names = block[0]->As<::clickhouse::ColumnString>();
+      auto types = block[1]->As<::clickhouse::ColumnString>();
+      auto default_types = block[2]->As<::clickhouse::ColumnString>();
+      if (not names or not types or not default_types) {
+        return;
+      }
+      for (auto i = size_t{0}; i < block.GetRowCount(); ++i) {
+        // Whether `SELECT *` returns a generated column depends on the
+        // session's `asterisk_include_*` settings, so the schema keeps them
+        // apart: predicates on them stay local and projections that name them
+        // fall back to `*`, which matches the local result under any setting.
+        auto default_type = default_types->At(i);
+        auto generated = default_type == "ALIAS"
+                         or default_type == "MATERIALIZED"
+                         or default_type == "EPHEMERAL";
+        schema.add_column(names->At(i), types->At(i), generated);
+      }
+    });
+    client.Execute(query);
+    return schema;
+  }
+
+  struct PreparedQuery {
+    std::string text;
+    ir::OptimizeFilter local_filter;
+  };
+
+  /// Decides the query text and which predicates stay local. Runs on the
+  /// query thread because it may need a round-trip for the schema.
+  static auto prepare_query(::clickhouse::Client& client, QueryPlan& plan)
+    -> PreparedQuery {
+    if (not plan.table) {
+      // TODO: Weaving hints into user-provided SQL requires parsing it. Until
+      // then, everything runs locally.
+      return {.text = std::move(plan.sql),
+              .local_filter = std::move(plan.filter)};
+    }
+    // A limit alone needs no schema; only filter and projection do.
+    if (plan.filter.empty() and not plan.projection) {
+      return {
+        .text = make_select_query(*plan.table, nullptr, None{}, {}, plan.limit),
+        .local_filter = {},
+      };
+    }
+    auto schema = fetch_schema(client, *plan.table);
+    auto split = split_filter_for_sql(std::move(plan.filter), schema);
+    // The limit counts events after the whole filter chain, so it can only go
+    // into the query if the chain did.
+    auto limit = Option<uint64_t>{};
+    if (split.remaining.empty()) {
+      limit = plan.limit;
+    }
+    return {
+      .text = make_select_query(*plan.table, &schema, plan.projection,
+                                split.pushed, limit),
+      .local_filter = std::move(split.remaining),
+    };
+  }
+
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
                  diagnostic_handler& dh) -> Task<void> {
     try {
       auto first_schema = Option<type>{};
-      auto query = ::clickhouse::Query{plan.query};
-      query.SetSetting("max_block_size",
-                       {std::to_string(defaults::import::table_slice_size),
-                        ::clickhouse::QuerySettingsField::IMPORTANT});
-      // Without this, MergeTree's byte-based cap overrides max_block_size on
-      // wide tables.
-      query.SetSetting("preferred_block_size_bytes",
-                       {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
-      // `block_to_table_slice` cannot decode ClickHouse's native `JSON`
-      // column type; this makes the server send such columns as plain
-      // strings instead, matching how `to_clickhouse` writes JSON columns.
-      query.SetSetting("output_format_native_write_json_as_string",
-                       {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
-      query.OnDataCancelable([&](::clickhouse::Block const& block) {
+      auto on_data = [&](::clickhouse::Block const& block) {
         if (runtime_->should_cancel()) {
           return false;
         }
@@ -284,9 +400,26 @@ private:
         }
         runtime_->produce_data(std::move(*slice));
         return not runtime_->should_cancel();
-      });
-      co_await spawn_blocking([&options, &query]() {
+      };
+      co_await spawn_blocking([&]() {
         auto client = ::clickhouse::Client{options};
+        auto prepared = prepare_query(client, plan);
+        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared.text);
+        runtime_->produce_plan(std::move(prepared.local_filter));
+        auto query = ::clickhouse::Query{std::move(prepared.text)};
+        query.SetSetting("max_block_size",
+                         {std::to_string(defaults::import::table_slice_size),
+                          ::clickhouse::QuerySettingsField::IMPORTANT});
+        // Without this, MergeTree's byte-based cap overrides max_block_size
+        // on wide tables.
+        query.SetSetting("preferred_block_size_bytes",
+                         {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
+        // `block_to_table_slice` cannot decode ClickHouse's native `JSON`
+        // column type; this makes the server send such columns as plain
+        // strings instead, matching how `to_clickhouse` writes JSON columns.
+        query.SetSetting("output_format_native_write_json_as_string",
+                         {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
+        query.OnDataCancelable(on_data);
         client.Select(query);
       });
     } catch (const panic_exception&) {
@@ -313,7 +446,9 @@ private:
   FromClickhouseArgs args_;
   mutable Arc<RuntimeState> runtime_ = Arc<RuntimeState>{std::in_place};
   bool tls_enabled_ = false;
-  bool saw_done_msg_ = false;
+  bool done_ = false;
+  ir::OptimizeFilter local_filter_;
+  uint64_t emitted_ = 0;
 };
 
 class Plugin final : public virtual OperatorPlugin {
@@ -376,7 +511,9 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    d.optimize_limit(&FromClickhouseArgs::limit);
+    d.optimize_projection(&FromClickhouseArgs::projection);
+    return d.optimize_filter(&FromClickhouseArgs::filter);
   }
 };
 

@@ -1,0 +1,8 @@
+// `s != "a"` is true for null rows in TQL; `n == null` is a null check.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where s != "a" and n == null
+select id, n, s

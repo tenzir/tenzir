@@ -1,0 +1,89 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `from_clickhouse` @ [1]:0..15 from 0
+         ],
+         ref: std::from_clickhouse/op
+       },
+       desc: "from_clickhouse",
+       args: [
+         
+       ],
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ [1]:46..47 from 0,
++            has_question_mark: false
++          },
++          op: "gt",
++          right: constant int64 0 @ [1]:50..51 from 0,
++          location: [1]:46..51 from 0
++        }
+       ],
+       order: "ordered",
++      limit: 5,
+       named_args: [
+         {
+           index: 6,
+           value: located "SELECT * FROM tbl" @ [1]:20..39 from 0
+         }
+       ]
+-    },
+-    where_ir {
+-      self: [1]:40..45 from 0,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `x` @ [1]:46..47 from 0,
+-          has_question_mark: false
+-        },
+-        op: "gt",
+-        right: constant int64 0 @ [1]:50..51 from 0,
+-        location: [1]:46..51 from 0
+-      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ [1]:52..56 from 0
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 5 @ [1]:57..58 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:58..58 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
