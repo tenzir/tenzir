@@ -1,0 +1,6 @@
+error: invalid `schema_registry` URL
+ --> tests/operators/from_kafka/error_avro_registry_port.tql:6:28
+  |
+6 |            schema_registry="http://registry:not-a-port"
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

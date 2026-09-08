@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_kafka "unused",
+           schema_registry="http://registry:not-a-port"

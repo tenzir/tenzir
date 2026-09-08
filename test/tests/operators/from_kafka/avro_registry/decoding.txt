@@ -1,0 +1,8 @@
+mixed framing, schema evolution, header precedence, tombstones, and cache: ok
+top-level bytes, null, empty payload, and schema references: ok
+invalid framing, payloads, and schemas: ok
+registry and decode failures preserve offsets across restart: ok
+transient registry failure retry: ok
+shared dependencies fetched once and soft-deleted references resolved: ok
+oversized registry response stopped before EOF: ok
+slow registry preserves group membership and stored offsets: ok

@@ -46,9 +46,20 @@ type authEvent struct {
 	Decoded   string    `json:"decoded,omitempty"`
 }
 
+type seedHeader struct {
+	Key   string `json:"key"`
+	Value []byte `json:"value"`
+}
+
+type seedRecord struct {
+	Value   []byte       `json:"value"`
+	Headers []seedHeader `json:"headers"`
+}
+
 type seedRequest struct {
-	Topic    string   `json:"topic"`
-	Messages []string `json:"messages"`
+	Topic    string       `json:"topic"`
+	Messages []string     `json:"messages"`
+	Records  []seedRecord `json:"records"`
 }
 
 type authEventsResponse struct {
@@ -82,6 +93,7 @@ func run() error {
 	}
 	cluster, err := kfake.NewCluster(
 		kfake.NumBrokers(1),
+		kfake.AllowAutoTopicCreation(),
 		kfake.Ports(cfg.brokerPort),
 		kfake.SeedTopics(int32(cfg.partitions), cfg.topic),
 		kfake.WithLogger(kfake.BasicLogger(os.Stderr, kfake.LogLevelNone)),
@@ -353,13 +365,17 @@ func (s *mockServer) handleSeed(w http.ResponseWriter, r *http.Request) {
 	if topic == "" {
 		topic = s.cfg.topic
 	}
-	if len(req.Messages) == 0 {
+	if len(req.Messages) == 0 && len(req.Records) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "`messages` must not be empty",
 		})
 		return
 	}
-	if err := s.produceMessages(topic, req.Messages); err != nil {
+	records := req.Records
+	for _, message := range req.Messages {
+		records = append(records, seedRecord{Value: []byte(message)})
+	}
+	if err := s.produceRecords(topic, records); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": fmt.Sprintf("failed to seed topic: %s", err),
 		})
@@ -378,9 +394,10 @@ func (s *mockServer) handleAuthEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.snapshotAuthEvents())
 }
 
-func (s *mockServer) produceMessages(topic string, messages []string) error {
+func (s *mockServer) produceRecords(topic string, records []seedRecord) error {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(s.broker),
+		kgo.AllowAutoTopicCreation(),
 		kgo.DefaultProduceTopic(topic),
 	)
 	if err != nil {
@@ -389,9 +406,10 @@ func (s *mockServer) produceMessages(topic string, messages []string) error {
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	for _, message := range messages {
-		record := &kgo.Record{
-			Value: []byte(message),
+	for _, message := range records {
+		record := &kgo.Record{Value: message.Value}
+		for _, header := range message.Headers {
+			record.Headers = append(record.Headers, kgo.RecordHeader{Key: header.Key, Value: header.Value})
 		}
 		if err := client.ProduceSync(ctx, record).FirstErr(); err != nil {
 			return err

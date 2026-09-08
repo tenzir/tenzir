@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 project(
   iceberg
   DESCRIPTION "Apache Iceberg integration for Tenzir"
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
 # top-level CMakeLists.txt file for it to create a test target, so while
@@ -104,6 +104,22 @@ else ()
       CACHE BOOL "")
 
   set(_build_shared_libs_before "${BUILD_SHARED_LIBS}")
+  # If the Avro plugin is disabled, Iceberg still uses its pinned sources
+  # when no system package is available.
+  if (NOT TARGET avrocpp_s)
+    find_package(avro-cpp QUIET CONFIG)
+    if (NOT avro-cpp_FOUND)
+      set(FETCHCONTENT_SOURCE_DIR_AVRO-CPP
+          "${CMAKE_CURRENT_SOURCE_DIR}/../avro/aux/avro")
+    endif ()
+  endif ()
+  # Keep system-package discovery, but use the submodule for the fallback
+  # instead of downloading Nanoarrow during configuration.
+  find_package(nanoarrow QUIET CONFIG)
+  if (NOT nanoarrow_FOUND)
+    set(FETCHCONTENT_SOURCE_DIR_NANOARROW
+        "${CMAKE_CURRENT_SOURCE_DIR}/aux/nanoarrow")
+  endif ()
   set(BUILD_SHARED_LIBS OFF)
   set(_pic_before "${CMAKE_POSITION_INDEPENDENT_CODE}")
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)

@@ -1,0 +1,9 @@
+fixtures:
+  - kafka:
+      mode: aws_iam
+      topic: from_kafka_avro_registry
+      messages: 0
+  - avro_registry
+timeout: 180
+skip:
+  on: fixture-unavailable

@@ -60,6 +60,8 @@ struct consumer_configuration {
   std::shared_ptr<RdKafka::EventCb> event_callback;
   std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
   std::shared_ptr<Atomic<uint64_t>> assignment_generation;
+  /// Serializes assignment changes with commits tied to an assignment generation.
+  std::shared_ptr<std::mutex> assignment_mutex;
   std::shared_ptr<committed_partition_set> committed_partitions;
   // `enable_sasl_queue(true)` is configured on `Conf` before consumer
   // creation. This is required to later attach OAUTH callback servicing to

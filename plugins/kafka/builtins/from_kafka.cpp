@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/async_consumer.hpp"
+#include "kafka/avro_registry.hpp"
 #include "kafka/from_kafka_legacy.hpp"
 #include "kafka/librdkafka_utils.hpp"
 #include "kafka/message_builder.hpp"
@@ -25,6 +26,7 @@
 
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/OperationCancelled.h>
@@ -45,6 +47,7 @@
 #include <mutex>
 #include <ranges>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -232,6 +235,9 @@ struct FromKafkaArgs {
   duration _batch_timeout = default_batch_timeout;
   /// Initial broker poll wait before adaptive timeout backoff.
   duration _fetch_wait_timeout = default_fetch_wait_timeout;
+  Option<located<secret>> schema_registry;
+  Option<located<data>> schema_registry_headers;
+  Option<located<data>> schema_registry_tls;
   /// Whether the operator should treat the input as json and produce events
   /// directly
   bool _json = false;
@@ -377,7 +383,10 @@ using TopicPartitionOffsets
 /// Represents one polled Kafka message batch plus control metadata.
 struct MessageBatch {
   uint64_t seq = 0;
+  Option<uint64_t> assignment_generation;
   std::vector<AsyncConsumerQueue::Message> messages;
+  std::vector<Option<Arc<AvroDecoder>>> avro_decoders;
+  std::vector<size_t> avro_payload_offsets;
   std::vector<TopicPartition> eof_partitions;
   Option<std::string> fatal_error;
   bool assignment_changed = false;
@@ -388,6 +397,7 @@ struct MessageBatch {
 /// Represents one built table-slice frame plus commit metadata.
 struct TableSliceFrame {
   uint64_t seq = 0;
+  Option<uint64_t> assignment_generation;
   std::vector<table_slice> slices;
   TopicPartitionOffsets max_offsets;
   size_t message_count = 0;
@@ -395,6 +405,7 @@ struct TableSliceFrame {
   Option<std::string> fatal_error;
   bool assignment_changed = false;
   std::vector<diagnostic> diagnostics;
+  Option<size_t> reserved_bytes;
 };
 
 /// Result wrapper returned by `await_task()` to `process_task()`.
@@ -444,6 +455,60 @@ auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
   return frame;
 }
 
+auto build_avro_slice(MessageBatch& batch) -> TableSliceFrame {
+  auto frame = TableSliceFrame{};
+  frame.seq = batch.seq;
+  frame.assignment_generation = batch.assignment_generation;
+  frame.eof_partitions = std::move(batch.eof_partitions);
+  frame.fatal_error = std::move(batch.fatal_error);
+  frame.assignment_changed = batch.assignment_changed;
+  if (frame.fatal_error) {
+    return frame;
+  }
+  auto builder = series_builder{};
+  auto schema = Option<type>{};
+  auto buffered_bytes = size_t{0};
+  auto flush = [&] {
+    buffered_bytes = 0;
+    auto slices = builder.finish_as_table_slice("tenzir.kafka.avro");
+    frame.slices.append_range(slices | std::views::as_rvalue);
+  };
+  for (auto i = size_t{0}; i < batch.messages.size(); ++i) {
+    auto const& message = batch.messages[i];
+    if (batch.avro_decoders[i]) {
+      auto payload
+        = message.payload().unwrap().subspan(batch.avro_payload_offsets[i]);
+      auto decoded = (*batch.avro_decoders[i])->decode(payload, true);
+      if (not decoded) {
+        frame.fatal_error = fmt::format(
+          "failed to decode Avro in topic {} partition {} at offset {}: {}",
+          message.topic(), message.partition(), message.offset(),
+          std::move(decoded).unwrap_err());
+        return frame;
+      }
+      auto value = std::move(decoded).unwrap();
+      if (not schema or *schema != value.schema) {
+        flush();
+        schema = std::move(value.schema);
+        builder = series_builder{&*schema};
+      }
+      if (buffered_bytes + value.approx_bytes > 16_Mi) {
+        flush();
+      }
+      buffered_bytes += value.approx_bytes;
+      builder.data(std::move(value.value));
+      if (builder.length() >= 1024) {
+        flush();
+      }
+    }
+    frame.max_offsets[TopicPartition{message.topic(), message.partition()}]
+      = message.offset();
+    ++frame.message_count;
+  }
+  flush();
+  return frame;
+}
+
 /// Streaming source operator that consumes Kafka records asynchronously.
 class FromKafka final : public Operator<void, table_slice> {
 public:
@@ -457,6 +522,7 @@ public:
       worker_batch_size_{other.worker_batch_size_},
       emitted_messages_{other.emitted_messages_},
       pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
+      pending_commit_generation_{other.pending_commit_generation_},
       consumer_closed_{other.consumer_closed_},
       assigned_partitions_{std::move(other.assigned_partitions_)},
       eof_partitions_{std::move(other.eof_partitions_)},
@@ -476,6 +542,7 @@ public:
     runtime_.pipeline_stop_requested.store(
       other.runtime_.pipeline_stop_requested.load());
     runtime_.in_flight_fetch_bytes = other.runtime_.in_flight_fetch_bytes;
+    runtime_.in_flight_avro_batches = other.runtime_.in_flight_avro_batches;
     runtime_.next_fetch_seq.store(other.runtime_.next_fetch_seq.load());
     runtime_.next_emit_seq = other.runtime_.next_emit_seq;
     runtime_.scheduled_messages.store(other.runtime_.scheduled_messages.load());
@@ -526,15 +593,95 @@ public:
       done_ = true;
       co_return;
     }
+    auto registry = Option<Box<AvroRegistry>>{};
+    if (args_.schema_registry) {
+      auto const* plugin = plugins::find<AvroDecoderPlugin>("avro.decoder");
+      if (not plugin) {
+        diagnostic::error("Avro decoding requires the avro plugin")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        co_return;
+      }
+      auto url = std::string{};
+      auto headers = std::vector<http::Header>{};
+      auto requests = http::make_header_secret_requests(
+        args_.schema_registry_headers, headers, ctx.dh());
+      requests.push_back(make_secret_request(
+        "schema_registry", *args_.schema_registry, url, ctx.dh()));
+      if (not co_await ctx.resolve_secrets(std::move(requests))) {
+        co_return;
+      }
+      if (url.empty()) {
+        diagnostic::error("`schema_registry` must not be empty")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        co_return;
+      }
+      auto config
+        = http::make_http_pool_config(args_.schema_registry_tls, url,
+                                      args_.schema_registry->source, ctx.dh(),
+                                      30s, ctx.actor_system().config());
+      if (not config) {
+        co_return;
+      }
+      config->max_retry_count = http::default_max_retry_count;
+      auto parsed = Option<folly::Uri>{};
+      try {
+        parsed.emplace(url);
+      } catch (std::invalid_argument const&) {
+        diagnostic::error("invalid `schema_registry` URL")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        co_return;
+      }
+      if (parsed->host().empty()) {
+        diagnostic::error("`schema_registry` URL must contain a host")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        co_return;
+      }
+      if (not parsed->query().empty() or not parsed->fragment().empty()) {
+        diagnostic::error(
+          "`schema_registry` must not contain a query or fragment")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        co_return;
+      }
+      auto base_path = parsed->path();
+      while (base_path.ends_with('/')) {
+        base_path.pop_back();
+      }
+      auto pool = Option<Box<HttpPool>>{};
+      try {
+        pool.emplace(
+          HttpPool::make(ctx.io_executor(), url, std::move(*config)));
+      } catch (std::runtime_error const&) {
+        diagnostic::error("invalid `schema_registry` URL")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        co_return;
+      }
+      auto cpu = co_await folly::coro::co_current_executor;
+      registry.emplace(Box<AvroRegistry>{
+        std::in_place, std::move(*pool), std::move(base_path),
+        std::move(headers), *plugin, folly::getKeepAliveToken(cpu)});
+    }
     if (not co_await make_subscription_source(ctx, *auth, *offset)) {
       done_ = true;
       co_return;
     }
     initialize_runtime_state();
+    auto avro_queues = std::shared_ptr<AvroQueues>{};
+    if (registry) {
+      avro_queues = std::make_shared<AvroQueues>();
+      ctx.spawn_task(folly::coro::co_withExecutor(
+        ctx.io_executor(),
+        resolve_avro_loop(std::move(*registry), avro_queues)));
+    }
     for (auto source_index = size_t{0}; source_index < runtime_.sources.size();
          ++source_index) {
-      ctx.spawn_task(folly::coro::co_withExecutor(ctx.io_executor(),
-                                                  fetch_loop(source_index)));
+      ctx.spawn_task(folly::coro::co_withExecutor(
+        ctx.io_executor(), fetch_loop(source_index, avro_queues)));
     }
     for (size_t i = 0; i < worker_count_; ++i) {
       ctx.spawn_task(build_loop());
@@ -606,6 +753,26 @@ public:
     }
     TENZIR_ASSERT(task_result.frame);
     auto& frame = *task_result.frame;
+    auto release_budget = tenzir::detail::scope_guard{[&]() noexcept {
+      if (frame.reserved_bytes) {
+        release_prefetch_budget(*frame.reserved_bytes);
+      }
+    }};
+    if (frame.assignment_generation
+        and *frame.assignment_generation
+              != runtime_.sources[0]
+                   .source_consumer->consumer_cfg.assignment_generation->load(
+                     std::memory_order_acquire)) {
+      frame.fatal_error = "Kafka assignment changed before Avro batch delivery";
+    }
+    if (args_.schema_registry and frame.fatal_error) {
+      diagnostic::error("{}", *frame.fatal_error)
+        .primary(args_.schema_registry->source)
+        .emit(ctx);
+      done_ = true;
+      request_pipeline_stop();
+      co_return;
+    }
     for (auto& d : frame.diagnostics) {
       std::move(d).modify().emit(ctx);
     }
@@ -625,7 +792,20 @@ public:
       }
     }
     if (frame.message_count > 0) {
+      if (frame.assignment_generation
+          and *frame.assignment_generation
+                != runtime_.sources[0]
+                     .source_consumer->consumer_cfg.assignment_generation->load(
+                       std::memory_order_acquire)) {
+        diagnostic::error("Kafka assignment changed during Avro batch delivery")
+          .primary(args_.schema_registry->source)
+          .emit(ctx);
+        done_ = true;
+        request_pipeline_stop();
+        co_return;
+      }
       record_pending_offsets(frame.max_offsets);
+      pending_commit_generation_ = frame.assignment_generation;
       co_await commit_pending_offsets(&ctx.dh());
       emitted_messages_ += frame.message_count;
       add_perf_counter(perf_.emitted_batches);
@@ -658,8 +838,8 @@ public:
     }
   }
 
-  auto post_commit(OpCtx&) -> Task<void> override {
-    co_await commit_pending_offsets();
+  auto post_commit(OpCtx& ctx) -> Task<void> override {
+    co_await commit_pending_offsets(&ctx.dh());
   }
 
   auto commit_pending_offsets(diagnostic_handler* dh = nullptr) -> Task<void> {
@@ -684,10 +864,107 @@ public:
         raw_offsets.push_back(offset.get());
       }
       auto& consumer = *runtime_.sources[0].source_consumer->consumer;
+      auto& config = runtime_.sources[0].source_consumer->consumer_cfg;
       auto err = RdKafka::ERR_NO_ERROR;
+      auto token = co_await folly::coro::co_current_cancellation_token;
       for (auto attempt = size_t{0}; attempt <= max_offset_commit_retries;
            ++attempt) {
-        err = consumer.commitSync(raw_offsets);
+        auto generation = pending_commit_generation_;
+        auto result = co_await spawn_blocking([&consumer, &config, &raw_offsets,
+                                               generation, token] {
+          if (not generation) {
+            return std::pair{consumer.commitSync(raw_offsets), false};
+          }
+          // The callback only runs when this worker polls its private queue.
+          // Destroy the queue before its callback state, including on cancel.
+          struct CommitResult {
+            bool complete = false;
+            RdKafka::ErrorCode error = RdKafka::ERR_NO_ERROR;
+            std::vector<TopicPartition> committed;
+          };
+          auto completed = CommitResult{};
+          auto queue
+            = detail::QueueHandle{rd_kafka_queue_new(consumer.c_ptr())};
+          auto* offsets = rd_kafka_topic_partition_list_new(
+            static_cast<int>(raw_offsets.size()));
+          auto destroy_offsets = tenzir::detail::scope_guard{[&]() noexcept {
+            rd_kafka_topic_partition_list_destroy(offsets);
+          }};
+          for (auto* partition : raw_offsets) {
+            auto* entry = rd_kafka_topic_partition_list_add(
+              offsets, partition->topic().c_str(), partition->partition());
+            entry->offset = partition->offset();
+          }
+          auto callback
+            = +[](rd_kafka_t*, rd_kafka_resp_err_t error,
+                  rd_kafka_topic_partition_list_t* partitions, void* opaque) {
+                auto& result = *static_cast<CommitResult*>(opaque);
+                result.error = static_cast<RdKafka::ErrorCode>(error);
+                if (partitions) {
+                  for (auto i = 0; i < partitions->cnt; ++i) {
+                    auto const& partition = partitions->elems[i];
+                    if (partition.err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                      if (result.error == RdKafka::ERR_NO_ERROR
+                          or result.error == RdKafka::ERR__PARTIAL) {
+                        result.error
+                          = static_cast<RdKafka::ErrorCode>(partition.err);
+                      }
+                    } else if (error == RD_KAFKA_RESP_ERR_NO_ERROR
+                               or error == RD_KAFKA_RESP_ERR__PARTIAL) {
+                      result.committed.push_back(
+                        TopicPartition{partition.topic, partition.partition});
+                    }
+                  }
+                }
+                result.complete = true;
+              };
+          {
+            auto guard = std::scoped_lock{*config.assignment_mutex};
+            if (token.isCancellationRequested()) {
+              throw folly::OperationCancelled{};
+            }
+            if (*generation
+                != config.assignment_generation->load(
+                  std::memory_order_acquire)) {
+              return std::pair{RdKafka::ERR__STATE, true};
+            }
+            // Only submission is serialized with assignment callbacks. An
+            // already submitted commit may still succeed after reassignment.
+            auto error = rd_kafka_commit_queue(
+              consumer.c_ptr(), offsets, queue.get(), callback, &completed);
+            if (error != RD_KAFKA_RESP_ERR_NO_ERROR) {
+              return std::pair{static_cast<RdKafka::ErrorCode>(error), false};
+            }
+          }
+          while (not completed.complete) {
+            if (token.isCancellationRequested()) {
+              throw folly::OperationCancelled{};
+            }
+            rd_kafka_queue_poll_callback(queue.get(), 100);
+          }
+          for (auto const& partition : completed.committed) {
+            config.committed_partitions->insert(partition.topic,
+                                                partition.partition);
+          }
+          auto changed
+            = *generation
+              != config.assignment_generation->load(std::memory_order_acquire);
+          return std::pair{completed.error, changed};
+        });
+        if (result.second) {
+          pending_commit_offsets_.clear();
+          pending_commit_generation_.reset();
+          if (dh) {
+            diagnostic::error(
+              "Kafka assignment changed while committing Avro offsets")
+              .primary(args_.schema_registry->source)
+              .emit(*dh);
+          }
+          done_ = true;
+          request_pipeline_stop();
+          co_return;
+        }
+        err = result.first;
         if (err == RdKafka::ERR_NO_ERROR) {
           break;
         }
@@ -709,6 +986,7 @@ public:
             committed->insert(partition.topic, partition.partition);
           }
         }
+        pending_commit_generation_.reset();
       } else {
         auto const partitions = tenzir::detail::join(commit_labels, ", ");
         if (dh) {
@@ -774,6 +1052,12 @@ private:
   /// Queue item type for source-stage handoff.
   using MessageQueue = folly::coro::BoundedQueue<Option<MessageBatch>>;
 
+  struct AvroQueues {
+    MessageQueue requests{1};
+    folly::coro::BoundedQueue<MessageBatch> replies{1};
+    folly::CancellationSource stop;
+  };
+
   /// Queue item type for build-stage handoff.
   using TableSliceQueue = folly::coro::BoundedQueue<Option<TableSliceFrame>>;
 
@@ -804,6 +1088,7 @@ private:
     std::atomic<bool> pipeline_stop_requested = false;
     std::mutex prefetch_budget_mutex;
     size_t in_flight_fetch_bytes = 0;
+    size_t in_flight_avro_batches = 0;
     Notify prefetch_budget_notify;
     std::atomic<uint64_t> next_fetch_seq = 0;
     uint64_t next_emit_seq = 0;
@@ -968,7 +1253,9 @@ private:
     auto parsed_optimization
       = from_string<OptimizationMode>(args_._optimization);
     TENZIR_ASSERT(parsed_optimization);
-    optimization_mode_ = *parsed_optimization;
+    // Avro failures must be observed before any later offsets are committed.
+    optimization_mode_ = args_.schema_registry ? OptimizationMode::ordered
+                                               : *parsed_optimization;
     worker_batch_size_ = resolve_worker_batch_size();
     worker_count_ = resolve_worker_concurrency();
     auto fetch_capacity = static_cast<uint32_t>(std::min<uint64_t>(
@@ -989,6 +1276,7 @@ private:
     {
       auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
       runtime_.in_flight_fetch_bytes = 0;
+      runtime_.in_flight_avro_batches = 0;
     }
   }
 
@@ -1131,7 +1419,7 @@ private:
       return;
     }
     for (auto& source : runtime_.sources) {
-      if (source.queue) {
+      if (source.queue and not args_.schema_registry) {
         (*source.queue)->request_stop();
       }
     }
@@ -1144,37 +1432,50 @@ private:
   }
 
   /// Waits until enough byte budget is available for one queued source batch.
-  auto acquire_prefetch_budget(size_t bytes) const -> Task<void> {
+  auto acquire_prefetch_budget(size_t bytes) const -> Task<bool> {
     if (bytes == 0) {
-      co_return;
+      co_return true;
     }
     while (not is_pipeline_stopping()) {
-      {
-        auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
-        // Never block forever on one oversized source batch. Allow exactly one
-        // oversized in-flight batch at a time when no other batch is tracked.
-        if (bytes > args_._prefetch_bytes) {
-          if (runtime_.in_flight_fetch_bytes == 0) {
-            runtime_.in_flight_fetch_bytes = bytes;
-            co_return;
-          }
-        } else if (runtime_.in_flight_fetch_bytes + bytes
-                   <= args_._prefetch_bytes) {
-          runtime_.in_flight_fetch_bytes += bytes;
-          co_return;
-        }
+      if (try_acquire_prefetch_budget(bytes)) {
+        co_return true;
       }
       co_await runtime_.prefetch_budget_notify.wait();
     }
+    co_return false;
   }
 
-  /// Releases byte budget after worker-side processing completes.
+  auto try_acquire_prefetch_budget(size_t bytes) const -> bool {
+    auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
+    if (args_.schema_registry
+        and runtime_.in_flight_avro_batches >= args_._prefetch_batches) {
+      return false;
+    }
+    // Allow one oversized batch when no other batch is tracked.
+    if (runtime_.in_flight_fetch_bytes == 0
+        or (bytes <= args_._prefetch_bytes
+            and runtime_.in_flight_fetch_bytes
+                  <= args_._prefetch_bytes - bytes)) {
+      runtime_.in_flight_fetch_bytes += bytes;
+      if (args_.schema_registry) {
+        ++runtime_.in_flight_avro_batches;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /// Releases budget after processing, including Avro delivery and commit.
   auto release_prefetch_budget(size_t bytes) const noexcept -> void {
-    if (bytes == 0) {
+    if (bytes == 0 and not args_.schema_registry) {
       return;
     }
     {
       auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
+      if (args_.schema_registry) {
+        TENZIR_ASSERT(runtime_.in_flight_avro_batches > 0);
+        --runtime_.in_flight_avro_batches;
+      }
       if (bytes >= runtime_.in_flight_fetch_bytes) {
         runtime_.in_flight_fetch_bytes = 0;
       } else {
@@ -1370,8 +1671,72 @@ private:
     co_return pending_messages;
   }
 
+  auto set_consumer_paused(SubscriptionSource& source, bool paused) const
+    -> Option<std::string> {
+    auto& consumer = *source.source_consumer->consumer;
+    auto partitions = std::vector<RdKafka::TopicPartition*>{};
+    auto cleanup = tenzir::detail::scope_guard{[&]() noexcept {
+      RdKafka::TopicPartition::destroy(partitions);
+    }};
+    auto error = consumer.assignment(partitions);
+    if (error == RdKafka::ERR_NO_ERROR and not partitions.empty()) {
+      error = paused ? consumer.pause(partitions) : consumer.resume(partitions);
+      if (error == RdKafka::ERR_NO_ERROR) {
+        for (auto* partition : partitions) {
+          if (partition->err() != RdKafka::ERR_NO_ERROR) {
+            error = partition->err();
+            break;
+          }
+        }
+      }
+    }
+    if (error != RdKafka::ERR_NO_ERROR) {
+      return fmt::format("failed to {} Kafka partitions: {}",
+                         paused ? "pause" : "resume", RdKafka::err2str(error));
+    }
+    return None{};
+  }
+
+  /// Service group callbacks without collecting more data under backpressure.
+  auto poll_paused(SubscriptionSource& source,
+                   std::vector<TopicPartition>& eof_partitions,
+                   std::chrono::milliseconds wait = 100ms) const
+    -> Task<Option<std::string>> {
+    co_await folly::coro::co_safe_point;
+    auto& generation
+      = *source.source_consumer->consumer_cfg.assignment_generation;
+    auto before = generation.load(std::memory_order_acquire);
+    auto pause_error = set_consumer_paused(source, true);
+    auto polled = co_await (*source.queue)->next_batch(1, wait);
+    co_await folly::coro::co_reschedule_on_current_executor;
+    if (generation.load(std::memory_order_acquire) != before) {
+      co_return "Kafka assignment changed while resolving Avro schemas";
+    }
+    for (auto const& message : polled.messages) {
+      if (message.err() == RD_KAFKA_RESP_ERR__PARTITION_EOF) {
+        if (args_.exit) {
+          auto partition = TopicPartition{message.topic(), message.partition()};
+          if (std::ranges::find(eof_partitions, partition)
+              == eof_partitions.end()) {
+            eof_partitions.push_back(std::move(partition));
+          }
+        }
+        continue;
+      }
+      if (message.err() != RD_KAFKA_RESP_ERR_NO_ERROR) {
+        co_return fmt::format("unexpected kafka error: `{}`", message.errstr());
+      }
+      // A newly assigned partition may deliver data before it can be paused.
+      // Stop instead of committing any records held from a revoked assignment.
+      co_return "received Kafka data while partitions were paused";
+    }
+    co_return pause_error;
+  }
+
   /// Enqueues one source batch while honoring prefetch-byte budget.
-  auto enqueue_fetched_batch(MessageBatch fetched) const -> Task<bool> {
+  auto enqueue_fetched_batch(MessageBatch fetched,
+                             SubscriptionSource* paused_source = nullptr) const
+    -> Task<bool> {
     if (perf_enabled_) {
       add_perf_counter(perf_.fetched_batches);
       add_perf_counter(perf_.fetched_messages,
@@ -1380,18 +1745,35 @@ private:
     }
     read_bytes_counter_.add(static_cast<uint64_t>(fetched.payload_bytes));
     auto reserved_bytes = fetched.payload_bytes;
-    if (reserved_bytes > 0) {
+    if (reserved_bytes > 0 or args_.schema_registry) {
       auto budget_started = std::chrono::steady_clock::time_point{};
       if (perf_enabled_) {
         budget_started = std::chrono::steady_clock::now();
       }
-      co_await acquire_prefetch_budget(reserved_bytes);
+      auto acquired = false;
+      if (paused_source) {
+        while (not is_pipeline_stopping() or fetched.fatal_error) {
+          if (try_acquire_prefetch_budget(reserved_bytes)) {
+            acquired = true;
+            break;
+          }
+          if (auto error
+              = co_await poll_paused(*paused_source, fetched.eof_partitions)) {
+            fetched.fatal_error = std::move(error);
+          }
+        }
+      } else {
+        acquired = co_await acquire_prefetch_budget(reserved_bytes);
+      }
       if (perf_enabled_) {
         add_perf_counter(
           perf_.prefetch_wait_ns,
           as_ns(std::chrono::steady_clock::now() - budget_started));
       }
-      if (is_pipeline_stopping()) {
+      if (not acquired) {
+        co_return false;
+      }
+      if (is_pipeline_stopping() and not fetched.fatal_error) {
         release_prefetch_budget(reserved_bytes);
         co_return false;
       }
@@ -1407,7 +1789,20 @@ private:
     if (perf_enabled_) {
       enqueue_started = std::chrono::steady_clock::now();
     }
-    co_await runtime_.message_queue->enqueue(std::move(fetched));
+    if (paused_source) {
+      while (not runtime_.message_queue->try_enqueue(std::move(fetched))) {
+        if (auto error
+            = co_await poll_paused(*paused_source, fetched.eof_partitions)) {
+          fetched.fatal_error = std::move(error);
+          has_fatal = true;
+        }
+        if (is_pipeline_stopping() and not fetched.fatal_error) {
+          co_return false;
+        }
+      }
+    } else {
+      co_await runtime_.message_queue->enqueue(std::move(fetched));
+    }
     if (perf_enabled_) {
       add_perf_counter(
         perf_.fetched_enqueue_wait_ns,
@@ -1424,12 +1819,71 @@ private:
     co_return not is_pipeline_stopping();
   }
 
+  /// Resolves schemas on its own task; the fetcher keeps polling while paused.
+  auto resolve_avro_loop(Box<AvroRegistry> registry,
+                         std::shared_ptr<AvroQueues> queues) const
+    -> Task<void> {
+    auto parent = co_await folly::coro::co_current_cancellation_token;
+    auto token
+      = folly::cancellation_token_merge(parent, queues->stop.getToken());
+    try {
+      co_await folly::coro::co_withCancellation(
+        token, resolve_avro_batches(std::move(registry), queues));
+    } catch (folly::OperationCancelled const&) {
+      if (parent.isCancellationRequested()) {
+        throw;
+      }
+    }
+  }
+
+  auto resolve_avro_batches(Box<AvroRegistry> registry,
+                            std::shared_ptr<AvroQueues> queues) const
+    -> Task<void> {
+    while (auto fetched = co_await queues->requests.dequeue()) {
+      if (not fetched->fatal_error) {
+        auto prepare = [&]() -> Task<Result<void, std::string>> {
+          for (auto& message : fetched->messages) {
+            if (message.is_tombstone()) {
+              fetched->avro_decoders.emplace_back(None{});
+              fetched->avro_payload_offsets.push_back(0);
+              continue;
+            }
+            CO_TRY(auto payload, message.payload());
+            CO_TRY(auto header, message.last_header("__value_schema_id"));
+            CO_TRY(auto envelope, avro_envelope(payload, header));
+            CO_TRY(auto decoder,
+                   co_await registry->resolve(envelope.schema_path));
+            fetched->avro_decoders.emplace_back(std::move(decoder));
+            fetched->avro_payload_offsets.push_back(envelope.payload_offset);
+          }
+          co_return {};
+        };
+        auto prepared = co_await prepare();
+        if (not prepared) {
+          auto const& message
+            = fetched->messages[fetched->avro_decoders.size()];
+          fetched->fatal_error
+            = fmt::format("failed to resolve Avro schema in topic {} "
+                          "partition {} at offset {}: {}",
+                          message.topic(), message.partition(),
+                          message.offset(), std::move(prepared).unwrap_err());
+        }
+      }
+      co_await queues->replies.enqueue(std::move(*fetched));
+    }
+  }
+
   /// Polls one subscribed source and hands message batches to build workers.
-  auto fetch_loop(size_t source_index) const -> Task<void> {
-    auto finish_fetcher = [this]() -> Task<void> {
-      if (runtime_.live_fetchers.fetch_sub(1) == 1) {
+  auto fetch_loop(size_t source_index,
+                  std::shared_ptr<AvroQueues> avro_queues) const -> Task<void> {
+    auto retire = tenzir::detail::scope_guard{[this]() noexcept {
+      runtime_.live_fetchers.fetch_sub(1);
+    }};
+    auto finish_fetcher = [this, &retire]() -> Task<void> {
+      if (runtime_.live_fetchers.load() == 1) {
         co_await close_message_queue();
       }
+      retire.trigger();
       co_return;
     };
     if (not runtime_.message_queue or source_index >= runtime_.sources.size()) {
@@ -1448,6 +1902,9 @@ private:
           request_pipeline_stop();
           break;
         }
+        auto generation_before
+          = source.source_consumer->consumer_cfg.assignment_generation->load(
+            std::memory_order_acquire);
         auto pending_messages
           = co_await collect_fetch_window(**source.queue, max_messages, source);
         if (pending_messages.empty() and is_pipeline_stopping()) {
@@ -1462,18 +1919,123 @@ private:
         if (not fetched) {
           continue;
         }
-        if (not co_await enqueue_fetched_batch(std::move(*fetched))) {
+        if (avro_queues) {
+          auto generation
+            = source.source_consumer->consumer_cfg.assignment_generation->load(
+              std::memory_order_acquire);
+          fetched->assignment_generation = generation;
+          // The first assignment is expected during the initial poll. Any
+          // additional change can invalidate records already in this window.
+          if (generation_before != generation
+              and (generation_before != 0 or generation > 1)) {
+            fetched->fatal_error
+              = "Kafka assignment changed while collecting an Avro batch";
+          }
+        }
+        auto resume = tenzir::detail::scope_guard{[&]() noexcept {
+          if (avro_queues) {
+            std::ignore = set_consumer_paused(source, false);
+          }
+        }};
+        if (avro_queues and not fetched->fatal_error) {
+          auto polling_error = set_consumer_paused(source, true);
+          if (not polling_error) {
+            co_await avro_queues->requests.enqueue(std::move(*fetched));
+            auto eof_partitions = std::vector<TopicPartition>{};
+            auto token = co_await folly::coro::co_current_cancellation_token;
+            while (true) {
+              try {
+                fetched
+                  = co_await avro_queues->replies.co_try_dequeue_for(100ms);
+                break;
+              } catch (folly::OperationCancelled const&) {
+                if (token.isCancellationRequested()) {
+                  throw;
+                }
+              }
+              if (is_pipeline_stopping()) {
+                avro_queues->stop.requestCancellation();
+                fetched.reset();
+                break;
+              }
+              if (auto error
+                  = co_await poll_paused(source, eof_partitions, 0ms)) {
+                polling_error = std::move(error);
+              }
+            }
+            if (not fetched) {
+              break;
+            }
+            fetched->eof_partitions.append_range(eof_partitions
+                                                 | std::views::as_rvalue);
+          }
+          if (polling_error) {
+            fetched->fatal_error = std::move(polling_error);
+          }
+        }
+        auto keep_fetching = co_await enqueue_fetched_batch(
+          std::move(*fetched), avro_queues ? &source : nullptr);
+        if (keep_fetching and avro_queues) {
+          auto error = set_consumer_paused(source, false);
+          resume.disable();
+          if (error) {
+            auto failed = MessageBatch{};
+            failed.seq = runtime_.next_fetch_seq.fetch_add(1);
+            failed.fatal_error = std::move(error);
+            std::ignore
+              = co_await enqueue_fetched_batch(std::move(failed), &source);
+            break;
+          }
+        }
+        if (not keep_fetching) {
           break;
         }
       }
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
+    if (avro_queues) {
+      avro_queues->stop.requestCancellation();
+      runtime_.message_queue_closed.store(true);
+      auto sentinels = size_t{0};
+      // Reaching count or EOF stops fetching, not group maintenance. Keep
+      // polling until every accepted frame has been delivered and committed.
+      auto eof_partitions = std::vector<TopicPartition>{};
+      while (true) {
+        while (sentinels < worker_count_
+               and runtime_.message_queue->try_enqueue(None{})) {
+          ++sentinels;
+        }
+        auto drained = false;
+        {
+          auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
+          drained = runtime_.in_flight_avro_batches == 0
+                    and runtime_.live_builders.load() == 0;
+        }
+        if (drained) {
+          break;
+        }
+        if (auto error = co_await poll_paused(source, eof_partitions)) {
+          auto frame = TableSliceFrame{};
+          frame.seq = runtime_.next_fetch_seq.fetch_add(1);
+          frame.fatal_error = std::move(error);
+          co_await runtime_.table_slice_queue->enqueue(std::move(frame));
+          break;
+        }
+      }
+    }
     co_await finish_fetcher();
+    if (avro_queues) {
+      co_await runtime_.table_slice_queue->enqueue(None{});
+    }
   }
 
   /// Runs one CPU-stage worker that builds slices from source batches.
   auto build_loop() const -> Task<void> {
+    auto last_builder = false;
+    auto retire = tenzir::detail::scope_guard{[this, &last_builder]() noexcept {
+      last_builder = runtime_.live_builders.fetch_sub(1) == 1;
+    }};
     if (not runtime_.message_queue or not runtime_.table_slice_queue) {
       co_return;
     }
@@ -1560,7 +2122,8 @@ private:
         }
         auto flush = optimization_mode_ == OptimizationMode::ordered;
         auto frame
-          = args_._json
+          = args_.schema_registry ? build_avro_slice(fetched)
+            : args_._json
               ? build_table_slice(
                   fetched, parser->builder, flush,
                   [&](std::span<const std::byte> payload) {
@@ -1597,12 +2160,19 @@ private:
         if (not diag_handler.empty()) {
           frame.diagnostics = diag_handler.drain();
         }
-        release_budget.trigger();
+        if (args_.schema_registry) {
+          frame.reserved_bytes = fetched.payload_bytes;
+        } else {
+          release_budget.trigger();
+        }
         auto enqueue_started = std::chrono::steady_clock::time_point{};
         if (perf_enabled_) {
           enqueue_started = std::chrono::steady_clock::now();
         }
         co_await runtime_.table_slice_queue->enqueue(std::move(frame));
+        if (args_.schema_registry) {
+          release_budget.disable();
+        }
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_enqueue_wait_ns,
@@ -1621,7 +2191,8 @@ private:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
-    if (runtime_.live_builders.fetch_sub(1) == 1
+    retire.trigger();
+    if (last_builder and not args_.schema_registry
         and runtime_.table_slice_queue) {
       co_await runtime_.table_slice_queue->enqueue(None{});
     }
@@ -1756,6 +2327,8 @@ private:
   size_t emitted_messages_ = 0;
   // Invariant: committed offsets are stored as "next offset to consume".
   TopicPartitionOffsets pending_commit_offsets_;
+  // Runtime-only: generations belong to one consumer instance, not snapshots.
+  Option<uint64_t> pending_commit_generation_;
   // Set once the group membership was closed; commits are impossible after.
   bool consumer_closed_ = false;
   // Snapshot of the subscription's current assignment; only maintained for
@@ -1853,9 +2426,52 @@ public:
       = d.named_optional("_batch_timeout", &FromKafkaArgs::_batch_timeout);
     auto fetch_wait_timeout_arg = d.named_optional(
       "_fetch_wait_timeout", &FromKafkaArgs::_fetch_wait_timeout);
-    d.named_optional("_json", &FromKafkaArgs::_json);
+    auto schema_registry_arg
+      = d.named("schema_registry", &FromKafkaArgs::schema_registry);
+    auto schema_headers_arg = d.named("schema_registry_headers",
+                                      &FromKafkaArgs::schema_registry_headers);
+    auto schema_tls_arg
+      = d.named("schema_registry_tls", &FromKafkaArgs::schema_registry_tls);
+    auto json_arg = d.named_optional("_json", &FromKafkaArgs::_json);
     d.named_optional("_raw", &FromKafkaArgs::_raw);
     d.validate([=](DescribeCtx& ctx) -> Empty {
+      if (auto headers = ctx.get(schema_headers_arg)) {
+        if (auto const* rec = try_as<record>(headers->inner)) {
+          for (auto const& [_, value] : *rec) {
+            if (not is<std::string>(value) and not is<secret>(value)) {
+              diagnostic::error("header values must be `string` or `secret`")
+                .primary(headers->source)
+                .emit(ctx);
+              break;
+            }
+          }
+        } else {
+          diagnostic::error("`schema_registry_headers` must be a record")
+            .primary(headers->source)
+            .emit(ctx);
+        }
+      }
+      auto registry = ctx.get(schema_registry_arg);
+      if (registry) {
+        if (auto json = ctx.get(json_arg); json and *json) {
+          diagnostic::error(
+            "`schema_registry` and `_json` are mutually exclusive")
+            .primary(registry->source)
+            .emit(ctx);
+        }
+      } else {
+        if (auto headers = ctx.get(schema_headers_arg)) {
+          diagnostic::error(
+            "`schema_registry_headers` requires `schema_registry`")
+            .primary(headers->source)
+            .emit(ctx);
+        }
+        if (auto tls = ctx.get(schema_tls_arg)) {
+          diagnostic::error("`schema_registry_tls` requires `schema_registry`")
+            .primary(tls->source)
+            .emit(ctx);
+        }
+      }
       auto mode = OptimizationMode::ordered;
       if (auto optimization = ctx.get(optimization_arg); optimization) {
         auto parsed = from_string<OptimizationMode>(*optimization);

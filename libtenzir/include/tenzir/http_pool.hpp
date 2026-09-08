@@ -69,16 +69,20 @@ struct HttpPoolConfig {
 
 /// Callbacks for streaming an HTTP response body.
 ///
-/// `stream_request` calls `on_headers` once after final response headers arrive
+/// `stream_request` calls `on_headers` after final response headers arrive
 /// and before any body chunks are delivered. It then calls `on_body` for each
 /// non-empty body chunk in wire order. Returning `true` from `on_body` stops
 /// consuming the response early; returning `false` keeps reading until EOF or
 /// error. Empty callbacks are allowed and simply skip the corresponding event.
 struct HttpStreamCallbacks {
-  /// Called once final response headers arrive, before the first body chunk.
+  /// Called after final response headers arrive in each attempt, before its body.
   std::function<void(http::Response const& response)> on_headers;
   /// Called for every response body chunk.
   std::function<Task<bool>(std::string chunk)> on_body;
+  /// Roll back response side effects before retrying a failed attempt.
+  /// Providing this callback permits retries after partial response bodies were
+  /// delivered.
+  std::function<void()> on_retry;
 };
 
 /// Registers well-known system CA bundle paths for Proxygen HTTPS clients.
@@ -159,6 +163,11 @@ public:
 
   /// GET through the session pool to a path.
   auto get(std::string path, std::map<std::string, std::string> headers)
+    -> Task<Result<http::Response, std::string>>;
+
+  /// GET through the session pool while streaming response body chunks.
+  auto stream_get(std::string path, std::vector<http::Header> headers,
+                  HttpStreamCallbacks callbacks)
     -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool while streaming response body chunks.

@@ -473,6 +473,14 @@ auto HttpPool::get(std::string path, std::map<std::string, std::string> headers)
   co_return co_await get(std::move(path), to_header_vector(std::move(headers)));
 }
 
+auto HttpPool::stream_get(std::string path, std::vector<http::Header> headers,
+                          HttpStreamCallbacks callbacks)
+  -> Task<Result<http::Response, std::string>> {
+  co_return co_await stream_request(proxygen::HTTPMethod::GET, std::move(path),
+                                    {}, std::move(headers),
+                                    std::move(callbacks));
+}
+
 auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
                               std::string body,
                               std::vector<http::Header> headers,
@@ -501,6 +509,8 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
       auto attempt = uint32_t{0};
       while (true) {
         auto body_started = false;
+        auto body_cancelled = false;
+        auto received_headers = false;
         auto retry_after = Option<std::chrono::seconds>{};
         auto retry_reason = std::string{};
         auto retryable_status = false;
@@ -525,6 +535,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
                 return proxygen::coro::HTTPSourceReader::Continue;
               }
               response = http::to_http_response(*headers);
+              received_headers = true;
               auto const status = response.status_code;
               retryable_status = attempt < impl->config.max_retry_count
                                  and http::is_retryable_http_status(status);
@@ -545,8 +556,9 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
                 co_return proxygen::coro::HTTPSourceReader::Continue;
               }
               body_started = true;
-              co_return co_await callbacks.on_body(
-                body.move()->to<std::string>());
+              body_cancelled
+                = co_await callbacks.on_body(body.move()->to<std::string>());
+              co_return body_cancelled;
             })
             .onError([&](proxygen::coro::HTTPSourceReader::ErrorContext,
                          proxygen::coro::HTTPError err) {
@@ -562,7 +574,13 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
           co_return response;
         }());
         if (result.is_ok()) {
-          if (not retryable_status) {
+          if (not received_headers) {
+            co_await folly::coro::co_safe_point;
+            if (attempt >= impl->config.max_retry_count) {
+              co_return Err{"request completed without a response"};
+            }
+            retry_reason = "connection error";
+          } else if (not retryable_status) {
             co_return std::move(result).unwrap();
           }
         } else if (retryable_status) {
@@ -581,11 +599,14 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
               using Type = proxygen::coro::HTTPCoroSessionPool::Exception::Type;
               is_retryable = err.type == Type::Timeout;
             });
-          if (body_started or not is_retryable
-              or attempt >= impl->config.max_retry_count) {
+          if (body_cancelled or (body_started and not callbacks.on_retry)
+              or not is_retryable or attempt >= impl->config.max_retry_count) {
             co_return Err{std::move(attempt_err).what().toStdString()};
           }
           retry_reason = "connection error";
+        }
+        if (callbacks.on_retry) {
+          callbacks.on_retry();
         }
         auto delay = http::retry_delay_for_attempt(impl->config.retry_delay,
                                                    attempt, retry_after);

@@ -6,6 +6,7 @@ from __future__ import annotations
 from . import abs  # noqa: F401
 from . import abs_proxy  # noqa: F401
 from . import amqp  # noqa: F401
+from . import avro_registry  # noqa: F401
 from . import clickhouse  # noqa: F401
 from . import cloudwatch  # noqa: F401
 from . import cloudwatch_repeat_token  # noqa: F401
@@ -51,6 +52,7 @@ __all__ = [
     "abs",
     "abs_proxy",
     "amqp",
+    "avro_registry",
     "clickhouse",
     "cloudwatch",
     "cloudwatch_repeat_token",
