@@ -10,10 +10,13 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/synopsis_factory.hpp"
+#include "tenzir/test/fixtures/filesystem.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/make_copy_on_write.hpp>
+
+#include <fstream>
 
 using namespace tenzir;
 
@@ -106,12 +109,14 @@ TEST("eviction crosses schemas") {
 TEST("ingest admission does not double count files seen by a directory scan") {
   auto f = fixture{};
   const auto existing = f.add();
+  const auto ingested = uuid::random();
+  f.state.admissions[existing] = 1;
   // The scan already sees 1000 bytes of unadmitted ingest and 500 bytes of
   // unrelated overhead, in addition to the catalog's existing partition.
-  f.state.on_space_measured(2500);
+  f.state.on_space_measured(2500, {{existing, 1000}, {ingested, 1000}});
   CHECK_EQUAL(f.state.external_bytes, uint64_t{1500});
+  CHECK(not f.state.scanned_ingest_bytes.contains(existing));
   auto synopsis = f.state.find_synopsis(existing);
-  const auto ingested = uuid::random();
   std::ignore = f.state.merge({{ingested, synopsis}},
                               catalog_state::merge_source::ingest);
   CHECK_EQUAL(f.state.catalog_bytes, uint64_t{2000});
@@ -123,10 +128,58 @@ TEST("ingest admission does not double count files seen by a directory scan") {
   CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
   std::ignore = f.state.merge({{uuid::random(), synopsis}});
   CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
-  // A scan may not have seen all incoming bytes. Never underflow the estimate.
+  // Later arrivals were not in the scan and cannot consume real overhead.
   std::ignore = f.state.merge({{uuid::random(), synopsis}},
                               catalog_state::merge_source::ingest);
-  CHECK_EQUAL(f.state.external_bytes, uint64_t{0});
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
+  // A partial file measurement credits only the bytes actually observed.
+  const auto partial = uuid::random();
+  f.state.on_space_measured(f.state.catalog_bytes + 750, {{partial, 250}});
+  std::ignore
+    = f.state.merge({{partial, synopsis}}, catalog_state::merge_source::ingest);
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
+  CHECK(f.state.scanned_ingest_bytes.empty());
+  // A new accepted scan replaces, rather than accumulates, pending credits.
+  f.state.on_space_measured(f.state.catalog_bytes + 1500,
+                            {{uuid::random(), 1000}});
+  f.state.on_space_measured(f.state.catalog_bytes + 500);
+  CHECK(f.state.scanned_ingest_bytes.empty());
+}
+
+TEST("directory scans record the partition bytes they actually measured") {
+  auto files = fixtures::filesystem{"catalog-eviction-scan"};
+  const auto paths = partition_paths::from_database_dir(files.directory);
+  std::filesystem::create_directories(paths.index_dir);
+  std::filesystem::create_directories(paths.archive_dir);
+  const auto id = uuid::random();
+  for (const auto& [path, bytes] :
+       std::vector<std::pair<std::filesystem::path, size_t>>{
+         {paths.partition(id), 10},
+         {paths.synopsis(id), 20},
+         {paths.archive_dir / fmt::format("{:l}.feather", id), 30},
+         {paths.database_dir / "overhead", 50}}) {
+    auto out = std::ofstream{path};
+    out << std::string(bytes, 'x');
+  }
+  auto measured = compute_dbdir_size(paths, {});
+  REQUIRE(measured);
+  CHECK(measured->stable);
+  CHECK_EQUAL(measured->bytes, uint64_t{110});
+  CHECK_EQUAL(measured->partition_bytes.size(), size_t{1});
+  CHECK_EQUAL(measured->partition_bytes.at(id), uint64_t{60});
+  auto config = disk_monitor_config{};
+  // Use shell builtins so this test needs no external scan program.
+  config.scan_binary = "printf 456; #";
+  measured = compute_dbdir_size(paths, config);
+  REQUIRE(measured);
+  CHECK(measured->stable);
+  CHECK_EQUAL(measured->bytes, uint64_t{456});
+  CHECK_EQUAL(measured->partition_bytes.at(id), uint64_t{60});
+  config.scan_binary
+    = fmt::format("printf x >> '{}'; printf 456; #", paths.partition(id));
+  measured = compute_dbdir_size(paths, config);
+  REQUIRE(measured);
+  CHECK(not measured->stable);
 }
 
 TEST("disk scans wait for catalog commits after their transformer exits") {

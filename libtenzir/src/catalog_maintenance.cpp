@@ -1099,34 +1099,37 @@ void catalog_state::measure_space() {
   measuring_space = true;
   auto const generation = storage_generation;
   auto const stable = space_scan_is_stable();
+  auto measurement = std::make_shared<disk_usage>();
   // `compute_dbdir_size` walks the whole database, or shells out to an
   // external binary. The disk monitor could block on that because nothing
   // else went through it; the catalog answers candidate lookups, so the scan
   // runs on a throwaway detached actor rather than on this thread.
   auto worker = self->spawn<caf::detached>(
-    [dir = paths.database_dir, config = maintenance.space](
-      caf::event_based_actor* worker) -> caf::behavior {
+    [paths = paths, config = maintenance.space,
+     measurement](caf::event_based_actor* worker) -> caf::behavior {
       return {
-        [worker, dir, config](atom::get) -> caf::result<uint64_t> {
-          auto size = compute_dbdir_size(dir, config);
+        [worker, paths, config,
+         measurement](atom::get) -> caf::result<uint64_t> {
+          auto size = compute_dbdir_size(paths, config);
           // This is a one-shot worker. Its lifetime must not depend on the
           // catalog still being alive to process the response.
           worker->quit();
           if (not size) {
             return std::move(size.error());
           }
-          return static_cast<uint64_t>(*size);
+          *measurement = std::move(*size);
+          return measurement->bytes;
         },
       };
     });
   self->mail(atom::get_v)
     .request(worker, caf::infinite)
     .then(
-      [this, generation, stable](uint64_t size) {
+      [this, generation, stable, measurement](uint64_t size) {
         measuring_space = false;
-        if (stable and generation == storage_generation
+        if (stable and measurement->stable and generation == storage_generation
             and space_scan_is_stable()) {
-          on_space_measured(size);
+          on_space_measured(size, std::move(measurement->partition_bytes));
         } else {
           // A directory walk is not a snapshot. Retain the last reconciled
           // overhead instead of interpreting partially moved files as growth.
@@ -1143,9 +1146,15 @@ void catalog_state::measure_space() {
       });
 }
 
-void catalog_state::on_space_measured(uint64_t size) {
+void catalog_state::on_space_measured(
+  uint64_t size, std::unordered_map<uuid, uint64_t> observed) {
   auto const known = catalog_bytes + parked_bytes() + deleting_bytes();
   external_bytes = size - std::min(size, known);
+  std::erase_if(observed, [this](const auto& entry) {
+    return admissions.contains(entry.first) or deferred.contains(entry.first)
+           or deleting.contains(entry.first);
+  });
+  scanned_ingest_bytes = std::move(observed);
   dbdir_size = size;
   advance_maintenance(time::clock::now());
 }

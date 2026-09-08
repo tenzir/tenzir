@@ -426,11 +426,14 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions,
         catalog_bytes -= old->store_file.size + old->indexes_file.size
                          + old->sketches_file.size;
       } else if (source == merge_source::ingest) {
-        // A scan can see persisted ingest files before their admission. Credit
-        // them conservatively so admission cannot count those bytes twice.
-        // This may undercount unrelated overhead until the next scan, but
-        // never evicts data because an ingest file was counted as overhead.
-        external_bytes -= std::min(external_bytes, footprint);
+        // Credit only this partition's bytes observed by the accepted scan.
+        // Later arrivals must not consume unrelated non-partition overhead.
+        if (auto observed = scanned_ingest_bytes.find(id);
+            observed != scanned_ingest_bytes.end()) {
+          external_bytes
+            -= std::min({external_bytes, footprint, observed->second});
+          scanned_ingest_bytes.erase(observed);
+        }
       }
       catalog_bytes += footprint;
       admissions[id] = ++admission_sequence;

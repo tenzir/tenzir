@@ -642,7 +642,8 @@ public:
   auto space_scan_is_stable() const -> bool;
 
   /// Acts on a completed measurement, evicting while over budget.
-  void on_space_measured(uint64_t size);
+  void on_space_measured(uint64_t size,
+                         std::unordered_map<uuid, uint64_t> observed = {});
 
   /// The bytes held by partitions that are erased but still pinned. They are
   /// already spoken for and will come back without erasing anything further,
@@ -940,6 +941,8 @@ public:
   /// Bytes owned by live catalog partitions; scans reconcile everything else.
   uint64_t catalog_bytes = 0;
   uint64_t external_bytes = 0;
+  /// Unadmitted partition bytes actually included in the accepted scan.
+  std::unordered_map<uuid, uint64_t> scanned_ingest_bytes = {};
   uint64_t storage_generation = 0;
 
   /// A transform finalized by startup marker replay, for the policy to hear

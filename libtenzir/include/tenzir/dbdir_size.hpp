@@ -11,11 +11,13 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/option.hpp"
+#include "tenzir/partition_paths.hpp"
 
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 
 namespace tenzir {
 
@@ -39,10 +41,19 @@ struct disk_monitor_config {
 /// Tests if the passed config options represent a valid disk budget.
 caf::error validate(const disk_monitor_config&);
 
-/// Computes the size of the database directory.
+struct disk_usage {
+  uint64_t bytes = 0;
+  /// Partition files included in the measurement, including unadmitted ingest.
+  std::unordered_map<uuid, uint64_t> partition_bytes = {};
+  /// External commands have no file inventory. Reject their measurements if
+  /// the partition inventory changed between the surrounding directory walks.
+  bool stable = true;
+};
+
+/// Computes the size of the database directory and its partition inventory.
 /// Note that this function may spawn an external process to perform the
 /// computation.
-caf::expected<size_t>
-compute_dbdir_size(std::filesystem::path, const disk_monitor_config&);
+caf::expected<disk_usage>
+compute_dbdir_size(const partition_paths&, const disk_monitor_config&);
 
 } // namespace tenzir

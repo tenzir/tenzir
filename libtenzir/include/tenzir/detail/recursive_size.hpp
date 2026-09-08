@@ -14,6 +14,7 @@
 #include "tenzir/logger.hpp"
 
 #include <filesystem>
+#include <functional>
 #include <system_error>
 
 namespace tenzir::detail {
@@ -21,8 +22,10 @@ namespace tenzir::detail {
 /// Calculates the sum of the sizes of all regular files in the directory.
 /// @param root_dir The directory to traverse.
 /// @returns The size of all regular files in *dir*.
-inline caf::expected<size_t>
-recursive_size(const std::filesystem::path& root_dir) {
+inline caf::expected<size_t> recursive_size(
+  const std::filesystem::path& root_dir,
+  const std::function<void(const std::filesystem::path&, size_t)>& observe
+  = {}) {
   size_t total_size = 0;
   std::error_code err{};
   auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
@@ -40,6 +43,9 @@ recursive_size(const std::filesystem::path& root_dir) {
       }
       TENZIR_TRACE("{} += {}", f.path().string(), size);
       total_size += size;
+      if (observe) {
+        observe(f.path(), size);
+      }
     }
   }
   return total_size;
