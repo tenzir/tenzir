@@ -219,6 +219,47 @@ TEST("a closed collection does not rebuild untouched schema day groups") {
               (std::vector{first, second}));
 }
 
+TEST("ingest and replacement admissions enter the next hourly collection") {
+  for (const auto source : {catalog_state::merge_source::ingest,
+                            catalog_state::merge_source::replacement}) {
+    auto f = fixture{};
+    const auto input = f.add("test", 10);
+    auto synopsis = f.state.find_synopsis(input);
+    synopsis.unshared().min_import_time -= std::chrono::days{1};
+    const auto expected = RebuildGroups{
+      {synopsis->schema, f.state.rebuild_day(synopsis->max_import_time)}};
+    const auto old_horizon = f.state.admission_sequence;
+    f.state.erase(input);
+    f.state.open_rebuild_groups.clear();
+    f.state.maintenance_ready = true;
+    f.state.maintenance.rebuild_interval = std::chrono::hours{1};
+    f.state.next_collection = f.clock;
+    const auto first = uuid::random();
+    const auto second = uuid::random();
+    // The elapsed hour closes before admission, even if its wakeup has not
+    // run yet. No subsequent ingest is needed to collect these outputs.
+    static_cast<void>(
+      f.state.merge({{first, synopsis}, {second, synopsis}}, source));
+    CHECK_EQUAL(f.state.closed_admission, old_horizon);
+    CHECK(f.state.closed_rebuild_groups.empty());
+    CHECK_EQUAL(f.state.open_rebuild_groups, expected);
+    auto run = f.make_run(automatic_options());
+    run.horizon = f.state.closed_admission;
+    run.collected_groups = f.state.closed_rebuild_groups;
+    CHECK(f.state.select_rebuild_batch(run).empty());
+    f.state.close_rebuild_collection(f.state.next_collection);
+    CHECK(f.state.open_rebuild_groups.empty());
+    CHECK_EQUAL(f.state.closed_rebuild_groups, expected);
+    run = f.make_run(automatic_options());
+    run.horizon = f.state.closed_admission;
+    run.collected_groups = f.state.closed_rebuild_groups;
+    const auto selected = fixture::ids_of(f.state.select_rebuild_batch(run));
+    CHECK_EQUAL(selected.size(), size_t{2});
+    CHECK(std::ranges::contains(selected, first));
+    CHECK(std::ranges::contains(selected, second));
+  }
+}
+
 TEST("an interrupted automatic run retains unfinished collection groups") {
   auto f = fixture{};
   const auto completed = f.add("completed", 10);

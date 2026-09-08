@@ -424,6 +424,9 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions,
   if (partitions.empty()) {
     return atom::ok_v;
   }
+  // Close the previous hour before admitting either ingested partitions or
+  // replacement outputs, so both wait for the next automatic collection.
+  close_rebuild_collection(time::clock::now());
   update_synopses([&](synopsis_map& map) {
     // Clone each touched schema exactly once for the whole batch.
     auto cloned = std::unordered_map<type, schema_synopsis_map*>{};
@@ -446,6 +449,8 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions,
       }
       catalog_bytes += footprint;
       admissions[id] = ++admission_sequence;
+      open_rebuild_groups.emplace(synopsis->schema,
+                                  rebuild_day(synopsis->max_import_time));
       ++storage_generation;
       policy_dirty.insert(id);
       // With lazy sketches, drop the Bloom filters of newly flushed or
@@ -1605,12 +1610,6 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
       }
       auto const now = time::clock::now();
-      self->state().close_rebuild_collection(now);
-      for (auto const& [id, synopsis] : partitions) {
-        self->state().open_rebuild_groups.emplace(
-          synopsis->schema,
-          self->state().rebuild_day(synopsis->max_import_time));
-      }
       auto result = self->state().merge(std::move(partitions),
                                         catalog_state::merge_source::ingest);
       self->state().advance_maintenance(now);
