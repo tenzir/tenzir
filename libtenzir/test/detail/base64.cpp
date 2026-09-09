@@ -33,3 +33,15 @@ TEST("decode") {
   CHECK(decoded.has_value());
   CHECK_EQUAL(*decoded, dec);
 }
+
+TEST("decode unpadded") {
+  auto const one_byte = base64::try_decode("TQ"sv);
+  REQUIRE(one_byte.has_value());
+  CHECK_EQUAL(*one_byte, "M"sv);
+  auto const two_bytes = base64::try_decode("TWE"sv);
+  REQUIRE(two_bytes.has_value());
+  CHECK_EQUAL(*two_bytes, "Ma"sv);
+  auto const four_bytes = base64::try_decode("TWFuTQ"sv);
+  REQUIRE(four_bytes.has_value());
+  CHECK_EQUAL(*four_bytes, "ManM"sv);
+}
