@@ -70,13 +70,16 @@ struct AzureAuthOptions {
   Option<secret> authority;
   Option<web_identity_options> web_identity;
   location loc;
+  /// Operator argument name used in diagnostics and secret resolution.
+  std::string argument_name = "auth";
 
   friend auto inspect(auto& f, AzureAuthOptions& x) -> bool {
     return f.object(x).fields(
       f.field("tenant_id", x.tenant_id), f.field("client_id", x.client_id),
       f.field("client_secret", x.client_secret), f.field("scope", x.scope),
       f.field("authority", x.authority),
-      f.field("web_identity", x.web_identity), f.field("loc", x.loc));
+      f.field("web_identity", x.web_identity), f.field("loc", x.loc),
+      f.field("argument_name", x.argument_name));
   }
 
   /// Parses Azure auth options from a TQL record.
@@ -92,8 +95,9 @@ struct AzureAuthOptions {
   ///
   /// Exactly one of `client_secret` and `web_identity` must be present, and
   /// keys the operator does not support per `support` are rejected.
-  static auto from_record(located<record> config, diagnostic_handler& dh,
-                          AzureAuthSupport support = {})
+  static auto
+  from_record(located<record> config, diagnostic_handler& dh,
+              AzureAuthSupport support = {}, std::string argument_name = "auth")
     -> failure_or<AzureAuthOptions>;
 
   /// Creates secret requests for resolving credentials.

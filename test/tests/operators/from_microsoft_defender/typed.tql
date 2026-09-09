@@ -1,0 +1,23 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+---
+
+from_microsoft_defender env("DEFENDER_QUERY"),
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+Types = {
+  Timestamp: type_of(Timestamp).kind,
+  Count: type_of(Count).kind,
+  Ratio: type_of(Ratio).kind,
+  Enabled: type_of(Enabled).kind,
+  Message: type_of(Message).kind,
+  NullTime: type_of(NullTime).kind,
+  NestedString: type_of(Details.text).kind,
+}

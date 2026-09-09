@@ -1,0 +1,13 @@
+warning: HTTP error 429, attempt 1/6, retrying after 2s
+ --> tests/operators/from_microsoft_defender/refresh-failed.tql:7:1
+  |
+7 | from_microsoft_defender "refresh-failed",
+  | ~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+error: expected Azure `access_token` to be `string`, got `record`
+ --> tests/operators/from_microsoft_defender/refresh-failed.tql:8:14
+  |
+8 |   azure_auth={
+  |              ^
+  |

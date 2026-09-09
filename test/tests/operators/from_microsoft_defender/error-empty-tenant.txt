@@ -1,0 +1,6 @@
+error: 'tenant_id' must not be empty
+ --> tests/operators/from_microsoft_defender/error-empty-tenant.tql:6:14
+  |
+6 |   azure_auth={tenant_id: "", client_id: "c", client_secret: "s"}
+  |              ^
+  |

@@ -1,0 +1,9 @@
+error: Microsoft Defender request failed: HTTP 400
+ --> tests/operators/from_microsoft_defender/bad-query.tql:7:25
+  |
+7 | from_microsoft_defender "bad-query",
+  |                         ^^^^^^^^^^^
+  |
+  = note: service error: BadRequest
+  = note: request ID: abc-123
+  = hint: check KQL syntax, projected types, and table availability in this tenant

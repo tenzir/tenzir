@@ -1,0 +1,9 @@
+{
+  Value: 42,
+}
+{
+  Value: true,
+}
+{
+  Value: null,
+}

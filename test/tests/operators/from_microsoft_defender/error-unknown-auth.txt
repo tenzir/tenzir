@@ -1,0 +1,6 @@
+error: unknown key 'unknown' in `azure_auth`
+ --> tests/operators/from_microsoft_defender/error-unknown-auth.tql:5:47
+  |
+5 | from_microsoft_defender "print 1", azure_auth={tenant_id: "t", client_id: "c", client_secret: "s", unknown: true}
+  |                                               ^
+  |

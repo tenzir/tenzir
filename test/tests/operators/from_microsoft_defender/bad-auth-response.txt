@@ -1,0 +1,6 @@
+error: expected Azure `access_token` to be `string`, got `record`
+ --> tests/operators/from_microsoft_defender/bad-auth-response.tql:8:14
+  |
+8 |   azure_auth={
+  |              ^
+  |

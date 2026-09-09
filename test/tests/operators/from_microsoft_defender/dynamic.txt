@@ -1,0 +1,61 @@
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: {
+    nested: {
+      IP: "192.0.2.1",
+    },
+  },
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: [
+    1,
+    2,
+  ],
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: 42,
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: true,
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: "plain",
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: null,
+}

@@ -1,0 +1,15 @@
+---
+fixtures: [microsoft_defender_bad_auth]
+timeout: 60
+error: true
+---
+
+from_microsoft_defender "bad-auth-response",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false

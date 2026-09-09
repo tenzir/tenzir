@@ -1,0 +1,9 @@
+error: `start` must be earlier than `end`
+ --> tests/operators/from_microsoft_defender/error-reverse-range.tql:5:107
+  |
+5 | from_microsoft_defender "print 1", azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}, start=2026-01-02, end=2026-01-01
+  |                                                                                                           ^^^^^^^^^^
+  ⋮
+5 | from_microsoft_defender "print 1", azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}, start=2026-01-02, end=2026-01-01
+  |                                                                                                                           ^^^^^^^^^^
+  |

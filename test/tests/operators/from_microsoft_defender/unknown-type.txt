@@ -1,0 +1,8 @@
+error: unsupported Microsoft Defender schema type `Unsupported`
+ --> tests/operators/from_microsoft_defender/unknown-type.tql:7:25
+  |
+7 | from_microsoft_defender "unknown-type",
+  |                         ^^^^^^^^^^^^^^
+  |
+  = hint: cast this column in KQL to a supported type
+  = note: request ID: defender-request-123

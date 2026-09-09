@@ -1,0 +1,7 @@
+error: invalid Microsoft Defender response: invalid JSON: TAPE_ERROR: The JSON document has an improper structure: missing or superfluous commas, braces, missing keys, etc.  This is a fatal and unrecoverable error.
+ --> tests/operators/from_microsoft_defender/malformed-json.tql:7:25
+  |
+7 | from_microsoft_defender "malformed-json",
+  |                         ^^^^^^^^^^^^^^^^
+  |
+  = hint: check the query's projected types and reduce its time range or output

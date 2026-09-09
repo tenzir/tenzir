@@ -1,0 +1,6 @@
+error: `start` and `end` must be specified together
+ --> tests/operators/from_microsoft_defender/error-only-start.tql:5:107
+  |
+5 | from_microsoft_defender "print 1", azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}, start=2026-01-01
+  |                                                                                                           ^^^^^^^^^^
+  |

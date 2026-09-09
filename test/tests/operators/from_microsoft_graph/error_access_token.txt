@@ -4,4 +4,3 @@ error: failed to fetch Azure access token: HTTP code `400`
 10 |   auth={
    |        ^
    |
-   = note: response body: {"error": "unexpected client_secret: ['wrong-secret']"}

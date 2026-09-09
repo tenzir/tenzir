@@ -1,0 +1,17 @@
+---
+fixtures: [microsoft_defender_refresh_failed]
+timeout: 60
+error: true
+---
+
+from_microsoft_defender "refresh-failed",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  start=2026-01-01,
+  end=2026-01-02,
+  _base_url=env("DEFENDER_URL"),
+  tls=false

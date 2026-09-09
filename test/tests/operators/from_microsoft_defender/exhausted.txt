@@ -1,0 +1,44 @@
+warning: HTTP error 429, attempt 1/6, retrying after 0s
+ --> tests/operators/from_microsoft_defender/exhausted.tql:7:1
+  |
+7 | from_microsoft_defender "exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: HTTP error 429, attempt 2/6, retrying after 0s
+ --> tests/operators/from_microsoft_defender/exhausted.tql:7:1
+  |
+7 | from_microsoft_defender "exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: HTTP error 429, attempt 3/6, retrying after 0s
+ --> tests/operators/from_microsoft_defender/exhausted.tql:7:1
+  |
+7 | from_microsoft_defender "exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: HTTP error 429, attempt 4/6, retrying after 0s
+ --> tests/operators/from_microsoft_defender/exhausted.tql:7:1
+  |
+7 | from_microsoft_defender "exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: HTTP error 429, attempt 5/6, retrying after 0s
+ --> tests/operators/from_microsoft_defender/exhausted.tql:7:1
+  |
+7 | from_microsoft_defender "exhausted",
+  | ~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+error: Microsoft Defender request failed: HTTP 429
+ --> tests/operators/from_microsoft_defender/exhausted.tql:7:1
+  |
+7 | from_microsoft_defender "exhausted",
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: service error: TooManyRequests
+  = note: request ID: abc-123
+  = hint: the retry budget is exhausted; reduce query frequency and check tenant service quotas

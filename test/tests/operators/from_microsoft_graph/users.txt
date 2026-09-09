@@ -4,7 +4,6 @@ warning: failed to fetch Azure access token: HTTP code `503`
 9 |   auth={
   |        ~
   |
-  = note: response body: {"error": "temporary auth outage"}
   = note: continuing with the cached token until it expires
 {
   id: "user-1",

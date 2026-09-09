@@ -1,0 +1,8 @@
+error: named argument `resource` does not exist
+ --> tests/operators/from_microsoft_defender/error-resource.tql:5:101
+  |
+5 | from_microsoft_defender "print 1", azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}, resource="DeviceEvents"
+  |                                                                                                     ^^^^^^^^
+  |
+  = usage: from_microsoft_defender query:string, azure_auth=record, [start=time, end=time, tls=any]
+  = docs: https://tenzir.com/docs/reference/operators/from_microsoft_defender

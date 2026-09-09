@@ -45,9 +45,12 @@ constexpr auto default_authority = "https://login.microsoftonline.com";
 constexpr auto default_token_lifetime = 50min;
 
 auto check_resolved(std::string_view name, std::string const& value,
-                    location loc, diagnostic_handler& dh) -> failure_or<void> {
+                    AzureAuthOptions const& options, diagnostic_handler& dh)
+  -> failure_or<void> {
   if (value.empty()) {
-    diagnostic::error("`auth.{}` must not be empty", name).primary(loc).emit(dh);
+    diagnostic::error("`{}.{}` must not be empty", options.argument_name, name)
+      .primary(options.loc)
+      .emit(dh);
     return failure::promise();
   }
   return {};
@@ -60,25 +63,29 @@ auto normalize_authority(std::string authority) -> std::string {
   return authority;
 }
 
-auto validate_authority(std::string_view authority, location loc,
-                        diagnostic_handler& dh) -> failure_or<void> {
+auto validate_authority(std::string_view authority,
+                        AzureAuthOptions const& options, diagnostic_handler& dh)
+  -> failure_or<void> {
+  auto loc = options.loc;
   auto parsed = boost::urls::parse_uri(authority);
   if (not parsed) {
-    diagnostic::error("invalid `auth.authority` URL: {}",
+    diagnostic::error("invalid `{}.authority` URL: {}", options.argument_name,
                       parsed.error().message())
       .primary(loc)
       .emit(dh);
     return failure::promise();
   }
   if (parsed->scheme() != "https" and parsed->scheme() != "http") {
-    diagnostic::error("`auth.authority` must use HTTP or HTTPS")
+    diagnostic::error("`{}.authority` must use HTTP or HTTPS",
+                      options.argument_name)
       .primary(loc)
       .note("scheme: {}", parsed->scheme())
       .emit(dh);
     return failure::promise();
   }
   if (parsed->host().empty()) {
-    diagnostic::error("`auth.authority` must include a host")
+    diagnostic::error("`{}.authority` must include a host",
+                      options.argument_name)
       .primary(loc)
       .emit(dh);
     return failure::promise();
@@ -131,7 +138,8 @@ auto credential_options(ResolvedAzureAuth const& auth) -> Options {
 
 auto AzureAuthOptions::from_record(located<record> config,
                                    diagnostic_handler& dh,
-                                   AzureAuthSupport support)
+                                   AzureAuthSupport support,
+                                   std::string argument_name)
   -> failure_or<AzureAuthOptions> {
   constexpr auto known = std::array{
     "tenant_id", "client_id", "client_secret",
@@ -141,13 +149,15 @@ auto AzureAuthOptions::from_record(located<record> config,
     return std::ranges::find(known, x.first) == std::ranges::end(known);
   });
   if (unknown != std::ranges::end(config.inner)) {
-    diagnostic::error("unknown key '{}' in `auth`", (*unknown).first)
+    diagnostic::error("unknown key '{}' in `{}`", (*unknown).first,
+                      argument_name)
       .primary(config)
       .emit(dh);
     return failure::promise();
   }
   auto opts = AzureAuthOptions{};
   opts.loc = config.source;
+  opts.argument_name = std::move(argument_name);
   TRY(assign_secret(config, "tenant_id", opts.tenant_id, dh));
   TRY(assign_secret(config, "client_id", opts.client_id, dh));
   TRY(assign_secret(config, "client_secret", opts.client_secret, dh));
@@ -165,11 +175,15 @@ auto AzureAuthOptions::from_record(located<record> config,
     }
   }
   if (not opts.tenant_id) {
-    diagnostic::error("`auth` requires `tenant_id`").primary(config).emit(dh);
+    diagnostic::error("`{}` requires `tenant_id`", opts.argument_name)
+      .primary(config)
+      .emit(dh);
     return failure::promise();
   }
   if (not opts.client_id) {
-    diagnostic::error("`auth` requires `client_id`").primary(config).emit(dh);
+    diagnostic::error("`{}` requires `client_id`", opts.argument_name)
+      .primary(config)
+      .emit(dh);
     return failure::promise();
   }
   if (opts.client_secret and opts.web_identity) {
@@ -180,8 +194,9 @@ auto AzureAuthOptions::from_record(located<record> config,
     return failure::promise();
   }
   if (not opts.client_secret and not opts.web_identity) {
-    diagnostic::error("`auth` requires one of: `client_secret`, "
-                      "`web_identity`")
+    diagnostic::error("`{}` requires one of: `client_secret`, "
+                      "`web_identity`",
+                      opts.argument_name)
       .primary(config)
       .emit(dh);
     return failure::promise();
@@ -208,13 +223,16 @@ auto AzureAuthOptions::make_secret_requests(ResolvedAzureAuth& resolved,
                                             diagnostic_handler& dh) const
   -> std::vector<secret_request> {
   auto requests = std::vector<secret_request>{};
-  requests.emplace_back(make_secret_request("auth.tenant_id", *tenant_id, loc,
-                                            resolved.tenant_id, dh));
-  requests.emplace_back(make_secret_request("auth.client_id", *client_id, loc,
-                                            resolved.client_id, dh));
+  requests.emplace_back(
+    make_secret_request(fmt::format("{}.tenant_id", argument_name), *tenant_id,
+                        loc, resolved.tenant_id, dh));
+  requests.emplace_back(
+    make_secret_request(fmt::format("{}.client_id", argument_name), *client_id,
+                        loc, resolved.client_id, dh));
   if (client_secret) {
-    requests.emplace_back(make_secret_request(
-      "auth.client_secret", *client_secret, loc, resolved.client_secret, dh));
+    requests.emplace_back(
+      make_secret_request(fmt::format("{}.client_secret", argument_name),
+                          *client_secret, loc, resolved.client_secret, dh));
   }
   if (web_identity) {
     resolved.web_identity = resolved_web_identity{};
@@ -225,14 +243,15 @@ auto AzureAuthOptions::make_secret_requests(ResolvedAzureAuth& resolved,
                     std::make_move_iterator(web_identity_requests.end()));
   }
   if (scope) {
-    requests.emplace_back(
-      make_secret_request("auth.scope", *scope, loc, resolved.scope, dh));
+    requests.emplace_back(make_secret_request(
+      fmt::format("{}.scope", argument_name), *scope, loc, resolved.scope, dh));
   } else {
     resolved.scope = std::move(default_scope);
   }
   if (authority) {
-    requests.emplace_back(make_secret_request("auth.authority", *authority, loc,
-                                              resolved.authority, dh));
+    requests.emplace_back(
+      make_secret_request(fmt::format("{}.authority", argument_name),
+                          *authority, loc, resolved.authority, dh));
   } else {
     resolved.authority = default_authority;
   }
@@ -249,19 +268,19 @@ auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
     co_return None{};
   }
   auto& dh = ctx.dh();
-  if (not check_resolved("tenant_id", resolved.tenant_id, options.loc, dh)
-      or not check_resolved("client_id", resolved.client_id, options.loc, dh)
-      or not check_resolved("scope", resolved.scope, options.loc, dh)
-      or not check_resolved("authority", resolved.authority, options.loc, dh)) {
+  if (not check_resolved("tenant_id", resolved.tenant_id, options, dh)
+      or not check_resolved("client_id", resolved.client_id, options, dh)
+      or not check_resolved("scope", resolved.scope, options, dh)
+      or not check_resolved("authority", resolved.authority, options, dh)) {
     co_return None{};
   }
   if (options.client_secret
-      and not check_resolved("client_secret", resolved.client_secret,
-                             options.loc, dh)) {
+      and not check_resolved("client_secret", resolved.client_secret, options,
+                             dh)) {
     co_return None{};
   }
   resolved.authority = normalize_authority(std::move(resolved.authority));
-  if (not validate_authority(resolved.authority, options.loc, dh)) {
+  if (not validate_authority(resolved.authority, options, dh)) {
     co_return None{};
   }
   co_return resolved;
@@ -373,9 +392,10 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
   }
   auto response = std::move(result).unwrap();
   auto fail = [&](std::string message) -> Result<void, diagnostic> {
+    // Even a malformed token response can contain credentials.
+    // Never include its body in diagnostics.
     return Err{diagnostic_builder{severity::error, std::move(message)}
                  .primary(loc_)
-                 .note("response body: {}", response.body)
                  .done()};
   };
   if (not response.is_status_success()) {

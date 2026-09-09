@@ -1,0 +1,7 @@
+error: `web_identity` is not supported by this operator
+ --> tests/operators/from_microsoft_defender/error-web-identity.tql:5:47
+  |
+5 | from_microsoft_defender "print 1", azure_auth={tenant_id: "t", client_id: "c", web_identity: {token: "s"}}
+  |                                               ^
+  |
+  = hint: use `client_secret` instead

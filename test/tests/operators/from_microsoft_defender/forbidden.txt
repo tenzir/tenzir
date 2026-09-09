@@ -1,0 +1,9 @@
+error: Microsoft Defender request failed: HTTP 403
+ --> tests/operators/from_microsoft_defender/forbidden.tql:8:14
+  |
+8 |   azure_auth={
+  |              ^
+  |
+  = note: service error: Forbidden
+  = note: request ID: abc-123
+  = hint: grant ThreatHunting.Read.All application permission with administrator consent and verify Defender licenses and access

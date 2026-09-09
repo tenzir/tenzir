@@ -1,0 +1,16 @@
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    values: [
+      1,
+      2,
+      null,
+    ],
+  },
+}

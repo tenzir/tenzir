@@ -1,0 +1,9 @@
+error: Microsoft Defender request failed: HTTP 401
+ --> tests/operators/from_microsoft_defender/unauthorized.tql:8:14
+  |
+8 |   azure_auth={
+  |              ^
+  |
+  = note: service error: InvalidAuthenticationToken
+  = note: request ID: abc-123
+  = hint: check the Entra tenant, application credentials, and Graph token audience

@@ -262,8 +262,8 @@ auto SignedHttpClient::raw_post(std::string path, std::string body,
   auto make_headers
     = [this, path = std::move(path), body = body, headers = std::move(headers),
        operation = std::string{
-         operation}]() -> Result<std::vector<http::Header>, std::string> {
-    return sign_request(path, body, headers, operation);
+         operation}]() -> Task<Result<std::vector<http::Header>, std::string>> {
+    co_return sign_request(path, body, headers, operation);
   };
   auto response = co_await pool_->post(std::move(pool_path), std::move(body),
                                        std::move(make_headers));
@@ -300,8 +300,8 @@ auto SignedHttpClient::stream_post(std::string path, std::string body,
   auto make_headers
     = [this, path = std::move(path), body = body, headers = std::move(headers),
        operation = std::string{
-         operation}]() -> Result<std::vector<http::Header>, std::string> {
-    return sign_request(path, body, headers, operation);
+         operation}]() -> Task<Result<std::vector<http::Header>, std::string>> {
+    co_return sign_request(path, body, headers, operation);
   };
   co_return co_await pool_->stream_post(std::move(pool_path), std::move(body),
                                         std::move(make_headers),

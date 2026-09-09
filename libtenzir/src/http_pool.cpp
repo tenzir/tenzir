@@ -380,10 +380,10 @@ auto HttpPool::request(proxygen::HTTPMethod method, std::string body,
 auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
                        std::string body, std::vector<http::Header> headers)
   -> Task<Result<http::Response, std::string>> {
-  auto make_headers =
-    [headers
-     = std::move(headers)]() -> Result<std::vector<http::Header>, std::string> {
-    return headers;
+  auto make_headers
+    = [headers = std::move(
+         headers)]() -> Task<Result<std::vector<http::Header>, std::string>> {
+    co_return headers;
   };
   co_return co_await request(method, std::move(path), std::move(body),
                              std::move(make_headers));
@@ -410,7 +410,7 @@ auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
       -> Task<Result<http::Response, std::string>> {
       co_return co_await retry_request(
         impl->config, [&]() -> Task<proxygen::coro::HTTPClient::Response> {
-          auto headers = make_headers();
+          auto headers = co_await make_headers();
           if (headers.is_err()) {
             throw std::runtime_error{std::move(headers).unwrap_err()};
           }
@@ -486,10 +486,10 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
                               std::vector<http::Header> headers,
                               HttpStreamCallbacks callbacks)
   -> Task<Result<http::Response, std::string>> {
-  auto make_headers =
-    [headers
-     = std::move(headers)]() -> Result<std::vector<http::Header>, std::string> {
-    return headers;
+  auto make_headers
+    = [headers = std::move(
+         headers)]() -> Task<Result<std::vector<http::Header>, std::string>> {
+    co_return headers;
   };
   co_return co_await stream_request(method, std::move(path), std::move(body),
                                     std::move(make_headers),
@@ -515,7 +515,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
         auto retry_reason = std::string{};
         auto retryable_status = false;
         auto result = co_await async_try([&]() -> Task<http::Response> {
-          auto headers = make_headers();
+          auto headers = co_await make_headers();
           if (headers.is_err()) {
             throw std::runtime_error{std::move(headers).unwrap_err()};
           }

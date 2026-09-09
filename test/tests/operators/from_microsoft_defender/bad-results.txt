@@ -1,0 +1,8 @@
+error: invalid Microsoft Defender response: expected schema and results arrays
+ --> tests/operators/from_microsoft_defender/bad-results.tql:7:25
+  |
+7 | from_microsoft_defender "bad-results",
+  |                         ^^^^^^^^^^^^^
+  |
+  = hint: check the query's projected types and reduce its time range or output
+  = note: request ID: defender-request-123

@@ -1,0 +1,17 @@
+error: named argument `auth` does not exist
+ --> tests/operators/from_microsoft_defender/error-legacy-auth.tql:5:36
+  |
+5 | from_microsoft_defender "print 1", auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+  |                                    ^^^^
+  |
+  = usage: from_microsoft_defender query:string, azure_auth=record, [start=time, end=time, tls=any]
+  = docs: https://tenzir.com/docs/reference/operators/from_microsoft_defender
+
+error: required argument `azure_auth` was not provided
+ --> tests/operators/from_microsoft_defender/error-legacy-auth.tql:5:1
+  |
+5 | from_microsoft_defender "print 1", auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = usage: from_microsoft_defender query:string, azure_auth=record, [start=time, end=time, tls=any]
+  = docs: https://tenzir.com/docs/reference/operators/from_microsoft_defender

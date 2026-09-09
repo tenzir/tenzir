@@ -1,0 +1,8 @@
+error: expected exactly 1 positional argument
+ --> tests/operators/from_microsoft_defender/error-missing-query.tql:5:1
+  |
+5 | from_microsoft_defender azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = usage: from_microsoft_defender query:string, azure_auth=record, [start=time, end=time, tls=any]
+  = docs: https://tenzir.com/docs/reference/operators/from_microsoft_defender

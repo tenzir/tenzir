@@ -1,0 +1,7 @@
+error: `azure_auth.authority` must use HTTP or HTTPS
+ --> tests/operators/from_microsoft_defender/error-authority.tql:6:14
+  |
+6 |   azure_auth={tenant_id: "t", client_id: "c", client_secret: "s", authority: "ftp://example.invalid"}
+  |              ^
+  |
+  = note: scheme: ftp

@@ -37,8 +37,11 @@ enum class HTTPMethod;
 
 namespace tenzir {
 
+/// Regenerates headers before each buffered or streaming request attempt.
+/// Invoked serially on the pool's IO executor, including after retry sleeps.
+/// Producers that need no asynchronous work can simply co_return their result.
 using HttpHeaderFactory
-  = std::function<Result<std::vector<http::Header>, std::string>()>;
+  = std::function<Task<Result<std::vector<http::Header>, std::string>>()>;
 
 /// Runtime settings for an `HttpPool`.
 ///
@@ -120,7 +123,7 @@ public:
                std::string body, std::map<std::string, std::string> headers)
     -> Task<Result<http::Response, std::string>>;
 
-  /// Request through the session pool to a path.
+  /// Request with regenerated headers on every attempt.
   auto request(proxygen::HTTPMethod method, Option<std::string> path,
                std::string body, HttpHeaderFactory make_headers)
     -> Task<Result<http::Response, std::string>>;
@@ -153,7 +156,7 @@ public:
             std::map<std::string, std::string> headers)
     -> Task<Result<http::Response, std::string>>;
 
-  /// POST through the session pool to a path.
+  /// POST with regenerated headers on every attempt.
   auto post(std::string path, std::string body, HttpHeaderFactory make_headers)
     -> Task<Result<http::Response, std::string>>;
 

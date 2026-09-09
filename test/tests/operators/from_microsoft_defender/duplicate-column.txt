@@ -1,0 +1,8 @@
+error: invalid Microsoft Defender response: schema requires unique, nonempty names and string types
+ --> tests/operators/from_microsoft_defender/duplicate-column.tql:7:25
+  |
+7 | from_microsoft_defender "duplicate-column",
+  |                         ^^^^^^^^^^^^^^^^^^
+  |
+  = hint: check the query's projected types and reduce its time range or output
+  = note: request ID: defender-request-123

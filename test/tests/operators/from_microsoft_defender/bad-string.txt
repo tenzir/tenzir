@@ -1,0 +1,9 @@
+error: invalid Microsoft Defender value in row 0, column `Message`
+ --> tests/operators/from_microsoft_defender/bad-string.tql:7:25
+  |
+7 | from_microsoft_defender "bad-string",
+  |                         ^^^^^^^^^^^^
+  |
+  = note: expected string
+  = hint: check the query's projected types; integer values must fit int64
+  = note: request ID: defender-request-123

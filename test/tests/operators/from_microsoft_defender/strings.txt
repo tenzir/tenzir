@@ -1,0 +1,85 @@
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "2026-01-01T00:00:00Z",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    values: [
+      1,
+      2,
+      null,
+    ],
+  },
+  MessageType: "string",
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "1h",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    values: [
+      1,
+      2,
+      null,
+    ],
+  },
+  MessageType: "string",
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.0/24",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    values: [
+      1,
+      2,
+      null,
+    ],
+  },
+  MessageType: "string",
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "true",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    values: [
+      1,
+      2,
+      null,
+    ],
+  },
+  MessageType: "string",
+}
+{
+  Timestamp: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "42",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    values: [
+      1,
+      2,
+      null,
+    ],
+  },
+  MessageType: "string",
+}
