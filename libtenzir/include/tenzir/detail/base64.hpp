@@ -49,6 +49,8 @@ inline constexpr size_t encoded_size(size_t n) {
 
 /// @see encoded_size
 inline constexpr size_t decoded_size(size_t n) {
+  // An unpadded final block of two or three characters produces one or two
+  // bytes.
   auto const remainder = n % 4;
   return n / 4 * 3 + (remainder > 1 ? remainder - 1 : 0);
 }
