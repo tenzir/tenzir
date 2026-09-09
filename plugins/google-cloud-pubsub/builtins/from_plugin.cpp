@@ -289,14 +289,14 @@ public:
     auto connection = pubsub::MakeSubscriberConnection(
       std::move(subscription),
       google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1));
-    auto subscriber = pubsub::Subscriber(std::move(connection));
+    subscriber_.emplace(std::move(connection));
 
     auto shared = shared_;
     auto has_metadata = args_.metadata_field.is_some();
     // Subscribe and attach a .then() callback to detect session end. The
     // callback runs on a GCP background thread when the session terminates
     // (e.g., due to an error), setting session_done and notifying the operator.
-    auto session_fut = subscriber.Subscribe(
+    auto session_fut = subscriber_->Subscribe(
       [shared, has_metadata](pubsub::Message const& m, pubsub::AckHandler h) {
         auto msg = MessageData{
           .data = std::string{m.data()},
@@ -397,6 +397,15 @@ public:
     }
   }
 
+  auto stop(OpCtx&) -> Task<void> override {
+    if (session_ and session_->fut.valid()) {
+      // The completion callback wakes await_task() so queued messages drain
+      // before process_task() transitions the operator to done.
+      session_->fut.cancel();
+    }
+    co_return;
+  }
+
   auto state() -> OperatorState override {
     return done_ ? OperatorState::done : OperatorState::normal;
   }
@@ -405,6 +414,8 @@ private:
   from_args args_;
   bool ordering_enabled_ = false;
   bool done_ = false;
+  // Keep the subscriber alive until session cleanup finishes.
+  Option<pubsub::Subscriber> subscriber_;
   Option<SessionHandle> session_;
   std::shared_ptr<SharedState> shared_ = std::make_shared<SharedState>();
   MetricsCounter bytes_read_counter_;
