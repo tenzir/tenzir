@@ -1,0 +1,11 @@
+// parallelism: 4
+// `count` is a per-instance limit, so `from_kafka` stays sequential and emits
+// three messages in total rather than three per instance.
+from_kafka env("KAFKA_TOPIC"),
+           count=3,
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "auto.offset.reset": "earliest",
+             "group.id": "tenzir-test-from-kafka-parallel-count"
+           }
+summarize messages=count()

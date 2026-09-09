@@ -1,0 +1,7 @@
+● {input}
+│
+● from
+│
+● to_kafka
+│
+● {output}

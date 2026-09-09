@@ -1,0 +1,3 @@
+// parallelism: 4
+// `count` limits each instance separately, so the operator stays sequential.
+from_kafka "topic", count=3, options={"bootstrap.servers": "localhost:9092"}

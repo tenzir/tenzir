@@ -1,0 +1,6 @@
+suite: from-kafka-parallel
+fixtures:
+  - kafka:
+      topic: from_kafka_parallel_test
+      partitions: 4
+      messages: 8

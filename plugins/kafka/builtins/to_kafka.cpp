@@ -25,8 +25,6 @@
 #include <tenzir/view3.hpp>
 
 #include <fmt/format.h>
-#include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 #include <librdkafka/rdkafkacpp.h>
 
@@ -150,11 +148,7 @@ struct ToKafkaArgs {
   located<record> options;
   Option<located<std::string>> aws_region;
   Option<located<record>> aws_iam;
-  uint64_t jobs = 1;
 };
-
-/// Bounded queue of table slices feeding the parallel producer workers.
-using InputQueue = folly::coro::BoundedQueue<table_slice>;
 
 class AsyncKafkaProducer {
 public:
@@ -399,87 +393,36 @@ public:
       done_.store(true, std::memory_order_release);
       co_return;
     }
-    if (args_.jobs <= 1) {
-      // Single-worker path: drive the producer directly from process() with no
-      // queue overhead — same sequential behavior as before workers= existed.
-      auto error = std::string{};
-      TENZIR_ASSERT(cfg->conf);
-      auto* raw_producer = RdKafka::Producer::create(cfg->conf.get(), error);
-      if (raw_producer == nullptr) {
-        diagnostic::error("failed to create kafka producer: {}", error)
-          .emit(ctx);
-        done_.store(true, std::memory_order_release);
-        co_return;
-      }
-      producer_.emplace(args_.topic, args_.message, auth_, std::move(*cfg),
-                        Box<RdKafka::Producer>::from_non_null(
-                          std::unique_ptr<RdKafka::Producer>{raw_producer}),
-                        write_bytes_counter_, write_events_counter_);
+    auto error = std::string{};
+    TENZIR_ASSERT(cfg->conf);
+    auto* raw_producer = RdKafka::Producer::create(cfg->conf.get(), error);
+    if (raw_producer == nullptr) {
+      diagnostic::error("failed to create kafka producer: {}", error).emit(ctx);
+      done_.store(true, std::memory_order_release);
       co_return;
     }
-    // Multi-worker path: feed a bounded queue from process() and drain it with
-    // N independent producer workers.
-    ctx_ = &ctx;
-    input_queue_ = std::make_shared<InputQueue>(args_.jobs * 2);
-    for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-      auto worker_cfg = *cfg;
-      auto error = std::string{};
-      TENZIR_ASSERT(worker_cfg.conf);
-      auto* raw_producer
-        = RdKafka::Producer::create(worker_cfg.conf.get(), error);
-      if (raw_producer == nullptr) {
-        diagnostic::error("failed to create kafka producer: {}", error)
-          .emit(ctx);
-        done_.store(true, std::memory_order_release);
-        co_return;
-      }
-      worker_handles_.push_back(ctx.spawn_task(worker_loop(AsyncKafkaProducer{
-        args_.topic, args_.message, auth_, std::move(worker_cfg),
-        Box<RdKafka::Producer>::from_non_null(
-          std::unique_ptr<RdKafka::Producer>{raw_producer}),
-        write_bytes_counter_, write_events_counter_})));
-    }
+    producer_.emplace(args_.topic, args_.message, auth_, std::move(*cfg),
+                      Box<RdKafka::Producer>::from_non_null(
+                        std::unique_ptr<RdKafka::Producer>{raw_producer}),
+                      write_bytes_counter_, write_events_counter_);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_.load(std::memory_order_acquire) or input.rows() == 0) {
+    if (done_.load(std::memory_order_acquire) or input.rows() == 0
+        or not producer_) {
       co_return;
     }
-    if (producer_) {
-      // Single-worker: original direct path.
-      if (not co_await producer_->process(input,
-                                          args_.key ? args_.key->inner : "",
-                                          compute_timestamp_ms(), ctx)) {
-        done_.store(true, std::memory_order_release);
-      }
-      co_return;
-    }
-    if (input_queue_) {
-      co_await input_queue_->enqueue(std::move(input));
+    if (not co_await producer_->process(input,
+                                        args_.key ? args_.key->inner : "",
+                                        compute_timestamp_ms(), ctx)) {
+      done_.store(true, std::memory_order_release);
     }
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (producer_) {
       co_await producer_->finalize(&ctx.dh());
-      co_return FinalizeBehavior::done;
     }
-    if (worker_handles_.empty()) {
-      co_return FinalizeBehavior::done;
-    }
-    // Signal workers to stop, then enqueue one empty slice per worker to
-    // unblock any that are waiting on dequeue, then join all of them.
-    done_.store(true, std::memory_order_release);
-    TENZIR_ASSERT(input_queue_);
-    for (auto i = size_t{0}; i < worker_handles_.size(); ++i) {
-      co_await input_queue_->enqueue(table_slice{});
-    }
-    auto joins = std::vector<Task<void>>{};
-    joins.reserve(worker_handles_.size());
-    for (auto& handle : worker_handles_) {
-      joins.push_back(handle.join());
-    }
-    co_await folly::coro::collectAllRange(std::move(joins));
     co_return FinalizeBehavior::done;
   }
 
@@ -498,31 +441,11 @@ private:
     return int64_t{0};
   }
 
-  auto worker_loop(AsyncKafkaProducer producer) -> Task<void> {
-    const auto key = args_.key ? args_.key->inner : std::string{};
-    const auto timestamp_ms = compute_timestamp_ms();
-    while (true) {
-      auto next = co_await input_queue_->dequeue();
-      if (next.rows() == 0) {
-        break;
-      }
-      if (not co_await producer.process(next, key, timestamp_ms, *ctx_)) {
-        done_.store(true, std::memory_order_release);
-        break;
-      }
-    }
-    TENZIR_ASSERT(ctx_);
-    co_await producer.finalize(&ctx_->dh());
-  }
-
   ToKafkaArgs args_;
   Option<ResolvedAwsIamAuth> auth_;
   Option<AsyncKafkaProducer> producer_;
   MetricsCounter write_bytes_counter_;
   MetricsCounter write_events_counter_;
-  std::shared_ptr<InputQueue> input_queue_;
-  std::vector<AsyncHandle<void>> worker_handles_;
-  OpCtx* ctx_ = nullptr;
   Atomic<bool> done_{false};
 };
 
@@ -585,7 +508,6 @@ public:
     d.named_optional("message", &ToKafkaArgs::message, "blob|string");
     d.named("key", &ToKafkaArgs::key);
     d.named("timestamp", &ToKafkaArgs::timestamp);
-    d.named_optional("_jobs", &ToKafkaArgs::jobs);
     auto options_arg = d.named_optional("options", &ToKafkaArgs::options);
     auto aws_region_arg = d.named("aws_region", &ToKafkaArgs::aws_region);
     auto aws_iam_arg = d.named("aws_iam", &ToKafkaArgs::aws_iam);
@@ -614,6 +536,20 @@ public:
         }
       }
       return {};
+    });
+    // Every instance runs its own producer. Without a key, the partitioner
+    // spreads messages over the topic's partitions and Kafka orders them only
+    // within a partition, so replicating the operator does not weaken any
+    // guarantee that a single instance provided. The operator itself is
+    // strictly sequential: all concurrency comes from the executor.
+    //
+    // A key changes that. It is one constant for the whole run, so every
+    // message hashes to the same partition, where a single producer did
+    // preserve input order. Independent producers would interleave their
+    // requests and lose it — and since all messages target one partition,
+    // replication would not buy any throughput either.
+    d.parallelizable([](const ToKafkaArgs& args) {
+      return not args.key;
     });
     return d.without_optimize();
   }

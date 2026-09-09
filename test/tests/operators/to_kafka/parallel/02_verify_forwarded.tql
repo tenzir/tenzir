@@ -1,0 +1,9 @@
+// Verify that all forwarded messages are readable from the target topic.
+from_kafka "to_kafka_parallel_forwarded",
+           count=8,
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "auto.offset.reset": "earliest",
+             "group.id": "tenzir-test-to-kafka-parallel-verify"
+           }
+sort message

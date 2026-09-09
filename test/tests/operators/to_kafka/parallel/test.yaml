@@ -1,0 +1,6 @@
+suite: to-kafka-parallel
+fixtures:
+  - kafka:
+      topic: to_kafka_parallel_source
+      partitions: 4
+      messages: 8

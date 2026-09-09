@@ -53,6 +53,19 @@ private:
   std::set<std::pair<std::string, int32_t>> partitions_;
 };
 
+/// The kind of the rebalance event that produced the current assignment.
+///
+/// The distinction matters because the eager rebalance protocol revokes every
+/// partition at once: between the revoke and the following assign, the
+/// consumer's assignment is empty even though the run is not over. Only an
+/// assign reports an assignment that may be acted upon.
+enum class AssignmentChange : uint8_t {
+  /// The broker assigned a — possibly empty — set of partitions.
+  assigned,
+  /// The broker revoked partitions and has not assigned the new set yet.
+  revoked,
+};
+
 /// Owns librdkafka consumer config and callback objects with shared lifetime.
 struct consumer_configuration {
   std::shared_ptr<RdKafka::Conf> conf;
@@ -60,8 +73,18 @@ struct consumer_configuration {
   std::shared_ptr<RdKafka::EventCb> event_callback;
   std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
   std::shared_ptr<Atomic<uint64_t>> assignment_generation;
-  /// Serializes assignment changes with commits tied to an assignment generation.
+  /// Serializes assignment changes with commits tied to an assignment
+  /// generation.
   std::shared_ptr<std::mutex> assignment_mutex;
+  /// The kind of the event that produced the current generation.
+  ///
+  /// The rebalance callback writes this before bumping `assignment_generation`
+  /// and readers load it after observing a new generation, so the generation's
+  /// release/acquire pair publishes this value too. librdkafka invokes the
+  /// rebalance callback from one thread at a time, so the plain store needs no
+  /// further ordering. Two rebalances between two reads collapse into the most
+  /// recent kind, which is the one a reader wants.
+  std::shared_ptr<Atomic<AssignmentChange>> last_assignment_change;
   std::shared_ptr<committed_partition_set> committed_partitions;
   // `enable_sasl_queue(true)` is configured on `Conf` before consumer
   // creation. This is required to later attach OAUTH callback servicing to

@@ -1,0 +1,5 @@
+// parallelism: 4
+// An explicit start offset is re-applied per consumer on every assignment, so
+// a partition moving between instances would rewind. Stays sequential.
+from_kafka "topic", offset="beginning",
+           options={"bootstrap.servers": "localhost:9092"}

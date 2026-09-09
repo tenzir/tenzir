@@ -1,0 +1,4 @@
+// parallelism: 4
+// Nothing ties this run to a single consumer, so the instances share the
+// group and the broker splits the partitions among them.
+from_kafka "topic", options={"bootstrap.servers": "localhost:9092"}

@@ -1,0 +1,8 @@
+// parallelism: 4
+// Static membership names one member of the group; replicas would be
+// duplicates that the broker fences, so the operator stays sequential.
+from_kafka "topic",
+           options={
+             "bootstrap.servers": "localhost:9092",
+             "group.instance.id": "tenzir-1"
+           }

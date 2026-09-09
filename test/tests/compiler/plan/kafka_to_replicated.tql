@@ -1,0 +1,5 @@
+// parallelism: 4
+// Without a key the partitioner spreads messages over the partitions and
+// Kafka only orders them per partition, so instances may produce in parallel.
+from {x: 1}, {x: 2}
+to_kafka "topic", options={"bootstrap.servers": "localhost:9092"}

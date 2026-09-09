@@ -1,0 +1,5 @@
+// parallelism: 4
+// `offset="stored"` means "resume from the committed offset", which is what
+// every instance should do anyway, so replication stays safe.
+from_kafka "topic", offset="stored",
+           options={"bootstrap.servers": "localhost:9092"}

@@ -59,7 +59,7 @@ def consume(
         access_key_id: {q(os.environ["KAFKA_AWS_ACCESS_KEY_ID"])},
         secret_access_key: {q(os.environ["KAFKA_AWS_SECRET_ACCESS_KEY"])}
       }},
-      _optimization="unordered", _worker_concurrency=3, _worker_batch_size=1,
+      _optimization="unordered", _worker_batch_size=1,
       options={{
         "bootstrap.servers": {q(os.environ["KAFKA_BOOTSTRAP_SERVERS"])},
         "group.id": {q(group or topic)},

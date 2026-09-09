@@ -213,6 +213,7 @@ with tempfile.TemporaryDirectory(
             [
                 tenzir,
                 "--console-verbosity=warning",
+                f"--endpoint=127.0.0.1:{port}",
                 target_pipeline(cli_group),
             ],
             stdout=subprocess.PIPE,

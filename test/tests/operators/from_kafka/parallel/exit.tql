@@ -1,0 +1,11 @@
+// parallelism: 4
+// All instances join the same consumer group, so the broker splits the topic's
+// four partitions among them and every seeded message arrives exactly once.
+from_kafka env("KAFKA_TOPIC"),
+           exit=true,
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "auto.offset.reset": "earliest",
+             "group.id": "tenzir-test-from-kafka-parallel-exit"
+           }
+sort message

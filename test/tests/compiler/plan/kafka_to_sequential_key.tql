@@ -1,0 +1,5 @@
+// parallelism: 4
+// A constant key sends every message to one partition, where a single
+// producer preserves input order, so the operator stays sequential.
+from {x: 1}, {x: 2}
+to_kafka "topic", key="k", options={"bootstrap.servers": "localhost:9092"}

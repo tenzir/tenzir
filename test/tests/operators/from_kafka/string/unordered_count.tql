@@ -1,0 +1,11 @@
+// Consume all seeded messages with the unordered build strategy, which yields
+// slices as the builder fills them instead of flushing once per fetched batch.
+from_kafka env("KAFKA_TOPIC"),
+           count=3,
+           offset="beginning",
+           _optimization="unordered",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-unordered"
+           }
+sort message

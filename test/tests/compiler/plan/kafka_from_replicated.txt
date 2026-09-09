@@ -1,0 +1,9 @@
+● {input}
+│
+● pass
+│
+● from_kafka(x4)
+╎
+● to_stdout
+│
+● {output}
