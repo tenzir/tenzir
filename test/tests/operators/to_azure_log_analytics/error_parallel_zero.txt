@@ -1,0 +1,6 @@
+error: `parallel` must be at least 1
+  --> tests/operators/to_azure_log_analytics/error_parallel_zero.tql:12:33
+   |
+12 |                        parallel=0
+   |                                 ^
+   |

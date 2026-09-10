@@ -1,0 +1,11 @@
+"POST /_bulk HTTP/1.1" 200 -
+
+Content-Type: application/json
+Host: 127.0.0.1:*
+Connection: keep-alive
+Content-Length: 72
+
+{"index":{"_index":"main"}}
+{"x":1}
+{"index":{"_index":"main"}}
+{"x":2}

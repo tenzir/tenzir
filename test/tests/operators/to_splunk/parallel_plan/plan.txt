@@ -1,0 +1,9 @@
+● {input}
+│
+● from
+╎
+● to_splunk(x6)
+│
+● pass
+│
+● {output}

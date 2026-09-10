@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/request_window.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/base64.hpp>
@@ -44,6 +45,7 @@ struct ToOpenSearchArgs {
   Option<location> include_nulls;
   located<uint64_t> max_content_length{5'000'000, location::unknown};
   located<duration> buffer_timeout{std::chrono::seconds{5}, location::unknown};
+  located<uint64_t> parallel{8, location::unknown};
   Option<location> compress;
   location operator_location = location::unknown;
 };
@@ -224,7 +226,8 @@ public:
         },
         args_.max_content_length.inner,
         args_.compress.is_some(),
-      } {
+      },
+      window_{args_.parallel.inner} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -266,6 +269,10 @@ public:
     auto config = HttpPoolConfig{
       .tls = *tls_needed,
       .ssl_context = nullptr,
+      // Fan concurrent requests out over multiple connections instead of
+      // serializing head-of-line on one HTTP/1.1 connection, so that
+      // `parallel` delivers actual concurrency.
+      .max_concurrent_streams_per_connection = 1,
       .on_retry =
         [dh = &ctx.dh(), loc](std::string_view message) {
           diagnostic::warning("{}", message).primary(loc).emit(*dh);
@@ -395,6 +402,12 @@ public:
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    if (result.try_as<RequestDone>()) {
+      // A request completed while the operator was otherwise idle; report its
+      // outcome now instead of at the next flush, checkpoint, or finalization.
+      poll(ctx);
+      co_return;
+    }
     TENZIR_ASSERT(result.try_as<FlushTimeout>());
     timer_armed_ = false;
     if (next_timeout_ and std::chrono::steady_clock::now() >= *next_timeout_) {
@@ -414,6 +427,7 @@ public:
     if (builder_.has_contents()) {
       co_await send_request(ctx);
     }
+    co_await drain(ctx);
     co_return FinalizeBehavior::done;
   }
 
@@ -421,12 +435,23 @@ public:
     if (builder_.has_contents()) {
       co_await send_request(ctx);
     }
+    co_await drain(ctx);
     next_timeout_ = None{};
   }
 
 private:
   /// Wakeup marker delivered to `await_task()` through `wakeup_queue_`.
   struct FlushTimeout {};
+
+  /// Wakeup marker signaling that an in-flight request completed.
+  struct RequestDone {};
+
+  /// The outcome of one bulk request, handed back by the request task.
+  struct Completion {
+    Result<http::Response, std::string> result;
+    uint64_t bytes;
+    uint64_t events;
+  };
 
   /// Spawns a task that sleeps until the current buffer deadline and then
   /// enqueues a `FlushTimeout` wakeup.
@@ -440,44 +465,79 @@ private:
     });
   }
 
+  /// Waits for all in-flight requests and reports their outcome.
+  auto drain(OpCtx& ctx) -> Task<void> {
+    co_await window_.drain([&](Completion completion) {
+      handle_completion(std::move(completion), ctx);
+    });
+  }
+
+  /// Reports the outcome of every request that has already completed.
+  auto poll(OpCtx& ctx) -> void {
+    window_.poll([&](Completion completion) {
+      handle_completion(std::move(completion), ctx);
+    });
+  }
+
   auto send_request(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(pool_);
     auto const events = builder_.event_count();
-    auto body = builder_.yield(ctx.dh());
+    auto body = std::string{builder_.yield(ctx.dh())};
     if (body.empty()) {
       co_return;
     }
     auto headers = headers_;
     http::set(headers, "Content-Length", fmt::to_string(body.size()));
-    auto result
-      = co_await (*pool_)->post(std::string{body}, std::move(headers));
-    if (result.is_err()) {
+    co_await window_.acquire([&](Completion completion) {
+      handle_completion(std::move(completion), ctx);
+    });
+    window_.spawn(
+      ctx,
+      [pool = &**pool_, body = std::move(body), headers = std::move(headers),
+       events]() mutable -> Task<Completion> {
+        auto const bytes = body.size();
+        auto result = co_await pool->post(std::move(body), std::move(headers));
+        co_return Completion{
+          .result = std::move(result),
+          .bytes = bytes,
+          .events = events,
+        };
+      },
+      [queue = wakeup_queue_]() mutable {
+        // Best-effort: when the wakeup queue is full, other wakeups are
+        // already pending, so the driver polls the window soon anyway.
+        std::ignore = queue->try_enqueue(Any{RequestDone{}});
+      });
+  }
+
+  auto handle_completion(Completion completion, OpCtx& ctx) -> void {
+    if (completion.result.is_err()) {
       diagnostic::error("HTTP request failed: {}",
-                        std::move(result).unwrap_err())
+                        std::move(completion.result).unwrap_err())
         .primary(args_.operator_location)
         .emit(ctx);
-      co_return;
+      return;
     }
-    auto response = std::move(result).unwrap();
+    auto response = std::move(completion.result).unwrap();
     if (not response.is_status_success()) {
       diagnostic::error("issue sending data. HTTP response code `{}`",
                         response.status_code)
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
-      co_return;
+      return;
     }
     auto json = from_json(response.body);
     if (not json.has_value()) {
-      co_return;
+      return;
     }
     auto const* r = try_as<record>(&json.value());
     if (not r) {
-      co_return;
+      return;
     }
     auto it = r->find("errors");
     if (it == r->end()) {
-      co_return;
+      return;
     }
     if (as<bool>(it->second)) {
       diagnostic::error("issue sending data")
@@ -485,12 +545,14 @@ private:
         .primary(args_.operator_location)
         .emit(ctx);
     }
-    bytes_write_counter_.add(body.size());
-    events_write_counter_.add(events);
+    bytes_write_counter_.add(completion.bytes);
+    events_write_counter_.add(completion.events);
   }
 
   ToOpenSearchArgs args_;
   json_builder builder_;
+  /// Bounds the bulk requests this instance keeps in flight.
+  RequestWindow<Completion> window_;
   Option<Box<HttpPool>> pool_ = None{};
   std::string url_;
   std::vector<http::Header> headers_;
@@ -527,6 +589,7 @@ public:
       "max_content_length", &ToOpenSearchArgs::max_content_length);
     auto buffer_timeout
       = d.named_optional("buffer_timeout", &ToOpenSearchArgs::buffer_timeout);
+    auto parallel = d.named_optional("parallel", &ToOpenSearchArgs::parallel);
     d.named("compress", &ToOpenSearchArgs::compress);
     d.operator_location(&ToOpenSearchArgs::operator_location);
     auto tls_validator = tls_options{
@@ -547,8 +610,23 @@ public:
             .emit(ctx);
         }
       }
+      if (auto value = ctx.get(parallel)) {
+        if (value->inner == 0) {
+          diagnostic::error("`parallel` must be at least 1")
+            .primary(value->source)
+            .emit(ctx);
+        }
+      }
       return {};
     });
+    // Every instance buffers, connects, and sends on its own: it owns its own
+    // HTTP connection pool and bulk buffer. The bulk API applies every request
+    // independently and gives no ordering guarantee across requests, so
+    // replicating the operator does not weaken a guarantee that a single
+    // instance provided. Note that `parallel` bounds the in-flight requests
+    // per instance, so the pipeline-wide bound is `parallel` times the degree
+    // of parallelism.
+    d.parallelizable();
     return d.invariant_order_filter();
   }
 };

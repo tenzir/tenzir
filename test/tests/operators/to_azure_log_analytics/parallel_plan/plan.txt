@@ -1,0 +1,9 @@
+● {input}
+│
+● from
+╎
+● to_azure_log_analytics(x6)
+│
+● pass
+│
+● {output}

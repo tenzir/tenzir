@@ -1,0 +1,6 @@
+error: `parallel` must be at least 1
+ --> tests/operators/to_opensearch/error_parallel_zero.tql:6:80
+  |
+6 | to_opensearch "https://127.0.0.1:9200", action="index", index="main", parallel=0
+  |                                                                                ^
+  |

@@ -1,0 +1,8 @@
+// The sink is parallelizable, so the planner replicates it across instances.
+from {x: 1}
+to_azure_log_analytics tenant_id="tenant",
+                       client_id="client",
+                       client_secret="secret",
+                       dce="https://example.invalid",
+                       dcr="dcr",
+                       stream="stream"

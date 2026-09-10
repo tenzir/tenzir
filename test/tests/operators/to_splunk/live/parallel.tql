@@ -1,0 +1,26 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 3
+      source: tenzir-test-parallel
+      sourcetype: tenzir:test:parallel
+      contains:
+        - parallel-alpha
+        - parallel-beta
+        - parallel-gamma
+---
+
+// `max_content_length` forces one request per event, so the operator keeps
+// several requests in flight at once.
+from {message: "parallel-alpha", seq: 1},
+     {message: "parallel-beta", seq: 2},
+     {message: "parallel-gamma", seq: 3}
+to_splunk env("SPLUNK_HEC_URL"),
+          hec_token=env("SPLUNK_HEC_TOKEN"),
+          source="tenzir-test-parallel",
+          sourcetype="tenzir:test:parallel",
+          index=env("SPLUNK_INDEX"),
+          max_content_length=200,
+          parallel=4,
+          compress=false

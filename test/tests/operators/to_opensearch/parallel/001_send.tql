@@ -1,0 +1,5 @@
+// Exercises the in-flight request window: the request runs in a spawned task
+// and is drained on finalization instead of being awaited inline.
+from {x: 1}, {x: 2}
+to_opensearch env("HTTP_FIXTURE_ENDPOINT"), tls=false, action="index",
+              index="main", compress=false, parallel=4

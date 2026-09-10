@@ -1,0 +1,3 @@
+// The sink is parallelizable, so the planner replicates it across instances.
+from {x: 1}
+to_splunk "https://127.0.0.1:8088", hec_token="token"

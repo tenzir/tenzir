@@ -1,0 +1,6 @@
+error: `parallel` must be at least 1
+ --> tests/operators/to_splunk/validation/error_parallel_zero.tql:7:20
+  |
+7 |           parallel=0
+  |                    ^
+  |

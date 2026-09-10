@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+to_opensearch "https://127.0.0.1:9200", action="index", index="main", parallel=0
