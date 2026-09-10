@@ -484,6 +484,11 @@ public:
       }
       return {};
     });
+    // Every instance opens its own CloudWatch client. PutLogEvents no longer
+    // requires sequence tokens, so concurrent writers to the same log stream
+    // are safe; events from different instances may interleave out of input
+    // order, which parallelism waives by design.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

@@ -1,0 +1,7 @@
+// parallelism: 4
+// Each instance opens its own NATS connection; together they publish every
+// event exactly once. Order across instances is not guaranteed.
+from {n: 1}, {n: 2}, {n: 3}, {n: 4}, {n: 5}, {n: 6}, {n: 7}, {n: 8}
+to_nats env("NATS_SUBJECT"),
+        message=n.string(),
+        url=env("NATS_URL")

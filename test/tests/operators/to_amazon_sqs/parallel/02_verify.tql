@@ -1,0 +1,12 @@
+// Verify that every event published at degree 4 arrived exactly once. The
+// fixture seeds the queue with three messages (ids 1-3); the parallel publish
+// adds ids 11-18.
+from_amazon_sqs env("LOCALSTACK_SQS_QUEUE_SAVE"), aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+}
+head 11
+this = message.parse_json()
+sort id
+select id

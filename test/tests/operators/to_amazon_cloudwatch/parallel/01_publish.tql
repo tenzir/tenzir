@@ -1,0 +1,10 @@
+// parallelism: 4
+// Each instance opens its own CloudWatch client; together they publish every
+// event exactly once. Events from different instances may interleave in the
+// log stream out of input order.
+from {id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}, {id: 6}, {id: 7}, {id: 8}
+to_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  stream=env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_WRITE"),
+  payload=id.string(),
+  batch_size=1,
+  aws_region="us-east-1"

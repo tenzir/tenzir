@@ -326,6 +326,10 @@ public:
     d.named("project_id", &to_args::project_id);
     d.named("topic_id", &to_args::topic_id);
     d.named("message", &to_args::message, "string");
+    // Every instance opens its own publisher connection, and the sink does
+    // not set ordering keys, so Pub/Sub provides no ordering guarantee that
+    // replication could weaken.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

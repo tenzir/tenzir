@@ -1,0 +1,7 @@
+// Verify that every event published at degree 4 arrived exactly once.
+from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                    start="trim_horizon",
+                    count=8,
+                    exit=true
+select id = int(string(message))
+sort id

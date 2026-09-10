@@ -530,6 +530,11 @@ public:
       }
       return {};
     });
+    // Every instance opens its own NATS connection and JetStream context.
+    // With multiple instances publishing to the same subject, messages from
+    // different instances interleave, so subscribers may observe events out
+    // of input order. Parallelism waives that ordering by design.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

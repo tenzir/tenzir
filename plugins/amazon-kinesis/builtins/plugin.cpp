@@ -160,6 +160,13 @@ public:
       }
       return {};
     });
+    // Every instance opens its own Kinesis client. `partition_key` routes
+    // records to shards but is not partitioned across instances: two events
+    // with the same partition key may be produced by different instances and
+    // therefore land in their shard out of input order. Parallelism waives
+    // that per-key ordering by design — routing affects placement, not
+    // correctness.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

@@ -1,0 +1,8 @@
+suite:
+  name: to-amazon-cloudwatch-parallel
+  mode: sequential
+fixtures: [cloudwatch]
+timeout: 120
+skip:
+  on:
+    - fixture-unavailable

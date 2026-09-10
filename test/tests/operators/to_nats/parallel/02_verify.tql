@@ -1,0 +1,7 @@
+// Verify that every event published at degree 4 arrived exactly once.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=8
+select n = int(string(message))
+sort n

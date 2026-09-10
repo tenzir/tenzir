@@ -1,0 +1,11 @@
+// Verify that every event published at degree 4 arrived exactly once.
+from_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  mode="search",
+  stream=[env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_WRITE")],
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+select id = int(message)
+sort id

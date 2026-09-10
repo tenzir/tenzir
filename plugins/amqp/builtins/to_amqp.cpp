@@ -398,6 +398,13 @@ public:
       }
       return {};
     });
+    // Every instance opens its own AMQP connection and channel. `routing_key`
+    // routes messages to queues but is not partitioned across instances: two
+    // events with the same routing key may be published by different
+    // instances and therefore arrive in their queue out of input order.
+    // Parallelism waives that per-key ordering by design — routing affects
+    // placement, not correctness.
+    d.parallelizable();
     return d.without_optimize();
   }
 

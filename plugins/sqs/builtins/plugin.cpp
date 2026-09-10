@@ -203,6 +203,11 @@ public:
       }
       return {};
     });
+    // Every instance opens its own SQS client, and SQS itself is a
+    // concurrency-safe broker: standard queues never guaranteed order across
+    // messages, and this sink does not set a message group ID. Replicating the
+    // operator therefore weakens no guarantee that a single instance provided.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

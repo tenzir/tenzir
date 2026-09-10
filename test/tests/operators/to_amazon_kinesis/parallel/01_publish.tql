@@ -1,0 +1,14 @@
+// parallelism: 4
+// Each instance opens its own Kinesis client; together they publish every
+// event exactly once. Records sharing a partition key may be produced by
+// different instances and land in their shard out of input order.
+from {id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}, {id: 6}, {id: 7}, {id: 8}
+to_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                  message=id.string(),
+                  partition_key="key",
+                  batch_size=1,
+                  aws_iam={
+                    access_key_id: "test",
+                    secret_access_key: "test",
+                    region: "us-east-1"
+                  }
