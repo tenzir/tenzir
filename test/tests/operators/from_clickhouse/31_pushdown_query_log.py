@@ -108,11 +108,12 @@ CREATE TABLE {TABLE} (
   y String,
   n Nullable(Int64),
   meta Tuple(source String, level Int64),
+  half Tuple(ok String, bad Map(String, Int64)),
   d Int64 DEFAULT x * 10,
   a String ALIAS concat(y, '-alias'),
   m Int64 MATERIALIZED x + 1
 ) ENGINE = MergeTree ORDER BY id;
-INSERT INTO {TABLE} (id, x, y, n, meta) VALUES (1, 1, 'foo', NULL, ('a', 1)), (2, -1, 'bar', 2, ('b', 2));
+INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1), ('x', map('k', 1))), (2, -1, 'bar', 2, ('b', 2), ('y', map())), (3, 0, '1.1.1.1', NULL, ('c', 3), ('z', map()));
 """
     )
     source = f'from_clickhouse table="{TABLE}",\n  {CONNECTION}\n'
@@ -128,8 +129,44 @@ INSERT INTO {TABLE} (id, x, y, n, meta) VALUES (1, 1, 'foo', NULL, ('a', 1)), (2
         " LIMIT 42"
     ), _last_select()
     # A conjunct without translation stays local and takes the limit with it.
-    _run_pipeline(tenzir, source + 'where x > 0 and y.starts_with("f")\nhead 5')
+    _run_pipeline(tenzir, source + 'where x > 0 and y.to_upper() == "FOO"\nhead 5')
     assert _last_select() == f"SELECT * FROM {TABLE} WHERE `x` > 0", _last_select()
+    # String functions with a ClickHouse counterpart go into the query.
+    _run_pipeline(
+        tenzir,
+        source + 'where y.starts_with("f") and "a" in y and y.length_bytes() > 2',
+    )
+    assert _last_select() == (
+        f"SELECT * FROM {TABLE} WHERE startsWith(`y`, 'f') AND position(`y`, 'a') > 0"
+        " AND length(`y`) > 2"
+    ), _last_select()
+    # Two columns compare directly; arithmetic and literal folding translate.
+    _run_pipeline(tenzir, source + "where x < meta.level and x / 2 > 1 - 2")
+    assert _last_select() == (
+        f"SELECT * FROM {TABLE} WHERE `x` < `meta`.`level` AND (`x` / 2) > -1"
+    ), _last_select()
+    # A nested projection narrows the tuple to the requested elements.
+    output = _run_pipeline(tenzir, source + "select id, meta.level\nwrite_ndjson")
+    assert _last_select() == (
+        f"SELECT `id`, CAST(tuple(`meta`.`level`), 'Tuple(`level` Int64)') AS `meta`"
+        f" FROM {TABLE}"
+    ), _last_select()
+    assert output.strip().splitlines() == [
+        '{"id":1,"meta":{"level":1}}',
+        '{"id":2,"meta":{"level":2}}',
+        '{"id":3,"meta":{"level":3}}',
+    ], output
+    # A tuple with an element the operator cannot decode is dropped locally as
+    # a whole. Narrowing it to a decodable element would expose a value where
+    # the unoptimized pipeline yields `null`, so it is selected whole and the
+    # local `select` sees no such field.
+    output = _run_pipeline(tenzir, source + "select id, half.ok\nwrite_ndjson")
+    assert _last_select() == f"SELECT `id`, `half` FROM {TABLE}", _last_select()
+    assert output.strip().splitlines() == [
+        '{"id":1,"half":{"ok":null}}',
+        '{"id":2,"half":{"ok":null}}',
+        '{"id":3,"half":{"ok":null}}',
+    ], output
     # Nullable equality carries a null guard so `not` keeps TQL semantics.
     _run_pipeline(tenzir, source + "where not (n == 2)")
     assert _last_select() == (
@@ -140,6 +177,24 @@ INSERT INTO {TABLE} (id, x, y, n, meta) VALUES (1, 1, 'foo', NULL, ('a', 1)), (2
     assert _last_select() == (f"SELECT * FROM {TABLE} WHERE `meta`.`level` > 1"), (
         _last_select()
     )
+    # An `ip` literal against a `String` column compares against its text, and
+    # a subnet parses the column locally behind a prefilter, which keeps the
+    # limit local as well.
+    output = _run_pipeline(
+        tenzir, source + "where y == 1.1.1.1\nselect id\nwrite_ndjson"
+    )
+    assert _last_select() == (f"SELECT `id`, `y` FROM {TABLE} WHERE `y` = '1.1.1.1'"), (
+        _last_select()
+    )
+    assert output.strip() == '{"id":3}', output
+    output = _run_pipeline(
+        tenzir, source + "where y in 1.0.0.0/8\nhead 1\nselect id\nwrite_ndjson"
+    )
+    assert _last_select() == (
+        f"SELECT `id`, `y` FROM {TABLE} WHERE (toIPv6OrNull(`y`) IS NULL OR"
+        " toIPv6OrNull(`y`) BETWEEN toIPv6('1.0.0.0') AND toIPv6('1.255.255.255'))"
+    ), _last_select()
+    assert output.strip() == '{"id":3}', output
     # A limit alone needs no schema round-trip.
     describes_before = len(_logged_queries("Describe"))
     _run_pipeline(tenzir, source + "head 1")

@@ -1,1 +1,1 @@
-ok (38 predicates)
+ok (256 predicates)

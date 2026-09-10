@@ -21,6 +21,7 @@
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/decimal.h>
 #include <clickhouse/columns/enum.h>
+#include <clickhouse/columns/factory.h>
 #include <clickhouse/columns/ip4.h>
 #include <clickhouse/columns/ip6.h>
 #include <clickhouse/columns/json.h>
@@ -1127,6 +1128,21 @@ auto block_to_table_slice(::clickhouse::Block const& block,
     runtime_schema.to_arrow_schema(),
     detail::narrow<std::int64_t>(block.GetRowCount()), std::move(arrays));
   return table_slice{std::move(batch), std::move(runtime_schema)};
+}
+
+auto is_decodable_type(std::string_view type) -> bool {
+  // The client builds the columns it receives with the same factory, so a type
+  // it rejects never reaches the decoder either.
+  try {
+    auto column = ::clickhouse::CreateColumnByType(std::string{type});
+    if (not column) {
+      return false;
+    }
+    auto dh = null_diagnostic_handler{};
+    return infer_type(column->Type(), value_path{}, dh).has_value();
+  } catch (std::exception const&) {
+    return false;
+  }
 }
 
 } // namespace tenzir::plugins::clickhouse

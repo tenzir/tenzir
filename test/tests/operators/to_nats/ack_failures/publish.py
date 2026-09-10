@@ -60,16 +60,21 @@ def main() -> None:
             "--defaults",
         ]
     )
+    # Keep all publishes in one slice so errors are drained only after the last
+    # message. With one pending publish, sending the final, valid message waits
+    # for all five rejection callbacks to finish before that drain.
     pipeline = f"""
 from {{message: "one"}},
      {{message: "two"}},
      {{message: "three"}},
      {{message: "four"}},
-     {{message: "five"}}
+     {{message: "five"}},
+     {{message: "x"}}
+batch 6
 to_nats "{subject}",
         message=this.message,
         url=env("NATS_URL"),
-        _max_pending=5
+        _max_pending=1
 """.strip()
     result = subprocess.run(
         [

@@ -1,4 +1,4 @@
-// Enum columns have no exact translation, so the predicate runs locally.
+// Enum names compare by name in both TQL and ClickHouse, so this goes into SQL.
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
