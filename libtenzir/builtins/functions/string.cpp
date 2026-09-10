@@ -215,39 +215,34 @@ public:
       for (auto [subject, arg] :
            split_multi_series(eval(subject_expr), eval(arg_expr))) {
         TENZIR_ASSERT(subject.length() == arg.length());
-        auto f = detail::overload{
-          [&](const arrow::StringArray& subject,
-              const arrow::StringArray& arg) {
-            auto subject_lc = std::shared_ptr<arrow::StringArray>{};
-            auto arg_lc = std::shared_ptr<arrow::StringArray>{};
-            const auto* s = &subject;
-            const auto* a = &arg;
-            if (ignore_case) {
-              subject_lc = fold_case(subject);
-              arg_lc = fold_case(arg);
-              s = subject_lc.get();
-              a = arg_lc.get();
-            }
-            for (auto i = int64_t{0}; i < s->length(); ++i) {
-              if (s->IsNull(i) or a->IsNull(i)) {
-                check(b.AppendNull());
-                continue;
-              }
-              auto result = bool{};
-              if (starts_with_) {
-                result = s->Value(i).starts_with(a->Value(i));
-              } else {
-                result = s->Value(i).ends_with(a->Value(i));
-              }
-              check(b.Append(result));
-            }
-          },
-          [&](const auto&, const auto&) {
-            // TODO: Handle null array. Emit warning.
-            check(b.AppendNulls(arg.length()));
-          },
-        };
-        match(std::tie(*subject.array, *arg.array), f);
+        auto const* subject_array = try_as<arrow::StringArray>(&*subject.array);
+        auto const* arg_array = try_as<arrow::StringArray>(&*arg.array);
+        if (not subject_array or not arg_array) {
+          // TODO: Emit a warning for non-null arrays.
+          check(b.AppendNulls(arg.length()));
+          continue;
+        }
+        auto subject_lc = std::shared_ptr<arrow::StringArray>{};
+        auto arg_lc = std::shared_ptr<arrow::StringArray>{};
+        if (ignore_case) {
+          subject_lc = fold_case(*subject_array);
+          arg_lc = fold_case(*arg_array);
+          subject_array = subject_lc.get();
+          arg_array = arg_lc.get();
+        }
+        for (auto i = int64_t{0}; i < subject_array->length(); ++i) {
+          if (subject_array->IsNull(i) or arg_array->IsNull(i)) {
+            check(b.AppendNull());
+            continue;
+          }
+          auto result = bool{};
+          if (starts_with_) {
+            result = subject_array->Value(i).starts_with(arg_array->Value(i));
+          } else {
+            result = subject_array->Value(i).ends_with(arg_array->Value(i));
+          }
+          check(b.Append(result));
+        }
       }
       return series{bool_type{}, finish(b)};
     });
@@ -428,90 +423,96 @@ public:
         return failure::promise();
       }
     }
-    return function_use::make(
-      [subject_expr = std::move(subject_expr),
-       length_expr = std::move(length_expr), pad_char = std::move(pad_char),
-       pad_left = pad_left_,
-       name = name_](evaluator eval, session ctx) -> multi_series {
-        auto b = arrow::StringBuilder{};
-        for (auto [subject, length] :
-             split_multi_series(eval(subject_expr), eval(length_expr))) {
-          TENZIR_ASSERT(subject.length() == length.length());
-          auto f = detail::overload{
-            [&](const arrow::StringArray& subject_array,
-                const concepts::one_of<arrow::Int64Array,
-                                       arrow::UInt64Array> auto& length_array) {
-              for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
-                if (subject_array.IsNull(i) or length_array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
-                }
-                auto str = subject_array.GetView(i);
-                auto target_length
-                  = detail::narrow<int64_t>(length_array.Value(i));
-                // For simple string length, we can use the string view's size
-                // for ASCII or count UTF-8 characters manually.
-                auto str_length = int64_t{0};
-                auto ptr = str.data();
-                auto end = ptr + str.size();
-                while (ptr < end) {
-                  // Skip UTF-8 continuation bytes (10xxxxxx)
-                  if ((*ptr & 0xC0) != 0x80) {
-                    str_length++;
-                  }
-                  ptr++;
-                }
-                if (str_length >= target_length) {
-                  // String is already long enough.
-                  check(b.Append(str));
-                  continue;
-                }
-                // Calculate padding needed.
-                auto padding_needed
-                  = static_cast<size_t>(target_length - str_length);
-                std::string result;
-                result.reserve(str.size()
-                               + padding_needed * pad_char.inner.size());
-                if (pad_left) {
-                  // Pad on the left
-                  for (size_t j = 0; j < padding_needed; ++j) {
-                    result += pad_char.inner;
-                  }
-                  result += str;
-                } else {
-                  // Pad on the right
-                  result = str;
-                  for (size_t j = 0; j < padding_needed; ++j) {
-                    result += pad_char.inner;
-                  }
-                }
-                check(b.Append(result));
-              }
-            },
-            [&]<class T, class U>(const T&, const U&) {
-              if constexpr (not detail::is_any_v<T, arrow::StringArray,
-                                                 arrow::NullArray>) {
-                diagnostic::warning("`{}` expected `string`, but got `{}`",
-                                    name, subject.type.kind())
-                  .primary(subject_expr)
-                  .emit(ctx);
-              }
-              if constexpr (not detail::is_any_v<U, arrow::Int64Array,
-                                                 arrow::UInt64Array,
-                                                 arrow::NullArray>) {
-                diagnostic::warning("`{}` expected `int`, but got `{}`", name,
-                                    length.type.kind())
-                  .primary(length_expr)
-                  .emit(ctx);
-              }
-              check(b.AppendNulls(subject.length()));
-            },
-          };
-          match(std::tie(*subject.array, *length.array), f);
+    return function_use::make([subject_expr = std::move(subject_expr),
+                               length_expr = std::move(length_expr),
+                               pad_char = std::move(pad_char),
+                               pad_left = pad_left_, name = name_](
+                                evaluator eval, session ctx) -> multi_series {
+      auto b = arrow::StringBuilder{};
+      for (auto [subject, length] :
+           split_multi_series(eval(subject_expr), eval(length_expr))) {
+        TENZIR_ASSERT(subject.length() == length.length());
+        auto const* subject_array = try_as<arrow::StringArray>(&*subject.array);
+        auto const* signed_length_array
+          = try_as<arrow::Int64Array>(&*length.array);
+        auto const* unsigned_length_array
+          = try_as<arrow::UInt64Array>(&*length.array);
+        auto const subject_is_null = is<arrow::NullArray>(*subject.array);
+        auto const length_is_null = is<arrow::NullArray>(*length.array);
+        if (not subject_array
+            or (not signed_length_array and not unsigned_length_array)) {
+          if (not subject_is_null and not subject_array) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name,
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+          }
+          if (not length_is_null and not signed_length_array
+              and not unsigned_length_array) {
+            diagnostic::warning("`{}` expected `int`, but got `{}`", name,
+                                length.type.kind())
+              .primary(length_expr)
+              .emit(ctx);
+          }
+          check(b.AppendNulls(subject.length()));
+          continue;
         }
+        auto append = [&](auto const& length_array) {
+          for (auto i = int64_t{0}; i < subject_array->length(); ++i) {
+            if (subject_array->IsNull(i) or length_array.IsNull(i)) {
+              check(b.AppendNull());
+              continue;
+            }
+            auto str = subject_array->GetView(i);
+            auto target_length = detail::narrow<int64_t>(length_array.Value(i));
+            // For simple string length, we can use the string view's size
+            // for ASCII or count UTF-8 characters manually.
+            auto str_length = int64_t{0};
+            auto ptr = str.data();
+            auto end = ptr + str.size();
+            while (ptr < end) {
+              // Skip UTF-8 continuation bytes (10xxxxxx)
+              if ((*ptr & 0xC0) != 0x80) {
+                str_length++;
+              }
+              ptr++;
+            }
+            if (str_length >= target_length) {
+              // String is already long enough.
+              check(b.Append(str));
+              continue;
+            }
+            // Calculate padding needed.
+            auto padding_needed
+              = static_cast<size_t>(target_length - str_length);
+            auto result = std::string{};
+            result.reserve(str.size() + padding_needed * pad_char.inner.size());
+            if (pad_left) {
+              // Pad on the left
+              for (size_t j = 0; j < padding_needed; ++j) {
+                result += pad_char.inner;
+              }
+              result += str;
+            } else {
+              // Pad on the right
+              result = str;
+              for (size_t j = 0; j < padding_needed; ++j) {
+                result += pad_char.inner;
+              }
+            }
+            check(b.Append(result));
+          }
+        };
+        if (signed_length_array) {
+          append(*signed_length_array);
+        } else {
+          TENZIR_ASSERT(unsigned_length_array);
+          append(*unsigned_length_array);
+        }
+      }
 
-        return series{string_type{}, finish(b)};
-      });
+      return series{string_type{}, finish(b)};
+    });
   }
 
 private:
@@ -549,83 +550,91 @@ public:
       for (auto [subject, count] :
            split_multi_series(eval(subject_expr), eval(count_expr))) {
         TENZIR_ASSERT(subject.length() == count.length());
-        auto f = detail::overload{
-          [&](arrow::StringArray const& subject_array,
-              concepts::one_of<arrow::Int64Array,
-                               arrow::UInt64Array> auto const& count_array) {
-            for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
-              if (subject_array.IsNull(i) or count_array.IsNull(i)) {
-                check(b.AppendNull());
-                continue;
-              }
-              auto str = subject_array.GetView(i);
-              auto n = uint64_t{};
-              if constexpr (std::same_as<std::decay_t<decltype(count_array)>,
-                                         arrow::Int64Array>) {
-                auto value = count_array.Value(i);
-                if (value < 0) {
-                  diagnostic::warning("`repeat` expected non-negative count, "
-                                      "but got {}",
-                                      value)
-                    .primary(count_expr)
-                    .emit(ctx);
-                  check(b.AppendNull());
-                  continue;
-                }
-                n = static_cast<uint64_t>(value);
-              } else {
-                n = count_array.Value(i);
-              }
-              if (n == 0 or str.empty()) {
-                check(b.Append(""));
-                continue;
-              }
-              if (n > max_string_size / str.size()) {
-                diagnostic::warning(
-                  "`repeat` result exceeds maximum string size")
+        auto const* subject_array = try_as<arrow::StringArray>(&*subject.array);
+        auto const* signed_count_array
+          = try_as<arrow::Int64Array>(&*count.array);
+        auto const* unsigned_count_array
+          = try_as<arrow::UInt64Array>(&*count.array);
+        auto const subject_is_null = is<arrow::NullArray>(*subject.array);
+        auto const count_is_null = is<arrow::NullArray>(*count.array);
+        if (not subject_array
+            or (not signed_count_array and not unsigned_count_array)) {
+          if (not subject_is_null and not subject_array) {
+            diagnostic::warning("`repeat` expected `string`, but got `{}`",
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+          }
+          if (not count_is_null and not signed_count_array
+              and not unsigned_count_array) {
+            diagnostic::warning("`repeat` expected `int`, but got `{}`",
+                                count.type.kind())
+              .primary(count_expr)
+              .emit(ctx);
+          }
+          check(b.AppendNulls(subject.length()));
+          continue;
+        }
+        auto append = [&](auto const& count_array) {
+          for (auto i = int64_t{0}; i < subject_array->length(); ++i) {
+            if (subject_array->IsNull(i) or count_array.IsNull(i)) {
+              check(b.AppendNull());
+              continue;
+            }
+            auto str = subject_array->GetView(i);
+            auto n = uint64_t{};
+            if constexpr (std::same_as<std::decay_t<decltype(count_array)>,
+                                       arrow::Int64Array>) {
+              auto value = count_array.Value(i);
+              if (value < 0) {
+                diagnostic::warning("`repeat` expected non-negative count, "
+                                    "but got {}",
+                                    value)
                   .primary(count_expr)
                   .emit(ctx);
                 check(b.AppendNull());
                 continue;
               }
-              auto size = static_cast<size_t>(n) * str.size();
-              if (size > max_string_size - total_size) {
-                diagnostic::warning(
-                  "`repeat` result exceeds maximum string array size")
-                  .primary(count_expr)
-                  .emit(ctx);
-                check(b.AppendNull());
-                continue;
-              }
-              auto result = std::string{};
-              result.reserve(size);
-              for (auto j = uint64_t{0}; j < n; ++j) {
-                result += str;
-              }
-              check(b.Append(result));
-              total_size += size;
+              n = static_cast<uint64_t>(value);
+            } else {
+              n = count_array.Value(i);
             }
-          },
-          [&]<class T, class U>(T const&, U const&) {
-            if constexpr (not detail::is_any_v<T, arrow::StringArray,
-                                               arrow::NullArray>) {
-              diagnostic::warning("`repeat` expected `string`, but got `{}`",
-                                  subject.type.kind())
-                .primary(subject_expr)
-                .emit(ctx);
+            if (n == 0 or str.empty()) {
+              check(b.Append(""));
+              continue;
             }
-            if constexpr (not detail::is_any_v<U, arrow::Int64Array,
-                                               arrow::UInt64Array,
-                                               arrow::NullArray>) {
-              diagnostic::warning("`repeat` expected `int`, but got `{}`",
-                                  count.type.kind())
+            if (n > max_string_size / str.size()) {
+              diagnostic::warning("`repeat` result exceeds maximum string "
+                                  "size")
                 .primary(count_expr)
                 .emit(ctx);
+              check(b.AppendNull());
+              continue;
             }
-            check(b.AppendNulls(subject.length()));
-          },
+            auto size = static_cast<size_t>(n) * str.size();
+            if (size > max_string_size - total_size) {
+              diagnostic::warning(
+                "`repeat` result exceeds maximum string array size")
+                .primary(count_expr)
+                .emit(ctx);
+              check(b.AppendNull());
+              continue;
+            }
+            auto result = std::string{};
+            result.reserve(size);
+            for (auto j = uint64_t{0}; j < n; ++j) {
+              result += str;
+            }
+            check(b.Append(result));
+            total_size += size;
+          }
         };
-        match(std::tie(*subject.array, *count.array), f);
+        if (signed_count_array) {
+          append(*signed_count_array);
+        } else {
+          TENZIR_ASSERT(unsigned_count_array);
+          append(*unsigned_count_array);
+        }
       }
       return series{string_type{}, finish(b)};
     });
@@ -868,68 +877,55 @@ public:
             check(b.Append(*result));
             total_size += result->size();
           };
-          auto f = detail::overload{
-            [&](arrow::StringArray const& subject,
-                arrow::StringArray const& pattern,
-                arrow::StringArray const& replacement) {
-              for (auto i = int64_t{0}; i < subject.length(); ++i) {
-                if (subject.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
-                }
-                auto pattern_value
-                  = pattern.IsNull(i) ? std::string_view{} : pattern.Value(i);
-                auto replacement_value = replacement.IsNull(i)
-                                           ? std::string_view{}
-                                           : replacement.Value(i);
-                append_replaced(subject.Value(i), pattern_value,
-                                replacement_value);
-              }
-            },
-            [&]<class Subject, class Pattern, class Replacement>(
-              Subject const& subject_array, Pattern const& pattern_array,
-              Replacement const&) {
-              if constexpr (not detail::is_any_v<Subject, arrow::StringArray,
-                                                 arrow::NullArray>
-                            or not detail::is_any_v<Pattern, arrow::StringArray,
-                                                    arrow::NullArray>
-                            or not detail::is_any_v<Replacement,
-                                                    arrow::StringArray,
-                                                    arrow::NullArray>) {
-                if (not warned) {
-                  warned = true;
-                  diagnostic::warning("`replace` expected `string`, but got "
-                                      "`{}`, "
-                                      "`{}`, and `{}`",
-                                      subject.type.kind(), pattern.type.kind(),
-                                      replacement.type.kind())
-                    .primary(subject_expr)
-                    .primary(pattern_expr)
-                    .primary(replacement_expr)
-                    .emit(ctx);
-                }
-                check(b.AppendNulls(subject_array.length()));
-              } else if constexpr (std::same_as<Subject, arrow::NullArray>) {
-                check(b.AppendNulls(subject_array.length()));
-              } else {
-                for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
-                  if (subject_array.IsNull(i)) {
-                    check(b.AppendNull());
-                    continue;
-                  }
-                  auto pattern_value = std::string_view{};
-                  if constexpr (std::same_as<Pattern, arrow::StringArray>) {
-                    if (not pattern_array.IsNull(i)) {
-                      pattern_value = pattern_array.Value(i);
-                    }
-                  }
-                  append_replaced(subject_array.Value(i), pattern_value, {});
-                }
-              }
-            },
-          };
-          match(std::tie(*subject.array, *pattern.array, *replacement.array),
-                f);
+          auto const* subject_array
+            = try_as<arrow::StringArray>(&*subject.array);
+          auto const* pattern_array
+            = try_as<arrow::StringArray>(&*pattern.array);
+          auto const* replacement_array
+            = try_as<arrow::StringArray>(&*replacement.array);
+          auto const subject_is_null = is<arrow::NullArray>(*subject.array);
+          auto const pattern_is_null = is<arrow::NullArray>(*pattern.array);
+          auto const replacement_is_null
+            = is<arrow::NullArray>(*replacement.array);
+          if ((not subject_array and not subject_is_null)
+              or (not pattern_array and not pattern_is_null)
+              or (not replacement_array and not replacement_is_null)) {
+            if (not warned) {
+              warned = true;
+              diagnostic::warning("`replace` expected `string`, but got `{}`, "
+                                  "`{}`, and `{}`",
+                                  subject.type.kind(), pattern.type.kind(),
+                                  replacement.type.kind())
+                .primary(subject_expr)
+                .primary(pattern_expr)
+                .primary(replacement_expr)
+                .emit(ctx);
+            }
+            check(b.AppendNulls(subject.length()));
+            continue;
+          }
+          if (subject_is_null) {
+            check(b.AppendNulls(subject.length()));
+            continue;
+          }
+          TENZIR_ASSERT(subject_array);
+          for (auto i = int64_t{0}; i < subject_array->length(); ++i) {
+            if (subject_array->IsNull(i)) {
+              check(b.AppendNull());
+              continue;
+            }
+            auto pattern_value = std::string_view{};
+            if (pattern_array and not pattern_array->IsNull(i)) {
+              pattern_value = pattern_array->Value(i);
+            }
+            auto replacement_value = std::string_view{};
+            if (pattern_array and replacement_array
+                and not replacement_array->IsNull(i)) {
+              replacement_value = replacement_array->Value(i);
+            }
+            append_replaced(subject_array->Value(i), pattern_value,
+                            replacement_value);
+          }
         }
         return series{result_type, finish(b)};
       });
@@ -1238,49 +1234,55 @@ public:
               check(b.Append(equal_at(i)));
             }
           };
-          auto f = detail::overload{
-            [&](const arrow::StringArray& l, const arrow::StringArray& r) {
-              auto l_lc = std::shared_ptr<arrow::StringArray>{};
-              auto r_lc = std::shared_ptr<arrow::StringArray>{};
-              const auto* lp = &l;
-              const auto* rp = &r;
-              if (ignore_case) {
-                l_lc = fold_case(l);
-                r_lc = fold_case(r);
-                lp = l_lc.get();
-                rp = r_lc.get();
-              }
-              append_null_aware(l, r, [&](int64_t i) {
-                return lp->Value(i) == rp->Value(i);
-              });
-            },
-            [&](const arrow::NullArray&, const arrow::NullArray&) {
-              check(b.AppendValues(left.length(), true));
-            },
-            [&](const arrow::StringArray& l, const arrow::NullArray&) {
-              for (auto i = int64_t{0}; i < l.length(); ++i) {
-                check(b.Append(l.IsNull(i)));
-              }
-            },
-            [&](const arrow::NullArray&, const arrow::StringArray& r) {
-              for (auto i = int64_t{0}; i < r.length(); ++i) {
-                check(b.Append(r.IsNull(i)));
-              }
-            },
-            [&](const auto&, const auto&) {
-              if (not warned) {
-                warned = true;
-                diagnostic::warning("`equals` expected `string`, but got `{}` "
-                                    "and `{}`",
-                                    left.type.kind(), right.type.kind())
-                  .primary(left_expr)
-                  .primary(right_expr)
-                  .emit(ctx);
-              }
-              check(b.AppendNulls(left.length()));
-            },
-          };
-          match(std::tie(*left.array, *right.array), f);
+          auto const* left_array = try_as<arrow::StringArray>(&*left.array);
+          auto const* right_array = try_as<arrow::StringArray>(&*right.array);
+          auto const left_is_null = is<arrow::NullArray>(*left.array);
+          auto const right_is_null = is<arrow::NullArray>(*right.array);
+          if ((not left_array and not left_is_null)
+              or (not right_array and not right_is_null)) {
+            if (not warned) {
+              warned = true;
+              diagnostic::warning("`equals` expected `string`, but got `{}` "
+                                  "and `{}`",
+                                  left.type.kind(), right.type.kind())
+                .primary(left_expr)
+                .primary(right_expr)
+                .emit(ctx);
+            }
+            check(b.AppendNulls(left.length()));
+            continue;
+          }
+          if (left_is_null and right_is_null) {
+            check(b.AppendValues(left.length(), true));
+            continue;
+          }
+          if (left_array and right_is_null) {
+            for (auto i = int64_t{0}; i < left_array->length(); ++i) {
+              check(b.Append(left_array->IsNull(i)));
+            }
+            continue;
+          }
+          if (left_is_null and right_array) {
+            for (auto i = int64_t{0}; i < right_array->length(); ++i) {
+              check(b.Append(right_array->IsNull(i)));
+            }
+            continue;
+          }
+          TENZIR_ASSERT(left_array);
+          TENZIR_ASSERT(right_array);
+          auto left_lc = std::shared_ptr<arrow::StringArray>{};
+          auto right_lc = std::shared_ptr<arrow::StringArray>{};
+          auto const* left_values = left_array;
+          auto const* right_values = right_array;
+          if (ignore_case) {
+            left_lc = fold_case(*left_array);
+            right_lc = fold_case(*right_array);
+            left_values = left_lc.get();
+            right_values = right_lc.get();
+          }
+          append_null_aware(*left_array, *right_array, [&](int64_t i) {
+            return left_values->Value(i) == right_values->Value(i);
+          });
         }
         return series{bool_type{}, finish(b)};
       });
