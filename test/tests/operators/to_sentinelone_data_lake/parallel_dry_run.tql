@@ -1,0 +1,7 @@
+// parallelism: 4
+// Dry runs print their request transcript to stdout, so the operator must not
+// be replicated: the output stays a deterministic single-instance transcript
+// even when the pipeline runs with a higher degree of parallelism.
+from {events:[{}, {data: {type: "security.event", message: "Test log"}}, {data: null}]}
+unroll events
+to_sentinelone_data_lake "https://example.com", token="TOKEN", _dry_run=true
