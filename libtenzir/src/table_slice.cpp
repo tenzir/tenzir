@@ -1794,14 +1794,11 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
                     })) {
       continue;
     }
-    for (const auto& index : layout.resolve_key_suffix(leaf.field.name)) {
-      // For historical reasons, resolve_key_suffix also suffix matches for dots
-      // within a field name. That's pretty stupid, and it can lead to wrong
-      // conflicts being detected here after flattening, so we check again if
-      // the full name actually clashes.
-      if (leaf.field.name != layout.field(index).name) {
+    for (auto const& other : layout.leaves()) {
+      if (leaf.field.name != other.field.name) {
         continue;
       }
+      auto const& index = other.index;
       if (index <= leaf.index) {
         continue;
       }

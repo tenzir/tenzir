@@ -12,6 +12,8 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/legacy_type.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/test/test.hpp"
 
 using namespace tenzir;
@@ -82,6 +84,49 @@ TEST("concepts - cyclic definition") {
                                   "a.bar == 1 || b.baR == 1"));
   auto result = resolve(t, exp);
   CHECK_EQUAL(result, ref);
+}
+
+TEST("concepts - schema prefixes require exact field paths") {
+  auto const ts = taxonomies{concepts_map{
+    {"traffic", {"", {"flow.pkts_toserver", "flow.bytes_toserver"}, {}}},
+  }};
+  auto const nested = record_type{
+    {"bytes_toserver", uint64_type{}},
+    {"bypassed", record_type{{"pkts_toserver", uint64_type{}}}},
+  };
+  auto const expr = unbox(to<expression>("traffic == 1"));
+  auto const expected = unbox(to<expression>("flow.bytes_toserver == 1"));
+  for (auto const& rt : {nested, flatten(nested)}) {
+    auto const schema = type{"flow", rt};
+    auto resolved = resolve(ts, expr, schema);
+    REQUIRE(resolved);
+    CHECK_EQUAL(*resolved, expected);
+    auto tailored = tailor(*resolved, schema);
+    REQUIRE(tailored);
+    CHECK_EQUAL(
+      *tailored,
+      (expression{predicate{data_extractor{type{uint64_type{}}, 0},
+                            relational_operator::equal, data{uint64_t{1}}}}));
+  }
+}
+
+TEST("concepts - field targets are not concept aliases") {
+  modules::init({}, {},
+                concepts_map{
+                  {"test.field_target", {"", {"flow.unrelated"}, {}}},
+                });
+  auto const ts = taxonomies{concepts_map{
+    {"traffic", {"", {"flow.kept", "test.field_target"}, {}}},
+  }};
+  auto const schema = type{"flow", record_type{
+                                     {"kept", uint64_type{}},
+                                     {"unrelated", uint64_type{}},
+                                   }};
+  auto const expr = unbox(to<expression>("traffic == 1"));
+  auto const expected = unbox(to<expression>("flow.kept == 1"));
+  auto resolved = resolve(ts, expr, schema);
+  REQUIRE(resolved);
+  CHECK_EQUAL(*resolved, expected);
 }
 
 TEST("concepts - convert fails for non-list input") {

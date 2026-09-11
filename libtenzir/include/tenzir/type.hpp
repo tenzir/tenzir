@@ -1314,33 +1314,20 @@ public:
   /// Resolves a flat index into an offset.
   [[nodiscard]] offset resolve_flat_index(size_t flat_index) const noexcept;
 
-  /// Resolves a key or a concept into an offset.
-  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
-  /// but not 'x.y_other.z' .
+  /// Resolves an exact field path, falling back to concept resolution.
+  /// Concept targets may begin with the full schema name followed by a dot.
+  /// The path after that prefix must match exactly from the record root.
   [[nodiscard]] generator<offset>
   resolve_key_or_concept(std::string_view key,
                          std::string_view schema_name) const noexcept;
 
-  /// Resolves a key or a concept into an offset.
-  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
-  /// but not 'x.y_other.z' .
+  /// Returns the first result of `resolve_key_or_concept`.
   [[nodiscard]] Option<offset>
   resolve_key_or_concept_once(std::string_view key,
                               std::string_view schema_name) const noexcept;
 
-  /// Resolves a key into an offset.
-  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
-  /// but not 'x.y_other.z' .
+  /// Resolves an exact field path into an offset.
   [[nodiscard]] Option<offset> resolve_key(std::string_view key) const noexcept;
-
-  /// Resolves a key into a list of offsets by suffix matching the given key.
-  /// @note This only matches on full keys, so the key 'y.z' matches 'x.y.z' but
-  /// not 'x.other_y.z'.
-  /// @note The key may optionally begin with a given prefix for backwards
-  /// compatilibty with the old type system.
-  [[nodiscard]] generator<offset>
-  resolve_key_suffix(std::string_view key, std::string_view prefix
-                                           = "") const noexcept;
 
   /// Resolves a type extractor into a list of offsets.
   /// @note If the extractor does not begin with ':', the function returns no

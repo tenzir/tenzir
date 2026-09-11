@@ -1,0 +1,4 @@
+// Keep publishing until the node fixture stops. Subscriber startup timing
+// cannot exhaust the input before the predicate is exercised.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: "every 10ms {\n  from {name: \"x\"}, {name: \"y\"}\n  @name = \"file\"\n}\npublish \"schema-prefix-collision\""}
+discard

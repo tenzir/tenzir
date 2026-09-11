@@ -179,10 +179,13 @@ WITH_FIXTURE(fixture) {
       auto expr = unbox(to<expression>(":ip in 192.168.0.0/24"));
       auto resolved = tenzir::match(expr, type_resolver(r));
       CHECK_EQUAL(resolved, normalized);
-      MESSAGE("field extractor - distribution");
+      MESSAGE("field extractor - exact path");
       expr = unbox(to<expression>("host in 192.168.0.0/24"));
       resolved = unbox(tenzir::match(expr, type_resolver(r)));
-      CHECK_EQUAL(resolved, normalized);
+      CHECK_EQUAL(resolved, expression{});
+      expr = unbox(to<expression>("orig.host in 192.168.0.0/24"));
+      resolved = unbox(tenzir::match(expr, type_resolver(r)));
+      CHECK_EQUAL(resolved, expression{pred0});
     }
     {
       auto pred0 = predicate{data_extractor{type{ip_type{}}, 2},
@@ -194,10 +197,13 @@ WITH_FIXTURE(fixture) {
       auto expr = unbox(to<expression>(":ip !in 192.168.0.0/24"));
       auto resolved = tenzir::match(expr, type_resolver(r));
       CHECK_EQUAL(resolved, normalized);
-      MESSAGE("field extractor - distribution with negation");
+      MESSAGE("field extractor - exact path with negation");
       expr = unbox(to<expression>("host !in 192.168.0.0/24"));
       resolved = unbox(tenzir::match(expr, type_resolver(r)));
-      CHECK_EQUAL(resolved, normalized);
+      CHECK_EQUAL(resolved, expression{});
+      expr = unbox(to<expression>("resp.host !in 192.168.0.0/24"));
+      resolved = unbox(tenzir::match(expr, type_resolver(r)));
+      CHECK_EQUAL(resolved, expression{pred1});
     }
     {
       auto pred0 = predicate{data_extractor{port, 3},
@@ -217,6 +223,33 @@ WITH_FIXTURE(fixture) {
       expr = unbox(to<expression>(":uint64 == 80"));
       resolved = tenzir::match(expr, type_resolver(r));
       CHECK_EQUAL(resolved, all_uints);
+    }
+  }
+
+  TEST("field extractors resolve exact paths with schema prefixes") {
+    auto const nested = record_type{
+      {"pkts_toserver", uint64_type{}},
+      {"bypassed", record_type{{"pkts_toserver", uint64_type{}}}},
+    };
+    for (auto const& rt : {nested, flatten(nested)}) {
+      auto const schema = type{"flow", rt};
+      auto const root
+        = expression{predicate{data_extractor{type{uint64_type{}}, 0},
+                               relational_operator::equal, data{uint64_t{10}}}};
+      CHECK_EQUAL(tenzir::match(to_expr("pkts_toserver == 10"),
+                                type_resolver{schema}),
+                  root);
+      CHECK_EQUAL(tenzir::match(to_expr("flow.pkts_toserver == 10"),
+                                type_resolver{schema}),
+                  root);
+      CHECK_EQUAL(tenzir::match(to_expr("flow.bypassed.pkts_toserver == 10"),
+                                type_resolver{schema}),
+                  (expression{predicate{data_extractor{type{uint64_type{}}, 1},
+                                        relational_operator::equal,
+                                        data{uint64_t{10}}}}));
+      CHECK_EQUAL(tenzir::match(to_expr("bypassed == null"),
+                                type_resolver{schema}),
+                  expression{});
     }
   }
 

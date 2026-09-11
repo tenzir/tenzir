@@ -10,6 +10,7 @@
 
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <arrow/api.h>
@@ -18,6 +19,25 @@
 #include <cstring>
 
 namespace tenzir {
+
+TEST("flatten renames exact duplicates but not suffix matches") {
+  auto builder = series_builder{};
+  auto row = builder.record();
+  row.field("x").data(int64_t{1});
+  row.field("a.x").data(int64_t{2});
+  row.field("a").record().field("x").data(int64_t{3});
+  auto slices = builder.finish_as_table_slice("test");
+  REQUIRE_EQUAL(slices.size(), 1u);
+  auto result = flatten(slices[0]);
+  auto const& layout = as<record_type>(result.slice.schema());
+  REQUIRE_EQUAL(layout.num_fields(), 3u);
+  CHECK_EQUAL(layout.field(0).name, "x");
+  CHECK_EQUAL(layout.field(1).name, "a.x");
+  CHECK_EQUAL(layout.field(2).name, "a.x_1");
+  CHECK_EQUAL(result.renamed_fields,
+              (std::vector<std::string>{"a.x -> a.x_1"}));
+  CHECK_EQUAL(materialize(result.slice.at(0, 2)), data{int64_t{3}});
+}
 
 TEST("record batch from struct array preserves row nulls") {
   auto int_builder = arrow::Int64Builder{arrow_memory_pool()};

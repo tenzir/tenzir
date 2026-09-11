@@ -2955,12 +2955,17 @@ generator<offset> record_type::resolve_key_or_concept(
   }};
   while (not index.empty()) {
     const auto& [record, remaining_key] = history.back();
-    TENZIR_ASSERT(record);
-    const auto* fields = record->fields();
-    TENZIR_ASSERT(fields);
+    // A damaged type read from a partition synopsis may contain a record
+    // without fields. Treat it as empty instead of taking down the node.
+    const auto* fields = record ? record->fields() : nullptr;
+    if (not fields) {
+      TENZIR_WARN("encountered record type without fields while resolving "
+                  "key `{}`; treating it as an empty record",
+                  key);
+    }
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
-    if (index.back() >= fields->size() or remaining_key.empty()) {
+    if (not fields or index.back() >= fields->size() or remaining_key.empty()) {
       history.pop_back();
       index.pop_back();
       if (not index.empty()) {
@@ -3025,8 +3030,7 @@ generator<offset> record_type::resolve_key_or_concept(
         break;
     }
   }
-  // As a fallback, try to resolve the key as a concept, if the schema name is
-  // known.
+  // Schema qualification and concept targets require a known schema name.
   if (schema_name.empty()) {
     co_return;
   }
@@ -3041,6 +3045,13 @@ generator<offset> record_type::resolve_key_or_concept(
     }
     return key.substr(1);
   };
+  // A concept with the same name must not hide a schema-qualified field.
+  if (auto qualified_key = try_strip_schema_name(key)) {
+    if (auto result = resolve_key(*qualified_key)) {
+      co_yield std::move(*result);
+      co_return;
+    }
+  }
   const auto resolved_keys
     = resolve_concepts(modules::concepts(), {std::string{key}});
   for (const auto& resolved_key : resolved_keys) {
@@ -3064,129 +3075,6 @@ Option<offset> record_type::resolve_key(std::string_view key) const noexcept {
   return resolve_key_or_concept_once(key, {});
 }
 
-generator<offset>
-record_type::resolve_key_suffix(std::string_view key,
-                                std::string_view prefix) const noexcept {
-  if (key.empty()) {
-    co_return;
-  }
-  auto index = offset{0};
-  auto history = std::vector{
-    std::pair{
-      table().type_as_record_type(),
-      std::vector{key},
-    },
-  };
-  const auto* prefix_begin = prefix.begin();
-  while (prefix_begin != prefix.end()) {
-    const auto [prefix_mismatch, key_mismatch]
-      = std::mismatch(prefix_begin, prefix.end(), key.begin(), key.end());
-    if (prefix_mismatch == prefix.end() and key_mismatch != key.end()
-        and *key_mismatch == '.') {
-      history[0].second.push_back(key.substr(1 + key_mismatch - key.begin()));
-    }
-    prefix_begin = std::find(prefix_begin, prefix.end(), '.');
-    if (prefix_begin == prefix.end()) {
-      break;
-    }
-    ++prefix_begin;
-  }
-  while (not index.empty()) {
-    auto& [record, remaining_keys] = history.back();
-    // A damaged or non-canonical type (e.g. a partition synopsis read back
-    // from a corrupt file) may contain a record without a field vector. Such
-    // a record cannot contain the key we are looking for, so treat it like
-    // an empty record instead of asserting; this code runs in the catalog,
-    // where an assertion failure takes down the whole node. Note that we
-    // cannot print the offending type itself: formatting a record without
-    // fields would dereference the very null vector we are guarding against.
-    const auto* fields = record ? record->fields() : nullptr;
-    if (not fields) {
-      TENZIR_WARN("encountered record type without fields while resolving "
-                  "key suffix `{}` with prefix `{}`; treating it as an empty "
-                  "record",
-                  key, prefix);
-    }
-    // This is our exit condition: If we arrived at the end of a record, we
-    // need to step out one layer. We must also reset the target key at this
-    // point.
-    if (not fields or index.back() >= fields->size()) {
-      history.pop_back();
-      index.pop_back();
-      if (not index.empty()) {
-        ++index.back();
-      }
-      continue;
-    }
-    const auto* field = fields->Get(index.back());
-    TENZIR_ASSERT(field);
-    const auto* field_name = field->name();
-    TENZIR_ASSERT(field_name);
-    const auto* field_type = resolve_transparent(field->type_nested_root());
-    TENZIR_ASSERT(field_type);
-    switch (field_type->type_type()) {
-      case fbs::type::Type::pattern_type:
-        __builtin_unreachable();
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type:
-      case fbs::type::Type::int64_type:
-      case fbs::type::Type::uint64_type:
-      case fbs::type::Type::double_type:
-      case fbs::type::Type::duration_type:
-      case fbs::type::Type::time_type:
-      case fbs::type::Type::string_type:
-      case fbs::type::Type::blob_type:
-      case fbs::type::Type::secret_type:
-      case fbs::type::Type::ip_type:
-      case fbs::type::Type::subnet_type:
-      case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        for (const auto& remaining_key : remaining_keys) {
-          // TODO: Once we no longer support flattening types, we can switch to
-          // an equality comparison between field_name and remaining_key here.
-          const auto [field_name_mismatch, remaining_key_mismatch]
-            = std::mismatch(field_name->rbegin(), field_name->rend(),
-                            remaining_key.rbegin(), remaining_key.rend());
-          if (remaining_key_mismatch == remaining_key.rend()
-              and (field_name_mismatch == field_name->rend()
-                   or *field_name_mismatch == '.')) {
-            co_yield index;
-            break;
-          }
-        }
-        ++index.back();
-        break;
-      }
-      case fbs::type::Type::record_type: {
-        using history_entry = decltype(history)::value_type;
-        auto next = history_entry{
-          field_type->type_as_record_type(),
-          history[0].second,
-        };
-        for (const auto& remaining_key : remaining_keys) {
-          auto [remaining_key_mismatch, field_name_mismatch]
-            = std::mismatch(remaining_key.begin(), remaining_key.end(),
-                            field_name->begin(), field_name->end());
-          if (field_name_mismatch == field_name->end()
-              and remaining_key_mismatch != remaining_key.end()
-              and *remaining_key_mismatch == '.') {
-            next.second.emplace_back(remaining_key.substr(
-              1 + remaining_key_mismatch - remaining_key.begin()));
-          }
-        }
-        history.push_back(std::move(next));
-        index.push_back(0);
-        break;
-      }
-      case fbs::type::Type::enriched_type:
-        __builtin_unreachable();
-        break;
-    }
-  }
-  co_return;
-}
-
 generator<offset> record_type::resolve_type_extractor(
   std::string_view type_extractor) const noexcept {
   if (type_extractor.empty()) {
@@ -3205,7 +3093,7 @@ generator<offset> record_type::resolve_type_extractor(
   };
   while (not index.empty()) {
     const auto* record = history.back();
-    // See the matching comment in `resolve_key_suffix`: a damaged type may
+    // See the matching comment in `resolve_key_or_concept`: a damaged type may
     // contain a record without a field vector; treat it like an empty record
     // instead of asserting.
     const auto* fields = record ? record->fields() : nullptr;

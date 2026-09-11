@@ -465,11 +465,11 @@ type_resolver::operator()(const data& d, const type_extractor& ex) {
 caf::expected<expression>
 type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
-  // First, interpret the field as a suffix of a record field name.
-  auto suffixes = schema_.resolve_key_suffix(ex.field, schema_name_);
-  for (auto&& offset : suffixes) {
+  auto offsets = schema_.resolve_key_or_concept(ex.field, schema_name_);
+  for (auto&& offset : offsets) {
     const auto f = schema_.field(offset);
-    if (not compatible(f.type, op_, d)) {
+    // Data extractors address leaf columns, not whole records.
+    if (is<record_type>(f.type) or not compatible(f.type, op_, d)) {
       continue;
     }
     auto x = data_extractor{schema_, offset};
