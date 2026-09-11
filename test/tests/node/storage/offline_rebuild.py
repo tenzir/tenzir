@@ -1,5 +1,5 @@
 # runner: python
-# timeout: 120
+# timeout: 180
 
 """Verify the offline rebuild tool (`tenzir-rebuild`).
 

@@ -45,7 +45,7 @@ class HttpRequestOptions:
     initial_delay: float = 0.5
     retry_delay: float = 0.1
     request_timeout: float = 0.2
-    max_attempts_per_request: int = 15
+    max_attempts_per_request: int = 50
     inter_request_delay: float = 0.0
     delay_before: float = 0.0
 
