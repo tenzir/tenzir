@@ -9,13 +9,13 @@
   tzdata,
 }:
 arrow-cpp.overrideAttrs (orig: {
-  version = "24.0.0";
+  version = "25.0.1";
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "arrow";
-    tag = "apache-arrow-24.0.0";
-    hash = "sha256-qTdkzZegANNvtO7nbqXVC8hc7BexvmeFF/0l5VzRb8g=";
+    tag = "apache-arrow-25.0.1";
+    hash = "sha256-IKqdGzjFiUDdOFxTHVIMKyY5pSLT5PbNHAPd5homp1Y=";
   };
 
   patches = [
@@ -79,6 +79,12 @@ arrow-cpp.overrideAttrs (orig: {
   doCheck = false;
 
   env = (orig.env or { }) // {
+    ARROW_XSIMD_URL = fetchFromGitHub {
+      owner = "xtensor-stack";
+      repo = "xsimd";
+      tag = "14.2.0";
+      hash = "sha256-BTiN4B3//wlB3nmOoluM/7bL7J7YIBp5afih9zUP1yw=";
+    };
     NIX_LDFLAGS = lib.optionalString (
       stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
     ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
