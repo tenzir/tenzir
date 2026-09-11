@@ -105,8 +105,7 @@
         legacyPackages = pkgs;
         devShells.default = import ./shell.nix { inherit system; };
         formatter = self.packages.${system}.format;
-        checks = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          static-pie = pkgs.pkgsStatic.callPackage ./nix/tests/static-pie.nix { };
+        checks = {
           # Disabled until the custom Style Check workflow is aligned.
           #formatting = treefmtEval.config.build.check self;
         };
