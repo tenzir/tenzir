@@ -1,0 +1,4 @@
+export
+ocsf_derive
+select actor.type
+head 3

@@ -1,0 +1,7 @@
+error: buffer has been removed
+ --> tests/operators/buffer/removed.tql:6:1
+  |
+6 | buffer 10, policy="block"
+  | ^^^^^^
+  |
+  = hint: consider removing the operator or using `batch` instead

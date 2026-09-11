@@ -1,0 +1,4 @@
+export
+timeshift timestamp, speed=2.0
+select other
+head 3

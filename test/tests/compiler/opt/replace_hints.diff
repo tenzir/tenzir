@@ -1,0 +1,198 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `bar` @ [1]:41..44 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:48..49 from 0,
++          location: [1]:41..49 from 0
++        }
+       ],
+-      order: "ordered"
++      order: "ordered",
++      limit: 3,
++      projection: [
++        {
++          expr: root_field {
++            id: `bar` @ [1]:57..60 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `bar` @ [1]:57..60 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `foo` @ [1]:15..18 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `foo` @ [1]:15..18 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "tql2.replace",
+       store: {
+         op: {
+           path: [
+             `replace` @ [1]:7..14 from 0
+           ],
+           ref: std::replace/op
+         },
+         args: [
+           field_path {
+             expr: root_field {
+               id: `foo` @ [1]:15..18 from 0,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `foo` @ [1]:15..18 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located int64 1 @ [1]:25..26 from 0
+           },
+           {
+             index: 1,
+             value: located int64 2 @ [1]:33..34 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:35..40 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `bar` @ [1]:41..44 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:48..49 from 0,
+-          location: [1]:41..49 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `bar` @ [1]:57..60 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `bar` @ [1]:57..60 from 0,
+             has_question_mark: false
+           },
+           location: [1]:57..60 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:61..65 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:66..67 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:67..67 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

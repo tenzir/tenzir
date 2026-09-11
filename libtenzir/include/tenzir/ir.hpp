@@ -148,6 +148,9 @@ public:
   ///
   /// The request describes what downstream needs from this operator. The result
   /// contains the replacement for this operator and the request for upstream.
+  /// This is only called after instantiation (from `ir::make_plan`), so the
+  /// implementation may assume that `substitute` already ran with
+  /// `instantiate == true` and that all arguments are fully resolved.
   /// The default implementation is a barrier: it keeps the operator, reinserts
   /// every predicate of `req.filter` as a `where` behind it, requires ordered
   /// input, and forwards neither limit nor projection.
@@ -158,7 +161,8 @@ public:
   ///
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
-  /// However, other methods such as `optimize` may be called in between.
+  /// `optimize` may be called in between, but only after instantiation as
+  /// well.
   virtual auto spawn(element_type_tag input) const -> AnyOperator = 0;
 
   /// Whether the planner may replicate this operator across parallel

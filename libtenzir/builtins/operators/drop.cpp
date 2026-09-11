@@ -209,24 +209,19 @@ public:
       }
       return {};
     });
-    return d.optimize([=](DescribeCtx& ctx, EventOrder order,
-                          ir::OptimizeFilter filter) -> Optimization {
-      auto touched_fields = std::vector<ast::field_path>{};
-      for (auto& field : ctx.get_all(fields)) {
-        TENZIR_ASSERT(field);
-        touched_fields.push_back(std::move(*field));
-      }
-      auto touched = ast::ExprRefs{.field_paths = std::move(touched_fields)};
-      auto [f_upstream, f_self]
-        = ir::split_filter_by_dependents(std::move(filter), touched);
-      return {
-        // invariant order
-        .order = order,
-        // split filters
-        .filter_upstream = std::move(f_upstream),
-        .filter_self = std::move(f_self),
-      };
-    });
+    // Fields other than the dropped ones pass through unchanged, so the
+    // downstream projection remains valid upstream. The dropped fields stay
+    // projected: `drop` resolves them and warns when they are missing, so
+    // upstream must still materialize them.
+    return d.field_local(
+      [=](DescribeCtx& ctx) -> Option<std::vector<ast::field_path>> {
+        auto touched_fields = std::vector<ast::field_path>{};
+        for (auto& field : ctx.get_all(fields)) {
+          TENZIR_ASSERT(field);
+          touched_fields.push_back(std::move(*field));
+        }
+        return touched_fields;
+      });
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

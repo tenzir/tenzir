@@ -1,0 +1,4 @@
+export
+replace what=1, with=2
+select bar
+head 3

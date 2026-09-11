@@ -179,9 +179,53 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<EnumerateArgs, Enumerate>{};
-    d.optional_positional("out", &EnumerateArgs::out);
-    d.named("group", &EnumerateArgs::group, "any");
-    return d.without_optimize();
+    auto out = d.optional_positional("out", &EnumerateArgs::out);
+    auto group = d.named("group", &EnumerateArgs::group, "any");
+    // `enumerate` numbers events by arrival order (per group). Predicates
+    // must not cross it, since filtering upstream would change the assigned
+    // indices, and ordered input is required for the same reason.
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // The output field is produced here; all other fields pass through.
+        auto projection = std::move(req.projection);
+        if (projection) {
+          auto out_path = ctx.get(out);
+          if (not out_path and not ctx.get_location(out)) {
+            out_path = EnumerateArgs{}.out;
+          }
+          if (out_path) {
+            std::erase_if(*projection, [&](const ast::field_path& path) {
+              return ir::is_field_path_prefix(*out_path, path);
+            });
+            // A nested assignment observes its existing parent and warns when
+            // a scalar must be replaced by an implicit record. Retain the
+            // target so projection cannot hide that diagnostic.
+            if (out_path->path().size() > 1) {
+              ir::add_to_projection(projection, *out_path);
+            }
+          } else {
+            projection = None{};
+          }
+        }
+        // Grouping reads its key expression from the input.
+        if (ctx.get_location(group)) {
+          if (auto expr = ctx.get(group)) {
+            ir::add_refs_to_projection(projection, *expr);
+          } else {
+            projection = None{};
+          }
+        }
+        // All predicates stay behind us. A carried limit still passes through
+        // when there are none: `enumerate` is 1:1, so the first N outputs stem
+        // from exactly the first N inputs.
+        auto limit = req.filter.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

@@ -1,0 +1,128 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "ocsf::derive",
+       store: {
+         op: {
+           path: [
+             `ocsf_derive` @ [1]:7..18 from 0
+           ],
+           ref: std::ocsf_derive/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: field_access {
+             left: root_field {
+               id: `actor` @ [1]:26..31 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:32..36 from 0,
+             location: [1]:26..36 from 0
+           },
+           right: field_access {
+             left: root_field {
+               id: `actor` @ [1]:26..31 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:32..36 from 0,
+             location: [1]:26..36 from 0
+           },
+           location: [1]:26..36 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:37..41 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:42..43 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:43..43 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

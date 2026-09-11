@@ -1,0 +1,228 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      limit: 3,
++      projection: [
++        {
++          expr: root_field {
++            id: `other` @ [1]:78..83 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `other` @ [1]:78..83 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `enrichment` @ [1]:31..41 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `dns` @ [1]:42..45 from 0,
++            location: [1]:31..45 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `enrichment` @ [1]:31..41 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `dns` @ [1]:42..45 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `host` @ [1]:18..22 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `host` @ [1]:18..22 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "dns_lookup",
+       store: {
+         op: {
+           path: [
+             `dns_lookup` @ [1]:7..17 from 0
+           ],
+           ref: std::dns_lookup/op
+         },
+         args: [
+           expression root_field {
+             id: `host` @ [1]:18..22 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: field_path {
+               expr: field_access {
+                 left: root_field {
+                   id: `enrichment` @ [1]:31..41 from 0,
+                   has_question_mark: false
+                 },
+                 has_question_mark: false,
+                 name: `dns` @ [1]:42..45 from 0,
+                 location: [1]:31..45 from 0
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `enrichment` @ [1]:31..41 from 0,
+                   has_question_mark: false
+                 },
+                 {
+                   id: `dns` @ [1]:42..45 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: field_access {
+             left: field_access {
+               left: root_field {
+                 id: `enrichment` @ [1]:53..63 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `dns` @ [1]:64..67 from 0,
+               location: [1]:53..67 from 0
+             },
+             has_question_mark: false,
+             name: `hostname` @ [1]:68..76 from 0,
+             location: [1]:53..76 from 0
+           },
+           right: field_access {
+             left: field_access {
+               left: root_field {
+                 id: `enrichment` @ [1]:53..63 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `dns` @ [1]:64..67 from 0,
+               location: [1]:53..67 from 0
+             },
+             has_question_mark: false,
+             name: `hostname` @ [1]:68..76 from 0,
+             location: [1]:53..76 from 0
+           },
+           location: [1]:53..76 from 0
+         },
+         {
+           left: root_field {
+             id: `other` @ [1]:78..83 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `other` @ [1]:78..83 from 0,
+             has_question_mark: false
+           },
+           location: [1]:78..83 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:84..88 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:89..90 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:90..90 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

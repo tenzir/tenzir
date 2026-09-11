@@ -1376,6 +1376,60 @@ public:
     });
   }
 
+  /// Declares that the operator forwards events 1:1, in order, and modifies
+  /// at most the fields returned by `touched_fields`, which it also reads.
+  ///
+  /// Predicates that reference a touched field (or a pipeline `let`) stay
+  /// behind the operator; all others move upstream. A carried limit passes
+  /// through when no predicate stays behind, because the first N outputs stem
+  /// from exactly the first N inputs. The downstream projection passes
+  /// through, extended by the touched fields so that upstream still
+  /// materializes them. Returning `None` from `touched_fields` means that
+  /// every field may change: all predicates stay behind and no projection is
+  /// forwarded.
+  template <class F>
+    requires concepts::invokable_r<Option<std::vector<ast::field_path>>, F&,
+                                   DescribeCtx&>
+  auto field_local(F&& touched_fields) -> Description {
+    return optimize([touched_fields = std::forward<F>(touched_fields)](
+                      DescribeCtx& ctx,
+                      ir::OptimizeRequest req) mutable -> Optimization {
+      auto fields = touched_fields(ctx);
+      auto projection = std::move(req.projection);
+      auto split = ir::split_filter_result{};
+      if (not fields) {
+        split.dependent = std::move(req.filter);
+        projection = None{};
+      } else {
+        for (const auto& path : *fields) {
+          ir::add_to_projection(projection, path);
+        }
+        auto touched = ast::ExprRefs{.field_paths = std::move(*fields),
+                                     .let_ids = ctx.pipeline_let_ids()};
+        split = ir::split_filter_by_dependents(std::move(req.filter), touched);
+      }
+      // A carried limit counts events after the whole filter chain. If we
+      // keep predicates behind us, upstream can no longer honor it.
+      auto limit = split.dependent.empty() ? req.limit : Option<uint64_t>{};
+      return {
+        .order = req.order,
+        .filter_upstream = std::move(split.independent),
+        .filter_self = std::move(split.dependent),
+        .limit_upstream = limit,
+        .projection_upstream = std::move(projection),
+      };
+    });
+  }
+
+  /// Declares that the operator forwards events 1:1, in order, and unchanged.
+  /// All downstream hints pass through.
+  auto transparent() -> Description {
+    return field_local(
+      [](DescribeCtx&) -> Option<std::vector<ast::field_path>> {
+        return std::vector<ast::field_path>{};
+      });
+  }
+
   /// Declares that the operator is invariant to ordering.
   ///
   /// Filters are not propagated upstream.

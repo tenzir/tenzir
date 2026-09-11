@@ -1,0 +1,5 @@
+export
+replace foo, what=1, with=2
+where bar == 1
+select bar
+head 3

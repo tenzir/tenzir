@@ -1,0 +1,4 @@
+export
+enumerate nested.index, group=group
+select nested.index, other
+head 3

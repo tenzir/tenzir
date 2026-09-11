@@ -1,0 +1,4 @@
+export
+dns_lookup host, result=enrichment.dns
+select enrichment.dns.hostname, other
+head 3

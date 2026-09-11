@@ -97,7 +97,9 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<BlockArgs, Block<table_slice>, Block<chunk_ptr>>{};
     d.positional("duration", &BlockArgs::duration);
-    return d.invariant_order_filter();
+    // `_block` only delays its input; events pass through unchanged, so
+    // downstream hints pass through as well.
+    return d.transparent();
   }
 };
 

@@ -147,7 +147,28 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    // `drop_null_fields` removes fields per row/null-pattern, never events,
+    // and does not reorder ordered input. Predicates that reference a
+    // potentially dropped field must stay behind us; independent predicates
+    // may move upstream. Without explicit fields, every field may be dropped.
+    return d.field_local(
+      [=](DescribeCtx& ctx) -> Option<std::vector<ast::field_path>> {
+        auto touched_fields = std::vector<ast::field_path>{};
+        for (auto& value : ctx.get_all(fields)) {
+          if (not value) {
+            return None{};
+          }
+          auto selector = ast::field_path::try_from(*value);
+          if (not selector or selector->path().empty()) {
+            return None{};
+          }
+          touched_fields.push_back(std::move(*selector));
+        }
+        if (touched_fields.empty()) {
+          return None{};
+        }
+        return touched_fields;
+      });
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

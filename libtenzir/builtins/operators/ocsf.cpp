@@ -1729,6 +1729,22 @@ private:
   bool timestamp_to_ms_{};
 };
 
+auto make_dependency_path(std::initializer_list<std::string_view> names)
+  -> ast::field_path {
+  TENZIR_ASSERT(names.size() > 0);
+  auto it = names.begin();
+  auto expr = ast::expression{ast::root_field{
+    ast::identifier{std::string{*it}, location::unknown}, false}};
+  for (++it; it != names.end(); ++it) {
+    expr = ast::expression{
+      ast::field_access{std::move(expr), location::unknown, false,
+                        ast::identifier{std::string{*it}, location::unknown}}};
+  }
+  auto result = ast::field_path::try_from(std::move(expr));
+  TENZIR_ASSERT(result);
+  return std::move(*result);
+}
+
 struct CastArgs {
   bool encode_variants = false;
   bool null_fill = false;
@@ -1853,7 +1869,18 @@ public:
     d.named("null_fill", &CastArgs::null_fill);
     d.named("timestamp_to_ms", &CastArgs::timestamp_to_ms);
     d.operator_location(&CastArgs::operator_location);
-    return d.invariant_order();
+    // Casting may rewrite every OCSF field and drops events whose version or
+    // class cannot be resolved, so filters and limits must not cross it. The
+    // caster also inspects all fields for validation diagnostics, including
+    // profile/extension fields; preserve that whole-event observation rather
+    // than forwarding a projection.
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        return {
+          .order = req.order,
+          .filter_self = std::move(req.filter),
+        };
+      });
   }
 };
 
@@ -1885,7 +1912,21 @@ public:
     d.named("drop_optional", &TrimArgs::drop_optional);
     d.named("drop_recommended", &TrimArgs::drop_recommended);
     d.operator_location(&TrimArgs::operator_location);
-    return d.invariant_order();
+    // Trimming may remove any schema-optional field and drops events whose
+    // version or class cannot be resolved, so filters and limits stay behind
+    // it. Requested surviving fields pass through; retain schema selectors.
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        auto projection = std::move(req.projection);
+        ir::add_to_projection(projection, make_dependency_path({"class_uid"}));
+        ir::add_to_projection(projection,
+                              make_dependency_path({"metadata", "version"}));
+        return {
+          .order = req.order,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 
@@ -1906,7 +1947,17 @@ public:
     auto d = Describer<DeriveArgs, Derive>{};
     d.parallelizable();
     d.operator_location(&DeriveArgs::operator_location);
-    return d.invariant_order();
+    // Derivation may change either side of arbitrary schema-defined enum and
+    // sibling pairs, and drops events whose version or class cannot be
+    // resolved. It validates all enum/sibling pairs recursively, so preserve
+    // whole-event input for diagnostics and keep filters and limits behind it.
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        return {
+          .order = req.order,
+          .filter_self = std::move(req.filter),
+        };
+      });
   }
 };
 

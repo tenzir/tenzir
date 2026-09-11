@@ -1,0 +1,4 @@
+export
+drop_null_fields
+select bar
+head 3

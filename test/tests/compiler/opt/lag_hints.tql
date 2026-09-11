@@ -1,0 +1,4 @@
+export
+lag value=value, into=nested.previous
+select nested.previous, other
+head 3

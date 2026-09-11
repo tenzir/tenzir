@@ -1,0 +1,4 @@
+export
+replace foo, what=1, with=2
+where foo == 2
+head 3

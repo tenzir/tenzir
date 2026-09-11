@@ -313,7 +313,11 @@ public:
       }
       return {};
     });
-    return d.invariant_order_filter();
+    // `batch` regroups events without changing, reordering, or filtering
+    // them, so downstream hints pass through. Note that the user-provided
+    // `limit` argument is a batch size, not an output limit, so we never emit
+    // a fresh limit of our own.
+    return d.transparent();
   }
 };
 } // namespace

@@ -190,7 +190,7 @@ struct plugin2 : operator_plugin2<timeshift_operator2>, virtual OperatorPlugin {
 
   auto describe() const -> Description override {
     auto d = Describer<TimeshiftArgs, Timeshift>{};
-    d.positional("field", &TimeshiftArgs::selector, "time");
+    auto selector = d.positional("field", &TimeshiftArgs::selector, "time");
     auto speed = d.named_optional("speed", &TimeshiftArgs::speed);
     d.named("start", &TimeshiftArgs::start);
     d.validate([speed](DescribeCtx& ctx) -> Empty {
@@ -202,7 +202,30 @@ struct plugin2 : operator_plugin2<timeshift_operator2>, virtual OperatorPlugin {
       }
       return {};
     });
-    return d.without_optimize();
+    // The first event's time defines the shift origin, so predicates must not
+    // cross `timeshift` and ordered input is required.
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto projection = std::move(req.projection);
+        // `timeshift` reads and rewrites the given field in place. Retain it
+        // even when downstream does not need it: the first value defines the
+        // origin, and a type mismatch warns.
+        if (auto selector_path = ctx.get(selector)) {
+          ir::add_to_projection(projection, *selector_path);
+        } else {
+          projection = None{};
+        }
+        // All predicates stay behind us. A carried limit still passes through
+        // when there are none: `timeshift` is 1:1, so the first N outputs stem
+        // from exactly the first N inputs.
+        auto limit = req.filter.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

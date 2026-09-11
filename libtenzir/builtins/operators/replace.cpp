@@ -380,7 +380,7 @@ struct replace : public virtual operator_plugin2<replace_operator>,
     d.parallelizable();
     auto what = d.named("what", &ReplaceArgs::what);
     auto with = d.named("with", &ReplaceArgs::with);
-    d.optional_variadic("fields", &ReplaceArgs::path, "field");
+    auto fields = d.optional_variadic("fields", &ReplaceArgs::path, "field");
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto what_value, ctx.get(what));
       TRY(auto with_value, ctx.get(with));
@@ -396,7 +396,25 @@ struct replace : public virtual operator_plugin2<replace_operator>,
       }
       return {};
     });
-    return d.without_optimize();
+    // `replace` rewrites values in place: it neither drops, creates, nor
+    // reorders events, and fields keep their identity. Predicates that
+    // reference replaced fields must stay behind us; without explicit fields,
+    // every field may change, so all predicates stay. Target fields stay
+    // projected because their values determine replacement and the resulting
+    // schema/slice boundaries.
+    return d.field_local(
+      [=](DescribeCtx& ctx) -> Option<std::vector<ast::field_path>> {
+        auto touched_fields = std::vector<ast::field_path>{};
+        for (auto& field : ctx.get_all(fields)) {
+          TENZIR_ASSERT(field);
+          touched_fields.push_back(std::move(*field));
+        }
+        if (touched_fields.empty()) {
+          // Without explicit targets, every field participates in replacement.
+          return None{};
+        }
+        return touched_fields;
+      });
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

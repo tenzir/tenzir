@@ -1,0 +1,4 @@
+export
+drop foo
+select bar
+head 3

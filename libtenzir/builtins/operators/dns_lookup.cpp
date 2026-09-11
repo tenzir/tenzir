@@ -592,23 +592,49 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<DnsLookupArgs, DnsLookup>{};
-    d.positional("field", &DnsLookupArgs::field, "string|ip");
+    auto field = d.positional("field", &DnsLookupArgs::field, "string|ip");
     auto result = d.named_optional("result", &DnsLookupArgs::result);
     d.operator_location(&DnsLookupArgs::operator_location);
-    return d.optimize([=](DescribeCtx& ctx, EventOrder order,
-                          ir::OptimizeFilter filter) -> Optimization {
-      auto touched_fields = std::vector<ast::field_path>{};
-      touched_fields.push_back(
-        ctx.get(result).value_or(default_result_field()));
-      auto touched = ast::ExprRefs{.field_paths = std::move(touched_fields)};
-      auto [f_upstream, f_self]
-        = ir::split_filter_by_dependents(std::move(filter), touched);
-      return {
-        .order = order,
-        .filter_upstream = std::move(f_upstream),
-        .filter_self = std::move(f_self),
-      };
-    });
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto result_path = ctx.get(result).value_or(default_result_field());
+        // The result field is produced here; all other fields pass through.
+        auto projection = std::move(req.projection);
+        if (projection) {
+          std::erase_if(*projection, [&](const ast::field_path& path) {
+            return ir::is_field_path_prefix(result_path, path);
+          });
+          // A nested assignment observes its existing parent and warns when a
+          // scalar must be replaced by an implicit record. Retain the target
+          // so projection cannot hide that diagnostic.
+          if (result_path.path().size() > 1) {
+            ir::add_to_projection(projection, result_path);
+          }
+        }
+        // The lookup input is computed from the event.
+        if (auto expr = ctx.get(field)) {
+          ir::add_refs_to_projection(projection, *expr);
+        } else {
+          projection = None{};
+        }
+        auto touched_fields = std::vector<ast::field_path>{};
+        touched_fields.push_back(std::move(result_path));
+        auto touched = ast::ExprRefs{.field_paths = std::move(touched_fields)};
+        auto [f_upstream, f_self]
+          = ir::split_filter_by_dependents(std::move(req.filter), touched);
+        // `dns_lookup` is 1:1, so the first N outputs stem from exactly the
+        // first N inputs and a carried limit passes through when no predicate
+        // stays behind. Skipped DNS requests are acceptable: effects may
+        // change under optimization.
+        auto limit = f_self.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(f_upstream),
+          .filter_self = std::move(f_self),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

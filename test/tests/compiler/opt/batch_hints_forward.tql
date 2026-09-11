@@ -1,0 +1,4 @@
+export
+batch 100
+select bar
+head 3

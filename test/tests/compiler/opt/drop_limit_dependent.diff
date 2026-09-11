@@ -1,0 +1,137 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "tql2.drop",
+       store: {
+         op: {
+           path: [
+             `drop` @ [1]:7..11 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `foo` @ [1]:12..15 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `bar` @ [1]:16..19 from 0,
+               location: [1]:12..19 from 0
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `foo` @ [1]:12..15 from 0,
+                 has_question_mark: false
+               },
+               {
+                 id: `bar` @ [1]:16..19 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:20..25 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `foo` @ [1]:26..29 from 0,
+             has_question_mark: false
+           },
+           op: "neq",
+           right: constant none_t {} @ [1]:33..37 from 0,
+           location: [1]:26..37 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:38..42 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:43..44 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:44..44 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

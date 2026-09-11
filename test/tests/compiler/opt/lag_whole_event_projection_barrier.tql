@@ -1,0 +1,4 @@
+export
+lag into=previous
+select previous, other
+head 3

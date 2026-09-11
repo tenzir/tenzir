@@ -229,9 +229,9 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<LagArgs, Lag>{};
-    d.named("value", &LagArgs::value, "any");
+    auto value = d.named("value", &LagArgs::value, "any");
     auto offset = d.named("offset", &LagArgs::offset);
-    d.named("into", &LagArgs::into);
+    auto into = d.named("into", &LagArgs::into);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(offset); value and value->inner == 0) {
         diagnostic::error("`offset` must be greater than zero")
@@ -240,7 +240,50 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    // `lag` writes values from earlier events, so predicates must not cross
+    // it: filtering upstream would change the history. Ordered input is
+    // required for the same reason.
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto projection = std::move(req.projection);
+        if (projection) {
+          // The `into` field is produced here; all other fields pass through.
+          if (auto into_path = ctx.get(into)) {
+            std::erase_if(*projection, [&](const ast::field_path& path) {
+              return ir::is_field_path_prefix(*into_path, path);
+            });
+            // A nested assignment observes its existing parent and warns when
+            // a scalar must be replaced by an implicit record. Retain the
+            // target so projection cannot hide that diagnostic.
+            if (into_path->path().size() > 1) {
+              ir::add_to_projection(projection, *into_path);
+            }
+          } else {
+            projection = None{};
+          }
+        }
+        // The lagged value is computed from the input; without an explicit
+        // `value`, it is the whole event.
+        if (ctx.get_location(value)) {
+          if (auto expr = ctx.get(value)) {
+            ir::add_refs_to_projection(projection, *expr);
+          } else {
+            projection = None{};
+          }
+        } else {
+          projection = None{};
+        }
+        // All predicates stay behind us. A carried limit still passes through
+        // when there are none: `lag` is 1:1, so the first N outputs stem from
+        // exactly the first N inputs.
+        auto limit = req.filter.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

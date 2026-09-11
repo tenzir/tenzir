@@ -1,0 +1,182 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `bar` @ [1]:34..37 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:41..42 from 0,
++          location: [1]:34..42 from 0
++        }
+       ],
+-      order: "ordered"
++      order: "ordered",
++      limit: 3,
++      projection: [
++        {
++          expr: root_field {
++            id: `bar` @ [1]:50..53 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `bar` @ [1]:50..53 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `foo` @ [1]:24..27 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `foo` @ [1]:24..27 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "tql2.drop_null_fields",
+       store: {
+         op: {
+           path: [
+             `drop_null_fields` @ [1]:7..23 from 0
+           ],
+           ref: std::drop_null_fields/op
+         },
+         args: [
+           expression root_field {
+             id: `foo` @ [1]:24..27 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:28..33 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `bar` @ [1]:34..37 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:41..42 from 0,
+-          location: [1]:34..42 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `bar` @ [1]:50..53 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `bar` @ [1]:50..53 from 0,
+             has_question_mark: false
+           },
+           location: [1]:50..53 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:54..58 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:59..60 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:60..60 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

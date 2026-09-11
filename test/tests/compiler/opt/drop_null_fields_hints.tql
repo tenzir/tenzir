@@ -1,0 +1,5 @@
+export
+drop_null_fields foo
+where bar == 1
+select bar
+head 3

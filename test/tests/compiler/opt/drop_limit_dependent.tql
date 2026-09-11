@@ -1,0 +1,4 @@
+export
+drop foo.bar
+where foo != null
+head 3

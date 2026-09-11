@@ -1,0 +1,143 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "context::enrich",
+       store: {
+         op: {
+           path: [
+             `context_enrich` @ [1]:7..21 from 0
+           ],
+           ref: std::context_enrich/op
+         },
+         args: [
+           located "ctx" @ [1]:22..27 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression root_field {
+               id: `src` @ [1]:33..36 from 0,
+               has_question_mark: false
+             }
+           },
+           {
+             index: 1,
+             value: field_path {
+               expr: root_field {
+                 id: `enrichment` @ [1]:43..53 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `enrichment` @ [1]:43..53 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:54..59 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: field_access {
+             left: root_field {
+               id: `enrichment` @ [1]:60..70 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `value` @ [1]:71..76 from 0,
+             location: [1]:60..76 from 0
+           },
+           op: "eq",
+           right: constant int64 1 @ [1]:80..81 from 0,
+           location: [1]:60..81 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:82..86 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:87..88 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:88..88 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

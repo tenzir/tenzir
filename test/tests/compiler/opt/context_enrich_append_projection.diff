@@ -1,0 +1,198 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      limit: 3,
++      projection: [
++        {
++          expr: root_field {
++            id: `other` @ [1]:88..93 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `other` @ [1]:88..93 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `enrichment` @ [1]:76..86 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `enrichment` @ [1]:76..86 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `src` @ [1]:33..36 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src` @ [1]:33..36 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "context::enrich",
+       store: {
+         op: {
+           path: [
+             `context_enrich` @ [1]:7..21 from 0
+           ],
+           ref: std::context_enrich/op
+         },
+         args: [
+           located "ctx" @ [1]:22..27 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression root_field {
+               id: `src` @ [1]:33..36 from 0,
+               has_question_mark: false
+             }
+           },
+           {
+             index: 1,
+             value: field_path {
+               expr: root_field {
+                 id: `enrichment` @ [1]:43..53 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `enrichment` @ [1]:43..53 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           },
+           {
+             index: 2,
+             value: located "append" @ [1]:60..68 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `enrichment` @ [1]:76..86 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `enrichment` @ [1]:76..86 from 0,
+             has_question_mark: false
+           },
+           location: [1]:76..86 from 0
+         },
+         {
+           left: root_field {
+             id: `other` @ [1]:88..93 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `other` @ [1]:88..93 from 0,
+             has_question_mark: false
+           },
+           location: [1]:88..93 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:94..98 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:99..100 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:100..100 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

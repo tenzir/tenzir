@@ -1,0 +1,4 @@
+export
+context_enrich "ctx", key=src, into=enrichment.value
+select enrichment.value, other
+head 3

@@ -1,0 +1,4 @@
+export
+ocsf_trim
+select actor.name
+head 3
