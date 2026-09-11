@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+if true {
+  from {branch: "then"}
+} else {
+  from {branch: "else"}
+}

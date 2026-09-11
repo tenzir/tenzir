@@ -191,6 +191,12 @@ public:
 
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
             diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    if (input.empty()) {
+      diagnostic::error("`if` requires incoming events")
+        .primary(args_.condition)
+        .emit(dh);
+      return failure::promise();
+    }
     // `if` is a two-output operator: it evaluates the condition per row and
     // routes each row to exactly one branch (port 0 = consequence for `true`
     // rows, port 1 = alternative for `false`/`null` rows). Without an explicit

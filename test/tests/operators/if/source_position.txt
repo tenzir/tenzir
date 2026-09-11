@@ -1,0 +1,6 @@
+error: `if` requires incoming events
+ --> tests/operators/if/source_position.tql:5:4
+  |
+5 | if true {
+  |    ^^^^
+  |
