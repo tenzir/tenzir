@@ -1,0 +1,10 @@
+warning: `int` failed to convert some string
+ --> tests/operators/quiet/downstream_warning.tql:5:11
+  |
+5 | where int(value) == 1
+  |           ~~~~~
+  |
+  = note: tried to convert: invalid
+{
+  value: "1",
+}

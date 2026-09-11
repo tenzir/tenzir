@@ -1,0 +1,5 @@
+from {value: "invalid"}, {value: "1"}
+quiet {
+  pass
+}
+where int(value) == 1

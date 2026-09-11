@@ -238,8 +238,9 @@ private:
 template <DiagnosticBehavior Behavior>
 auto describe_diagnostic_scope() -> Description {
   auto d = Describer<DiagnosticScopeArgs>{};
-  auto pipe
-    = d.pipeline(&DiagnosticScopeArgs::pipe, SubOptimize::from_downstream);
+  // Optimize the subpipeline independently in plan_and_spawn_sub(). Pushing
+  // downstream predicates into it would change their diagnostic behavior.
+  auto pipe = d.pipeline(&DiagnosticScopeArgs::pipe, SubOptimize::off);
   d.spawner([pipe]<class Input>(DescribeCtx& ctx)
               -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
     TRY(auto p, ctx.get(pipe));
@@ -266,13 +267,7 @@ auto describe_diagnostic_scope() -> Description {
         };
       });
   });
-  return d.optimize([](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
-    return {
-      .order = EventOrder::ordered,
-      .filter_self = std::move(req.filter),
-      .projection_upstream = std::move(req.projection),
-    };
-  });
+  return d.without_optimize();
 }
 
 // --- Plugin ---
