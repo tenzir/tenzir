@@ -19,7 +19,7 @@ let
       extraPlugins ? [ ],
       symlinkJoin,
       extraCmakeFlags ? [ ],
-      python3,
+      python313,
       uv,
       uv-bin,
       pkgsBuildBuild,
@@ -63,7 +63,7 @@ let
       # dependencies from the bundled wheels, which carry the full transitive
       # set, so nothing needs a site-packages environment at runtime.
       py3 =
-        if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
+        if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python313 else python313;
 
       allPluginSrcs = lib.genAttrs tenzirPluginNames (name: "${tenzir-plugins-source}/${name}");
 
@@ -132,6 +132,8 @@ let
 
       toImage = pkgsBuildHost.callPackage toImageFn {
         inherit isStatic;
+        # Match the bundled wheels, including for cross-built images.
+        python3 = pkgsBuildHost.python313;
       };
 
       deps = callPackage ../dependencies.nix {
