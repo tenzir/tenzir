@@ -1,0 +1,8 @@
+fixtures:
+  - azure_log_analytics:
+      case: cancelled
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1

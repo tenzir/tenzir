@@ -1,0 +1,7 @@
+error: invalid Azure Log Analytics response: the service reported an error or partial results
+  --> tests/operators/from_azure_log_analytics/unsafe-request-id.tql:14:26
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   |                          ^^^^^^^^^^^^^^^^^^
+   |
+   = hint: reduce the query's output or time range and check projected types

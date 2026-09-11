@@ -1,0 +1,13 @@
+{
+  TimeGenerated: null,
+  Count: null,
+  Small: null,
+  Ratio: null,
+  Enabled: null,
+  Message: null,
+  Id: null,
+  Elapsed: null,
+  Amount: null,
+  NullTime: null,
+  Details: null,
+}

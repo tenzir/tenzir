@@ -1,0 +1,6 @@
+error: `workspace_id` must be a workspace GUID
+  --> tests/operators/from_azure_log_analytics/error-invalid-workspace.tql:13:16
+   |
+13 |   workspace_id="../other/query",
+   |                ^^^^^^^^^^^^^^^^
+   |

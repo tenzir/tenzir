@@ -1,0 +1,25 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: refresh
+      bounded: true
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 2
+      tokens: 2
+---
+
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02

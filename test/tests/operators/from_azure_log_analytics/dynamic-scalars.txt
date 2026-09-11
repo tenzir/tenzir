@@ -1,0 +1,12 @@
+{
+  Value: 42,
+}
+{
+  Value: true,
+}
+{
+  Value: null,
+}
+{
+  Value: "42",
+}

@@ -1,0 +1,9 @@
+error: `start` must be earlier than `end`
+  --> tests/operators/from_azure_log_analytics/error-equal-range.tql:22:9
+   |
+22 |   start=2026-01-01, end=2026-01-01
+   |         ^^^^^^^^^^
+   ⋮
+22 |   start=2026-01-01, end=2026-01-01
+   |                         ^^^^^^^^^^
+   |

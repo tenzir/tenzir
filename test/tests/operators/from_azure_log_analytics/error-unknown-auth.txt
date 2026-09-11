@@ -1,0 +1,6 @@
+error: unknown key 'unexpected' in `azure_auth`
+  --> tests/operators/from_azure_log_analytics/error-unknown-auth.tql:14:14
+   |
+14 |   azure_auth={
+   |              ^
+   |

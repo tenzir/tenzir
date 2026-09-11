@@ -1,0 +1,22 @@
+{
+  Value: {
+    "a.b": "192.0.2.1",
+  },
+}
+{
+  Value: [
+    1,
+    2,
+  ],
+}
+{
+  Value: {
+    text: "1h",
+  },
+}
+{
+  Value: "plain",
+}
+{
+  Value: null,
+}

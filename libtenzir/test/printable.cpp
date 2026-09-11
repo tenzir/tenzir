@@ -356,6 +356,8 @@ TEST("duration") {
   CHECK_TO_STRING(-90s, "-1.5min");
   CHECK_TO_STRING(390s, "6.5min");
   CHECK_TO_STRING(-2400h, "-100d");
+  CHECK_TO_STRING(duration::min(), "-106751.99116730064d");
+  CHECK_TO_STRING(duration::max(), "106751.99116730064d");
 }
 
 TEST("time") {

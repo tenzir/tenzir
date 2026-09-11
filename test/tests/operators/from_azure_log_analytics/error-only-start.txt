@@ -1,0 +1,6 @@
+error: `start` and `end` must be specified together
+  --> tests/operators/from_azure_log_analytics/error-only-start.tql:22:9
+   |
+22 |   start=2026-01-01
+   |         ^^^^^^^^^^
+   |

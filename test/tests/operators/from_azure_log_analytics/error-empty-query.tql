@@ -1,0 +1,21 @@
+---
+fixtures: [azure_log_analytics]
+timeout: 30
+error: true
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 0
+      tokens: 0
+---
+
+from_azure_log_analytics "",
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false

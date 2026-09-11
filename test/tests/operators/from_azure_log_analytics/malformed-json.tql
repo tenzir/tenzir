@@ -1,0 +1,23 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: malformed-json
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+---
+
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false

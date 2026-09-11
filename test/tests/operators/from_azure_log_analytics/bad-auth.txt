@@ -1,0 +1,6 @@
+error: expected Azure `access_token` to be `string`, got `record`
+  --> tests/operators/from_azure_log_analytics/bad-auth.tql:16:14
+   |
+16 |   azure_auth={
+   |              ^
+   |

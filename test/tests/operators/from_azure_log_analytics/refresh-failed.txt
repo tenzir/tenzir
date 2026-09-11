@@ -1,0 +1,13 @@
+warning: HTTP error 429, attempt 1/6, retrying after 2s
+  --> tests/operators/from_azure_log_analytics/refresh-failed.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+error: expected Azure `access_token` to be `string`, got `record`
+  --> tests/operators/from_azure_log_analytics/refresh-failed.tql:16:14
+   |
+16 |   azure_auth={
+   |              ^
+   |

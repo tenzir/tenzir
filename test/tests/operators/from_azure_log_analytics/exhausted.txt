@@ -1,0 +1,43 @@
+warning: HTTP error 429, attempt 1/6, retrying after 0s
+  --> tests/operators/from_azure_log_analytics/exhausted.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: HTTP error 429, attempt 2/6, retrying after 0s
+  --> tests/operators/from_azure_log_analytics/exhausted.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: HTTP error 429, attempt 3/6, retrying after 0s
+  --> tests/operators/from_azure_log_analytics/exhausted.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: HTTP error 429, attempt 4/6, retrying after 0s
+  --> tests/operators/from_azure_log_analytics/exhausted.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: HTTP error 429, attempt 5/6, retrying after 0s
+  --> tests/operators/from_azure_log_analytics/exhausted.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+error: Azure Log Analytics request failed: HTTP 429
+  --> tests/operators/from_azure_log_analytics/exhausted.tql:14:1
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: request ID: azure-request-123
+   = hint: the retry budget is exhausted; reduce query frequency

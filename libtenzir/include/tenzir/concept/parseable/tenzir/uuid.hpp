@@ -55,15 +55,23 @@ struct uuid_parser : parser_base<uuid_parser> {
         }
         c = *f++;
       }
+      auto high = lookup(c);
+      if (high == std::byte{0xff}) {
+        return false;
+      }
       if constexpr (std::is_same_v<Attribute, uuid>) {
-        x[i] = lookup(c);
+        x[i] = high;
       }
       if (f == l) {
         return false;
       }
       c = *f++;
+      auto low = lookup(c);
+      if (low == std::byte{0xff}) {
+        return false;
+      }
       if constexpr (std::is_same_v<Attribute, uuid>) {
-        x[i] = (x[i] << 4) | lookup(c);
+        x[i] = (x[i] << 4) | low;
       }
     }
     if (braced) {
@@ -71,7 +79,7 @@ struct uuid_parser : parser_base<uuid_parser> {
         return false;
       }
       c = *f++;
-      if (c == '}') {
+      if (c != '}') {
         return false;
       }
     }

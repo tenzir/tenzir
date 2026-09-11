@@ -1,0 +1,8 @@
+error: invalid Azure Log Analytics response: invalid value at table 0, row 0, column 4 (expected bool; values must fit Tenzir's types and decoded value budget)
+  --> tests/operators/from_azure_log_analytics/bad-bool.tql:14:26
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   |                          ^^^^^^^^^^^^^^^^^^
+   |
+   = hint: reduce the query's output or time range and check projected types
+   = note: request ID: azure-request-123

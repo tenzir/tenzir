@@ -1,0 +1,8 @@
+error: Azure Log Analytics request failed: HTTP 400
+  --> tests/operators/from_azure_log_analytics/bad-query.tql:14:26
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   |                          ^^^^^^^^^^^^^^^^^^
+   |
+   = note: request ID: azure-request-123
+   = hint: check KQL syntax and table availability in this workspace

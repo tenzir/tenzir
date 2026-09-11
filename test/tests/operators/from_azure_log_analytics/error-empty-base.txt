@@ -1,0 +1,6 @@
+error: `_base_url` must not be empty
+  --> tests/operators/from_azure_log_analytics/error-empty-base.tql:20:13
+   |
+20 |   _base_url="",
+   |             ^^
+   |

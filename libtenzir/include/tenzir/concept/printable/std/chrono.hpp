@@ -96,7 +96,15 @@ public:
         // durations, so to avoid negative durations always being printed with
         // nanosecond resolution we just take care of it early here.
         *out++ = '-';
-        d = -d;
+        if constexpr (std::is_integral_v<Rep> and std::is_signed_v<Rep>) {
+          // The magnitude of the minimum signed value only fits unsigned.
+          using Unsigned = std::make_unsigned_t<Rep>;
+          auto magnitude = Unsigned{0} - static_cast<Unsigned>(d.count());
+          return duration_printer<Unsigned, Period, Policy>{}.print(
+            out, std::chrono::duration<Unsigned, Period>{magnitude});
+        } else {
+          d = -d;
+        }
       }
       using namespace std::chrono;
       if (is_at_least<days>(d)) {

@@ -1,0 +1,8 @@
+error: invalid Azure Log Analytics response: row width does not match the column descriptions
+  --> tests/operators/from_azure_log_analytics/bad-row.tql:14:26
+   |
+14 | from_azure_log_analytics env("AZLOG_QUERY"),
+   |                          ^^^^^^^^^^^^^^^^^^
+   |
+   = hint: reduce the query's output or time range and check projected types
+   = note: request ID: azure-request-123

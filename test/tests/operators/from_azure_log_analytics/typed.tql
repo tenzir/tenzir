@@ -1,0 +1,34 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: typed
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+---
+
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+Types = {
+  TimeGenerated: type_of(TimeGenerated).kind,
+  Count: type_of(Count).kind,
+  Small: type_of(Small).kind,
+  Ratio: type_of(Ratio).kind,
+  Enabled: type_of(Enabled).kind,
+  Message: type_of(Message).kind,
+  Elapsed: type_of(Elapsed).kind,
+  Amount: type_of(Amount).kind,
+  NullTime: type_of(NullTime).kind,
+  NestedString: type_of(Details.text).kind,
+}

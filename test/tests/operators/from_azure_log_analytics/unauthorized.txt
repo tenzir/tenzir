@@ -1,0 +1,8 @@
+error: Azure Log Analytics request failed: HTTP 401
+  --> tests/operators/from_azure_log_analytics/unauthorized.tql:16:14
+   |
+16 |   azure_auth={
+   |              ^
+   |
+   = note: request ID: azure-request-123
+   = hint: check the Entra credentials, Log Analytics token audience, and workspace query permissions

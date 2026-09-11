@@ -1,0 +1,26 @@
+warning: HTTP error 503, attempt 1/6, retrying after 0s
+  --> tests/operators/from_azure_log_analytics/retry-503.tql:13:1
+   |
+13 | from_azure_log_analytics env("AZLOG_QUERY"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+{
+  TimeGenerated: 2026-01-02T03:04:05.123456700Z,
+  Count: 9223372036854775807,
+  Small: -2147483648,
+  Ratio: 1.5,
+  Enabled: true,
+  Message: "192.0.2.1",
+  Id: "01234567-89ab-cdef-0123-456789abcdef",
+  Elapsed: -1.0854643918599538d,
+  Amount: "12345678901234567890.123456789012345678",
+  NullTime: null,
+  Details: {
+    text: "2026-01-01T00:00:00Z",
+    "a.b": [
+      1,
+      2,
+      null,
+    ],
+  },
+}

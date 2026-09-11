@@ -1,0 +1,7 @@
+error: `web_identity` is not supported by this operator
+  --> tests/operators/from_azure_log_analytics/error-web-identity.tql:14:14
+   |
+14 |   azure_auth={
+   |              ^
+   |
+   = hint: use `client_secret` instead

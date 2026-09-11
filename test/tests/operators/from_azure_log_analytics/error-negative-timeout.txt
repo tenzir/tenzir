@@ -1,0 +1,6 @@
+error: `timeout` must be positive and at most 10min
+  --> tests/operators/from_azure_log_analytics/error-negative-timeout.tql:22:11
+   |
+22 |   timeout=-1s
+   |           ^^^
+   |
