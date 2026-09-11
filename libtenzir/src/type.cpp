@@ -3030,8 +3030,7 @@ generator<offset> record_type::resolve_key_or_concept(
         break;
     }
   }
-  // As a fallback, try to resolve the key as a concept, if the schema name is
-  // known.
+  // Schema qualification and concept targets require a known schema name.
   if (schema_name.empty()) {
     co_return;
   }
@@ -3046,6 +3045,13 @@ generator<offset> record_type::resolve_key_or_concept(
     }
     return key.substr(1);
   };
+  // A concept with the same name must not hide a schema-qualified field.
+  if (auto qualified_key = try_strip_schema_name(key)) {
+    if (auto result = resolve_key(*qualified_key)) {
+      co_yield std::move(*result);
+      co_return;
+    }
+  }
   const auto resolved_keys
     = resolve_concepts(modules::concepts(), {std::string{key}});
   for (const auto& resolved_key : resolved_keys) {

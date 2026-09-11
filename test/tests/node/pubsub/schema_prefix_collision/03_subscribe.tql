@@ -1,0 +1,3 @@
+subscribe "schema-prefix-collision"
+where file.name == "x"
+head 1

@@ -169,13 +169,19 @@ static bool contains(const type& schema, const std::string& x,
                      relational_operator op, const tenzir::data& data) {
   const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
-  for (const auto& offset : rt->resolve_key_or_concept(x, schema.name())) {
-    auto const field_type = rt->field(offset).type;
-    if (not is<record_type>(field_type) and compatible(field_type, op, data)) {
-      return true;
+  auto offset = rt->resolve_key(x);
+  if (not offset and not schema.name().empty()
+      and x.starts_with(schema.name())) {
+    auto key = std::string_view{x}.substr(schema.name().size());
+    if (key.starts_with('.')) {
+      offset = rt->resolve_key(key.substr(1));
     }
   }
-  return false;
+  if (not offset) {
+    return false;
+  }
+  auto const field_type = rt->field(*offset).type;
+  return not is<record_type>(field_type) and compatible(field_type, op, data);
 }
 
 caf::expected<expression>
