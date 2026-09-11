@@ -20,7 +20,7 @@
 
 #include <arrow/type.h>
 
-namespace tenzir::plugins::strict {
+namespace tenzir::plugins::strict_quiet {
 
 namespace {
 
@@ -311,8 +311,8 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::strict
+} // namespace tenzir::plugins::strict_quiet
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict::strict)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict_quiet::strict)
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict::QuietPlugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict_quiet::QuietPlugin)
