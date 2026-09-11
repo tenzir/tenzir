@@ -1,0 +1,7 @@
+from {x: 1}, {x: 2}
+quiet {
+  parsed = int("invalid")
+  y = x + 1
+}
+where y == 3
+select y

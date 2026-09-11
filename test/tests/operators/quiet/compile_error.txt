@@ -1,0 +1,7 @@
+error: operator `operator_that_does_not_exist` not found
+ --> tests/operators/quiet/compile_error.tql:6:3
+  |
+6 |   operator_that_does_not_exist
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = docs: https://tenzir.com/docs/reference/operators

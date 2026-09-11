@@ -1,0 +1,5 @@
+from {}
+quiet {
+  let $ts = "invalid".parse_time("%Y-%m-%dT%H:%M:%SZ")
+  ts = $ts
+}

@@ -308,6 +308,26 @@ private:
   Ref<secret_censor> censor_;
 };
 
+// Suppression does not isolate failures: errors still reach the parent.
+class WarningSuppressingDiagHandler final : public DiagHandler {
+public:
+  explicit WarningSuppressingDiagHandler(DiagHandler& dh) : dh_{dh} {
+  }
+
+  auto emit(diagnostic diag) -> void override {
+    if (diag.severity != severity::warning) {
+      dh_->emit(std::move(diag));
+    }
+  }
+
+  auto failure() -> failure_or<void> override {
+    return dh_->failure();
+  }
+
+private:
+  Ref<DiagHandler> dh_;
+};
+
 // Transforms diagnostic severity between a subpipeline and its parent handler.
 //
 // ErrorToWarning (ErrorDemotingDiagHandler): emits errors as warnings
@@ -815,6 +835,12 @@ private:
                            std::move(cancel_source)},
           sub_cancel_token);
       }
+      case DiagnosticBehavior::SuppressWarnings:
+        return spawn_sub_impl(
+          std::move(key), std::move(plan), fused,
+          Arc<DiagHandler>{std::in_place_type<WarningSuppressingDiagHandler>,
+                           *dh_},
+          folly::CancellationToken{});
       case DiagnosticBehavior::WarningToError: {
         return spawn_sub_impl(
           std::move(key), std::move(plan), fused,

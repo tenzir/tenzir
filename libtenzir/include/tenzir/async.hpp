@@ -117,6 +117,8 @@ enum class DiagnosticBehavior {
   ErrorToWarning,
   /// Promote warnings to errors; the parent handler drives cancellation.
   WarningToError,
+  /// Drop warnings and forward all other diagnostics unchanged.
+  SuppressWarnings,
 };
 
 /// Settings for the checkpointing mechanism.

@@ -1,0 +1,11 @@
+error: duplicate pipeline argument
+ --> tests/operators/quiet/duplicate_pipeline.tql:5:17
+  |
+5 | quiet { pass }, { drop x }
+  |                 ^^^^^^^^^^
+  ⋮
+5 | quiet { pass }, { drop x }
+  |       -------- previously provided here
+  |
+  = usage: quiet
+  = docs: https://tenzir.com/docs/reference/operators/quiet

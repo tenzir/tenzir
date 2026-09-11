@@ -1,0 +1,12 @@
+warning: failed to parse timestamp
+ --> tests/operators/quiet/compile_warning.tql:3:13
+  |
+3 |   let $ts = "invalid".parse_time("%Y-%m-%dT%H:%M:%SZ")
+  |             ~~~~~~~~~
+  ⋮
+3 |   let $ts = "invalid".parse_time("%Y-%m-%dT%H:%M:%SZ")
+  |                                  --------------------
+  |
+{
+  ts: null,
+}

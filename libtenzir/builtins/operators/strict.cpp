@@ -106,20 +106,21 @@ private:
 
 // --- New-executor implementation ---
 
-struct StrictArgs {
+struct DiagnosticScopeArgs {
   located<ir::pipeline> pipe;
 };
 
 // Primary template: non-void input, non-void output.
-template <class Input, class Output>
-class StrictOp final : public Operator<Input, Output> {
+template <DiagnosticBehavior Behavior, class Input, class Output>
+class DiagnosticScopeOp final : public Operator<Input, Output> {
 public:
-  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  explicit DiagnosticScopeOp(DiagnosticScopeArgs args)
+    : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not co_await ctx.plan_and_spawn_sub<Input>(
-          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+    if (not co_await ctx.plan_and_spawn_sub<Input>(int64_t{0}, args_.pipe.inner,
+                                                   Behavior)) {
       co_return;
     }
   }
@@ -145,19 +146,21 @@ public:
   }
 
 private:
-  StrictArgs args_;
+  DiagnosticScopeArgs args_;
 };
 
 // Partial specialisation: void output, non-void input.
-template <class Input>
-class StrictOp<Input, void> final : public Operator<Input, void> {
+template <DiagnosticBehavior Behavior, class Input>
+class DiagnosticScopeOp<Behavior, Input, void> final
+  : public Operator<Input, void> {
 public:
-  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  explicit DiagnosticScopeOp(DiagnosticScopeArgs args)
+    : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not co_await ctx.plan_and_spawn_sub<Input>(
-          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+    if (not co_await ctx.plan_and_spawn_sub<Input>(int64_t{0}, args_.pipe.inner,
+                                                   Behavior)) {
       co_return;
     }
   }
@@ -171,19 +174,21 @@ public:
   }
 
 private:
-  StrictArgs args_;
+  DiagnosticScopeArgs args_;
 };
 
 // Partial specialisation: void input, non-void output.
-template <class Output>
-class StrictOp<void, Output> final : public Operator<void, Output> {
+template <DiagnosticBehavior Behavior, class Output>
+class DiagnosticScopeOp<Behavior, void, Output> final
+  : public Operator<void, Output> {
 public:
-  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  explicit DiagnosticScopeOp(DiagnosticScopeArgs args)
+    : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not co_await ctx.plan_and_spawn_sub<void>(
-          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+    if (not co_await ctx.plan_and_spawn_sub<void>(int64_t{0}, args_.pipe.inner,
+                                                  Behavior)) {
       co_return;
     }
   }
@@ -203,19 +208,21 @@ public:
   }
 
 private:
-  StrictArgs args_;
+  DiagnosticScopeArgs args_;
 };
 
 // Full specialisation: void input, void output.
-template <>
-class StrictOp<void, void> final : public Operator<void, void> {
+template <DiagnosticBehavior Behavior>
+class DiagnosticScopeOp<Behavior, void, void> final
+  : public Operator<void, void> {
 public:
-  explicit StrictOp(StrictArgs args) : args_{std::move(args)} {
+  explicit DiagnosticScopeOp(DiagnosticScopeArgs args)
+    : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not co_await ctx.plan_and_spawn_sub<void>(
-          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+    if (not co_await ctx.plan_and_spawn_sub<void>(int64_t{0}, args_.pipe.inner,
+                                                  Behavior)) {
       co_return;
     }
   }
@@ -225,8 +232,48 @@ public:
   }
 
 private:
-  StrictArgs args_;
+  DiagnosticScopeArgs args_;
 };
+
+template <DiagnosticBehavior Behavior>
+auto describe_diagnostic_scope() -> Description {
+  auto d = Describer<DiagnosticScopeArgs>{};
+  auto pipe
+    = d.pipeline(&DiagnosticScopeArgs::pipe, SubOptimize::from_downstream);
+  d.spawner([pipe]<class Input>(DescribeCtx& ctx)
+              -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+    TRY(auto p, ctx.get(pipe));
+    TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
+    return match(
+      output,
+      [](tag<table_slice>)
+        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+        return [](DiagnosticScopeArgs args) {
+          return DiagnosticScopeOp<Behavior, Input, table_slice>{
+            std::move(args)};
+        };
+      },
+      [](tag<chunk_ptr>)
+        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+        return [](DiagnosticScopeArgs args) {
+          return DiagnosticScopeOp<Behavior, Input, chunk_ptr>{std::move(args)};
+        };
+      },
+      [](tag<void>)
+        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+        return [](DiagnosticScopeArgs args) {
+          return DiagnosticScopeOp<Behavior, Input, void>{std::move(args)};
+        };
+      });
+  });
+  return d.optimize([](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+    return {
+      .order = EventOrder::ordered,
+      .filter_self = std::move(req.filter),
+      .projection_upstream = std::move(req.projection),
+    };
+  });
+}
 
 // --- Plugin ---
 
@@ -245,39 +292,20 @@ struct strict : public virtual operator_plugin2<strict_operator>,
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<StrictArgs>{};
-    auto pipe = d.pipeline(&StrictArgs::pipe, SubOptimize::from_downstream);
-    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
-                -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
-      TRY(auto p, ctx.get(pipe));
-      TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-      return match(
-        output,
-        [](tag<table_slice>)
-          -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
-          return [](StrictArgs args) {
-            return StrictOp<Input, table_slice>{std::move(args)};
-          };
-        },
-        [](tag<chunk_ptr>) -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
-          return [](StrictArgs args) {
-            return StrictOp<Input, chunk_ptr>{std::move(args)};
-          };
-        },
-        [](tag<void>) -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
-          return [](StrictArgs args) {
-            return StrictOp<Input, void>{std::move(args)};
-          };
-        });
-    });
-    return d.optimize(
-      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
-        return {
-          .order = EventOrder::ordered,
-          .filter_self = std::move(req.filter),
-          .projection_upstream = std::move(req.projection),
-        };
-      });
+    return describe_diagnostic_scope<DiagnosticBehavior::WarningToError>();
+  }
+};
+
+// Experimental: suppress runtime warnings until selective diagnostic handling
+// and dead-letter queues have a defined contract.
+class QuietPlugin final : public OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "quiet";
+  }
+
+  auto describe() const -> Description override {
+    return describe_diagnostic_scope<DiagnosticBehavior::SuppressWarnings>();
   }
 };
 
@@ -286,3 +314,5 @@ struct strict : public virtual operator_plugin2<strict_operator>,
 } // namespace tenzir::plugins::strict
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict::strict)
+
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict::QuietPlugin)

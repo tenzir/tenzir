@@ -1,0 +1,9 @@
+---
+error: true
+---
+from {x: 1}
+quiet {
+  strict {
+    assert x == 2, message="promoted error"
+  }
+}

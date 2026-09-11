@@ -1,0 +1,8 @@
+from {x: 1}
+quiet {
+  write_json
+}
+quiet {
+  read_json
+  parsed = int("invalid")
+}

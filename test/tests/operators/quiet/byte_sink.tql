@@ -1,0 +1,7 @@
+from {x: 1}
+write_json
+quiet {
+  read_json
+  assert x == 2, message="suppressed sink warning"
+  discard
+}

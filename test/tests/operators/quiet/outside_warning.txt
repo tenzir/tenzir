@@ -1,0 +1,6 @@
+warning: assertion failed: "visible"
+ --> tests/operators/quiet/outside_warning.tql:5:8
+  |
+5 | assert x == 3, message="visible"
+  |        ~~~~~~
+  |

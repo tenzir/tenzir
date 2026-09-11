@@ -1,0 +1,8 @@
+---
+error: true
+---
+quiet {
+  from_stdin {
+    read_json
+  }
+}

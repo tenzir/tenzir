@@ -1,0 +1,6 @@
+from {x: 1}
+write_json
+quiet {
+  pass
+}
+read_json

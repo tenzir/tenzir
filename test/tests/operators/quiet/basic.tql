@@ -1,0 +1,7 @@
+from {time: "2026-09-09T14:30:00Z"}, {time: "something-else-but-expected"}
+quiet {
+  ts = time.parse_time("%Y-%m-%dT%H:%M:%SZ")
+}
+if ts == null {
+  ts = 2026-09-09T00:00:00Z
+}

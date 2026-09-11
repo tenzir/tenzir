@@ -1,0 +1,5 @@
+from {x: 1}
+quiet {
+  parsed = int("invalid")
+}
+assert x == 3, message="visible"

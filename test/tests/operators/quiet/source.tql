@@ -1,0 +1,4 @@
+quiet {
+  from {x: 1}
+  parsed = int("invalid")
+}

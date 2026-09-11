@@ -1,0 +1,17 @@
+error: too many positional arguments
+ --> tests/operators/quiet/empty_record.tql:5:7
+  |
+5 | quiet {}
+  |       ^^
+  |
+  = usage: quiet
+  = docs: https://tenzir.com/docs/reference/operators/quiet
+
+error: required subpipeline was not provided
+ --> tests/operators/quiet/empty_record.tql:5:1
+  |
+5 | quiet {}
+  | ^^^^^
+  |
+  = usage: quiet
+  = docs: https://tenzir.com/docs/reference/operators/quiet
