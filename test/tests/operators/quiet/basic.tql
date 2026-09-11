@@ -5,3 +5,4 @@ quiet {
 if ts == null {
   ts = 2026-09-09T00:00:00Z
 }
+sort time
