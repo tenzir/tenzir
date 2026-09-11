@@ -1,0 +1,11 @@
+created: 2026-09-11
+title: Parallel data movement and deeper pushdown
+intro: >-
+  Tenzir now parallelizes Kafka operators and HTTP-based sinks while pushing more
+  filters, projections, and limits toward data sources, so pipelines process less
+  data and move it faster. This release also adds KQL query sources for Microsoft
+  Defender advanced hunting and Azure Log Analytics, expands ClickHouse pushdown,
+  and improves the reliability of Kafka, Google Cloud Pub/Sub, and Base64 processing.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.16.0
