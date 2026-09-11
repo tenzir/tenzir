@@ -1,0 +1,125 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "tql2.cron",
+       store: {
+         op: {
+           path: [
+             `cron` @ [1]:115..119 from 0
+           ],
+           ref: std::cron/op
+         },
+         args: [
+           located "0 * * * * *" @ [1]:120..133 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:138..144 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+-                order: "ordered"
++                order: "ordered",
++                projection: [
++                  {
++                    expr: root_field {
++                      id: `payload` @ [1]:154..161 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `payload` @ [1]:154..161 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ]
+           } @ [1]:134..146 from 0,
+           let_ids: {
+             
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `payload` @ [1]:154..161 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `payload` @ [1]:154..161 from 0,
+             has_question_mark: false
+           },
+           location: [1]:154..161 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:161..161 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

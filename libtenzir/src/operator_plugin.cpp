@@ -751,8 +751,9 @@ public:
           break;
         }
         case SubOptimize::fork: {
-          // independent optimize; the branch's limit and projection describe
-          // the branch input and are discarded
+          // Optimize independently. The branch input and the main path share
+          // the enclosing upstream, so their projections are unioned. A
+          // branch-local limit must not escape to that shared input.
           auto sub
             = std::move(pipe->pipeline.inner)
                 .optimize(ir::OptimizeRequest{.filter = {},
@@ -761,6 +762,7 @@ public:
           // fork is filter barrier
           sub.replacement.prepend(std::move(sub.filter));
           pipe->pipeline.inner = std::move(sub.replacement);
+          ir::merge_projection(req.projection, sub.projection);
           // only relax upstream ordering if both branches are ok with unordered
           order = stronger_event_order(order, sub.order);
           break;

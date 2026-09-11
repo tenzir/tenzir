@@ -1,0 +1,6 @@
+export
+fork {
+  select side
+  discard
+}
+select main

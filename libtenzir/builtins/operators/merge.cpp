@@ -80,12 +80,15 @@ public:
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     auto filter = std::move(req.filter);
     auto order = req.order;
-    // Push filter and order into both legs of merge: upstream and subpipeline.
-    // Limit and projection are not pushed into either leg, because the merged
-    // output needs both legs in full.
+    // Push filter, order, and projection into both legs of merge. The source
+    // subpipeline may consume the projection internally, but its input
+    // requirement does not apply to the independent main leg. A limit cannot
+    // be pushed into either leg because it is global across the merged output.
     auto opt = std::move(args_.pipe)
-                 .optimize(
-                   ir::OptimizeRequest{.filter = filter, .order = order}, octx);
+                 .optimize(ir::OptimizeRequest{.filter = filter,
+                                               .order = order,
+                                               .projection = req.projection},
+                           octx);
     args_.pipe = std::move(opt.replacement);
     args_.pipe.operators.insert_range(args_.pipe.operators.begin(),
                                       opt.filter
@@ -96,6 +99,8 @@ public:
       std::move(filter),
       order,
       ir::pipeline{{}, std::move(replacement)},
+      None{},
+      std::move(req.projection),
     };
   }
 

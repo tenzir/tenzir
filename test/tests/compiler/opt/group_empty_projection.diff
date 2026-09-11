@@ -1,0 +1,133 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:122..128 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `key` @ [1]:135..138 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `key` @ [1]:135..138 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "group",
+       store: {
+         op: {
+           path: [
+             `group` @ [1]:129..134 from 0
+           ],
+           ref: std::group/op
+         },
+         args: [
+           expression root_field {
+             id: `key` @ [1]:135..138 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: this_ [0]:0..0 from 0,
+                     right: record {
+                       begin: [0]:0..0 from 0,
+                       items: [
+                         
+                       ],
+                       end: [0]:0..0 from 0
+                     },
+                     location: [0]:0..0 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:139..151 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:158..158 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

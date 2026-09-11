@@ -1,0 +1,6 @@
+export
+match route {
+  "left" if enabled => { out = left }
+  _ => { out = right }
+}
+select out

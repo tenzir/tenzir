@@ -446,6 +446,8 @@ public:
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     auto filter = std::move(req.filter);
     auto order = req.order;
+    auto downstream_projection = std::move(req.projection);
+    auto projection = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
     // The planner lowers the arms inline, so this is the only pass that gets to
     // optimize them. Without recursing here, optimizer-only operators such as
     // `unordered` would survive into the plan and panic when spawned.
@@ -475,19 +477,29 @@ public:
     for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
       auto& arm = args_.arms[i];
       auto events = outputs_events[i];
-      auto opt = std::move(arm.pipeline)
-                   .optimize(
-                     ir::OptimizeRequest{
-                       .filter = events ? pushed : ir::OptimizeFilter{},
-                       .order = events ? order : EventOrder::ordered,
-                     },
-                     octx);
+      auto opt
+        = std::move(arm.pipeline)
+            .optimize(
+              ir::OptimizeRequest{
+                .filter = events ? pushed : ir::OptimizeFilter{},
+                .order = events ? order : EventOrder::ordered,
+                .projection = events ? downstream_projection
+                                     : Option<ir::OptimizeProjection>{None{}},
+              },
+              octx);
       arm.pipeline = std::move(opt.replacement);
       // All arms share `match` as their upstream, so an arm cannot push its
-      // residual filter further up. The same holds for its limit and
-      // projection, which describe the arm input and are discarded.
+      // residual filter further up. A local limit also cannot escape. The
+      // projection describes fields this arm needs from the shared input.
       arm.pipeline.prepend(std::move(opt.filter));
+      ir::merge_projection(projection, opt.projection);
       result_order = stronger_event_order(result_order, opt.order);
+    }
+    ir::add_refs_to_projection(projection, args_.scrutinee);
+    for (const auto& arm : args_.arms) {
+      if (arm.guard) {
+        ir::add_refs_to_projection(projection, *arm.guard);
+      }
     }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
@@ -495,9 +507,10 @@ public:
       replacement.push_back(make_where_ir(std::move(expr)));
     }
     return {
-      {},
-      result_order,
-      ir::pipeline{{}, std::move(replacement)},
+      .filter = {},
+      .order = result_order,
+      .replacement = ir::pipeline{{}, std::move(replacement)},
+      .projection = std::move(projection),
     };
   }
 

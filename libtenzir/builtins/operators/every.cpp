@@ -415,7 +415,18 @@ public:
           });
       }
     });
-    return d.invariant_filter();
+    return d.optimize(
+      [](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
+        auto [independent, dependent]
+          = ir::split_filter_by_dependents(std::move(req.filter), touched);
+        return {
+          .order = EventOrder::ordered,
+          .filter_upstream = std::move(independent),
+          .filter_self = std::move(dependent),
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

@@ -1,0 +1,5 @@
+export
+every 1s {
+  select payload
+}
+select payload

@@ -352,6 +352,7 @@ public:
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     auto filter = std::move(req.filter);
     auto order = req.order;
+    auto projection = std::move(req.projection);
     // The planner lowers the branch inline, so this is the only pass that gets
     // to optimize it. Without recursing here, optimizer-only operators such as
     // `unordered` would survive into the plan and panic when spawned.
@@ -365,9 +366,12 @@ public:
                            octx);
     args_.pipe = std::move(opt.replacement);
     // The branch is a sink and has no other upstream than `fork` itself, so a
-    // filter it wants to push up is reinserted at its front. A limit or
-    // projection it wants to push up describes the branch input and is dropped.
+    // filter it wants to push up is reinserted at its front. Its projection,
+    // however, describes fields that the shared input must retain in addition
+    // to those needed by the main output path. A branch-local limit must not
+    // escape to the shared input.
     args_.pipe.prepend(std::move(opt.filter));
+    ir::merge_projection(projection, opt.projection);
     // A downstream filter must not be pushed past `fork`: the branch has to
     // observe every input row. It stays behind the main output port.
     auto replacement = std::vector<Box<ir::Operator>>{};
@@ -379,6 +383,8 @@ public:
       {},
       stronger_event_order(order, opt.order),
       ir::pipeline{{}, std::move(replacement)},
+      None{},
+      std::move(projection),
     };
   }
 

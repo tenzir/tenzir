@@ -1,0 +1,7 @@
+// An opaque full-row sink in one branch prevents narrowing the shared input,
+// even though the main path only needs one field.
+export
+fork {
+  discard
+}
+select main

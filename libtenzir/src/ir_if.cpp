@@ -134,11 +134,12 @@ public:
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     auto filter = std::move(req.filter);
     auto order = req.order;
+    auto downstream_projection = std::move(req.projection);
+    auto projection = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
     // A branch that does not return events has no downstream event consumer,
     // so it inherits neither the downstream filter nor its order requirement.
-    // Limit and projection are not pushed into the branches, and whatever a
-    // branch would push to its upstream describes the branch input rather than
-    // the upstream of `if`, so it is discarded.
+    // Every branch input requirement applies to the shared input of `if`, but
+    // a branch-local limit does not.
     auto null_dh = null_diagnostic_handler{};
     auto optimize_branch
       = [&](ir::pipeline& branch, const ir::OptimizeFilter& f) -> EventOrder {
@@ -148,10 +149,13 @@ public:
         ir::OptimizeRequest{
           .filter = events ? f : ir::OptimizeFilter{},
           .order = events ? order : EventOrder::ordered,
+          .projection = events ? downstream_projection
+                               : Option<ir::OptimizeProjection>{None{}},
         },
         octx);
       branch = std::move(opt.replacement);
       branch.prepend(std::move(opt.filter));
+      ir::merge_projection(projection, opt.projection);
       return opt.order;
     };
     // Handle downstream filters when there is no explicit `else` branch.
@@ -161,12 +165,18 @@ public:
     auto cons_order = optimize_branch(args_.consequence, filter);
     auto alt_order
       = args_.alternative ? optimize_branch(*args_.alternative, filter) : order;
+    if (not args_.alternative) {
+      ir::merge_projection(projection, downstream_projection);
+    }
+    ir::add_refs_to_projection(projection, args_.condition);
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     return {
       {},
       stronger_event_order(cons_order, alt_order),
       ir::pipeline{{}, std::move(replacement)},
+      None{},
+      std::move(projection),
     };
   }
 

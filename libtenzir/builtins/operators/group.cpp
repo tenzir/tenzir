@@ -147,7 +147,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<GroupArgs>{};
-    d.positional("over", &GroupArgs::over, "expr");
+    auto over = d.positional("over", &GroupArgs::over, "expr");
     auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
                            {{"group", &GroupArgs::let}});
     d.parallelizable();
@@ -183,7 +183,17 @@ public:
         return {};
       }
     });
-    return d.without_optimize();
+    return d.optimize(
+      [over](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        if (auto value = ctx.get(over)) {
+          ir::add_refs_to_projection(req.projection, *value);
+        }
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

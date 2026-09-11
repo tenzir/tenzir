@@ -1,0 +1,7 @@
+export
+fork_merge {
+  out = left
+}, {
+  out = right
+}
+select out

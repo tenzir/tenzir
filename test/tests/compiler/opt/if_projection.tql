@@ -1,0 +1,7 @@
+export
+if route {
+  out = left
+} else {
+  out = right
+}
+select out

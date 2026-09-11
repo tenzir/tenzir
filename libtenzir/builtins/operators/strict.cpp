@@ -270,7 +270,14 @@ struct strict : public virtual operator_plugin2<strict_operator>,
           };
         });
     });
-    return d.without_optimize();
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

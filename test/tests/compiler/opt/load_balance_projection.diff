@@ -1,0 +1,129 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "unordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `payload` @ [1]:42..49 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `payload` @ [1]:42..49 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "load_balance",
+       store: {
+         op: {
+           path: [
+             `load_balance` @ [1]:7..19 from 0
+           ],
+           ref: std::load_balance/op
+         },
+         args: [
+           located [
+             string "worker"
+           ] @ [1]:20..30 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: this_ [0]:0..0 from 0,
+                     right: record {
+                       begin: [0]:0..0 from 0,
+                       items: [
+                         
+                       ],
+                       end: [0]:0..0 from 0
+                     },
+                     location: [0]:0..0 from 0
+                   },
+                   {
+                     left: root_field {
+                       id: `payload` @ [1]:42..49 from 0,
+                       has_question_mark: false
+                     },
+                     right: root_field {
+                       id: `payload` @ [1]:42..49 from 0,
+                       has_question_mark: false
+                     },
+                     location: [1]:42..49 from 0
+                   }
+                 ],
+-                order: "ordered"
++                order: "unordered"
+               },
+               GenericIr {
+                 desc: "discard",
+                 store: {
+                   op: {
+                     path: [
+                       `discard` @ [1]:52..59 from 0
+                     ],
+                     ref: std::discard/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:31..61 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "unordered"
+     }
+   ]
+ }

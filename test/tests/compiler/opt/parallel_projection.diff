@@ -1,0 +1,135 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "unordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `payload` @ [1]:26..33 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `payload` @ [1]:26..33 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     parallel_ir {
+       op: {
+         path: [
+           `parallel` @ [1]:7..15 from 0
+         ],
+         ref: std::parallel/op
+       },
+       args: [
+         
+       ],
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             SetIr {
+               assignments: [
+                 {
+                   left: root_field {
+                     id: `out` @ [1]:20..23 from 0,
+                     has_question_mark: false
+                   },
+                   right: root_field {
+                     id: `payload` @ [1]:26..33 from 0,
+                     has_question_mark: false
+                   },
+                   location: [1]:20..33 from 0
+                 }
+               ],
+-              order: "ordered"
++              order: "unordered"
+             }
+           ]
+         } @ [1]:16..35 from 0,
+         let_ids: {
+           
+         }
+       }
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `out` @ [1]:43..46 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `out` @ [1]:43..46 from 0,
+             has_question_mark: false
+           },
+           location: [1]:43..46 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:46..46 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

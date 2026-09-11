@@ -1,0 +1,6 @@
+// `cron` has no enclosing event input, but still pushes the downstream
+// projection into its source subpipeline.
+cron "0 * * * * *" {
+  export
+}
+select payload

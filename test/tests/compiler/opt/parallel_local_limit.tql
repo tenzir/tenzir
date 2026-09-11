@@ -1,0 +1,8 @@
+// The inner `head` applies to every replica and must not become a limit on the
+// input shared by all replicas. The final `head` remains the global count.
+export
+parallel {
+  head 1
+  select payload
+}
+head 2

@@ -1,0 +1,5 @@
+export
+load_balance ["worker"] {
+  select payload
+  discard
+}

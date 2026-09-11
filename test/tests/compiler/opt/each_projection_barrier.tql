@@ -1,0 +1,8 @@
+// `$this` is bound to the complete outer event. Until binding-rooted field
+// requirements are representable, `each` conservatively retains every field.
+export
+each {
+  from $this
+  select payload
+}
+select payload

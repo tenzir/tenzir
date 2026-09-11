@@ -1842,7 +1842,20 @@ public:
         return {};
       }
     });
-    return d.without_optimize();
+    return d.optimize(
+      [on, trigger](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        if (auto value = ctx.get(on)) {
+          ir::add_refs_to_projection(req.projection, *value);
+        }
+        if (auto value = ctx.get(trigger)) {
+          ir::add_refs_to_projection(req.projection, *value);
+        }
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

@@ -1,0 +1,7 @@
+// Even when the nested and downstream pipelines need no output fields, the
+// shared input must retain the grouping key.
+export
+group key {
+  select
+}
+select

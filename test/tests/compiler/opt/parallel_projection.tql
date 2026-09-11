@@ -1,0 +1,5 @@
+export
+parallel {
+  out = payload
+}
+select out

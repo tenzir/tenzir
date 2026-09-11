@@ -1,0 +1,199 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `payload` @ [1]:71..78 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `payload` @ [1]:71..78 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `ts` @ [1]:27..29 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `ts` @ [1]:27..29 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `ready` @ [1]:54..59 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `ready` @ [1]:54..59 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "window",
+       store: {
+         op: {
+           path: [
+             `window` @ [1]:7..13 from 0
+           ],
+           ref: std::window/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located duration "10s" @ [1]:19..22 from 0
+           },
+           {
+             index: 4,
+             value: expression root_field {
+               id: `ts` @ [1]:27..29 from 0,
+               has_question_mark: false
+             }
+           },
+           {
+             index: 3,
+             value: located true @ [1]:40..44 from 0
+           },
+           {
+             index: 5,
+             value: expression root_field {
+               id: `ready` @ [1]:54..59 from 0,
+               has_question_mark: false
+             }
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: this_ [0]:0..0 from 0,
+                     right: record {
+                       begin: [0]:0..0 from 0,
+                       items: [
+                         
+                       ],
+                       end: [0]:0..0 from 0
+                     },
+                     location: [0]:0..0 from 0
+                   },
+                   {
+                     left: root_field {
+                       id: `payload` @ [1]:71..78 from 0,
+                       has_question_mark: false
+                     },
+                     right: root_field {
+                       id: `payload` @ [1]:71..78 from 0,
+                       has_question_mark: false
+                     },
+                     location: [1]:71..78 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           } @ [1]:60..80 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `payload` @ [1]:88..95 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `payload` @ [1]:88..95 from 0,
+             has_question_mark: false
+           },
+           location: [1]:88..95 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:95..95 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

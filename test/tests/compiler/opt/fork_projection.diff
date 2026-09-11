@@ -1,0 +1,165 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `main` @ [1]:47..51 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `main` @ [1]:47..51 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `side` @ [1]:23..27 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `side` @ [1]:23..27 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     fork_ir {
+       keyword: [1]:7..11 from 0,
+       pipe_location: [1]:12..39 from 0,
+       pipe: {
+         lets: [
+           
+         ],
+         operators: [
+           SetIr {
+             assignments: [
+               {
+                 left: this_ [0]:0..0 from 0,
+                 right: record {
+                   begin: [0]:0..0 from 0,
+                   items: [
+                     
+                   ],
+                   end: [0]:0..0 from 0
+                 },
+                 location: [0]:0..0 from 0
+               },
+               {
+                 left: root_field {
+                   id: `side` @ [1]:23..27 from 0,
+                   has_question_mark: false
+                 },
+                 right: root_field {
+                   id: `side` @ [1]:23..27 from 0,
+                   has_question_mark: false
+                 },
+                 location: [1]:23..27 from 0
+               }
+             ],
+-            order: "ordered"
++            order: "unordered"
+           },
+           GenericIr {
+             desc: "discard",
+             store: {
+               op: {
+                 path: [
+                   `discard` @ [1]:30..37 from 0
+                 ],
+                 ref: std::discard/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
+             filter: [
+               
+             ],
+             order: "ordered"
+           }
+         ]
+       }
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `main` @ [1]:47..51 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `main` @ [1]:47..51 from 0,
+             has_question_mark: false
+           },
+           location: [1]:47..51 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:51..51 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

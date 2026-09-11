@@ -188,13 +188,18 @@ public:
     };
     auto pipe = args_.pipe();
     TENZIR_ASSERT(pipe);
-    // Apply downstream filter and order into the subpipeline.
-    // Limit and projection stay outside: every replica would stop after the
-    // limit on its own, so the shared upstream could not honor it.
+    // Apply downstream requirements into the subpipeline. Every replica would
+    // interpret a limit independently, so a limit must not escape to the
+    // shared upstream. In contrast, every replica's input projection is the
+    // same requirement on that shared input.
     auto sub = std::move(pipe->inner)
-                 .optimize(ir::OptimizeRequest{.filter = std::move(req.filter),
-                                               .order = req.order},
-                           sub_octx);
+                 .optimize(
+                   ir::OptimizeRequest{
+                     .filter = std::move(req.filter),
+                     .order = req.order,
+                     .projection = std::move(req.projection),
+                   },
+                   sub_octx);
     // Reinsert residual filters at the front of the subpipeline so they don't
     // escape past `parallel` (no filter propagation upstream).
     pipe->inner = std::move(sub.replacement);
@@ -206,6 +211,7 @@ public:
       .filter = {},
       .order = sub.order,
       .replacement = ir::pipeline{{}, std::move(replacement)},
+      .projection = std::move(sub.projection),
     };
   }
 

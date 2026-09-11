@@ -1,0 +1,5 @@
+export
+window size=10s, on=ts, trailing=true, trigger=ready {
+  select payload
+}
+select payload
