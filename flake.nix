@@ -10,7 +10,7 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:tobim/nixpkgs/0eba1cb3a7898e24864434399bcd07ffec1b8221";
+    nixpkgs.url = "github:NixOS/nixpkgs/a36350a37b1f70dd995e1be9e39946c11ad0c77b";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
@@ -105,7 +105,8 @@
         legacyPackages = pkgs;
         devShells.default = import ./shell.nix { inherit system; };
         formatter = self.packages.${system}.format;
-        checks = {
+        checks = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          static-pie = pkgs.pkgsStatic.callPackage ./nix/tests/static-pie.nix { };
           # Disabled until the custom Style Check workflow is aligned.
           #formatting = treefmtEval.config.build.check self;
         };

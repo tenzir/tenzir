@@ -2,6 +2,7 @@ finalPkgs: prevPkgs:
 let
   inherit (prevPkgs) lib;
   inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
+  gccName = "gcc${toString prevPkgs.default-gcc-version}";
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
   callFunction = callFunctionWith finalPkgs;
@@ -10,11 +11,6 @@ let
     pyarrow = python-prevPkgs.pyarrow.overridePythonAttrs (baseAttrs: {
       doCheck = false;
       doInstallCheck = false;
-      nativeBuildInputs = baseAttrs.nativeBuildInputs ++ [
-        python-finalPkgs.libcst
-        python-finalPkgs.ninja
-        python-finalPkgs.scikit-build-core
-      ];
       postPatch = (baseAttrs.postPatch or "") + ''
         substituteInPlace pyproject.toml \
           --replace-fail 'build-backend = "_build_backend"' 'build-backend = "scikit_build_core.build"' \
@@ -42,6 +38,24 @@ let
 
 in
 {
+  # Port https://github.com/NixOS/nixpkgs/pull/515233 to our static Linux
+  # toolchain. Select by targetPlatform: the cross compiler itself runs on
+  # the build platform, while its output must be position independent.
+  ${gccName} =
+    if prevPkgs.stdenv.targetPlatform.isStatic && prevPkgs.stdenv.targetPlatform.isLinux then
+      prevPkgs.${gccName}.override (args: {
+        cc = (args.cc.override { enableDefaultPie = true; }).overrideAttrs (orig: {
+          # GCC's default PIE code generation also applies to its runtime
+          # libraries. Rewrite -static at link time, preserving explicit
+          # -no-pie, relocatable links, and shared-library links.
+          configureFlags = orig.configureFlags ++ [
+            "--with-specs=%{!r:%{!shared:%{!no-pie:%{static:%<static -static-pie}}}}"
+          ];
+        });
+      })
+    else
+      prevPkgs.${gccName};
+
   curl = prevPkgs.curl.override (
     lib.optionalAttrs (isDarwin && isStatic) {
       # Brings in a conflicting libiconv via libunistring.
@@ -86,7 +100,6 @@ in
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
   fizz = callFunction ./overrides/fizz.nix { inherit (prevPkgs) fizz; };
   folly = callFunction ./overrides/folly.nix { inherit (prevPkgs) folly; };
-  gmp = callFunction ./overrides/gmp.nix { inherit (prevPkgs) gmp; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };
@@ -95,7 +108,6 @@ in
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
-  musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
   ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
   # Upstream builds the OTLP exporters only when asked, and something exporting
@@ -122,6 +134,17 @@ in
           runHook postCheck
         '';
       });
+  protobuf = prevPkgs.protobuf.overrideAttrs (
+    base:
+    lib.optionalAttrs prevPkgs.stdenv.hostPlatform.isMusl {
+      # The arena reference stress test overflows musl's default thread stack.
+      postPatch = (base.postPatch or "") + ''
+        substituteInPlace cmake/tests.cmake \
+          --replace-fail 'target_link_libraries(upb-test' \
+            $'target_link_options(upb-test PRIVATE "LINKER:-z,stack-size=8388608")\n  target_link_libraries(upb-test'
+      '';
+    }
+  );
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };

@@ -2,7 +2,7 @@
   lib,
   callPackage,
   pyproject-nix,
-  python3,
+  python313,
   uv2nix,
   pyproject-build-systems,
 }:
@@ -14,7 +14,8 @@ let
   };
 
   pythonBase = callPackage pyproject-nix.build.packages {
-    python = python3;
+    # Keep the bundled wheels and their runtime interpreter on Python 3.13.
+    python = python313;
   };
 
   addDistOutput =
@@ -71,7 +72,7 @@ in
       # The dependency wheels are binary builds for exactly this interpreter
       # version. The `python` operator reads the marker to pin its venvs to a
       # matching interpreter on systems that do not ship one.
-      echo "${python3.pythonVersion}" > $out/.python-version
+      echo "${python313.pythonVersion}" > $out/.python-version
       copy_wheels() {
         local src="$1"
         if [ -d "$src" ]; then

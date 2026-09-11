@@ -23,7 +23,7 @@
       in
       baseEnv
       // {
-        PROTOC = lib.getExe buildPackages.protobuf_34;
+        PROTOC = lib.getExe buildPackages.protobuf;
         NIX_LDFLAGS =
           (baseEnv.NIX_LDFLAGS or "")
           + lib.optionalString stdenv.hostPlatform.isDarwin " -framework CoreFoundation";

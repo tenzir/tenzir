@@ -21,7 +21,7 @@ stdenvNoCC.mkDerivation {
   checkPhase =
     let
       pythonDeps = import ../python-dependencies.nix;
-      py3 = pkgsBuildBuild.python3.withPackages pythonDeps.integration;
+      py3 = pkgsBuildBuild.python313.withPackages pythonDeps.integration;
 
       template = path: ''
         if [ -d "${path}/test/tests" ]; then

@@ -24,6 +24,13 @@ rustPlatform.buildRustPackage (finalAttrs: {
   env = {
     CARGO_PROFILE_RELEASE_LTO = "fat";
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "1";
+  }
+  // lib.optionalAttrs (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isLinux) {
+    # The Rust static library is linked into the Engine's static PIE executable.
+    "CARGO_TARGET_${
+      lib.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] stdenv.hostPlatform.rust.rustcTarget)
+    }_RUSTFLAGS" =
+      "-C relocation-model=pie";
   };
 
   cargoBuildFlags = [ "--package=yara-x-cli" ];
