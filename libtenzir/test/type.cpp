@@ -344,62 +344,51 @@ TEST("record_type name resolving") {
   CHECK_EQUAL(rt.resolve_key("r.a"), (offset{1, 1}));
   CHECK_EQUAL(rt.resolve_key("a"), None{});
   CHECK_EQUAL(rt.resolve_key("r.not"), None{});
-  auto to_vector = [](auto&& rng) {
-    std::vector<offset> result{};
-    for (auto&& elem : std::forward<decltype(rng)>(rng)) {
-      result.push_back(std::forward<decltype(elem)>(elem));
-    }
-    return result;
+  CHECK_EQUAL(rt.resolve_key("r2.r.a"), (offset{3, 1, 0}));
+  CHECK_EQUAL(rt.resolve_key("2.r.a"), None{});
+  CHECK_EQUAL(rt.resolve_key(""), None{});
+}
+
+TEST("record_type exact paths with schema prefixes") {
+  auto const nested = record_type{
+    {"pkts_toserver", uint64_type{}},
+    {"bypassed", record_type{{"pkts_toserver", uint64_type{}}}},
   };
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("a")),
-              (std::vector<offset>{{1, 1}, {3, 1, 0}}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("r.a")),
-              (std::vector<offset>{{1, 1}, {3, 1, 0}}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("r")), (std::vector<offset>{}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("r2.r.a")),
-              (std::vector<offset>{{3, 1, 0}}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("2.r.a")),
-              (std::vector<offset>{}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("i")),
-              (std::vector<offset>{{0}}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("")), (std::vector<offset>{}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("t.u.r2.r.a", "t.u")),
-              (std::vector<offset>{{3, 1, 0}}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix("u.r2.r.a", "t.u")),
-              (std::vector<offset>{{3, 1, 0}}));
-  CHECK_EQUAL(to_vector(rt.resolve_key_suffix(".u.r2.r.a", "t.u")),
-              (std::vector<offset>{}));
-  const auto zeek_conn = type{
-    "zeek.conn",
-    record_type{
-      {"ts", type{"timestamp", time_type{}}},
-      {"uid", type{string_type{}, {{"index", "hash"}}}},
-      {
-        "id",
-        type{"zeek.conn_id",
-             record_type{
-               {"orig_h", ip_type{}},
-               {"orig_p", type{"port", uint64_type{}}},
-               {"resp_h", ip_type{}},
-               {"resp_p", type{"port", uint64_type{}}},
-             }},
-      },
-      {"proto", string_type{}},
-    },
+  auto const schema_name = std::string_view{"suricata.flow"};
+  for (auto const& rt : {nested, flatten(nested)}) {
+    auto const root = *rt.resolve_key("pkts_toserver");
+    auto const bypassed = *rt.resolve_key("bypassed.pkts_toserver");
+    CHECK_EQUAL(
+      collect(rt.resolve_key_or_concept("pkts_toserver", schema_name)),
+      (std::vector<offset>{root}));
+    CHECK_EQUAL(collect(rt.resolve_key_or_concept("suricata.flow.pkts_toserver",
+                                                  schema_name)),
+                (std::vector<offset>{root}));
+    CHECK_EQUAL(collect(rt.resolve_key_or_concept(
+                  "suricata.flow.bypassed.pkts_toserver", schema_name)),
+                (std::vector<offset>{bypassed}));
+    CHECK_EQUAL(
+      collect(rt.resolve_key_or_concept("flow.pkts_toserver", schema_name)),
+      (std::vector<offset>{}));
+  }
+  auto const only_nested
+    = record_type{{"bypassed", record_type{{"pkts_toserver", uint64_type{}}}}};
+  for (auto const& rt : {only_nested, flatten(only_nested)}) {
+    CHECK_EQUAL(collect(rt.resolve_key_or_concept("pkts_toserver", "flow")),
+                (std::vector<offset>{}));
+    CHECK_EQUAL(collect(rt.resolve_key_or_concept("flow.pkts_toserver", "flo"
+                                                                        "w")),
+                (std::vector<offset>{}));
+  }
+  auto const collision = record_type{
+    {"pkts_toserver", uint64_type{}},
+    {"flow", record_type{{"pkts_toserver", uint64_type{}}}},
   };
-  CHECK_EQUAL(to_vector(as<record_type>(zeek_conn).resolve_key_suffix(
-                "resp_p", zeek_conn.name())),
-              (std::vector<offset>{{2, 3}}));
-  CHECK_EQUAL(to_vector(as<record_type>(zeek_conn).resolve_key_suffix("resp_"
-                                                                      "p")),
-              (std::vector<offset>{{2, 3}}));
-  const auto zeek_conn_flat = flatten(zeek_conn);
-  CHECK_EQUAL(to_vector(as<record_type>(zeek_conn_flat)
-                          .resolve_key_suffix("resp_p", zeek_conn.name())),
-              (std::vector<offset>{{5}}));
-  CHECK_EQUAL(
-    to_vector(as<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p")),
-    (std::vector<offset>{{5}}));
+  for (auto const& rt : {collision, flatten(collision)}) {
+    CHECK_EQUAL(collect(rt.resolve_key_or_concept("flow.pkts_toserver", "flo"
+                                                                        "w")),
+                (std::vector<offset>{*rt.resolve_key("flow.pkts_toserver")}));
+  }
 }
 
 TEST("record_type type resolving") {

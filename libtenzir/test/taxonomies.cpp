@@ -84,6 +84,30 @@ TEST("concepts - cyclic definition") {
   CHECK_EQUAL(result, ref);
 }
 
+TEST("concepts - schema prefixes require exact field paths") {
+  auto const ts = taxonomies{concepts_map{
+    {"traffic", {"", {"flow.pkts_toserver", "flow.bytes_toserver"}, {}}},
+  }};
+  auto const nested = record_type{
+    {"bytes_toserver", uint64_type{}},
+    {"bypassed", record_type{{"pkts_toserver", uint64_type{}}}},
+  };
+  auto const expr = unbox(to<expression>("traffic == 1"));
+  auto const expected = unbox(to<expression>("flow.bytes_toserver == 1"));
+  for (auto const& rt : {nested, flatten(nested)}) {
+    auto const schema = type{"flow", rt};
+    auto resolved = resolve(ts, expr, schema);
+    REQUIRE(resolved);
+    CHECK_EQUAL(*resolved, expected);
+    auto tailored = tailor(*resolved, schema);
+    REQUIRE(tailored);
+    CHECK_EQUAL(
+      *tailored,
+      (expression{predicate{data_extractor{type{uint64_type{}}, 0},
+                            relational_operator::equal, data{uint64_t{1}}}}));
+  }
+}
+
 TEST("concepts - convert fails for non-list input") {
   concepts_map test;
   // Pass a string instead of a list

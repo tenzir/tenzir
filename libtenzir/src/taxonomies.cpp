@@ -169,8 +169,9 @@ static bool contains(const type& schema, const std::string& x,
                      relational_operator op, const tenzir::data& data) {
   const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
-  for (const auto& offset : rt->resolve_key_suffix(x, schema.name())) {
-    if (compatible(rt->field(offset).type, op, data)) {
+  for (const auto& offset : rt->resolve_key_or_concept(x, schema.name())) {
+    auto const field_type = rt->field(offset).type;
+    if (not is<record_type>(field_type) and compatible(field_type, op, data)) {
       return true;
     }
   }
