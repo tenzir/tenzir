@@ -103,6 +103,15 @@ in
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };
+  grpc = prevPkgs.grpc.overrideAttrs (orig: {
+    patches = (orig.patches or [ ]) ++ [
+      # Fix a null dereference when the internal HTTPS client reports a TLS error.
+      (finalPkgs.fetchpatch2 {
+        url = "https://github.com/grpc/grpc/commit/64969f94fd342dba64c3bd066541f03a45137c24.patch";
+        hash = "sha256-XCLv7PvE19WQ1n9mBxvJroCqR0XQEQvgd4Uw4IZ1Ge0=";
+      })
+    ];
+  });
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
   libnats-c = callFunction ./overrides/libnats-c.nix { inherit (prevPkgs) libnats-c; };
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
