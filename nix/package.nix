@@ -84,7 +84,9 @@ rec {
     fileset = tenzir-tree;
   };
 
-  test-deps = pkgs.callPackage ./test-dependencies.nix { };
+  test-deps = pkgs.callPackage ./test-dependencies.nix {
+    python3Packages = pkgs.python313Packages;
+  };
   inherit (test-deps) tenzir-integration-test-deps;
 
   toImageFn = import ./tenzir/image.nix nix2container;

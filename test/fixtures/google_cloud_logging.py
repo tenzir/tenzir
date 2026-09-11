@@ -482,6 +482,7 @@ def google_cloud_logging() -> Iterator[dict[str, str]]:
             "GOOGLE_CLOUD_CPP_LOGGING_SERVICE_V2_ENDPOINT": f"localhost:{grpc_port}",
             "GOOGLE_CLOUD_CPP_LOGGING_SERVICE_V2_AUTHORITY": "localhost",
             "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": str(tls["ca_cert"]),
+            "GRPC_VERBOSITY": "ERROR",
             "GCL_CAPTURE_FILE": capture_path,
             "GCL_SERVICE_CREDENTIALS": sa_path,
             "GOOGLE_CLOUD_PROJECT": "test-project",
