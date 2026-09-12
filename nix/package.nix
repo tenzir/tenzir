@@ -63,7 +63,6 @@ rec {
   integration-test-tree = lib.fileset.difference ../test excluded-integration-tests;
 
   tenzir-tree = lib.fileset.unions [
-    ../changelog
     ../cmake
     ../libtenzir
     ../libtenzir_test
