@@ -114,6 +114,14 @@ in
   });
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
   libnats-c = callFunction ./overrides/libnats-c.nix { inherit (prevPkgs) libnats-c; };
+  libpcap = prevPkgs.libpcap.overrideAttrs (
+    orig:
+    lib.optionalAttrs (isStatic && finalPkgs.stdenv.hostPlatform.isLinux && finalPkgs.stdenv.cc.isGNU) {
+      # libpcap adds -fpic even with shared libraries disabled. Let GCC's
+      # default PIE mode avoid the small GOT limit in large aarch64 binaries.
+      makeFlags = (orig.makeFlags or [ ]) ++ [ "SHLIB_CCOPT=" ];
+    }
+  );
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
