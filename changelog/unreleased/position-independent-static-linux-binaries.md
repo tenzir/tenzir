@@ -6,4 +6,4 @@ authors:
 created: 2026-09-11T10:09:02.742381Z
 ---
 
-Static Linux binaries now support address-space randomization for the executable itself. The bundled Python environment continues to support Python 3.13, including offline use in container images.
+Static Linux binaries now support address-space randomization for the executable itself.
