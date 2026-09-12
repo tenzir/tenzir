@@ -39,6 +39,8 @@ folly.overrideAttrs (orig: {
   # aarch64 aor EXCLUDE_FROM_MONOLITH substitution. The fork removes the -use
   # aor variants, so that --replace-fail has nothing to match.
   postPatch = ''
+    substituteInPlace folly/lang/Exception.h \
+      --replace-fail '#include <exception>' $'#include <cstring>\n#include <exception>'
     substituteInPlace CMake/libfolly.pc.in \
       --replace-fail \
         ${lib.escapeShellArg "\${exec_prefix}/@LIB_INSTALL_DIR@"} \
