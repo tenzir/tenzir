@@ -1,0 +1,6 @@
+error: json parser: UTF8_ERROR: The input is not valid UTF-8
+  = note: found invalid JSON
+  = note: context:
+          ...aaaaaaaaaaaaaaaaaaaaa","message":"before\xFFafter"}\x0A
+                                                     ^
+  = note: total buffer size: 120

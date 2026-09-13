@@ -33,8 +33,9 @@ static_assert(max_simdjson_batch_size <= 4_G,
 
 /// Adds a `context:` note to `b` showing up to `window` bytes around `loc`
 /// in `source`, with a `^` pointer on the line below indicating the exact
-/// position. If `loc` carries an error, `b` is returned unchanged.
-/// Control characters are replaced with '?'. Ellipsis markers are added
+/// position. If `loc` carries a UTF-8 error, find the first invalid sequence
+/// in `source`. Other location errors leave `b` unchanged.
+/// Non-ASCII and control bytes are hex-escaped. Ellipsis markers are added
 /// when the context was truncated by the window.
 auto with_surrounding_bytes(diagnostic_builder b, std::string_view source,
                             simdjson::simdjson_result<const char*> loc,

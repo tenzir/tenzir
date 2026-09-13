@@ -12,6 +12,8 @@
 #include "tenzir/option.hpp"
 #include "tenzir/try_simdjson.hpp"
 
+#include <unicode/utf8.h>
+
 #include <cstring>
 
 namespace tenzir::json {
@@ -45,10 +47,20 @@ auto parse_ndjson_lines(ndjson_parser& parser, SimdjsonPaddedBuffer const& buf,
 auto with_surrounding_bytes(diagnostic_builder b, std::string_view source,
                             simdjson::simdjson_result<const char*> loc,
                             size_t window) -> diagnostic_builder {
-  if (loc.error() != simdjson::error_code::SUCCESS) {
-    return b;
+  if (loc.error() == simdjson::UTF8_ERROR) {
+    // Stage-one UTF-8 validation can fail before simdjson has a document
+    // location. Find the invalid sequence only on this error path.
+    for (auto i = size_t{0}; i < source.size();) {
+      auto start = i;
+      auto code_point = UChar32{};
+      U8_NEXT(source.data(), i, source.size(), code_point);
+      if (code_point < 0) {
+        loc = source.data() + start;
+        break;
+      }
+    }
   }
-  if (source.empty()) {
+  if (loc.error() != simdjson::SUCCESS or source.empty()) {
     return b;
   }
   const auto* pos = loc.value_unsafe();
@@ -56,24 +68,15 @@ auto with_surrounding_bytes(diagnostic_builder b, std::string_view source,
   TENZIR_ASSERT_LEQ(pos, source.data() + source.size());
   auto offset = static_cast<size_t>(pos - source.data());
   auto start = offset > window ? offset - window : size_t{0};
-  auto end = std::min(offset + window, source.size());
+  auto end = offset + std::min(window, source.size() - offset);
   auto view = source.substr(start, end - start);
-  auto context = std::string{};
-  context.reserve(view.size() + 6);
-  if (start > 0) {
-    context += "...";
-  }
-  for (auto c : view) {
-    if (c < 32 or c == 127) {
-      context += '?';
-    } else {
-      context += c;
-    }
-  }
+  auto context = start > 0 ? std::string{"..."} : std::string{};
+  context += detail::byte_escape(view.substr(0, offset - start));
+  auto arrow_col = context.size();
+  context += detail::byte_escape(view.substr(offset - start));
   if (end < source.size()) {
     context += "...";
   }
-  auto arrow_col = (start > 0 ? 3u : 0u) + (offset - start);
   b = std::move(b).note("context:\n{}\n{}^", context,
                         std::string(arrow_col, ' '));
   b = std::move(b).note("total buffer size: {}", source.size());
