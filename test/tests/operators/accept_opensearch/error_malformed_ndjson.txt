@@ -2,7 +2,7 @@ warning: accept_opensearch parser: line did not contain a single valid JSON obje
   = note: line 2
   = note: skipped invalid JSON
   = note: context:
-          {"value":42?
+          {"value":42\x0A
           ^
   = note: total buffer size: 12
 {

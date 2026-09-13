@@ -210,6 +210,12 @@ def _make_handler(capture_path: Path):
                     content_type="Application/JSON; charset=utf-8",
                 )
                 return
+            if path == "/infer/invalid-utf8":
+                self._reply(
+                    b'{"padding":"' + b"a" * 80 + b'","message":"before\xffafter"}\n',
+                    content_type="application/json",
+                )
+                return
             if path == _INFER_CSV_EXTENSION:
                 self._reply(b"answer\n42\n", content_type="")
                 return
