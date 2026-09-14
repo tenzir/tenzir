@@ -1,0 +1,9 @@
+● {input}
+│
+● pass
+│
+● from_google_cloud_pubsub(x4)
+╎
+● to_stdout
+│
+● {output}

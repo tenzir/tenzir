@@ -1,0 +1,5 @@
+// parallelism: 4
+// RabbitMQ stream consumers maintain independent offsets and each receive a
+// copy of matching messages, so the source stays single-instance.
+from_amqp "amqp://localhost", queue="queue",
+          queue_arguments={"x-queue-type": "stream"}

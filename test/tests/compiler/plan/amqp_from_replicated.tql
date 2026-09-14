@@ -1,0 +1,4 @@
+// parallelism: 4
+// AMQP distributes messages among consumers of the same classic queue.
+from_amqp "amqp://localhost", queue="queue",
+          queue_arguments={"x-queue-type": "classic"}

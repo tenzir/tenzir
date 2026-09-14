@@ -1,0 +1,4 @@
+// parallelism: 4
+// An exclusive queue refuses a second consumer, so the source stays
+// single-instance.
+from_amqp "amqp://localhost", queue="queue", exclusive=true

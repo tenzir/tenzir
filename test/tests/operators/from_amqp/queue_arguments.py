@@ -120,6 +120,7 @@ def _run_case(
     exchange = "amq.direct"
     payload = f"{label}-message"
     pipeline = f"""
+// parallelism: 4
 from_amqp env("AMQP_URL"),
           queue="{queue}",
           exchange="{exchange}",

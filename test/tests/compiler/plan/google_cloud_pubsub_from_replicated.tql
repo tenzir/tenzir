@@ -1,0 +1,3 @@
+// parallelism: 4
+// Pub/Sub distributes messages among pullers for the same subscription.
+from_google_cloud_pubsub project_id="project", subscription_id="subscription"

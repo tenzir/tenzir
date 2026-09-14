@@ -1,0 +1,9 @@
+● {input}
+│
+● pass
+│
+● from_amqp(x4)
+╎
+● to_stdout
+│
+● {output}

@@ -1,0 +1,4 @@
+// parallelism: 4
+// A passive declaration cannot determine whether the existing queue has
+// competing-consumer semantics, so the source stays single-instance.
+from_amqp "amqp://localhost", queue="queue", passive=true

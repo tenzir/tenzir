@@ -1,0 +1,7 @@
+● {input}
+│
+● from_amqp
+│
+● to_stdout
+│
+● {output}

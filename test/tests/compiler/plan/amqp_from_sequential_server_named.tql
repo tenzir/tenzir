@@ -1,0 +1,4 @@
+// parallelism: 4
+// Without a queue name, every instance would declare its own server-named
+// queue and receive a copy of every matching message.
+from_amqp "amqp://localhost"

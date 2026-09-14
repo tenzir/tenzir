@@ -482,6 +482,21 @@ public:
       }
       return {};
     });
+    // AMQP distributes messages among concurrent consumers of classic and
+    // quorum queues. Require an explicit queue type because the broker default
+    // can be a stream queue, whose consumers maintain independent offsets.
+    d.parallelizable([](const FromAmqpArgs& args) {
+      if (not args.queue or args.queue->inner.empty() or args.exclusive
+          or args.passive or not args.queue_arguments) {
+        return false;
+      }
+      auto type = args.queue_arguments->inner.find("x-queue-type");
+      if (type == args.queue_arguments->inner.end()) {
+        return false;
+      }
+      auto* name = try_as<std::string>(&type->second);
+      return name and (*name == "classic" or *name == "quorum");
+    });
     return d.without_optimize();
   }
 

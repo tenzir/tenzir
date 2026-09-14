@@ -446,6 +446,9 @@ public:
     d.named("subscription_id", &from_args::subscription_id);
     d.named("metadata_field", &from_args::metadata_field);
     d.named_optional("_yield_timeout", &from_args::yield_timeout);
+    // Pub/Sub distributes messages among concurrent pullers attached to the
+    // same subscription instead of broadcasting a copy to every puller.
+    d.parallelizable();
     return d.without_optimize();
   }
 

@@ -1,0 +1,4 @@
+// parallelism: 4
+// The broker's default queue type may be a stream, so the source stays
+// single-instance unless it explicitly declares a competing queue type.
+from_amqp "amqp://localhost", queue="queue"
