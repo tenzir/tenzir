@@ -1,0 +1,6 @@
+from {value: "invalid"}, {value: "3"}
+quiet {
+  y = int(value)
+}
+where y == 3
+select y

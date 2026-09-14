@@ -1,0 +1,5 @@
+quiet {
+  from {x: 1}
+  assert x == 2, message="suppressed sink warning"
+  discard
+}

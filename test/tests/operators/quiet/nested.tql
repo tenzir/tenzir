@@ -1,0 +1,9 @@
+from {x: 1}
+quiet {
+  if x == 1 {
+    parsed_if = int("invalid")
+  }
+  quiet {
+    parsed_quiet = int("invalid")
+  }
+}

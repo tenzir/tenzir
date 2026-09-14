@@ -1,0 +1,6 @@
+error: assertion failed: "promoted error"
+ --> tests/operators/quiet/strict_inside.tql:7:12
+  |
+7 |     assert x == 2, message="promoted error"
+  |            ^^^^^^
+  |

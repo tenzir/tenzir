@@ -1,0 +1,8 @@
+error: required subpipeline was not provided
+ --> tests/operators/quiet/missing_pipeline.tql:5:1
+  |
+5 | quiet
+  | ^^^^^
+  |
+  = usage: quiet
+  = docs: https://tenzir.com/docs/reference/operators/quiet

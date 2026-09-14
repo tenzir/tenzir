@@ -1,0 +1,8 @@
+{
+  time: "2026-09-09T14:30:00Z",
+  ts: 2026-09-09T14:30:00Z,
+}
+{
+  time: "something-else-but-expected",
+  ts: 2026-09-09T00:00:00Z,
+}

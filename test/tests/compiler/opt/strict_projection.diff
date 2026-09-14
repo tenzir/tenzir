@@ -22,23 +22,7 @@
        filter: [
          
        ],
--      order: "ordered"
-+      order: "ordered",
-+      projection: [
-+        {
-+          expr: root_field {
-+            id: `payload` @ [1]:25..32 from 0,
-+            has_question_mark: false
-+          },
-+          has_this: false,
-+          path: [
-+            {
-+              id: `payload` @ [1]:25..32 from 0,
-+              has_question_mark: false
-+            }
-+          ]
-+        }
-+      ]
+       order: "ordered"
      },
      GenericIr {
        desc: "strict",
