@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/pusher.hpp>
@@ -30,7 +29,6 @@
 #include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
-#include <tenzir/to_lines.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
 #include <tenzir/view3.hpp>
@@ -257,49 +255,6 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   return {};
 }
 
-auto parse_loop(generator<Option<std::string_view>> lines,
-                diagnostic_handler& diag, multi_series_builder::options options)
-  -> generator<table_slice> {
-  size_t line_counter = 0;
-  auto dh = transforming_diagnostic_handler{
-    diag,
-    [&](diagnostic d) {
-      d.message = fmt::format("leef parser: {}", d.message);
-      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
-                      fmt::format("line {}", line_counter));
-      return d;
-    },
-  };
-  auto quoting = detail::quoting_escaping_policy{
-    .unescape_operation = unescape,
-  };
-  auto msb = multi_series_builder{
-    std::move(options),
-    dh,
-  };
-  for (auto&& line : lines) {
-    for (auto& v : msb.yield_ready_as_table_slice()) {
-      co_yield std::move(v);
-    }
-    if (not line) {
-      co_yield {};
-      continue;
-    }
-    ++line_counter;
-    if (line->empty()) {
-      TENZIR_DEBUG("LEEF parser ignored empty line");
-      continue;
-    }
-    auto d = parse_line(*line, msb, quoting);
-    if (d) {
-      dh.emit(std::move(*d));
-    }
-  }
-  for (auto& v : msb.finalize_as_table_slice()) {
-    co_yield std::move(v);
-  }
-}
-
 struct ReadLeefArgs {
   multi_series_builder::options msb_options;
   location operator_location = location::unknown;
@@ -440,60 +395,7 @@ private:
   SeriesPusher pusher_;
 };
 
-class leef_parser final : public plugin_parser {
-public:
-  auto name() const -> std::string override {
-    return "leef";
-  }
-
-  leef_parser() = default;
-
-  explicit leef_parser(multi_series_builder::options options)
-    : options_{std::move(options)} {
-    options_.settings.default_schema_name = "leef.event";
-  }
-
-  auto optimize(EventOrder order) -> std::unique_ptr<plugin_parser> override {
-    auto opts = options_;
-    opts.settings.ordered = order == EventOrder::ordered;
-    return std::make_unique<leef_parser>(std::move(opts));
-  }
-
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> Option<generator<table_slice>> override {
-    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
-  }
-
-  friend auto inspect(auto& f, leef_parser& x) -> bool {
-    return f.apply(x.options_);
-  }
-
-private:
-  multi_series_builder::options options_ = {};
-};
-
-class leef_plugin final : public virtual parser_plugin<leef_parser> {
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
-    auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_all_to_parser(parser);
-    parser.parse(p);
-    auto dh = collecting_diagnostic_handler{};
-    auto opts = msb_parser.get_options(dh);
-    for (auto& d : std::move(dh).collect()) {
-      if (d.severity == severity::error) {
-        throw std::move(d);
-      }
-    }
-    TENZIR_ASSERT(opts);
-    return std::make_unique<leef_parser>(std::move(*opts));
-  }
-};
-
-class read_leef final : public operator_plugin2<parser_adapter<leef_parser>>,
+class read_leef final : public virtual operator_factory_plugin,
                         public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -508,17 +410,6 @@ public:
     d.operator_location(&ReadLeefArgs::operator_location);
     d.optimization(&ReadLeefArgs::optimization);
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_(name());
-    auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_all_to_parser(parser);
-    TRY(parser.parse(inv, ctx));
-    TRY(auto opts, msb_parser.get_options(ctx.dh()));
-    return std::make_unique<parser_adapter<leef_parser>>(
-      leef_parser{std::move(opts)});
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -829,7 +720,6 @@ public:
 } // namespace
 } // namespace tenzir::plugins::leef
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::leef_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::read_leef)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::parse_leef)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::print_leef)

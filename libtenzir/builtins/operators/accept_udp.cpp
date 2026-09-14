@@ -501,7 +501,7 @@ private:
 class AcceptUdpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.accept_udp";
+    return "accept_udp";
   }
 
   auto describe() const -> Description override {

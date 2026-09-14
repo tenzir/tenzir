@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -44,36 +43,10 @@ public:
   }
 };
 
-// Does nothing with the input.
-class pass_operator final : public crtp_operator<pass_operator> {
+class plugin final : public virtual OperatorPlugin {
 public:
-  template <operator_input_batch T>
-  auto operator()(T x) const -> T {
-    return x;
-  }
-
   auto name() const -> std::string override {
     return "pass";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    return OptimizeResult{filter, order, nullptr};
-  }
-
-  friend auto inspect(auto& f, pass_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
-class plugin final : public virtual operator_plugin<pass_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
-public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("pass").parse(inv, ctx).ignore();
-    return std::make_unique<pass_operator>();
   }
 
   auto describe() const -> Description override {

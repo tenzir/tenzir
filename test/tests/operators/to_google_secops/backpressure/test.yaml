@@ -11,4 +11,4 @@ skip:
   reason: requires the to_google_secops plugin
 requires:
   operators:
-    - tql2.to_google_secops
+    - to_google_secops

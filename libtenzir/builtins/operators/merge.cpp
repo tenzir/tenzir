@@ -135,7 +135,7 @@ private:
 class plugin final : public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.merge";
+    return "merge";
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const

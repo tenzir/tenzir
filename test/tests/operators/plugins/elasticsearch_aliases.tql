@@ -1,4 +1,4 @@
 plugins
-where name in ["accept_elasticsearch", "tql2.to_elasticsearch"]
+where name in ["accept_elasticsearch", "to_elasticsearch"]
 sort name
 select name

@@ -149,67 +149,6 @@ using context_create_actor
                           context_save_result)
                        ->caf::result<void>>;
 
-template <detail::string_literal Name>
-class context_create_operator final
-  : public crtp_operator<context_create_operator<Name>> {
-public:
-  context_create_operator() = default;
-
-  context_create_operator(located<std::string> name,
-                          context_save_result save_result)
-    : name_{std::move(name)}, save_result_{std::move(save_result)} {
-    // nop
-  }
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
-    auto context_manager
-      = ctrl.self().system().registry().get<context_create_actor>(
-        "tenzir.context-manager");
-    TENZIR_ASSERT(context_manager);
-    ctrl.set_waiting(true);
-    ctrl.self()
-      .mail(atom::create_v, name_.inner, std::string{Name.str()}, save_result_)
-      .request(context_manager, caf::infinite)
-      .then(
-        [&]() {
-          ctrl.set_waiting(false);
-        },
-        [&](caf::error& err) {
-          diagnostic::error(err)
-            .primary(name_)
-            .note("failed to create context")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-  }
-
-  auto name() const -> std::string override {
-    return fmt::format("context::create_{}",
-                       detail::replace_all(std::string{Name.str()}, "-", "_"));
-  }
-
-  auto optimize(const expression& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter;
-    (void)order;
-    return do_not_optimize(*this);
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
-  friend auto inspect(auto& f, context_create_operator& x) -> bool {
-    return f.object(x).fields(f.field("name", x.name_),
-                              f.field("save_result", x.save_result_));
-  }
-
-private:
-  located<std::string> name_ = {};
-  context_save_result save_result_ = {};
-};
-
 class context_plugin : public virtual plugin {
 public:
   using invocation = operator_factory_invocation;
@@ -258,9 +197,7 @@ private:
 };
 
 template <detail::string_literal Name>
-class context_factory_plugin
-  : public virtual operator_plugin2<context_create_operator<Name>>,
-    public virtual context_plugin {
+class context_factory_plugin : public virtual context_plugin {
 public:
   using context_plugin::invocation;
 
@@ -289,14 +226,6 @@ private:
 
   auto context_name() const -> std::string final {
     return Name;
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> final {
-    TRY(auto result, this->make_context(std::move(inv), ctx));
-    TRY(validate_name(result.name, ctx));
-    return std::make_unique<context_create_operator<Name>>(
-      result.name, check(result.ctx->save()));
   }
 };
 

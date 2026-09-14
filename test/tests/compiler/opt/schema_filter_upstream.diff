@@ -54,7 +54,7 @@
 +      ]
      },
      GenericIr {
-       desc: "tql2.drop",
+       desc: "drop",
        store: {
          op: {
            path: [

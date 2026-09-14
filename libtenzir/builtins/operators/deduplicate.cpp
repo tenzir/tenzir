@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
@@ -15,7 +14,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -449,53 +447,6 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   return filtered;
 }
 
-class deduplicate_operator final : public crtp_operator<deduplicate_operator> {
-public:
-  deduplicate_operator() = default;
-
-  explicit deduplicate_operator(configuration cfg) : cfg_(std::move(cfg)) {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto states = dedup_map{};
-    auto row = int64_t{};
-    const auto cleanup_duration = cfg_.cleanup_duration();
-    auto last_cleanup_time = std::chrono::steady_clock::now();
-    for (auto&& slice : input) {
-      auto output
-        = deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
-                            last_cleanup_time, ctrl.diagnostics());
-      co_yield std::move(output);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "deduplicate";
-  }
-
-  auto optimize(const expression& filter, EventOrder) const
-    -> OptimizeResult override {
-    if (cfg_.distance) {
-      // When the `distance` option is used, we're not allowed to optimize at
-      // all. Here's a simple example that proves this:
-      //   metrics "platform"
-      //   deduplicate connected, distance=1
-      //   where not connected
-      return do_not_optimize(*this);
-    }
-    return OptimizeResult{filter, EventOrder::ordered, copy()};
-  }
-
-  friend auto inspect(auto& f, deduplicate_operator& x) -> bool {
-    return f.object(x).fields(f.field("cfg_", x.cfg_));
-  }
-
-private:
-  configuration cfg_{};
-};
-
 auto make_configuration_checked(DeduplicateArgs args) -> configuration {
   auto dh = null_diagnostic_handler{};
   auto cfg = configuration::make(
@@ -536,9 +487,12 @@ private:
     = std::chrono::steady_clock::now();
 };
 
-class Plugin final : public operator_plugin2<deduplicate_operator>,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "deduplicate";
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<DeduplicateArgs, Deduplicate>{};
     auto keys = d.optional_variadic("key", &DeduplicateArgs::keys, "any");
@@ -583,12 +537,6 @@ public:
       return {};
     });
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(auto cfg, configuration::parse(std::move(inv), ctx));
-    return std::make_unique<deduplicate_operator>(std::move(cfg));
   }
 };
 

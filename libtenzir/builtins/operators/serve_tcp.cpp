@@ -523,7 +523,7 @@ private:
 class ServeTcpPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.serve_tcp";
+    return "serve_tcp";
   }
 
   auto describe() const -> Description override {

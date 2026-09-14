@@ -13,7 +13,6 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/view3.hpp"
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -21,37 +20,6 @@
 namespace tenzir::plugins::discard {
 
 namespace {
-
-class discard_operator final : public crtp_operator<discard_operator> {
-public:
-  discard_operator() = default;
-
-  auto name() const -> std::string override {
-    return "discard";
-  }
-
-  template <operator_input_batch Batch>
-  auto operator()(generator<Batch> input) const -> generator<std::monostate> {
-    for (auto&& slice : input) {
-      (void)slice;
-      co_yield {};
-    }
-  }
-
-  auto internal() const -> bool override {
-    return true;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter, (void)order;
-    return OptimizeResult{None{}, EventOrder::unordered, copy()};
-  }
-
-  friend auto inspect(auto& f, discard_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
 
 struct DiscardArgs {};
 
@@ -103,14 +71,10 @@ private:
   MetricsCounter write_events_counter_;
 };
 
-class plugin final : public virtual operator_plugin<discard_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("discard").parse(inv, ctx).ignore();
-    return std::make_unique<discard_operator>();
+  auto name() const -> std::string override {
+    return "discard";
   }
 
   auto describe() const -> Description override {

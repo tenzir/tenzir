@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser.hpp"
 #include "tenzir/pipeline.hpp"
 
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -24,52 +23,12 @@ namespace {
 
 constexpr auto default_flatten_separator = ".";
 
-class flatten_operator final : public crtp_operator<flatten_operator> {
+class plugin final : public virtual function_plugin {
 public:
-  flatten_operator() = default;
-
-  flatten_operator(std::string separator) : separator_{std::move(separator)} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto seen = std::unordered_set<type>{};
-    for (auto&& slice : input) {
-      auto result = tenzir::flatten(slice, separator_);
-      // We only warn once per schema that we had to rename a set of fields.
-      if (seen.insert(slice.schema()).second
-          and not result.renamed_fields.empty()) {
-        diagnostic::warning("renamed fields with conflicting names after "
-                            "flattening: {}",
-                            fmt::join(result.renamed_fields, ", "))
-          .note("from `{}`", name())
-          .emit(ctrl.diagnostics());
-      }
-      co_yield std::move(result).slice;
-    }
-  }
-
   auto name() const -> std::string override {
     return "flatten";
   }
 
-  auto optimize(expression const&, EventOrder order) const
-    -> OptimizeResult override {
-    return OptimizeResult::order_invariant(*this, order);
-  }
-
-  friend auto inspect(auto& f, flatten_operator& x) -> bool {
-    return f.apply(x.separator_);
-  }
-
-private:
-  std::string separator_ = default_flatten_separator;
-};
-
-class plugin final : public virtual operator_plugin<flatten_operator>,
-                     public virtual function_plugin {
-public:
   auto is_deterministic() const -> bool override {
     return true;
   }

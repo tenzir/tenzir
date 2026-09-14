@@ -119,7 +119,7 @@ using FromUnixSocket = StreamFrom<UnixSocketFrom>;
 class FromUnixSocketPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.from_unix_socket";
+    return "from_unix_socket";
   }
 
   auto describe() const -> Description override {

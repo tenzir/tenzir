@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -99,36 +98,6 @@ auto openapi_record() -> record {
   return openapi;
 }
 
-class openapi_operator final : public crtp_operator<openapi_operator> {
-public:
-  openapi_operator() = default;
-
-  auto operator()(operator_control_plane&) const -> generator<table_slice> {
-    auto builder = series_builder{};
-    builder.data(openapi_record());
-    co_yield builder.finish_assert_one_slice("tenzir.openapi");
-  }
-
-  auto name() const -> std::string override {
-    return "openapi";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, openapi_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.openapi.openapi_operator")
-      .fields();
-  }
-};
-
 struct OpenapiArgs {
   // No arguments.
 };
@@ -172,14 +141,10 @@ private:
   bool done_ = false;
 };
 
-class Plugin final : public virtual operator_plugin<openapi_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(argument_parser2::operator_("openapi").parse(inv, ctx));
-    return std::make_unique<openapi_operator>();
+  auto name() const -> std::string override {
+    return "openapi";
   }
 
   auto describe() const -> Description override {

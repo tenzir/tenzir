@@ -64,7 +64,7 @@
 +      ]
      },
      GenericIr {
-       desc: "tql2.replace",
+       desc: "replace",
        store: {
          op: {
            path: [

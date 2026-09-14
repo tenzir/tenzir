@@ -310,37 +310,6 @@ using component_plugin_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   >::extend_with<status_client_actor>::unwrap;
 
-/// The receiving part of interface of an EXEC NODE actor.
-struct exec_node_sink_actor_traits {
-  using signatures = caf::type_list<
-    // Push events.
-    auto(atom::push, table_slice events)->caf::result<void>,
-    // Push bytes.
-    auto(atom::push, chunk_ptr bytes)->caf::result<void>>;
-};
-using exec_node_sink_actor = caf::typed_actor<exec_node_sink_actor_traits>;
-
-/// The interface of a EXEC NODE actor.
-struct exec_node_actor_traits {
-  using signatures = caf::type_list<
-    // Start an execution node. Returns after the operator has yielded for the
-    // first time.
-    auto(atom::start, std::vector<caf::actor> all_previous)->caf::result<void>,
-    // Pause the execution node. No-op if it was already paused.
-    auto(atom::pause)->caf::result<void>,
-    // Resume the execution node. No-op if it was not paused.
-    auto(atom::resume)->caf::result<void>,
-    // Emit a diagnostic through the exec node.
-    auto(diagnostic diag)->caf::result<void>,
-    // Uodate demand.
-    auto(atom::pull, exec_node_sink_actor sink, uint64_t elements,
-         uint64_t batches)
-      ->caf::result<void>>
-    // Source.
-    ::append_from<exec_node_sink_actor_traits::signatures>;
-};
-using exec_node_actor = caf::typed_actor<exec_node_actor_traits>;
-
 /// The interface of the METRICS RECEIVER actor.
 using metrics_receiver_actor = typed_actor_fwd<
   // Register a custom metric type for the metrics of an operator.
@@ -349,25 +318,6 @@ using metrics_receiver_actor = typed_actor_fwd<
   auto(uint64_t op_index, uuid metrics_id, record)->caf::result<void>,
   // Receive the standard execution node metrics.
   auto(operator_metric)->caf::result<void>>::unwrap;
-
-/// The interface of the PIPELINE SHELL actor.
-struct pipeline_shell_actor_traits {
-  using signatures = caf::type_list<
-    // Spawn a set of execution nodes for a given pipeline. Does not start the
-    // execution nodes.
-    // TODO: The definition is sent as a plain string and re-wrapped in a new
-    // `Source` on the receiving side, which allocates a fresh source id that
-    // does not match the ids stamped on diagnostic locations during parsing.
-    // As a result, the remote executor's `SourceMap` cannot resolve any
-    // locations locally. Sending `Arc<const Source>` instead requires
-    // remapping source ids on receive to avoid collisions with the receiving
-    // process's own id counter.
-    auto(atom::spawn, operator_box, operator_type, std::string definition,
-         receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
-         bool is_hidden, uuid run_id, std::string pipeline_id)
-      ->caf::result<exec_node_actor>>;
-};
-using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;
 
 /// Configuration for export operations.
 struct export_mode {
@@ -429,15 +379,9 @@ struct node_actor_traits {
     auto(atom::get, atom::version)->caf::result<record>,
     // Set the listening endpoint of the tenzir-node.
     auto(atom::set, Endpoint)->caf::result<void>,
-    // Spawn a pipeline_shell subprocess.
-    auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
     // Spawn an export bridge for querying stored data.
     auto(atom::spawn, expression, export_mode)->caf::result<export_bridge_actor>,
-    // Callback from subprocess when shell actor is ready.
-    auto(atom::connect, atom::shell, uint32_t child_id, pipeline_shell_actor)
-      ->caf::result<void>>
-    // Allow spawning exec nodes inside of the node process.
-    ::append_from<pipeline_shell_actor_traits::signatures>
+    auto(atom::spawn, expression, export_mode)->caf::result<export_bridge_actor>>
     // Enable secret resolution through the node actor. It will first check the
     // node config and then dispatch to the platform actor if necessary/possible.
     ::append_from<secret_store_actor_traits::signatures>;
@@ -493,17 +437,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((std::filesystem::path))
   TENZIR_ADD_TYPE_ID(
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
-  TENZIR_ADD_TYPE_ID(
-    (std::vector<
-      std::tuple<tenzir::exec_node_actor, tenzir::operator_type, std::string>>))
-
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::exec_node_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::exec_node_sink_actor))
   TENZIR_ADD_TYPE_ID((tenzir::export_bridge_actor))
   TENZIR_ADD_TYPE_ID((tenzir::export_mode))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
@@ -514,7 +452,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::pipeline_shell_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))

@@ -53,124 +53,6 @@ struct configuration {
   }
 };
 
-/// Drops the specifed fields from the input.
-class drop_operator final
-  : public schematic_operator<drop_operator,
-                              Option<std::vector<indexed_transformation>>> {
-public:
-  drop_operator() = default;
-
-  explicit drop_operator(configuration config) noexcept
-    : config_{std::move(config)} {
-    // nop
-  }
-
-  auto initialize(const type& schema, operator_control_plane&) const
-    -> caf::expected<state_type> override {
-    // Determine whether we want to drop the entire batch first.
-    const auto drop_schema
-      = std::any_of(config_.schemas.begin(), config_.schemas.end(),
-                    [&](const auto& dropped_schema) {
-                      return dropped_schema == schema.name();
-                    });
-    if (drop_schema) {
-      return None{};
-    }
-    // Apply the transformation.
-    auto transform_fn
-      = [&](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
-      -> std::vector<
-        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      return {};
-    };
-    auto transformations = std::vector<indexed_transformation>{};
-    for (const auto& field : config_.fields) {
-      for (auto index : schema.resolve(field)) {
-        transformations.push_back({std::move(index), transform_fn});
-      }
-    }
-    // transform_columns requires the transformations to be sorted, and that may
-    // not necessarily be true if we have multiple fields configured, so we sort
-    // again in that case.
-    if (config_.fields.size() > 1) {
-      std::sort(transformations.begin(), transformations.end());
-    }
-    transformations.erase(std::unique(transformations.begin(),
-                                      transformations.end()),
-                          transformations.end());
-    return transformations;
-  }
-
-  /// Processes a single slice with the corresponding schema-specific state.
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    if (state) {
-      return transform_columns(slice, *state);
-    }
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "drop";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter;
-    return OptimizeResult::order_invariant(*this, order);
-  }
-
-  friend auto inspect(auto& f, drop_operator& x) -> bool {
-    return f.apply(x.config_);
-  }
-
-private:
-  /// The underlying configuration of the transformation.
-  configuration config_;
-};
-
-class plugin final : public virtual operator_plugin<drop_operator> {
-public:
-};
-
-class drop_operator2 final : public crtp_operator<drop_operator2> {
-public:
-  drop_operator2() = default;
-
-  explicit drop_operator2(std::vector<ast::field_path> selectors)
-    : selectors_{std::move(selectors)} {
-  }
-
-  auto name() const -> std::string override {
-    return "tql2.drop";
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      co_yield tenzir::drop(slice, selectors_, ctrl.diagnostics(), true);
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, drop_operator2& x) -> bool {
-    return f.apply(x.selectors_);
-  }
-
-private:
-  std::vector<ast::field_path> selectors_;
-};
-
 struct DropArgs {
   std::vector<ast::field_path> fields;
 };
@@ -190,9 +72,12 @@ private:
   DropArgs args_;
 };
 
-class plugin2 final : public virtual operator_plugin2<drop_operator2>,
-                      public virtual OperatorPlugin {
+class plugin2 final : public virtual OperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "drop";
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<DropArgs, Drop>{};
     d.parallelizable();
@@ -223,35 +108,10 @@ public:
         return touched_fields;
       });
   }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_("drop");
-    auto selectors = std::vector<ast::field_path>{};
-    for (auto& arg : inv.args) {
-      auto selector = ast::field_path::try_from(arg);
-      if (selector) {
-        if (selector->path().empty()) {
-          diagnostic::error("cannot drop `this`").primary(*selector).emit(ctx);
-          return failure::promise();
-        }
-        selectors.push_back(std::move(*selector));
-      } else {
-        // TODO: Improve error message.
-        diagnostic::error("expected simple selector")
-          .primary(arg)
-          .usage(parser.usage())
-          .docs(parser.docs())
-          .emit(ctx.dh());
-      }
-    }
-    return std::make_unique<drop_operator2>(std::move(selectors));
-  }
 };
 
 } // namespace
 
 } // namespace tenzir::plugins::drop
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop::plugin2)

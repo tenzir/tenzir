@@ -349,7 +349,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "tql2.to_amqp";
+    return "to_amqp";
   }
 
   auto describe() const -> Description override {

@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -322,139 +321,6 @@ auto unroll(const table_slice& slice, const offset& offset, bool unordered,
   }
 }
 
-class unroll_operator final : public crtp_operator<unroll_operator> {
-public:
-  unroll_operator() = default;
-
-  explicit unroll_operator(ast::field_path field) : field_{std::move(field)} {
-  }
-
-  explicit unroll_operator(located<std::string> field)
-    : field_{std::move(field)} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    const auto get_offset
-      = field_.match<std::function<auto(const table_slice&)->Option<offset>>>(
-        [&](const located<std::string>& field) {
-          return [&](const table_slice& slice) -> Option<offset> {
-            auto offsets = collect(slice.schema().resolve(field.inner));
-            if (offsets.empty()) {
-              diagnostic::warning("field `{}` not found", field.inner)
-                .primary(field)
-                .emit(ctrl.diagnostics());
-              return {};
-            }
-            if (offsets.size() > 1) {
-              diagnostic::warning("field `{}` resolved multiple times for `{}` "
-                                  "and will be ignored",
-                                  field.inner, slice.schema().name())
-                .primary(field)
-                .emit(ctrl.diagnostics());
-              return {};
-            }
-            if (offsets.front().empty()) {
-              return offsets.front();
-            }
-            const auto& field_type
-              = as<record_type>(slice.schema()).field(offsets.front()).type;
-            if (is<null_type>(field_type)) {
-              return {};
-            }
-            if (not is<list_type>(field_type)) {
-              diagnostic::warning("expected `list`, but got `{}`",
-                                  field_type.kind())
-                .primary(field)
-                .emit(ctrl.diagnostics());
-              return {};
-            }
-            return offsets.front();
-          };
-        },
-        [&](const ast::field_path& field) {
-          return [&](const table_slice& slice) {
-            return resolve(field, slice.schema())
-              .match(
-                [&](offset result) -> Option<offset> {
-                  if (result.empty()) {
-                    return result;
-                  }
-                  const auto& field_type
-                    = as<record_type>(slice.schema()).field(result).type;
-                  if (is<null_type>(field_type)) {
-                    return {};
-                  }
-                  if (not is<list_type>(field_type)
-                      and not is<record_type>(field_type)) {
-                    diagnostic::warning("expected `list` or `record`, but got "
-                                        "`{}`",
-                                        field_type.kind())
-                      .primary(field)
-                      .emit(ctrl.diagnostics());
-                    return {};
-                  }
-                  return result;
-                },
-                [&](const resolve_error& err) -> Option<offset> {
-                  err.reason.match(
-                    [&](const resolve_error::field_not_found&) {
-                      diagnostic::warning("field `{}` not found",
-                                          err.ident.name)
-                        .primary(err.ident)
-                        .emit(ctrl.diagnostics());
-                    },
-                    [&](const resolve_error::field_not_found_no_error&) {},
-                    [&](const resolve_error::field_of_non_record& reason) {
-                      diagnostic::warning("type `{}` has no field `{}`",
-                                          reason.type.kind(), err.ident.name)
-                        .primary(err.ident)
-                        .emit(ctrl.diagnostics());
-                    });
-                  return {};
-                });
-          };
-        });
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      const auto offset = get_offset(slice);
-      if (not offset) {
-        // Zero or multiple offsets; cannot proceed.
-        continue;
-      }
-      for (auto unrolled :
-           unroll(slice, *offset, unordered_, ctrl.diagnostics())) {
-        co_yield std::move(unrolled);
-      }
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "unroll";
-  }
-
-  auto optimize(const expression& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter;
-    auto replacement = std::make_unique<unroll_operator>(*this);
-    replacement->unordered_ = order == EventOrder::unordered;
-    return OptimizeResult{None{}, order, std::move(replacement)};
-  }
-
-  friend auto inspect(auto& f, unroll_operator& x) -> bool {
-    return f.object(x).fields(f.field("field", x.field_),
-                              f.field("unordered", x.unordered_));
-  }
-
-private:
-  variant<ast::field_path, located<std::string>> field_;
-  bool unordered_ = {};
-};
-
 struct UnrollArgs {
   ast::field_path field;
   OptimizationArgs<opt::Order> optimization;
@@ -521,17 +387,10 @@ private:
   UnrollArgs args_;
 };
 
-class plugin final : public virtual operator_plugin<unroll_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto field = ast::field_path{};
-    auto parser
-      = argument_parser2::operator_(name()).positional("field", field, "list");
-    TRY(parser.parse(inv, ctx));
-    return std::make_unique<unroll_operator>(std::move(field));
+  auto name() const -> std::string override {
+    return "unroll";
   }
 
   auto describe() const -> Description override {

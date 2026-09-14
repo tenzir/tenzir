@@ -10,7 +10,6 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -122,39 +121,6 @@ auto make_version(const caf::settings& settings) -> table_slice {
   return builder.finish_assert_one_slice("tenzir.version");
 }
 
-class version_operator final : public crtp_operator<version_operator> {
-public:
-  version_operator() = default;
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield make_version(content(ctrl.self().config()));
-  }
-
-  auto name() const -> std::string override {
-    return "version";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)order;
-    (void)filter;
-    return do_not_optimize(*this);
-  }
-
-  auto internal() const -> bool override {
-    return true;
-  }
-
-  friend auto inspect(auto& f, version_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
 class Version final : public Operator<void, table_slice> {
 public:
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -239,14 +205,10 @@ private:
   location self_;
 };
 
-class plugin final : public virtual operator_plugin<version_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual operator_compiler_plugin {
+class plugin final : public virtual operator_compiler_plugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("version").parse(inv, ctx).ignore();
-    return std::make_unique<version_operator>();
+  auto name() const -> std::string override {
+    return "version";
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const

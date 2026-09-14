@@ -32,6 +32,7 @@
 #include "tenzir/terminate.hpp"
 #include "tenzir/type.hpp"
 
+#include <caf/anon_mail.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/make_copy_on_write.hpp>

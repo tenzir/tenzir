@@ -22,7 +22,7 @@ namespace {
 class ip final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.ip";
+    return "ip";
   }
 
   auto is_deterministic() const -> bool override {

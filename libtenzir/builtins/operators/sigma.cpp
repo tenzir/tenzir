@@ -10,7 +10,6 @@
 #include "sigma/plan_cache.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async/metrics.hpp>
@@ -3603,28 +3602,6 @@ auto locate_inline_rules(ast::expression const& rules, SigmaSources& sources)
     [](auto const&) {});
 }
 
-/// Finds the `rules=` argument expression of an invocation by its location.
-auto find_rules_expression(std::vector<ast::expression> const& args,
-                           location rules_source)
-  -> Option<ast::expression const&> {
-  for (auto const& arg : args) {
-    auto found = arg.match(
-      [&](ast::assignment const& assignment) -> Option<ast::expression const&> {
-        if (assignment.right.get_location() == rules_source) {
-          return assignment.right;
-        }
-        return None{};
-      },
-      [](auto const&) -> Option<ast::expression const&> {
-        return None{};
-      });
-    if (found) {
-      return found;
-    }
-  }
-  return None{};
-}
-
 /// Compiles inline rule content at pipeline-construction time so that
 /// diagnostics anchor at the TQL argument and carry the list element and
 /// YAML document indices.
@@ -3691,91 +3668,6 @@ auto validate_inline_rules(SigmaSources const& sources, location source)
   }
   return None{};
 }
-
-class sigma_operator final : public crtp_operator<sigma_operator> {
-public:
-  sigma_operator() = default;
-
-  sigma_operator(duration refresh_interval, SigmaSources sources,
-                 sigma_format format, sigma_mapping mapping)
-    : refresh_interval_{refresh_interval},
-      sources_{std::move(sources)},
-      format_{format},
-      mapping_{mapping} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto rules = RuleMap{};
-    auto reload_state = ReloadState{};
-    auto filter_bank = FilterBank{};
-    auto mapping_state = MappingState{};
-    auto diagnostics
-      = make_source_diagnostic_handler(ctrl.diagnostics(), sources_.source);
-    std::ignore
-      = update_rules(sources_, rules, filter_bank, reload_state, diagnostics);
-    mapping_state.reset(rules.revision, rules);
-    auto metrics = ctrl.metrics(sigma_metrics_type);
-    auto last_update = std::chrono::steady_clock::now();
-    co_yield {}; // signal that we're done initializing
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      // Inline rules are part of the operator plan and never change.
-      auto const now = std::chrono::steady_clock::now();
-      if (not sources_.paths.empty()
-          and now - last_update > refresh_interval_) {
-        if (update_rules(sources_, rules, filter_bank, reload_state,
-                         diagnostics)) {
-          mapping_state.reset(rules.revision, rules);
-        }
-        last_update = now;
-      }
-      auto const events = static_cast<uint64_t>(slice.rows());
-      auto stats = SliceMatchStats{};
-      for (auto&& result : match_slice(slice, rules, mapping_, format_,
-                                       mapping_state, stats, diagnostics)) {
-        co_yield std::move(result);
-      }
-      emit_processing_metrics(metrics, events, stats.evaluated_rules,
-                              stats.matches);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "sigma";
-  }
-
-  auto location() const -> operator_location override {
-    // Filesystem paths are relative to the process constructing the pipeline.
-    // Inline rules have no local resources and can remain with upstream.
-    return sources_.paths.empty() ? operator_location::anywhere
-                                  : operator_location::local;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, sigma_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("sigma_operator")
-      .fields(f.field("refresh_interval", x.refresh_interval_),
-              f.field("sources", x.sources_), f.field("format", x.format_),
-              f.field("mapping", x.mapping_));
-  }
-
-private:
-  duration refresh_interval_ = {};
-  SigmaSources sources_;
-  sigma_format format_ = sigma_format::ocsf;
-  sigma_mapping mapping_ = sigma_mapping::automatic;
-};
 
 struct SigmaArgs {
   Option<located<std::string>> legacy_path;
@@ -3871,65 +3763,10 @@ private:
   std::chrono::steady_clock::time_point last_update_ = {};
 };
 
-class plugin final : public virtual operator_plugin<sigma_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto legacy_path = Option<located<std::string>>{};
-    auto path = Option<located<data>>{};
-    auto rules = Option<located<data>>{};
-    auto refresh_interval = Option<located<duration>>{};
-    auto format = Option<located<std::string>>{};
-    auto mapping = Option<located<std::string>>{};
-    TRY(argument_parser2::operator_("sigma")
-          .positional("legacy_path", legacy_path)
-          .named("path", path)
-          .named("rules", rules)
-          .named("refresh_interval", refresh_interval)
-          .named("format", format)
-          .named("mapping", mapping)
-          .parse(inv, ctx));
-    auto sources = normalize_sources(legacy_path, path, rules, refresh_interval,
-                                     inv.self.get_location());
-    if (sources.is_err()) {
-      std::move(sources).unwrap_err().modify().emit(ctx);
-      return failure::promise();
-    }
-    if (rules) {
-      if (auto expression = find_rules_expression(inv.args, rules->source)) {
-        locate_inline_rules(*expression, sources.unwrap());
-      }
-    }
-    if (legacy_path) {
-      diagnostic::warning("passing the path positionally is deprecated")
-        .primary(legacy_path->source)
-        .hint("use `path={:?}` instead", legacy_path->inner)
-        .emit(ctx);
-    }
-    auto normalized_mapping = normalize_mapping(mapping);
-    if (normalized_mapping.is_err()) {
-      std::move(normalized_mapping).unwrap_err().modify().emit(ctx);
-      return failure::promise();
-    }
-    if (rules) {
-      if (auto error = validate_inline_rules(sources.unwrap(), rules->source)) {
-        std::move(*error).modify().emit(ctx);
-        return failure::promise();
-      }
-    }
-    auto normalized_format = normalize_format(format);
-    if (normalized_format.is_err()) {
-      std::move(normalized_format).unwrap_err().modify().emit(ctx);
-      return failure::promise();
-    }
-    auto const interval
-      = refresh_interval ? refresh_interval->inner : default_refresh_interval;
-    return std::make_unique<sigma_operator>(
-      interval, std::move(sources).unwrap(),
-      std::move(normalized_format).unwrap(),
-      std::move(normalized_mapping).unwrap());
+  auto name() const -> std::string override {
+    return "sigma";
   }
 
   auto describe() const -> Description override {

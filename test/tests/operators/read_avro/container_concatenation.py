@@ -21,7 +21,7 @@ def main() -> None:
             ],
         ),
         "from_stdin { read_avro }"
-        " | kind = type_of(value).kind | select kind | write_ndjson",
+        " | kind = type_of(value).kind | select kind | to_stdout { write_ndjson }",
         [{"kind": "record"}, {"kind": "record"}, {"kind": "record"}],
     )
     first = make_container(
@@ -36,14 +36,14 @@ def main() -> None:
     )
     assert_completes(
         first + second,
-        "from_stdin { split_bytes 1 | read_avro } | write_ndjson",
+        "from_stdin { split_bytes 1 | read_avro } | to_stdout { write_ndjson }",
         [{"a": 1}, {"b": "x"}],
     )
     empty = make_container("null", b'"string"', [])
     assert_completes(
         (empty * 1_024)
         + make_container("null", b'"string"', [(1, encode_bytes(b"value"))]),
-        "from_stdin { read_avro } | write_ndjson",
+        "from_stdin { read_avro } | to_stdout { write_ndjson }",
         [{"value": "value"}],
     )
     print("container_concatenation: true")

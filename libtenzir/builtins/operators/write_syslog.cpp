@@ -223,7 +223,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.write_syslog";
+    return "write_syslog";
   }
 
   auto describe() const -> Description override {

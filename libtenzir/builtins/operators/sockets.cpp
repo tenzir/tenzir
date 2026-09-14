@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/os.hpp>
 #include <tenzir/pipeline.hpp>
@@ -16,41 +15,6 @@
 namespace tenzir::plugins::sockets {
 
 namespace {
-
-class sockets_operator final : public crtp_operator<sockets_operator> {
-public:
-  sockets_operator() = default;
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    auto system = os::make();
-    if (not system) {
-      diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());
-      co_return;
-    }
-    co_yield system->sockets();
-  }
-
-  auto name() const -> std::string override {
-    return "sockets";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, sockets_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.sockets.sockets_operator")
-      .fields();
-  }
-};
 
 struct SocketsArgs {
   // No arguments.
@@ -99,14 +63,10 @@ private:
   bool done_ = false;
 };
 
-class Plugin final : public virtual operator_plugin<sockets_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(argument_parser2::operator_("sockets").parse(inv, ctx));
-    return std::make_unique<sockets_operator>();
+  auto name() const -> std::string override {
+    return "sockets";
   }
 
   auto describe() const -> Description override {

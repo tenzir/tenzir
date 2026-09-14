@@ -1,6 +1,6 @@
 error: invalid compression level: `99999999999999`
- --> tests/operators/compress_gzip/error_invalid_level.tql:7:21
+ --> tests/operators/compress_gzip/error_invalid_level.tql:6:46
   |
-7 | compress_gzip level=99999999999999
-  |                     ^^^^^^^^^^^^^^
+6 | to_stdout { write_json | compress_gzip level=99999999999999 }
+  |                                              ^^^^^^^^^^^^^^
   |

@@ -44,7 +44,7 @@ using uuid_generator_type = std::variant<boost::uuids::nil_generator,     // nil
 class uuid final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.uuid";
+    return "uuid";
   }
 
   auto is_deterministic() const -> bool override {

@@ -25,7 +25,7 @@
 -      order: "ordered"
 -    },
 -    GenericIr {
--      desc: "tql2.reverse",
+-      desc: "reverse",
 -      store: {
 -        op: {
 -          path: [

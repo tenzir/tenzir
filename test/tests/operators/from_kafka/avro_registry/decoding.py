@@ -70,7 +70,7 @@ def consume(
         "heartbeat.interval.ms": 1000,
         "max.poll.interval.ms": {max_poll_interval}
       }}
-    write_ndjson
+    to_stdout {{ write_ndjson }}
     """
     return subprocess.run(
         [binary, pipeline], capture_output=True, text=True, timeout=35, check=False

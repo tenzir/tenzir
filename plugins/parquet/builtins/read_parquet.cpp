@@ -6,8 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "parquet/operator.hpp"
+#include "tenzir/arrow_memory_pool.hpp"
+#include "tenzir/option.hpp"
 
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/enum.hpp>
@@ -16,6 +18,10 @@
 #include <tenzir/read_detection.hpp>
 #include <tenzir/read_pushdown.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <arrow/compute/cast.h>
+#include <arrow/util/key_value_metadata.h>
+#include <parquet/arrow/reader.h>
 
 namespace tenzir::plugins::parquet {
 
@@ -311,7 +317,7 @@ private:
 class Plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.read_parquet";
+    return "read_parquet";
   }
 
   auto describe() const -> Description override {

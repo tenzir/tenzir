@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -26,126 +25,6 @@ namespace tenzir::plugins::measure {
 TENZIR_ENUM(schema, name_only, legacy, exact);
 
 namespace {
-
-class measure_operator final : public crtp_operator<measure_operator> {
-public:
-  measure_operator() = default;
-
-  measure_operator(bool real_time, bool cumulative, enum schema schema)
-    : real_time_{real_time}, cumulative_{cumulative}, schema_{schema} {
-  }
-
-  auto operator()(generator<table_slice> input) const
-    -> generator<table_slice> {
-    auto last_finish = std::chrono::steady_clock::now();
-    auto builder = series_builder{};
-    auto counters = std::unordered_map<type, uint64_t>{};
-    for (auto&& slice : input) {
-      const auto now = std::chrono::steady_clock::now();
-      if (slice.rows() == 0) {
-        if (builder.length() > 0
-            and last_finish + defaults::import::batch_timeout < now) {
-          last_finish = now;
-          co_yield builder.finish_assert_one_slice("tenzir.measure.events");
-          continue;
-        }
-        co_yield {};
-        continue;
-      }
-      auto& events = counters[slice.schema()];
-      const auto is_new = events == 0;
-      events = cumulative_ ? events + slice.rows() : slice.rows();
-      auto metric = builder.record();
-      metric.field("timestamp", time::clock::now());
-      metric.field("events", events);
-      metric.field("schema_id", slice.schema().make_fingerprint());
-      switch (schema_) {
-        case schema::name_only:
-          metric.field("schema", slice.schema().name());
-          break;
-        case schema::legacy:
-          metric.field("schema", is_new
-                                   ? data{slice.schema().to_legacy_definition()}
-                                   : data{});
-          break;
-        case schema::exact:
-          metric.field("schema",
-                       is_new ? data{slice.schema().to_definition()} : data{});
-          break;
-      }
-      if (real_time_ or last_finish + defaults::import::batch_timeout < now) {
-        last_finish = now;
-        co_yield builder.finish_assert_one_slice("tenzir.measure.events");
-        continue;
-      }
-      co_yield {};
-    }
-    if (builder.length() > 0) {
-      co_yield builder.finish_assert_one_slice("tenzir.measure.events");
-    }
-  }
-
-  auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
-    auto last_finish = std::chrono::steady_clock::now();
-    static const auto schema = type{
-      "tenzir.measure.bytes",
-      record_type{
-        {"timestamp", time_type{}},
-        {"bytes", uint64_type{}},
-      },
-    };
-    auto builder = series_builder{schema};
-    auto counter = uint64_t{};
-    for (auto&& chunk : input) {
-      const auto now = std::chrono::steady_clock::now();
-      if (not chunk or chunk->size() == 0) {
-        if (builder.length() > 0
-            and last_finish + defaults::import::batch_timeout < now) {
-          last_finish = now;
-          co_yield builder.finish_assert_one_slice();
-          continue;
-        }
-        co_yield {};
-        continue;
-      }
-      counter = cumulative_ ? counter + chunk->size() : chunk->size();
-      auto metric = builder.record();
-      metric.field("timestamp", time::clock::now());
-      metric.field("bytes", counter);
-      if (real_time_ or last_finish + defaults::import::batch_timeout < now) {
-        last_finish = now;
-        co_yield builder.finish_assert_one_slice();
-        continue;
-      }
-      co_yield {};
-    }
-    if (builder.length() > 0) {
-      co_yield builder.finish_assert_one_slice();
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "measure";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    // Note: This can change the output of `measure`.
-    (void)filter;
-    return OptimizeResult::order_invariant(*this, order);
-  }
-
-  friend auto inspect(auto& f, measure_operator& x) -> bool {
-    return f.object(x).fields(f.field("real_time", x.real_time_),
-                              f.field("cumulative", x.cumulative_),
-                              f.field("schema", x.schema_));
-  }
-
-private:
-  bool real_time_ = {};
-  bool cumulative_ = {};
-  schema schema_ = {};
-};
 
 struct MeasureArgs {
   bool cumulative = false;
@@ -219,27 +98,10 @@ private:
   uint64_t counter_ = 0;
 };
 
-class plugin final : public virtual operator_plugin<measure_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    bool real_time = false;
-    bool cumulative = false;
-    bool definition = false;
-    bool exact_definition = false;
-    argument_parser2::operator_("measure")
-      .named("real_time", real_time)
-      .named("cumulative", cumulative)
-      .named("_definition", definition)
-      .named("_exact_definition", exact_definition)
-      .parse(inv, ctx)
-      .ignore();
-    return std::make_unique<measure_operator>(real_time, cumulative,
-                                              exact_definition ? schema::exact
-                                              : definition     ? schema::legacy
-                                                           : schema::name_only);
+  auto name() const -> std::string override {
+    return "measure";
   }
 
   auto describe() const -> Description override {

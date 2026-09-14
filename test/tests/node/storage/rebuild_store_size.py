@@ -136,7 +136,8 @@ def stores(tenzir: Executor) -> list[dict[str, object]]:
     """The uuid and store resource of every partition holding SCHEMA."""
     r = tenzir.run(
         f'partitions\nwhere schema == "{SCHEMA}"\n'
-        "select uuid, url = store.url, size = store.size\nwrite_ndjson\n"
+        "select uuid, url = store.url, size = store.size\n"
+        "to_stdout { write_ndjson }\n"
     )
     assert r.returncode == 0, f"partitions failed: {r.stderr.decode()}"
     return [json.loads(line) for line in r.stdout.decode().splitlines() if line.strip()]

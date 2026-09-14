@@ -28,6 +28,7 @@
 
 #include <caf/actor_cast.hpp>
 #include <caf/actor_registry.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>

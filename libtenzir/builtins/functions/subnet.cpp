@@ -212,7 +212,7 @@ auto append_with_prefix(subnet_type::builder_type& builder, series const& value,
 class subnet final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.subnet";
+    return "subnet";
   }
 
   auto is_deterministic() const -> bool override {

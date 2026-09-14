@@ -93,7 +93,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.cron";
+    return "cron";
   }
 
   auto describe() const -> Description override {

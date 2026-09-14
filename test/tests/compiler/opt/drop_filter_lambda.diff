@@ -38,7 +38,7 @@
        self: [1]:0..4 from 0
      },
      GenericIr {
-       desc: "tql2.drop",
+       desc: "drop",
        store: {
          op: {
            path: [

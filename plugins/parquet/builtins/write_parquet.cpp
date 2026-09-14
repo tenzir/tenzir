@@ -6,14 +6,29 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "parquet/operator.hpp"
+#include "parquet/chunked_buffer_output_stream.hpp"
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
+#include "tenzir/tql2/plugin.hpp"
 
+#include <tenzir/arrow_utils.hpp>
+#include <tenzir/fwd.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
+#include <tenzir/pipeline.hpp>
+#include <tenzir/plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <arrow/compute/cast.h>
+#include <arrow/io/file.h>
+#include <arrow/table.h>
+#include <arrow/util/key_value_metadata.h>
+#include <caf/expected.hpp>
+#include <parquet/arrow/reader.h>
+#include <parquet/arrow/writer.h>
 
 #include <limits>
 #include <memory>
@@ -21,6 +36,100 @@
 namespace tenzir::plugins::parquet {
 
 namespace {
+
+auto remove_empty_records(std::shared_ptr<arrow::Schema> schema, bool ms_times,
+                          diagnostic_handler& dh)
+  -> std::shared_ptr<arrow::Schema> {
+  auto impl
+    = [ms_times](const auto& impl, std::shared_ptr<arrow::DataType> type,
+                 diagnostic_handler& dh,
+                 std::string_view path) -> std::shared_ptr<arrow::DataType> {
+    TENZIR_ASSERT(type);
+    if (const auto* list_type = try_as<arrow::ListType>(type.get())) {
+      return arrow::list(
+        impl(impl, list_type->value_type(), dh, fmt::format("{}[]", path)));
+    }
+    if (const auto* struct_type = try_as<arrow::StructType>(type.get())) {
+      if (struct_type->num_fields() == 0) {
+        diagnostic::warning("replacing empty record with null at `{}`", path)
+          .note("empty records are not supported in Apache Parquet")
+          .emit(dh);
+        return arrow::null();
+      }
+      auto fields = struct_type->fields();
+      for (auto& field : fields) {
+        field = field->WithType(impl(
+          impl, field->type(), dh, fmt::format("{}.{}", path, field->name())));
+      }
+      return arrow::struct_(fields);
+    }
+    if (const auto* timestamp = try_as<arrow::TimestampType>(type.get());
+        timestamp and ms_times) {
+      return arrow::timestamp(arrow::TimeUnit::MILLI);
+    }
+    return type;
+  };
+  for (auto i = 0; i < schema->num_fields(); ++i) {
+    auto field = schema->field(i);
+    schema = check(schema->SetField(
+      i, field->WithType(impl(impl, field->type(), dh, field->name()))));
+  }
+  return schema;
+}
+
+auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
+                          bool ms_timestamps)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto impl
+    = [ms_timestamps](
+        this const auto& self,
+        std::shared_ptr<arrow::Array> array) -> std::shared_ptr<arrow::Array> {
+    TENZIR_ASSERT(array);
+    if (const auto* list_array = try_as<arrow::ListArray>(array.get())) {
+      auto values = self(list_array->values());
+      return std::make_shared<arrow::ListArray>(
+        arrow::list(values->type()), list_array->length(),
+        list_array->value_offsets(), values, array->null_bitmap(),
+        array->data()->null_count, array->offset());
+    }
+    if (const auto* struct_array = try_as<arrow::StructArray>(array.get())) {
+      if (struct_array->num_fields() == 0) {
+        return check(arrow::MakeArrayOfNull(
+          arrow::null(), struct_array->length(), tenzir::arrow_memory_pool()));
+      }
+      auto arrays = struct_array->fields();
+      auto fields = struct_array->struct_type()->fields();
+      TENZIR_ASSERT(arrays.size() == fields.size());
+      for (auto i = size_t{0}; i < arrays.size(); ++i) {
+        arrays[i] = self(std::move(arrays[i]));
+        fields[i] = fields[i]->WithType(arrays[i]->type());
+      }
+      auto null_bitmap = array->null_bitmap();
+      if (array->offset() != 0 and array->null_bitmap_data()) {
+        null_bitmap = check(arrow::internal::CopyBitmap(
+          arrow_memory_pool(), array->null_bitmap_data(), array->offset(),
+          array->length()));
+      }
+      return std::make_shared<arrow::StructArray>(
+        arrow::struct_(fields), struct_array->length(), arrays,
+        std::move(null_bitmap), array->data()->null_count, 0);
+    }
+    if (const auto* timestamp = try_as<arrow::TimestampArray>(array.get());
+        timestamp and ms_timestamps) {
+      auto target = arrow::timestamp(arrow::TimeUnit::MILLI);
+      auto result = check(arrow::compute::Cast(
+        array, target, arrow::compute::CastOptions::Unsafe()));
+      return result.make_array();
+    }
+    return array;
+  };
+  for (auto i = 0; i < batch->num_columns(); ++i) {
+    auto column = impl(batch->column(i));
+    batch = check(batch->SetColumn(
+      i, batch->schema()->field(i)->WithType(column->type()), column));
+  }
+  return batch;
+}
 
 struct WriteParquetArgs {
   Option<located<int64_t>> compression_level;
@@ -234,7 +343,7 @@ auto validate_args(const Option<located<std::string>>& type,
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.write_parquet";
+    return "write_parquet";
   }
 
   auto describe() const -> Description override {

@@ -12,7 +12,6 @@
 #include "tenzir/tls_options.hpp"
 
 #include <tenzir/arc.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/channel.hpp>
@@ -798,185 +797,6 @@ auto parse_fluent_bit_chunk(chunk_ptr const& chunk, multi_series_builder& msb,
   }
 }
 
-template <bool enable_source, bool enable_sink>
-  requires(enable_source or enable_sink)
-class fluent_bit_operator_impl final
-  : public crtp_operator<fluent_bit_operator_impl<enable_source, enable_sink>> {
-public:
-  fluent_bit_operator_impl() = default;
-
-  fluent_bit_operator_impl(operator_args operator_args,
-                           multi_series_builder::options builder_options,
-                           record config)
-    : operator_args_{std::move(operator_args)},
-      builder_options_{std::move(builder_options)},
-      config_{std::move(config)} {
-  }
-
-  fluent_bit_operator_impl(operator_args operator_args, record config)
-    requires(not enable_source)
-    : operator_args_{std::move(operator_args)}, config_{std::move(config)} {
-  }
-
-  auto operator()(operator_control_plane& ctrl) const -> generator<table_slice>
-    requires enable_source
-  {
-    co_yield {};
-    auto args = operator_args_;
-    auto ssl = args.ssl.resolve(ctrl);
-    if (not ssl) {
-      co_return;
-    }
-    if (not tls_to_fluentbit(*ssl, args.args.inner, ctrl.diagnostics())) {
-      co_return;
-    }
-    auto requests = std::vector<secret_request>{};
-    auto fluent_bit_args = property_map{};
-    auto plugin_args = property_map{};
-    to_property_map_or_request(args.service_properties, fluent_bit_args,
-                               requests, ctrl.diagnostics());
-    to_property_map_or_request(args.args, plugin_args, requests,
-                               ctrl.diagnostics());
-    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
-    auto engine = engine::make_source(args, config_, fluent_bit_args,
-                                      plugin_args, ctrl.diagnostics());
-    if (not engine) {
-      co_return;
-    }
-    auto dh = transforming_diagnostic_handler{
-      ctrl.diagnostics(),
-      [&](diagnostic d) {
-        d.message = fmt::format("fluent-bit parser: {}", d.message);
-        return d;
-      },
-    };
-    auto msb = multi_series_builder{
-      builder_options_,
-      dh,
-    };
-    auto parse = [&ctrl, &msb](chunk_ptr const& chunk) {
-      parse_fluent_bit_chunk(chunk, msb, ctrl.diagnostics());
-    };
-    while (engine->running()) {
-      for (auto& v : msb.yield_ready_as_table_slice()) {
-        co_yield std::move(v);
-      }
-      auto num_elements = engine->try_consume(parse);
-      if (num_elements == 0) {
-        TENZIR_DEBUG("sleeping for {}", operator_args_.poll_interval);
-        std::this_thread::sleep_for(operator_args_.poll_interval);
-      }
-    }
-    for (auto& v : msb.finalize_as_table_slice()) {
-      co_yield std::move(v);
-    }
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate>
-    requires enable_sink
-  {
-    co_yield {};
-    auto args = operator_args_;
-    auto ssl = args.ssl.resolve(ctrl);
-    if (not ssl) {
-      co_return;
-    }
-    if (not tls_to_fluentbit(*ssl, args.args.inner, ctrl.diagnostics())) {
-      co_return;
-    }
-    auto requests = std::vector<secret_request>{};
-    auto fluent_bit_args = property_map{};
-    auto plugin_args = property_map{};
-    to_property_map_or_request(args.service_properties, fluent_bit_args,
-                               requests, ctrl.diagnostics());
-    to_property_map_or_request(args.args, plugin_args, requests,
-                               ctrl.diagnostics());
-    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
-    auto engine = engine::make_sink(args, config_, fluent_bit_args, plugin_args,
-                                    ctrl.diagnostics());
-    if (not engine) {
-      co_return;
-    }
-    engine->max_wait_before_stop(std::chrono::seconds(1));
-    auto event = std::string{};
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      // Print table slice as JSON.
-      auto resolved_slice = resolve_enumerations(slice);
-      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-      auto failed = false;
-      for (const auto& row : values3(*array)) {
-        auto it = std::back_inserter(event);
-        TENZIR_ASSERT(row);
-        auto printer = json_printer{{
-          .oneline = true,
-        }};
-        const auto ok = printer.print(it, *row);
-        TENZIR_ASSERT(ok);
-        // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
-        auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (engine->push(message).is_error()) {
-          failed = true;
-        }
-        event.clear();
-      }
-      if (failed) {
-        diagnostic::warning("failed to push data into Fluent Bit Engine")
-          .emit(ctrl.diagnostics());
-      }
-      co_yield {};
-    }
-  }
-
-  auto name() const -> std::string override {
-    if constexpr (enable_source and enable_sink) {
-      return "fluent-bit";
-    } else if constexpr (enable_source) {
-      return "from_fluent_bit";
-    } else {
-      return "to_fluent_bit";
-    }
-  }
-
-  auto detached() const -> bool override {
-    return true;
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    if constexpr (enable_source) {
-      auto builder_options = builder_options_;
-      builder_options.settings.ordered = order == EventOrder::ordered;
-      auto replacement = std::make_unique<fluent_bit_operator_impl>(
-        this->operator_args_, std::move(builder_options), this->config_);
-      return {filter, order, std::move(replacement)};
-    } else {
-      TENZIR_UNUSED(filter, order);
-      return do_not_optimize(*this);
-    }
-  }
-
-  friend auto inspect(auto& f, fluent_bit_operator_impl& x) -> bool {
-    return f.object(x).fields(f.field("operator_args", x.operator_args_),
-                              f.field("builder_options", x.builder_options_),
-                              f.field("config", x.config_));
-  }
-
-private:
-  operator_args operator_args_;
-  multi_series_builder::options builder_options_;
-  record config_;
-};
-
 constexpr auto source_channel_capacity = size_t{16};
 constexpr auto sink_stop_wait = std::chrono::seconds{1};
 constexpr auto snapshot_stop_wait = std::chrono::seconds{5};
@@ -1380,10 +1200,6 @@ private:
   MetricsCounter write_events_counter_;
   bool done_ = false;
 };
-
-using fluent_bit_operator = fluent_bit_operator_impl<true, true>;
-using fluent_bit_source_operator = fluent_bit_operator_impl<true, false>;
-using fluent_bit_sink_operator = fluent_bit_operator_impl<false, true>;
 
 } // namespace
 } // namespace tenzir::plugins::fluentbit

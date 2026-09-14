@@ -125,7 +125,7 @@ private:
 class ToAzureBlobStoragePlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_azure_blob_storage";
+    return "to_azure_blob_storage";
   }
 
   auto describe() const -> Description override {

@@ -207,7 +207,7 @@ using FromTcp = StreamFrom<TcpFrom>;
 class from_tcp_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.from_tcp";
+    return "from_tcp";
   }
 
   auto describe() const -> Description override {

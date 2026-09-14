@@ -982,49 +982,6 @@ auto process_cast_slice(const table_slice& slice, location self,
   return result;
 }
 
-class trim_operator final : public crtp_operator<trim_operator> {
-public:
-  trim_operator() = default;
-
-  trim_operator(struct location self, bool drop_optional, bool drop_recommended)
-    : self_{self},
-      drop_optional_{drop_optional},
-      drop_recommended_{drop_recommended} {
-  }
-
-  auto name() const -> std::string override {
-    return "ocsf::trim";
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      auto output = process_trim_slice(slice, self_, ctrl.diagnostics(),
-                                       drop_optional_, drop_recommended_);
-      for (auto&& out : output) {
-        co_yield std::move(out);
-      }
-    }
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, trim_operator& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_),
-                              f.field("drop_optional", x.drop_optional_),
-                              f.field("drop_recommended", x.drop_recommended_));
-  }
-
-private:
-  struct location self_;
-  bool drop_optional_{};
-  bool drop_recommended_{};
-};
-
 class deriver {
 public:
   deriver(location self, diagnostic_handler& dh) : self_{self}, dh_{dh} {
@@ -1644,91 +1601,6 @@ auto process_derive_slice(const table_slice& slice, location self,
   return result;
 }
 
-class derive_operator final : public crtp_operator<derive_operator> {
-public:
-  derive_operator() = default;
-
-  derive_operator(struct location self) : self_{self} {
-  }
-
-  auto name() const -> std::string override {
-    return "ocsf::derive";
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      auto output = process_derive_slice(slice, self_, ctrl.diagnostics());
-      for (auto&& out : output) {
-        co_yield std::move(out);
-      }
-    }
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, derive_operator& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_));
-  }
-
-private:
-  struct location self_;
-};
-
-class cast_operator final : public crtp_operator<cast_operator> {
-public:
-  cast_operator() = default;
-
-  cast_operator(struct location self, bool preserve_variants, bool null_fill,
-                bool timestamp_to_ms)
-    : self_{self},
-      preserve_variants_{preserve_variants},
-      null_fill_{null_fill},
-      timestamp_to_ms_{timestamp_to_ms} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto cache = null_fill_cache{};
-    for (auto&& slice : input) {
-      auto output = process_cast_slice(slice, self_, ctrl.diagnostics(),
-                                       preserve_variants_, null_fill_,
-                                       timestamp_to_ms_, cache);
-      for (auto&& out : output) {
-        co_yield std::move(out);
-      }
-    }
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  auto name() const -> std::string override {
-    return "ocsf::cast";
-  }
-
-  friend auto inspect(auto& f, cast_operator& x) -> bool {
-    return f.object(x).fields(f.field("self_", x.self_),
-                              f.field("preserve_variants_",
-                                      x.preserve_variants_),
-                              f.field("null_fill_", x.null_fill_),
-                              f.field("timestamp_to_ms_", x.timestamp_to_ms_));
-  }
-
-private:
-  struct location self_;
-  bool preserve_variants_{};
-  bool null_fill_{};
-  bool timestamp_to_ms_{};
-};
-
 auto make_dependency_path(std::initializer_list<std::string_view> names)
   -> ast::field_path {
   TENZIR_ASSERT(names.size() > 0);
@@ -1819,47 +1691,14 @@ private:
   DeriveArgs args_;
 };
 
-class apply_plugin final : public operator_factory_plugin {
+class cast_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "ocsf::apply";
+    return "ocsf::cast";
   }
 
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto preserve_variants = false;
-    argument_parser2::operator_(name())
-      .named("preserve_variants", preserve_variants)
-      .parse(inv, ctx)
-      .ignore();
-    diagnostic::warning("`ocsf::apply` is deprecated")
-      .primary(inv.self.get_location())
-      .hint("consider using `ocsf::cast` instead")
-      .emit(ctx);
-    return std::make_unique<cast_operator>(inv.self.get_location(),
-                                           preserve_variants, true, false);
-  }
-};
-
-class cast_plugin final : public virtual operator_plugin2<cast_operator>,
-                          public virtual OperatorPlugin {
-public:
   auto operator_name() const -> std::string override {
     return "ocsf_cast";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto encode_variants = false;
-    auto timestamp_to_ms = false;
-    auto null_fill = false;
-    TRY(argument_parser2::operator_(name())
-          .named("encode_variants", encode_variants)
-          .named("null_fill", null_fill)
-          .named("timestamp_to_ms", timestamp_to_ms)
-          .parse(inv, ctx));
-    return std::make_unique<cast_operator>(
-      inv.self.get_location(), not encode_variants, null_fill, timestamp_to_ms);
   }
 
   auto describe() const -> Description override {
@@ -1884,26 +1723,14 @@ public:
   }
 };
 
-class trim_plugin final : public virtual operator_plugin2<trim_operator>,
-                          public virtual OperatorPlugin {
+class trim_plugin final : public virtual OperatorPlugin {
 public:
-  auto operator_name() const -> std::string override {
-    return "ocsf_trim";
+  auto name() const -> std::string override {
+    return "ocsf::trim";
   }
 
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    // TODO: Consider using a more intelligent default that is not simply
-    // based on attributes being optional.
-    auto drop_optional = true;
-    auto drop_recommended = false;
-    argument_parser2::operator_(name())
-      .named("drop_optional", drop_optional)
-      .named("drop_recommended", drop_recommended)
-      .parse(inv, ctx)
-      .ignore();
-    return std::make_unique<trim_operator>(inv.self.get_location(),
-                                           drop_optional, drop_recommended);
+  auto operator_name() const -> std::string override {
+    return "ocsf_trim";
   }
 
   auto describe() const -> Description override {
@@ -1930,17 +1757,14 @@ public:
   }
 };
 
-class derive_plugin final : public virtual operator_plugin2<derive_operator>,
-                            public virtual OperatorPlugin {
+class derive_plugin final : public virtual OperatorPlugin {
 public:
-  auto operator_name() const -> std::string override {
-    return "ocsf_derive";
+  auto name() const -> std::string override {
+    return "ocsf::derive";
   }
 
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_(name()).parse(inv, ctx).ignore();
-    return std::make_unique<derive_operator>(inv.self.get_location());
+  auto operator_name() const -> std::string override {
+    return "ocsf_derive";
   }
 
   auto describe() const -> Description override {
@@ -1964,7 +1788,6 @@ public:
 } // namespace
 } // namespace tenzir::plugins::ocsf
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::apply_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::cast_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)

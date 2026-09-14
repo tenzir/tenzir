@@ -29,7 +29,7 @@
 -      pipeline: {
 -        lets: [
 +    GenericIr {
-+      desc: "tql2.to_file",
++      desc: "to_file",
 +      store: {
 +        op: {
 +          path: [
@@ -50,7 +50,7 @@
          ],
 -        operators: [
 -          GenericIr {
--            desc: "tql2.sort",
+-            desc: "sort",
 -            store: {
 -              op: {
 -                path: [
@@ -77,7 +77,7 @@
 -            order: "ordered"
 -          },
 -          GenericIr {
--            desc: "tql2.to_file",
+-            desc: "to_file",
 -            store: {
 -              op: {
 -                path: [

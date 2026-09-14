@@ -63,47 +63,6 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
 
 } // namespace
 
-auto operator_def::make(operator_factory_invocation inv, session ctx) const
-  -> failure_or<operator_ptr> {
-  return match(
-    kind_,
-    [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
-      auto op_name = make_operator_name(inv.self);
-      // Build a local source map so that diagnostics from the UDO body carry
-      // the call-site "called from here" trace even in the non-IR path.
-      auto source_map = SourceMap{};
-      source_map.add_source(udo.source);
-      auto callsite = source_map.add_call_site(inv.self.get_location());
-      auto enricher = make_enriching_handler(source_map, ctx.dh());
-      auto dh = udo_diagnostic_handler(enricher.get(), op_name, udo);
-      // If there are no parameters defined, check that no arguments were provided
-      if (udo.positional_params.empty() and udo.named_params.empty()) {
-        if (not inv.args.empty()) {
-          diagnostic::error("operator '{}' does not support arguments", op_name)
-            .primary(inv.self)
-            .emit(dh);
-          return failure::promise();
-        }
-        TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
-        return std::make_unique<pipeline>(std::move(compiled));
-      }
-      TRY(auto instantiated,
-          instantiate_user_defined_operator(udo, inv, ctx, callsite, dh));
-      TRY(auto compiled, compile(std::move(instantiated), ctx));
-      return std::make_unique<pipeline>(std::move(compiled));
-    },
-    [&](const native_operator& op) -> failure_or<operator_ptr> {
-      if (not op.factory_plugin) {
-        diagnostic::error("operator `{}` can only be used with the new IR",
-                          make_operator_name(inv.self))
-          .primary(inv.self)
-          .emit(ctx);
-        return failure::promise();
-      }
-      return op.factory_plugin->make(inv, ctx);
-    });
-}
-
 namespace {
 
 auto global_registry_ref() -> std::shared_ptr<const registry>& {
@@ -113,22 +72,20 @@ auto global_registry_ref() -> std::shared_ptr<const registry>& {
     // so we reject module-qualified ones instead of creating builtin modules
     // that would shadow package modules.
     const auto flat = [](std::string name) -> Option<std::string> {
-      if (name.starts_with("tql2.")) {
-        name.erase(0, 5);
-      }
       if (name.contains("::")) {
         return None{};
       }
       return name;
     };
-    // Factory plugins may still carry a scoped name. Such an operator must not
-    // create a builtin module, but it must keep working under its old spelling.
-    // If a compiler plugin registers the flattened name, the two halves belong
-    // to the same renamed operator, so the factory joins it in the standard
-    // package; both spellings then work on both execution paths. Otherwise the
-    // operator exists only under its old spelling, and we park it in the
-    // deprecated package under its flattened name. Only the deprecation relay
-    // in `resolve.cpp` looks there, and only if no module of that name resolved
+    // Factory plugins no longer implement operators; they only carry connector,
+    // format, and compression properties. They still contribute names so that
+    // the migration diagnostics in `ir.cpp` can pick them up. Such a name may
+    // be scoped, which must not create a builtin module. If a compiler plugin
+    // registers the flattened name, the two halves belong to the same renamed
+    // operator, so the factory joins it in the standard package. Otherwise the
+    // name exists only under its old spelling, and we park it in the deprecated
+    // package under its flattened name. Only the deprecation relay in
+    // `resolve.cpp` looks there, and only if no module of that name resolved
     // before.
     auto flat_ir_names = std::unordered_set<std::string>{};
     for (const auto* op : plugins::get<operator_compiler_plugin>()) {

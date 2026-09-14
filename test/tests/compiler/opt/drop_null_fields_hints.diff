@@ -64,7 +64,7 @@
 +      ]
      },
      GenericIr {
-       desc: "tql2.drop_null_fields",
+       desc: "drop_null_fields",
        store: {
          op: {
            path: [

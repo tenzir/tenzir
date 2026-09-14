@@ -2,5 +2,5 @@
   name: "accept_elasticsearch",
 }
 {
-  name: "tql2.to_elasticsearch",
+  name: "to_elasticsearch",
 }

@@ -65,33 +65,6 @@ auto parse_selector_value(std::string_view x)
 }
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
-  argument_parser& parser, bool add_unflatten_option, bool add_merge_option)
-  -> void {
-  is_tql1_ = true;
-  parser.add("--schema-only", schema_only_);
-  if (add_merge_option) {
-    parser.add("--merge", merge_);
-  }
-  parser.add("--raw", raw_);
-  if (add_unflatten_option) {
-    parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
-  }
-}
-
-auto multi_series_builder_argument_parser::add_policy_to_parser(
-  argument_parser& parser) -> void {
-  is_tql1_ = true;
-  parser.add("--schema", schema_, "<schema>");
-  parser.add("--selector", selector_, "<selector>");
-}
-
-auto multi_series_builder_argument_parser::add_all_to_parser(
-  argument_parser& parser) -> void {
-  add_policy_to_parser(parser);
-  add_settings_to_parser(parser);
-}
-
-auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool add_unflatten_option,
   merge_option add_merge_option) -> void {
   parser.named("schema_only", schema_only_);

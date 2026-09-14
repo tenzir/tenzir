@@ -190,7 +190,7 @@ def export_summary(tenzir: Executor, schema: str, field: str) -> dict:
         f"export\n"
         f'where @name == "{schema}"\n'
         f"summarize count=count(), lo=min({field}), hi=max({field})\n"
-        f"write_ndjson\n"
+        "to_stdout { write_ndjson }\n"
     )
     assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
     return json.loads(r.stdout.decode().strip())
@@ -205,7 +205,7 @@ def wait_for_count(
             f"export\n"
             f'where @name == "{schema}"\n'
             f"summarize count=count()\n"
-            f"write_ndjson\n"
+            "to_stdout { write_ndjson }\n"
         )
         if r.returncode == 0:
             try:
@@ -306,7 +306,7 @@ try:
         'where @name == "shutdown-phase3"\n'
         "sort id\n"
         "deduplicate id\n"
-        "write_ndjson\n",
+        "to_stdout { write_ndjson }\n",
     )
     assert rows == [{"id": "pub-a"}, {"id": "pub-b"}], f"phase3: {rows}"
     print("phase3-sequential-publishers-survive-sigterm: ok")
@@ -338,7 +338,7 @@ try:
     tenzir = stop_and_restart()
     rows = export_ndjson(
         tenzir,
-        'export\nwhere @name == "shutdown-phase4"\nsort x\nwrite_ndjson\n',
+        'export\nwhere @name == "shutdown-phase4"\nsort x\nto_stdout { write_ndjson }\n',
     )
     assert rows == [{"x": 1}] * 3 + [{"x": 2}] * 3 + [{"x": 3}] * 3, f"phase4: {rows}"
     print("phase4-batched-publish-survives-sigterm: ok")

@@ -608,7 +608,7 @@ private:
 class ServeHttpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.serve_http";
+    return "serve_http";
   }
 
   auto describe() const -> Description override {

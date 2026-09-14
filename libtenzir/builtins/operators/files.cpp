@@ -9,7 +9,6 @@
 #include "tenzir/option.hpp"
 
 #include <tenzir/arc.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -348,65 +347,6 @@ auto make_file_listing(files_args args, diagnostic_handler& dh)
   co_yield None{};
 }
 
-class files_operator final : public crtp_operator<files_operator> {
-public:
-  files_operator() = default;
-
-  files_operator(files_args args) : args_{std::move(args)} {
-  }
-
-  auto make_generator(auto listing) const -> generator<table_slice> {
-    for (auto&& slice : make_file_events(std::move(listing))) {
-      co_yield std::move(slice);
-    }
-  }
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    try {
-      const auto path = args_.path ? std::filesystem::path{*args_.path}
-                                   : std::filesystem::current_path();
-      const auto options = directory_options(args_);
-      if (args_.recurse_directories) {
-        auto gen = make_generator(list_directory_recursive(
-          path, options, args_.skip_permission_denied, ctrl.diagnostics()));
-        for (auto&& result : std::move(gen)) {
-          co_yield std::move(result);
-        }
-      } else {
-        auto gen = make_generator(list_directory(
-          path, options, args_.skip_permission_denied, ctrl.diagnostics()));
-        for (auto&& result : std::move(gen)) {
-          co_yield std::move(result);
-        }
-      }
-    } catch (const std::filesystem::filesystem_error& err) {
-      diagnostic::error("{}", err.what()).emit(ctrl.diagnostics());
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "files";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, files_operator& x) -> bool {
-    return f.object(x).fields(f.field("args", x.args_));
-  }
-
-private:
-  files_args args_ = {};
-};
-
 class Files final : public Operator<void, table_slice> {
 public:
   explicit Files(FilesArgs args) : args_{to_legacy_args(args)} {
@@ -456,20 +396,10 @@ private:
   bool done_ = false;
 };
 
-class plugin final : public virtual operator_plugin<files_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = files_args{};
-    TRY(argument_parser2::operator_("files")
-          .positional("dir", args.path)
-          .named("recurse", args.recurse_directories)
-          .named("follow_symlinks", args.follow_directory_symlink)
-          .named("skip_permission_denied", args.skip_permission_denied)
-          .parse(inv, ctx));
-    return std::make_unique<files_operator>(std::move(args));
+  auto name() const -> std::string override {
+    return "files";
   }
 
   auto describe() const -> Description override {

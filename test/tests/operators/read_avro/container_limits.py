@@ -21,7 +21,7 @@ def main() -> None:
         '{type: "map", values: "long"}]} } | measure'
         " | summarize max_rows=max(events), total_rows=sum(events)"
         " | oversized=max_rows > 500"
-        " | select total_rows, oversized | write_ndjson",
+        " | select total_rows, oversized | to_stdout { write_ndjson }",
         [{"total_rows": 1_024, "oversized": False}],
     )
     assert_rejected(

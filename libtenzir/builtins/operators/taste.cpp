@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
@@ -22,46 +21,6 @@
 namespace tenzir::plugins::taste {
 
 namespace {
-
-class taste_operator final
-  : public schematic_operator<taste_operator, uint64_t> {
-public:
-  taste_operator() = default;
-
-  explicit taste_operator(uint64_t limit) : limit_{limit} {
-  }
-
-  auto initialize(const type&, operator_control_plane&) const
-    -> caf::expected<state_type> override {
-    return limit_;
-  }
-
-  auto process(table_slice slice, state_type& remaining) const
-    -> table_slice override {
-    auto result = head(slice, remaining);
-    remaining -= result.rows();
-    return result;
-  }
-
-  auto name() const -> std::string override {
-    return "taste";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    // Note: The `unordered` means that we do not necessarily return the first
-    // `limit_` events.
-    (void)filter, (void)order;
-    return OptimizeResult{None{}, EventOrder::unordered, copy()};
-  }
-
-  friend auto inspect(auto& f, taste_operator& x) -> bool {
-    return f.apply(x.limit_);
-  }
-
-private:
-  uint64_t limit_;
-};
 
 struct TasteArgs {
   uint64_t limit = 10;
@@ -95,18 +54,10 @@ private:
   uint64_t limit_;
 };
 
-class plugin final : public virtual operator_plugin<taste_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto count = Option<uint64_t>{};
-    argument_parser2::operator_("taste")
-      .positional("count", count)
-      .parse(inv, ctx)
-      .ignore();
-    return std::make_unique<taste_operator>(count.value_or(10));
+  auto name() const -> std::string override {
+    return "taste";
   }
 
   auto describe() const -> Description override {

@@ -88,11 +88,6 @@ public:
   auto positional(std::string name, Option<T>& x,
                   std::string type = maybe_default<T>) -> argument_parser2&;
 
-  auto positional(std::string name, located<pipeline>& x, std::string type = "")
-    -> argument_parser2&;
-  auto positional(std::string name, Option<located<pipeline>>& x,
-                  std::string type = "") -> argument_parser2&;
-
   // ------------------------------------------------------------------------
 
   /// Adds a required named argument.
@@ -107,20 +102,12 @@ public:
   named(std::string name, Option<T>& x, std::string type = maybe_default<T>)
     -> argument_parser2&;
 
-  auto named(std::string name, located<pipeline>& x, std::string type = "")
-    -> argument_parser2&;
-  auto named(std::string name, Option<located<pipeline>>& x,
-             std::string type = "") -> argument_parser2&;
-
   /// Adds an optional named argument. Use this if you have an object with a
   /// default value.
   template <argument_parser_type T>
   auto
   named_optional(std::string name, T& x, std::string type = maybe_default<T>)
     -> argument_parser2&;
-
-  auto named_optional(std::string name, located<pipeline>& x,
-                      std::string type = "") -> argument_parser2&;
 
   /// Adds an optional named argument.
   auto named(std::string name, Option<location>& x, std::string type = "")
@@ -157,10 +144,6 @@ private:
 
   argument_parser2(kind kind, std::string name)
     : kind_{kind}, name_{std::move(name)} {
-    // TODO: Remove this temporary hack once we removed TQL1 plugins.
-    if (name_.starts_with("tql2.")) {
-      name_.erase(0, 5);
-    }
   }
 
   template <class T>

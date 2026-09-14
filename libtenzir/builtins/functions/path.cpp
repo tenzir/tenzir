@@ -17,7 +17,7 @@ namespace {
 class file_name final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.file_name";
+    return "file_name";
   }
 
   auto is_deterministic() const -> bool final {
@@ -75,7 +75,7 @@ public:
 class parent_dir final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.parent_dir";
+    return "parent_dir";
   }
 
   auto is_deterministic() const -> bool final {

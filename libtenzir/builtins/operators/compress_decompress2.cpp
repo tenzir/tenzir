@@ -415,7 +415,7 @@ public:
 
   auto name() const -> std::string override {
     TENZIR_ASSERT_ALWAYS(not method_name_.empty());
-    return "tql2.compress_" + method_name_;
+    return "compress_" + method_name_;
   }
 
   auto describe() const -> Description override {
@@ -504,7 +504,7 @@ public:
 
   auto name() const -> std::string override {
     TENZIR_ASSERT_ALWAYS(not method_name_.empty());
-    return "tql2.decompress_" + method_name_;
+    return "decompress_" + method_name_;
   }
 
   auto describe() const -> Description override {

@@ -360,7 +360,7 @@ private:
 class SaveStdoutPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.save_stdout";
+    return "save_stdout";
   }
 
   auto describe() const -> Description override {

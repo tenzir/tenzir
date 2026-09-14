@@ -322,7 +322,7 @@ private:
 class LoadStdinPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.load_stdin";
+    return "load_stdin";
   }
 
   auto describe() const -> Description override {

@@ -2320,7 +2320,7 @@ private:
 class ToIcebergPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_iceberg";
+    return "to_iceberg";
   }
 
   auto describe() const -> Description override {

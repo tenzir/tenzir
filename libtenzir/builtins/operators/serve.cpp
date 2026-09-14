@@ -73,6 +73,7 @@
 #include <arrow/record_batch.h>
 #include <caf/actor_addr.hpp>
 #include <caf/actor_registry.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/send.hpp>
 #include <caf/stateful_actor.hpp>
@@ -1808,112 +1809,16 @@ private:
 
 // -- serve operator ----------------------------------------------------------
 
-class serve_operator final : public crtp_operator<serve_operator> {
-public:
-  serve_operator() = default;
-
-  serve_operator(std::string serve_id, uint64_t buffer_size)
-    : serve_id_{std::move(serve_id)}, buffer_size_{buffer_size} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
-    auto serve_manager
-      = ctrl.self().system().registry().get<serve_manager_actor>(
-        "tenzir.serve-manager");
-    // Register this operator at SERVE MANAGER actor using the serve_id.
-    ctrl.set_waiting(true);
-    ctrl.self()
-      .mail(atom::start_v, serve_id_, buffer_size_,
-            caf::actor_cast<caf::actor>(&ctrl.self()))
-      .request(serve_manager, caf::infinite)
-      .then(
-        [&]() {
-          ctrl.set_waiting(false);
-          TENZIR_DEBUG("serve for id {} is now available",
-                       escape_operator_arg(serve_id_));
-        },
-        [&](const caf::error& err) { //
-          diagnostic::error(err)
-            .note("failed to register at serve-manager")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-    // Forward events to the SERVE MANAGER.
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      // Send slice to SERVE MANAGER.
-      ctrl.set_waiting(true);
-      ctrl.self()
-        .mail(atom::put_v, serve_id_, std::move(slice))
-        .request(serve_manager, caf::infinite)
-        .then(
-          [&]() {
-            ctrl.set_waiting(false);
-          },
-          [&](const caf::error& err) {
-            diagnostic::error(err)
-              .note("failed to buffer events at serve-manager")
-              .emit(ctrl.diagnostics());
-          });
-      co_yield {};
-    }
-    //  Wait until all events were fetched.
-    ctrl.set_waiting(true);
-    ctrl.self()
-      .mail(atom::shutdown_v, serve_id_,
-            caf::actor_cast<caf::actor>(&ctrl.self()))
-      .request(serve_manager, caf::infinite)
-      .then(
-        [&]() {
-          ctrl.set_waiting(false);
-        },
-        [&](const caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to deregister at serve-manager")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
-  auto name() const -> std::string override {
-    return "serve";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter, (void)order;
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, serve_operator& x) {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.serve.serve-operator")
-      .fields(f.field("serve-id", x.serve_id_),
-              f.field("buffer-size", x.buffer_size_));
-  }
-
-private:
-  std::string serve_id_ = {};
-  uint64_t buffer_size_ = {};
-};
-
 // -- serve plugin ------------------------------------------------------------
 
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
-                     public virtual operator_plugin2<serve_operator>,
-                     public virtual OperatorPlugin,
-                     public virtual aspect_plugin {
+                     public virtual OperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "serve";
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<ServeArgs, ServeImpl>{};
     d.positional("id", &ServeArgs::id);
@@ -1932,57 +1837,6 @@ public:
 
   auto component_name() const -> std::string override {
     return "serve-manager";
-  }
-
-  auto aspect_name() const -> std::string override {
-    return "serves";
-  }
-
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
-    auto serve_manager = serve_manager_actor{};
-    auto blocking = caf::scoped_actor{ctrl.self().system()};
-    blocking
-      ->mail(atom::get_v, atom::label_v,
-             std::vector<std::string>{"serve-manager"})
-      .request(ctrl.node(), caf::infinite)
-      .receive(
-        [&](std::vector<caf::actor>& actors) {
-          TENZIR_ASSERT(actors.size() == 1);
-          serve_manager
-            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-        },
-        [&](const caf::error& err) { //
-          diagnostic::error(err)
-            .note("failed to get at serve-manager")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-    auto serves = list{};
-    blocking
-      ->mail(atom::status_v, status_verbosity::debug,
-             duration{std::chrono::seconds{10}})
-      .request(serve_manager, caf::infinite)
-      .receive(
-        [&](record& response) {
-          TENZIR_ASSERT(response.size() == 1);
-          TENZIR_ASSERT(response.contains("requests"));
-          TENZIR_ASSERT(is<list>(response["requests"]));
-          serves = std::move(as<list>(response["requests"]));
-        },
-        [&](const caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to get status")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-    auto builder = series_builder{};
-    for (const auto& serve : serves) {
-      builder.data(serve);
-    }
-    for (auto&& result : builder.finish_as_table_slice("tenzir.serve")) {
-      co_yield std::move(result);
-    }
   }
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
@@ -2057,30 +1911,6 @@ public:
   auto handler(caf::actor_system& system, node_actor node) const
     -> rest_handler_actor override {
     return system.spawn(serve_handler, node);
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto id = located<std::string>{};
-    auto buffer_size = Option<located<uint64_t>>{};
-    argument_parser2::operator_("serve")
-      .positional("id", id)
-      .named("buffer_size", buffer_size)
-      .parse(inv, ctx)
-      .ignore();
-    if (id.inner.empty()) {
-      diagnostic::error("serve id must not be empty")
-        .primary(id.source)
-        .emit(ctx);
-    }
-    if (buffer_size and buffer_size->inner == 0) {
-      diagnostic::error("buffer size must not be zero")
-        .primary(buffer_size->source)
-        .emit(ctx);
-    }
-    return std::make_unique<serve_operator>(
-      std::move(id.inner),
-      buffer_size ? buffer_size->inner : defaults::api::serve::max_events);
   }
 };
 

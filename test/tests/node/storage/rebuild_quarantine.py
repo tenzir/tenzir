@@ -138,7 +138,8 @@ def run_ctl(node: NodeController, *args: str) -> subprocess.CompletedProcess[str
 
 def export_count(tenzir: Executor, schema: str) -> int:
     r = tenzir.run(
-        f'export\nwhere @name == "{schema}"\nsummarize count=count()\nwrite_ndjson\n'
+        f'export\nwhere @name == "{schema}"\nsummarize count=count()\n'
+        "to_stdout { write_ndjson }\n"
     )
     assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
     return json.loads(r.stdout.decode().strip()).get("count", 0)
@@ -146,7 +147,8 @@ def export_count(tenzir: Executor, schema: str) -> int:
 
 def partition_uuids(tenzir: Executor, schema: str) -> list[str]:
     r = tenzir.run(
-        f'partitions\nwhere schema == "{schema}"\nselect uuid\nwrite_ndjson\n'
+        f'partitions\nwhere schema == "{schema}"\nselect uuid\n'
+        "to_stdout { write_ndjson }\n"
     )
     assert r.returncode == 0, f"partitions failed: {r.stderr.decode()}"
     return [
@@ -286,7 +288,8 @@ try:
     tenzir = Executor.from_env(node.env)
     r = tenzir.run(
         'export\nwhere @name == "quarantine.invalid_utf8"\n'
-        "summarize count=count()\nwrite_ndjson\n"
+        "summarize count=count()\n"
+        "to_stdout { write_ndjson }\n"
     )
     assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
     assert json.loads(r.stdout.decode())["count"] == 0, (

@@ -32,7 +32,7 @@ namespace {
 class sqrt final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.sqrt";
+    return "sqrt";
   }
 
   auto is_deterministic() const -> bool override {
@@ -105,7 +105,7 @@ public:
 class random final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.random";
+    return "random";
   }
 
   auto is_deterministic() const -> bool override {
@@ -212,7 +212,7 @@ private:
 class count final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.count";
+    return "count";
   }
 
   auto is_deterministic() const -> bool final {
@@ -232,7 +232,7 @@ public:
 class count_if final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.count_if";
+    return "count_if";
   }
 
   auto is_deterministic() const -> bool final {
@@ -415,7 +415,7 @@ private:
 class quantile final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.quantile";
+    return "quantile";
   }
 
   auto is_deterministic() const -> bool final {
@@ -482,7 +482,7 @@ public:
 class median final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.median";
+    return "median";
   }
 
   auto is_deterministic() const -> bool final {

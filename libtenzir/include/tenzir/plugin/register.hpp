@@ -263,12 +263,16 @@ auto get() noexcept -> generator<const Plugin*> {
 /// (case-insensitive), or nullptr if it doesn't exist.
 template <class Plugin = plugin>
 auto find(std::string_view name) noexcept -> const Plugin* {
-  const auto& plugins = get();
-  const auto found = std::find(plugins.begin(), plugins.end(), name);
-  if (found == plugins.end()) {
-    return nullptr;
+  // Plugins in distinct roles may share a TQL name, e.g., a function and an
+  // operator. Find the first plugin with both the requested name and role.
+  for (const auto& candidate : get()) {
+    if (candidate == name) {
+      if (const auto* result = candidate.template as<Plugin>()) {
+        return result;
+      }
+    }
   }
-  return found->template as<Plugin>();
+  return nullptr;
 }
 
 } // namespace tenzir::plugins

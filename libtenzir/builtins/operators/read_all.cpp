@@ -76,7 +76,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.read_all";
+    return "read_all";
   }
 
   auto describe() const -> Description override {

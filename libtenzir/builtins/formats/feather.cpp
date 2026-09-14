@@ -8,7 +8,6 @@
 
 #include "tenzir/option.hpp"
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -763,49 +762,6 @@ public:
   bool schema_decoded = false;
 };
 
-auto print_feather(
-  table_slice input, operator_control_plane& ctrl,
-  const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer,
-  const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
-  -> generator<chunk_ptr> {
-  auto has_secrets = false;
-  std::tie(has_secrets, input) = replace_secrets(std::move(input));
-  if (has_secrets) {
-    diagnostic::warning("`secret` is serialized as text")
-      .note("fields will be `\"***\"`")
-      .emit(ctrl.diagnostics());
-  }
-  auto batch = to_record_batch(input);
-  auto validate_status = batch->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-  auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
-  if (not stream_writer_status.ok()) {
-    diagnostic::error("{}", stream_writer_status.ToStringWithoutContextLines())
-      .note("failed to write record batch")
-      .emit(ctrl.diagnostics());
-    co_return;
-  }
-  // We must finish the clear the buffer because the provided APIs do not offer
-  // a scrape and rewrite on the allocated same memory.
-  auto finished_buffer_result = sink->Finish();
-  if (not finished_buffer_result.ok()) {
-    diagnostic::error(
-      "{}", finished_buffer_result.status().ToStringWithoutContextLines())
-      .note("failed to finish stream")
-      .emit(ctrl.diagnostics());
-    co_return;
-  }
-  co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
-  // The buffer is reinit with newly allocated memory because the API does not
-  // offer a Reset that just clears the original data.
-  auto reset_buffer_result = sink->Reset(1024, arrow_memory_pool());
-  if (not reset_buffer_result.ok()) {
-    diagnostic::error("{}", reset_buffer_result.ToStringWithoutContextLines())
-      .note("failed to reset stream")
-      .emit(ctrl.diagnostics());
-  }
-}
-
 class feather_options {
 public:
   Option<located<int64_t>> compression_level;
@@ -818,127 +774,6 @@ public:
                               f.field("min_space_savings",
                                       x.min_space_savings));
   }
-};
-
-class feather_parser final : public plugin_parser {
-public:
-  feather_parser() = default;
-
-  auto name() const -> std::string override {
-    return "feather";
-  }
-
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> Option<generator<table_slice>> override {
-    return detail::parse_feather(std::move(input), ctrl.diagnostics());
-  }
-
-  friend auto inspect(auto& f, feather_parser& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
-class feather_printer final : public plugin_printer {
-public:
-  feather_printer() = default;
-  feather_printer(feather_options write_options)
-    : options_{std::move(write_options)} {
-  }
-
-  auto name() const -> std::string override {
-    // FIXME: Rename this and the file to just feather.
-    return "feather";
-  }
-
-  auto instantiate([[maybe_unused]] type input_schema,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto sink
-      = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
-    if (not sink.ok()) {
-      return diagnostic::error("{}",
-                               sink.status().ToStringWithoutContextLines())
-        .note("failed to created BufferOutputStream")
-        .to_error();
-    }
-    auto ipc_write_options = arrow::ipc::IpcWriteOptions::Defaults();
-    if (not options_.compression_type) {
-      if (options_.min_space_savings) {
-        diagnostic::warning("ignoring min space savings option")
-          .note("has no effect without `--compression-type`")
-          .primary(options_.min_space_savings->source)
-          .emit(ctrl.diagnostics());
-      }
-      if (options_.compression_level) {
-        diagnostic::warning("ignoring compression level option")
-          .note("has no effect without `--compression-type`")
-          .primary(options_.compression_level->source)
-          .emit(ctrl.diagnostics());
-      }
-    } else {
-      auto result_compression_type = arrow::util::Codec::GetCompressionType(
-        options_.compression_type->inner);
-      if (not result_compression_type.ok()) {
-        return diagnostic::error(
-                 "{}",
-                 result_compression_type.status().ToStringWithoutContextLines())
-          .note("failed to parse compression type")
-          .note("must be `uncompressed`, `lz4`, or `zstd`")
-          .primary(options_.compression_type->source)
-          .to_error();
-      }
-      auto compression_level = options_.compression_level
-                                 ? options_.compression_level->inner
-                                 : arrow::util::kUseDefaultCompressionLevel;
-      auto codec_result = arrow::util::Codec::Create(
-        result_compression_type.MoveValueUnsafe(), compression_level);
-      if (not codec_result.ok()) {
-        return diagnostic::error(
-                 "{}", codec_result.status().ToStringWithoutContextLines())
-          .note("failed to create codec")
-          .primary(options_.compression_type->source)
-          .primary(options_.compression_level
-                     ? options_.compression_level->source
-                     : location::unknown)
-          .to_error();
-      }
-      ipc_write_options.codec = codec_result.MoveValueUnsafe();
-      if (options_.min_space_savings) {
-        ipc_write_options.min_space_savings = options_.min_space_savings->inner;
-      }
-    }
-    const auto schema = input_schema.to_arrow_schema();
-    auto stream_writer_result = arrow::ipc::MakeStreamWriter(
-      sink.ValueUnsafe(), schema, ipc_write_options);
-    if (not stream_writer_result.ok()) {
-      return diagnostic::error(
-               "{}",
-               stream_writer_result.status().ToStringWithoutContextLines())
-        .to_error();
-    }
-    auto stream_writer = stream_writer_result.MoveValueUnsafe();
-    return printer_instance::make([&ctrl, sink = sink.MoveValueUnsafe(),
-                                   stream_writer = std::move(stream_writer)](
-                                    table_slice slice) -> generator<chunk_ptr> {
-      return print_feather(std::move(slice), ctrl, stream_writer, sink);
-    });
-  }
-
-  auto allows_joining() const -> bool override {
-    return false;
-  };
-
-  auto prints_utf8() const -> bool override {
-    return false;
-  }
-
-  friend auto inspect(auto& f, feather_printer& x) -> bool {
-    return f.object(x).fields(f.field("options", x.options_));
-  }
-
-private:
-  feather_options options_;
 };
 
 struct ReadFeatherArgs {
@@ -1429,9 +1264,7 @@ private:
   bool done_ = false;
 };
 
-class plugin final : public virtual parser_plugin<feather_parser>,
-                     public virtual printer_plugin<feather_printer>,
-                     public virtual store_plugin {
+class plugin final : public virtual store_plugin {
   auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);
@@ -1446,26 +1279,6 @@ class plugin final : public virtual parser_plugin<feather_parser>,
 
   auto name() const -> std::string override {
     return "feather";
-  }
-
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"feather", "https://tenzir.com/docs/"
-                                             "formats/feather"};
-    parser.parse(p);
-    return std::make_unique<feather_parser>();
-  }
-
-  auto parse_printer(parser_interface& p) const
-    -> std::unique_ptr<plugin_printer> override {
-    auto options = feather_options{};
-    auto parser = argument_parser{"feather", "https://tenzir.com/docs/"
-                                             "formats/feather"};
-    parser.add("--compression-level", options.compression_level, "<level>");
-    parser.add("--compression-type", options.compression_type, "<type>");
-    parser.add("--min-space-savings", options.min_space_savings, "<rate>");
-    parser.parse(p);
-    return std::make_unique<feather_printer>(std::move(options));
   }
 
   [[nodiscard]] auto make_passive_store() const
@@ -1490,21 +1303,18 @@ private:
   bool validate_store_batches_ = false;
 };
 
-class read_plugin final
-  : public virtual operator_plugin2<parser_adapter<feather_parser>>,
-    public virtual ReadOperatorPlugin {
+class read_plugin final : public virtual operator_factory_plugin,
+                          public virtual ReadOperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "read_feather";
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<ReadFeatherArgs, ReadFeather>{};
     d.operator_location(&ReadFeatherArgs::operator_location);
     d.optimization(&ReadFeatherArgs::optimization);
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
-    return std::make_unique<parser_adapter<feather_parser>>(feather_parser{});
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -1526,10 +1336,13 @@ public:
   }
 };
 
-class write_plugin final
-  : public virtual operator_plugin2<writer_adapter<feather_printer>>,
-    public virtual OperatorPlugin {
+class write_plugin final : public virtual operator_factory_plugin,
+                           public virtual OperatorPlugin {
 public:
+  auto name() const -> std::string override {
+    return "write_feather";
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<WriteFeatherArgs, WriteFeather>{};
     d.operator_location(&WriteFeatherArgs::operator_location);
@@ -1548,18 +1361,6 @@ public:
       return {};
     });
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto options = feather_options{};
-    TRY(argument_parser2::operator_(name())
-          .named("compression_level", options.compression_level)
-          .named("compression_type", options.compression_type)
-          .named("min_space_savings", options.min_space_savings)
-          .parse(inv, ctx));
-    return std::make_unique<writer_adapter<feather_printer>>(
-      feather_printer{std::move(options)});
   }
 
   auto write_properties() const -> write_properties_t override {

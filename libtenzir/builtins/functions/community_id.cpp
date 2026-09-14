@@ -31,7 +31,7 @@ struct arguments {
 class plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.community_id";
+    return "community_id";
   }
 
   auto is_deterministic() const -> bool override {

@@ -8,7 +8,7 @@
 
 #pragma once
 #include "tenzir/aliases.hpp"
-#include "tenzir/operator_control_plane.hpp"
+#include "tenzir/secret_resolution.hpp"
 
 #include <arrow/util/uri.h>
 
@@ -60,11 +60,4 @@ auto make_uri_request(const located<secret>& s, std::string prefix,
                       arrow::util::Uri& uri, diagnostic_handler& dh)
   -> secret_request;
 
-/// A helper function that is able to resolve records in place
-/// @relates operator_control_plane::resolve_secrets_must_yield
-auto resolve_secrets_must_yield(
-  operator_control_plane& ctrl, std::vector<secret_request_combined> requests,
-  operator_control_plane::final_callback_t final_callback
-  = operator_control_plane::noop_final_callback)
-  -> operator_control_plane::secret_resolution_sentinel;
 } // namespace tenzir

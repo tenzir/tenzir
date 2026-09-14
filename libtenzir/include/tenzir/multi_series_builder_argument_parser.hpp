@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/argument_parser.hpp"
+#include "tenzir/argument_parser2.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/option.hpp"
@@ -45,11 +45,6 @@ public:
       policy_{std::move(policy)} {
   }
 
-  auto add_settings_to_parser(argument_parser& parser,
-                              bool add_unflatten_option = true,
-                              bool add_merge_option = true) -> void;
-  auto add_policy_to_parser(argument_parser& parser) -> void;
-  auto add_all_to_parser(argument_parser& parser) -> void;
   auto add_settings_to_parser(argument_parser2& parser,
                               bool add_unflatten_option = true,
                               merge_option add_merge_option = merge_option::yes)
@@ -80,7 +75,6 @@ private:
   // this is only relevant to tql1
 public:
   bool has_manual_defaults_ = false;
-  bool is_tql1_ = false;
   multi_series_builder::settings_type settings_ = {};
   multi_series_builder::policy_type policy_
     = multi_series_builder::policy_default{};

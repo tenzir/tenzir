@@ -55,7 +55,7 @@
 +      ]
      },
      GenericIr {
-       desc: "tql2.timeshift",
+       desc: "timeshift",
        store: {
          op: {
            path: [

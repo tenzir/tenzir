@@ -27,8 +27,6 @@ class SSLContext;
 
 namespace tenzir {
 
-struct operator_control_plane;
-
 auto parse_curl_tls_version(std::string_view version) -> caf::expected<long>;
 auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int>;
 
@@ -86,11 +84,6 @@ struct TlsConfig {
   /// Updates a URL using the `tls` option (e.g. rewriting `http://` to
   /// `https://` when TLS is on and the option was explicit).
   [[nodiscard]] auto update_url(std::string_view url) const -> std::string;
-
-  /// Creates a CAF SSL context from the resolved options.
-  auto make_caf_context(operator_control_plane& ctrl, Option<caf::uri> uri
-                                                      = None{}) const
-    -> caf::expected<caf::net::ssl::context>;
 
   /// Creates a folly SSL context from the resolved options.
   /// Returns nullptr if TLS is disabled and not required by the caller,
@@ -176,7 +169,6 @@ public:
   /// all subsequent TLS operations.
   auto resolve(const caf::actor_system_config& cfg,
                diagnostic_handler& dh) const -> failure_or<TlsConfig>;
-  auto resolve(operator_control_plane& ctrl) const -> failure_or<TlsConfig>;
 
   /// Same as `resolve`, but additionally checks that the URL scheme is
   /// consistent with the TLS setting (e.g. `https://` requires `tls=true`).

@@ -104,11 +104,11 @@ try:
 
     live = start_pipeline(
         node.env,
-        'export live=true, retro=true\nwhere @name == "live-delivery"\nwrite_ndjson\n',
+        'export live=true, retro=true\nwhere @name == "live-delivery"\nto_stdout { write_ndjson }\n',
     )
     activity = start_pipeline(
         node.env,
-        "pipeline_activity range=10s, interval=10s\nunroll pipelines\nwrite_ndjson\n",
+        "pipeline_activity range=10s, interval=10s\nunroll pipelines\nto_stdout { write_ndjson }\n",
     )
     processes.extend([live, activity])
     ready = read_line(live, 5)
@@ -116,7 +116,7 @@ try:
 
     importer = start_pipeline(
         node.env,
-        "read_ndjson\n"
+        "from_stdin { read_ndjson }\n"
         "timestamp = time(timestamp)\n"
         "ingress.bytes = ingress.bytes.uint()\n"
         "egress.bytes = egress.bytes.uint()\n"

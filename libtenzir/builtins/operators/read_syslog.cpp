@@ -458,7 +458,7 @@ private:
 class plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.read_syslog";
+    return "read_syslog";
   }
 
   auto describe() const -> Description override {

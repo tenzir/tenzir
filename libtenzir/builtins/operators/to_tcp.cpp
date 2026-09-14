@@ -159,7 +159,7 @@ using ToTcp = StreamTo<TcpTo>;
 class ToTcpPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_tcp";
+    return "to_tcp";
   }
 
   auto describe() const -> Description override {

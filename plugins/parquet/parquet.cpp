@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "parquet/operator.hpp"
-
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/drain_bytes.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>

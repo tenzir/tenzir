@@ -4,7 +4,7 @@
    ],
    operators: [
      GenericIr {
-       desc: "tql2.from_file",
+       desc: "from_file",
        store: {
          op: {
            path: [
@@ -30,7 +30,7 @@
              ],
              operators: [
                GenericIr {
-                 desc: "tql2.read_parquet",
+                 desc: "read_parquet",
                  store: {
                    op: {
                      path: [

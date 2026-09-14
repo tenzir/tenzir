@@ -1088,7 +1088,7 @@ auto validate_chart_common(auto y, auto limit, auto x_min, auto x_max,
 
 class PluginArea final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
-    return fmt::format("tql2.chart_area");
+    return fmt::format("chart_area");
   }
 
   auto describe() const -> Description override {
@@ -1121,7 +1121,7 @@ class PluginArea final : public virtual OperatorPlugin {
 
 class PluginBar final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
-    return fmt::format("tql2.chart_bar");
+    return fmt::format("chart_bar");
   }
 
   auto describe() const -> Description override {
@@ -1154,7 +1154,7 @@ class PluginBar final : public virtual OperatorPlugin {
 
 class PluginLine final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
-    return fmt::format("tql2.chart_line");
+    return fmt::format("chart_line");
   }
 
   auto describe() const -> Description override {
@@ -1185,7 +1185,7 @@ class PluginLine final : public virtual OperatorPlugin {
 
 class PluginPie final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
-    return fmt::format("tql2.chart_pie");
+    return fmt::format("chart_pie");
   }
 
   auto describe() const -> Description override {

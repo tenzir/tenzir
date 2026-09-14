@@ -503,7 +503,7 @@ private:
 class Plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.read_netflow";
+    return "read_netflow";
   }
 
   auto describe() const -> Description override {

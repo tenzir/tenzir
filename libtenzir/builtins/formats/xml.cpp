@@ -654,7 +654,7 @@ auto make_xml_function(location call, multi_series_builder::options msb_opts,
 class parse_xml_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.parse_xml";
+    return "parse_xml";
   }
 
   auto is_deterministic() const -> bool override {
@@ -968,7 +968,7 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
 class parse_winlog_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.parse_winlog";
+    return "parse_winlog";
   }
 
   auto is_deterministic() const -> bool override {

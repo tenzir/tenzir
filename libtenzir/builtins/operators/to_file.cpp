@@ -76,7 +76,7 @@ private:
 class ToFilePlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_file";
+    return "to_file";
   }
 
   auto describe() const -> Description override {

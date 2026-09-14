@@ -3,4 +3,4 @@ error: true
 ---
 
 from {x:1}
-write_kv value_separator=""
+to_stdout { write_kv value_separator="" }

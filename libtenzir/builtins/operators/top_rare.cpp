@@ -47,9 +47,8 @@ auto describe_top_rare() -> Description {
 auto make_replacement_ir(mode which, ast::field_path selector, location self,
                          compile_ctx ctx) -> failure_or<ir::pipeline> {
   auto provider = session_provider::make(ctx);
-  const auto* summarize
-    = plugins::find<operator_compiler_plugin>("tql2.summarize");
-  const auto* sort = plugins::find<operator_compiler_plugin>("tql2.sort");
+  const auto* summarize = plugins::find<operator_compiler_plugin>("summarize");
+  const auto* sort = plugins::find<operator_compiler_plugin>("sort");
   TENZIR_ASSERT(summarize);
   TENZIR_ASSERT(sort);
   auto count_call = ast::function_call{
@@ -83,57 +82,10 @@ auto make_replacement_ir(mode which, ast::field_path selector, location self,
 }
 
 template <mode Mode>
-class top_rare_plugin final : public virtual operator_factory_plugin,
-                              public virtual operator_compiler_plugin {
+class top_rare_plugin final : public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return Mode == mode::top ? "top" : "rare";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto selector = ast::field_path{};
-    const auto loc = inv.self.get_location();
-    TRY(argument_parser2::operator_(name())
-          .positional("x", selector)
-          .parse(inv, ctx));
-    const auto* summarize
-      = plugins::find<operator_factory_plugin>("tql2.summarize");
-    const auto* sort = plugins::find<operator_factory_plugin>("tql2.sort");
-    TENZIR_ASSERT(summarize);
-    TENZIR_ASSERT(sort);
-    auto ident = ast::identifier{"count", loc};
-    auto call = ast::function_call{ast::entity{{ident}}, {}, loc, false};
-    auto out = ast::field_path::try_from(ast::root_field{std::move(ident)});
-    TENZIR_ASSERT(out);
-    auto summarize_args = ast::assignment{out->inner(), loc, call};
-    TENZIR_ASSERT(resolve_entities(summarize_args.right, ctx));
-    auto summarized = summarize->make(
-      {
-        inv.self,
-        {
-          std::move(selector).unwrap(),
-          summarize_args,
-        },
-      },
-      ctx);
-    const auto sort_args = [&]() {
-      if constexpr (Mode == mode::top) {
-        return ast::unary_expr{{ast::unary_op::neg, loc},
-                               std::move(out).value().unwrap()};
-      }
-      if constexpr (Mode == mode::rare) {
-        return std::move(out).value().unwrap();
-      }
-      TENZIR_UNREACHABLE();
-    };
-    auto sorted = sort->make({inv.self, {sort_args()}}, ctx);
-    TENZIR_ASSERT(summarized);
-    TENZIR_ASSERT(sorted);
-    auto p = std::make_unique<pipeline>();
-    p->append(std::move(summarized).unwrap());
-    p->append(std::move(sorted).unwrap());
-    return p;
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const

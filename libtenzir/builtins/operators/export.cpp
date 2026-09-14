@@ -13,7 +13,6 @@
 #include "tenzir/connect_to_node.hpp"
 
 #include <tenzir/actors.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/async/unbounded_queue.hpp>
 #include <tenzir/atoms.hpp>
 #include <tenzir/catalog.hpp>
@@ -384,107 +383,12 @@ private:
   bool done_ = false;
 };
 
-class export_operator final : public crtp_operator<export_operator> {
+class export_plugin final : public virtual OperatorPlugin {
 public:
-  export_operator() = default;
-
-  explicit export_operator(expression expr, export_mode mode)
-    : expr_{std::move(expr)}, mode_{mode} {
-  }
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    auto filesystem = ctrl.self().system().registry().get<filesystem_actor>(
-      "tenzir.filesystem");
-    TENZIR_ASSERT(filesystem);
-    auto metrics_handler = ctrl.metrics({
-      "tenzir.metrics.export",
-      record_type{
-        {"schema", string_type{}},
-        {"schema_id", string_type{}},
-        {"events", uint64_type{}},
-        {"queued_events", uint64_type{}},
-      },
-    });
-    auto bridge = spawn_and_link_export_bridge(
-      ctrl.self(), expr_, mode_, std::move(filesystem),
-      std::move(metrics_handler),
-      std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()));
-    co_yield {};
-    while (true) {
-      auto result = table_slice{};
-      ctrl.set_waiting(true);
-      ctrl.self()
-        .mail(atom::get_v)
-        .request(bridge, caf::infinite)
-        .then(
-          [&](table_slice& slice) {
-            ctrl.set_waiting(false);
-            result = std::move(slice);
-          },
-          [&](const caf::error& err) {
-            diagnostic::error(err)
-              .note("from export-bridge")
-              .emit(ctrl.diagnostics());
-          });
-      co_yield {};
-      if (result.rows() == 0) {
-        co_return;
-      }
-      co_yield std::move(result);
-    }
-  }
-
   auto name() const -> std::string override {
     return "export";
   }
 
-  auto detached() const -> bool override {
-    return false;
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
-  auto internal() const -> bool override {
-    return true;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)order;
-    auto clauses = std::vector<expression>{};
-    if (expr_ != caf::none and expr_ != trivially_true_expression()) {
-      clauses.push_back(expr_);
-    }
-    if (filter != caf::none and filter != trivially_true_expression()) {
-      clauses.push_back(filter);
-    }
-    auto expr = clauses.empty()
-                  ? trivially_true_expression()
-                  : (clauses.size() == 1 ? std::move(clauses[0])
-                                         : conjunction{std::move(clauses)});
-    return OptimizeResult{trivially_true_expression(), EventOrder::ordered,
-                          std::make_unique<export_operator>(std::move(expr),
-                                                            mode_)};
-  }
-
-  friend auto inspect(auto& f, export_operator& x) -> bool {
-    return f.object(x).fields(f.field("expression", x.expr_),
-                              f.field("mode", x.mode_));
-  }
-
-private:
-  expression expr_;
-  export_mode mode_;
-};
-
-class export_plugin final : public virtual operator_plugin<export_operator>,
-                            public virtual operator_factory_plugin,
-                            public virtual OperatorPlugin {
-public:
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
       .optimization = {},
@@ -508,44 +412,9 @@ public:
     d.optimization(&ExportArgs::optimization);
     return d.without_optimize();
   }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto live = false;
-    auto retro = false;
-    auto internal = false;
-    auto parallel = Option<located<uint64_t>>{};
-    argument_parser2::operator_("export")
-      .named("live", live)
-      .named("retro", retro)
-      .named("internal", internal)
-      .named("parallel", parallel)
-      .parse(inv, ctx)
-      .ignore();
-    if (not live) {
-      // TODO: export live=false, retro=false
-      retro = true;
-    }
-    if (parallel and parallel->inner == 0) {
-      diagnostic::error("parallel level must be greater than zero")
-        .primary(parallel->source)
-        .emit(ctx);
-      return nullptr;
-    }
-    return std::make_unique<export_operator>(
-      expression{
-        predicate{
-          meta_extractor{meta_extractor::internal},
-          relational_operator::equal,
-          data{internal},
-        },
-      },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
-  }
 };
 
-class diagnostics_plugin final : public virtual operator_factory_plugin,
-                                 public virtual OperatorPlugin {
+class diagnostics_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "diagnostics";
@@ -574,42 +443,9 @@ public:
     d.optimization(&ExportArgs::optimization);
     return d.without_optimize();
   }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto live = false;
-    auto retro = false;
-    const auto internal = true;
-    auto parallel = Option<located<uint64_t>>{};
-    TRY(argument_parser2::operator_("diagnostics")
-          .named("live", live)
-          .named("retro", retro)
-          .named("parallel", parallel)
-          .parse(inv, ctx));
-    if (not live) {
-      retro = true;
-    }
-    return std::make_unique<export_operator>(
-      expression{
-        conjunction{
-          predicate{
-            meta_extractor{meta_extractor::internal},
-            relational_operator::equal,
-            data{internal},
-          },
-          predicate{
-            meta_extractor{meta_extractor::schema},
-            relational_operator::equal,
-            data{"tenzir.diagnostic"},
-          },
-        },
-      },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
-  }
 };
 
-class metrics_plugin final : public virtual operator_factory_plugin,
-                             public virtual OperatorPlugin {
+class metrics_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "metrics";
@@ -650,52 +486,6 @@ public:
     });
     d.optimization(&ExportArgs::optimization);
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto name = Option<located<std::string>>{};
-    auto live = false;
-    auto retro = false;
-    const auto internal = true;
-    auto parallel = Option<located<uint64_t>>{};
-    TRY(argument_parser2::operator_("metrics")
-          .positional("name", name)
-          .named("live", live)
-          .named("retro", retro)
-          .named("parallel", parallel)
-          .parse(inv, ctx));
-    if (not live) {
-      retro = true;
-    }
-    static const auto all_metrics = [] {
-      auto result = pattern::make("tenzir\\.metrics\\..*");
-      TENZIR_ASSERT(result);
-      return std::move(*result);
-    }();
-    if (name and name->inner == "operator") {
-      diagnostic::warning("operator metrics are deprecated")
-        .hint("use `pipeline` metrics instead")
-        .primary(*name)
-        .emit(ctx);
-    }
-    return std::make_unique<export_operator>(
-      expression{
-        conjunction{
-          predicate{
-            meta_extractor{meta_extractor::internal},
-            relational_operator::equal,
-            data{internal},
-          },
-          predicate{
-            meta_extractor{meta_extractor::schema},
-            relational_operator::equal,
-            name ? data{fmt::format("tenzir.metrics.{}", name->inner)}
-                 : data{all_metrics},
-          },
-        },
-      },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
   }
 };
 

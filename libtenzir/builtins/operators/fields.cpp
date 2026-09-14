@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/async/fetch_node.hpp>
 #include <tenzir/async/mail.hpp>
 #include <tenzir/catalog.hpp>
@@ -20,60 +19,6 @@
 namespace tenzir::plugins::fields {
 
 namespace {
-
-class fields_operator final : public crtp_operator<fields_operator> {
-public:
-  fields_operator() = default;
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto catalog
-      = ctrl.self().system().registry().get<catalog_actor>("tenzir.catalog");
-    TENZIR_ASSERT(catalog);
-    ctrl.set_waiting(true);
-    auto slices = std::vector<table_slice>{};
-    ctrl.self()
-      .mail(atom::get_v, std::string{"fields"})
-      .request(catalog, caf::infinite)
-      .then(
-        [&](std::vector<table_slice>& result) {
-          slices = std::move(result);
-          ctrl.set_waiting(false);
-        },
-        [&ctrl](const caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to get fields")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-    for (auto&& slice : slices) {
-      co_yield std::move(slice);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "fields";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)order;
-    (void)filter;
-    return do_not_optimize(*this);
-  }
-
-  auto internal() const -> bool override {
-    return true;
-  }
-
-  friend auto inspect(auto& f, fields_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
 
 struct FieldsArgs {
   location operator_location = location::unknown;
@@ -132,14 +77,10 @@ private:
   bool done_ = false;
 };
 
-class plugin final : public virtual operator_plugin<fields_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("fields").parse(inv, ctx).ignore();
-    return std::make_unique<fields_operator>();
+  auto name() const -> std::string override {
+    return "fields";
   }
 
   auto describe() const -> Description override {

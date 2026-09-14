@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/subprocess.hpp>
@@ -194,192 +193,6 @@ private:
   bp::child child_;
   bp::pipe stdout_;
   bp::pipe stdin_;
-};
-
-class shell_operator final : public crtp_operator<shell_operator> {
-public:
-  shell_operator() = default;
-
-  explicit shell_operator(located<secret> command)
-    : command_{std::move(command)} {
-  }
-
-  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto command = std::string{};
-    co_yield ctrl.resolve_secrets_must_yield(
-      {make_secret_request("command", command_, command, ctrl.diagnostics())});
-    auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
-    auto child = child::make(command, mode);
-    if (not child) {
-      diagnostic::error(child.error())
-        .note("failed to spawn child process")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    auto buffer = std::vector<char>(block_size);
-    while (true) {
-      auto bytes_read = child->read(as_writeable_bytes(buffer));
-      if (not bytes_read) {
-        diagnostic::error(bytes_read.error())
-          .note("failed to read from child process")
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      if (*bytes_read == 0) {
-        // Reading 0 bytes indicates EOF.
-        break;
-      }
-      auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
-      TENZIR_TRACE("yielding chunk with {} bytes", chk->size());
-      co_yield chk;
-    }
-    if (auto error = child->wait(); error.valid()) {
-      diagnostic::error(error)
-        .note("child process execution failed")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-  }
-
-  auto operator()(generator<chunk_ptr> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto command = std::string{};
-    co_yield ctrl.resolve_secrets_must_yield(
-      {make_secret_request("command", command_, command, ctrl.diagnostics())});
-    // TODO: Handle exceptions from `boost::process`.
-    auto child = child::make(command, stdin_mode::pipe);
-    if (not child) {
-      diagnostic::error(child.error())
-        .note("failed to spawn child process")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Read from child in separate thread because coroutine-based async
-    // I/O is not (yet) feasible. The thread writes the chunks into a
-    // queue such that to this coroutine can yield them.
-    auto chunks = std::queue<chunk_ptr>{};
-    auto chunks_mutex = std::mutex{};
-    auto thread = std::thread([&child, &chunks, &chunks_mutex,
-                               diagnostics = ctrl.shared_diagnostics()]() {
-      try {
-        auto buffer = std::vector<char>(block_size);
-        while (true) {
-          auto bytes_read = child->read(as_writeable_bytes(buffer));
-          if (not bytes_read) {
-            diagnostic::error(bytes_read.error())
-              .note("failed to read from child process")
-              .emit(diagnostics);
-            return;
-          }
-          if (*bytes_read == 0) {
-            // Reading 0 bytes indicates EOF.
-            break;
-          }
-          auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
-          auto lock = std::lock_guard{chunks_mutex};
-          chunks.push(std::move(chk));
-        }
-      } catch (const std::exception& err) {
-        diagnostic::error("{}", err.what())
-          .note("encountered exception when reading from child process")
-          .emit(diagnostics);
-      }
-    });
-    {
-      // Coroutines require RAII-style exit handling.
-      auto unplanned_exit = detail::scope_guard([&]() noexcept {
-        child->terminate();
-        TENZIR_DEBUG("joining thread");
-        thread.join();
-      });
-      // Loop over input chunks.
-      for (auto&& chunk : input) {
-        auto stalled = not chunk or chunk->size() == 0;
-        if (not stalled) {
-          // Pass operator input to the child's stdin.
-          // TODO: If the reading end of the pipe to the child's stdin is
-          // already closed, this will generate a SIGPIPE.
-          if (auto err = child->write(as_bytes(chunk)); err.valid()) {
-            diagnostic::error(err)
-              .note("failed to write to child process")
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-        }
-        // Try yielding so far accumulated child output.
-        auto lock = std::unique_lock{chunks_mutex, std::try_to_lock};
-        if (lock.owns_lock()) {
-          auto i = size_t{0};
-          auto total = chunks.size();
-          while (not chunks.empty()) {
-            auto chk = chunks.front();
-            TENZIR_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
-                         chk->size());
-            co_yield std::move(chk);
-            chunks.pop();
-          }
-          if (stalled) {
-            co_yield {};
-          }
-        } else {
-          co_yield {};
-        }
-      }
-      unplanned_exit.disable();
-      child->close_stdin();
-      thread.join();
-      if (auto error = child->wait(); error.valid()) {
-        diagnostic::error(error)
-          .note("child process execution failed")
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-    }
-    // Yield all accumulated child output.
-    auto lock = std::lock_guard{chunks_mutex};
-    auto i = size_t{0};
-    auto total = chunks.size();
-    while (not chunks.empty()) {
-      auto& chk = chunks.front();
-      TENZIR_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
-                   chk->size());
-      co_yield std::move(chk);
-      chunks.pop();
-    }
-  }
-
-  auto location() const -> operator_location override {
-    // The user expectation is that shell executes relative to the
-    // currently executing process.
-    return operator_location::local;
-  }
-
-  auto detached() const -> bool override {
-    // We may execute blocking syscalls.
-    return true;
-  }
-
-  auto idle_after() const -> duration override {
-    // We may produce results without receiving any further input.
-    return duration::max();
-  }
-
-  auto name() const -> std::string override {
-    return "shell";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter, (void)order;
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, shell_operator& x) -> bool {
-    return f.apply(x.command_);
-  }
-
-private:
-  located<secret> command_;
 };
 
 struct ShellArgs {
@@ -874,8 +687,7 @@ private:
   Option<WriteFailure> write_failure_ = None{};
 };
 
-class plugin final : public virtual operator_plugin2<shell_operator>,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "shell";
@@ -883,15 +695,6 @@ public:
 
   auto initialize(const record&, const record&) -> caf::error override {
     return {};
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto command = located<secret>{};
-    auto parser
-      = argument_parser2::operator_("shell").positional("cmd", command);
-    TRY(parser.parse(inv, ctx));
-    return std::make_unique<shell_operator>(std::move(command));
   }
 
   auto describe() const -> Description override {

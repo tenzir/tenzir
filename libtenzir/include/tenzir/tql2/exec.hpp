@@ -11,7 +11,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/async/executor.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/exec_pipeline.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/table_slice.hpp"
@@ -24,6 +23,23 @@
 #include <vector>
 
 namespace tenzir {
+
+/// Configuration for a single `tenzir exec` invocation.
+struct exec_config {
+  std::string implicit_bytes_source = R"(from_stdin)";
+  std::string implicit_events_source = R"(from_stdin { read_json })";
+  std::string implicit_bytes_sink = R"(to_stdout)";
+  std::string implicit_events_sink = R"(to_stdout)";
+  bool dump_tokens = false;
+  bool dump_ast = false;
+  bool dump_diagnostics = false;
+  bool dump_ir = false;
+  bool dump_inst_ir = false;
+  bool dump_opt_ir = false;
+  bool dump_ir_plan = false;
+  Option<std::string> profile;
+  Option<std::string> parallelism;
+};
 
 struct NoProfiler {};
 
@@ -54,11 +70,6 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
 auto exec2(Arc<const Source> source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys,
            SourceMap& source_map) -> bool;
-
-auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline>;
-
-auto parse_and_compile(std::string_view source, session ctx)
-  -> failure_or<pipeline>;
 
 /// Run a closed pipeline plan.
 auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,

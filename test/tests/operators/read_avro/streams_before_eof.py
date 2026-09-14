@@ -8,7 +8,7 @@ def main() -> None:
     assert_streams(
         b"\x0ahello",
         'from_stdin { read_avro schema=r#"{"type":"string"}"# }'
-        " | head 1 | write_ndjson",
+        " | head 1 | to_stdout { write_ndjson }",
         {"value": "hello"},
     )
     for codec in ["null", "deflate"]:
@@ -18,7 +18,7 @@ def main() -> None:
                 b'{"type":"string"}',
                 [(1, encode_bytes(b"hello"))],
             ),
-            "from_stdin { read_avro } | head 1 | write_ndjson",
+            "from_stdin { read_avro } | head 1 | to_stdout { write_ndjson }",
             {"value": "hello"},
         )
     print("streams_before_eof: true")

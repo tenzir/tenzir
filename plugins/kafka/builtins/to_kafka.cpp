@@ -8,7 +8,6 @@
 
 #include "kafka/librdkafka_utils.hpp"
 #include "kafka/operator_args.hpp"
-#include "kafka/to_kafka_legacy.hpp"
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/option.hpp"
@@ -450,9 +449,7 @@ private:
 };
 
 /// Plugin entrypoint that parses `to_kafka` arguments and creates operators.
-class ToKafkaPlugin final
-  : public virtual operator_plugin2<legacy::to_kafka_operator>,
-    public virtual OperatorPlugin {
+class ToKafkaPlugin final : public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
@@ -493,11 +490,6 @@ public:
 
   auto name() const -> std::string override {
     return "to_kafka";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    return legacy::make_to_kafka(std::move(inv), ctx, sink_global_defaults());
   }
 
   auto describe() const -> Description override {

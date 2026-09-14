@@ -21,7 +21,6 @@
 #include "tenzir/detail/signal_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/element_type.hpp"
-#include "tenzir/exec_pipeline.hpp"
 #include "tenzir/execution_node_name_guard.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
@@ -229,286 +228,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   return {};
 }
 
-// TODO: This is a naive implementation and does not do scoping properly.
-class let_resolver : public ast::visitor<let_resolver> {
-public:
-  explicit let_resolver(session ctx) : ctx_{ctx} {
-  }
-
-  void visit(ast::pipeline& x) {
-    // TODO: Extraction + patch is probably a common pattern.
-    for (auto it = x.body.begin(); it != x.body.end();) {
-      auto let = std::get_if<ast::let_stmt>(&*it);
-      if (not let) {
-        visit(*it);
-        ++it;
-        continue;
-      }
-      auto name = std::string{let->name_without_dollar()};
-      if (try_as<ast::lambda_expr>(*let->expr.kind)) {
-        diagnostic::error("lambda-valued `let` bindings are not supported")
-          .primary(let->expr)
-          .hint("inline the lambda expression at the use site")
-          .emit(ctx_);
-        failure_ = failure::promise();
-        map_[std::move(name)] = None{};
-        it = x.body.erase(it);
-        continue;
-      }
-      visit(let->expr);
-      auto value = const_eval(let->expr, ctx_);
-      if (value) {
-        map_[std::move(name)] = ast::constant::make(*value);
-      } else {
-        failure_ = value.error();
-        map_[std::move(name)] = None{};
-      }
-      it = x.body.erase(it);
-    }
-  }
-
-  void emit_not_found(const ast::dollar_var& var) {
-    diagnostic::error("variable `{}` was not declared", var.id.name)
-      .primary(var)
-      .emit(ctx_);
-    failure_ = failure::promise();
-  }
-
-  void visit(ast::expression& x) {
-    const auto* dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
-    if (not dollar_var) {
-      enter(x);
-      return;
-    }
-    auto it = map_.find(std::string{dollar_var->name_without_dollar()});
-    if (it == map_.end()) {
-      emit_not_found(*dollar_var);
-      return;
-    }
-    if (not it->second) {
-      // Variable exists but there was an error during evaluation.
-      return;
-    }
-    x = ast::constant{it->second->value, x.get_location()};
-  }
-
-  void load_balance(ast::invocation& x) {
-    // We currently have some special casing here for the `load_balance`
-    // operator. The `let_resolver` must somehow interact with operators that
-    // modify the constant environment. There are probably better ways to do
-    // this, but putting everything here was easy to do. We should reconsider
-    // this strategy when introducing a second operator that can modify the
-    // constant environment.
-    const auto* docs = "https://tenzir.com/docs/tql2/operators/load_balance";
-    const auto* usage = "load_balance over:list { … }";
-    auto emit = [&](diagnostic_builder d) {
-      if (d.inner().severity == severity::error) {
-        failure_ = failure::promise();
-      }
-      std::move(d).docs(docs).usage(usage).emit(ctx_);
-    };
-    // Remove all the arguments, as we will be replacing them anyway.
-    auto args = std::move(x.args);
-    x.args.clear();
-    if (args.empty()) {
-      emit(
-        diagnostic::error("expected two positional arguments").primary(x.op));
-      return;
-    }
-    auto var = std::get_if<ast::dollar_var>(&*args[0].kind);
-    if (not var) {
-      emit(diagnostic::error("expected a `$`-variable").primary(args[0]));
-      return;
-    }
-    if (args.size() < 2) {
-      emit(diagnostic::error("expected a pipeline afterwards").primary(*var));
-      return;
-    }
-    auto it = map_.find(std::string{var->name_without_dollar()});
-    if (it == map_.end()) {
-      emit_not_found(*var);
-      return;
-    }
-    if (not it->second) {
-      // Variable exists, but there was an error during evaluation.
-      return;
-    }
-    auto pipe = std::get_if<ast::pipeline_expr>(&*args[1].kind);
-    if (not pipe) {
-      emit(
-        diagnostic::error("expected a pipeline expression").primary(args[1]));
-      return;
-    }
-    // We now expand the pipeline once for each entry in the list, replacing
-    // the original variable with the list items.
-    auto original = std::move(*it->second);
-    auto entries = std::get_if<list>(&original.value);
-    if (not entries) {
-      auto got = original.value.match([]<class T>(const T&) {
-        return type_kind::of<data_to_type_t<T>>;
-      });
-      emit(diagnostic::error("expected a list, got `{}`", got).primary(*var));
-      *it->second = std::move(original);
-      return;
-    }
-    if (entries->empty()) {
-      emit(diagnostic::error("expected list to not be empty").primary(*var));
-      *it->second = std::move(original);
-      return;
-    }
-    for (const auto& entry : *entries) {
-      map_.insert_or_assign(
-        std::string{var->name_without_dollar()},
-        ast::constant::make(located<data>{entry, original.source}));
-      auto pipe_copy = *pipe;
-      visit(pipe_copy);
-      x.args.emplace_back(std::move(pipe_copy));
-    }
-    if (args.size() > 2) {
-      emit(
-        diagnostic::error("expected exactly two arguments, got {}", args.size())
-          .primary(args[2]));
-    }
-    // Restore the original value in case it's used elsewhere.
-    map_.insert_or_assign(std::string{var->name_without_dollar()},
-                          std::move(original));
-  }
-
-  void visit(ast::match_stmt& x) {
-    visit(x.expr);
-  }
-
-  void visit(ast::invocation& x) {
-    if (x.op.ref.resolved() and x.op.ref.segments().size() == 1
-        and x.op.ref.segments()[0] == "load_balance") {
-      // We special case this as a temporary solution.
-      load_balance(x);
-      return;
-    }
-    enter(x);
-  }
-
-  template <class T>
-  void visit(T& x) {
-    enter(x);
-  }
-
-  auto get_failure() -> failure_or<void> {
-    return failure_;
-  }
-
-private:
-  failure_or<void> failure_;
-  std::unordered_map<std::string, Option<ast::constant>> map_;
-  session ctx_;
-};
-
-auto resolve_let_bindings(ast::pipeline& pipe, session ctx)
-  -> failure_or<void> {
-  auto resolver = let_resolver{ctx};
-  resolver.visit(pipe);
-  return resolver.get_failure();
-}
-
-auto compile_resolved(ast::pipeline&& pipe, session ctx)
-  -> failure_or<pipeline> {
-  auto fail = Option<failure>{};
-  auto ops = std::vector<operator_ptr>{};
-  for (auto& stmt : pipe.body) {
-    auto result = stmt.match(
-      [&](ast::invocation& x) -> failure_or<void> {
-        // TODO: Where do we check that this succeeds?
-        TRY(auto op, ctx.reg().get(x).make(
-                       operator_factory_invocation{
-                         std::move(x.op),
-                         std::move(x.args),
-                       },
-                       ctx));
-        TENZIR_ASSERT(op);
-        ops.push_back(std::move(op));
-        return {};
-      },
-      [&](ast::assignment& x) -> failure_or<void> {
-#if 0
-        // TODO: Cannot do this right now (release typeid problem).
-        auto assignments = std::vector<assignment>();
-        assignments.push_back(std::move(x));
-        ops.push_back(std::make_unique<set_operator>(std::move(assignments)));
-#else
-        auto plugin = plugins::find<operator_factory_plugin>("tql2.set");
-        TENZIR_ASSERT(plugin);
-        auto args = std::vector<ast::expression>{};
-        args.emplace_back(std::move(x));
-        TRY(auto op, plugin->make(
-                       operator_factory_invocation{
-                         ast::entity{{ast::identifier{std::string{"set"},
-                                                      location::unknown}}},
-                         std::move(args),
-                       },
-                       ctx));
-        ops.push_back(std::move(op));
-#endif
-        return {};
-      },
-      [&](ast::if_stmt& x) -> failure_or<void> {
-        // TODO: Same problem regarding instantiation outside of plugin.
-        auto args = std::vector<ast::expression>{};
-        args.reserve(3);
-        args.push_back(std::move(x.condition));
-        args.emplace_back(ast::pipeline_expr{
-          location::unknown, std::move(x.then), location::unknown});
-        if (x.else_) {
-          args.emplace_back(ast::pipeline_expr{
-            location::unknown, std::move(x.else_->pipe), location::unknown});
-        }
-        auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
-        TENZIR_ASSERT(plugin);
-        TRY(auto op, plugin->make(
-                       operator_factory_invocation{
-                         ast::entity{{ast::identifier{std::string{"if"},
-                                                      location::unknown}}},
-                         std::move(args),
-                       },
-                       ctx));
-        ops.push_back(std::move(op));
-        return {};
-      },
-      [&](ast::match_stmt& x) -> failure_or<void> {
-        diagnostic::error("`match` not yet implemented, try using `if` instead")
-          .primary(x)
-          .emit(ctx.dh());
-        return failure::promise();
-      },
-      [&](ast::let_stmt&) -> failure_or<void> {
-        TENZIR_UNREACHABLE();
-      },
-      [&](ast::type_stmt&) -> failure_or<void> {
-        TENZIR_UNREACHABLE();
-      });
-    if (result.is_error()) {
-      fail = result.error();
-    }
-  }
-  if (fail) {
-    return *fail;
-  }
-  return tenzir::pipeline{std::move(ops)};
-}
-
 } // namespace
-
-auto parse_and_compile(std::string_view source, session ctx)
-  -> failure_or<pipeline> {
-  TRY(auto ast,
-      parse_pipeline_with_location_override(source, location::unknown, ctx));
-  return compile(std::move(ast), ctx);
-}
-
-auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline> {
-  TRY(resolve_entities(pipe, ctx));
-  TRY(resolve_let_bindings(pipe, ctx));
-  return compile_resolved(std::move(pipe), ctx);
-}
 
 auto dump_tokens(std::span<token const> tokens, std::string_view source)
   -> bool {
@@ -2184,68 +1904,35 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
-        or cfg.dump_opt_ir or cfg.dump_ir_plan) {
-      // This new code path will eventually supersede the current one.
-      auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
-                                  : Option<std::string_view>{};
-      auto configured = caf::get_or(content(sys.config()),
-                                    ir::parallelism::config_key, std::string{});
-      auto config = configured.empty() ? Option<std::string_view>{}
-                                       : Option<std::string_view>{configured};
-      auto parallelism = ir::parallelism::resolve(source->text, flag, config);
-      if (not parallelism) {
-        diagnostic::error("invalid parallelism value in {}",
-                          ir::parallelism::describe(parallelism.error()))
-          .hint("expected `disabled`, `max`, or a positive integer, "
-                "optionally followed by `,limit_partitions=<n>` and/or "
-                "`,fuse=<all|parallel|none>`")
-          .emit(ctx);
-        return failure::promise();
-      }
-      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map,
-                          *parallelism);
-    }
-    if (cfg.profile) {
-      diagnostic::warning("`--profile` is only supported with `--neo`")
+    auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
+                                : Option<std::string_view>{};
+    auto configured = caf::get_or(content(sys.config()),
+                                  ir::parallelism::config_key, std::string{});
+    auto config = configured.empty() ? Option<std::string_view>{}
+                                     : Option<std::string_view>{configured};
+    auto parallelism = ir::parallelism::resolve(source->text, flag, config);
+    if (not parallelism) {
+      diagnostic::error("invalid parallelism value in {}",
+                        ir::parallelism::describe(parallelism.error()))
+        .hint("expected `disabled`, `max`, or a positive integer, "
+              "optionally followed by `,limit_partitions=<n>` and/or "
+              "`,fuse=<all|parallel|none>`")
         .emit(ctx);
+      return failure::promise();
     }
-    TRY(auto pipe, compile(std::move(parsed), ctx));
-    if (cfg.dump_pipeline) {
-      fmt::print("{:#?}\n", pipe);
-      return not ctx.has_failure();
-    }
-    if (ctx.has_failure()) {
-      // Do not proceed to execution if there has been an error.
-      return false;
-    }
-    auto pipes = std::vector<pipeline>{};
-    if (not cfg.multi) {
-      pipes.push_back(std::move(pipe));
-    } else {
-      auto split = std::move(pipe).split_at_void();
-      if (not split) {
-        diagnostic::error(split.error()).emit(ctx);
-        return false;
-      }
-      pipes = std::move(*split);
-    }
-    for (auto& pipe : pipes) {
-      auto result
-        = exec_pipeline(std::move(pipe), source, ctx, cfg, sys, source_map);
-      if (not result) {
-        if (result.error() != ec::silent) {
-          diagnostic::error(result.error()).emit(ctx);
-        }
-        return false;
-      }
-      if (ctx.has_failure()) {
-        return false;
-      }
-    }
-    return true;
+    return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map,
+                        *parallelism);
   });
   return result ? *result : false;
+}
+
+exec_node_name_guard::exec_node_name_guard(const name_type& name, type t) {
+  operator_name = name;
+  operator_type = t;
+}
+
+exec_node_name_guard::~exec_node_name_guard() {
+  operator_type = type::none;
 }
 
 } // namespace tenzir

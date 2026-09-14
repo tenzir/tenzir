@@ -180,7 +180,7 @@ auto apply_binary(series left, series right, ast::expression const& left_expr,
 class exp final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.exp";
+    return "exp";
   }
 
   auto is_deterministic() const -> bool override {
@@ -207,7 +207,7 @@ public:
 class log final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.log";
+    return "log";
   }
 
   auto is_deterministic() const -> bool override {
@@ -255,7 +255,7 @@ public:
 class pow final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.pow";
+    return "pow";
   }
 
   auto is_deterministic() const -> bool override {

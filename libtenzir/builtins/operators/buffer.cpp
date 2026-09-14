@@ -6,15 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/async/mutex.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/metric_handler.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/shared_diagnostic_handler.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 #include <tenzir/uuid.hpp>
@@ -352,238 +353,11 @@ private:
   bool done_ = false;
 };
 
-class write_buffer_operator final
-  : public crtp_operator<write_buffer_operator> {
-public:
-  write_buffer_operator() = default;
-
-  explicit write_buffer_operator(uuid id) : id_{id} {
-  }
-
-  template <class Elements>
-    requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
-    -> generator<Elements> {
-    // The internal-write-buffer operator is spawned after the
-    // internal-read-buffer operator, so we can safely get the buffer actor here
-    // after the first yield and then just remove it from the registry again.
-    co_yield {};
-    auto buffer = ctrl.self().system().registry().get<buffer_actor<Elements>>(
-      fmt::format("tenzir.buffer.{}.{}", id_, ctrl.run_id()));
-    TENZIR_ASSERT(buffer);
-    ctrl.self().link_to(buffer);
-    ctrl.self().system().registry().erase(buffer->id());
-    // Now, all we need to do is send our inputs to the buffer batch by batch.
-    for (auto&& elements : input) {
-      if (size(elements) == 0) {
-        co_yield {};
-        continue;
-      }
-      ctrl.set_waiting(true);
-      ctrl.self()
-        .mail(atom::write_v, std::move(elements))
-        .request(buffer, caf::infinite)
-        .then(
-          [&]() {
-            ctrl.set_waiting(false);
-          },
-          [&](caf::error& err) {
-            diagnostic::error(err)
-              .note("failed to write to buffer")
-              .emit(ctrl.diagnostics());
-          });
-      co_yield {};
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "internal-write-buffer";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    return OptimizeResult{filter, order, copy()};
-  }
-
-  auto infer_type_impl(operator_type input) const
-    -> caf::expected<operator_type> override {
-    if (input.is<table_slice>()) {
-      return tag_v<table_slice>;
-    }
-    if (input.is<chunk_ptr>()) {
-      return tag_v<chunk_ptr>;
-    }
-    return diagnostic::error("`buffer` does not accept {} as input",
-                             operator_type_name(input))
-      .to_error();
-  }
-
-  friend auto inspect(auto& f, write_buffer_operator& x) -> bool {
-    return f.object(x).fields(f.field("id", x.id_));
-  }
-
-private:
-  uuid id_ = {};
-};
-
-class read_buffer_operator final : public crtp_operator<read_buffer_operator> {
-public:
-  read_buffer_operator() = default;
-
-  explicit read_buffer_operator(uuid id, located<uint64_t> capacity,
-                                Option<located<buffer_policy>> policy)
-    : id_{id}, capacity_{capacity}, policy_{policy} {
-  }
-
-  template <class Elements>
-  auto policy(operator_control_plane& ctrl) const -> buffer_policy {
-    if (std::is_same_v<Elements, table_slice>) {
-      if (policy_) {
-        return policy_->inner;
-      }
-      return ctrl.is_hidden() ? buffer_policy::drop : buffer_policy::block;
-    }
-    if (policy_ and policy_->inner == buffer_policy::drop) {
-      diagnostic::error("`drop` policy is unsupported for bytes inputs")
-        .note("use `block` instead")
-        .primary(policy_->source)
-        .emit(ctrl.diagnostics());
-    }
-    return buffer_policy::block;
-  }
-
-  static auto metrics(operator_control_plane& ctrl) -> metric_handler {
-    return ctrl.metrics(type{
-      "tenzir.metrics.buffer",
-      record_type{
-        {"used", uint64_type{}},
-        {"free", uint64_type{}},
-        {"dropped", uint64_type{}},
-      },
-    });
-  }
-
-  template <class Elements>
-    requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
-    -> generator<Elements> {
-    // The internal-read-buffer operator is spawned before the
-    // internal-write-buffer operator, so we spawn the buffer actor here and
-    // move it into the registry before the first yield.
-    auto buffer
-      = ctrl.self().spawn<caf::linked>(make_buffer<Elements>, capacity_,
-                                       policy<Elements>(ctrl), metrics(ctrl),
-                                       ctrl.shared_diagnostics());
-    ctrl.self().system().registry().put(
-      fmt::format("tenzir.buffer.{}.{}", id_, ctrl.run_id()), buffer);
-    co_yield {};
-    // Now, we can get batch by batch from the buffer.
-    for (auto&& elements : input) {
-      TENZIR_ASSERT(size(elements) == 0);
-      ctrl.set_waiting(true);
-      ctrl.self()
-        .mail(atom::read_v)
-        .request(buffer, caf::infinite)
-        .then(
-          [&](Elements& response) {
-            ctrl.set_waiting(false);
-            elements = std::move(response);
-          },
-          [&](caf::error& err) {
-            diagnostic::error(err)
-              .note("failed to read from buffer")
-              .emit(ctrl.diagnostics());
-          });
-      co_yield {};
-      co_yield std::move(elements);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "internal-read-buffer";
-  }
-
-  auto idle_after() const -> duration override {
-    // We only send stub elements between the two operators to break the back
-    // pressure and instead use a side channel for transporting elements, hence
-    // the nead to schedule the reading side independently of receiving input.
-    return duration::max();
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    return OptimizeResult{filter, order, copy()};
-  }
-
-  auto infer_type_impl(operator_type input) const
-    -> caf::expected<operator_type> override {
-    if (input.is<table_slice>()) {
-      return tag_v<table_slice>;
-    }
-    if (input.is<chunk_ptr>()) {
-      return tag_v<chunk_ptr>;
-    }
-    return diagnostic::error("`buffer` does not accept {} as input",
-                             operator_type_name(input))
-      .to_error();
-  }
-
-  friend auto inspect(auto& f, read_buffer_operator& x) -> bool {
-    return f.object(x).fields(f.field("id", x.id_),
-                              f.field("capacity", x.capacity_),
-                              f.field("policy", x.policy_));
-  }
-
-private:
-  uuid id_ = {};
-  located<uint64_t> capacity_ = {};
-  Option<located<buffer_policy>> policy_ = None{};
-};
-
-class buffer_plugin final : public virtual operator_factory_plugin,
-                            public virtual OperatorPlugin {
+class buffer_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "buffer";
   };
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto capacity = located<uint64_t>{};
-    auto policy_str = Option<located<std::string>>{};
-    argument_parser2::operator_("buffer")
-      .positional("capacity", capacity)
-      .named("policy", policy_str)
-      .parse(inv, ctx)
-      .ignore();
-    auto failed = false;
-    if (capacity.inner == 0) {
-      diagnostic::error("capacity must be greater than zero")
-        .primary(capacity.source)
-        .emit(ctx);
-      failed = true;
-    }
-    auto policy = Option<located<buffer_policy>>{};
-    if (policy_str) {
-      const auto parsed_policy = from_string<buffer_policy>(policy_str->inner);
-      if (not parsed_policy) {
-        diagnostic::error("policy must be 'block' or 'drop'")
-          .primary(policy_str->source)
-          .emit(ctx);
-        failed = true;
-      }
-      policy = {*parsed_policy, policy_str->source};
-    }
-    if (failed) {
-      return failure::promise();
-    }
-    const auto id = uuid::random();
-    auto result = std::make_unique<pipeline>();
-    result->append(std::make_unique<write_buffer_operator>(id));
-    result->append(
-      std::make_unique<read_buffer_operator>(id, capacity, policy));
-    return result;
-  }
 
   auto describe() const -> Description override {
     auto d = Describer<BufferArgs>{};
@@ -636,13 +410,8 @@ public:
   }
 };
 
-using write_buffer_plugin = operator_inspection_plugin<write_buffer_operator>;
-using read_buffer_plugin = operator_inspection_plugin<read_buffer_operator>;
-
 } // namespace
 
 } // namespace tenzir::plugins::buffer
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::buffer::buffer_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::buffer::write_buffer_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::buffer::read_buffer_plugin)

@@ -3,5 +3,4 @@ error: true
 ---
 
 from {}
-write_json
-compress_gzip format="invalid"
+to_stdout { write_json | compress_gzip format="invalid" }

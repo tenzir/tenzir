@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/os.hpp>
 #include <tenzir/pipeline.hpp>
@@ -25,38 +24,6 @@ auto make_processes(diagnostic_handler& dh) -> Option<table_slice> {
   }
   return system->processes();
 }
-
-class processes_operator final : public crtp_operator<processes_operator> {
-public:
-  processes_operator() = default;
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    if (auto result = make_processes(ctrl.diagnostics())) {
-      co_yield std::move(*result);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "processes";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, processes_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.processes.processes_operator")
-      .fields();
-  }
-};
 
 struct ProcessesArgs {
   // No arguments.
@@ -101,14 +68,10 @@ private:
   bool done_ = false;
 };
 
-class Plugin final : public virtual operator_plugin<processes_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(argument_parser2::operator_("processes").parse(inv, ctx));
-    return std::make_unique<processes_operator>();
+  auto name() const -> std::string override {
+    return "processes";
   }
 
   auto describe() const -> Description override {

@@ -17,13 +17,13 @@ def main() -> None:
         )
         assert_completes(
             container,
-            'from_stdin { read_avro schema={type: "string"} } | write_ndjson',
+            'from_stdin { read_avro schema={type: "string"} } | to_stdout { write_ndjson }',
             [{"value": "hello"}, {"value": "world"}],
         )
         if codec == "null":
             assert_completes(
                 container + container,
-                'from_stdin { read_avro schema={type: "long"} } | write_ndjson',
+                'from_stdin { read_avro schema={type: "long"} } | to_stdout { write_ndjson }',
                 [
                     {"value": "hello"},
                     {"value": "world"},
@@ -41,7 +41,7 @@ def main() -> None:
         assert_completes(
             container,
             f"from_stdin {{ split_bytes 1 | read_avro schema={ignored_schema} }}"
-            " | write_ndjson",
+            " | to_stdout { write_ndjson }",
             [{"value": "hello"}, {"value": "world"}],
         )
     empty_deflate = b"\x03\x00"
@@ -52,7 +52,7 @@ def main() -> None:
             [(0, empty_deflate)] * 1_024 + [(1, empty_deflate)],
             encoded_payloads=True,
         ),
-        "from_stdin { read_avro } | summarize count=count() | write_ndjson",
+        "from_stdin { read_avro } | summarize count=count() | to_stdout { write_ndjson }",
         [{"count": 1}],
     )
     noncanonical_empty_deflate = b"\x01\x00\x00\xff\xff"
@@ -63,7 +63,7 @@ def main() -> None:
             [(0, noncanonical_empty_deflate), (1, noncanonical_empty_deflate)],
             encoded_payloads=True,
         ),
-        "from_stdin { read_avro } | write_ndjson",
+        "from_stdin { read_avro } | to_stdout { write_ndjson }",
         [{"value": None}],
     )
     print("container_codecs: true")

@@ -14,7 +14,6 @@
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -25,98 +24,6 @@
 namespace tenzir::plugins::local_remote {
 
 namespace {
-
-class local_remote_operator final : public operator_base {
-public:
-  local_remote_operator() = default;
-
-  explicit local_remote_operator(operator_ptr op, operator_location location)
-    : op_{std::move(op)}, location_{location} {
-    if (auto* op = dynamic_cast<local_remote_operator*>(op_.get())) {
-      op_ = std::move(op->op_);
-    }
-    TENZIR_ASSERT(not dynamic_cast<const local_remote_operator*>(op_.get()));
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    auto result = op_->optimize(filter, order);
-    if (not result.replacement) {
-      return result;
-    }
-    if (auto* pipe = dynamic_cast<pipeline*>(result.replacement.get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<local_remote_operator>(
-          std::move(result.replacement), location_);
-      }
-      result.replacement = std::make_unique<pipeline>(std::move(ops));
-      return result;
-    }
-    result.replacement = std::make_unique<local_remote_operator>(
-      std::move(result.replacement), location_);
-    return result;
-  }
-
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
-    -> caf::expected<operator_output> override {
-    if (not ctrl.no_location_overrides()
-        or op_->location() == operator_location::anywhere
-        or op_->location() == location_) {
-      return op_->instantiate(std::move(input), ctrl);
-    }
-    return caf::make_error(ec::invalid_configuration,
-                           "operator location overrides are forbidden because "
-                           "the option 'tenzir.no-location-overrides' is "
-                           "set to 'true'");
-  }
-
-  auto copy() const -> operator_ptr override {
-    return std::make_unique<local_remote_operator>(op_->copy(), location_);
-  };
-
-  auto location() const -> operator_location override {
-    return location_;
-  }
-
-  auto detached() const -> bool override {
-    return op_->detached();
-  }
-
-  auto internal() const -> bool override {
-    return op_->internal();
-  }
-
-  auto idle_after() const -> duration override {
-    return op_->idle_after();
-  }
-
-  auto demand() const -> demand_settings override {
-    return op_->demand();
-  }
-
-  auto strictness() const -> strictness_level override {
-    return op_->strictness();
-  }
-
-  auto infer_type_impl(operator_type input) const
-    -> caf::expected<operator_type> override {
-    return op_->infer_type(input);
-  }
-
-  auto name() const -> std::string override {
-    return "internal-local-remote";
-  }
-
-  friend auto inspect(auto& f, local_remote_operator& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op_),
-                              f.field("location", x.location_));
-  }
-
-private:
-  operator_ptr op_;
-  operator_location location_;
-};
 
 auto location_name(operator_location location) -> std::string_view {
   switch (location) {
@@ -131,8 +38,7 @@ auto location_name(operator_location location) -> std::string_view {
 }
 
 template <detail::string_literal Name, operator_location Location>
-class plugin final : public virtual operator_factory_plugin,
-                     public virtual operator_compiler_plugin {
+class plugin final : public virtual operator_compiler_plugin {
 public:
   auto initialize([[maybe_unused]] const record& plugin_config,
                   const record& global_config) -> caf::error override {
@@ -151,18 +57,6 @@ public:
   auto name() const -> std::string override {
     return std::string{Name.str()};
   };
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto pipe = located<pipeline>{};
-    auto parser = argument_parser2::operator_(name()).positional("{ … }", pipe);
-    TRY(parser.parse(inv, ctx));
-    auto ops = std::move(pipe.inner).unwrap();
-    for (auto& op : ops) {
-      op = std::make_unique<local_remote_operator>(std::move(op), Location);
-    }
-    return std::make_unique<pipeline>(std::move(ops));
-  }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::CompileResult> override {
@@ -193,8 +87,6 @@ public:
 
 using local_plugin = plugin<"local", operator_location::local>;
 using remote_plugin = plugin<"remote", operator_location::remote>;
-using legacy_serialization_plugin
-  = operator_inspection_plugin<local_remote_operator>;
 
 } // namespace
 
@@ -202,5 +94,3 @@ using legacy_serialization_plugin
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::local_remote::local_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::local_remote::remote_plugin)
-TENZIR_REGISTER_PLUGIN(
-  tenzir::plugins::local_remote::legacy_serialization_plugin)

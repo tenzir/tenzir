@@ -404,7 +404,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "tql2.from_amqp";
+    return "from_amqp";
   }
 
   auto describe() const -> Description override {

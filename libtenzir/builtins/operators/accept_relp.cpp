@@ -1082,7 +1082,7 @@ private:
 class AcceptRelpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.accept_relp";
+    return "accept_relp";
   }
 
   auto describe() const -> Description override {

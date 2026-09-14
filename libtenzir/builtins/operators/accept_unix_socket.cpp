@@ -175,7 +175,7 @@ using AcceptUnixSocket = StreamAccept<UnixSocketAccept>;
 class AcceptUnixSocketPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.accept_unix_socket";
+    return "accept_unix_socket";
   }
 
   auto describe() const -> Description override {

@@ -69,10 +69,6 @@ public:
     : kind_{native_operator{nullptr, std::addressof(plugin)}} {
   }
 
-  /// Instantiate the operator with the given arguments.
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr>;
-
   // TODO: Remove this?
   auto inner() const -> const variant<native_operator, user_defined_operator>& {
     return kind_;

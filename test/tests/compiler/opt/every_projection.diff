@@ -41,7 +41,7 @@
 +      ]
      },
      GenericIr {
-       desc: "tql2.every",
+       desc: "every",
        store: {
          op: {
            path: [

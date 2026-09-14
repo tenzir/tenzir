@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -16,8 +15,6 @@
 #include <arrow/io/api.h>
 #include <arrow/util/uri.h>
 #include <fmt/core.h>
-
-#include "operator.hpp"
 
 namespace tenzir::plugins::s3 {
 

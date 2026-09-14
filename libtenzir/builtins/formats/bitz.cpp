@@ -333,81 +333,6 @@ private:
   std::shared_ptr<arrow::util::Codec> codec_;
 };
 
-// Serializes a slice into a BITZ payload (a Zstd-compressed Feather IPC stream).
-auto encode_bitz_payload(table_slice input, diagnostic_handler& dh)
-  -> Option<chunk_ptr> {
-  auto default_level
-    = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
-  if (not default_level.ok()) {
-    diagnostic::error("failed to get default Zstd compression level")
-      .note("{}", default_level.status().ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  auto codec_result
-    = arrow::util::Codec::Create(arrow::Compression::ZSTD, *default_level);
-  if (not codec_result.ok()) {
-    diagnostic::error("failed to create Zstd codec")
-      .note("{}", codec_result.status().ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  std::shared_ptr<arrow::util::Codec> codec = codec_result.MoveValueUnsafe();
-  auto has_secrets = false;
-  std::tie(has_secrets, input) = replace_secrets(std::move(input));
-  if (has_secrets) {
-    diagnostic::warning("`secret` is serialized as text")
-      .note("fields will be `\"***\"`")
-      .emit(dh);
-  }
-  auto batch = to_record_batch(input);
-  auto validate_status = batch->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-  auto sink_result
-    = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
-  if (not sink_result.ok()) {
-    diagnostic::error("failed to create BufferOutputStream")
-      .note("{}", sink_result.status().ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  auto sink = sink_result.MoveValueUnsafe();
-  auto write_options = arrow::ipc::IpcWriteOptions::Defaults();
-  write_options.memory_pool = arrow_memory_pool();
-  write_options.codec = codec;
-  auto writer_result
-    = arrow::ipc::MakeStreamWriter(sink, batch->schema(), write_options);
-  if (not writer_result.ok()) {
-    diagnostic::error("failed to initialize Feather stream writer")
-      .note("{}", writer_result.status().ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  auto writer = writer_result.MoveValueUnsafe();
-  auto write_status = writer->WriteRecordBatch(*batch);
-  if (not write_status.ok()) {
-    diagnostic::error("failed to write record batch")
-      .note("{}", write_status.ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  auto close_status = writer->Close();
-  if (not close_status.ok()) {
-    diagnostic::error("failed to close Feather stream writer")
-      .note("{}", close_status.ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  auto buffer_result = sink->Finish();
-  if (not buffer_result.ok()) {
-    diagnostic::error("failed to finish Feather stream")
-      .note("{}", buffer_result.status().ToStringWithoutContextLines())
-      .emit(dh);
-    return None{};
-  }
-  return chunk::make(buffer_result.MoveValueUnsafe());
-}
-
 // Yields exactly `remaining` bytes pulled from `byte_reader` in bounded pieces,
 // decrementing `remaining` as bytes are produced. Yields an empty chunk for
 // backpressure and stops early if the upstream is exhausted.
@@ -430,139 +355,8 @@ auto take_bytes(ByteReader& byte_reader, uint64_t& remaining)
   }
 }
 
-// Old-executor operator that reads a BITZ stream into table slices.
-class read_bitz_operator final : public crtp_operator<read_bitz_operator> {
-public:
-  read_bitz_operator() = default;
-
-  auto name() const -> std::string override {
-    return "read_bitz";
-  }
-
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    auto byte_reader = make_byte_reader(std::move(input));
-    while (true) {
-      auto magic = byte_reader(BITZ_MAGIC.size());
-      while (not magic) {
-        co_yield {};
-        magic = byte_reader(BITZ_MAGIC.size());
-      }
-      if (magic->size() < BITZ_MAGIC.size()) {
-        if (magic->size() != 0) {
-          diagnostic::error("unexpected BITZ magic length {}", magic->size())
-            .note("expected {}", BITZ_MAGIC.size())
-            .emit(ctrl.diagnostics());
-        }
-        co_return;
-      }
-      if (std::memcmp(magic->data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
-          != 0) {
-        diagnostic::error("unexpected BITZ magic")
-          .note("expected {}",
-                std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      auto header = byte_reader(sizeof(uint64_t));
-      while (not header) {
-        co_yield {};
-        header = byte_reader(sizeof(uint64_t));
-      }
-      if (header->size() < sizeof(uint64_t)) {
-        diagnostic::error("unexpected BITZ header length {}", header->size())
-          .note("expected {}", sizeof(uint64_t))
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      auto message_length = uint64_t{};
-      std::memcpy(&message_length, header->data(), sizeof(uint64_t));
-      message_length = detail::to_host_order(message_length);
-      // A BITZ message payload is exactly one self-contained Feather stream. We
-      // stream the framed payload into the shared Feather decoder instead of
-      // buffering the whole message, bounding it by the message length.
-      auto remaining = message_length;
-      for (auto&& slice : detail::parse_feather(
-             take_bytes(byte_reader, remaining), ctrl.diagnostics())) {
-        co_yield std::move(slice);
-      }
-      // Drain any payload bytes the decoder did not consume so that the next
-      // magic read stays aligned with the message frame.
-      while (remaining > 0) {
-        auto tail = byte_reader(
-          detail::narrow<size_t>(std::min<uint64_t>(remaining, 1u << 16)));
-        if (not tail) {
-          co_yield {};
-          continue;
-        }
-        if (tail->size() == 0) {
-          diagnostic::error("unexpected message length {}",
-                            message_length - remaining)
-            .note("expected {}", message_length)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        remaining -= tail->size();
-      }
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, read_bitz_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
-// Old-executor operator that writes table slices as a BITZ stream.
-class write_bitz_operator final : public crtp_operator<write_bitz_operator> {
-public:
-  write_bitz_operator() = default;
-
-  auto name() const -> std::string override {
-    return "write_bitz";
-  }
-
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    co_yield {};
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto payload = encode_bitz_payload(std::move(slice), ctrl.diagnostics());
-      if (not payload) {
-        co_return;
-      }
-      auto total_size = detail::to_network_order(
-        detail::narrow<uint64_t>((*payload)->size()));
-      co_yield chunk::copy(BITZ_MAGIC.data(), BITZ_MAGIC.size());
-      co_yield chunk::copy(&total_size, sizeof(total_size));
-      co_yield std::move(*payload);
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, write_bitz_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
-class read_bitz_plugin final
-  : public virtual operator_plugin2<read_bitz_operator>,
-    public virtual ReadOperatorPlugin {
+class read_bitz_plugin final : public virtual operator_factory_plugin,
+                               public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_bitz";
@@ -572,12 +366,6 @@ public:
     auto d = Describer<ReadBitzArgs, ReadBitz>{};
     d.operator_location(&ReadBitzArgs::operator_location);
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
-    return std::make_unique<read_bitz_operator>();
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -596,9 +384,7 @@ public:
   }
 };
 
-class write_bitz_plugin final
-  : public virtual operator_plugin2<write_bitz_operator>,
-    public virtual OperatorPlugin {
+class write_bitz_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "write_bitz";
@@ -608,12 +394,6 @@ public:
     auto d = Describer<WriteBitzArgs, WriteBitz>{};
     d.operator_location(&WriteBitzArgs::operator_location);
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
-    return std::make_unique<write_bitz_operator>();
   }
 };
 

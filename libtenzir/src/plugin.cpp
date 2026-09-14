@@ -21,7 +21,6 @@
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/store.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/uuid.hpp"
@@ -334,18 +333,15 @@ auto load(const std::vector<std::string>& bundled_plugins,
 
 /// Initialize loaded plugins.
 auto initialize(caf::actor_system_config& cfg) -> caf::error {
-  // If everything went well, we should have a strictly-ordered list of plugins.
-  if (auto it = std::ranges::adjacent_find(get(), std::greater_equal{});
+  // Native functions and operators may share a flat TQL name. The TQL
+  // registry keeps them in separate namespaces, so only reject an invalid
+  // ordering here.
+  if (auto it = std::ranges::adjacent_find(get(), std::greater{});
       it != get().end()) {
     auto name_a = (*it)->name();
     ++it;
     auto name_b = (*it)->name();
-    if (name_a == name_b) {
-      panic("found multiple plugins named `{}`", name_a);
-    } else {
-      panic("unexpected plugin ordering: found `{}` before `{}`", name_a,
-            name_b);
-    }
+    panic("unexpected plugin ordering: found `{}` before `{}`", name_a, name_b);
   }
   auto global_config = record{};
   auto global_opts = caf::content(cfg);
@@ -480,20 +476,6 @@ auto component_plugin::wanted_components() const -> std::vector<std::string> {
   return {};
 }
 
-// -- loader plugin -----------------------------------------------------------
-
-auto loader_parser_plugin::supported_uri_schemes() const
-  -> std::vector<std::string> {
-  return {this->name()};
-}
-
-// -- saver plugin ------------------------------------------------------------
-
-auto saver_parser_plugin::supported_uri_schemes() const
-  -> std::vector<std::string> {
-  return {this->name()};
-}
-
 // -- store plugin -------------------------------------------------------------
 
 auto store_plugin::make_store_builder(filesystem_actor fs,
@@ -549,86 +531,6 @@ auto store_plugin::make_store(filesystem_actor fs,
                                                  std::move(*store), fs,
                                                  std::move(path), name(),
                                                  priority);
-}
-
-// -- aspect plugin ------------------------------------------------------------
-
-auto aspect_plugin::aspect_name() const -> std::string {
-  return name();
-}
-
-// -- parser plugin ------------------------------------------------------------
-
-auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
-                                  operator_control_plane& ctrl) const
-  -> std::vector<series> {
-  // TODO: Collecting finished table slices here is very bad for performance.
-  // For example, we have to concatenate new table slices. But there are also
-  // many questions with regards to semantics. This should be either completely
-  // rewritten or replaced with a different mechanism after the revamp.
-  auto output = std::vector<table_slice>{};
-  auto append_null = [&] {
-    if (output.empty()) {
-      auto schema = type{"tenzir.unknown", record_type{}};
-      output.emplace_back(arrow::RecordBatch::Make(schema.to_arrow_schema(), 1,
-                                                   arrow::ArrayVector{}),
-                          schema);
-      return;
-    }
-    auto& last = output.back();
-    auto null_builder
-      = as<record_type>(last.schema()).make_arrow_builder(arrow_memory_pool());
-    TENZIR_ASSERT(null_builder->AppendNull().ok());
-    auto null_array = std::shared_ptr<arrow::StructArray>{};
-    TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
-    auto null_batch = record_batch_from_struct_array(
-      last.schema().to_arrow_schema(), *null_array);
-    last
-      = concatenate({std::move(last), table_slice{null_batch, last.schema()}});
-  };
-  for (auto str : values(string_type{}, *input)) {
-    if (not str) {
-      append_null();
-      continue;
-    }
-    auto bytes = as_bytes(*str);
-    auto chunk = chunk::make(bytes, []() noexcept {});
-    auto instance = instantiate(
-      [](chunk_ptr chunk) -> generator<chunk_ptr> {
-        co_yield std::move(chunk);
-      }(std::move(chunk)),
-      ctrl);
-    if (not instance) {
-      append_null();
-      continue;
-    }
-    auto slices = collect(std::move(*instance));
-    std::erase_if(slices, [](table_slice& x) {
-      return x.rows() == 0;
-    });
-    if (slices.size() != 1) {
-      append_null();
-      continue;
-    }
-    auto slice = std::move(slices[0]);
-    if (slice.rows() != 1) {
-      append_null();
-      continue;
-    }
-    // TODO: Requiring exact schema equality will often produce tiny batches.
-    if (not output.empty() and output.back().schema() == slice.schema()) {
-      output.back() = concatenate({std::move(output.back()), std::move(slice)});
-    } else {
-      output.push_back(std::move(slice));
-    }
-  }
-  auto result = std::vector<series>{};
-  result.reserve(output.size());
-  for (auto&& slice : output) {
-    result.emplace_back(slice.schema(),
-                        check(to_record_batch(slice)->ToStructArray()));
-  }
-  return result;
 }
 
 // -- plugin_ptr ---------------------------------------------------------------

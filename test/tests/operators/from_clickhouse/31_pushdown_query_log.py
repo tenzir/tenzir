@@ -146,7 +146,9 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
         f"SELECT * FROM {TABLE} WHERE `x` < `meta`.`level` AND (`x` / 2) > -1"
     ), _last_select()
     # A nested projection narrows the tuple to the requested elements.
-    output = _run_pipeline(tenzir, source + "select id, meta.level\nwrite_ndjson")
+    output = _run_pipeline(
+        tenzir, source + "select id, meta.level\nto_stdout { write_ndjson }"
+    )
     assert _last_select() == (
         f"SELECT `id`, CAST(tuple(`meta`.`level`), 'Tuple(`level` Int64)') AS `meta`"
         f" FROM {TABLE}"
@@ -160,7 +162,9 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     # a whole. Narrowing it to a decodable element would expose a value where
     # the unoptimized pipeline yields `null`, so it is selected whole and the
     # local `select` sees no such field.
-    output = _run_pipeline(tenzir, source + "select id, half.ok\nwrite_ndjson")
+    output = _run_pipeline(
+        tenzir, source + "select id, half.ok\nto_stdout { write_ndjson }"
+    )
     assert _last_select() == f"SELECT `id`, `half` FROM {TABLE}", _last_select()
     assert output.strip().splitlines() == [
         '{"id":1,"half":{"ok":null}}',
@@ -181,14 +185,15 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     # a subnet parses the column locally behind a prefilter, which keeps the
     # limit local as well.
     output = _run_pipeline(
-        tenzir, source + "where y == 1.1.1.1\nselect id\nwrite_ndjson"
+        tenzir, source + "where y == 1.1.1.1\nselect id\nto_stdout { write_ndjson }"
     )
     assert _last_select() == (f"SELECT `id`, `y` FROM {TABLE} WHERE `y` = '1.1.1.1'"), (
         _last_select()
     )
     assert output.strip() == '{"id":3}', output
     output = _run_pipeline(
-        tenzir, source + "where y in 1.0.0.0/8\nhead 1\nselect id\nwrite_ndjson"
+        tenzir,
+        source + "where y in 1.0.0.0/8\nhead 1\nselect id\nto_stdout { write_ndjson }",
     )
     assert _last_select() == (
         f"SELECT `id`, `y` FROM {TABLE} WHERE (toIPv6OrNull(`y`) IS NULL OR"
@@ -206,11 +211,13 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     # stays local, where it sees no such field and drops every row. Pushing it
     # would match rows instead. A DEFAULT column is an ordinary column.
     output = _run_pipeline(
-        tenzir, source + 'where a == "foo-alias" or m == 2\nwrite_ndjson'
+        tenzir, source + 'where a == "foo-alias" or m == 2\nto_stdout { write_ndjson }'
     )
     assert _last_select() == f"SELECT * FROM {TABLE}", _last_select()
     assert output.strip() == "", output
-    output = _run_pipeline(tenzir, source + "where d == 10\nselect id\nwrite_ndjson")
+    output = _run_pipeline(
+        tenzir, source + "where d == 10\nselect id\nto_stdout { write_ndjson }"
+    )
     assert _last_select() == (f"SELECT `id`, `d` FROM {TABLE} WHERE `d` = 10"), (
         _last_select()
     )
@@ -218,7 +225,9 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     # A projection that names a generated column keeps `SELECT *`, because
     # whether that includes the column depends on the session's settings. With
     # the defaults it does not, and `select` fills the field with null.
-    output = _run_pipeline(tenzir, source + "select id, a, m\nhead 1\nwrite_ndjson")
+    output = _run_pipeline(
+        tenzir, source + "select id, a, m\nhead 1\nto_stdout { write_ndjson }"
+    )
     assert _last_select() == f"SELECT * FROM {TABLE} LIMIT 1", _last_select()
     assert output.strip() == '{"id":1,"a":null,"m":null}', output
     # A user whose profile includes generated columns in `SELECT *` gets their
@@ -241,12 +250,13 @@ GRANT SELECT ON default.* TO fc_asterisk;
         "  tls=false\n"
     )
     output = _run_pipeline(
-        tenzir, as_asterisk + "select id, a, m\nhead 1\nwrite_ndjson"
+        tenzir, as_asterisk + "select id, a, m\nhead 1\nto_stdout { write_ndjson }"
     )
     assert _last_select() == f"SELECT * FROM {TABLE} LIMIT 1", _last_select()
     assert output.strip() == '{"id":1,"a":"foo-alias","m":2}', output
     output = _run_pipeline(
-        tenzir, as_asterisk + 'where a == "foo-alias"\nselect id\nwrite_ndjson'
+        tenzir,
+        as_asterisk + 'where a == "foo-alias"\nselect id\nto_stdout { write_ndjson }',
     )
     assert _last_select() == f"SELECT * FROM {TABLE}", _last_select()
     assert output.strip() == '{"id":1}', output

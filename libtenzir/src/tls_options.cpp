@@ -9,7 +9,6 @@
 #include "tenzir/tls_options.hpp"
 
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/operator_control_plane.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
@@ -674,97 +673,6 @@ auto TlsConfig::apply_to(curl::easy& easy, std::string_view url) const
   return {};
 }
 
-auto TlsConfig::make_caf_context(operator_control_plane& ctrl,
-                                 Option<caf::uri> uri) const
-  -> caf::expected<caf::net::ssl::context> {
-  using namespace caf::net;
-  auto& dh = ctrl.diagnostics();
-  const auto tls_enabled = tls.inner or (uri and uri->scheme() == "https");
-  auto min_version = ssl::tls::any;
-  if (auto& min = tls_min_version) {
-    if (not min->inner.empty()) {
-      if (auto parsed = parse_caf_tls_version(min->inner)) {
-        min_version = *parsed;
-      } else {
-        diagnostic::error(parsed.error()).primary(*min).emit(dh);
-        return caf::make_error(ec::invalid_configuration,
-                               "invalid TLS minimum version");
-      }
-    }
-  }
-  auto ctx = ssl::context::enable(tls_enabled)
-               .and_then(ssl::emplace_context(min_version))
-               .and_then(ssl::use_private_key_file_if(inner(keyfile).to_std(),
-                                                      ssl::format::pem))
-               .and_then(ssl::use_certificate_file_if(inner(certfile).to_std(),
-                                                      ssl::format::pem))
-               .and_then(ssl::use_password_if(inner(password).to_std()));
-  if (uri) {
-    ctx = std::move(ctx).and_then(ssl::use_sni_hostname(std::move(*uri)));
-  }
-  if (not ctx) {
-    return ctx;
-  }
-  auto& concrete = *ctx;
-  const auto require_cert = tls_require_client_cert.inner;
-  const auto skip_verify = skip_peer_verification.inner;
-  auto verify_mode = ssl::verify::none;
-  if (not skip_verify or require_cert) {
-    verify_mode |= ssl::verify::peer;
-    if (require_cert) {
-      verify_mode |= ssl::verify::fail_if_no_peer_cert;
-    }
-  }
-  concrete.verify_mode(verify_mode);
-  if (verify_mode != ssl::verify::none) {
-    auto load_ca = [&](const located<std::string>& ca) -> caf::expected<void> {
-      if (concrete.load_verify_file(ca.inner)) {
-        return {};
-      }
-      diagnostic::error("failed to load TLS CA certificate")
-        .primary(ca)
-        .emit(dh);
-      return caf::make_error(ec::invalid_configuration,
-                             "failed to load TLS CA certificate");
-    };
-    if (require_cert) {
-      if (auto& client_ca = tls_client_ca) {
-        if (auto res = load_ca(*client_ca); not res) {
-          return caf::make_error(ec::invalid_configuration,
-                                 "failed to configure TLS client CA");
-        }
-      }
-    }
-    if (auto& ca = cacert) {
-      if (auto res = load_ca(*ca); not res) {
-        return caf::make_error(ec::invalid_configuration,
-                               "failed to configure TLS CA");
-      }
-    } else if (not concrete.enable_default_verify_paths()) {
-      return caf::make_error(ec::invalid_configuration,
-                             "failed to enable default verify paths");
-    }
-  }
-  if (auto& ciphers = tls_ciphers) {
-    auto cipher_loc = ciphers->source;
-    if (cipher_loc == tls_arg_source) {
-      // `located<data>` for `tls={...}` only carries the whole record span.
-      // Clamp to a tiny span to avoid misleading multi-line highlights.
-      cipher_loc = cipher_loc.subloc(0, 1);
-    }
-    if (auto* native = static_cast<SSL_CTX*>(concrete.native_handle())) {
-      if (SSL_CTX_set_cipher_list(native, ciphers->inner.c_str()) != 1) {
-        diagnostic::error("invalid TLS cipher list")
-          .primary(cipher_loc, "`tls.ciphers`")
-          .emit(dh);
-        return caf::make_error(ec::invalid_configuration,
-                               "invalid TLS cipher list");
-      }
-    }
-  }
-  return ctx;
-}
-
 auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
                                        bool tls_required) const
   -> failure_or<std::shared_ptr<folly::SSLContext>> {
@@ -956,11 +864,6 @@ auto tls_options::resolve(std::string_view url, location url_loc,
   out.uses_curl_http = uses_curl_http_;
   out.tls_arg_source = tls_ ? tls_->source : location::unknown;
   return out;
-}
-
-auto tls_options::resolve(operator_control_plane& ctrl) const
-  -> failure_or<TlsConfig> {
-  return resolve(ctrl.self().system().config(), ctrl.diagnostics());
 }
 
 auto TlsConfig::defaults() -> TlsConfig {

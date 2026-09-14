@@ -10,4 +10,4 @@ from {
   data: b"\x00",
 }
 @name = "pcap.packet"
-write_pcap format="pcapng"
+to_stdout { write_pcap format="pcapng" }

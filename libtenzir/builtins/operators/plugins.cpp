@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -36,20 +35,15 @@ auto make_plugins() -> generator<table_slice> {
     row.field("version").data(version);
     row.field("kind").data(fmt::to_string(plugin.type()));
     auto types = row.field("types").list();
-    add_plugin_type<aspect_plugin>(plugin, types, "aspect");
     add_plugin_type<command_plugin>(plugin, types, "command");
     add_plugin_type<component_plugin>(plugin, types, "component");
     add_plugin_type<context_plugin>(plugin, types, "context");
-    add_plugin_type<loader_parser_plugin>(plugin, types, "loader");
     add_plugin_type<metrics_plugin>(plugin, types, "metrics");
     if (plugin.as<operator_factory_plugin>()
         or plugin.as<operator_compiler_plugin>()) {
       types.data("operator");
     }
-    add_plugin_type<parser_parser_plugin>(plugin, types, "parser");
-    add_plugin_type<printer_parser_plugin>(plugin, types, "printer");
     add_plugin_type<rest_endpoint_plugin>(plugin, types, "rest_endpoint");
-    add_plugin_type<saver_parser_plugin>(plugin, types, "saver");
     add_plugin_type<store_plugin>(plugin, types, "store");
     add_plugin_type<aggregation_plugin>(plugin, types,
                                         "tql2.aggregation_function");
@@ -63,40 +57,6 @@ auto make_plugins() -> generator<table_slice> {
     co_yield std::move(slice);
   }
 }
-
-class plugins_operator final : public crtp_operator<plugins_operator> {
-public:
-  plugins_operator() = default;
-
-  auto operator()() const -> generator<table_slice> {
-    for (auto&& slice : make_plugins()) {
-      co_yield std::move(slice);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "plugins";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)order;
-    (void)filter;
-    return do_not_optimize(*this);
-  }
-
-  auto internal() const -> bool override {
-    return true;
-  }
-
-  friend auto inspect(auto& f, plugins_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
 
 struct PluginsArgs {
   // No arguments.
@@ -141,14 +101,10 @@ private:
   bool done_ = false;
 };
 
-class Plugin final : public virtual operator_plugin<plugins_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("plugins").parse(inv, ctx).ignore();
-    return std::make_unique<plugins_operator>();
+  auto name() const -> std::string override {
+    return "plugins";
   }
 
   auto describe() const -> Description override {

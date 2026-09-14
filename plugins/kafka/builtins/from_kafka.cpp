@@ -9,7 +9,6 @@
 #include "kafka/async_consumer.hpp"
 #include "kafka/avro_registry.hpp"
 #include "kafka/eof_tracker.hpp"
-#include "kafka/from_kafka_legacy.hpp"
 #include "kafka/librdkafka_utils.hpp"
 #include "kafka/message_builder.hpp"
 #include "kafka/offset_commit.hpp"
@@ -2433,9 +2432,7 @@ private:
 };
 
 /// Plugin entrypoint that parses `from_kafka` arguments and builds operators.
-class FromKafkaPlugin final
-  : public virtual operator_plugin2<legacy::from_kafka_operator>,
-    public virtual OperatorPlugin {
+class FromKafkaPlugin final : public virtual OperatorPlugin {
 public:
   auto initialize(record const& unused_plugin_config,
                   record const& global_config) -> caf::error override {
@@ -2476,12 +2473,6 @@ public:
 
   auto name() const -> std::string override {
     return "from_kafka";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    return legacy::make_from_kafka(std::move(inv), ctx,
-                                   source_global_defaults());
   }
 
   auto describe() const -> Description override {

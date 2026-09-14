@@ -26,8 +26,8 @@
 +      order: "unordered"
      },
      GenericIr {
--      desc: "tql2.sort",
-+      desc: "tql2.to_file",
+-      desc: "sort",
++      desc: "to_file",
        store: {
          op: {
            path: [
@@ -99,7 +99,7 @@
 -        ],
 -        operators: [
 -          GenericIr {
--            desc: "tql2.to_file",
+-            desc: "to_file",
 -            store: {
 -              op: {
 -                path: [

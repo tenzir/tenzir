@@ -57,45 +57,4 @@ auto make_uri_request(const located<secret>& s, std::string prefix,
                                               s.source)};
 }
 
-auto resolve_secrets_must_yield(
-  operator_control_plane& ctrl, std::vector<secret_request_combined> requests,
-  operator_control_plane::final_callback_t final_callback)
-  -> operator_control_plane::secret_resolution_sentinel {
-  auto translated_requests = std::vector<secret_request>{};
-  translated_requests.reserve(requests.size());
-  for (auto& req : requests) {
-    if (auto* v2 = try_as<secret_request>(req)) {
-      translated_requests.push_back(std::move(*v2));
-      continue;
-    }
-    auto& record_request = as<secret_request_record>(req);
-    const auto handle_value
-      = [&record_request, &translated_requests](
-          this const auto& self, std::string key, tenzir::data& value) -> void {
-      if (auto* s = try_as<secret>(value)) {
-        translated_requests.emplace_back(
-          std::move(*s), record_request.location,
-          [cb = record_request.callback,
-           key](resolved_secret_value v) -> failure_or<void> {
-            return cb(key, std::move(v));
-          });
-      }
-      if (auto* r = try_as<record>(value)) {
-        for (auto& [k, v] : *r) {
-          self(key + "." + k, v);
-        }
-      }
-      if (auto* l = try_as<list>(value)) {
-        for (size_t i = 0; i < l->size(); ++i) {
-          self(key + "[" + std::to_string(i) + "]", l->operator[](i));
-        }
-      }
-    };
-    for (auto& [k, v] : record_request.value) {
-      handle_value(k, v);
-    }
-  }
-  return ctrl.resolve_secrets_must_yield(std::move(translated_requests),
-                                         std::move(final_callback));
-}
 } // namespace tenzir

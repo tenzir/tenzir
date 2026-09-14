@@ -57,30 +57,10 @@ auto make_select_assignments(std::vector<ast::expression> args,
   return assignments;
 }
 
-class set final : public virtual operator_plugin2<set_operator>,
-                  public virtual operator_compiler_plugin {
+class set final : public virtual operator_compiler_plugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto usage = "set <path>=<expr>...";
-    auto docs = "https://tenzir.com/docs/reference/operators/set";
-    auto assignments = std::vector<ast::assignment>{};
-    for (auto& arg : inv.args) {
-      arg.match(
-        [&](ast::assignment& x) {
-          if (not resolve_assignment_left(x, ctx.dh()).is_error()) {
-            assignments.push_back(std::move(x));
-          }
-        },
-        [&](auto&) {
-          diagnostic::error("expected assignment")
-            .primary(arg)
-            .usage(usage)
-            .docs(docs)
-            .emit(ctx.dh());
-        });
-    }
-    return std::make_unique<set_operator>(std::move(assignments));
+  auto name() const -> std::string override {
+    return "set";
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
@@ -107,18 +87,10 @@ public:
   }
 };
 
-class select final : public virtual operator_plugin2<set_operator>,
-                     public virtual operator_compiler_plugin {
+class select final : public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.select";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(auto assignments,
-        make_select_assignments(std::move(inv.args), ctx.dh(), false));
-    return std::make_unique<set_operator>(std::move(assignments));
+    return "select";
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const

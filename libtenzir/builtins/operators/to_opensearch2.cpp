@@ -572,7 +572,7 @@ private:
 class ToOpenSearchPlugin : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_opensearch";
+    return "to_opensearch";
   }
 
   auto describe() const -> Description override {
@@ -634,7 +634,7 @@ public:
 class ToElasticsearchPlugin final : public ToOpenSearchPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_elasticsearch";
+    return "to_elasticsearch";
   }
 };
 

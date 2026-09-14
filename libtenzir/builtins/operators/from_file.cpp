@@ -99,7 +99,7 @@ private:
 class FromFilePlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.from_file";
+    return "from_file";
   }
 
   auto describe() const -> Description override {

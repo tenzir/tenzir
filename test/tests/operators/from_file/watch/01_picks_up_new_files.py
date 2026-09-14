@@ -41,7 +41,7 @@ def main() -> None:
     # overall test well under the 30 s suite timeout.
     pipeline = (
         f'from_file "{watch_dir}/*.json", watch=50ms {{ read_json }} '
-        "| select name | write_ndjson"
+        "| select name | to_stdout { write_ndjson }"
     )
     proc = subprocess.Popen(
         [*tenzir, "--bare-mode", "--console-verbosity=error", pipeline],

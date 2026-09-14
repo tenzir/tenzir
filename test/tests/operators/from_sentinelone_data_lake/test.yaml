@@ -4,7 +4,7 @@ fixtures:
 timeout: 60
 requires:
   operators:
-    - tql2.from_sentinelone_data_lake
+    - from_sentinelone_data_lake
 skip:
   on:
     - fixture-unavailable

@@ -125,7 +125,7 @@ using ToUnixSocket = StreamTo<UnixSocketTo>;
 class ToUnixSocketPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_unix_socket";
+    return "to_unix_socket";
   }
 
   auto describe() const -> Description override {

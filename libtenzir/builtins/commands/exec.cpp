@@ -11,9 +11,9 @@
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/exec_pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/source.hpp>
+#include <tenzir/tql2/exec.hpp>
 
 #include <iostream>
 #include <unistd.h>
@@ -35,14 +35,7 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
 auto exec_command_impl(Arc<const Source> source, diagnostic_handler& dh,
                        const exec_config& cfg, caf::actor_system& sys,
                        SourceMap& source_map) -> bool {
-  auto result = exec_pipeline(std::move(source), dh, cfg, sys, source_map);
-  if (result) {
-    return true;
-  }
-  if (result != ec::silent and result != caf::exit_reason::user_shutdown) {
-    dh.emit(diagnostic::error(result.error()).done());
-  }
-  return false;
+  return exec2(std::move(source), dh, cfg, sys, source_map);
 }
 
 auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
@@ -74,16 +67,9 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.dump_opt_ir = caf::get_or(inv.options, "tenzir.exec.dump-opt-ir", false);
   cfg.dump_ir_plan
     = caf::get_or(inv.options, "tenzir.exec.dump-ir-plan", false);
-  cfg.dump_pipeline
-    = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
-  cfg.dump_metrics
-    = caf::get_or(inv.options, "tenzir.exec.dump-metrics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
-  cfg.neo = caf::get_or(inv.options, "tenzir.neo", cfg.neo);
-  const auto use_neo_executor = cfg.neo or cfg.dump_ir or cfg.dump_inst_ir
-                                or cfg.dump_opt_ir or cfg.dump_ir_plan;
   const auto stdout_color
     = (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
       or color_mode == "always";
@@ -91,18 +77,13 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     inv.options, "tenzir.exec.implicit-bytes-sink", cfg.implicit_bytes_sink);
   cfg.implicit_events_sink = caf::get_or(
     inv.options, "tenzir.exec.implicit-events-sink",
-    use_neo_executor
-      ? (stdout_color ? "to_stdout { write_tql color=true }" : "to_stdout")
-      : make_default_implicit_events_sink(stdout_color));
+    stdout_color ? "to_stdout { write_tql color=true }" : "to_stdout");
   cfg.implicit_bytes_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
                   cfg.implicit_bytes_source);
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
-                  use_neo_executor ? R"(from_stdin { read_json })"
-                                   : cfg.implicit_events_source);
-  cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
-  cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
+                  cfg.implicit_events_source);
   auto profile_str
     = caf::get_or(inv.options, "tenzir.exec.profile", std::string{});
   if (not profile_str.empty()) {
@@ -169,8 +150,6 @@ public:
         .add<bool>("file,f", "load the pipeline definition from a file")
         .add<std::string>("color", "whether to emit colorful output (default: "
                                    "auto, alternatives: never, always)")
-        .add<bool>("dump-pipeline",
-                   "print a textual description of the pipeline and then exit")
         .add<bool>("dump-tokens",
                    "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
@@ -187,24 +166,19 @@ public:
                                      "finalized pipeline and then exit")
         .add<bool>("dump-diagnostics",
                    "print all diagnostics to stdout before exiting")
-        .add<bool>("dump-metrics",
-                   "print all diagnostics to stderr before exiting")
         .add<std::string>("implicit-bytes-sink",
                           "implicit sink for pipelines ending in bytes "
-                          "(default: 'save file -')")
+                          "(default: 'to_stdout')")
         .add<std::string>("implicit-events-sink",
                           "implicit sink for pipelines ending in events "
-                          "(default: 'to stdout write json'")
+                          "(default: 'to_stdout')")
         .add<std::string>("implicit-bytes-source",
                           "implicit source for pipelines starting with bytes "
-                          "(default: 'load file -')")
+                          "(default: 'from_stdin')")
         .add<std::string>("implicit-events-source",
                           "implicit source for pipelines starting with events "
-                          "(default: 'from stdin read json'")
-        .add<bool>("multi", "split pipelines at void-to-void boundaries, "
-                            "running them sequentially")
-        .add<bool>("strict",
-                   "return a non-zero exit code if any warnings occured")
+                          "(default: 'from_stdin { read_json }')")
+        .add<bool>("multi", "deprecated; has no effect")
         .add<std::string>("profile",
                           "write a channel profile to a file (Chrome Trace "
                           "Format, viewable in ui.perfetto.dev)")

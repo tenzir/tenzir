@@ -523,11 +523,11 @@ private:
 class repeat : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.repeat_fn";
+    return "repeat_fn";
   }
 
   auto function_name() const -> std::string override {
-    return "tql2.repeat";
+    return "repeat";
   }
 
   auto is_deterministic() const -> bool override {
@@ -736,11 +736,11 @@ public:
   }
 
   auto name() const -> std::string override {
-    return regex_ ? "tql2.replace_regex" : "tql2.replace_fn";
+    return regex_ ? "replace_regex" : "replace_fn";
   }
 
   auto function_name() const -> std::string override {
-    return regex_ ? "tql2.replace_regex" : "tql2.replace";
+    return regex_ ? "replace_regex" : "replace";
   }
 
   auto is_deterministic() const -> bool override {
@@ -939,7 +939,7 @@ template <bool Deprecated>
 class string_fn : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return Deprecated ? "tql2.str" : "tql2.string";
+    return Deprecated ? "str" : "string";
   }
 
   auto is_deterministic() const -> bool override {
@@ -973,7 +973,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return regex_ ? "tql2.split_regex" : "tql2.split";
+    return regex_ ? "split_regex" : "split";
   }
 
   auto is_deterministic() const -> bool override {
@@ -1093,7 +1093,7 @@ private:
 class join : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.join";
+    return "join";
   }
 
   auto is_deterministic() const -> bool override {

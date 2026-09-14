@@ -9,8 +9,7 @@
 #pragma once
 
 #include "tenzir/concepts.hpp"
-#include "tenzir/config.hpp"  // IWYU pragma: export
-#include "tenzir/tql/fwd.hpp" // IWYU pragma: export
+#include "tenzir/config.hpp" // IWYU pragma: export
 
 #include <arrow/util/config.h>
 #include <caf/allowed_unsafe_message_type.hpp>
@@ -160,14 +159,10 @@ class map_type;
 class module;
 class null_bitmap;
 class null_type;
-class operator_base;
-class operator_box;
 template <class T>
 class Option;
-class parser_interface;
 class passive_store;
 class pattern;
-class pipeline;
 class plugin_ptr;
 class plugin;
 class port;
@@ -323,7 +318,6 @@ class legacy_deserializer;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operand = variant<meta_extractor, field_extractor, type_extractor,
                         data_extractor, data>;
-using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
 using symbol_map = std::unordered_map<std::string, legacy_type>;
@@ -479,7 +473,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::module))
   TENZIR_ADD_TYPE_ID((tenzir::negation))
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
-  TENZIR_ADD_TYPE_ID((tenzir::operator_box))
   TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
   TENZIR_ADD_TYPE_ID((tenzir::package))
@@ -489,7 +482,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::partition_transformer_result))
   TENZIR_ADD_TYPE_ID((tenzir::pattern))
-  TENZIR_ADD_TYPE_ID((tenzir::pipeline))
   TENZIR_ADD_TYPE_ID((tenzir::ast::pipeline))
   TENZIR_ADD_TYPE_ID((tenzir::ir::pipeline))
   TENZIR_ADD_TYPE_ID((tenzir::port))

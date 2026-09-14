@@ -21,7 +21,7 @@ namespace {
 class secret final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.secret";
+    return "secret";
   }
 
   auto is_deterministic() const -> bool final {

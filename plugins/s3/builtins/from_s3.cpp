@@ -11,7 +11,6 @@
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
-#include <tenzir/from_file_base.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -33,132 +32,6 @@
 
 namespace tenzir::plugins::s3 {
 namespace {
-
-struct from_s3_args final {
-  from_file_args base_args;
-  Option<location> anonymous;
-  Option<aws_iam_options> aws_iam;
-
-  friend auto inspect(auto& f, from_s3_args& x) -> bool {
-    return f.object(x).fields(f.field("base_args", x.base_args),
-                              f.field("anonymous", x.anonymous),
-                              f.field("aws_iam", x.aws_iam));
-  }
-};
-
-class from_s3_operator final : public crtp_operator<from_s3_operator> {
-public:
-  from_s3_operator() = default;
-
-  explicit from_s3_operator(from_s3_args args) : args_{std::move(args)} {
-  }
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto& dh = ctrl.diagnostics();
-    auto uri = arrow::util::Uri{};
-    auto reqs = std::vector{
-      make_uri_request(args_.base_args.url, "s3://", uri, dh),
-    };
-    // Resolve all aws_iam secrets if provided
-    auto resolved_creds = Option<resolved_aws_credentials>{};
-    if (args_.aws_iam) {
-      resolved_creds.emplace();
-      auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
-      for (auto& r : aws_reqs) {
-        reqs.push_back(std::move(r));
-      }
-    }
-    co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
-    auto path = std::string{};
-    auto opts = arrow::fs::S3Options::FromUri(uri, &path);
-    if (not opts.ok()) {
-      diagnostic::error("failed to create Arrow S3 options: {}",
-                        opts.status().ToStringWithoutContextLines())
-        .emit(dh);
-      co_return;
-    }
-    if (args_.anonymous) {
-      opts->ConfigureAnonymousCredentials();
-    } else if (resolved_creds) {
-      auto region = resolved_creds->region.empty()
-                      ? Option<std::string>{}
-                      : Option{resolved_creds->region};
-      auto provider
-        = tenzir::make_aws_credentials_provider(resolved_creds, region);
-      if (not provider) {
-        diagnostic::error(provider.error()).emit(dh);
-        co_return;
-      }
-      opts->credentials_provider = std::move(*provider);
-      if (not resolved_creds->access_key_id.empty()
-          or not resolved_creds->profile.empty()) {
-        opts->credentials_kind = arrow::fs::S3CredentialsKind::Explicit;
-      } else if (not resolved_creds->role.empty()) {
-        opts->credentials_kind = arrow::fs::S3CredentialsKind::Role;
-      }
-    }
-    auto fs = arrow::fs::S3FileSystem::Make(*opts);
-    if (not fs.ok()) {
-      diagnostic::error("failed to create Arrow S3 filesystem: {}",
-                        fs.status().ToStringWithoutContextLines())
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Spawning the actor detached because some parts of the Arrow filesystem
-    // API are blocking.
-    auto impl = scope_linked{ctrl.self().spawn<caf::linked + caf::detached>(
-      caf::actor_from_state<from_file_state>, args_.base_args, path, path,
-      fs.MoveValueUnsafe(), order_,
-      std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
-      ctrl.definition(), ctrl.node(), ctrl.is_hidden(), ctrl.metrics_receiver(),
-      ctrl.operator_index(), std::string{ctrl.pipeline_id()})};
-    while (true) {
-      auto result = table_slice{};
-      ctrl.self()
-        .mail(atom::get_v)
-        .request(impl.get(), caf::infinite)
-        .then(
-          [&](table_slice slice) {
-            result = std::move(slice);
-            ctrl.set_waiting(false);
-          },
-          [&](caf::error error) {
-            diagnostic::error(std::move(error)).emit(ctrl.diagnostics());
-          });
-      ctrl.set_waiting(true);
-      co_yield {};
-      if (result.rows() == 0) {
-        break;
-      }
-      co_yield std::move(result);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "from_s3";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const&, EventOrder order) const
-    -> OptimizeResult override {
-    auto copy = std::make_unique<from_s3_operator>(*this);
-    copy->order_ = order;
-    return OptimizeResult{None{}, EventOrder::ordered, std::move(copy)};
-  }
-
-  friend auto inspect(auto& f, from_s3_operator& x) -> bool {
-    return f.object(x).fields(f.field("args_", x.args_),
-                              f.field("order_", x.order_));
-  }
-
-private:
-  from_s3_args args_;
-  EventOrder order_{EventOrder::ordered};
-};
 
 struct FromS3Args : FromArrowFsArgs {
   bool anonymous = false;
@@ -329,103 +202,10 @@ private:
   Option<Aws::S3::S3Client> client_;
 };
 
-class from_s3 final : public operator_plugin2<from_s3_operator>,
-                      public OperatorPlugin {
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = from_s3_args{};
-    // Legacy options for backwards compatibility
-    auto access_key = Option<located<secret>>{};
-    auto secret_key = Option<located<secret>>{};
-    auto session_token = Option<located<secret>>{};
-    auto role = Option<located<secret>>{};
-    auto external_id = Option<located<secret>>{};
-    auto aws_iam_rec = Option<located<record>>{};
-    auto p = argument_parser2::operator_(name());
-    args.base_args.add_to(p);
-    p.named("anonymous", args.anonymous);
-    p.named("access_key", access_key);
-    p.named("secret_key", secret_key);
-    p.named("session_token", session_token);
-    p.named("role", role);
-    p.named("external_id", external_id);
-    p.named("aws_iam", aws_iam_rec);
-    TRY(p.parse(inv, ctx));
-    if (aws_iam_rec) {
-      TRY(args.aws_iam,
-          aws_iam_options::from_record(std::move(*aws_iam_rec), ctx));
-      // Validate aws_iam is not used with other auth options
-      if (args.anonymous) {
-        diagnostic::error("`aws_iam` cannot be used with `anonymous`")
-          .primary(args.aws_iam->loc)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (access_key or secret_key or session_token or role or external_id) {
-        diagnostic::error(
-          "`aws_iam` cannot be used with individual credential options")
-          .primary(args.aws_iam->loc)
-          .note("use either `aws_iam` or individual options, not both")
-          .emit(ctx);
-        return failure::promise();
-      }
-    } else if (access_key or secret_key) {
-      // Convert legacy explicit credentials to aws_iam
-      if (args.anonymous) {
-        diagnostic::error("`anonymous` cannot be used with credential options")
-          .primary(*args.anonymous)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (access_key.has_value() xor secret_key.has_value()) {
-        diagnostic::error(
-          "`access_key` and `secret_key` must be specified together")
-          .primary(access_key ? *access_key : *secret_key)
-          .emit(ctx);
-        return failure::promise();
-      }
-      args.aws_iam.emplace();
-      args.aws_iam->loc = access_key->source;
-      args.aws_iam->access_key_id = access_key->inner;
-      args.aws_iam->secret_access_key = secret_key->inner;
-      if (session_token) {
-        args.aws_iam->session_token = session_token->inner;
-      }
-      // Also set role if provided (credentials + role assumption)
-      if (role) {
-        args.aws_iam->role = role->inner;
-        if (external_id) {
-          args.aws_iam->external_id = external_id->inner;
-        }
-      }
-    } else if (role) {
-      // Convert legacy role option to aws_iam
-      if (args.anonymous) {
-        diagnostic::error("`anonymous` cannot be used with `role`")
-          .primary(*args.anonymous)
-          .emit(ctx);
-        return failure::promise();
-      }
-      args.aws_iam.emplace();
-      args.aws_iam->loc = role->source;
-      args.aws_iam->role = role->inner;
-      if (external_id) {
-        args.aws_iam->external_id = external_id->inner;
-      }
-    } else if (session_token) {
-      diagnostic::error("`session_token` specified without `access_key`")
-        .primary(*session_token)
-        .emit(ctx);
-      return failure::promise();
-    } else if (external_id) {
-      diagnostic::error("`external_id` specified without `role`")
-        .primary(*external_id)
-        .emit(ctx);
-      return failure::promise();
-    }
-    TRY(auto result, args.base_args.handle(ctx));
-    result.prepend(std::make_unique<from_s3_operator>(std::move(args)));
-    return std::make_unique<pipeline>(std::move(result));
+class from_s3 final : public OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "from_s3";
   }
 
   auto describe() const -> Description override {

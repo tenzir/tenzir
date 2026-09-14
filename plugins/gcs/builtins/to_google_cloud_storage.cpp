@@ -84,7 +84,7 @@ private:
 class ToGoogleCloudStoragePlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_google_cloud_storage";
+    return "to_google_cloud_storage";
   }
 
   auto describe() const -> Description override {

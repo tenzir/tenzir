@@ -92,7 +92,7 @@ auto spheroidal_distance(double lon1, double lat1, double lon2, double lat2)
 class plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.geo_distance";
+    return "geo_distance";
   }
 
   auto is_deterministic() const -> bool override {

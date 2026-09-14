@@ -722,7 +722,7 @@ def _check(
         index, case = item
         predicate = case[0]
         local = case[2] if len(case) > 2 and case[2] else predicate
-        tail = f"\nwhere id < {1000 + index}\nsort id\nwrite_ndjson"
+        tail = f"\nwhere id < {1000 + index}\nsort id\nto_stdout {{ write_ndjson }}"
         pushed = _run_pipeline(
             tenzir,
             f'from_clickhouse table="{table}",\n  {CONNECTION}\n'

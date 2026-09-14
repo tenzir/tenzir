@@ -255,7 +255,7 @@ auto resolve_missing_date(std::tm& tm, const std::tm& reference_tm,
 class time_ final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.time";
+    return "time";
   }
 
   auto is_deterministic() const -> bool override {
@@ -596,7 +596,7 @@ private:
 class now final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.now";
+    return "now";
   }
 
   auto is_deterministic() const -> bool override {
@@ -621,7 +621,7 @@ public:
 class format_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.format_time";
+    return "format_time";
   }
 
   auto is_deterministic() const -> bool override {
@@ -679,7 +679,7 @@ public:
 class parse_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.parse_time";
+    return "parse_time";
   }
 
   auto is_deterministic() const -> bool override {

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -62,46 +61,5 @@ assign(const ast::field_path& left, series right, const table_slice& input,
 [[nodiscard]] auto
 drop(const table_slice& slice, std::span<const ast::field_path> fields,
      diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice;
-
-class set_operator final : public crtp_operator<set_operator> {
-public:
-  set_operator() = default;
-
-  explicit set_operator(std::vector<ast::assignment> assignments)
-    : assignments_{std::move(assignments)} {
-    for (auto& assignment : assignments_) {
-      auto [pruned_assignment, moved_fields]
-        = resolve_move_keyword(std::move(assignment));
-      assignment = std::move(pruned_assignment);
-      std::ranges::move(moved_fields, std::back_inserter(moved_fields_));
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "tql2.set";
-  }
-
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<table_slice>;
-
-  auto optimize(const expression& filter, EventOrder order) const
-    -> OptimizeResult override {
-    TENZIR_UNUSED(filter);
-    auto replacement = std::make_unique<set_operator>(*this);
-    replacement->order_ = order;
-    return OptimizeResult{None{}, order, std::move(replacement)};
-  }
-
-  friend auto inspect(auto& f, set_operator& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_),
-                              f.field("moved_fields", x.moved_fields_),
-                              f.field("order", x.order_));
-  }
-
-private:
-  std::vector<ast::assignment> assignments_;
-  std::vector<ast::field_path> moved_fields_;
-  EventOrder order_ = EventOrder::ordered;
-};
 
 } // namespace tenzir

@@ -72,136 +72,6 @@ struct from_args {
   }
 };
 
-class from_google_cloud_pubsub_operator final
-  : public crtp_operator<from_google_cloud_pubsub_operator> {
-public:
-  from_google_cloud_pubsub_operator() = default;
-
-  explicit from_google_cloud_pubsub_operator(from_args args)
-    : args_{std::move(args)} {
-  }
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    // Setup subscription
-    auto subscription = pubsub::Subscription(args_.project_id.inner,
-                                             args_.subscription_id.inner);
-    const auto ordering_enabled = args_.ordered and [&]() {
-      auto admin_client = pubsub::SubscriptionAdminClient(
-        pubsub::MakeSubscriptionAdminConnection());
-      auto subscription_info = admin_client.GetSubscription(subscription);
-      if (not subscription_info.ok()) {
-        return false;
-      }
-      return subscription_info->enable_message_ordering();
-    }
-    ();
-    auto connection = pubsub::MakeSubscriberConnection(
-      std::move(subscription),
-      google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1));
-    auto subscriber = pubsub::Subscriber(std::move(connection));
-    // The pubsub library does not conclusively specify that only one callback
-    // will be *executed* at a time. Hence we still have a mutex here to be safe.
-    auto builder_mut = std::mutex{};
-    auto msb = multi_series_builder{
-      {.settings={
-         .ordered = ordering_enabled,
-         .raw = true,
-       }},
-      ctrl.diagnostics(),
-    };
-    auto session = subscriber.Subscribe(
-      [&](pubsub::Message const& m, pubsub::AckHandler h) {
-        {
-          auto guard = std::scoped_lock{builder_mut};
-          auto event = msb.record();
-          event.field("message").data(m.data());
-          if (args_.metadata_field) {
-            auto meta = event.field(*args_.metadata_field).record();
-            meta.field("message_id").data(m.message_id());
-            meta.field("publish_time").data(time{m.publish_time()});
-            auto attrs = meta.field("attributes").record();
-            for (const auto& [key, value] : m.attributes()) {
-              attrs.field(key).data(value);
-            }
-          }
-        }
-        std::move(h).ack();
-      });
-    auto shared_diagnostics = ctrl.shared_diagnostics();
-    auto session_guard = detail::scope_guard{[&]() noexcept {
-      if (not session.valid()) {
-        return;
-      }
-      if (not session.is_ready()) {
-        // Initiate cancellation of the subscription.
-        session.cancel();
-      }
-      // Always wait for the session to fully stop. This is critical to ensure
-      // that gRPC background threads are no longer accessing captured locals
-      // (builder_mut, msb, args_) before they are destroyed.
-      const auto session_status = session.get();
-      if (not session_status.ok()
-          and session_status.code() != google::cloud::StatusCode::kCancelled) {
-        diagnostic::error("google-cloud-subscriber: {}",
-                          session_status.message())
-          .primary(args_.operator_location)
-          .emit(shared_diagnostics);
-      }
-    }};
-    while (session.valid()) {
-      if (session.is_ready()) {
-        break;
-      }
-      // Must hold the mutex while collecting slices to prevent concurrent
-      // modification by the callback. We collect slices under the lock, then
-      // yield outside.
-      auto slices = [&] {
-        auto guard = std::scoped_lock{builder_mut};
-        return msb.yield_ready_as_table_slice();
-      }();
-      auto yielded = false;
-      for (auto&& s : slices) {
-        yielded = true;
-        co_yield std::move(s);
-      }
-      if (not yielded) {
-        co_yield {};
-      }
-    }
-    session_guard.trigger();
-    for (auto&& s : msb.finalize_as_table_slice()) {
-      co_yield std::move(s);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "from_google_cloud_pubsub";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto optimize(expression const&, EventOrder order) const
-    -> OptimizeResult override {
-    auto args = args_;
-    args.ordered = order == EventOrder::ordered;
-
-    return {
-      None{}, order,
-      std::make_unique<from_google_cloud_pubsub_operator>(std::move(args_))};
-  }
-
-  friend auto inspect(auto& f, from_google_cloud_pubsub_operator& x) -> bool {
-    return f.apply(x.args_);
-  }
-
-private:
-  from_args args_;
-};
-
 // Holds state shared between the operator and the GCP subscriber callback.
 // Uses a mutex because GCP only limits the number of callbacks *scheduled*,
 // not the number actually executing at a time, even with
@@ -424,19 +294,11 @@ private:
 
 } // namespace
 
-class from_plugin final
-  : public virtual operator_plugin2<from_google_cloud_pubsub_operator>,
-    public virtual OperatorPlugin {
+class from_plugin final : public virtual operator_factory_plugin,
+                          public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = from_args{};
-    auto parser = argument_parser2::operator_(name());
-    args.add_to(parser);
-    TRY(parser.parse(inv, ctx));
-    TRY(args.validate(ctx));
-    args.operator_location = inv.self.get_location();
-    return std::make_unique<from_google_cloud_pubsub_operator>(std::move(args));
+  auto name() const -> std::string override {
+    return "from_google_cloud_pubsub";
   }
 
   auto describe() const -> Description override {

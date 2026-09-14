@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "kafka/operator.hpp"
-
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/string.hpp>

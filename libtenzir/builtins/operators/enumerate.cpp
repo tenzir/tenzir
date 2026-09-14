@@ -67,61 +67,6 @@ auto find_group(GroupMap& groups, data_view3 const value)
   return it;
 }
 
-class enumerate_operator final : public crtp_operator<enumerate_operator> {
-public:
-  enumerate_operator() = default;
-
-  explicit enumerate_operator(EnumerateArgs args) : args_{std::move(args)} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto& dh = ctrl.diagnostics();
-    auto next_id = int64_t{0};
-    auto groups = GroupMap{};
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto builder = int64_type::make_arrow_builder(arrow_memory_pool());
-      check(builder->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
-      if (args_.group) {
-        for (auto const& result : eval(*args_.group, slice, dh)) {
-          for (auto const& value : result.values()) {
-            auto it = find_group(groups, value);
-            check(builder->Append(it.value()++));
-          }
-        }
-      } else {
-        for (auto i = int64_t{0}; i < detail::narrow<int64_t>(slice.rows());
-             ++i) {
-          check(builder->Append(next_id++));
-        }
-      }
-      co_yield assign(args_.out, series{int64_type{}, finish(*builder)}, slice,
-                      dh, assign_position::front);
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "enumerate";
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-private:
-  friend auto inspect(auto& f, enumerate_operator& x) -> bool {
-    return f.apply(x.args_);
-  }
-
-  EnumerateArgs args_;
-};
-
 class Enumerate final : public Operator<table_slice, table_slice> {
 public:
   explicit Enumerate(EnumerateArgs args) : args_{std::move(args)} {
@@ -160,21 +105,10 @@ private:
   GroupMap groups_;
 };
 
-class Plugin final : public virtual operator_plugin2<enumerate_operator>,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = EnumerateArgs{};
-    auto out = ast::field_path::try_from(
-      ast::root_field{ast::identifier{"#", inv.self.get_location()}});
-    TENZIR_ASSERT(out);
-    TRY(argument_parser2::operator_("enumerate")
-          .positional("out", out)
-          .named("group", args.group, "any")
-          .parse(inv, ctx));
-    args.out = std::move(*out);
-    return std::make_unique<enumerate_operator>(std::move(args));
+  auto name() const -> std::string override {
+    return "enumerate";
   }
 
   auto describe() const -> Description override {

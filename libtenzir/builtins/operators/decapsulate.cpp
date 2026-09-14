@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/community_id.hpp>
 #include <tenzir/error.hpp>
@@ -372,47 +371,12 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
   return new_s;
 }
 
-class decapsulate_operator final : public crtp_operator<decapsulate_operator> {
+class plugin final : public virtual function_plugin {
 public:
-  decapsulate_operator() = default;
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto s = decapsulate(series{slice}, ctrl.diagnostics(), true);
-      if (not s) {
-        co_yield {};
-        continue;
-      }
-      auto batch = record_batch_from_struct_array(
-        s->type.to_arrow_schema(), as<arrow::StructArray>(*s->array));
-      co_yield table_slice{batch, s->type};
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter;
-    return OptimizeResult::order_invariant(*this, order);
-  }
-
   auto name() const -> std::string override {
     return "decapsulate";
   }
 
-  friend auto inspect(auto& f, decapsulate_operator& x) -> bool {
-    return f.object(x).pretty_name("decapsulate_operator").fields();
-  }
-};
-
-class plugin final : public virtual operator_plugin<decapsulate_operator>,
-                     public virtual function_plugin {
-public:
   auto is_deterministic() const -> bool override {
     return true;
   }

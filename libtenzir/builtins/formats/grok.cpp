@@ -6,16 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async/pusher.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/to_lines.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -442,11 +441,7 @@ auto& get_builtin_pattern_store(diagnostic_handler& dh) {
   return store;
 }
 
-class grok_parser final : public plugin_parser {
-  friend auto parse_loop(generator<Option<std::string_view>> input,
-                         diagnostic_handler& dh, grok_parser parser)
-    -> generator<table_slice>;
-
+class grok_parser final {
 public:
   grok_parser() = default;
 
@@ -473,16 +468,6 @@ public:
       }));
     input_pattern_.resolve(*patterns_, false);
     TENZIR_ASSERT(input_pattern_.resolved_pattern);
-  }
-
-  auto name() const -> std::string override {
-    return "grok";
-  }
-
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> Option<generator<table_slice>> override {
-    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), *this);
   }
 
   auto parse_line(multi_series_builder& builder, diagnostic_handler& dh,
@@ -607,13 +592,6 @@ public:
     return builder.finalize();
   }
 
-  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
-    TENZIR_ASSERT(input);
-    return parse_strings(*input, ctrl.diagnostics());
-  }
-
   friend auto inspect(auto& f, grok_parser& x) -> bool {
     auto get_patterns = [&x]() -> decltype(auto) {
       return *x.patterns_;
@@ -640,66 +618,6 @@ private:
   bool indexed_captures_{false};
   bool include_unnamed_{false};
   multi_series_builder::options opts_;
-};
-
-auto parse_loop(generator<Option<std::string_view>> input,
-                diagnostic_handler& dh, grok_parser parser)
-  -> generator<table_slice> {
-  auto tdh = transforming_diagnostic_handler{
-    dh,
-    [](auto diag) {
-      diag.message = fmt::format("grok parser: {}", diag.message);
-      return diag;
-    },
-  };
-  auto builder = multi_series_builder(parser.opts_, tdh);
-  for (auto&& line : input) {
-    if (not line) {
-      co_yield {};
-      continue;
-    }
-    for (auto&& slice : builder.yield_ready_as_table_slice()) {
-      co_yield std::move(slice);
-    }
-    if (not parser.parse_line(builder, tdh, *line)) {
-      builder.remove_last();
-    }
-  }
-  for (auto&& slice : builder.finalize_as_table_slice()) {
-    co_yield std::move(slice);
-  }
-}
-
-class plugin final : public virtual parser_plugin<grok_parser> {
-public:
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    auto parser
-      = argument_parser{"grok", "https://tenzir.com/docs/operators/grok"};
-    auto pattern_definitions = Option<located<std::string>>{};
-    auto raw_pattern = located<std::string>{};
-    auto indexed_captures = false;
-    auto include_unnamed = false;
-    parser.add(raw_pattern, "<pattern>");
-    parser.add("--pattern-definitions", pattern_definitions, "<patterns>");
-    parser.add("--indexed-captures", indexed_captures);
-    parser.add("--include-unnamed", include_unnamed);
-    auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_all_to_parser(parser);
-    parser.parse(p);
-    auto dh = collecting_diagnostic_handler{};
-    auto msb_opts = msb_parser.get_options(dh);
-    for (auto&& diag : std::move(dh).collect()) {
-      if (diag.severity == severity::error) {
-        throw diag;
-      }
-    }
-    msb_opts->settings.default_schema_name = "tenzir.grok";
-    return std::make_unique<grok_parser>(std::move(pattern_definitions),
-                                         std::move(raw_pattern),
-                                         indexed_captures, include_unnamed,
-                                         std::move(*msb_opts), dh);
-  }
 };
 
 auto extract_pattern_definitions(Option<located<data>> expr,
@@ -883,12 +801,10 @@ private:
   SeriesPusher pusher_;
 };
 
-class read_grok_plugin
-  : public virtual operator_plugin2<parser_adapter<grok_parser>>,
-    public virtual OperatorPlugin {
+class read_grok_plugin : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.read_grok";
+    return "read_grok";
   }
 
   auto describe() const -> Description override {
@@ -922,44 +838,12 @@ public:
     });
     return d.without_optimize();
   }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_(name());
-    auto pattern_definitions_expression = Option<ast::expression>{};
-    auto raw_pattern = located<std::string>{};
-    auto indexed_captures = false;
-    auto include_unnamed = false;
-    parser.positional("pattern", raw_pattern);
-    parser.named("pattern_definitions", pattern_definitions_expression,
-                 "record|string");
-    parser.named("indexed_captures", indexed_captures);
-    parser.named("include_unnamed", include_unnamed);
-    auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_all_to_parser(parser);
-    TRY(parser.parse(inv, ctx));
-    TRY(auto opts, msb_parser.get_options(ctx));
-    opts.settings.default_schema_name = "tenzir.grok";
-    TRY(auto pattern_definitions,
-        extract_pattern_definitions(std::move(pattern_definitions_expression),
-                                    ctx));
-    try {
-      return std::make_unique<parser_adapter<grok_parser>>(grok_parser{
-        std::move(pattern_definitions), std::move(raw_pattern),
-        indexed_captures, include_unnamed, std::move(opts), ctx.dh()});
-    } catch (diagnostic& diag) {
-      std::move(diag).modify().emit(ctx);
-      return failure::promise();
-    } catch (...) {
-      throw;
-    }
-  }
 };
 
 class parse_grok_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.parse_grok";
+    return "parse_grok";
   }
 
   auto is_deterministic() const -> bool override {
@@ -1030,6 +914,5 @@ public:
 
 } // namespace tenzir::plugins::grok
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::read_grok_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::parse_grok_plugin)

@@ -131,7 +131,8 @@ def run_ctl(node: NodeController, *args: str) -> subprocess.CompletedProcess[str
 
 def partition_count(tenzir: Executor) -> int:
     result = tenzir.run(
-        f'partitions\nwhere schema == "{SCHEMA}"\nsummarize count=count()\nwrite_ndjson\n'
+        f'partitions\nwhere schema == "{SCHEMA}"\nsummarize count=count()\n'
+        "to_stdout { write_ndjson }\n"
     )
     assert result.returncode == 0, f"partitions failed: {result.stderr.decode()}"
     return json.loads(result.stdout.decode())["count"]

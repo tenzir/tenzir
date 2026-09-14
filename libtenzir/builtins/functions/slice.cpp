@@ -27,7 +27,7 @@ namespace {
 class Plugin : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.slice";
+    return "slice";
   }
 
   auto is_deterministic() const -> bool override {

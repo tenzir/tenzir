@@ -48,21 +48,6 @@ auto loaded_config_files() -> const std::vector<std::filesystem::path>&;
 // -- command plugin -----------------------------------------------------------
 #include "tenzir/plugin/command.hpp"
 
-// -- operator plugin ----------------------------------------------------------
-#include "tenzir/plugin/operator.hpp"
-
-// -- loader plugin -----------------------------------------------------------
-#include "tenzir/plugin/loader.hpp"
-
-// -- parser plugin -----------------------------------------------------------
-#include "tenzir/plugin/parser.hpp"
-
-// -- printer plugin ----------------------------------------------------------
-#include "tenzir/plugin/printer.hpp"
-
-// -- saver plugin ------------------------------------------------------------
-#include "tenzir/plugin/saver.hpp"
-
 // -- rest endpoint plugin -----------------------------------------------------
 #include "tenzir/plugin/rest_endpoint.hpp"
 
@@ -71,6 +56,3 @@ auto loaded_config_files() -> const std::vector<std::filesystem::path>&;
 
 // -- metrics plugin ----------------------------------------------------------
 #include "tenzir/plugin/metrics.hpp"
-
-// -- aspect plugin ------------------------------------------------------------
-#include "tenzir/plugin/aspect.hpp"

@@ -19,6 +19,7 @@
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/multi_series.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -1426,8 +1427,21 @@ auto compile_summarize(ast::invocation inv, compile_ctx ctx)
   return SummarizeIr{loc, std::move(config)};
 }
 
+class plugin final : public virtual operator_compiler_plugin {
+public:
+  auto name() const -> std::string override {
+    return "summarize";
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    return compile_summarize(std::move(inv), ctx);
+  }
+};
+
 } // namespace tenzir::plugins::summarize
 
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin)
 TENZIR_REGISTER_PLUGIN(
   (tenzir::inspection_plugin<tenzir::ir::Operator,
                              tenzir::plugins::summarize::SummarizeIr>))

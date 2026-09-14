@@ -169,7 +169,7 @@ try:
             "export\n"
             'where @name == "every-loss-ready"\n'
             "summarize count=count()\n"
-            "write_ndjson\n"
+            "to_stdout { write_ndjson }\n"
         )
         assert ready.returncode == 0, (
             f"readiness export failed: {ready.stderr.decode()}"
@@ -200,7 +200,7 @@ try:
             "export\n"
             'where @name == "every-loss"\n'
             "summarize count=count()\n"
-            "write_ndjson\n"
+            "to_stdout { write_ndjson }\n"
         )
         assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
         count = json.loads(r.stdout.decode().strip()).get("count", 0)
@@ -209,7 +209,9 @@ try:
         time.sleep(0.2)
 
     assert count == 121, f"timed out waiting for 121 events, got {count}"
-    rows = tenzir.run('export\nwhere @name == "every-loss"\nsort seq\nwrite_ndjson\n')
+    rows = tenzir.run(
+        'export\nwhere @name == "every-loss"\nsort seq\nto_stdout { write_ndjson }\n'
+    )
     assert rows.returncode == 0, f"export failed: {rows.stderr.decode()}"
     assert [row["seq"] for row in map(json.loads, rows.stdout.splitlines())] == [
         -1,

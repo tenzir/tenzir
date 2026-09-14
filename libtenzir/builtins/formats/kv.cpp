@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async/pusher.hpp>
@@ -17,11 +16,9 @@
 #include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
-#include <tenzir/to_lines.hpp>
 #include <tenzir/view3.hpp>
 
 #include <arrow/api.h>
@@ -181,26 +178,11 @@ struct kv_args {
   }
 };
 
-class kv_parser;
-auto parse_loop(generator<Option<std::string_view>> input,
-                operator_control_plane& ctrl, kv_parser parser)
-  -> generator<table_slice>;
-
-class kv_parser final : public plugin_parser {
+class kv_parser final {
 public:
   kv_parser() = default;
 
   explicit kv_parser(kv_args args) : args_{std::move(args)} {
-  }
-
-  auto name() const -> std::string override {
-    return "kv";
-  }
-
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> Option<generator<table_slice>> override {
-    return parse_loop(to_lines(std::move(input)), ctrl, *this);
   }
 
   auto parse_line(multi_series_builder& builder, diagnostic_handler& dh,
@@ -275,45 +257,12 @@ public:
     return builder.finalize();
   }
 
-  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
-    TENZIR_ASSERT(input);
-    return parse_strings(*input, ctrl.diagnostics());
-  }
-
   friend auto inspect(auto& f, kv_parser& x) -> bool {
     return f.apply(x.args_);
   }
 
   kv_args args_;
 };
-
-auto parse_loop(generator<Option<std::string_view>> input,
-                operator_control_plane& ctrl, kv_parser parser)
-  -> generator<table_slice> {
-  auto dh = transforming_diagnostic_handler{
-    ctrl.diagnostics(),
-    [](auto diag) {
-      diag.message = fmt::format("read_kv: {}", diag.message);
-      return diag;
-    },
-  };
-  auto builder = multi_series_builder(parser.args_.msb_opts_, dh);
-  for (auto&& line : input) {
-    if (not line) {
-      co_yield {};
-      continue;
-    }
-    for (auto&& slice : builder.yield_ready_as_table_slice()) {
-      co_yield std::move(slice);
-    }
-    parser.parse_line(builder, ctrl.diagnostics(), *line);
-  }
-  for (auto&& slice : builder.finalize_as_table_slice()) {
-    co_yield std::move(slice);
-  }
-}
 
 struct kv_writer {
   location operator_location;
@@ -450,48 +399,6 @@ struct kv_writer {
         return out;
       });
   }
-};
-
-class write_kv_operator final : public crtp_operator<write_kv_operator> {
-public:
-  auto name() const -> std::string override {
-    return "write_kv";
-  }
-
-  write_kv_operator() = default;
-  write_kv_operator(kv_writer writer) : writer_{std::move(writer)} {
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  auto operator()(generator<table_slice> input, operator_control_plane&) const
-    -> generator<chunk_ptr> {
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto resolved_slice
-        = flatten(resolve_enumerations(slice), writer_.flatten.inner).slice;
-      auto out = std::vector<char>{};
-      auto out_iter = std::back_inserter(out);
-      for (auto&& row : values3(resolved_slice)) {
-        out_iter = writer_.print(out_iter, row);
-        *out_iter++ = '\n';
-      }
-      co_yield chunk::make(std::exchange(out, {}));
-    }
-  }
-
-  friend auto inspect(auto& f, write_kv_operator& x) -> bool {
-    return f.apply(x.writer_);
-  }
-
-private:
-  kv_writer writer_;
 };
 
 struct ReadKvArgs {
@@ -800,43 +707,6 @@ private:
   WriteKvArgs args_;
 };
 
-class kv_plugin final : public virtual parser_plugin<kv_parser> {
-public:
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"kv", docs};
-    auto field_split = Option<located<std::string>>{
-      std::in_place,
-      "\\s",
-      location::unknown,
-    };
-    auto value_split = Option<located<std::string>>{
-      std::in_place,
-      "=",
-      location::unknown,
-    };
-    parser.add(field_split, "<field_split>");
-    parser.add(value_split, "<value_split>");
-    auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_all_to_parser(parser);
-    parser.parse(p);
-    auto dh = collecting_diagnostic_handler{};
-    auto msb_opts = msb_parser.get_options(dh);
-    for (auto&& diag : std::move(dh).collect()) {
-      if (diag.severity == severity::error) {
-        throw diag;
-      }
-    }
-    msb_opts->settings.default_schema_name = "tenzir.kv";
-    return std::make_unique<kv_parser>(kv_args{
-      std::move(*msb_opts),
-      detail::quoting_escaping_policy{},
-      splitter{*field_split},
-      splitter{*value_split},
-    });
-  }
-};
-
 auto validate_split_expression(const located<std::string>& split,
                                diagnostic_handler& dh) -> failure_or<void> {
   auto const test = [&](char c) -> failure_or<void> {
@@ -869,7 +739,7 @@ auto validate_splitter(const located<std::string>& split,
   return {};
 }
 
-class read_kv : public operator_plugin2<parser_adapter<kv_parser>>,
+class read_kv : public virtual operator_factory_plugin,
                 public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -897,38 +767,6 @@ public:
       return {};
     });
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_(name());
-    auto field_split = Option<located<std::string>>{
-      std::in_place,
-      "\\s",
-      location::unknown,
-    };
-    auto value_split = Option<located<std::string>>{
-      std::in_place,
-      "=",
-      location::unknown,
-    };
-    parser.named("field_split", field_split);
-    parser.named("value_split", value_split);
-    auto msb_parser = multi_series_builder_argument_parser{};
-    auto quoting = detail::quoting_escaping_policy{};
-    msb_parser.add_all_to_parser(parser);
-    parser.named_optional("quotes", quoting.quotes);
-    TRY(parser.parse(inv, ctx));
-    TRY(validate_split_expression(*field_split, ctx));
-    TRY(validate_split_expression(*value_split, ctx));
-    TRY(auto opts, msb_parser.get_options(ctx.dh()));
-    opts.settings.default_schema_name = "tenzir.kv";
-    return std::make_unique<parser_adapter<kv_parser>>(kv_parser{{
-      std::move(opts),
-      std::move(quoting),
-      splitter{std::move(*field_split)},
-      splitter{std::move(*value_split)},
-    }});
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -991,8 +829,7 @@ private:
   }
 };
 
-class write_kv : public operator_plugin2<write_kv_operator>,
-                 public virtual OperatorPlugin {
+class write_kv : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "write_kv";
@@ -1027,16 +864,6 @@ public:
       return {};
     });
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_(name());
-    auto writer = kv_writer{inv.self.get_location()};
-    writer.add(parser);
-    TRY(parser.parse(inv, ctx));
-    TRY(writer.validate(ctx));
-    return std::make_unique<write_kv_operator>(std::move(writer));
   }
 };
 
@@ -1161,7 +988,6 @@ public:
 
 } // namespace tenzir::plugins::kv
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::kv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::read_kv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::write_kv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::parse_kv)

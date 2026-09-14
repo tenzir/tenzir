@@ -99,7 +99,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.write_all";
+    return "write_all";
   }
 
   auto describe() const -> Description override {

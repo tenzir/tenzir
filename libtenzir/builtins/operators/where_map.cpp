@@ -8,7 +8,6 @@
 
 #include "tenzir/concept/printable/tenzir/json.hpp"
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -28,7 +27,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql/basic.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/filter.hpp>
@@ -46,225 +44,6 @@
 namespace tenzir::plugins::where {
 
 namespace {
-
-// Selects matching rows from the input.
-class where_operator final
-  : public schematic_operator<where_operator, Option<expression>> {
-public:
-  where_operator() = default;
-
-  /// Constructs a *where* pipeline operator.
-  /// @pre *expr* must be normalized and validated
-  explicit where_operator(located<expression> expr) : expr_{std::move(expr)} {
-#if TENZIR_ENABLE_ASSERTIONS
-    auto result = normalize_and_validate(expr_.inner);
-    TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
-    TENZIR_ASSERT(*result == expr_.inner, fmt::to_string(result).c_str());
-#endif // TENZIR_ENABLE_ASSERTIONS
-  }
-
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
-    -> caf::expected<state_type> override {
-    auto ts = taxonomies{.concepts = modules::concepts()};
-    auto resolved_expr = resolve(ts, expr_.inner, schema);
-    if (not resolved_expr) {
-      diagnostic::warning(resolved_expr.error())
-        .primary(expr_.source)
-        .emit(ctrl.diagnostics());
-      return None{};
-    }
-    auto tailored_expr = tailor(std::move(*resolved_expr), schema);
-    // We ideally want to warn when extractors can not be resolved. However,
-    // this is tricky for e.g. `where #schema == "foo" && bar == 42` and
-    // changing the behavior for this is tricky with the current expressions.
-    if (not tailored_expr) {
-      // diagnostic::warning(tailored_expr.error())
-      //   .primary(expr_.source)
-      //   .emit(ctrl.diagnostics());
-      return None{};
-    }
-    return std::move(*tailored_expr);
-  }
-
-  auto process(table_slice slice, state_type& expr) const
-    -> output_type override {
-    // TODO: Adjust filter function return type.
-    // TODO: Replace this with an Arrow-native filter function as soon as we
-    // are able to directly evaluate expressions on a record batch.
-    if (expr) {
-      return filter(slice, *expr).value_or(table_slice{});
-    }
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "where";
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    if (filter == trivially_true_expression()) {
-      return OptimizeResult{expr_.inner, order, nullptr};
-    }
-    auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
-    TENZIR_ASSERT(combined);
-    return OptimizeResult{std::move(*combined), order, nullptr};
-  }
-
-  friend auto inspect(auto& f, where_operator& x) -> bool {
-    if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("({} @ {:?})", x.expr_.inner, x.expr_.source);
-    }
-    return f.apply(x.expr_);
-  }
-
-private:
-  located<expression> expr_;
-};
-
-class tql1_plugin final : public virtual operator_plugin<where_operator>,
-                          public virtual where_factory_plugin {
-public:
-  auto make_where_operator(located<expression> expr) const
-    -> operator_ptr override {
-    auto normalized_and_validated = normalize_and_validate(expr.inner);
-    TENZIR_ASSERT(normalized_and_validated);
-    expr.inner = std::move(*normalized_and_validated);
-    return std::make_unique<where_operator>(std::move(expr));
-  }
-};
-
-class where_assert_operator final
-  : public crtp_operator<where_assert_operator> {
-public:
-  where_assert_operator() = default;
-
-  where_assert_operator(ast::expression expr, Option<ast::expression> msg,
-                        bool warn)
-    : expr_{std::move(expr)}, msg_{std::move(msg)}, warn_{warn} {
-  }
-
-  auto name() const -> std::string override {
-    return "where_assert_operator";
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    // TODO: This might be quite inefficient compared to what we could do.
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto offset = int64_t{0};
-      for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
-        auto* array = try_as<arrow::BooleanArray>(*filter.array);
-        if (not array) {
-          diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-          offset += filter.array->length();
-          co_yield {};
-          continue;
-        }
-        if (array->true_count() == array->length()) {
-          co_yield subslice(slice, offset, offset + array->length());
-          offset += array->length();
-          continue;
-        }
-        if (array->null_count() > 0) {
-          diagnostic::warning("expected `bool`, got `null`")
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-        }
-        if (warn_ and not msg_) {
-          diagnostic::warning("assertion failure")
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-        }
-        auto length = array->length();
-        auto current_value = array->Value(0);
-        auto current_begin = int64_t{0};
-        // We add an artificial `false` at index `length` to flush.
-        auto results = std::vector<table_slice>{};
-        const auto p = json_printer{json_printer_options{
-          .tql = true,
-          .oneline = true,
-        }};
-        auto buf = std::string{};
-        const auto print_messages
-          = [&](const int64_t start, const int64_t end) {
-              if (start == end) {
-                return;
-              }
-              const auto sub = subslice(slice, start, end);
-              const auto ms = eval(*msg_, sub, ctrl.diagnostics());
-              for (const auto& s : ms) {
-                for (auto msg : s.values()) {
-                  auto it = std::back_inserter(buf);
-                  p.print(it, msg);
-                  diagnostic::warning("assertion failed: {}", buf)
-                    .primary(expr_)
-                    .emit(ctrl.diagnostics());
-                  buf.clear();
-                }
-              }
-            };
-        for (auto i = int64_t{1}; i < length + 1; ++i) {
-          const auto next
-            = i != length and array->IsValid(i) and array->Value(i);
-          if (current_value == next) {
-            continue;
-          }
-          if (current_value) {
-            results.push_back(
-              subslice(slice, offset + current_begin, offset + i));
-          } else if (msg_) {
-            print_messages(offset + current_begin, offset + i);
-          }
-          current_value = next;
-          current_begin = i;
-        }
-        if (msg_) {
-          print_messages(offset + current_begin, length);
-        }
-        co_yield concatenate(std::move(results));
-        offset += length;
-      }
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    if (warn_) {
-      return OptimizeResult::order_invariant(*this, order);
-    }
-    auto [legacy, remainder] = split_legacy_expression(expr_);
-    auto remainder_op = is_true_literal(remainder)
-                          ? nullptr
-                          : std::make_unique<where_assert_operator>(
-                              std::move(remainder), msg_, warn_);
-    if (filter == trivially_true_expression()) {
-      return OptimizeResult{std::move(legacy), order, std::move(remainder_op)};
-    }
-    auto combined
-      = normalize_and_validate(conjunction{std::move(legacy), filter});
-    TENZIR_ASSERT(combined);
-    return OptimizeResult{std::move(*combined), order, std::move(remainder_op)};
-  }
-
-  friend auto inspect(auto& f, where_assert_operator& x) -> bool {
-    return f.object(x).fields(f.field("expr_", x.expr_),
-                              f.field("msg_", x.msg_),
-                              f.field("warn_", x.warn_));
-  }
-
-private:
-  ast::expression expr_;
-  Option<ast::expression> msg_;
-  bool warn_{};
-};
 
 struct arguments {
   ast::expression field;
@@ -748,84 +527,6 @@ auto make_map_function(function_invocation inv, session ctx)
   });
 }
 
-using where_assert_plugin = operator_inspection_plugin<where_assert_operator>;
-
-class assert_plugin final : public virtual operator_factory_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.assert";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto expr = ast::expression{};
-    auto msg = Option<ast::expression>{};
-    TRY(argument_parser2::operator_("assert")
-          .positional("invariant", expr, "bool")
-          .named("message", msg, "string")
-          .parse(inv, ctx));
-    return std::make_unique<where_assert_operator>(std::move(expr),
-                                                   std::move(msg), true);
-  }
-};
-
-#if 0
-class where_exec : public exec::operator_base<ast::expression> {
-public:
-  explicit where_exec(initializer init) : operator_base{std::move(init)} {
-  }
-
-  void next(const table_slice& slice) override {
-    const auto& pred = state();
-    const auto filters = eval(pred, slice, ctx());
-    auto filter_offset = int64_t{0};
-    for (const auto& part : filters.parts()) {
-      const auto filter = part.as<bool_type>();
-      if (not filter) {
-        diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
-          .primary(pred)
-          .emit(ctx());
-        filter_offset += part.length();
-        continue;
-      }
-      if (filter->array->true_count() == filter->length()) {
-        push(subslice(slice, filter_offset, filter_offset + filter->length()));
-        filter_offset += filter->length();
-        continue;
-      }
-      // TODO: Should this warn? For some reason the original TQL2
-      // implementation did not.
-      // if (filter->array->null_count() > 0) {
-      //   diagnostic::warning(…).emit(ctx());
-      // }
-      auto start = Option<int64_t>{};
-      for (int64_t i = 0; i < filter->length(); ++i) {
-        if (filter->array->IsValid(i) and filter->array->GetView(i)) {
-          if (not start) {
-            start.emplace(i);
-          }
-          continue;
-        }
-        if (start) {
-          push(subslice(slice, filter_offset + *start, filter_offset + i));
-          start.reset();
-        }
-      }
-      if (start) {
-        push(subslice(slice, filter_offset + *start,
-                      filter_offset + filter->length()));
-      }
-      filter_offset += filter->length();
-    }
-    ready();
-  }
-
-  auto should_stop() -> bool override {
-    return get_input_ended();
-  }
-};
-#endif
-
 class Where final : public Operator<table_slice, table_slice> {
 public:
   explicit Where(ast::expression expr) : expr_{std::move(expr)} {
@@ -928,22 +629,11 @@ private:
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::Operator, where_ir>)
 
-class where_plugin final : public virtual operator_factory_plugin,
-                           public virtual function_plugin,
+class where_plugin final : public virtual function_plugin,
                            public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.where";
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::operator_("where")
-          .positional("predicate", expr, "bool")
-          .parse(inv, ctx));
-    return std::make_unique<where_assert_operator>(std::move(expr), None{},
-                                                   false);
+    return "where";
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
@@ -965,7 +655,7 @@ public:
 class map_plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.map";
+    return "map";
   }
 
   auto is_deterministic() const -> bool override {
@@ -981,8 +671,5 @@ public:
 } // namespace
 } // namespace tenzir::plugins::where
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::tql1_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::assert_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::where_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::where_assert_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::map_plugin)

@@ -315,7 +315,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.read_auto";
+    return "read_auto";
   }
 
   auto describe() const -> Description override {

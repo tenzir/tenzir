@@ -28,24 +28,6 @@ namespace {
 template <class T>
 concept data_type = detail::tl_contains_v<data::types, T>;
 
-auto make_pipeline_setter(located<pipeline>& x)
-  -> std::function<failure_or<void>(const ast::pipeline_expr&, session)> {
-  return [&x](const ast::pipeline_expr& expr, session ctx) -> failure_or<void> {
-    TRY(auto pipe, compile(ast::pipeline{expr.inner}, ctx));
-    x = located{std::move(pipe), expr.get_location()};
-    return {};
-  };
-}
-
-auto make_pipeline_setter(Option<located<pipeline>>& x)
-  -> std::function<failure_or<void>(const ast::pipeline_expr&, session)> {
-  return [&x](const ast::pipeline_expr& expr, session ctx) -> failure_or<void> {
-    TRY(auto pipe, compile(ast::pipeline{expr.inner}, ctx));
-    x = located{std::move(pipe), expr.get_location()};
-    return {};
-  };
-}
-
 } // namespace
 
 auto argument_parser2::parse(const operator_factory_invocation& inv,
@@ -556,37 +538,10 @@ auto argument_parser2::positional(std::string name, Option<T>& x,
   return *this;
 }
 
-auto argument_parser2::positional(std::string name, located<pipeline>& x,
-                                  std::string type) -> argument_parser2& {
-  TENZIR_ASSERT(not first_optional_, "encountered required positional after "
-                                     "optional positional argument");
-  positional_.emplace_back(std::move(name), std::move(type),
-                           make_pipeline_setter(x));
-  return *this;
-}
-
-auto argument_parser2::positional(std::string name,
-                                  Option<located<pipeline>>& x,
-                                  std::string type) -> argument_parser2& {
-  if (not first_optional_) {
-    first_optional_ = positional_.size();
-  }
-  positional_.emplace_back(std::move(name), std::move(type),
-                           make_pipeline_setter(x));
-  return *this;
-}
-
 template <argument_parser_type T>
 auto argument_parser2::named(std::string name, T& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), true);
-  return *this;
-}
-
-auto argument_parser2::named(std::string name, located<pipeline>& x,
-                             std::string type) -> argument_parser2& {
-  named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
-                      true);
   return *this;
 }
 
@@ -597,24 +552,10 @@ auto argument_parser2::named(std::string name, Option<T>& x, std::string type)
   return *this;
 }
 
-auto argument_parser2::named(std::string name, Option<located<pipeline>>& x,
-                             std::string type) -> argument_parser2& {
-  named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
-                      false);
-  return *this;
-}
-
 template <argument_parser_type T>
 auto argument_parser2::named_optional(std::string name, T& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
-  return *this;
-}
-
-auto argument_parser2::named_optional(std::string name, located<pipeline>& x,
-                                      std::string type) -> argument_parser2& {
-  named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
-                      false);
   return *this;
 }
 

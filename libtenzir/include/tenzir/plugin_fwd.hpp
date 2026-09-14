@@ -31,28 +31,6 @@ class component_plugin;
 
 class command_plugin;
 
-// -- loader (plugin/loader.hpp) -----------------------------------------------
-
-class plugin_loader;
-class loader_parser_plugin;
-
-// -- parser (plugin/parser.hpp) -----------------------------------------------
-
-class plugin_parser;
-class parser_parser_plugin;
-
-// -- printer (plugin/printer.hpp) ---------------------------------------------
-
-class printer_instance;
-class plugin_printer;
-class printer_parser_plugin;
-
-// -- saver (plugin/saver.hpp) -------------------------------------------------
-
-struct printer_info;
-class plugin_saver;
-class saver_parser_plugin;
-
 // -- rest endpoint (plugin/rest_endpoint.hpp) ---------------------------------
 
 class rest_endpoint_plugin;
@@ -65,10 +43,6 @@ class store_plugin;
 // -- metrics (plugin/metrics.hpp) ---------------------------------------------
 
 class metrics_plugin;
-
-// -- aspect (plugin/aspect.hpp) -----------------------------------------------
-
-class aspect_plugin;
 
 // -- tql2 (tql2/plugin.hpp) ---------------------------------------------------
 

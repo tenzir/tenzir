@@ -39,8 +39,6 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE)
 endif ()
 
 dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
-# TODO: After the new executor is the default and the old executor is removed,
-# drop the C++ librdkafka dependency and keep only the C API linkage.
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)
 
 if (TARGET RdKafka::rdkafka)

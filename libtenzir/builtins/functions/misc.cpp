@@ -36,7 +36,7 @@ namespace {
 class type_id final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.type_id";
+    return "type_id";
   }
 
   auto is_deterministic() const -> bool override {
@@ -102,7 +102,7 @@ public:
 class env final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.env";
+    return "env";
   }
 
   auto initialize(const record& plugin_config, const record& global_config)

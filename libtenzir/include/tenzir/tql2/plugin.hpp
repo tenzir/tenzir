@@ -12,20 +12,19 @@
 #include "tenzir/multi_series.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/plugin/operator.hpp"
-#include "tenzir/plugin/printer.hpp"
+#include "tenzir/plugin/base.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 
 namespace tenzir {
 
+/// Carries the connector, format, and compression properties of an operator.
+///
+/// The properties drive the URI, extension, and MIME-type based operator
+/// selection that `from_file`, `from_http`, and friends perform.
 class operator_factory_plugin : public virtual plugin {
 public:
-  virtual auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr>
-    = 0;
-
   struct load_properties_t {
     /// URI schemes the connector supports
     std::vector<std::string> schemes = {};
@@ -102,10 +101,6 @@ public:
     return {};
   }
 };
-
-template <class Operator>
-class operator_plugin2 : public virtual operator_factory_plugin,
-                         public virtual operator_inspection_plugin<Operator> {};
 
 class function_use;
 
@@ -194,166 +189,6 @@ public:
   }
 };
 
-/// This adapter transforms a legacy parser object to an operator.
-///
-/// Should be deleted once the transition is done.
-template <class Parser, detail::string_literal NameOverride = "">
-class parser_adapter final : public crtp_operator<parser_adapter<Parser>> {
-public:
-  parser_adapter() = default;
-
-  explicit parser_adapter(Parser parser) : parser_{std::move(parser)} {
-  }
-
-  auto name() const -> std::string override {
-    return fmt::format("read_{}", NameOverride.str().empty()
-                                    ? Parser{}.name()
-                                    : NameOverride.str());
-  }
-
-  auto detached() const -> bool override {
-    return parser_.detached();
-  }
-
-  auto idle_after() const -> duration override {
-    return parser_.idle_after();
-  }
-
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    co_yield {};
-    auto gen = parser_.instantiate(std::move(input), ctrl);
-    if (not gen) {
-      diagnostic::error("failed to instantiate `{}`", name())
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    for (auto&& slice : *gen) {
-      co_yield std::move(slice);
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    TENZIR_UNUSED(filter);
-    // TODO: Function should be const.
-    auto parser = parser_;
-    auto replacement = parser.optimize(order);
-    if (not replacement) {
-      return OptimizeResult{
-        None{},
-        EventOrder::ordered,
-        std::make_unique<parser_adapter>(std::move(parser)),
-      };
-    }
-    // TODO: This is a hack.
-    auto cast = dynamic_cast<Parser*>(replacement.get());
-    TENZIR_ASSERT(cast);
-    return OptimizeResult{
-      None{},
-      EventOrder::ordered,
-      std::make_unique<parser_adapter>(std::move(*cast)),
-    };
-  }
-
-  friend auto inspect(auto& f, parser_adapter& x) -> bool {
-    return f.apply(x.parser_);
-  }
-
-private:
-  Parser parser_;
-};
-
-// Essentially the tql1 write operator
-template <class Writer, detail::string_literal NameOverride = "">
-class writer_adapter final : public crtp_operator<writer_adapter<Writer>> {
-public:
-  writer_adapter() = default;
-
-  explicit writer_adapter(Writer writer) : writer_{std::move(writer)} {
-  }
-
-  auto name() const -> std::string override {
-    return fmt::format("write_{}", NameOverride.str().empty()
-                                     ? Writer{}.name()
-                                     : NameOverride.str());
-  }
-
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    co_yield {};
-    if (writer_.allows_joining()) {
-      auto p = writer_.instantiate(type{}, ctrl);
-      if (not p) {
-        diagnostic::error(p.error())
-          .note("failed to instantiate `{}`", name())
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      for (auto&& slice : input) {
-        for (auto&& chunk : (*p)->process(std::move(slice))) {
-          co_yield std::move(chunk);
-        }
-        if (ctrl.self().getf(caf::abstract_actor::is_shutting_down_flag)) {
-          co_return;
-        }
-      }
-      for (auto&& chunk : (*p)->finish()) {
-        co_yield std::move(chunk);
-      }
-    } else {
-      auto state = Option<std::pair<std::unique_ptr<printer_instance>, type>>{};
-      for (auto&& slice : input) {
-        if (slice.rows() == 0) {
-          co_yield {};
-          continue;
-        }
-        if (not state) {
-          auto p = writer_.instantiate(slice.schema(), ctrl);
-          if (not p) {
-            diagnostic::error(p.error())
-              .note("failed to initialize `{}`", name())
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          state = std::pair{std::move(*p), slice.schema()};
-        } else if (state->second != slice.schema()) {
-          diagnostic::error("`{}` writer does not support heterogeneous "
-                            "outputs",
-                            writer_.name())
-            .note("cannot initialize for schema `{}` after schema `{}`",
-                  slice.schema(), state->second)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        for (auto&& chunk : state->first->process(std::move(slice))) {
-          co_yield std::move(chunk);
-        }
-        if (ctrl.self().getf(caf::abstract_actor::is_shutting_down_flag)) {
-          co_return;
-        }
-      }
-      if (state) {
-        for (auto&& chunk : state->first->finish()) {
-          co_yield std::move(chunk);
-        }
-      }
-    }
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, writer_adapter& x) -> bool {
-    return f.apply(x.writer_);
-  }
-
-private:
-  Writer writer_;
-};
 // Forward declarations for operator_compiler_plugin.
 namespace ir {
 class Operator;

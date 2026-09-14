@@ -160,7 +160,7 @@ private:
 class ToS3Plugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_s3";
+    return "to_s3";
   }
 
   auto describe() const -> Description override {

@@ -27,7 +27,7 @@
 +      limit: 3
      },
      GenericIr {
-       desc: "tql2.replace",
+       desc: "replace",
        store: {
          op: {
            path: [

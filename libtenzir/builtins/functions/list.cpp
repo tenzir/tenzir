@@ -406,7 +406,7 @@ public:
   };
 
   auto name() const -> std::string override {
-    return "tql2.zip";
+    return "zip";
   }
 
   auto is_deterministic() const -> bool override {

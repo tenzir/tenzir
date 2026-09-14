@@ -412,7 +412,7 @@ using AcceptTcp = StreamAccept<TcpAccept>;
 class AcceptTcpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.accept_tcp";
+    return "accept_tcp";
   }
 
   auto describe() const -> Description override {

@@ -269,64 +269,6 @@ struct replace_args {
   }
 };
 
-class replace_operator final : public crtp_operator<replace_operator> {
-public:
-  replace_operator() = default;
-
-  replace_operator(replace_args args) : args_{std::move(args)} {
-  }
-
-  auto operator()(generator<table_slice> input, operator_control_plane&) const
-    -> generator<table_slice> {
-    const auto what_type = type::infer(args_.what.inner).value();
-    const auto with_type = type::infer(args_.with.inner).value();
-    const auto replace_with_null = with_type.kind().is<null_type>();
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto s = basic_series<record_type>{slice};
-      if (replace_with_null) {
-        auto rs = replace_series_with_null(s, args_.path, 0, what_type,
-                                           args_.what.inner);
-        co_yield table_slice{
-          record_batch_from_struct_array(slice.schema().to_arrow_schema(),
-                                         *rs.array),
-          slice.schema(),
-        };
-      } else {
-        auto rs = replace_series(s, args_.path, what_type, args_.what.inner,
-                                 args_.with.inner);
-        auto attrs = collect(slice.schema().attributes());
-        for (auto& r : rs) {
-          auto rty = type{slice.schema().name(), r.type, auto{attrs}};
-          co_yield table_slice{
-            record_batch_from_struct_array(rty.to_arrow_schema(), *r.array),
-            std::move(rty),
-          };
-        }
-      }
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "tql2.replace";
-  }
-
-  auto optimize(expression const&, EventOrder) const
-    -> OptimizeResult override {
-    return do_not_optimize(*this);
-  };
-
-  friend auto inspect(auto& f, replace_operator& x) -> bool {
-    return f.apply(x.args_);
-  }
-
-private:
-  replace_args args_;
-};
-
 struct ReplaceArgs {
   std::vector<ast::field_path> path;
   located<data> what;
@@ -373,8 +315,12 @@ private:
   bool replace_with_null_ = false;
 };
 
-struct replace : public virtual operator_plugin2<replace_operator>,
-                 public virtual OperatorPlugin {
+struct replace : public virtual OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "replace";
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<ReplaceArgs, Replace>{};
     d.parallelizable();
@@ -415,26 +361,6 @@ struct replace : public virtual operator_plugin2<replace_operator>,
         }
         return touched_fields;
       });
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = replace_args{};
-    auto p = argument_parser2::operator_(name());
-    p.named("what", args.what);
-    p.named("with", args.with);
-    auto partition
-      = std::partition(inv.args.begin(), inv.args.end(), [](auto&& x) {
-          return not ast::field_path::try_from(x).has_value();
-        });
-    std::ranges::transform(partition, inv.args.end(),
-                           std::back_inserter(args.path), [](auto& x) {
-                             return ast::field_path::try_from(x).value();
-                           });
-    inv.args.erase(partition, inv.args.end());
-    TRY(p.parse(inv, ctx));
-    TRY(args.validate(ctx));
-    return std::make_unique<replace_operator>(std::move(args));
   }
 };
 

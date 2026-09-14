@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/async/task.hpp>
@@ -34,98 +33,6 @@ struct buffer_entry {
   uint64_t num_buffered = {};
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-};
-
-class batch_operator final : public crtp_operator<batch_operator> {
-public:
-  batch_operator() = default;
-
-  batch_operator(uint64_t limit, duration timeout, EventOrder order)
-    : limit_{limit}, timeout_{timeout}, order_{order} {
-    // nop
-  }
-
-  auto operator()(generator<table_slice> input) const
-    -> generator<table_slice> {
-    std::unordered_map<type, buffer_entry> buffers;
-    for (auto&& slice : input) {
-      const auto now = std::chrono::steady_clock::now();
-      // Check all current buffers to see if we have hit a timeout.
-      for (auto it = buffers.begin(); it != buffers.end();) {
-        auto& entry = it->second;
-        if (now - entry.start_time > timeout_) {
-          TENZIR_ASSERT(entry.num_buffered < limit_);
-          co_yield concatenate(std::exchange(entry.events, {}));
-          it = buffers.erase(it);
-        } else {
-          ++it;
-        }
-      }
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      // For ordered batching, on schema change, yield the current buffer
-      if (order_ == EventOrder::ordered and not buffers.empty()
-          and buffers.begin()->first != slice.schema()) {
-        TENZIR_ASSERT(buffers.size() == 1);
-        auto& entry = buffers.begin()->second;
-        TENZIR_ASSERT(entry.num_buffered < limit_);
-        co_yield concatenate(std::move(entry.events));
-        buffers.clear();
-      }
-      // Get the buffer for the current slice schema and append to it.
-      auto [it, _] = buffers.try_emplace(slice.schema());
-      auto& entry = it->second;
-      entry.num_buffered += slice.rows();
-      entry.events.push_back(std::move(slice));
-      // If the buffer hit the limit, yield until its below again.
-      while (entry.num_buffered >= limit_) {
-        auto [lhs, rhs] = split(entry.events, limit_);
-        auto result = concatenate(std::move(lhs));
-        entry.num_buffered -= result.rows();
-        entry.start_time = std::chrono::steady_clock::now();
-        co_yield std::move(result);
-        entry.events = std::move(rhs);
-      }
-      if (entry.num_buffered == 0) {
-        buffers.erase(it);
-      }
-    }
-    // When our input is done, yield the rest of all buffers.
-    // We sort the remaining buffers by start time for consistent output.
-    std::vector<buffer_entry> remaining;
-    remaining.reserve(buffers.size());
-    for (auto& [_, entry] : buffers) {
-      remaining.emplace_back(std::move(entry));
-    }
-    std::ranges::sort(remaining, {}, &buffer_entry::start_time);
-    for (auto& entry : remaining) {
-      co_yield concatenate(std::move(entry.events));
-    }
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    return OptimizeResult{
-      filter, order, std::make_unique<batch_operator>(limit_, timeout_, order)};
-  }
-
-  auto name() const -> std::string override {
-    return "batch";
-  }
-
-  friend auto inspect(auto& f, batch_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("batch_operator")
-      .fields(f.field("limit", x.limit_), f.field("timeout", x.timeout_),
-              f.field("order", x.order_));
-  }
-
-private:
-  uint64_t limit_ = defaults::import::table_slice_size;
-  duration timeout_ = {};
-  EventOrder order_ = EventOrder::ordered;
 };
 
 struct BatchArgs {
@@ -257,38 +164,10 @@ private:
   mutable std::unique_ptr<Notify> buffer_ready_ = std::make_unique<Notify>();
 };
 
-class plugin final : public virtual operator_plugin<batch_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto limit = Option<located<uint64_t>>{};
-    auto timeout = Option<located<duration>>{};
-    argument_parser2::operator_("batch")
-      .positional("limit", limit)
-      .named("timeout", timeout)
-      .parse(inv, ctx)
-      .ignore();
-    auto failed = false;
-    if (limit and limit->inner == 0) {
-      diagnostic::error("batch size must not be 0")
-        .primary(limit->source)
-        .emit(ctx);
-      failed = true;
-    }
-    if (timeout and timeout->inner <= duration::zero()) {
-      diagnostic::error("timeout must be a positive duration")
-        .primary(timeout->source)
-        .emit(ctx);
-      failed = true;
-    }
-    if (failed) {
-      return failure::promise();
-    }
-    return std::make_unique<batch_operator>(
-      limit ? limit->inner : defaults::import::table_slice_size,
-      timeout ? timeout->inner : duration::max(), EventOrder::ordered);
+  auto name() const -> std::string override {
+    return "batch";
   }
 
   auto describe() const -> Description override {

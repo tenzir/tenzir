@@ -11,9 +11,8 @@
 // This header provides the free template functions plugin_serialize() and
 // plugin_inspect() which are used by pipeline.hpp for operator serialization.
 //
-// It is extracted from plugin.hpp to break the circular dependency:
-//   - pipeline.hpp needs plugin_serialize/plugin_inspect
-//   - plugin.hpp needs pipeline.hpp for operator_ptr, etc.
+// It is extracted from plugin.hpp to break the circular dependency between
+// pipeline.hpp and plugin.hpp.
 //
 // The serialization_plugin and inspection_plugin class templates are defined in
 // plugin/base.hpp, which includes this header.
@@ -41,8 +40,7 @@
 
 namespace tenzir {
 
-// Type aliases for serializer/deserializer variants (also defined in
-// pipeline.hpp)
+// Type aliases for serializer/deserializer variants.
 using serializer
   = std::variant<std::reference_wrapper<caf::serializer>,
                  std::reference_wrapper<caf::binary_serializer>,
@@ -65,7 +63,7 @@ auto find(std::string_view name) noexcept -> const Plugin*;
 } // namespace plugins
 
 // -- Free functions for plugin serialization ---------------------------------
-// These are used by pipeline.hpp for operator serialization
+// These are used by pipeline-related types for serialization.
 
 template <class Inspector, class Base>
 auto plugin_serialize(Inspector& f, const Base& x) -> bool {

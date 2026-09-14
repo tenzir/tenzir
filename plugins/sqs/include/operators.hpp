@@ -17,9 +17,14 @@
 #include <memory>
 
 #include "async_sqs_queue.hpp"
-#include "operators_legacy.hpp"
 
 namespace tenzir::plugins::sqs {
+
+using namespace std::chrono_literals;
+
+/// The default duration to wait for messages when polling a queue.
+constexpr auto default_poll_time = 3s;
+static_assert(default_poll_time >= 1s and default_poll_time <= 20s);
 
 struct FromSqsArgs {
   located<std::string> queue;

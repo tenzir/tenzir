@@ -3,4 +3,4 @@ error: true
 ---
 
 from {x: 1}
-write_parquet compression_type="wrongname"
+to_stdout { write_parquet compression_type="wrongname" }

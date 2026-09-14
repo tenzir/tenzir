@@ -139,7 +139,7 @@ auto ir::intersect_projection(Option<OptimizeProjection>& projection,
 
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   // TODO: This should just be a `where_ir{std::move(filter)}`.
-  const auto* where = plugins::find<operator_compiler_plugin>("tql2.where");
+  const auto* where = plugins::find<operator_compiler_plugin>("where");
   TENZIR_ASSERT(where);
   auto args = std::vector<ast::expression>{};
   args.push_back(std::move(filter));
@@ -526,11 +526,7 @@ auto ir::Operator::infer_type(element_type_tag input, diagnostic_handler&) const
 }
 
 auto operator_compiler_plugin::operator_name() const -> std::string {
-  auto result = name();
-  if (result.starts_with("tql2.")) {
-    result = result.substr(5);
-  }
-  return result;
+  return name();
 }
 
 ir::pipeline::pipeline(std::vector<let> lets,

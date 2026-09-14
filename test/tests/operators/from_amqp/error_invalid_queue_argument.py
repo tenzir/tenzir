@@ -34,7 +34,6 @@ def main() -> None:
             _resolve_tenzir_binary(),
             "--bare-mode",
             "--console-verbosity=warning",
-            "--neo",
             PIPELINE,
         ],
         text=True,

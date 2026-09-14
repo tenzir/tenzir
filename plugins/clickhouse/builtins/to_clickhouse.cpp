@@ -25,6 +25,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/uuid.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/builder.h>
@@ -64,152 +65,6 @@ auto clickhouse_openssl_error_diagnostic(std::string_view message, location loc,
     clickhouse_error_diagnostic(message, loc), tls_enabled, "ClickHouse",
     clickhouse_plaintext_port, clickhouse_tls_port);
 }
-
-class clickhouse_sink_operator final
-  : public crtp_operator<clickhouse_sink_operator> {
-public:
-  clickhouse_sink_operator() = default;
-
-  clickhouse_sink_operator(operator_arguments args) : args_{std::move(args)} {
-  }
-
-  friend auto inspect(auto& f, clickhouse_sink_operator& x) -> bool {
-    return f.apply(x.args_);
-  }
-
-  auto optimize(expression const& filter, EventOrder order) const
-    -> OptimizeResult override {
-    (void)filter, (void)order;
-    return {{}, EventOrder::unordered, copy()};
-  }
-
-  auto name() const -> std::string override {
-    return "to_clickhouse";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto detached() const -> bool override {
-    return true;
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> try {
-    auto& dh = ctrl.diagnostics();
-    auto ssl_opts = args_.ssl;
-    auto ssl_result = ssl_opts.resolve(ctrl);
-    if (not ssl_result) {
-      co_return;
-    }
-    auto const tls_enabled = ssl_result->tls.inner;
-    auto const default_port
-      = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
-    auto args = easy_client::arguments{
-      .host = "",
-      .port = args_.port ? *args_.port
-                         : located<uint64_t>{default_port, location::unknown},
-      .user = "default",
-      .password = "",
-      .default_database = None{},
-      .set_client_default_database = false,
-      .ssl = std::move(*ssl_result),
-      .table = args_.table,
-      .mode = args_.mode,
-      .primary = args_.primary,
-      .operator_location = args_.operator_location,
-    };
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto has_uri = args_.uri and args_.uri->inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", *args_.uri, uri, dh));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, args.host, dh));
-      requests.push_back(
-        make_secret_request("user", args_.user, args.user, dh));
-      requests.push_back(
-        make_secret_request("password", args_.password, args.password, dh));
-    }
-    /// GCC 14.2 erroneously warns that the first temporary here may used as a
-    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
-    /// name somehow circumvents this warning.
-    auto x = ctrl.resolve_secrets_must_yield(std::move(requests));
-    co_yield std::move(x);
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri->source, dh);
-      if (not parsed) {
-        co_return;
-      }
-      apply_connection_uri(args, *parsed);
-      if (not parsed->has_port()) {
-        args.port = located<uint64_t>{default_port, location::unknown};
-      }
-    }
-    auto client = easy_client::make(args, ctrl.diagnostics());
-    if (not client) {
-      co_return;
-    }
-    auto disp = detail::weak_run_delayed_loop(
-      &ctrl.self(), clickhouse_ping_interval,
-      [&client]() {
-        client->ping();
-      },
-      false);
-    const auto guard
-      = detail::scope_guard([disp = std::move(disp)]() mutable noexcept {
-          disp.dispose();
-        });
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      if (slice.columns() == 0) {
-        diagnostic::warning("empty event will be dropped")
-          .primary(args.operator_location)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      slice = resolve_enumerations(slice);
-      if (not client->insert_dynamic(slice)) {
-        co_return;
-      }
-      co_yield {};
-    }
-  } catch (const panic_exception& e) {
-    throw;
-  } catch (const ::clickhouse::OpenSSLError& e) {
-    // The original `ssl` from `operator()` is out of scope by the time the
-    // catch handler runs; resolve a fresh `TlsConfig` here just for the
-    // diagnostic-hint TLS-enabled flag.
-    auto ssl_opts = args_.ssl;
-    auto resolved = ssl_opts.resolve(ctrl);
-    auto tls_enabled = resolved and resolved->tls.inner;
-    clickhouse_openssl_error_diagnostic(e.what(), args_.operator_location,
-                                        tls_enabled)
-      .emit(ctrl.diagnostics());
-    co_return;
-  } catch (const std::exception& e) {
-    auto diag = diagnostic::error("ClickHouse error: {}", e.what())
-                  .primary(args_.operator_location);
-    auto ssl_opts = args_.ssl;
-    auto resolved = ssl_opts.resolve(ctrl);
-    auto tls_enabled = resolved and resolved->tls.inner;
-    add_tls_client_diagnostic_hints(std::move(diag), tls_enabled, "ClickHouse",
-                                    clickhouse_plaintext_port,
-                                    clickhouse_tls_port)
-      .emit(ctrl.diagnostics());
-    co_return;
-  }
-
-private:
-  operator_arguments args_;
-};
 
 struct ToClickhouseArgs {
   located<secret> uri = {secret::make_literal(""), location::unknown};
@@ -885,14 +740,10 @@ private:
   std::unique_ptr<runtime_state> state_;
 };
 
-class to_clickhouse final
-  : public virtual operator_plugin2<clickhouse_sink_operator>,
-    public virtual OperatorPlugin {
+class to_clickhouse final : public virtual OperatorPlugin {
 public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    TRY(auto args, operator_arguments::try_parse(name(), inv, ctx));
-    return std::make_unique<clickhouse_sink_operator>(std::move(args));
+  auto name() const -> std::string override {
+    return "to_clickhouse";
   }
 
   auto describe() const -> Description override {
