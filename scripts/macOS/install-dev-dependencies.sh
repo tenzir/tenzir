@@ -3,7 +3,7 @@
 set -euo pipefail
 
 brew --version
-brew install --overwrite \
+brew install --overwrite --skip-post-install \
   apache-arrow \
   aws-sdk-cpp \
   azure-storage-blobs-cpp \
