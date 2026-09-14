@@ -1,0 +1,10 @@
+// parallelism: 6
+// DNS lookup, context enrichment, Python, and event-output `each` all replicate
+// at the requested degree. The `each` child limit remains per instance.
+from {host: "localhost"}
+dns_lookup host
+context_enrich "hosts", key=host
+python ""
+each parallel=2 {
+  from $this
+}

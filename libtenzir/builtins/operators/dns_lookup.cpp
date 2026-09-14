@@ -592,6 +592,10 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<DnsLookupArgs, DnsLookup>{};
+    // Replicas resolve independent slices with private resolver caches. This
+    // may duplicate requests between instances, but does not change results or
+    // exceed a pipeline-wide request bound: lookups are already unconstrained.
+    d.parallelizable();
     auto field = d.positional("field", &DnsLookupArgs::field, "string|ip");
     auto result = d.named_optional("result", &DnsLookupArgs::result);
     d.operator_location(&DnsLookupArgs::operator_location);

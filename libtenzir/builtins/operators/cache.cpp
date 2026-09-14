@@ -1411,6 +1411,13 @@ public:
     return {};
   }
 
+  auto parallelizable() const -> bool override {
+    // Keep every mode single-instance. In read/write mode, replicas would race
+    // for the cache's single writer identity; in read and readwrite mode, every
+    // replica would independently replay the full cache from offset zero.
+    return false;
+  }
+
   auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(args_resolved_);
     auto null_dh = null_diagnostic_handler{};

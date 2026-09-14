@@ -1,0 +1,15 @@
+● {input}
+│
+● from
+╎
+● dns_lookup(x6)
+║
+● context::enrich(x6)
+║
+● python(x6)
+║
+● each(x6)
+╎
+● to_stdout
+│
+● {output}

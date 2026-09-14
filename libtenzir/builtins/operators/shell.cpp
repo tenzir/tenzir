@@ -896,6 +896,9 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ShellArgs>{};
+    // Keep the byte transform single-instance. One subprocess consumes the
+    // complete stdin stream and may retain state or perform side effects;
+    // scattering chunks over independent invocations would change that stream.
     d.positional("cmd", &ShellArgs::command);
     d.spawner([]<class Input>(DescribeCtx&)
                 -> failure_or<Option<SpawnWith<ShellArgs, Input>>> {

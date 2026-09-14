@@ -137,6 +137,10 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<EachArgs, Each>{};
+    // Every instance owns its child pipelines and completion state. The
+    // `parallel` argument therefore remains a per-instance bound, making the
+    // pipeline-wide child-pipeline budget `parallel` times the planner degree.
+    d.parallelizable();
     auto parallel = d.named_optional("parallel", &EachArgs::parallel);
     auto pipe = d.pipeline(&EachArgs::pipe, SubOptimize::from_downstream,
                            {{"this", &EachArgs::this_id}});

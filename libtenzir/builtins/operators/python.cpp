@@ -1433,6 +1433,10 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<PythonArgs>{};
+    // Every instance owns its subprocess and virtual environment. Python code
+    // that retains state or performs side effects observes one independent
+    // invocation per planner lane, just like an explicitly parallel pipeline.
+    d.parallelizable();
     auto code = d.optional_positional("code", &PythonArgs::code);
     auto file = d.named("file", &PythonArgs::file);
     d.named("requirements", &PythonArgs::requirements);
