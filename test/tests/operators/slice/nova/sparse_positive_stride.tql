@@ -1,0 +1,7 @@
+load_stdin
+read_json
+where x != 1
+where x != 3
+where x != 5
+where x != 7
+slice begin=1, end=5, stride=2

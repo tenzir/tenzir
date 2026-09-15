@@ -7,8 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -30,6 +34,7 @@ struct SliceArgs {
   Option<int64_t> begin;
   Option<int64_t> end;
   Option<int64_t> stride;
+  location operator_location;
 };
 
 class Slice final : public Operator<table_slice, table_slice> {
@@ -244,6 +249,157 @@ private:
   bool done_ = false;
 };
 
+class SliceNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit SliceNova(SliceArgs args)
+    : begin_{args.begin},
+      end_{args.end},
+      stride_{args.stride},
+      needs_buffering_{(stride_ and *stride_ < 0) or (begin_ and *begin_ < 0)
+                       or (end_ and *end_ < 0)} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (needs_buffering_) {
+      total_ += input.active_count();
+      buffer_.push_back(std::move(input));
+      co_return;
+    }
+    auto mask = select_forward(input.mask, begin_.unwrap_or(0),
+                               end_.unwrap_or(max_index()),
+                               stride_.unwrap_or(1), offset_);
+    offset_ += input.active_count();
+    if (end_ and offset_ >= *end_) {
+      done_ = true;
+    }
+    if (mask.any()) {
+      input.mask = std::move(mask);
+      co_await push(std::move(input));
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (not needs_buffering_) {
+      co_return FinalizeBehavior::done;
+    }
+    auto begin = begin_.unwrap_or(0);
+    auto end = end_.unwrap_or(total_);
+    if (begin < 0) {
+      begin += total_;
+    }
+    if (end < 0) {
+      end += total_;
+    }
+    begin = std::max(begin, int64_t{0});
+    end = std::clamp(end, int64_t{0}, total_);
+    if (end <= begin) {
+      co_return FinalizeBehavior::done;
+    }
+    auto const stride = stride_.unwrap_or(1);
+    if (stride > 0) {
+      auto position = int64_t{0};
+      for (auto& input : buffer_) {
+        auto mask = select_forward(input.mask, begin, end, stride, position);
+        position += input.active_count();
+        if (mask.any()) {
+          input.mask = std::move(mask);
+          co_await push(std::move(input));
+        }
+      }
+    } else {
+      auto const magnitude = uint64_t{0} - static_cast<uint64_t>(stride);
+      co_await push_reversed(push, begin, end, magnitude);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return not needs_buffering_ and done_ ? OperatorState::done
+                                          : OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    if (needs_buffering_) {
+      // Buffered Nova events are not serializable yet.
+      TENZIR_TODO();
+    }
+    serde("offset", offset_);
+    serde("done", done_);
+  }
+
+private:
+  static auto max_index() -> int64_t {
+    return std::numeric_limits<int64_t>::max();
+  }
+
+  static auto select_forward(nova::storage::BitMap const& input, int64_t begin,
+                             int64_t end, int64_t stride, int64_t offset)
+    -> nova::storage::BitMap {
+    auto result = nova::storage::BitMap::Mutable{input.length()};
+    auto position = offset;
+    for (auto row : nova::storage::bitmap_iteration(input)) {
+      if (not row) {
+        continue;
+      }
+      if (position >= begin and position < end
+          and (position - begin) % stride == 0) {
+        result.set(*row, true);
+      }
+      ++position;
+    }
+    return std::move(result).finish();
+  }
+
+  auto push_reversed(Push<nova::Events>& push, int64_t begin, int64_t end,
+                     uint64_t stride) -> Task<void> {
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto position = total_;
+    for (auto& input : buffer_ | std::ranges::views::reverse) {
+      for (auto row = input.length(); row-- > 0;) {
+        if (not input.mask.get(row)) {
+          continue;
+        }
+        --position;
+        if (position < begin or position >= end
+            or static_cast<uint64_t>(end - 1 - position) % stride != 0) {
+          continue;
+        }
+        auto output = builder.record();
+        for (auto [name, field] : input.data.get(row)) {
+          nova::append_row(output.field(name), field);
+        }
+        if (builder.length()
+            == static_cast<nova::storage::Index>(
+              defaults::import::table_slice_size)) {
+          co_await push(nova::Events{
+            builder.finish(),
+            nova::storage::BitMap{static_cast<nova::storage::Index>(
+                                    defaults::import::table_slice_size),
+                                  true}});
+          builder = nova::ArrayBuilder<nova::Record>{};
+        }
+      }
+    }
+    if (builder.length() > 0) {
+      auto data = builder.finish();
+      auto const length = data.length();
+      co_await push(
+        nova::Events{std::move(data), nova::storage::BitMap{length, true}});
+    }
+  }
+
+  Option<int64_t> begin_;
+  Option<int64_t> end_;
+  Option<int64_t> stride_;
+  bool needs_buffering_ = false;
+  std::vector<nova::Events> buffer_;
+  int64_t offset_ = 0;
+  int64_t total_ = 0;
+  bool done_ = false;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -251,7 +407,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SliceArgs, Slice>{};
+    auto d = Describer<SliceArgs, Slice, SliceNova>{};
+    d.operator_location(&SliceArgs::operator_location);
     d.named("begin", &SliceArgs::begin);
     d.named("end", &SliceArgs::end);
     auto stride = d.named("stride", &SliceArgs::stride);
