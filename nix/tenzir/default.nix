@@ -237,7 +237,7 @@ let
             "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
           ]
           ++ lib.optionals stdenv.hostPlatform.isDarwin [
-            "-DCMAKE_OSX_DEPLOYMENT_TARGET=26.0"
+            "-DCMAKE_OSX_DEPLOYMENT_TARGET=${finalAttrs.passthru.darwinDeploymentTarget}"
             # Want's to install into the users home, but that would be the
             # builder in the Nix context, and that doesn't make sense.
             "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
@@ -315,6 +315,7 @@ let
           '';
 
           passthru = {
+            darwinDeploymentTarget = "26.0";
             plugins = [ ];
             withPlugins =
               if isStatic then
@@ -343,7 +344,7 @@ let
           };
         }
         # disallowedReferences does not work on darwin.
-        // lib.optionalAttrs (isStatic && stdenv.isLinux) {
+        // lib.optionalAttrs (isStatic && stdenv.hostPlatform.isLinux) {
           #disallowedReferences = [ tenzir-source ] ++ extraPlugins;
         }
         // lib.optionalAttrs isStatic {

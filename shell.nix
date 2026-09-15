@@ -100,7 +100,7 @@ let
         pkgs.yara-x
       ]
       ++ clang-shims
-      ++ lib.optionals pkgs.stdenv.isLinux [
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
         # Temporarily only on Linux.
         pkgs.pandoc
         pkgs.gdb

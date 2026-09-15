@@ -73,7 +73,7 @@ in
     makeBinaryWrapper
     uv
   ]
-  ++ lib.optionals stdenv.isLinux [
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
     dpkg
     rpm
   ];
@@ -100,7 +100,7 @@ in
     c-ares
     expat
   ]
-  ++ lib.optionals stdenv.isLinux [ pfs ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [ pfs ]
   ++ lib.optionals (stdenv.cc.isClang && isStatic) [ empty-libgcc_eh ]
   ++ [ yara-x ]
   ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [ jansson ];
@@ -142,7 +142,7 @@ in
     yaml-cpp
     xxhash
   ]
-  ++ lib.optionals (stdenv.isLinux && !(isStatic && stdenv.hostPlatform.isMusl)) [
+  ++ lib.optionals (stdenv.hostPlatform.isLinux && !(isStatic && stdenv.hostPlatform.isMusl)) [
     liburing
   ]
   ++ lib.optionals (!isStatic) [
