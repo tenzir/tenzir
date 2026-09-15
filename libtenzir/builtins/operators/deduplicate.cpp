@@ -11,6 +11,12 @@
 #include <tenzir/async.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/hash/hash.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
@@ -22,6 +28,7 @@
 #include <tsl/robin_map.h>
 
 #include <chrono>
+#include <tuple>
 
 namespace tenzir::plugins::deduplicate {
 namespace {
@@ -87,6 +94,7 @@ struct configuration {
 };
 
 struct DeduplicateArgs {
+  location keyword;
   std::vector<ast::expression> keys;
   Option<located<int64_t>> limit;
   Option<located<int64_t>> distance;
@@ -487,6 +495,149 @@ private:
     = std::chrono::steady_clock::now();
 };
 
+struct NovaKey {
+  explicit NovaKey(nova::RowView<nova::Data> value) : data{make(value)} {
+  }
+
+  static auto make(nova::RowView<nova::Data> value) -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    nova::append_row(builder, value);
+    return builder.finish();
+  }
+
+  nova::Array<nova::Data> data;
+};
+
+struct NovaKeyHash {
+  using is_transparent = void;
+
+  auto operator()(NovaKey const& key) const noexcept -> size_t {
+    return nova::hash(key.data.get(0));
+  }
+
+  auto operator()(nova::RowView<nova::Data> key) const noexcept -> size_t {
+    return nova::hash(key);
+  }
+};
+
+struct NovaKeyEqual {
+  using is_transparent = void;
+
+  auto operator()(NovaKey const& lhs, NovaKey const& rhs) const -> bool {
+    return nova::equal(lhs.data.get(0), rhs.data.get(0));
+  }
+
+  auto operator()(NovaKey const& lhs, nova::RowView<nova::Data> rhs) const
+    -> bool {
+    return nova::equal(lhs.data.get(0), rhs);
+  }
+
+  auto operator()(nova::RowView<nova::Data> lhs, NovaKey const& rhs) const
+    -> bool {
+    return nova::equal(lhs, rhs.data.get(0));
+  }
+};
+
+using nova_dedup_map
+  = tsl::robin_map<NovaKey, State, NovaKeyHash, NovaKeyEqual>;
+
+class DeduplicateNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit DeduplicateNova(DeduplicateArgs args)
+    : cfg_{make_configuration_checked(std::move(args))},
+      cleanup_duration_{cfg_.cleanup_duration()} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto evaluator = nova::Evaluator::make(
+      std::move(cfg_.keys), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (evaluator) {
+      evaluator_.emplace(std::move(*evaluator));
+    }
+    co_return;
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not evaluator_) {
+      co_return;
+    }
+    auto const now = steady_clock::now();
+    if (now > last_cleanup_time_ + cleanup_duration_) {
+      last_cleanup_time_ = now;
+      for (auto it = states_.begin(); it != states_.end();) {
+        auto const should_remove
+          = cfg_.count_field ? it->second.is_double_expired(cfg_, row_, now)
+                             : it->second.is_expired(cfg_, row_, now);
+        if (should_remove) {
+          it = states_.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+    auto keys = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto output_mask = nova::storage::BitMap::Mutable{input.mask};
+    auto counts
+      = nova::Type<nova::Int>::PrimaryPhysicalStorage::Mutable{input.length()};
+    for (auto index : nova::storage::bitmap_iteration(input.mask)) {
+      if (not index) {
+        continue;
+      }
+      auto const current_row = row_++;
+      auto key = keys.get(*index);
+      auto it = states_.find(key);
+      if (it == states_.end()) {
+        states_.emplace_hint(it, NovaKey{key}, State{})
+          .value()
+          .reset(current_row, now);
+        continue;
+      }
+      if (it->second.is_expired(cfg_, current_row, now)) {
+        if (cfg_.count_field
+            and not it->second.is_double_expired(cfg_, current_row, now)) {
+          counts.set(*index, it->second.count - cfg_.limit.inner);
+        }
+        it.value().reset(current_row, now);
+        continue;
+      }
+      it.value().read_at = now;
+      it.value().last_row = current_row;
+      it.value().count += 1;
+      if (it->second.count > cfg_.limit.inner) {
+        output_mask.set(*index, false);
+        continue;
+      }
+      it.value().written_at = now;
+    }
+    input.mask = std::move(output_mask).finish();
+    if (not input.mask.any()) {
+      co_return;
+    }
+    if (cfg_.count_field) {
+      input.data = nova::assign_nested_field(
+        std::move(input.data), cfg_.count_field->path(),
+        {nova::Array<nova::Data>{
+           nova::Array<nova::Int>{std::move(counts).finish()}},
+         input.mask});
+    }
+    co_await push(std::move(input));
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // Nova deduplication keys are not serializable yet.
+    TENZIR_TODO();
+  }
+
+private:
+  configuration cfg_;
+  duration cleanup_duration_;
+  Option<nova::Evaluator> evaluator_;
+  nova_dedup_map states_;
+  int64_t row_ = 0;
+  steady_clock::time_point last_cleanup_time_ = steady_clock::now();
+};
+
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -494,7 +645,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<DeduplicateArgs, Deduplicate>{};
+    auto d = Describer<DeduplicateArgs, Deduplicate, DeduplicateNova>{};
+    d.operator_location(&DeduplicateArgs::keyword);
     auto keys = d.optional_variadic("key", &DeduplicateArgs::keys, "any");
     auto limit = d.named("limit", &DeduplicateArgs::limit);
     auto distance = d.named("distance", &DeduplicateArgs::distance);

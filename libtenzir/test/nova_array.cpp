@@ -23,6 +23,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -2277,6 +2278,43 @@ TEST("constant lists preserve nested views through erasure and masks") {
   CHECK(equal(nullable.get(0), data.get(0)));
   CHECK(is<RowView<Null>>(nullable.get(1)));
   CHECK(equal(nullable.get(2), data.get(2)));
+}
+
+TEST("equal nova rows have equal hashes") {
+  auto lhs = ArrayBuilder<Data>{};
+  lhs.data(int64_t{0});
+  lhs.data(int64_t{-42});
+  lhs.data(uint64_t{9'007'199'254'740'992});
+  auto lhs_record = lhs.record();
+  lhs_record.field("a").data(int64_t{1});
+  lhs_record.field("b").data(std::string_view{"x"});
+  auto lhs_list = lhs.list();
+  lhs_list.data(int64_t{1});
+  lhs_list.data(std::string_view{"x"});
+  auto rhs = ArrayBuilder<Data>{};
+  rhs.data(0.0);
+  rhs.data(-42.0);
+  rhs.data(9'007'199'254'740'992.0);
+  auto rhs_record = rhs.record();
+  rhs_record.field("b").data(std::string_view{"x"});
+  rhs_record.field("a").data(1.0);
+  auto rhs_list = rhs.list();
+  rhs_list.data(uint64_t{1});
+  rhs_list.data(std::string_view{"x"});
+  auto lhs_values = lhs.finish();
+  auto rhs_values = rhs.finish();
+  for (auto i = storage::Index{0}; i < lhs_values.length(); ++i) {
+    REQUIRE(equal(lhs_values.get(i), rhs_values.get(i)));
+    CHECK_EQUAL(hash(lhs_values.get(i)), hash(rhs_values.get(i)));
+  }
+}
+
+TEST("nova NaNs compare unequal") {
+  auto lhs = ArrayBuilder<Data>{};
+  lhs.data(std::numeric_limits<double>::quiet_NaN());
+  auto rhs = ArrayBuilder<Data>{};
+  rhs.data(-std::numeric_limits<double>::quiet_NaN());
+  CHECK(not equal(lhs.finish().get(0), rhs.finish().get(0)));
 }
 
 TEST("empty structured constants and zero row field lookup") {

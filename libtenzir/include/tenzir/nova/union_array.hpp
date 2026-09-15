@@ -221,6 +221,9 @@ auto repeat(Data const& value, storage::Index length) -> Array<Data>;
 
 auto equal(const RowView<Data>& lhs, const RowView<Data>& rhs) -> bool;
 
+/// Hashes a row consistently with `equal`.
+auto hash(const RowView<Data>& row) noexcept -> std::size_t;
+
 template <class Alternatives, std::size_t I, class Qualifier>
 struct UnionArrayAlternativeResult {
   using Alternative = Alternatives::template at<I>;

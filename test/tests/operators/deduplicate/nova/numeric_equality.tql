@@ -1,0 +1,5 @@
+from {id: "int", key: {x: 1}},
+     {id: "uint", key: {x: uint(1)}},
+     {id: "float", key: {x: 1.0}},
+     {id: "different", key: {x: 1.5}}
+deduplicate key

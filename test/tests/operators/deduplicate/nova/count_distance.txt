@@ -1,0 +1,30 @@
+{
+  x: 1,
+  y: "a",
+  seq: 1,
+  drop_count: 0,
+}
+{
+  x: 1,
+  y: "a",
+  seq: 2,
+  drop_count: 0,
+}
+{
+  x: 2,
+  y: "b",
+  seq: 4,
+  drop_count: 0,
+}
+{
+  x: 3,
+  y: "c",
+  seq: 5,
+  drop_count: 0,
+}
+{
+  x: 1,
+  y: "a",
+  seq: 6,
+  drop_count: 1,
+}

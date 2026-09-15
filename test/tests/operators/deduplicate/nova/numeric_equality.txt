@@ -1,0 +1,12 @@
+{
+  id: "int",
+  key: {
+    x: 1,
+  },
+}
+{
+  id: "different",
+  key: {
+    x: 1.5,
+  },
+}
