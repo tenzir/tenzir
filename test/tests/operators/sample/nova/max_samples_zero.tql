@@ -1,0 +1,3 @@
+// A zero cap suppresses the first batch without emitting an empty Nova batch.
+from {x: 1}, {x: 2}
+sample 1h, max_samples=0
