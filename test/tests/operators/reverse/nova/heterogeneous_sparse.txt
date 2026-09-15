@@ -1,0 +1,14 @@
+{
+  keep: true,
+  nested: {
+    z: 3,
+  },
+}
+{
+  keep: true,
+  y: "b",
+}
+{
+  keep: true,
+  x: 1,
+}

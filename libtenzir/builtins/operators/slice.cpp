@@ -354,7 +354,7 @@ private:
 
   auto push_reversed(Push<nova::Events>& push, int64_t begin, int64_t end,
                      uint64_t stride) -> Task<void> {
-    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto builder = EventsBuilder{};
     auto position = total_;
     for (auto& input : buffer_ | std::ranges::views::reverse) {
       for (auto row = input.length(); row-- > 0;) {
@@ -366,29 +366,53 @@ private:
             or static_cast<uint64_t>(end - 1 - position) % stride != 0) {
           continue;
         }
-        auto output = builder.record();
-        for (auto [name, field] : input.data.get(row)) {
-          nova::append_row(output.field(name), field);
-        }
+        builder.append(input, row);
         if (builder.length()
             == static_cast<nova::storage::Index>(
               defaults::import::table_slice_size)) {
-          co_await push(nova::Events{
-            builder.finish(),
-            nova::storage::BitMap{static_cast<nova::storage::Index>(
-                                    defaults::import::table_slice_size),
-                                  true}});
-          builder = nova::ArrayBuilder<nova::Record>{};
+          co_await push(std::exchange(builder, EventsBuilder{}).finish());
         }
       }
     }
     if (builder.length() > 0) {
-      auto data = builder.finish();
-      auto const length = data.length();
-      co_await push(
-        nova::Events{std::move(data), nova::storage::BitMap{length, true}});
+      co_await push(std::move(builder).finish());
     }
   }
+
+  struct EventsBuilder {
+    auto append(nova::Events const& input, nova::storage::Index row) -> void {
+      auto output = data.record();
+      for (auto [name, value] : input.data.get(row)) {
+        nova::append_row(output.field(name), value);
+      }
+      names.data(*input.meta.name.get(row));
+      import_times.data(*input.meta.import_time.get(row));
+      internal.data(*input.meta.internal.get(row));
+    }
+
+    auto length() const -> nova::storage::Index {
+      return data.length();
+    }
+
+    auto finish() && -> nova::Events {
+      auto result = data.finish();
+      auto mask = nova::storage::BitMap{result.length(), true};
+      return {
+        std::move(result),
+        std::move(mask),
+        {
+          .name = names.finish(),
+          .import_time = import_times.finish(),
+          .internal = internal.finish(),
+        },
+      };
+    }
+
+    nova::ArrayBuilder<nova::Record> data;
+    nova::ArrayBuilder<nova::String> names;
+    nova::ArrayBuilder<nova::Time> import_times;
+    nova::ArrayBuilder<nova::Bool> internal;
+  };
 
   Option<int64_t> begin_;
   Option<int64_t> end_;
@@ -432,11 +456,13 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SliceArgs, Slice>{SliceArgs{
+    auto d = Describer<SliceArgs, Slice, SliceNova>{SliceArgs{
       .begin = None{},
       .end = None{},
       .stride = int64_t{-1},
+      .operator_location = {},
     }};
+    d.operator_location(&SliceArgs::operator_location);
     return d.optimize([](DescribeCtx&, EventOrder order,
                          ir::OptimizeFilter filter) -> Optimization {
       return {
