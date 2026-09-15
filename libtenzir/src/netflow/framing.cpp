@@ -279,7 +279,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
       if (end_of_input) {
         return framing_error(version, "truncated NetFlow v5 header");
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     auto const count = read_u16_at(bytes, 2);
     if (count > 30) {
@@ -294,7 +294,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
                                          "expected {} bytes, got {}",
                                          size, bytes.size()));
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     return FrameResult{FrameStatus::ready, size, version, {}};
   }
@@ -304,7 +304,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
       if (end_of_input) {
         return framing_error(version, "truncated IPFIX header");
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     auto const size = size_t{read_u16_at(bytes, 2)};
     if (size < 16) {
@@ -317,7 +317,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
                                                   "expected {} bytes, got {}",
                                                   size, bytes.size()));
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     return FrameResult{FrameStatus::ready, size, version, {}};
   }
@@ -326,7 +326,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
     if (end_of_input) {
       return framing_error(version, "truncated NetFlow v9 header");
     }
-    return FrameResult{.version = version};
+    return FrameResult{.version = version, .message = {}};
   }
   auto header_cursor = Cursor{bytes.subspan(2, 18)};
   auto expected_records = uint16_t{0};
@@ -354,6 +354,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
       .export_time_seconds = export_time_seconds,
       .sequence_number = sequence_number,
       .domain_id = domain_id,
+      .local_templates = {},
     };
   }
   auto& offset = v9_state.offset;
@@ -405,9 +406,10 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
           .status = FrameStatus::ambiguous,
           .size = offset,
           .version = version,
+          .message = {},
         };
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     if (bytes.size() - offset < 4) {
       if (idle_boundary_is_possible()) {
@@ -418,12 +420,13 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
           .status = FrameStatus::ambiguous,
           .size = offset,
           .version = version,
+          .message = {},
         };
       }
       if (end_of_input) {
         return fail("truncated NetFlow v9 set header");
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     auto const set_id = read_u16_at(bytes, offset);
     if (set_id < 256 and set_id != 0 and set_id != 1) {
@@ -446,7 +449,7 @@ auto frame_message(std::span<const std::byte> bytes, bool end_of_input,
                                 "got {}",
                                 set_length, bytes.size() - offset));
       }
-      return FrameResult{.version = version};
+      return FrameResult{.version = version, .message = {}};
     }
     ++set_count;
     auto const payload = bytes.subspan(offset + 4, set_length - 4);
