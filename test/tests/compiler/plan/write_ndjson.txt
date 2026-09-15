@@ -1,0 +1,11 @@
+● {input}
+│
+● version
+╎
+● SetIr(x6)
+╎
+● write_ndjson
+│
+● save_stdout
+│
+● {output}
