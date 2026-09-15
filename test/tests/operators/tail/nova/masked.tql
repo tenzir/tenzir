@@ -1,0 +1,5 @@
+load_stdin
+read_json
+where x != 2
+where x != 4
+tail 2
