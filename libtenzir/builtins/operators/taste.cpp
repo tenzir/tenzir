@@ -10,6 +10,9 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/type_id.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -54,6 +57,44 @@ private:
   uint64_t limit_;
 };
 
+class TasteNova : public Operator<nova::Events, nova::Events> {
+public:
+  explicit TasteNova(TasteArgs args) : limit_{args.limit} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    auto const ids
+      = nova::type_id(nova::Array<nova::Data>{input.data}, input.mask);
+    auto kept = nova::storage::BitMap::Mutable{input.length()};
+    for (auto row : nova::storage::bitmap_iteration(input.mask)) {
+      if (not row) {
+        continue;
+      }
+      auto id = std::string{*input.meta.name.get(*row)};
+      id.push_back('\0');
+      id.append(*ids.get(*row));
+      auto& count = counts_[id];
+      if (count < limit_) {
+        kept.set(*row, true);
+        ++count;
+      }
+    }
+    input.mask = std::move(kept).finish();
+    if (input.mask.any()) {
+      co_await push(std::move(input));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("counts", counts_);
+  }
+
+private:
+  std::unordered_map<std::string, uint64_t> counts_;
+  uint64_t limit_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -61,7 +102,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<TasteArgs, Taste>{};
+    auto d = Describer<TasteArgs, Taste, TasteNova>{};
     auto limit = d.optional_positional("limit", &TasteArgs::limit);
     d.validate([limit](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(limit));
