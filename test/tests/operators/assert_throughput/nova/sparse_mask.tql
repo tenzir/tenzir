@@ -1,0 +1,4 @@
+load_stdin
+read_json
+where x != 2
+assert_throughput 2, within=1h, max_events=2, retries=0
