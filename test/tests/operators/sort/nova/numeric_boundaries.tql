@@ -1,0 +1,5 @@
+// Integers retain precision above 2^53 and numeric ties are stable.
+from {id: "large", key: 9007199254740993},
+     {id: "float", key: 9007199254740992.0},
+     {id: "integer", key: 9007199254740992}
+sort key

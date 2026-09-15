@@ -1,0 +1,8 @@
+// Covers Nova union sort keys, nulls-last ordering, and stable numeric ties.
+from {id: "null"},
+     {id: "uint", key: uint(1)},
+     {id: "string", key: "a"},
+     {id: "int", key: 1},
+     {id: "float", key: 1.0},
+     {id: "zero", key: 0}
+sort key?

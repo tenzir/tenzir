@@ -3,6 +3,7 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/comparison.hpp"
 #include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/eval_internal.hpp"
 #include "tenzir/nova/eval_kernel.hpp"
@@ -47,70 +48,11 @@ auto select_rows(const Array<Data>& a, storage::BitMap const& mask_a,
                      MaskedArray<Array<Data>>{b, mask_b});
 }
 
-constexpr auto is_ordering(ast::binary_op op) -> bool {
-  using enum ast::binary_op;
-  return op == gt or op == geq or op == lt or op == leq;
-}
-
-template <ast::binary_op Op>
-auto compare_values(auto const& lhs, auto const& rhs) -> Bool {
-  using enum ast::binary_op;
-  if constexpr (Op == eq) {
-    return lhs == rhs;
-  } else if constexpr (Op == neq) {
-    return lhs != rhs;
-  } else if constexpr (Op == gt) {
-    return lhs > rhs;
-  } else if constexpr (Op == geq) {
-    return lhs >= rhs;
-  } else if constexpr (Op == lt) {
-    return lhs < rhs;
-  } else {
-    static_assert(Op == leq, "not a comparison operator");
-    return lhs <= rhs;
-  }
-}
-
-/// Compares across the signed/unsigned boundary, where the built-in operators
-/// would convert one side first and then compare the converted values.
-template <ast::binary_op Op>
-auto compare_integers(auto lhs, auto rhs) -> Bool {
-  using enum ast::binary_op;
-  if constexpr (Op == eq) {
-    return std::cmp_equal(lhs, rhs);
-  } else if constexpr (Op == neq) {
-    return std::cmp_not_equal(lhs, rhs);
-  } else if constexpr (Op == gt) {
-    return std::cmp_greater(lhs, rhs);
-  } else if constexpr (Op == geq) {
-    return std::cmp_greater_equal(lhs, rhs);
-  } else if constexpr (Op == lt) {
-    return std::cmp_less(lhs, rhs);
-  } else {
-    static_assert(Op == leq, "not a comparison operator");
-    return std::cmp_less_equal(lhs, rhs);
-  }
-}
-
-/// Integers compare exactly across signedness, any mix involving `Float`
-/// promotes both sides. The explicit casts keep
-/// `-Wimplicit-int-float-conversion` quiet, and having this as a separate
-/// template keeps the call in `list_contains` dependent.
-template <ast::binary_op Op, concepts::one_of<Int, UInt, Float> A,
-          concepts::one_of<Int, UInt, Float> B>
-auto compare_numbers(A a, B b) -> Bool {
-  if constexpr (std::same_as<A, Float> or std::same_as<B, Float>) {
-    return compare_values<Op>(static_cast<Float>(a), static_cast<Float>(b));
-  } else {
-    return compare_integers<Op>(a, b);
-  }
-}
-
 /// Equality compares `null` by nullness. The ordering operators have no order
 /// to report, so they do not accept it at all and `apply_kernel` warns.
 template <class U, class T, ast::binary_op Op>
 concept null_compared_with
-  = not is_ordering(Op) and (std::same_as<T, Null> or std::same_as<U, Null>);
+  = not _::is_ordering(Op) and (std::same_as<T, Null> or std::same_as<U, Null>);
 
 template <class U, class T>
 concept other_number_than = concepts::number<U> and not std::same_as<T, U>;
@@ -121,7 +63,7 @@ concept other_number_than = concepts::number<U> and not std::same_as<T, U>;
 template <class T, ast::binary_op Op>
 concept self_comparable
   = fundamental_view_type<T> and not std::same_as<T, Null>
-    and (not is_ordering(Op)
+    and (not _::is_ordering(Op)
          or concepts::one_of<T, Int, UInt, Float, Time, Duration>);
 
 /// The rows must stay mutually exclusive: `apply_kernel` probes them with
@@ -132,15 +74,15 @@ auto comparison_kernel() {
   return ::tenzir::detail::overload{
     []<class T, null_compared_with<T, Op> U>(diagnostic_handler&, T,
                                              U) -> Option<Bool> {
-      return compare_values<Op>(std::same_as<T, Null>, std::same_as<U, Null>);
+      return compare<Op>(std::same_as<T, Null>, std::same_as<U, Null>);
     },
     []<concepts::number T, other_number_than<T> U>(diagnostic_handler&, T lhs,
                                                    U rhs) -> Option<Bool> {
-      return compare_numbers<Op>(lhs, rhs);
+      return compare<Op>(lhs, rhs);
     },
     []<self_comparable<Op> T>(diagnostic_handler&, T lhs,
                               T rhs) -> Option<Bool> {
-      return compare_values<Op>(lhs, rhs);
+      return compare<Op>(lhs, rhs);
     },
   };
 }
@@ -177,7 +119,7 @@ auto list_contains(diagnostic_handler& dh, WarnOnce& warn_unsupported,
           using E = std::remove_cvref_t<decltype(*view)>;
           if constexpr (concepts::one_of<T, Int, UInt, Float>
                         and concepts::one_of<E, Int, UInt, Float>) {
-            return compare_numbers<ast::binary_op::eq>(lhs, *view);
+            return compare<ast::binary_op::eq>(lhs, *view);
           } else if constexpr (requires() { lhs == *view; }
                                and not std::same_as<T, Null>) {
             return lhs == *view;

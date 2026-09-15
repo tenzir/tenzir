@@ -1,0 +1,6 @@
+// Exercise native recursive comparison for lists and records.
+from {id: "list-b", key: [1, 3]},
+     {id: "record-b", key: {b: 0}},
+     {id: "list-a", key: [1, 2]},
+     {id: "record-a", key: {a: 1}}
+sort key
