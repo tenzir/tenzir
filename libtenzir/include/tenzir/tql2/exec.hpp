@@ -28,7 +28,7 @@ namespace tenzir {
 struct exec_config {
   std::string implicit_bytes_source = R"(from_stdin)";
   std::string implicit_events_source = R"(from_stdin { read_json })";
-  std::string implicit_bytes_sink = R"(to_stdout)";
+  std::string implicit_bytes_sink = R"(save_stdout)";
   std::string implicit_events_sink = R"(to_stdout)";
   bool dump_tokens = false;
   bool dump_ast = false;

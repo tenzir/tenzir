@@ -27,7 +27,7 @@
   proxygen = {
     owner = "tenzir";
     repo = "proxygen";
-    rev = "ccf1e5559d8bf378a8e9cdf4669609f81550a552";
-    hash = "sha256-q+7TTeszoL0TfIjNikQb63VVoPfHtG8DkjTd+eJ5zb0=";
+    rev = "df0505a9d310197b81058abfb6aaed56fe8d3826";
+    hash = "sha256-vmDAH1+i8dlTS0bqyj9EUINgaJyFsAZYh/7e0yByepo=";
   };
 }

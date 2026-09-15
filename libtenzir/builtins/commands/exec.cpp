@@ -168,7 +168,7 @@ public:
                    "print all diagnostics to stdout before exiting")
         .add<std::string>("implicit-bytes-sink",
                           "implicit sink for pipelines ending in bytes "
-                          "(default: 'to_stdout')")
+                          "(default: 'save_stdout')")
         .add<std::string>("implicit-events-sink",
                           "implicit sink for pipelines ending in events "
                           "(default: 'to_stdout')")
