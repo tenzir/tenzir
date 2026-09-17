@@ -1,5 +1,7 @@
 {
   system ? builtins.currentSystem,
+  # Relative to the directory from which the development shell is entered.
+  sourceSubdir ? ".",
 }:
 let
   lock = builtins.fromJSON (builtins.readFile ./flake.lock);
@@ -40,7 +42,7 @@ let
     (pkgs.writeShellScriptBin "clang++" ''exec ${pkgs.clang}/bin/clang++ "$@"'')
   ];
   deps-prefix = pkgs.buildEnv {
-    name = "tenzir-deps-prefix";
+    name = "deps-prefix";
     paths = lib.closePropagation base-deps;
     # Pull the common split outputs into the merged prefix so FindPackage and
     # pkg-config can see headers, shared libraries, and helper binaries from
@@ -65,7 +67,7 @@ let
     ];
   };
   tools-prefix = pkgs.buildEnv {
-    name = "tenzir-tools-prefix";
+    name = "tools-prefix";
     # Keep developer tools separate from dependency discovery. We only need
     # their executables on PATH; pulling their library/include trees into the
     # shell would reintroduce the duplicated wrapper flags we are avoiding.
@@ -115,8 +117,10 @@ let
   };
 in
 pkgs.mkShell (
-  {
-    name = "tenzir-dev";
+  rec {
+    name = "engine";
+    # inputsFrom inherits dependencies and hooks, but not environment variables.
+    passthru.devShellEnv = env;
     hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
     packages = [ tools-prefix ];
     # Point CMake at the merged dependency prefix explicitly instead of
@@ -156,6 +160,7 @@ pkgs.mkShell (
     env.TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL = 1;
 
     shellHook = ''
+      tenzir_source_dir="$(cd "${sourceSubdir}" && pwd)"
       ccache_s3_dir="/tmp/tenzir-ccache"
       ccache_s3_sock="$ccache_s3_dir/s3.sock"
       mkdir -p "$ccache_s3_dir"
@@ -164,13 +169,14 @@ pkgs.mkShell (
       if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
         echo "ccache R2 helper: already running at $ccache_s3_sock."
       else
-        echo "ccache R2 helper: run 'wrangler login' if needed, then 'scripts/ccache/s3-storage-helper.py --deamonize --socket-mode 0666' to enable remote cache."
+        echo "ccache R2 helper: run 'wrangler login' if needed, then '\"$tenzir_source_dir/scripts/ccache/s3-storage-helper.py\" --deamonize --socket-mode 0666' to enable remote cache."
       fi
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator
       # without needing to rebuild the wheel.
-      export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="--no-deps -e $PWD/python/tenzir-common/ -e $PWD/python/tenzir-operator"
-      export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$PWD/python"
+      export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="--no-deps -e $tenzir_source_dir/python/tenzir-common/ -e $tenzir_source_dir/python/tenzir-operator"
+      export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$tenzir_source_dir/python"
+      unset tenzir_source_dir
     '';
   }
   // lib.optionalAttrs isStatic {

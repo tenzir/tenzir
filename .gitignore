@@ -7,8 +7,9 @@
 .env
 .wrangler.generated.toml
 
-# Direnv
-.envrc
+# Direnv (also used by the standalone engine mirror)
+.direnv/
+.envrc.local
 justfile
 
 # Build artifacts
