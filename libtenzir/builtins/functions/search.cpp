@@ -27,7 +27,7 @@
 #include <functional>
 #include <utility>
 
-namespace tenzir::plugins::contains {
+namespace tenzir::plugins::search {
 
 namespace {
 
@@ -129,17 +129,24 @@ auto contains(const series& input, const type& what_type, const data& what,
   }
 }
 
-class plugin final : public function_plugin {
+template <bool Deprecated = false>
+class Plugin final : public function_plugin {
   auto is_deterministic() const -> bool override {
     return true;
   }
 
   auto name() const -> std::string override {
-    return "contains";
+    return Deprecated ? "contains" : "search";
   }
 
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
+    if constexpr (Deprecated) {
+      diagnostic::warning("`contains` is deprecated")
+        .primary(inv.call.get_location())
+        .hint("use `search` instead")
+        .emit(ctx);
+    }
     auto input = ast::expression{};
     auto target = located<data>{};
     auto exact = false;
@@ -179,6 +186,7 @@ class plugin final : public function_plugin {
 
 } // namespace
 
-} // namespace tenzir::plugins::contains
+} // namespace tenzir::plugins::search
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::contains::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::search::Plugin<>)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::search::Plugin<true>)

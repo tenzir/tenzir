@@ -1,0 +1,23 @@
+from {
+  nested: {user: {name: "Alice", age: 42}},
+  tags: ["urgent", "important"],
+  network: 10.0.0.0/8,
+  empty_record: {},
+  empty_list: [],
+  missing: null,
+}
+this = {
+  record_match: search(nested, "Alice"),
+  method_match: nested.search("Alice"),
+  absent: search(nested, "Bob"),
+  numeric: search(nested, 42),
+  list_match: search(tags, "urgent"),
+  substring: search(tags, "urge"),
+  exact: search(tags, "urge", exact=true),
+  ip_match: search(network, 10.1.2.3),
+  subnet_match: search(network, 10.0.0.0/16),
+  exact_subnet: search(network, 10.0.0.0/16, exact=true),
+  empty_record_match: search(empty_record, "Alice"),
+  empty_list_match: search(empty_list, 42),
+  null_match: search(missing, null),
+}

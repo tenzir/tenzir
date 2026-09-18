@@ -1,0 +1,7 @@
+from {rec: {host: "HOST-A"}, tags: ["Foo", "BAR"], scalar: "Hello World"}
+search_record = search(rec, "host-a", ignore_case=true)
+search_list = search(tags, "bar", ignore_case=true)
+search_substring = search(scalar, "WORLD", ignore_case=true)
+search_exact = search(tags, "ba", exact=true, ignore_case=true)
+search_exact_full = search(tags, "bar", exact=true, ignore_case=true)
+search_default = search(scalar, "WORLD")

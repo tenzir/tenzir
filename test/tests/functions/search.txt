@@ -1,0 +1,15 @@
+{
+  record_match: true,
+  method_match: true,
+  absent: false,
+  numeric: true,
+  list_match: true,
+  substring: true,
+  exact: false,
+  ip_match: true,
+  subnet_match: true,
+  exact_subnet: false,
+  empty_record_match: false,
+  empty_list_match: false,
+  null_match: true,
+}

@@ -1,0 +1,4 @@
+---
+error: true
+---
+from {found: search({value: 42}, {value: 42})}

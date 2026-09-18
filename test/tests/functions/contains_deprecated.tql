@@ -1,0 +1,3 @@
+from {nested: {value: "Alice"}}
+function_match = contains(nested, "alice", exact=true, ignore_case=true)
+method_match = nested.contains("Ali")
