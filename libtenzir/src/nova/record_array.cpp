@@ -58,7 +58,7 @@ auto RecordStorage::as_unique() const& -> RecordStorage {
 }
 
 auto RecordStorage::as_unique() && -> RecordStorage {
-  if (storage_.unique()) {
+  if (storage_.use_count() == 1) {
     return std::move(*this);
   }
   return static_cast<RecordStorage const&>(*this).as_unique();
@@ -73,7 +73,7 @@ auto RecordStorage::data() && -> Storage&& {
 }
 
 auto RecordStorage::mutable_data() -> Storage& {
-  if (not storage_.unique()) {
+  if (storage_.use_count() != 1) {
     storage_ = std::make_shared<Storage>(*storage_);
   }
   return *storage_;

@@ -34,7 +34,7 @@ auto ListStorage::as_unique() const& -> ListStorage {
 }
 
 auto ListStorage::as_unique() && -> ListStorage {
-  if (storage_.unique()) {
+  if (storage_.use_count() == 1) {
     return std::move(*this);
   }
   return static_cast<ListStorage const&>(*this).as_unique();

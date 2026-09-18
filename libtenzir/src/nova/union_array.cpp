@@ -67,7 +67,7 @@ auto UnionArray::as_unique() const& -> UnionArray {
 }
 
 auto UnionArray::as_unique() && -> UnionArray {
-  if (storage_.unique()) {
+  if (storage_.use_count() == 1) {
     return std::move(*this);
   }
   return static_cast<UnionArray const&>(*this).as_unique();
@@ -349,7 +349,7 @@ auto UnionArray::get_alternative()
 
 template <data_type Tag>
 auto UnionArray::get_alternative() && -> Option<nova::MaskedArray<Array<Tag>>> {
-  if (not storage_.unique()) {
+  if (storage_.use_count() != 1) {
     return static_cast<UnionArray const&>(*this).get_alternative<Tag>();
   }
   constexpr auto wanted = ErasedDataAlternatives::unique_index_of<Array<Tag>>;
