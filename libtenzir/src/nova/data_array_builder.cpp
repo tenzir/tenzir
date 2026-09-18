@@ -265,11 +265,11 @@ template auto FieldBuilder::data(bool) -> void;
 template auto FieldBuilder::data(int64_t) -> void;
 template auto FieldBuilder::data(uint64_t) -> void;
 template auto FieldBuilder::data(double) -> void;
-template auto FieldBuilder::data(std::string_view) -> void;
+template auto FieldBuilder::data<std::string_view>(std::string_view) -> void;
 template auto FieldBuilder::data(blob_view) -> void;
 template auto FieldBuilder::data(ip) -> void;
 template auto FieldBuilder::data(subnet) -> void;
-template auto FieldBuilder::data(time) -> void;
+template auto FieldBuilder::data<time>(time) -> void;
 template auto FieldBuilder::data(duration) -> void;
 
 } // namespace tenzir::nova

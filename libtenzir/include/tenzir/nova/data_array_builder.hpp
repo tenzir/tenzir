@@ -25,6 +25,14 @@ public:
     switch_builder<TagForViewType<V>>().data(v);
   }
 
+  auto data(Time v) -> void {
+    data<Time>(v);
+  }
+
+  auto data(std::string_view v) -> void {
+    data<std::string_view>(v);
+  }
+
   auto record() -> ArrayBuilder<Record>::RecordBuilder;
   auto list() -> ArrayBuilder<List>::ListBuilder;
   auto skip() -> void;
@@ -101,6 +109,14 @@ public:
   template <fundamental_view_type V>
   auto data(V v) -> void;
 
+  auto data(Time v) -> void {
+    data<Time>(v);
+  }
+
+  auto data(std::string_view v) -> void {
+    data<std::string_view>(v);
+  }
+
   auto null() -> void;
   auto record() -> ArrayBuilder<Record>::RecordBuilder;
   auto list() -> ArrayBuilder<List>::ListBuilder;
@@ -120,11 +136,12 @@ extern template auto FieldBuilder::data(bool) -> void;
 extern template auto FieldBuilder::data(int64_t) -> void;
 extern template auto FieldBuilder::data(uint64_t) -> void;
 extern template auto FieldBuilder::data(double) -> void;
-extern template auto FieldBuilder::data(std::string_view) -> void;
+extern template auto FieldBuilder::data<std::string_view>(std::string_view)
+  -> void;
 extern template auto FieldBuilder::data(blob_view) -> void;
 extern template auto FieldBuilder::data(ip) -> void;
 extern template auto FieldBuilder::data(subnet) -> void;
-extern template auto FieldBuilder::data(time) -> void;
+extern template auto FieldBuilder::data<time>(time) -> void;
 extern template auto FieldBuilder::data(duration) -> void;
 
 auto append_row(ArrayBuilder<Data>& builder, const RowView<Data>& row) -> void;

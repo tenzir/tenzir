@@ -105,11 +105,13 @@ template auto ArrayBuilder<List>::ListBuilder::data(bool) -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(int64_t) -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(uint64_t) -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(double) -> void;
-template auto ArrayBuilder<List>::ListBuilder::data(std::string_view) -> void;
+template auto
+  ArrayBuilder<List>::ListBuilder::data<std::string_view>(std::string_view)
+    -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(blob_view) -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(ip) -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(subnet) -> void;
-template auto ArrayBuilder<List>::ListBuilder::data(time) -> void;
+template auto ArrayBuilder<List>::ListBuilder::data<time>(time) -> void;
 template auto ArrayBuilder<List>::ListBuilder::data(duration) -> void;
 
 } // namespace tenzir::nova

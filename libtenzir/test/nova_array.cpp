@@ -423,6 +423,41 @@ TEST("list array tracks empty-list vs none rows") {
   CHECK(row2_view.begin() == row2_view.end());
 }
 
+TEST("data builders implicitly convert timestamps and strings") {
+  auto const timestamp = std::chrono::sys_time<std::chrono::microseconds>{
+    std::chrono::microseconds{1234567}};
+  auto const text = std::string{"value"};
+  auto const expected = tenzir::data{Time{timestamp}};
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(timestamp);
+  builder.data(text);
+  builder.data("literal");
+  auto array = builder.finish();
+  CHECK_EQUAL(materialize(array.get(0)), expected);
+  CHECK_EQUAL(materialize(array.get(1)), (tenzir::data{text}));
+  CHECK_EQUAL(materialize(array.get(2)),
+              (tenzir::data{std::string{"literal"}}));
+  auto records = ArrayBuilder<Record>{};
+  auto record = records.record();
+  record.field("timestamp").data(timestamp);
+  record.field("text").data(text);
+  auto record_array = records.finish();
+  auto field = record_array.field("timestamp");
+  REQUIRE(field.is_some());
+  CHECK_EQUAL(materialize(field->data.get(0)), expected);
+  auto text_field = record_array.field("text");
+  REQUIRE(text_field.is_some());
+  CHECK_EQUAL(materialize(text_field->data.get(0)), (tenzir::data{text}));
+  auto lists = ArrayBuilder<List>{};
+  auto list = lists.list();
+  list.data(timestamp);
+  list.data(text);
+  list.data("literal");
+  auto list_array = lists.finish();
+  CHECK_EQUAL(materialize(RowView<Data>{list_array.get(0)}),
+              (tenzir::data{tenzir::list{expected, text, "literal"}}));
+}
+
 TEST("data array builder switches between alternatives") {
   auto builder = ArrayBuilder<Data>{};
   builder.data(std::int64_t{1});

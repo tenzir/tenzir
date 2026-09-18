@@ -24,6 +24,14 @@ public:
     template <fundamental_view_type V>
     auto data(V v) -> void;
 
+    auto data(Time v) -> void {
+      data<Time>(v);
+    }
+
+    auto data(std::string_view v) -> void {
+      data<std::string_view>(v);
+    }
+
     auto null() -> void;
     auto record() -> ArrayBuilder<Record>::RecordBuilder;
     auto list() -> ListBuilder;
@@ -64,12 +72,13 @@ extern template auto ArrayBuilder<List>::ListBuilder::data(bool) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(int64_t) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(uint64_t) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(double) -> void;
-extern template auto ArrayBuilder<List>::ListBuilder::data(std::string_view)
-  -> void;
+extern template auto
+  ArrayBuilder<List>::ListBuilder::data<std::string_view>(std::string_view)
+    -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(blob_view) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(ip) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(subnet) -> void;
-extern template auto ArrayBuilder<List>::ListBuilder::data(time) -> void;
+extern template auto ArrayBuilder<List>::ListBuilder::data<time>(time) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(duration) -> void;
 
 } // namespace tenzir::nova
