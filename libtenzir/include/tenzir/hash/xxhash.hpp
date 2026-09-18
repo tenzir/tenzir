@@ -14,26 +14,28 @@
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
+
+// Exposes the layout of `XXH64_state_t`, which we hold by value below. Its
+// layout has been ABI-stable since xxhash 0.7.
+#define XXH_STATIC_LINKING_ONLY
 #include <xxhash.h>
 
 namespace tenzir {
 
-// Exposed xxHash tuning parameters.
+// Exposed xxHash tuning parameters. These mirror xxhash's own defaults
+// (see xxhash.h's `XXH_FORCE_ALIGN_CHECK`/`XXH_CPU_LITTLE_ENDIAN` docs) rather
+// than reading xxhash's internal macros, which are only defined when
+// xxhash.h's implementation section is visible (e.g. under `XXH_INLINE_ALL`).
 
 /// Use special path for aligned inputs (XXH32 and XXH64 only).
-static constexpr bool xxh_force_align_check = XXH_FORCE_ALIGN_CHECK;
+static constexpr bool xxh_force_align_check = false;
 
 /// Use fast-path for aligned read at the cost of one branch per hash.
-#ifdef XXH_FORCE_MEMORY_ACCESS
-static constexpr int xxh_force_memory_access = XXH_FORCE_MEMORY_ACCESS;
-#else
 static constexpr int xxh_force_memory_access = 0;
-#endif
 
 class xxh64 {
 public:
-  static constexpr std::endian endian
-    = XXH_CPU_LITTLE_ENDIAN ? std::endian::little : std::endian::big;
+  static constexpr std::endian endian = std::endian::native;
 
   using result_type = XXH64_hash_t;
   using seed_type = XXH64_hash_t;

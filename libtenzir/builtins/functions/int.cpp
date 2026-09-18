@@ -6,6 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
+
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -13,12 +19,108 @@
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+using namespace tenzir::nova;
+
 namespace tenzir::plugins::int_ {
 
 namespace {
 
+struct IntArgs {
+  ValueArgument x;
+  located<uint64_t> base = {10, location::unknown};
+  location call;
+};
+
 template <bool Signed>
-class int_uint final : public function_plugin {
+class IntUintFunction final {
+public:
+  using Type = std::conditional_t<Signed, int64_type, uint64_type>;
+  using Data = type_to_data_t<Type>;
+
+  auto eval(IntArgs const& args, EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto const name = Signed ? "int" : "uint";
+    using NovaTag = std::conditional_t<Signed, nova::Int, nova::UInt>;
+    auto warn_overflow = nova::WarnOnce{};
+    auto warn_convert = nova::WarnOnce{};
+    return apply_kernel<1>(
+      frame, name, {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, NovaTag v) -> Option<NovaTag> {
+          return v;
+        },
+        []<class T>(diagnostic_handler&, T v) -> Option<NovaTag>
+          requires(std::same_as<T, nova::Int> or std::same_as<T, nova::UInt>)
+        {
+          if (not std::in_range<Data>(v)) {
+            return None{};
+          }
+          return static_cast<Data>(v);
+        },
+        [](diagnostic_handler&, nova::Bool v) -> Option<NovaTag> {
+          return static_cast<Data>(v);
+        },
+        [&args, name, &warn_overflow](diagnostic_handler& dh,
+                                      nova::Float v) -> Option<NovaTag> {
+          auto min
+            = static_cast<double>(std::numeric_limits<Data>::lowest()) - 1.0;
+          auto max
+            = static_cast<double>(std::numeric_limits<Data>::max()) + 1.0;
+          if (not(v > min) or not(v < max)) {
+            warn_overflow(dh,
+                          diagnostic::warning("integer overflow in `{}`", name)
+                            .primary(args.x.source));
+            return None{};
+          }
+          return static_cast<Data>(v);
+        },
+        [&args, name, &warn_convert, base = args.base.inner](
+          diagnostic_handler& dh, std::string_view v) -> Option<NovaTag> {
+          constexpr auto p = std::invoke([] {
+            if constexpr (Signed) {
+              return parsers::i64;
+            } else {
+              return parsers::u64;
+            }
+          });
+          constexpr auto q
+            = ignore(*parsers::space) >> p >> ignore(*parsers::space);
+          constexpr auto px = std::invoke([] {
+            if constexpr (Signed) {
+              return parsers::ix64;
+            } else {
+              return parsers::ux64;
+            }
+          });
+          constexpr auto qx
+            = ignore(*parsers::space) >> px >> ignore(*parsers::space);
+          auto result = Data{};
+          switch (base) {
+            case 10:
+              if (q(v, result)) {
+                return result;
+              }
+              break;
+            case 16:
+              if (qx(v, result)) {
+                return result;
+              }
+              break;
+            default:
+              TENZIR_UNREACHABLE();
+          }
+          warn_convert(
+            dh, diagnostic::warning("`{}` failed to convert some string", name)
+                  .primary(args.x.source)
+                  .note("tried to convert: {}", v));
+          return None{};
+        },
+        });
+  }
+};
+
+template <bool Signed>
+class int_uint final : public FunctionPlugin {
 public:
   using Type = std::conditional_t<Signed, int64_type, uint64_type>;
   using Array = type_to_arrow_array_t<Type>;
@@ -31,6 +133,21 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> FunctionDescription override {
+    auto d = FunctionDescriber<IntArgs, IntUintFunction<Signed>>{};
+    d.positional("x", &IntArgs::x, "number|string");
+    d.named_optional("base", &IntArgs::base);
+    d.call_location(&IntArgs::call);
+    d.validate([](IntArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+      if (args.base.inner != 10 and args.base.inner != 16) {
+        diagnostic::error("`base` must be 10 or 16").primary(args.base).emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

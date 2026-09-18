@@ -95,11 +95,11 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
             return it->second;
           });
     if constexpr (std::is_same_v<Attribute, unused_type>) {
-      auto p = ignore(parsers::real) >> ignore(*space) >> unit;
+      static const auto p = ignore(parsers::real) >> ignore(*space) >> unit;
       return p(f, l, unused);
     } else {
       auto scale = double{};
-      auto p = parsers::real >> ignore(*space) >> unit;
+      static const auto p = parsers::real >> ignore(*space) >> unit;
       if (not p(f, l, scale, x)) {
         return false;
       }
@@ -124,12 +124,15 @@ struct compound_duration_parser
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    auto negation = (-parsers::ch<'-'>).then([](Option<char> x) -> bool {
-      return x.has_value();
-    });
-    auto positive_duration
-      = ignore(&not parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
-    auto compound_duration = negation >> (positive_duration % *parsers::space);
+    // Composing the parser is not free, so we do it only once.
+    static const auto compound_duration = [] {
+      auto negation = (-parsers::ch<'-'>).then([](Option<char> x) -> bool {
+        return x.has_value();
+      });
+      auto positive_duration
+        = ignore(&not parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
+      return negation >> (positive_duration % *parsers::space);
+    }();
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return compound_duration(f, l, x);
     } else {
@@ -200,10 +203,8 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
     return sys_days{} + days{era * 146097 + static_cast<int>(doe) - 719468};
   }
 
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  static auto make() {
     using namespace parser_literals;
-    using namespace std::chrono;
     auto year = integral_parser<int, 4, 4>{}.with([](auto x) {
       return x >= 1900;
     });
@@ -232,12 +233,19 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
     auto zone = 'Z'
               | (~' '_p >> zero_offset_name)
               | (sign >> hour >> ~(~':'_p >> min));
-    auto p = year >> '-' >> mon
+    return year >> '-' >> mon
               >> ~('-' >> day
                 >> ~(time_divider >> hour
                   >> ~(':' >> min
                     >> ~(':' >> sec) >> ~zone)));
     // clang-format on
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    using namespace std::chrono;
+    // Composing the parser is not free, so we do it only once.
+    static const auto p = make();
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
@@ -304,8 +312,7 @@ auto const unix_ts = unix_ts_parser{};
 struct time_parser : parser_base<time_parser> {
   using attribute = time;
 
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+  static auto make() {
     using namespace parser_literals;
     auto plus = [](duration t) {
       return time::clock::now() + t;
@@ -314,15 +321,21 @@ struct time_parser : parser_base<time_parser> {
       return time::clock::now() - t;
     };
     auto ws = ignore(*parsers::space);
-    auto p = parsers::ymdhms | '@' >> parsers::unix_ts
-             | "now" >> ws >> ('+' >> ws >> parsers::duration->*plus
-                               | '-' >> ws >> parsers::duration->*minus)
-             | "now"_p->*
-                 []() {
-                   return time::clock::now();
-                 }
-             | "in" >> ws >> parsers::duration->*plus
-             | (parsers::duration->*minus) >> ws >> "ago";
+    return parsers::ymdhms | '@' >> parsers::unix_ts
+           | "now" >> ws >> ('+' >> ws >> parsers::duration->*plus
+                             | '-' >> ws >> parsers::duration->*minus)
+           | "now"_p->*
+               []() {
+                 return time::clock::now();
+               }
+           | "in" >> ws >> parsers::duration->*plus
+           | (parsers::duration->*minus) >> ws >> "ago";
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    // Composing the parser is not free, so we do it only once.
+    static const auto p = make();
     return p(f, l, a);
   }
 };

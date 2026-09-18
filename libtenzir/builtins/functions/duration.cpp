@@ -7,6 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/checked_math.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
@@ -15,6 +20,8 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
+
+#include <string_view>
 
 namespace tenzir::plugins::duration {
 
@@ -89,8 +96,101 @@ public:
   }
 };
 
+template <class T, bool Count = false>
+constexpr auto duration_function_name() -> std::string_view {
+  if constexpr (std::same_as<T, std::chrono::nanoseconds>) {
+    return Count ? "count_nanoseconds" : "nanoseconds";
+  } else if constexpr (std::same_as<T, std::chrono::microseconds>) {
+    return Count ? "count_microseconds" : "microseconds";
+  } else if constexpr (std::same_as<T, std::chrono::milliseconds>) {
+    return Count ? "count_milliseconds" : "milliseconds";
+  } else if constexpr (std::same_as<T, std::chrono::seconds>) {
+    return Count ? "count_seconds" : "seconds";
+  } else if constexpr (std::same_as<T, std::chrono::minutes>) {
+    return Count ? "count_minutes" : "minutes";
+  } else if constexpr (std::same_as<T, std::chrono::hours>) {
+    return Count ? "count_hours" : "hours";
+  } else if constexpr (std::same_as<T, std::chrono::days>) {
+    return Count ? "count_days" : "days";
+  } else if constexpr (std::same_as<T, std::chrono::weeks>) {
+    return Count ? "count_weeks" : "weeks";
+  } else if constexpr (std::same_as<T, std::chrono::months>) {
+    return Count ? "count_months" : "months";
+  } else if constexpr (std::same_as<T, std::chrono::years>) {
+    return Count ? "count_years" : "years";
+  } else {
+    static_assert(std::same_as<T, void>, "unsupported duration unit");
+  }
+}
+
+struct IntoDurationArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
 template <class T>
-class into_duration_plugin final : public function_plugin {
+class IntoDurationFunction final {
+public:
+  auto eval(IntoDurationArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto const name = duration_function_name<T>();
+    const auto unit = std::chrono::duration_cast<tenzir::duration>(T{1});
+    constexpr auto min = static_cast<double>(
+                           std::numeric_limits<tenzir::duration::rep>::lowest())
+                         - 1.0;
+    constexpr auto max
+      = static_cast<double>(std::numeric_limits<tenzir::duration::rep>::max())
+        + 1.0;
+    auto warn_no_effect = nova::WarnOnce{};
+    auto warn_overflow = nova::WarnOnce{};
+    return nova::apply_kernel<1>(
+      frame, name, {args.x}, args.call,
+      detail::overload{
+        [&](diagnostic_handler& dh,
+            nova::Duration v) -> Option<nova::Duration> {
+          warn_no_effect(
+            dh,
+            diagnostic::warning("interpreting as `{}` has no effect", name)
+              .primary(args.x.source, "already has type `duration`")
+              .hint("use `count_{}` to extract the number of {}", name, name));
+          return v;
+        },
+        [&](diagnostic_handler& dh, nova::Int v) -> Option<nova::Duration> {
+          const auto result = checked_mul(v, unit.count());
+          if (not result) {
+            warn_overflow(dh,
+                          diagnostic::warning("duration overflow in `{}`", name)
+                            .primary(args.x.source));
+            return None{};
+          }
+          return nova::Duration{*result};
+        },
+        [&](diagnostic_handler& dh, nova::UInt v) -> Option<nova::Duration> {
+          const auto result = checked_mul(v, unit.count());
+          if (not result) {
+            warn_overflow(dh,
+                          diagnostic::warning("duration overflow in `{}`", name)
+                            .primary(args.x.source));
+            return None{};
+          }
+          return nova::Duration{*result};
+        },
+        [&](diagnostic_handler& dh, nova::Float v) -> Option<nova::Duration> {
+          const auto result = static_cast<double>(v) * unit.count();
+          if (not(result > min) or not(result < max)) {
+            warn_overflow(dh,
+                          diagnostic::warning("duration overflow in `{}`", name)
+                            .primary(args.x.source));
+            return None{};
+          }
+          return nova::Duration{static_cast<tenzir::duration::rep>(result)};
+        },
+      });
+  }
+};
+
+template <class T>
+class into_duration_plugin final : public nova::FunctionPlugin {
 public:
   into_duration_plugin() = default;
 
@@ -103,6 +203,14 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<IntoDurationArgs, IntoDurationFunction<T>>{};
+    d.positional("x", &IntoDurationArgs::x, "number");
+    d.call_location(&IntoDurationArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -191,8 +299,37 @@ private:
   std::string name_;
 };
 
+struct CountDurationArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
 template <class T>
-class count_duration_plugin final : public function_plugin {
+class CountDurationFunction final {
+public:
+  auto eval(CountDurationArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto const name = duration_function_name<T, true>();
+    const auto unit = std::chrono::duration_cast<tenzir::duration>(T{1});
+    if constexpr (std::same_as<T, std::chrono::nanoseconds>) {
+      static_assert(std::same_as<int64_t, tenzir::duration::rep>);
+      return nova::apply_kernel<1>(frame, name, {args.x}, args.call,
+                                   [](diagnostic_handler&,
+                                      nova::Duration v) -> Option<nova::Int> {
+                                     return v.count();
+                                   });
+    } else {
+      return nova::apply_kernel<1>(
+        frame, name, {args.x}, args.call,
+        [unit](diagnostic_handler&, nova::Duration v) -> Option<nova::Float> {
+          return static_cast<double>(v.count()) / unit.count();
+        });
+    }
+  }
+};
+
+template <class T>
+class count_duration_plugin final : public nova::FunctionPlugin {
 public:
   count_duration_plugin() = default;
 
@@ -205,6 +342,14 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<CountDurationArgs, CountDurationFunction<T>>{};
+    d.positional("x", &CountDurationArgs::x, "duration");
+    d.call_location(&CountDurationArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

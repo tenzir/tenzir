@@ -35,12 +35,18 @@ class Operator;
 /// use; add new alternatives on demand. Every alternative multiplies the number
 /// of lambda instantiations in the generic `match` over this variant, of which
 /// the executor alone has a dozen.
+// `nova::Events` is a peer to `table_slice`, so it gets the same set of
+// Input/Output combinations.
 using AnyOperator = variant<
   Box<Operator<void, void>>, Box<Operator<void, chunk_ptr>>,
-  Box<Operator<void, table_slice>>, Box<Operator<chunk_ptr, chunk_ptr>>,
-  Box<Operator<chunk_ptr, table_slice>>, Box<Operator<table_slice, chunk_ptr>>,
+  Box<Operator<void, table_slice>>, Box<Operator<void, nova::Events>>,
+  Box<Operator<chunk_ptr, chunk_ptr>>, Box<Operator<chunk_ptr, table_slice>>,
+  Box<Operator<chunk_ptr, nova::Events>>, Box<Operator<table_slice, chunk_ptr>>,
   Box<Operator<table_slice, table_slice>>,
   Box<Operator<table_slice, table_slice, true>>,
-  Box<Operator<table_slice, void>>, Box<Operator<chunk_ptr, void>>>;
+  Box<Operator<table_slice, void>>, Box<Operator<nova::Events, chunk_ptr>>,
+  Box<Operator<nova::Events, nova::Events>>,
+  Box<Operator<nova::Events, nova::Events, true>>,
+  Box<Operator<nova::Events, void>>, Box<Operator<chunk_ptr, void>>>;
 
 } // namespace tenzir

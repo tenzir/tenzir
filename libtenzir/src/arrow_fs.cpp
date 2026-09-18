@@ -74,7 +74,9 @@ constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
 
 } // namespace
 
-auto FromArrowFsOperator::start(JobId job, OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::start(JobId job, OpCtx& ctx) -> Task<void> {
   job_ = job;
   auto resolved = co_await resolve_url(ctx);
   if (not resolved) {
@@ -105,12 +107,17 @@ auto FromArrowFsOperator::start(JobId job, OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto FromArrowFsOperator::await_task(diagnostic_handler&) const -> Task<Any> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::await_task(diagnostic_handler&) const
+  -> Task<Any> {
   co_return co_await results_->dequeue();
 }
 
-auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
-                                       OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
+                                               OpCtx& ctx) -> Task<void> {
   auto msg = result.as<AwaitResult>();
   co_await co_match(
     msg,
@@ -250,28 +257,42 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
     });
 }
 
-auto FromArrowFsOperator::process_sub(SubKeyView key, table_slice slice,
-                                      Push<table_slice>& push, OpCtx& ctx)
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::process_sub(SubKeyView key, Output slice,
+                                              Push<Output>& push, OpCtx& ctx)
   -> Task<void> {
   TENZIR_UNUSED(key, ctx);
-  auto const rows = slice.rows();
+  auto const rows = [&] {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      return slice.active_count();
+    } else {
+      return slice.rows();
+    }
+  }();
   co_await push(std::move(slice));
   events_read_counter_.add(rows);
 }
 
-auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
-  -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::finish_sub(SubKeyView key, Push<Output>&,
+                                             OpCtx&) -> Task<void> {
   results_->force_enqueue(SubFinished{as<uint64_t>(key)});
   co_return;
 }
 
-auto FromArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::finalize(Push<Output>&, OpCtx& ctx)
   -> Task<FinalizeBehavior> {
   co_await cleanup_files(ctx.dh());
   co_return FinalizeBehavior::done;
 }
 
-auto FromArrowFsOperator::state() -> OperatorState {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::state() -> OperatorState {
   if (base_args_.watch) {
     return OperatorState::normal;
   }
@@ -287,7 +308,9 @@ auto FromArrowFsOperator::state() -> OperatorState {
   return OperatorState::done;
 }
 
-auto FromArrowFsOperator::snapshot(Serde& serde) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::snapshot(Serde& serde) -> void {
   serde("scan_complete_", scan_complete_);
   serde("pending_", pending_);
   serde("processing_", processing_);
@@ -296,8 +319,10 @@ auto FromArrowFsOperator::snapshot(Serde& serde) -> void {
   serde("previous_", previous_);
 }
 
-auto FromArrowFsOperator::cleanup_file(std::string path,
-                                       diagnostic_handler& dh) const
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
+                                               diagnostic_handler& dh) const
   -> Task<void> {
   if (base_args_.remove) {
     co_await remove_file(path, dh);
@@ -341,7 +366,10 @@ auto FromArrowFsOperator::cleanup_file(std::string path,
   }
 }
 
-auto FromArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::cleanup_files(diagnostic_handler& dh)
+  -> Task<void> {
   // PERF: We could probably batch these calls.
   auto tasks = std::vector<Task<void>>{};
   for (auto& path : cleanup_pending_) {
@@ -351,11 +379,15 @@ auto FromArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
   cleanup_pending_.clear();
 }
 
-auto FromArrowFsOperator::post_commit(OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::post_commit(OpCtx& ctx) -> Task<void> {
   co_await cleanup_files(ctx.dh());
 }
 
-auto FromArrowFsOperator::restore_processing(OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
   if (not processing_) {
     co_return;
   }
@@ -424,7 +456,9 @@ auto FromArrowFsOperator::restore_processing(OpCtx& ctx) -> Task<void> {
   previous_.emplace(file_info);
 }
 
-auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::restore(OpCtx& ctx) -> Task<void> {
   co_await restore_processing(ctx);
   // Restore pending files
   auto restored = std::deque<TrackedFile>{};
@@ -444,7 +478,9 @@ auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
   pending_ = std::move(restored);
 }
 
-auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
   ctx.spawn_task([this, &dh = ctx.dh()]() -> Task<void> {
     while (true) {
       auto start = std::chrono::steady_clock::now();
@@ -560,15 +596,21 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
   });
 }
 
-auto FromArrowFsOperator::owns(std::string_view path) const -> bool {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::owns(std::string_view path) const -> bool {
   return job_.owns(path);
 }
 
-auto FromArrowFsOperator::is_scan_reporter() const -> bool {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::is_scan_reporter() const -> bool {
   return job_.index == 0;
 }
 
-auto FromArrowFsOperator::start_next_job(OpCtx& ctx) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::start_next_job(OpCtx& ctx) -> void {
   TENZIR_ASSERT(not processing_);
   if (pending_.empty()) {
     return;
@@ -585,18 +627,28 @@ auto FromArrowFsOperator::start_next_job(OpCtx& ctx) -> void {
                });
 }
 
-auto FromArrowFsOperator::skip_job(OpCtx& ctx) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::skip_job(OpCtx& ctx) -> void {
   processing_.reset();
   start_next_job(ctx);
 }
 
-auto FromArrowFsOperator::is_current_file(uint64_t file_id) const -> bool {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::is_current_file(uint64_t file_id) const
+  -> bool {
   return processing_ and processing_->file_id == file_id;
 }
 
-auto FromArrowFsOperator::is_globbing() const -> bool {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::is_globbing() const -> bool {
   return glob_.size() != 1 or not is<std::string>(glob_[0]);
 }
+
+template class FromArrowFsOperator<table_slice>;
+template class FromArrowFsOperator<nova::Events>;
 
 // =============================================================================
 // ToArrowFsOperator

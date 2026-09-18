@@ -6,7 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/stringify.hpp"
+#include "tenzir/nova/type_system.hpp"
+
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -18,11 +28,13 @@
 #include <arrow/array/builder_nested.h>
 #include <arrow/compute/api.h>
 #include <arrow/util/utf8.h>
+#include <fmt/format.h>
 #include <re2/re2.h>
 
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -121,13 +133,15 @@ auto replace_literal(std::string_view input, std::string_view pattern,
 }
 
 auto validate_max_replacements(Option<located<int64_t>> const& max_replacements,
-                               session ctx) -> void {
+                               diagnostic_handler& dh) -> failure_or<void> {
   if (max_replacements and max_replacements->inner < 0) {
     diagnostic::error("`max` must be at least 0, but got {}",
                       max_replacements->inner)
       .primary(*max_replacements)
-      .emit(ctx);
+      .emit(dh);
+    return failure::promise();
   }
+  return {};
 }
 
 auto replace_substring(multi_series subjects, char const* arrow_function,
@@ -182,17 +196,55 @@ auto literal_string_arg(ast::expression const& expr) -> Option<std::string> {
   return None{};
 }
 
-class starts_or_ends_with : public virtual function_plugin {
-public:
-  explicit starts_or_ends_with(bool starts_with) : starts_with_{starts_with} {
-  }
+struct StartsEndsWithArgs {
+  nova::ValueArgument x;
+  nova::ValueArgument prefix;
+  bool ignore_case = false;
+  location call;
+};
 
+template <bool StartsWith>
+class StartsEndsWithFunction final {
+public:
+  auto eval(StartsEndsWithArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    return apply_kernel<2>(
+      frame, (StartsWith ? "starts_with" : "ends_with"), {args.x, args.prefix},
+      args.call,
+      [ignore_case = args.ignore_case](diagnostic_handler&,
+                                       std::string_view subject,
+                                       std::string_view arg) -> Option<Bool> {
+        if (ignore_case) {
+          auto const subject_folded = detail::utf8_fold_case(subject);
+          auto const arg_folded = detail::utf8_fold_case(arg);
+          return StartsWith ? subject_folded.starts_with(arg_folded)
+                            : subject_folded.ends_with(arg_folded);
+        }
+        return StartsWith ? subject.starts_with(arg) : subject.ends_with(arg);
+      });
+  }
+};
+
+template <bool StartsWith>
+class starts_or_ends_with : public nova::FunctionPlugin {
+public:
   auto name() const -> std::string override {
-    return starts_with_ ? "starts_with" : "ends_with";
+    return StartsWith ? "starts_with" : "ends_with";
   }
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<StartsEndsWithArgs,
+                                     StartsEndsWithFunction<StartsWith>>{};
+    d.positional("x", &StartsEndsWithArgs::x, "string");
+    d.positional("prefix", &StartsEndsWithArgs::prefix, "string");
+    d.named_optional("ignore_case", &StartsEndsWithArgs::ignore_case);
+    d.call_location(&StartsEndsWithArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -207,8 +259,8 @@ public:
           .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
-                               arg_expr = std::move(arg_expr), ignore_case,
-                               this](evaluator eval, session ctx) -> series {
+                               arg_expr = std::move(arg_expr), ignore_case](
+                                evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(eval.length()));
@@ -236,7 +288,7 @@ public:
             continue;
           }
           auto result = bool{};
-          if (starts_with_) {
+          if (StartsWith) {
             result = subject_array->Value(i).starts_with(arg_array->Value(i));
           } else {
             result = subject_array->Value(i).ends_with(arg_array->Value(i));
@@ -247,9 +299,6 @@ public:
       return series{bool_type{}, finish(b)};
     });
   }
-
-private:
-  bool starts_with_;
 };
 
 class match_regex : public virtual function_plugin {
@@ -729,7 +778,42 @@ private:
   std::shared_ptr<arrow::DataType> result_arrow_ty_;
 };
 
-class replace : public virtual function_plugin {
+struct ReplaceArgs {
+  nova::ValueArgument x;
+  nova::ValueArgument pattern;
+  nova::ValueArgument replacement;
+  Option<located<int64_t>> max;
+  bool ignore_case = false;
+  location call;
+};
+
+class ReplaceFunction final {
+public:
+  auto eval(ReplaceArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto max = args.max ? args.max->inner : int64_t{-1};
+    auto warn_too_large = WarnOnce{};
+    return apply_kernel<3>(
+      frame, "replace_fn", {args.x, args.pattern, args.replacement}, args.call,
+      [max, &warn_too_large, ignore_case = args.ignore_case](
+        diagnostic_handler& dh, std::string_view subject,
+        std::string_view pattern,
+        std::string_view replacement) -> Option<String> {
+        auto result = replace_literal(subject, pattern, replacement, max,
+                                      ignore_case, max_string_size);
+        if (not result) {
+          warn_too_large(dh, diagnostic::warning(
+                               "`replace` result exceeds maximum string "
+                               "size"));
+          return None{};
+        }
+        return result;
+      });
+  }
+};
+
+class replace : public nova::FunctionPlugin {
 public:
   replace() = default;
   explicit replace(bool regex) : regex_{regex} {
@@ -745,6 +829,28 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ReplaceArgs, ReplaceFunction>{};
+    d.positional("x", &ReplaceArgs::x, "string");
+    d.positional("pattern", &ReplaceArgs::pattern, "string");
+    d.positional("replacement", &ReplaceArgs::replacement, "string");
+    d.named("max", &ReplaceArgs::max);
+    d.named_optional("ignore_case", &ReplaceArgs::ignore_case);
+    d.call_location(&ReplaceArgs::call);
+    d.validate([regex = regex_](ReplaceArgs& args,
+                                diagnostic_handler& dh) -> failure_or<void> {
+      if (regex) {
+        diagnostic::error(
+          "`replace_regex` is not yet supported for the nova evaluator")
+          .primary(args.call)
+          .emit(dh);
+        return failure::promise();
+      }
+      return validate_max_replacements(args.max, dh);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -763,7 +869,7 @@ public:
         .positional("replacement", replacement)
         .named("max", max_replacements);
       TRY(parser.parse(inv, ctx));
-      validate_max_replacements(max_replacements, ctx);
+      TRY(validate_max_replacements(max_replacements, ctx));
       return function_use::make(
         [this, subject_expr = std::move(subject_expr),
          pattern = std::move(pattern), replacement = std::move(replacement),
@@ -780,7 +886,7 @@ public:
       .named("max", max_replacements)
       .named_optional("ignore_case", ignore_case);
     TRY(parser.parse(inv, ctx));
-    validate_max_replacements(max_replacements, ctx);
+    TRY(validate_max_replacements(max_replacements, ctx));
     auto literal_pattern = literal_string_arg(pattern_expr);
     auto literal_replacement = literal_string_arg(replacement_expr);
     return function_use::make(
@@ -935,8 +1041,32 @@ private:
   bool regex_ = {};
 };
 
+struct StringArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
 template <bool Deprecated>
-class string_fn : public virtual function_plugin {
+class StringFunction final {
+public:
+  auto eval(StringArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    if constexpr (Deprecated) {
+      diagnostic::warning("`str` has been renamed to `string`")
+        .note("`str` alias will be removed and become a hard error in a future "
+              "release")
+        .primary(args.call)
+        .emit(frame);
+    }
+    auto subject = args.x;
+    // `stringify` renders every row of the frame's mask, nulls included.
+    return Array<Data>{stringify(subject.data, frame.mask())};
+  }
+};
+
+template <bool Deprecated>
+class string_fn : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return Deprecated ? "str" : "string";
@@ -944,6 +1074,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<StringArgs, StringFunction<Deprecated>>{};
+    d.positional("x", &StringArgs::x, "any");
+    d.call_location(&StringArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -966,7 +1103,189 @@ public:
   }
 };
 
-class split_fn : public virtual function_plugin {
+struct SplitArgs {
+  nova::ValueArgument x;
+  located<std::string> pattern;
+  Option<located<int64_t>> max;
+  Option<location> reverse;
+  bool ignore_case = false;
+  location call;
+};
+
+class SplitFunction final {
+public:
+  auto eval(SplitArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto present = frame.mask();
+    auto const max
+      = args.max ? Option<int64_t>{args.max->inner} : Option<int64_t>{};
+    auto arg = args.x;
+    // Resolve the subject to a concrete `Array<String>` plus the mask of
+    // rows that are actually strings: either the whole column already is
+    // one, or it's a `UnionArray` with a `String` alternative among others.
+    // Nulls propagate silently; any other row is reported and excluded.
+    auto mask = present;
+    auto subject = Option<Array<String>>{};
+    match(
+      arg.data,
+      [&](Array<String> s) {
+        subject = std::move(s);
+      },
+      [&](const Array<Null>&) {},
+      [&](const UnionArray& u) {
+        auto strings = u.get_alternative<String>();
+        auto const string_present = strings
+                                      ? mask & strings->present
+                                      : storage::BitMap{mask.length(), false};
+        if (mask.and_not(string_present)
+              .and_not(u.alternative_mask<Null>())
+              .any()) {
+          diagnostic::warning("expected `string`, got a different type")
+            .primary(args.x.source)
+            .emit(frame);
+        }
+        mask = string_present;
+        if (strings) {
+          subject = std::move(strings->data);
+        }
+      },
+      [&](const auto&) {
+        diagnostic::warning("expected `string`, got a different type")
+          .primary(args.x.source)
+          .emit(frame);
+      });
+    if (not subject) {
+      return frame.null();
+    }
+    auto const length = subject->length();
+    auto ranges = storage::SharedOwner<storage::Span[]>::Builder{};
+    // Appends one `Span` per piece of `v` split on `pattern`/`ignore_case`,
+    // with `base` added to every offset so the spans can point into
+    // whichever byte buffer `v` was sliced from.
+    auto const split_into = [&](std::string_view v, storage::Index base) {
+      if (args.ignore_case and not args.pattern.inner.empty()) {
+        auto const folded = detail::utf8_fold_case(args.pattern.inner);
+        auto const found = detail::utf8_fold_case_find(v, folded);
+        auto const first = max and found.size() > static_cast<size_t>(*max)
+                               and args.reverse.has_value()
+                             ? found.size() - static_cast<size_t>(*max)
+                             : size_t{0};
+        auto const last = max and found.size() > static_cast<size_t>(*max)
+                              and not args.reverse.has_value()
+                            ? static_cast<size_t>(*max)
+                            : found.size();
+        auto pos = base;
+        for (auto k = first; k < last; ++k) {
+          auto const [s, en] = found[k];
+          ranges.emplace_back(pos, base + static_cast<storage::Index>(s));
+          pos = base + static_cast<storage::Index>(en);
+        }
+        ranges.emplace_back(pos, base + static_cast<storage::Index>(v.size()));
+        return;
+      }
+      if (args.pattern.inner.empty()) {
+        ranges.emplace_back(base, base + static_cast<storage::Index>(v.size()));
+        return;
+      }
+      // `max`+`reverse` together need the total match count up front, to
+      // know how many leading matches to skip; every other combination can
+      // emit each piece as soon as its closing match is found.
+      auto skip = size_t{0};
+      if (max and args.reverse.has_value()) {
+        auto total = size_t{0};
+        for (auto pos = size_t{0};;) {
+          auto const match = v.find(args.pattern.inner, pos);
+          if (match == std::string_view::npos) {
+            break;
+          }
+          ++total;
+          pos = match + args.pattern.inner.size();
+        }
+        auto const count = static_cast<size_t>(*max);
+        skip = total > count ? total - count : 0;
+      }
+      auto const limit = max ? static_cast<size_t>(*max) : SIZE_MAX;
+      auto piece_begin = size_t{0};
+      auto pos = size_t{0};
+      auto emitted = size_t{0};
+      while (emitted < limit) {
+        auto const match = v.find(args.pattern.inner, pos);
+        if (match == std::string_view::npos) {
+          break;
+        }
+        pos = match + args.pattern.inner.size();
+        if (skip > 0) {
+          --skip;
+          continue;
+        }
+        ranges.emplace_back(base + static_cast<storage::Index>(piece_begin),
+                            base + static_cast<storage::Index>(match));
+        piece_begin = pos;
+        ++emitted;
+      }
+      ranges.emplace_back(base + static_cast<storage::Index>(piece_begin),
+                          base + static_cast<storage::Index>(v.size()));
+    };
+    return match(
+      subject->storage(),
+      [&](const storage::DenseStringOffsetStorage& dense) -> Array<Data> {
+        auto spans = storage::SharedOwner<storage::Span[]>::Builder{};
+        auto begin = storage::Index{0};
+        for (auto i = storage::Index{0}; i < length; ++i) {
+          if (mask.get(i)) {
+            auto const row = dense.span(i);
+            split_into(*subject->get(i), row.begin);
+          }
+          auto const end = static_cast<storage::Index>(ranges.size());
+          spans.emplace_back(begin, end);
+          begin = end;
+        }
+        auto pieces = Array<String>{
+          storage::DenseStringOffsetStorage{dense.data(), ranges.finish()}};
+        auto result
+          = Array<List>{spans.finish(), Array<Data>{std::move(pieces)}};
+        // Non-string rows never got pieces written, so they become nulls.
+        return Array<Data>{std::move(result)}.null_where(present.and_not(mask));
+      },
+      [&](const storage::ConstantStorage<std::string, std::string_view>&)
+        -> Array<Data> {
+        // Every row holds the same value, so the split itself runs exactly
+        // once; each selected row then gets its own copy of the pieces. Spans
+        // could instead point every row at one shared copy, but overlapping
+        // spans break `merge_lists`, which sizes its value mask from a single
+        // row-to-element mapping.
+        auto const v = *subject->get(0);
+        split_into(v, storage::Index{0});
+        auto const piece_ranges = ranges.finish();
+        auto const piece_count
+          = static_cast<storage::Index>(piece_ranges.length());
+        auto piece_builder = nova::ArrayBuilder<String>{};
+        auto spans = storage::SharedOwner<storage::Span[]>::Builder{};
+        auto begin = storage::Index{0};
+        for (auto i = storage::Index{0}; i < length; ++i) {
+          if (not mask.get(i)) {
+            spans.emplace_back(begin, begin);
+            continue;
+          }
+          for (auto const& span : piece_ranges) {
+            piece_builder.data(
+              v.substr(static_cast<size_t>(span.begin),
+                       static_cast<size_t>(span.end - span.begin)));
+          }
+          auto const end = begin + piece_count;
+          spans.emplace_back(begin, end);
+          begin = end;
+        }
+        auto pieces = piece_builder.finish();
+        auto result
+          = Array<List>{spans.finish(), Array<Data>{std::move(pieces)}};
+        return Array<Data>{std::move(result)}.null_where(present.and_not(mask));
+      });
+  }
+};
+
+class split_fn : public nova::FunctionPlugin {
 public:
   split_fn() = default;
   explicit split_fn(bool regex) : regex_{regex} {
@@ -978,6 +1297,35 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SplitArgs, SplitFunction>{};
+    d.positional("x", &SplitArgs::x, "string");
+    d.positional("pattern", &SplitArgs::pattern);
+    d.named("max", &SplitArgs::max);
+    d.named("reverse", &SplitArgs::reverse);
+    d.named_optional("ignore_case", &SplitArgs::ignore_case);
+    d.call_location(&SplitArgs::call);
+    d.validate([regex = regex_](SplitArgs& args,
+                                diagnostic_handler& dh) -> failure_or<void> {
+      if (regex) {
+        diagnostic::error(
+          "`split_regex` is not yet supported for the nova evaluator")
+          .primary(args.call)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (args.max and args.max->inner < 0) {
+        diagnostic::error("`max` must be at least 0, but got {}",
+                          args.max->inner)
+          .primary(*args.max)
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -1296,8 +1644,8 @@ public:
 using namespace tenzir;
 using namespace tenzir::plugins::string;
 
-TENZIR_REGISTER_PLUGIN(starts_or_ends_with{true})
-TENZIR_REGISTER_PLUGIN(starts_or_ends_with{false})
+TENZIR_REGISTER_PLUGIN(starts_or_ends_with<true>)
+TENZIR_REGISTER_PLUGIN(starts_or_ends_with<false>)
 
 TENZIR_REGISTER_PLUGIN(match_regex)
 

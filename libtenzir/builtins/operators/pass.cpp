@@ -43,6 +43,18 @@ public:
   }
 };
 
+class PassEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit PassEvents(PassArgs /*args*/) {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await push(std::move(input));
+  }
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -50,7 +62,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<PassArgs, PassTableSlice, PassChunk>{};
+    auto d = Describer<PassArgs, PassTableSlice, PassChunk, PassEvents>{};
     return d.optimize(
       [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
         return {

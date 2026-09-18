@@ -138,7 +138,7 @@ template <class List>
 using tl_reverse_t = typename tl_reverse<List>::type;
 
 template <class List, class T>
-constexpr auto tl_contains_v = tl_contains<List, T>::value;
+inline constexpr auto tl_contains_v = tl_contains<List, T>::value;
 
 template <class ListA, class ListB>
 struct tl_concat_impl;

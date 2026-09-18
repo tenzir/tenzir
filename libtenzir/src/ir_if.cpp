@@ -12,6 +12,12 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/multi_series.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_ctx.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
@@ -101,6 +107,100 @@ private:
   ast::expression condition_;
 };
 
+/// Runtime operator for `if` on `nova::Events`: evaluates the condition
+/// against the input's active rows, yielding a boolean mask, and routes rows
+/// to port 0 (consequence) where the condition is `true` and to port 1
+/// (alternative) where it is `false`, absent, or non-boolean. Unlike the
+/// `table_slice` version, rows are never physically split: both branches
+/// receive the full `data`, differing only in which rows their `mask` keeps
+/// active.
+class IfOpNova final : public Operator<nova::Events, nova::Events, true> {
+public:
+  explicit IfOpNova(ast::expression condition)
+    : condition_location_{condition.get_location()},
+      condition_{std::move(condition)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto evaluator = nova::Evaluator::make(
+      std::move(condition_), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not evaluator) {
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+  }
+
+  auto process(nova::Events input, PushPorts<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto& dh = ctx.dh();
+    TENZIR_ASSERT(evaluator_);
+    auto result = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    // A uniformly-boolean condition surfaces as `Array<Bool>` directly; a
+    // mixed-type condition surfaces as a `UnionArray`, in which case we pull
+    // out just the `Bool` alternative (with its own present mask) and treat
+    // every other row as "not boolean".
+    auto bool_data = Option<nova::Array<nova::Bool>>{};
+    auto bool_present = nova::storage::BitMap{input.length(), false};
+    auto has_non_bool = false;
+    match(
+      result,
+      [&](const nova::Array<nova::Bool>& b) {
+        bool_data = b;
+        bool_present = input.mask;
+      },
+      [&](const nova::UnionArray& u) {
+        if (auto alt = u.get_alternative<nova::Bool>()) {
+          bool_data = std::move(alt->data);
+          bool_present = input.mask & alt->present;
+        }
+        has_non_bool = input.mask.and_not(bool_present).any();
+      },
+      [&](const auto&) {
+        has_non_bool = input.mask.any();
+      });
+    if (has_non_bool) {
+      diagnostic::warning("expected `bool`")
+        .primary(condition_location_)
+        .emit(dh);
+    }
+    if (not bool_data) {
+      co_await push(1, std::move(input));
+      co_return;
+    }
+    auto pred_mask = std::get<nova::storage::BitMap>(bool_data->storage());
+    auto then_mask = input.mask & bool_present & pred_mask;
+    auto else_mask = input.mask.and_not(then_mask);
+    // Only share `data` between the branches when both actually receive
+    // rows. A shared record array forces the first mutation on either side to
+    // deep-copy its storage, so hand over our reference whenever we can.
+    const auto then_any = then_mask.any();
+    const auto else_any = else_mask.any();
+    if (then_any and not else_any) {
+      input.mask = std::move(then_mask);
+      co_await push(0, std::move(input));
+      co_return;
+    }
+    if (else_any and not then_any) {
+      input.mask = std::move(else_mask);
+      co_await push(1, std::move(input));
+      co_return;
+    }
+    if (then_any) {
+      co_await push(0,
+                    nova::Events{input.data, std::move(then_mask), input.meta});
+    }
+    if (else_any) {
+      co_await push(1, nova::Events{std::move(input.data), std::move(else_mask),
+                                    input.meta});
+    }
+  }
+
+private:
+  location condition_location_;
+  ast::expression condition_;
+  Option<nova::Evaluator> evaluator_;
+};
+
 class IfIr final : public ir::Operator {
 public:
   IfIr() = default;
@@ -180,9 +280,14 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice, true>>{
-      IfOp{args_.condition}.with_name("if")};
+  auto spawn(element_type_tag input) const -> AnyOperator override {
+    if (input.is<table_slice>()) {
+      return Box<tenzir::Operator<table_slice, table_slice, true>>{
+        IfOp{args_.condition}.with_name("if")};
+    }
+    TENZIR_ASSERT(input.is<nova::Events>());
+    return Box<tenzir::Operator<nova::Events, nova::Events, true>>{
+      IfOpNova{args_.condition}.with_name("if")};
   }
 
   auto parallelizable() const -> bool override {
@@ -202,7 +307,8 @@ public:
     // rows, port 1 = alternative for `false`/`null` rows). Without an explicit
     // `else`, the alternative branch is empty and forwards unmatched rows
     // unchanged. Both branch tails are returned so the consumer merges them.
-    auto ty = tag_v<table_slice>;
+    auto ty
+      = input.empty() ? element_type_tag{tag_v<void>} : input.front().type;
     auto consequence = std::move(args_.consequence);
     auto alternative
       = args_.alternative ? std::move(*args_.alternative) : ir::pipeline{};
@@ -256,10 +362,10 @@ public:
       return then_ty;
     }
     // TODO: Improve diagnostic.
-    auto diag = diagnostic::error("incompatible branch output types: {} and {}",
-                                  operator_type_name(then_ty),
-                                  operator_type_name(else_ty))
-                  .primary(branch_location(args_.consequence));
+    auto diag
+      = diagnostic::error("incompatible branch output types: {} and {}",
+                          fmt::to_string(then_ty), fmt::to_string(else_ty))
+          .primary(branch_location(args_.consequence));
     if (args_.alternative) {
       diag = std::move(diag).secondary(branch_location(*args_.alternative));
     }

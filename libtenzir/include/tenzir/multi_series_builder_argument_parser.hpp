@@ -165,6 +165,12 @@ struct msb_validator {
         .primary(schema_only_loc.value_or(location::unknown))
         .emit(ctx);
     }
+    if (auto batch_size_val = ctx.get(batch_size);
+        batch_size_val and *batch_size_val == 0) {
+      diagnostic::error("`_batch_size` must be greater than zero")
+        .primary(ctx.get_location(batch_size).value_or(location::unknown))
+        .emit(ctx);
+    }
     return {};
   }
 };

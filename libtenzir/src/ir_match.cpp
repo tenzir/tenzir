@@ -12,6 +12,14 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_ctx.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -37,7 +45,7 @@ auto combine_branch_types(element_type_tag lhs, element_type_tag rhs,
     return lhs;
   }
   diagnostic::error("incompatible branch output types: {} and {}",
-                    operator_type_name(lhs), operator_type_name(rhs))
+                    fmt::to_string(lhs), fmt::to_string(rhs))
     .primary(primary)
     .emit(dh);
   return failure::promise();
@@ -104,6 +112,10 @@ struct MatchArgs {
 };
 
 auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool;
+auto matches_pattern(nova::RowView<nova::Data> const& value,
+                     MatchPattern const& pattern) -> bool;
+auto compare_range_bounds(data const& lower, data const& upper)
+  -> std::partial_ordering;
 
 auto make_boolean_array(std::vector<bool> const& mask)
   -> std::shared_ptr<arrow::BooleanArray> {
@@ -211,6 +223,136 @@ private:
   }
 
   MatchArgs args_;
+};
+
+/// Extracts a boolean mask from the result of evaluating a `bool`-typed
+/// expression against `nova::Events`. A uniformly-boolean result surfaces as
+/// `Array<Bool>` directly; a mixed-type result surfaces as a `UnionArray`, in
+/// which case only the `Bool` alternative (with its own present mask) is used
+/// and every other row is treated as "not boolean". Mirrors `IfOpNova`.
+auto extract_bool_mask(nova::Array<nova::Data> const& result,
+                       nova::storage::BitMap const& mask,
+                       diagnostic_handler& dh, ast::expression const& source,
+                       bool warn_on_non_bool) -> nova::storage::BitMap {
+  auto bool_data = Option<nova::Array<nova::Bool>>{};
+  auto bool_present = nova::storage::BitMap{mask.length(), false};
+  auto has_non_bool = false;
+  match(
+    result,
+    [&](nova::Array<nova::Bool> const& b) {
+      bool_data = b;
+      bool_present = mask;
+    },
+    [&](nova::UnionArray const& u) {
+      if (auto alt = u.get_alternative<nova::Bool>()) {
+        bool_data = std::move(alt->data);
+        bool_present = mask & alt->present;
+      }
+      has_non_bool = mask.and_not(bool_present).any();
+    },
+    [&](auto const&) {
+      has_non_bool = mask.any();
+    });
+  if (has_non_bool and warn_on_non_bool) {
+    diagnostic::warning("expected `bool`").primary(source).emit(dh);
+  }
+  if (not bool_data) {
+    return nova::storage::BitMap{mask.length(), false};
+  }
+  auto pred_mask = std::get<nova::storage::BitMap>(bool_data->storage());
+  return bool_present & pred_mask;
+}
+
+/// Evaluates a lowered `MatchPattern` against `nova::Events`, returning the
+/// mask of rows the pattern matches. `Wildcard` is expected to be handled by
+/// the caller (it matches unconditionally without evaluating `scrutinee`).
+auto eval_pattern_mask(nova::Array<nova::Data> const& scrutinee,
+                       MatchPattern const& pattern,
+                       nova::storage::BitMap const& mask)
+  -> nova::storage::BitMap {
+  auto result = nova::storage::BitMap::Mutable{mask.length()};
+  for (auto row : nova::storage::true_bits(mask)) {
+    result.set(row, matches_pattern(scrutinee.get(row), pattern));
+  }
+  return std::move(result).finish();
+}
+
+/// Runtime operator for `match` on `nova::Events`: evaluates the scrutinee
+/// and patterns/guards against the input's active rows, yielding one mask
+/// per arm, and routes rows to the first arm whose pattern matches and whose
+/// guard passes (one output port per arm). Unlike the `table_slice` version,
+/// rows are never physically split: every output port receives the full
+/// `data`, differing only in which rows their `mask` keeps active.
+class MatchOpNova final : public Operator<nova::Events, nova::Events, true> {
+public:
+  explicit MatchOpNova(MatchArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto scrutinee = nova::Evaluator::make(
+      args_.scrutinee, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not scrutinee) {
+      co_return;
+    }
+    scrutinee_.emplace(std::move(*scrutinee));
+    guards_.reserve(args_.arms.size());
+    for (auto const& arm : args_.arms) {
+      if (not arm.guard) {
+        guards_.push_back(None{});
+        continue;
+      }
+      auto guard = nova::Evaluator::make(
+        *arm.guard, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not guard) {
+        co_return;
+      }
+      guards_.push_back(std::move(*guard));
+    }
+  }
+
+  auto process(nova::Events input, PushPorts<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto& dh = ctx.dh();
+    TENZIR_ASSERT(scrutinee_);
+    TENZIR_ASSERT(guards_.size() == args_.arms.size());
+    auto scrutinee = scrutinee_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto matched = nova::storage::BitMap{input.length(), false};
+    for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
+         ++arm_index) {
+      auto const& arm = args_.arms[arm_index];
+      auto remaining = input.mask.and_not(matched);
+      auto candidate_mask = nova::storage::BitMap{input.length(), false};
+      if (arm.wildcard) {
+        candidate_mask = remaining;
+      } else {
+        for (auto const& pattern : arm.patterns) {
+          candidate_mask
+            = candidate_mask | eval_pattern_mask(scrutinee, pattern, remaining);
+        }
+        candidate_mask = candidate_mask & remaining;
+      }
+      if (arm.guard and candidate_mask.any()) {
+        TENZIR_ASSERT(guards_[arm_index]);
+        auto candidate_events = input;
+        candidate_events.mask = candidate_mask;
+        auto guard_result
+          = guards_[arm_index]->eval(candidate_events, nova::EvalCtx{ctx.dh()});
+        candidate_mask = candidate_mask
+                         & extract_bool_mask(guard_result, candidate_mask, dh,
+                                             *arm.guard, true);
+      }
+      matched = matched | candidate_mask;
+      if (candidate_mask.any()) {
+        co_await push(arm_index,
+                      nova::Events{input.data, candidate_mask, input.meta});
+      }
+    }
+  }
+
+private:
+  MatchArgs args_;
+  Option<nova::Evaluator> scrutinee_;
+  std::vector<Option<nova::Evaluator>> guards_;
 };
 
 auto const_eval_match_expression(ast::expression const& expr, location source,
@@ -403,6 +545,41 @@ auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool {
     });
 }
 
+auto compare_nova_row(nova::RowView<nova::Data> const& value, data const& other)
+  -> std::partial_ordering {
+  return match(value, [&](auto view) -> std::partial_ordering {
+    using View = std::remove_cvref_t<decltype(view)>;
+    if constexpr (std::same_as<View, nova::RowView<nova::Record>>
+                  or std::same_as<View, nova::RowView<nova::List>>) {
+      return std::partial_ordering::unordered;
+    } else if constexpr (std::same_as<View, nova::RowView<nova::Null>>) {
+      return partial_order(data_view3{caf::none}, other);
+    } else {
+      return partial_order(data_view3{*view}, other);
+    }
+  });
+}
+
+auto matches_pattern(nova::RowView<nova::Data> const& value,
+                     MatchPattern const& pattern) -> bool {
+  return pattern.kind.match(
+    [&](MatchPattern::Wildcard const&) {
+      return true;
+    },
+    [&](MatchPattern::Constant const& constant) {
+      auto order = compare_nova_row(value, constant.value);
+      return order == std::partial_ordering::equivalent
+             or (order == std::partial_ordering::unordered
+                 and nova::materialize(value) == constant.value);
+    },
+    [&](MatchPattern::Range const& range) {
+      auto lower = compare_nova_row(value, range.lower);
+      auto upper = compare_nova_row(value, range.upper);
+      return lower == std::partial_ordering::greater
+             and upper == std::partial_ordering::less;
+    });
+}
+
 class MatchIr final : public ir::Operator {
 public:
   MatchIr() = default;
@@ -514,9 +691,14 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice, true>>{
-      MatchOp{args_}.with_name("match")};
+  auto spawn(element_type_tag input) const -> AnyOperator override {
+    if (input.is<table_slice>()) {
+      return Box<tenzir::Operator<table_slice, table_slice, true>>{
+        MatchOp{args_}.with_name("match")};
+    }
+    TENZIR_ASSERT(input.is<nova::Events>());
+    return Box<tenzir::Operator<nova::Events, nova::Events, true>>{
+      MatchOpNova{args_}.with_name("match")};
   }
 
   auto parallelizable() const -> bool override {
@@ -529,7 +711,8 @@ public:
     // evaluates the scrutinee and guards per row and routes each row to the
     // first arm that claims it. The arm tails are returned so the consumer
     // merges them.
-    auto ty = tag_v<table_slice>;
+    auto ty
+      = input.empty() ? element_type_tag{tag_v<void>} : input.front().type;
     auto branches = std::vector<ir::pipeline>{};
     branches.reserve(args_.arms.size());
     for (auto& arm : args_.arms) {
@@ -549,7 +732,7 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
-    if (input.is_not<table_slice>()) {
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("match operator expected events").emit(dh);
       return failure::promise();
     }

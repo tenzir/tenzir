@@ -402,8 +402,8 @@ auto to_diagnostic(const panic_exception& e) -> diagnostic {
     note += detail::format_frame(frame) + "\n";
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
-    .primary(location{detail::narrow_cast<uint32_t>(e.trace.begin),
-                      detail::narrow_cast<uint32_t>(e.trace.end)})
+    .primary(location{e.trace.begin, e.trace.end, e.trace.source_index,
+                      e.trace.callsite_index})
     .note(std::move(note))
     .done();
 }

@@ -200,6 +200,58 @@ auto parse_as_data(std::string_view s, tenzir::data& d) -> bool {
   return (l.template operator()<Types>(s, d) or ...);
 }
 
+/// Parses `s` as one of the types that a best-effort parser recognizes. This
+/// is equivalent to `parse_as_data<bool_type, [int64_type, uint64_type,
+/// double_type,] time_type, duration_type, subnet_type, ip_type>`, but the
+/// vast majority of strings in real-world data are none of these. Attempting
+/// all parsers on every string is expensive, so we first look at the leading
+/// character to skip parsers that cannot possibly accept the input. Every check
+/// below is a superset of what the corresponding parser accepts.
+template <bool WithNumbers>
+auto parse_common_types(std::string_view s, tenzir::data& res) -> bool {
+  TENZIR_ASSERT(not s.empty());
+  const auto c = s.front();
+  const auto is_digit = c >= '0' and c <= '9';
+  const auto is_hex_alpha = (c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F');
+  // Integers accept a sign. `std::from_chars` (used by the real parser and
+  // inside durations and times) additionally accepts a leading dot and
+  // `inf`/`nan`.
+  const auto number_like = is_digit or c == '-' or c == '+' or c == '.'
+                           or c == 'i' or c == 'I' or c == 'n' or c == 'N';
+  // The bool parser only accepts the literals `true` and `false`.
+  if ((c == 't' or c == 'f') and parse_as_data<bool_type>(s, res)) {
+    return true;
+  }
+  if constexpr (WithNumbers) {
+    if (number_like
+        and parse_as_data<int64_type, uint64_type, double_type>(s, res)) {
+      return true;
+    }
+  }
+  // Times start like a number, with `@` (UNIX timestamp), or with `now`/`in`.
+  if ((number_like or c == '@') and parse_as_data<time_type>(s, res)) {
+    return true;
+  }
+  if (number_like and parse_as_data<duration_type>(s, res)) {
+    return true;
+  }
+  // IPv4 addresses start with a digit and contain dots; IPv6 addresses start
+  // with a hex digit or a colon and always contain a colon.
+  const auto has_colon = s.find(':') != std::string_view::npos;
+  const auto ip_like = (is_digit and (has_colon or s.find('.') != s.npos))
+                       or ((is_hex_alpha or c == ':') and has_colon);
+  if (ip_like) {
+    if (s.find('/') != std::string_view::npos
+        and parse_as_data<subnet_type>(s, res)) {
+      return true;
+    }
+    if (parse_as_data<ip_type>(s, res)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 auto parse_enumeration(std::string_view s, const enumeration_type& e)
   -> detail::data_builder::data_parsing_result {
   s = detail::trim(s);
@@ -267,9 +319,11 @@ auto parse_time(std::string_view s, const type& seed)
 namespace detail::data_builder {
 
 auto best_effort_parser(std::string_view s) -> Option<data> {
+  if (s.empty()) {
+    return None{};
+  }
   tenzir::data res;
-  if (parse_as_data<bool_type, int64_type, uint64_type, double_type, time_type,
-                    duration_type, subnet_type, ip_type>(s, res)) {
+  if (parse_common_types<true>(s, res)) {
     return res;
   }
   return None{};
@@ -354,8 +408,7 @@ auto non_number_parser(std::string_view s, const tenzir::type* seed,
     return tenzir::data{std::string{}};
   }
   auto res = tenzir::data{};
-  if (parse_as_data<bool_type, time_type, duration_type, subnet_type, ip_type>(
-        s, res)) {
+  if (parse_common_types<false>(s, res)) {
     return res;
   }
   return {};

@@ -44,8 +44,10 @@ struct panic_exception final : std::exception {
   // We can't include the location.hpp header here as that'd be a circular
   // include, so we roll our own and convert it into a location upon printing.
   struct {
-    size_t begin = {};
-    size_t end = {};
+    uint32_t begin = {};
+    uint32_t end = {};
+    uint32_t source_index = {};
+    uint32_t callsite_index = {};
   } trace;
 };
 

@@ -50,12 +50,14 @@ auto global_registry() -> std::shared_ptr<const registry>;
 /// Type-erased pull.
 using AnyOpPull
   = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
-            Box<Pull<OperatorMsg<table_slice>>>>;
+            Box<Pull<OperatorMsg<table_slice>>>,
+            Box<Pull<OperatorMsg<nova::Events>>>>;
 
 /// Type-erased push.
 using AnyOpPush
   = variant<Box<Push<OperatorMsg<void>>>, Box<Push<OperatorMsg<chunk_ptr>>>,
-            Box<Push<OperatorMsg<table_slice>>>>;
+            Box<Push<OperatorMsg<table_slice>>>,
+            Box<Push<OperatorMsg<nova::Events>>>>;
 
 /// A single logical output port of an operator instance: the physical
 /// downstream lanes plus how to route data across them.
@@ -94,6 +96,10 @@ public:
       }
     } else if constexpr (std::same_as<T, chunk_ptr>) {
       if (not output or output->size() == 0) {
+        co_return;
+      }
+    } else if constexpr (std::same_as<T, nova::Events>) {
+      if (output.active_count() == 0) {
         co_return;
       }
     }
@@ -141,7 +147,7 @@ private:
   diagnostic_handler& dh_;
 };
 /// A type-erased stream message: either data or a signal.
-struct AnyOperatorMsg : variant<table_slice, chunk_ptr, Signal> {
+struct AnyOperatorMsg : variant<table_slice, chunk_ptr, nova::Events, Signal> {
   using variant::variant;
 
   template <class T>
@@ -267,12 +273,15 @@ auto SubHandle<Input>::close() -> Task<void>
 
 template class SubHandle<chunk_ptr>;
 template class SubHandle<table_slice>;
+template class SubHandle<nova::Events>;
 // Explicit instantiation of member template `push` (not covered by template
 // class).
 template auto SubHandle<chunk_ptr>::push(chunk_ptr)
   -> Task<Result<void, chunk_ptr>>;
 template auto SubHandle<table_slice>::push(table_slice)
   -> Task<Result<void, table_slice>>;
+template auto SubHandle<nova::Events>::push(nova::Events)
+  -> Task<Result<void, nova::Events>>;
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
@@ -462,6 +471,16 @@ protected:
   auto make_fused_bytes(ChannelId id)
     -> PushPull<OperatorMsg<chunk_ptr>> override {
     return inner_.make_fused_channel<chunk_ptr>(std::move(id));
+  }
+
+  auto make_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>> override {
+    return inner_.make_fused_channel<nova::Events>(std::move(id));
+  }
+
+  auto make_fused_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>> override {
+    return inner_.make_fused_channel<nova::Events>(std::move(id));
   }
 
 private:
@@ -985,6 +1004,9 @@ private:
                 [&](table_slice output) -> Task<void> {
                   co_await call_process_sub(make_view(key), std::move(output));
                 },
+                [&](nova::Events output) -> Task<void> {
+                  co_await call_process_sub(make_view(key), std::move(output));
+                },
                 [&](Signal signal) -> Task<void> {
                   co_await co_match(
                     signal,
@@ -1212,6 +1234,21 @@ private:
       });
   }
 
+  auto call_process_sub(SubKeyView key, nova::Events events) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
+    co_await co_match(
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->process_sub(key, std::move(events), ctx_ref);
+        } else {
+          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          co_await op->process_sub(key, std::move(events), push, ctx_ref);
+        }
+      });
+  }
+
   auto call_finish_sub(SubKeyView key) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
@@ -1251,7 +1288,7 @@ private:
         Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<In, DataInput>) {
           if constexpr (std::same_as<Out, void>) {
-            co_await op->process(input, ctx_ref);
+            co_await op->process(std::move(input), ctx_ref);
           } else if constexpr (MultipleOutputPorts) {
             auto pushes = std::vector<OpPushWrapper<Out>>{};
             auto refs = std::vector<Push<Out>*>{};
@@ -1261,10 +1298,10 @@ private:
               refs.push_back(&pushes.emplace_back(port, dh()));
             }
             auto push = PushPorts<Out>{refs};
-            co_await op->process(input, push, ctx_ref);
+            co_await op->process(std::move(input), push, ctx_ref);
           } else {
             auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
-            co_await op->process(input, push, ctx_ref);
+            co_await op->process(std::move(input), push, ctx_ref);
           }
         } else {
           TENZIR_UNREACHABLE();
@@ -1423,6 +1460,13 @@ private:
         co_await call_process(std::move(input));
       },
       [&](chunk_ptr input) -> Task<void> {
+        LOGV("got input in {}", op_name());
+        if (phase_ != Phase::running) {
+          co_return;
+        }
+        co_await call_process(std::move(input));
+      },
+      [&](nova::Events input) -> Task<void> {
         LOGV("got input in {}", op_name());
         if (phase_ != Phase::running) {
           co_return;

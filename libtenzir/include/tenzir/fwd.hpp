@@ -275,6 +275,10 @@ template <class Type>
 struct basic_series;
 using series = basic_series<type>;
 
+namespace nova {
+struct Events;
+} // namespace nova
+
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
 enum class bool_operator : uint8_t;

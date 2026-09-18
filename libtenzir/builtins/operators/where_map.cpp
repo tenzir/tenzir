@@ -7,6 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/lambda.hpp"
+#include "tenzir/nova/type_system.hpp"
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
@@ -563,6 +571,65 @@ auto describe_where() -> Description {
 
 using WhereArguments = OperatorArguments<WhereArgs, describe_where>;
 
+/// Runtime operator for `where` on `nova::Events`: evaluates the predicate
+/// against the input's active rows and keeps the rows where it is `true`.
+/// Rows are never physically filtered out; only the mask narrows, so the
+/// record array is passed through untouched.
+class WhereEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit WhereEvents(ast::expression expr)
+    : expr_location_{expr.get_location()}, expr_{std::move(expr)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto evaluator = nova::Evaluator::make(
+      std::move(expr_), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not evaluator) {
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(evaluator_);
+    auto result = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    // Resolves both the uniformly-boolean and the mixed-type case: the
+    // returned mask marks the rows that actually are `bool`.
+    auto predicate = result.get_alternative<nova::Bool>();
+    auto present = predicate ? input.mask & predicate->present
+                             : nova::storage::BitMap{input.length(), false};
+    if (input.mask.and_not(present).any()) {
+      diagnostic::warning("expected `bool`")
+        .primary(expr_location_)
+        .emit(ctx.dh());
+    }
+    if (not predicate) {
+      co_return;
+    }
+    static_assert(nova::Type<nova::Bool>::PhysicalStorage::size == 1,
+                  "implementation assumes bool is bitmap");
+    auto kept = std::move(present)
+                & as<nova::storage::BitMap>(predicate->data.storage());
+    if (not kept.any()) {
+      co_return;
+    }
+    input.mask = std::move(kept);
+    co_await push(std::move(input));
+  }
+
+  friend auto inspect(auto& f, WhereEvents& x) -> bool {
+    return f.object(x).fields(f.field("expr_location", x.expr_location_),
+                              f.field("expr", x.expr_));
+  }
+
+private:
+  location expr_location_;
+  ast::expression expr_;
+  Option<nova::Evaluator> evaluator_;
+};
+
+// TODO: Don't want to write this fully ourselves.
 class where_ir final : public ir::Operator {
 public:
   where_ir() = default;
@@ -580,12 +647,18 @@ public:
   }
 
   auto spawn(element_type_tag input) const -> AnyOperator override {
+    if (input.is<nova::Events>()) {
+      return WhereEvents{args_.get().predicate}.with_name("where");
+    }
     TENZIR_ASSERT(input.is<table_slice>());
     return Where{args_.get().predicate}.with_name("where");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
+    if (input.is<nova::Events>()) {
+      return tag_v<nova::Events>;
+    }
     if (input.is_not<table_slice>()) {
       // TODO: Do not duplicate these messages across the codebase.
       diagnostic::error("operator expects events")
@@ -652,7 +725,52 @@ public:
   }
 };
 
-class map_plugin final : public function_plugin {
+namespace {
+
+struct MapArgs {
+  nova::ValueArgument list;
+  nova::LambdaArgument lambda;
+};
+
+class MapFunction final {
+public:
+  auto eval(MapArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const& present = frame.mask();
+    auto const& subject = args.list;
+    auto list = subject.data.get_alternative<List>();
+    auto null = subject.data.get_alternative<Null>();
+    auto active = list ? list->present & present
+                       : storage::BitMap{present.length(), false};
+    auto invalid = present.and_not(active);
+    if (null) {
+      invalid = std::move(invalid).and_not(null->present);
+    }
+    if (invalid.any()) {
+      diagnostic::warning("expected `list`, got a different type")
+        .primary(subject.source)
+        .emit(frame);
+    }
+    if (not list or not active.any()) {
+      return frame.null();
+    }
+    // The frame expands the mask and the captures to the element rows,
+    // applies the lambda, and hands back the flattened results, which keep
+    // the input's spans and so re-nest without a copy.
+    auto primary = list->data.to_primary();
+    auto const& storage = as<storage::ListStorage>(primary.storage());
+    auto elements = frame.narrow(active).eval_elements(args.lambda, storage);
+    auto mapped
+      = Array<Data>{Array<List>{storage.spans(), std::move(elements)}};
+    // Rows that were not mapped (a null or non-list subject) become nulls.
+    return std::move(mapped).null_where(present.and_not(active));
+  }
+};
+
+} // namespace
+
+class map_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "map";
@@ -660,6 +778,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<MapArgs, MapFunction>{};
+    d.positional("list", &MapArgs::list, "list");
+    d.positional("function", &MapArgs::lambda, "any -> any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

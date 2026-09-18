@@ -33,7 +33,8 @@ struct FromAzureBlobStorageArgs : FromArrowFsArgs {
   Option<located<record>> azure_auth;
 };
 
-class FromAzureBlobStorageOperator final : public FromArrowFsOperator {
+class FromAzureBlobStorageOperator final
+  : public FromArrowFsOperator<table_slice> {
 public:
   explicit FromAzureBlobStorageOperator(FromAzureBlobStorageArgs args)
     : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},

@@ -39,7 +39,7 @@ struct FromS3Args : FromArrowFsArgs {
   location operator_location = location::unknown;
 };
 
-class FromS3Operator final : public FromArrowFsOperator {
+class FromS3Operator final : public FromArrowFsOperator<table_slice> {
 public:
   explicit FromS3Operator(FromS3Args args)
     : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},

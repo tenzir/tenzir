@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/eval_util.hpp"
+#include "tenzir/nova/events.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -72,6 +76,25 @@ private:
   DropArgs args_;
 };
 
+class DropNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit DropNova(DropArgs args)
+    : fields_{std::move(args.fields)},
+      drop_tree_{nova::DropTree::make(fields_)} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    input.data = drop_tree_.apply(std::move(input.data), input.mask);
+    co_await push(std::move(input));
+  }
+
+private:
+  std::vector<ast::field_path> fields_;
+  nova::DropTree drop_tree_;
+};
+
 class plugin2 final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -79,7 +102,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<DropArgs, Drop>{};
+    auto d = Describer<DropArgs, Drop, DropNova>{};
     d.parallelizable();
     auto fields = d.variadic("fields", &DropArgs::fields, "field");
     d.validate([=](DescribeCtx& ctx) -> Empty {

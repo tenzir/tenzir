@@ -11,6 +11,7 @@
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/source.hpp>
 #include <tenzir/tql2/exec.hpp>
@@ -70,6 +71,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
+  const auto nova = caf::get_or(inv.options, "tenzir.nova", false);
+  set_nova_enabled(nova);
   const auto stdout_color
     = (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
       or color_mode == "always";

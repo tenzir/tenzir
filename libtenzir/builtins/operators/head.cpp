@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/events.hpp"
+
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -49,6 +51,52 @@ private:
   uint64_t remaining_;
 };
 
+class HeadNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit HeadNova(HeadArgs args) : remaining_{args.count} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    // TODO: Do we want to guarantee this?
+    TENZIR_ASSERT(remaining_ > 0);
+    auto const active_count = detail::narrow<uint64_t>(input.active_count());
+    if (active_count <= remaining_) {
+      remaining_ -= active_count;
+      co_return co_await push(std::move(input));
+    }
+    // The final batch: clear set bits from the back of the mask until only
+    // `remaining_` of them are left.
+    auto mask = nova::storage::BitMap::Mutable{std::move(input.mask)};
+    auto excess = active_count - remaining_;
+    for (auto i = mask.length(); i-- > 0 and excess > 0;) {
+      if (mask.get(i)) {
+        mask.set(i, false);
+        --excess;
+      }
+    }
+    remaining_ = 0;
+    input.mask = std::move(mask).finish();
+    co_await push(std::move(input));
+  }
+
+  auto state() -> OperatorState override {
+    if (remaining_ == 0) {
+      // TODO: We also want to declare that we'll produce no more output and
+      // that we are ready to shutdown.
+      return OperatorState::done;
+    }
+    return OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("remaining", remaining_);
+  }
+
+private:
+  uint64_t remaining_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -56,7 +104,7 @@ public:
   };
 
   auto describe() const -> Description override {
-    auto d = Describer<HeadArgs, Head>{};
+    auto d = Describer<HeadArgs, Head, HeadNova>{};
     auto count = d.optional_positional("count", &HeadArgs::count);
     return d.optimize(
       [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {

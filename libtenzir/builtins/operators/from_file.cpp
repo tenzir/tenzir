@@ -23,14 +23,17 @@ struct FromFileArgs : FromArrowFsArgs {
   Option<location> mmap;
 };
 
-class FromFileOperator final : public FromArrowFsOperator {
+template <class Output>
+class FromFileOperator final : public FromArrowFsOperator<Output> {
 public:
   explicit FromFileOperator(FromFileArgs args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<Output>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
 protected:
+  using FromArrowFsOperator<Output>::filesystem;
+
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>> override {
     auto resolved = std::string{};
     auto requests = std::vector<secret_request>{
@@ -103,14 +106,43 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromFileArgs, FromFileOperator>{};
-    FromArrowFsArgs::describe_to(d);
+    // `from_file` relays the events produced by its subpipeline unchanged, so
+    // its output element type equals the subpipeline's output. We register
+    // both instantiations as implementations and use a custom spawner that
+    // inspects the subpipeline to pick the matching one. The subpipeline is
+    // fed bytes (`chunk_ptr`), so we infer its output for that input.
+    auto d = Describer<FromFileArgs, FromFileOperator<table_slice>,
+                       FromFileOperator<nova::Events>>{};
+    auto pipe_arg = FromArrowFsArgs::describe_to(d);
     d.named("mmap", &FromFileArgs::mmap);
     // Instances split the discovered files among themselves by path. We cannot
     // restrict this to globbing URLs because `url` is a secret that is only
     // resolved at runtime; instances that end up without files simply finish
     // immediately.
     d.parallelizable();
+    d.spawner([pipe_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<FromFileArgs, Input>>> {
+      if constexpr (not std::same_as<Input, void>) {
+        return {};
+      } else {
+        TRY(auto pipe, ctx.get(pipe_arg));
+        TRY(auto output, pipe.inner.infer_type(tag_v<chunk_ptr>, ctx));
+        return match(
+          output,
+          [](tag<nova::Events>) -> Option<SpawnWith<FromFileArgs, Input>> {
+            return SpawnWith<FromFileArgs, void>{
+              [](FromFileArgs args) -> Box<Operator<void, nova::Events>> {
+                return FromFileOperator<nova::Events>{std::move(args)};
+              }};
+          },
+          [](auto) -> Option<SpawnWith<FromFileArgs, Input>> {
+            return SpawnWith<FromFileArgs, void>{
+              [](FromFileArgs args) -> Box<Operator<void, table_slice>> {
+                return FromFileOperator<table_slice>{std::move(args)};
+              }};
+          });
+      }
+    });
     return d.without_optimize();
   }
 };

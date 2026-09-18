@@ -6,22 +6,144 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
+
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/overload.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <cmath>
+#include <limits>
+
+using namespace tenzir::nova;
 
 namespace tenzir::plugins::numeric {
 
 TENZIR_ENUM(mode, ceil, floor, round);
 
 namespace {
+struct RoundArgs {
+  ValueArgument x;
+  Option<located<duration>> unit;
+  location call;
+};
+
 template <mode Mode>
-class plugin final : public function_plugin {
+class RoundFunction final {
+public:
+  auto eval(RoundArgs const& args, EvalFrame frame) const -> Array<Data> {
+    auto const name = to_string(Mode);
+    if (not args.unit) {
+      // fn(<number>)
+      auto warn_overflow = nova::WarnOnce{};
+      auto warn_resolution = nova::WarnOnce{};
+      return apply_kernel<1>(
+        frame, name, {args.x}, args.call,
+        detail::overload{
+          [](diagnostic_handler&, Int v) -> Option<Int> {
+            return v;
+          },
+          [](diagnostic_handler&, UInt v) -> Option<UInt> {
+            return v;
+          },
+          [&](diagnostic_handler& dh, Float v) -> Option<Int> {
+            if (not std::isfinite(v)) {
+              return None{};
+            }
+            const auto val = [&] {
+              if constexpr (Mode == mode::ceil) {
+                return std::ceil(v);
+              } else if constexpr (Mode == mode::floor) {
+                return std::floor(v);
+              } else {
+                static_assert(Mode == mode::round);
+                return std::round(v);
+              }
+            }();
+            constexpr auto min
+              = static_cast<double>(std::numeric_limits<int64_t>::lowest())
+                - 1.0;
+            constexpr auto max
+              = static_cast<double>(std::numeric_limits<int64_t>::max()) + 1.0;
+            if (not(val > min) or not(val < max)) {
+              warn_overflow(dh, diagnostic::warning("integer overflow in `{}`",
+                                                    name)
+                                  .primary(args.x.source));
+              return None{};
+            }
+            return static_cast<Int>(val);
+          },
+          [&]<class T>(diagnostic_handler& dh, T) -> Option<Int>
+            requires(std::same_as<T, Time> or std::same_as<T, Duration>)
+          {
+            warn_resolution(dh, diagnostic::warning("`{}` with `{}` requires a "
+                                                    "resolution",
+                                                    name, Type<T>::static_name)
+                                  .primary(args.x.source)
+                                  .hint("for example `{}(x, 1h)`", name));
+            return None{};
+          },
+          });
+    }
+    // fn(<duration>, <duration>)
+    // fn(x, 1h) -> to multiples of 1h
+    // fn(<time>, <duration>)
+    // fn(x, 1h) -> time is multiples of 1h (for UTC timezone?)
+    const auto count = std::abs(args.unit->inner.count());
+    return apply_kernel<1>(
+      frame, name, {args.x}, args.call,
+      detail::overload{
+        [count](diagnostic_handler&, Duration v) -> Option<Duration> {
+          const auto val = v.count();
+          const auto rem = std::abs(val % count);
+          if (rem == 0) {
+            return v;
+          }
+          const auto ceil = val >= 0 ? count - rem : rem;
+          const auto floor = val >= 0 ? -rem : rem - count;
+          if constexpr (Mode == mode::ceil) {
+            return Duration{val + ceil};
+          } else if constexpr (Mode == mode::floor) {
+            return Duration{val + floor};
+          } else {
+            static_assert(Mode == mode::round);
+            return Duration{val + (std::abs(floor) < ceil ? floor : ceil)};
+          }
+        },
+        [count](diagnostic_handler&, Time v) -> Option<Time> {
+          const auto val = v.time_since_epoch().count();
+          const auto rem = std::abs(val % count);
+          if (rem == 0) {
+            return v;
+          }
+          const auto ceil = val >= 0 ? count - rem : rem;
+          const auto floor = val >= 0 ? -rem : rem - count;
+          if constexpr (Mode == mode::ceil) {
+            return Time{Duration{val + ceil}};
+          } else if constexpr (Mode == mode::floor) {
+            return Time{Duration{val + floor}};
+          } else {
+            static_assert(Mode == mode::round);
+            return Time{
+              Duration{val + (std::abs(floor) < ceil ? floor : ceil)}};
+          }
+        },
+      });
+  }
+};
+
+template <mode Mode>
+class plugin final : public FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return std::string{to_string(Mode)};
@@ -29,6 +151,23 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> FunctionDescription override {
+    auto d = FunctionDescriber<RoundArgs, RoundFunction<Mode>>{};
+    d.positional("x", &RoundArgs::x, "number|duration|time");
+    d.positional("unit", &RoundArgs::unit, "duration");
+    d.call_location(&RoundArgs::call);
+    d.validate([](RoundArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+      if (args.unit and args.unit->inner.count() == 0) {
+        diagnostic::error("resolution must not be 0")
+          .primary(*args.unit)
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

@@ -143,7 +143,8 @@ auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
   co_return co_await result_queue->dequeue();
 }
 
-class ToStdout final : public Operator<table_slice, void> {
+template <class Events>
+class ToStdout final : public Operator<Events, void> {
 public:
   explicit ToStdout(ToStdoutArgs args) : args_{std::move(args)} {
   }
@@ -179,8 +180,8 @@ public:
       folly::NetworkSocket::fromFd(STDOUT_FILENO));
     // Avoid closing the process-global stdout when the writer shuts down.
     writer_->setCloseCallback([](folly::NetworkSocket) {});
-    if (not co_await ctx.plan_and_spawn_sub<table_slice>(caf::none,
-                                                         std::move(pipe))) {
+    if (not co_await ctx.plan_and_spawn_sub<Events>(caf::none,
+                                                    std::move(pipe))) {
       done_ = true;
       co_return;
     }
@@ -201,7 +202,7 @@ public:
     co_return;
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+  auto process(Events input, OpCtx& ctx) -> Task<void> override {
     if (done_) {
       co_return;
     }
@@ -210,8 +211,14 @@ public:
       done_ = true;
       co_return;
     }
-    auto const rows = input.rows();
-    auto& pipeline = as<SubHandle<table_slice>>(*sub);
+    auto const rows = [&] {
+      if constexpr (std::same_as<Events, nova::Events>) {
+        return input.active_count();
+      } else {
+        return input.rows();
+      }
+    }();
+    auto& pipeline = as<SubHandle<Events>>(*sub);
     auto push_result = co_await pipeline.push(std::move(input));
     if (push_result.is_err()) {
       done_ = true;
@@ -244,7 +251,7 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (auto sub = ctx.get_sub(caf::none)) {
-      auto& pipeline = as<SubHandle<table_slice>>(*sub);
+      auto& pipeline = as<SubHandle<Events>>(*sub);
       co_await pipeline.close();
       // `continue_` keeps the executor alive until the subpipeline drains and
       // reports `finish_sub()`.
@@ -377,7 +384,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToStdoutArgs, ToStdout>{};
+    auto d
+      = Describer<ToStdoutArgs, ToStdout<table_slice>, ToStdout<nova::Events>>{};
     d.operator_location(&ToStdoutArgs::self);
     auto pipe_arg
       = d.pipeline(&ToStdoutArgs::pipe, SubOptimize::from_downstream);

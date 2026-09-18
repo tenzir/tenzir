@@ -15,6 +15,7 @@
 
 #include <folly/coro/BoundedQueue.h>
 
+#include <chrono>
 #include <functional>
 
 namespace tenzir {
@@ -80,6 +81,69 @@ private:
     wait_for_->try_enqueue(wait_for);
   }
 
+  mutable Box<folly::coro::BoundedQueue<duration>> wait_for_;
+};
+
+/// Tracks the flush deadline of a partially filled batch and coordinates the
+/// wakeup between `Operator::await_task()` and `Operator::process_task()`.
+///
+/// Unlike `SeriesPusher`, this class is independent of the builder type: the
+/// operator reports how many rows are pending via `poll()` and is told whether
+/// the batch timeout has expired. The wakeup mailbox follows the same
+/// latest-wins contract as `SeriesPusher`, so a wakeup may be stale and callers
+/// must re-run `poll()` in `process_task()` instead of flushing unconditionally.
+class BatchTimeout {
+public:
+  using clock = std::chrono::steady_clock;
+  using duration = clock::duration;
+
+  explicit BatchTimeout(duration timeout)
+    : timeout_{timeout}, wait_for_{std::in_place, 1u} {
+  }
+
+  /// Sleeps until the currently scheduled deadline. Intended for `await_task()`.
+  auto wait() const -> Task<void> {
+    auto next = co_await wait_for_->dequeue();
+    co_await sleep_for(next);
+  }
+
+  /// Reports the number of currently pending rows. Returns true if the caller
+  /// must flush now because the deadline of the oldest pending row has expired.
+  /// Otherwise (re)schedules the wakeup for the remaining wait.
+  auto poll(size_t rows, clock::time_point now = clock::now()) -> bool {
+    if (rows == 0) {
+      oldest_ = None{};
+      return false;
+    }
+    if (not oldest_) {
+      oldest_ = now;
+      schedule(timeout_);
+      return false;
+    }
+    auto const waiting = now - *oldest_;
+    if (waiting >= timeout_) {
+      oldest_ = None{};
+      return true;
+    }
+    schedule(timeout_ - waiting);
+    return false;
+  }
+
+  /// Forgets the current deadline, e.g., after a size-triggered flush.
+  auto reset() -> void {
+    oldest_ = None{};
+  }
+
+private:
+  auto schedule(duration wait_for) const -> void {
+    // Drop stale duration (if any) so consumers always wake with the freshest
+    // remaining wait.
+    wait_for_->try_dequeue();
+    wait_for_->try_enqueue(wait_for);
+  }
+
+  duration timeout_;
+  Option<clock::time_point> oldest_;
   mutable Box<folly::coro::BoundedQueue<duration>> wait_for_;
 };
 

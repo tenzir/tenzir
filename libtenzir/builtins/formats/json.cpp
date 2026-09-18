@@ -8,6 +8,11 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/json_parser.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/type_system.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async/pusher.hpp>
@@ -16,11 +21,13 @@
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config_options.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/data_builder.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/padded_buffer.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/generator.hpp>
@@ -28,6 +35,7 @@
 #include <tenzir/modules.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -523,6 +531,361 @@ private:
   std::unique_ptr<default_parser> parser_;
 };
 
+namespace nova_json {
+
+// simdjson recommends starting with a generous batch size and growing it when
+// a single document exceeds the current batch. These mirror the constants
+// used by the classic JSON parser.
+constexpr auto initial_batch_size = size_t{10 * 1024 * 1024};
+constexpr auto max_batch_size = size_t{2ull * 1024 * 1024 * 1024};
+
+/// Parses a JSON string as one of the strong types supported by the legacy
+/// JSON parser and writes it to `out`. Returns whether parsing succeeded.
+auto parse_strong_type(std::string_view input, auto& out) -> bool {
+  auto parsed
+    = detail::data_builder::non_number_parser(input, nullptr, value_path{});
+  if (not parsed.data) {
+    return false;
+  }
+  return match(
+    *parsed.data,
+    [&](bool value) {
+      out.data(value);
+      return true;
+    },
+    [&](time value) {
+      out.data(value);
+      return true;
+    },
+    [&](duration value) {
+      out.data(value);
+      return true;
+    },
+    [&](subnet value) {
+      out.data(value);
+      return true;
+    },
+    [&](ip value) {
+      out.data(value);
+      return true;
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
+/// Recursively writes a single simdjson value into a nova field/list-element
+/// builder slot. Emits warnings on malformed values and falls back to `null`.
+auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh, bool raw)
+  -> void {
+  auto type = val.type();
+  if (type.error()) {
+    diagnostic::warning("failed to parse a JSON value").emit(dh);
+    out.null();
+    return;
+  }
+  switch (type.value_unsafe()) {
+    case simdjson::ondemand::json_type::null: {
+      out.null();
+      return;
+    }
+    case simdjson::ondemand::json_type::boolean: {
+      auto result = val.get_bool();
+      if (result.error()) {
+        diagnostic::warning("failed to parse a JSON boolean").emit(dh);
+        out.null();
+        return;
+      }
+      out.data(result.value_unsafe());
+      return;
+    }
+    case simdjson::ondemand::json_type::number: {
+      auto kind = val.get_number_type();
+      if (kind.error()) {
+        diagnostic::warning("failed to parse a JSON number").emit(dh);
+        out.null();
+        return;
+      }
+      switch (kind.value_unsafe()) {
+        case simdjson::ondemand::number_type::floating_point_number: {
+          out.data(val.get_double().value_unsafe());
+          return;
+        }
+        case simdjson::ondemand::number_type::signed_integer: {
+          out.data(val.get_int64().value_unsafe());
+          return;
+        }
+        case simdjson::ondemand::number_type::unsigned_integer: {
+          out.data(val.get_uint64().value_unsafe());
+          return;
+        }
+        case simdjson::ondemand::number_type::big_integer: {
+          // Does not fit into 64 bits; store the raw token as a string.
+          out.data(std::string_view{val.raw_json_token()});
+          return;
+        }
+      }
+      TENZIR_UNREACHABLE();
+    }
+    case simdjson::ondemand::json_type::string: {
+      auto str = val.get_string();
+      if (str.error()) {
+        diagnostic::warning("failed to parse a JSON string").emit(dh);
+        out.null();
+        return;
+      }
+      auto const value = str.value_unsafe();
+      if (raw or not parse_strong_type(value, out)) {
+        out.data(value);
+      }
+      return;
+    }
+    case simdjson::ondemand::json_type::array: {
+      auto arr = val.get_array();
+      if (arr.error()) {
+        diagnostic::warning("failed to parse a JSON array").emit(dh);
+        out.null();
+        return;
+      }
+      auto elements = out.list();
+      for (auto element : arr.value_unsafe()) {
+        if (element.error()) {
+          diagnostic::warning("failed to parse a JSON array element").emit(dh);
+          elements.null();
+          continue;
+        }
+        parse_value(element.value_unsafe(), elements, dh, raw);
+      }
+      return;
+    }
+    case simdjson::ondemand::json_type::object: {
+      auto obj = val.get_object();
+      if (obj.error()) {
+        diagnostic::warning("failed to parse a JSON object").emit(dh);
+        out.null();
+        return;
+      }
+      auto row = out.record();
+      for (auto pair : obj.value_unsafe()) {
+        if (pair.error()) {
+          diagnostic::warning("failed to parse a JSON key-value pair").emit(dh);
+          continue;
+        }
+        auto key = pair.unescaped_key();
+        if (key.error()) {
+          diagnostic::warning("failed to parse a JSON key").emit(dh);
+          continue;
+        }
+        auto value = pair.value();
+        if (value.error()) {
+          diagnostic::warning("failed to parse a JSON object value").emit(dh);
+          continue;
+        }
+        parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh,
+                    raw);
+      }
+      return;
+    }
+    case simdjson::ondemand::json_type::unknown: {
+      diagnostic::warning("failed to parse a JSON value").emit(dh);
+      out.null();
+      return;
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
+} // namespace nova_json
+
+class ReadJsonEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadJsonEvents(ReadJsonArgs args)
+    : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (timeout_.poll(rows())) {
+      co_await flush(push);
+    }
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    auto& dh = ctx.dh();
+    buffer_.append(
+      {reinterpret_cast<const char*>(input->data()), input->size()});
+    auto const batch_size = args_.msb_options.settings.desired_batch_size;
+    while (true) {
+      auto const limit = batch_size - rows();
+      auto const appended = parse_buffer(builder_, limit, dh);
+      if (rows() >= batch_size) {
+        co_await flush(push);
+      }
+      if (appended < limit) {
+        // Buffer exhausted (or a parse error dropped it).
+        break;
+      }
+    }
+    if (timeout_.poll(rows())) {
+      co_await flush(push);
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    auto& dh = ctx.dh();
+    if (not buffer_.view().empty()) {
+      diagnostic::error("read_json: input ended with incomplete JSON").emit(dh);
+    }
+    if (rows() > 0) {
+      co_await flush(push);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    TENZIR_UNUSED(serde);
+    // Checkpointing is out of scope for this experimental operator.
+    TENZIR_TODO();
+  }
+
+private:
+  /// Number of rows currently accumulated in `builder_`.
+  auto rows() const -> size_t {
+    return static_cast<size_t>(builder_.length());
+  }
+
+  /// Emits the rows accumulated in `builder_` as a single batch.
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    auto result = builder_.finish();
+    builder_ = nova::ArrayBuilder<nova::Record>{};
+    timeout_.reset();
+    auto const length = result.length();
+    auto mask = nova::storage::BitMap{length, true};
+    co_await push(nova::Events{std::move(result), std::move(mask),
+                               nova::Events::Meta::make_empty(length)});
+  }
+
+  /// Parses complete documents currently in `buffer_` into `builder`, up to
+  /// `limit` rows, retaining any unparsed or truncated trailing bytes for the
+  /// next call. Returns the number of rows appended.
+  auto parse_buffer(nova::ArrayBuilder<nova::Record>& builder, size_t limit,
+                    diagnostic_handler& dh) -> size_t {
+    if (limit == 0) {
+      return 0;
+    }
+    auto rows = size_t{0};
+    auto retry = false;
+    auto completed = size_t{0};
+    do {
+      retry = false;
+      auto view = buffer_.view();
+      auto stream = simdjson::ondemand::document_stream{};
+      auto err = parser_.iterate_many(view.data(), view.length(), batch_size_)
+                   .get(stream);
+      if (err) {
+        buffer_.reset();
+        diagnostic::warning("read_json: {}", simdjson::error_message(err))
+          .note("failed to parse")
+          .emit(dh);
+        return rows;
+      }
+      auto current = size_t{0};
+      for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
+        // Skip documents already processed on a previous (smaller) batch.
+        if (current < completed) {
+          ++current;
+          continue;
+        }
+        ++current;
+        if (rows == limit) {
+          auto offset = doc_it.current_index();
+          buffer_.truncate(view.size() - offset);
+          return rows;
+        }
+        auto doc = (*doc_it).get_value();
+        if (auto derr = doc.error()) {
+          if (derr == simdjson::CAPACITY) {
+            batch_size_ *= 2;
+            retry = batch_size_ < nova_json::max_batch_size;
+            if (retry) {
+              break;
+            }
+          }
+          diagnostic::error("read_json: {}", simdjson::error_message(derr))
+            .note("found invalid JSON")
+            .emit(dh);
+          buffer_.reset();
+          return rows;
+        }
+        ++completed;
+        auto type = doc.value_unsafe().type();
+        if (type.error()
+            or type.value_unsafe() != simdjson::ondemand::json_type::object) {
+          diagnostic::error("read_json: expected a JSON object").emit(dh);
+          continue;
+        }
+        auto row = builder.record();
+        for (auto pair : doc.value_unsafe().get_object().value_unsafe()) {
+          if (pair.error()) {
+            diagnostic::warning("read_json: failed to parse a key-value pair")
+              .emit(dh);
+            continue;
+          }
+          auto key = pair.unescaped_key();
+          auto value = pair.value();
+          if (key.error() or value.error()) {
+            diagnostic::warning("read_json: failed to parse an object entry")
+              .emit(dh);
+            continue;
+          }
+          nova_json::parse_value(value.value_unsafe(),
+                                 row.field(key.value_unsafe()), dh,
+                                 args_.msb_options.settings.raw);
+        }
+        ++rows;
+      }
+      if (not retry) {
+        handle_truncated(stream);
+      }
+    } while (retry);
+    return rows;
+  }
+
+  auto handle_truncated(simdjson::ondemand::document_stream& stream) -> void {
+    auto truncated = stream.truncated_bytes();
+    auto view = buffer_.view();
+    if (truncated > view.size()) {
+      buffer_.reset();
+      return;
+    }
+    auto partial_utf8 = detail::count_trailing_partial_utf8(view);
+    auto keep = std::min(truncated + partial_utf8, view.size());
+    if (keep == 0) {
+      buffer_.reset();
+      return;
+    }
+    buffer_.truncate(keep);
+  }
+
+  ReadJsonArgs args_;
+  BatchTimeout timeout_;
+  nova::ArrayBuilder<nova::Record> builder_;
+  detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'> buffer_;
+  simdjson::ondemand::parser parser_;
+  size_t batch_size_ = nova_json::initial_batch_size;
+};
+
 class ReadNdjson final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadNdjson(ReadJsonArgs args) : args_{std::move(args)} {
@@ -894,7 +1257,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadJsonArgs, ReadJson>{};
+    auto d = Describer<ReadJsonArgs, ReadJson, ReadJsonEvents>{};
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
     d.optimization(&ReadJsonArgs::optimization);
     d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
@@ -1373,6 +1736,56 @@ private:
   uint64_t finished_workers_ = 0;
 };
 
+/// `nova::Events` counterpart to `WriteJson`. Consumes `nova::Events` and
+/// produces `chunk_ptr` bytes, printing each row using `nova::json_printer`.
+/// Array-of-objects output and parallel printing are not supported yet.
+class WriteJsonEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteJsonEvents(WriteJsonArgs args) {
+    opts_.tql = args.tql;
+    if (args.color and args.tql) {
+      opts_.style = tql_style();
+    } else if (args.color) {
+      opts_.style = jq_style();
+    } else {
+      opts_.style = no_style();
+    }
+    opts_.oneline = args.compact;
+    opts_.omit_null_fields = args.strip_null_fields or args.strip;
+    opts_.omit_nulls_in_lists = args.strip_nulls_in_lists or args.strip;
+    opts_.omit_empty_records = args.strip_empty_records or args.strip;
+    opts_.omit_empty_lists = args.strip_empty_lists or args.strip;
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto const length = input.length();
+    if (length == 0) {
+      co_return;
+    }
+    auto buffer = std::string{};
+    auto printer = nova::json_printer{opts_};
+    for (auto i = nova::storage::Index{0}; i < length; ++i) {
+      if (not input.mask.get(i)) {
+        continue;
+      }
+      printer.print(input.data.get(i));
+      auto const bytes = printer.bytes();
+      buffer.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      buffer.push_back('\n');
+    }
+    auto meta = chunk_metadata{
+      .content_type
+      = opts_.oneline ? "application/x-ndjson" : "application/json",
+    };
+    co_await push(chunk::make(std::move(buffer), meta));
+  }
+
+private:
+  json_printer_options opts_ = {};
+};
+
 class write_json_plugin final : public virtual operator_factory_plugin,
                                 public virtual OperatorPlugin {
 public:
@@ -1384,7 +1797,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteJsonArgs, WriteJson>{WriteJsonArgs{.tql = tql_}};
+    auto d = Describer<WriteJsonArgs, WriteJson, WriteJsonEvents>{
+      WriteJsonArgs{.tql = tql_}};
     d.named("strip", &WriteJsonArgs::strip);
     d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);

@@ -388,7 +388,8 @@ public:
     });
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
-      if constexpr (std::same_as<Input, chunk_ptr>) {
+      if constexpr (std::same_as<Input, chunk_ptr>
+                    or std::same_as<Input, nova::Events>) {
         return {};
       } else {
         TRY(auto p, ctx.get(pipe));
@@ -409,6 +410,13 @@ public:
           [&](
             tag<chunk_ptr>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
             diagnostic::error("subpipeline must not produce bytes")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          },
+          [&](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce nova_events")
               .primary(p.source)
               .emit(ctx);
             return failure::promise();

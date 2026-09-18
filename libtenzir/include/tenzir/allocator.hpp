@@ -35,6 +35,7 @@
 #if TENZIR_ALLOCATOR_HAS_MIMALLOC
 #  include <mimalloc.h>
 #endif
+#include <cstdlib>
 #include <new>
 #include <string_view>
 
@@ -1291,10 +1292,36 @@ auto selected_backend(const char* env) noexcept -> backend;
 #else
 
 /// This dummy allocator only exists to make the memory stats compile without
-/// issue.
+/// issue. It forwards directly to the global `malloc`/`free`/`realloc`
+/// (not the custom allocator backends) so that tools like ASan, which
+/// require `TENZIR_ALLOCATOR=none`, see ordinary heap traffic. All three
+/// members must stay on the same `malloc`-family, since `reallocate` can
+/// only be implemented via `realloc`, which requires a `malloc`-family
+/// pointer.
 struct dummy_allocator {
   static auto stats() noexcept -> const stats& {
     return detail::zero_stats;
+  }
+
+  [[nodiscard]] static auto allocate(std::size_t size) -> void* {
+    return std::malloc(size);
+  }
+
+  [[nodiscard]] static auto allocate(std::size_t size, std::align_val_t align)
+    -> void* {
+    const auto alignment = static_cast<std::size_t>(align);
+    // `aligned_alloc` requires `size` to be a multiple of `alignment`.
+    const auto rounded_size = (size + alignment - 1) / alignment * alignment;
+    return std::aligned_alloc(alignment, rounded_size);
+  }
+
+  static auto deallocate(void* ptr) noexcept -> void {
+    std::free(ptr);
+  }
+
+  [[nodiscard]] static auto reallocate(void* ptr, std::size_t new_size)
+    -> void* {
+    return std::realloc(ptr, new_size);
   }
 };
 
@@ -1312,6 +1339,10 @@ TENZIR_MAKE_ALLOCATOR(arrow_allocator, "ARROW")
 TENZIR_MAKE_ALLOCATOR(cpp_allocator, "CPP")
 /// The allocator used by `malloc` and other C/POSIX allocation functions.
 TENZIR_MAKE_ALLOCATOR(c_allocator, "C")
+/// The allocator used by `malloc` and other C/POSIX allocation functions.
+TENZIR_MAKE_ALLOCATOR(nova_structure_allocator, "nova_structure")
+/// The allocator used by `malloc` and other C/POSIX allocation functions.
+TENZIR_MAKE_ALLOCATOR(nova_data_allocator, "nova_data")
 
 #undef TENZIR_MAKE_ALLOCATOR
 #undef TENZIR_ALLOCATOR_MIMALLOC_INSTANCE

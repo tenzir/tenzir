@@ -53,6 +53,7 @@
 #include "tenzir/element_type.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/result.hpp"
@@ -107,8 +108,8 @@ private:
   SubPipeline& self_;
 };
 
-using AnySubHandle
-  = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>>;
+using AnySubHandle = variant<SubHandle<void>, SubHandle<chunk_ptr>,
+                             SubHandle<table_slice>, SubHandle<nova::Events>>;
 
 enum class DiagnosticBehavior {
   /// Forward diagnostics to the parent unchanged.
@@ -342,6 +343,18 @@ public:
           "operator");
   }
 
+  /// Process nova::Events output from a spawned subpipeline in a
+  /// *thread-safe* way.
+  virtual auto process_sub(SubKeyView key, nova::Events events,
+                           Push<Output>& push, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, ctx);
+    if constexpr (std::same_as<Output, nova::Events>) {
+      co_await push(std::move(events));
+    } else {
+      panic("subpipeline result handling is not implemented for this operator");
+    }
+  }
+
   /// This is *not* required to be thread-safe.
   virtual auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
@@ -388,6 +401,12 @@ public:
   virtual auto process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> {
     TENZIR_UNUSED(key, chunk, ctx);
+    TENZIR_UNREACHABLE();
+  }
+
+  virtual auto process_sub(SubKeyView key, nova::Events events, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(key, events, ctx);
     TENZIR_UNREACHABLE();
   }
 

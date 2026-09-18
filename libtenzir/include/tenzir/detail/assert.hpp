@@ -60,13 +60,14 @@ assertion_failure(std::string_view cond, std::source_location location) {
   if (not static_cast<bool>(LHS OP RHS)) [[unlikely]] {                         \
     auto txt =                                                                  \
       []<typename TENZIR_ASSERT_INTERNAL_L, typename TENZIR_ASSERT_INTERNAL_R>( \
-        const TENZIR_ASSERT_INTERNAL_L& lhs,                                    \
-        const TENZIR_ASSERT_INTERNAL_R& rhs) -> std::string {                   \
+        const TENZIR_ASSERT_INTERNAL_L& tenzir_assert_lhs,                      \
+        const TENZIR_ASSERT_INTERNAL_R& tenzir_assert_rhs) -> std::string {     \
       constexpr static bool formattable                                         \
         = fmt::is_formattable<TENZIR_ASSERT_INTERNAL_L>::value                  \
           and fmt::is_formattable<TENZIR_ASSERT_INTERNAL_R>::value;             \
       if constexpr (formattable) {                                              \
-        return fmt::format("{} (" #LHS ") " #OP " {} (" #RHS ")", lhs, rhs);    \
+        return fmt::format("{} (" #LHS ") " #OP " {} (" #RHS ")",               \
+                           tenzir_assert_lhs, tenzir_assert_rhs);               \
       } else {                                                                  \
         return #LHS " " #OP " " #RHS;                                           \
       }                                                                         \

@@ -248,6 +248,8 @@ auto trace_panic_impl(TraceFn&& trace_fn, Fun&& fun) -> decltype(auto) {
         and panic.trace.end == location::unknown.end) {
       panic.trace.begin = trace.begin;
       panic.trace.end = trace.end;
+      panic.trace.source_index = trace.source_index;
+      panic.trace.callsite_index = trace.callsite_index;
     }
     throw std::move(panic);
   }

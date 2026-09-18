@@ -162,29 +162,41 @@ auto describe_diagnostic_scope() -> Description {
   auto pipe = d.pipeline(&DiagnosticScopeArgs::pipe, SubOptimize::off);
   d.spawner([pipe]<class Input>(DescribeCtx& ctx)
               -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-    TRY(auto p, ctx.get(pipe));
-    TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-    return match(
-      output,
-      [](tag<table_slice>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        return [](DiagnosticScopeArgs args) {
-          return DiagnosticScopeOp<Behavior, Input, table_slice>{
-            std::move(args)};
-        };
-      },
-      [](tag<chunk_ptr>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        return [](DiagnosticScopeArgs args) {
-          return DiagnosticScopeOp<Behavior, Input, chunk_ptr>{std::move(args)};
-        };
-      },
-      [](tag<void>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        return [](DiagnosticScopeArgs args) {
-          return DiagnosticScopeOp<Behavior, Input, void>{std::move(args)};
-        };
-      });
+    if constexpr (std::same_as<Input, nova::Events>) {
+      return {};
+    } else {
+      TRY(auto p, ctx.get(pipe));
+      TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
+      return match(
+        output,
+        [](tag<table_slice>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          return [](DiagnosticScopeArgs args) {
+            return DiagnosticScopeOp<Behavior, Input, table_slice>{
+              std::move(args)};
+          };
+        },
+        [](tag<chunk_ptr>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          return [](DiagnosticScopeArgs args) {
+            return DiagnosticScopeOp<Behavior, Input, chunk_ptr>{
+              std::move(args)};
+          };
+        },
+        [](tag<void>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          return [](DiagnosticScopeArgs args) {
+            return DiagnosticScopeOp<Behavior, Input, void>{std::move(args)};
+          };
+        },
+        [&](tag<nova::Events>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          diagnostic::error("subpipeline must not produce nova_events")
+            .primary(p.source)
+            .emit(ctx);
+          return failure::promise();
+        });
+    }
   });
   return d.without_optimize();
 }

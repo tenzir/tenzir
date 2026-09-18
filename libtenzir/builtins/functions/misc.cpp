@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/storage.hpp"
+
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -26,6 +28,12 @@
 #else
 #  include <boost/process/environment.hpp>
 #endif
+
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
 
 #include <ranges>
 
@@ -191,7 +199,71 @@ private:
   detail::heterogeneous_string_hashmap<std::string> env_ = {};
 };
 
-class length final : public function_plugin {
+struct LengthArgs {
+  nova::ValueArgument x;
+};
+
+class LengthFunction final {
+public:
+  auto eval(LengthArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto present = frame.mask();
+    auto subject = args.x;
+
+    auto compute_lengths = [&](const Array<List>& arr,
+                               const storage::BitMap& valid) -> Array<Data> {
+      auto mut = Type<Int>::PrimaryPhysicalStorage::Mutable{arr.length()};
+      for (auto i = storage::Index{0}; i < arr.length(); ++i) {
+        if (valid.get(i)) {
+          mut.set(i, static_cast<std::int64_t>(arr.get(i).length()));
+        }
+      }
+      // Rows outside `valid` never got a length written, so they become
+      // explicit `Null`s.
+      return Array<Data>{Array<Int>{std::move(mut).finish()}}.null_where(
+        present.and_not(valid));
+    };
+
+    return match(
+      subject.data,
+      [&](const Array<List>& arr) -> Array<Data> {
+        return compute_lengths(arr, present);
+      },
+      [&](const UnionArray& u) -> Array<Data> {
+        auto list_alt = u.get_alternative<List>();
+        auto list_present
+          = list_alt ? list_alt->present : storage::BitMap{u.length(), false};
+        auto null_alt = u.get_alternative<Null>();
+        auto null_present
+          = null_alt ? null_alt->present : storage::BitMap{u.length(), false};
+        // Rows that are present but whose active alternative is neither
+        // `List` nor `Null` (a legitimate null propagates without warning).
+        if (present.and_not(list_present).and_not(null_present).any()) {
+          diagnostic::warning("expected `list`, got a different type")
+            .primary(args.x.source)
+            .emit(frame);
+        }
+        if (not list_alt) {
+          return frame.null();
+        }
+        return compute_lengths(list_alt->data, list_present & present);
+      },
+      [&]<data_type Tag>(Array<Tag> const&) -> Array<Data> {
+        auto d = diagnostic::warning("expected `list`, got `{}`",
+                                     Type<Tag>::static_name)
+                   .primary(args.x.source);
+        if constexpr (std::same_as<Tag, String>) {
+          d = std::move(d).hint(
+            "use `.length_bytes()` or `.length_chars()` instead");
+        }
+        std::move(d).emit(frame);
+        return frame.null();
+      });
+  }
+};
+
+class length final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "length";
@@ -199,6 +271,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<LengthArgs, LengthFunction>{};
+    d.positional("x", &LengthArgs::x, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -370,7 +448,59 @@ public:
   }
 };
 
-class has final : public function_plugin {
+struct HasArgs {
+  nova::ValueArgument x;
+  located<std::string> field;
+};
+
+class HasFunction final {
+public:
+  auto eval(HasArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const& present = frame.mask();
+    auto subject = args.x;
+    auto const none = storage::BitMap{present.length(), false};
+    auto has_field = [&](Array<Record> const& rec,
+                         storage::BitMap const& rows) -> storage::BitMap {
+      auto field = rec.field(args.field.inner);
+      return field ? field->present & rows : none;
+    };
+    return match(
+      subject.data,
+      [&](Array<Record> const& rec) -> Array<Data> {
+        return Array<Data>{Array<Bool>{has_field(rec, present)}};
+      },
+      [&](const Array<Null>&) -> Array<Data> {
+        return frame.null();
+      },
+      [&](const UnionArray& u) -> Array<Data> {
+        auto rec = u.get_alternative<Record>();
+        auto const rec_present = present & (rec ? rec->present : none);
+        auto const bad
+          = present.and_not(rec_present).and_not(u.alternative_mask<Null>());
+        if (bad.any()) {
+          diagnostic::warning("expected `record`, got a different type")
+            .primary(args.x.source)
+            .emit(frame);
+        }
+        if (not rec) {
+          return frame.null();
+        }
+        return Array<Data>{Array<Bool>{has_field(rec->data, rec_present)}}
+          .null_where(present.and_not(rec_present));
+      },
+      [&]<data_type Tag>(Array<Tag> const&) -> Array<Data> {
+        diagnostic::warning("expected `record`, got `{}`",
+                            Type<Tag>::static_name)
+          .primary(args.x.source)
+          .emit(frame);
+        return frame.null();
+      });
+  }
+};
+
+class has final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "has";
@@ -378,6 +508,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<HasArgs, HasFunction>{};
+    d.positional("x", &HasArgs::x, "record");
+    d.positional("field", &HasArgs::field);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

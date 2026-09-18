@@ -6,6 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
 
 #include <tenzir/arrow_memory_pool.hpp>
@@ -321,7 +326,24 @@ public:
   }
 };
 
-class since_epoch final : public function_plugin {
+struct SinceEpochArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+class SinceEpochFunction final {
+public:
+  auto eval(SinceEpochArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(frame, "since_epoch", {args.x}, args.call,
+                                 [](diagnostic_handler&,
+                                    nova::Time v) -> Option<nova::Duration> {
+                                   return v.time_since_epoch();
+                                 });
+  }
+};
+
+class since_epoch final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "since_epoch";
@@ -329,6 +351,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SinceEpochArgs, SinceEpochFunction>{};
+    d.positional("x", &SinceEpochArgs::x, "time");
+    d.call_location(&SinceEpochArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -374,7 +403,24 @@ public:
   }
 };
 
-class from_epoch final : public function_plugin {
+struct FromEpochArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+class FromEpochFunction final {
+public:
+  auto eval(FromEpochArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(frame, "from_epoch", {args.x}, args.call,
+                                 [](diagnostic_handler&,
+                                    nova::Duration v) -> Option<nova::Time> {
+                                   return nova::Time{v};
+                                 });
+  }
+};
+
+class from_epoch final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "from_epoch";
@@ -382,6 +428,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<FromEpochArgs, FromEpochFunction>{};
+    d.positional("x", &FromEpochArgs::x, "duration");
+    d.call_location(&FromEpochArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

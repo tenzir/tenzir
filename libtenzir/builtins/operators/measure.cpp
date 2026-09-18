@@ -6,6 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/type_system.hpp"
+
 #include <tenzir/async.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -98,6 +103,42 @@ private:
   uint64_t counter_ = 0;
 };
 
+class MeasureEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit MeasureEvents(MeasureArgs args) : args_{args} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    const auto length = static_cast<uint64_t>(input.length());
+    const auto active_count = static_cast<uint64_t>(input.active_count());
+    events_ = args_.cumulative ? events_ + length : length;
+    selected_ = args_.cumulative ? selected_ + active_count : active_count;
+
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto metric = builder.record();
+    metric.field("timestamp").data(time::clock::now());
+    metric.field("events").data(events_);
+    metric.field("selected").data(selected_);
+    auto result = builder.finish();
+    auto const rows = result.length();
+    auto mask = nova::storage::BitMap{rows, true};
+    co_await push(nova::Events{std::move(result), std::move(mask),
+                               nova::Events::Meta::make_empty(rows)});
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("events", events_);
+    serde("selected", selected_);
+  }
+
+private:
+  MeasureArgs args_;
+  uint64_t events_ = 0;
+  uint64_t selected_ = 0;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -106,7 +147,8 @@ public:
 
   auto describe() const -> Description override {
     auto d
-      = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk>{MeasureArgs{}};
+      = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk, MeasureEvents>{
+        MeasureArgs{}};
     d.named("cumulative", &MeasureArgs::cumulative);
     d.named("_definition", &MeasureArgs::definition);
     d.named("_exact_definition", &MeasureArgs::exact_definition);

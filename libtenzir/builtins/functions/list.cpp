@@ -6,6 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
+
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -261,7 +267,84 @@ public:
   }
 };
 
-class add : public virtual function_plugin {
+struct AddArgs {
+  nova::ValueArgument xs;
+  nova::ValueArgument x;
+};
+
+class AddFunction final {
+public:
+  auto eval(AddArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const& present = frame.mask();
+    auto list_val = args.xs;
+    auto element_val = args.x;
+
+    // Rows in `valid` extend their list, rows in `init` (null lists) start
+    // a new one with just the element, all others become explicit nulls.
+    auto build_result
+      = [&](Option<Array<List>> const& list_arr, const storage::BitMap& valid,
+            const storage::BitMap& init) -> Array<Data> {
+      auto builder = ArrayBuilder<List>{};
+      for (auto i = storage::Index{0}; i < present.length(); ++i) {
+        auto const extend = valid.get(i);
+        if (not extend and not init.get(i)) {
+          builder.skip();
+          continue;
+        }
+        auto lb = builder.list();
+        auto elem = element_val.data.get(i);
+        auto already_present = false;
+        if (extend) {
+          for (auto v : list_arr->get(i)) {
+            append_row(lb, v);
+            if (not already_present) {
+              already_present = equal(v, elem);
+            }
+          }
+        }
+        if (not already_present) {
+          append_row(lb, elem);
+        }
+      }
+      return Array<Data>{builder.finish()};
+    };
+    auto const none = storage::BitMap{present.length(), false};
+
+    return match(
+      list_val.data,
+      [&](const Array<List>& arr) -> Array<Data> {
+        return build_result(arr, present, none);
+      },
+      [&](const Array<Null>&) -> Array<Data> {
+        return build_result(None{}, none, present);
+      },
+      [&](const UnionArray& u) -> Array<Data> {
+        auto lists = u.get_alternative<List>();
+        auto const list_present = present & (lists ? lists->present : none);
+        auto const null_present = present & u.alternative_mask<Null>();
+        auto const bad = present.and_not(list_present).and_not(null_present);
+        if (bad.any()) {
+          diagnostic::warning("expected `list`, got a different type")
+            .primary(args.xs.source)
+            .emit(frame);
+        }
+        auto result = build_result(
+          lists ? Option<Array<List>>{std::move(lists->data)} : None{},
+          list_present, null_present);
+        return std::move(result).null_where(bad);
+      },
+      [&]<data_type Tag>(Array<Tag> const&) -> Array<Data> {
+        diagnostic::warning("expected `list`, got `{}`", Type<Tag>::static_name)
+          .primary(args.xs.source)
+          .emit(frame);
+        return frame.null();
+      });
+  }
+};
+
+class add : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "add";
@@ -269,6 +352,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<AddArgs, AddFunction>{};
+    d.positional("xs", &AddArgs::xs, "list");
+    d.positional("x", &AddArgs::x, "any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

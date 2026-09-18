@@ -21,6 +21,8 @@ let
 
   inherit (pkgs) lib;
   inherit (pkgs.stdenv.hostPlatform) isStatic;
+  clang = pkgs.llvmPackages_22.clang;
+  compiler-rt-dev = pkgs.llvmPackages_22.compiler-rt.dev;
   # Build one explicit dependency closure for discovery instead of importing
   # the full package environment into the shell. That keeps CMake and the Nix
   # compiler/linker wrappers from seeing the same include/lib paths multiple
@@ -29,6 +31,7 @@ let
     deps.buildInputs
     ++ deps.propagatedBuildInputs
     ++ [
+      compiler-rt-dev
       pkgs.openssl
       pkgs.arrow-adbc-go
       pkgs.libsodium
@@ -38,8 +41,8 @@ let
   );
 
   clang-shims = [
-    (pkgs.writeShellScriptBin "clang" ''exec ${pkgs.clang}/bin/clang "$@"'')
-    (pkgs.writeShellScriptBin "clang++" ''exec ${pkgs.clang}/bin/clang++ "$@"'')
+    (pkgs.writeShellScriptBin "clang" ''exec ${clang}/bin/clang "$@"'')
+    (pkgs.writeShellScriptBin "clang++" ''exec ${clang}/bin/clang++ "$@"'')
   ];
   deps-prefix = pkgs.buildEnv {
     name = "deps-prefix";
@@ -137,7 +140,7 @@ pkgs.mkShell (
     # location. This keeps the Nix wrappers fast while preserving normal
     # dependency discovery for configure checks and real builds.
     env.PKG_CONFIG_PATH = "${deps-prefix}/lib/pkgconfig:${deps-prefix}/share/pkgconfig";
-    env.NIX_CFLAGS_COMPILE = "-isystem ${deps-prefix}/include";
+    env.NIX_CFLAGS_COMPILE = "-isystem ${deps-prefix}/include -isystem ${compiler-rt-dev}/include";
     env.NIX_LDFLAGS = "-L${deps-prefix}/lib -rpath ${deps-prefix}/lib";
     env.LDFLAGS =
       if (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") then "-fuse-ld=mold" else "";

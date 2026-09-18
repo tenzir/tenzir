@@ -149,7 +149,8 @@ struct tenzir::tryable<tenzir::variant<V, E>> {
   if (false) {                                                                 \
     /* trigger [[nodiscard]] */                                                \
     tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
-  }
+  }                                                                            \
+  static_assert(true) /* so the caller's `;` is not an empty statement */
 
 // -- Regular variants (use `return`) ------------------------------------------
 

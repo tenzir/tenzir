@@ -8,12 +8,15 @@
 
 #pragma once
 
+#include "tenzir/fwd.hpp"
+
 #include <tenzir/tag.hpp>
 
 namespace tenzir {
 
 /// Describes the input or output type of an operator.
-struct element_type_tag : tag_variant<void, table_slice, chunk_ptr> {
+struct element_type_tag
+  : tag_variant<void, table_slice, chunk_ptr, nova::Events> {
   using tag_variant::tag_variant;
 };
 

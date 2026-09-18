@@ -54,7 +54,8 @@ struct FromArrowFsArgs {
   template <class Args, class... Impls, class F = decltype([](DescribeCtx&) {})>
     requires std::derived_from<Args, FromArrowFsArgs>
              and std::invocable<F, DescribeCtx&>
-  static auto describe_to(Describer<Args, Impls...>& d, F extra = {}) -> void {
+  static auto describe_to(Describer<Args, Impls...>& d, F extra = {})
+    -> Argument<Args, located<ir::pipeline>> {
     d.template positional<located<secret>>("url", &FromArrowFsArgs::url);
     auto watch_arg
       = d.template named<located<duration>>("watch", &FromArrowFsArgs::watch);
@@ -102,6 +103,7 @@ struct FromArrowFsArgs {
       extra(ctx);
       return {};
     });
+    return pipe_arg;
   }
 };
 
@@ -238,7 +240,9 @@ struct MakeFilesystemResult {
 ///   file is read, removed, and renamed by exactly one instance. An instance
 ///   processes its files one after another, so the number of files read at the
 ///   same time is the degree of parallelism.
-class FromArrowFsOperator : public Operator<void, table_slice> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+class FromArrowFsOperator : public Operator<void, Output> {
 public:
   explicit FromArrowFsOperator(FromArrowFsArgs args)
     : base_args_{std::move(args)} {
@@ -246,14 +250,13 @@ public:
 
   auto start(JobId job, OpCtx& ctx) -> Task<void> final;
   auto await_task(diagnostic_handler& dh) const -> Task<Any> final;
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
-                   OpCtx& ctx) -> Task<void> final;
-  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+  auto process_sub(SubKeyView key, Output slice, Push<Output>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> final;
+  auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> final;
+  auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<FinalizeBehavior> final;
   auto state() -> OperatorState final;
   auto snapshot(Serde& serde) -> void final;
   auto post_commit(OpCtx& ctx) -> Task<void> final;

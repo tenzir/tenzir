@@ -11,6 +11,13 @@
 #include "tenzir/async.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_ctx.hpp"
+#include "tenzir/nova/eval_util.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
@@ -383,6 +390,123 @@ private:
   std::vector<ResolvedAssignment> dynamic_assignments_;
 };
 
+/// Extracts the `Array<Record>` alternative from `value`, falling back to an
+/// empty record of `length` rows if it isn't record-typed.
+auto extract_record_or_empty(nova::MaskedArray<nova::Array<nova::Data>> value,
+                             nova::storage::Index length, location rhs,
+                             diagnostic_handler& dh)
+  -> nova::Array<nova::Record> {
+  if (auto record = value.data.try_as<nova::Record>()) {
+    return std::move(*record);
+  }
+  auto result = nova::Array<nova::Record>::make_empty(length);
+  if (auto* u = try_as<nova::UnionArray>(value.data)) {
+    auto alt = u->get_alternative<nova::Record>();
+    if (alt) {
+      // The alternative spans every row, but only the rows in `present` are
+      // actually records; the others must become empty records here.
+      result = std::move(alt->data).empty_where(alt->present.make_inverted());
+    }
+    if (value.present.and_not(u->alternative_mask<nova::Record>())
+          .and_not(u->alternative_mask<nova::Null>())
+          .any()) {
+      diagnostic::warning("expected `record`").primary(rhs).emit(dh);
+    }
+    return result;
+  }
+  if (not value.data.try_as<nova::Null>()) {
+    diagnostic::warning("expected `record`").primary(rhs).emit(dh);
+  }
+  return result;
+}
+
+/// Implements `set`/`select` for the nova columnar representation.
+class SetNova final : public Operator<nova::Events, nova::Events> {
+public:
+  /// One assignment `SetNova` will apply, in order, to the original input.
+  struct Field {
+    /// Empty `path()` means a bare `this = expr` assignment.
+    ast::field_path target;
+    location rhs_location;
+    ast::expression rhs;
+  };
+
+  explicit SetNova(std::vector<ast::assignment> assignments) {
+    fields_.reserve(assignments.size());
+    for (auto& assignment : assignments) {
+      auto [pruned, moved] = resolve_move_keyword(std::move(assignment));
+      auto selector = ast::selector::try_from(pruned.left);
+      TENZIR_ASSERT(selector);
+      auto* target = try_as<ast::field_path>(&*selector);
+      TENZIR_ASSERT(target);
+      fields_.push_back(Field{
+        .target = *target,
+        .rhs_location = pruned.right.get_location(),
+        .rhs = std::move(pruned.right),
+      });
+      std::ranges::move(moved, std::back_inserter(moved_fields_));
+    }
+    drop_tree_ = nova::DropTree::make(moved_fields_);
+  }
+
+  // `drop_tree_` aliases string data owned by `moved_fields_`, so `SetNova`
+  // must never be copied (only moved) and `moved_fields_` must not be
+  // mutated after construction.
+  SetNova(const SetNova&) = delete;
+  SetNova(SetNova&&) = default;
+  auto operator=(const SetNova&) -> SetNova& = delete;
+  auto operator=(SetNova&&) -> SetNova& = default;
+  ~SetNova() override = default;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    evaluators_.reserve(fields_.size());
+    for (auto& field : fields_) {
+      auto evaluator = nova::Evaluator::make(
+        std::move(field.rhs), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        co_return;
+      }
+      evaluators_.push_back(std::move(*evaluator));
+    }
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(evaluators_.size() == fields_.size());
+    // Evaluated against the original input, like `Set`: earlier assignments
+    // must not affect later right-hand sides.
+    auto values = std::vector<nova::MaskedArray<nova::Array<nova::Data>>>{};
+    values.reserve(fields_.size());
+    for (auto& evaluator : evaluators_) {
+      values.push_back(nova::MaskedArray<nova::Array<nova::Data>>{
+        evaluator.eval(input, nova::EvalCtx{ctx.dh()}), input.mask});
+    }
+    auto& data = input.data;
+    if (not drop_tree_.empty()) {
+      data = drop_tree_.apply(std::move(data), input.mask);
+    }
+    for (auto [field, value] : std::views::zip(fields_, values)) {
+      auto path = field.target.path();
+      if (path.empty()) {
+        data = extract_record_or_empty(std::move(value), data.length(),
+                                       field.rhs_location, ctx.dh());
+        continue;
+      }
+      data = nova::assign_nested_field(std::move(data), path, std::move(value));
+    }
+    input.data = std::move(data);
+    co_await push(std::move(input));
+  }
+
+private:
+  std::vector<Field> fields_;
+  std::vector<nova::Evaluator> evaluators_;
+  /// Field paths moved out of via `move` in a right-hand side; owns the
+  /// segment strings that `drop_tree_` aliases as `string_view`s.
+  std::vector<ast::field_path> moved_fields_;
+  nova::DropTree drop_tree_;
+};
+
 } // namespace
 
 auto validate_assignment_target(ast::expression const& expression,
@@ -393,6 +517,57 @@ auto validate_assignment_target(ast::expression const& expression,
   diagnostic::error(
     "left side of `=` must be a field path or metadata reference")
     .primary(expression)
+    .emit(dh);
+  return failure::promise();
+}
+
+/// Checks that `assignment`'s left side is a target `SetNova` can handle: a
+/// field path of any depth, or `this`. Rejects metadata (`@x`) and
+/// dynamic/computed paths (`$var`, `foo[expr]`), and `move this` (there is
+/// no field to drop for a `this`-level move).
+auto validate_nova_target(ast::assignment const& assignment,
+                          diagnostic_handler& dh) -> failure_or<void> {
+  auto const& expression = assignment.left;
+  auto selector = ast::selector::try_from(expression);
+  const auto* path = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+  if (path == nullptr) {
+    diagnostic::error("set operator does not yet support this assignment "
+                      "target with nova events")
+      .primary(expression, "expected a field path or `this`, e.g. `x`, "
+                           "`x.y`, or `this`")
+      .emit(dh);
+    return failure::promise();
+  }
+  auto [resolved, moved] = resolve_move_keyword(assignment);
+  TENZIR_UNUSED(resolved);
+  for (const auto& field : moved) {
+    if (field.path().empty()) {
+      diagnostic::error("cannot `move this` with nova events")
+        .primary(field)
+        .hint("use `this = {{}}` to clear the event instead")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
+}
+
+/// Checks that `expression` is a target `SetNova` (the `nova::Events`
+/// implementation of `set`) can handle: a simple, static, top-level field
+/// reference, e.g. `x` in `x = expr`. Rejects metadata targets (`@name`),
+/// `this`, nested paths (`foo.bar`), and optional-access targets (`foo?`) —
+/// `SetNova` has no equivalent to `Set`'s dynamic-path/metadata machinery.
+auto validate_simple_nova_target(ast::expression const& expression,
+                                 diagnostic_handler& dh) -> failure_or<void> {
+  auto selector = ast::selector::try_from(expression);
+  const auto* path = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+  if (path != nullptr and not path->has_this() and path->path().size() == 1
+      and not path->path()[0].has_question_mark) {
+    return {};
+  }
+  diagnostic::error("set operator does not yet support this assignment "
+                    "target with nova events")
+    .primary(expression, "expected a simple top-level field name, e.g. `x`")
     .emit(dh);
   return failure::promise();
 }
@@ -430,8 +605,11 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
 }
 
 auto ir::SetIr::spawn(element_type_tag input) const -> AnyOperator {
-  TENZIR_ASSERT(input.is<table_slice>());
-  return Set{assignments_, order_}.with_name("set");
+  if (input.is<table_slice>()) {
+    return Set{assignments_, order_}.with_name("set");
+  }
+  TENZIR_ASSERT(input.is<nova::Events>());
+  return SetNova{assignments_}.with_name("set");
 }
 
 namespace {
@@ -546,11 +724,17 @@ auto ir::SetIr::optimize(ir::OptimizeRequest req,
 
 auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
   -> failure_or<element_type_tag> {
-  if (input.is_not<table_slice>()) {
-    diagnostic::error("set operator expected events").emit(dh);
-    return failure::promise();
+  if (input.is<table_slice>()) {
+    return input;
   }
-  return input;
+  if (input.is<nova::Events>()) {
+    for (const auto& assignment : assignments_) {
+      TRY(validate_nova_target(assignment, dh));
+    }
+    return input;
+  }
+  diagnostic::error("set operator expected events").emit(dh);
+  return failure::promise();
 }
 
 namespace ir {

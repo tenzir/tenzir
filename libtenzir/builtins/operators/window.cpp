@@ -1837,6 +1837,13 @@ public:
               .primary(p.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [&](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce nova_events")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
           });
       } else {
         return {};

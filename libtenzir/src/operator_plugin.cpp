@@ -12,6 +12,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova_flag.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -142,36 +144,35 @@ auto setter_to_type_string(const AnySetter& setter) -> std::string {
 
 } // namespace
 
-auto get_usage(const Description& desc) -> std::string {
-  auto result = desc.name;
+auto usage_arguments(std::span<const Positional> positional,
+                     Option<size_t> first_optional,
+                     std::span<const Named> named) -> std::string {
+  auto result = std::string{};
   auto has_previous = false;
   auto in_brackets = false;
   // Print positional arguments.
-  for (auto [idx, positional] : detail::enumerate(desc.positional)) {
-    if (is_hidden_argument(positional.name)) {
+  for (auto [idx, arg] : detail::enumerate(positional)) {
+    if (is_hidden_argument(arg.name)) {
       continue;
     }
-    auto is_optional = desc.first_optional and idx >= *desc.first_optional;
+    auto is_optional = first_optional and idx >= *first_optional;
     if (std::exchange(has_previous, true)) {
       result += ", ";
-    } else {
-      result += ' ';
     }
     if (is_optional and not in_brackets) {
       result += '[';
       in_brackets = true;
     }
-    result += positional.name;
+    result += arg.name;
     result += ':';
-    result += positional.type.empty() ? setter_to_type_string(positional.setter)
-                                      : positional.type;
+    result += arg.type.empty() ? setter_to_type_string(arg.setter) : arg.type;
   }
   // Print required named arguments first.
-  for (const auto& named : desc.named) {
-    if (not named.required) {
+  for (const auto& arg : named) {
+    if (not arg.required) {
       continue;
     }
-    if (is_hidden_argument(named)) {
+    if (is_hidden_argument(arg)) {
       continue;
     }
     if (in_brackets) {
@@ -180,40 +181,42 @@ auto get_usage(const Description& desc) -> std::string {
     }
     if (std::exchange(has_previous, true)) {
       result += ", ";
-    } else {
-      result += ' ';
     }
-    result += display_names(named);
+    result += display_names(arg);
     result += '=';
-    result
-      += named.type.empty() ? setter_to_type_string(named.setter) : named.type;
+    result += arg.type.empty() ? setter_to_type_string(arg.setter) : arg.type;
   }
   // Print optional named arguments.
-  for (const auto& named : desc.named) {
-    if (named.required) {
+  for (const auto& arg : named) {
+    if (arg.required) {
       continue;
     }
-    if (is_hidden_argument(named)) {
+    if (is_hidden_argument(arg)) {
       continue;
     }
     if (std::exchange(has_previous, true)) {
       result += ", ";
-    } else {
-      result += ' ';
     }
     if (not in_brackets) {
       result += '[';
       in_brackets = true;
     }
-    result += display_names(named);
+    result += display_names(arg);
     result += '=';
-    result
-      += named.type.empty() ? setter_to_type_string(named.setter) : named.type;
+    result += arg.type.empty() ? setter_to_type_string(arg.setter) : arg.type;
   }
   if (in_brackets) {
     result += ']';
   }
   return result;
+}
+
+auto get_usage(const Description& desc) -> std::string {
+  auto args = usage_arguments(desc.positional, desc.first_optional, desc.named);
+  if (args.empty()) {
+    return desc.name;
+  }
+  return desc.name + ' ' + args;
 }
 
 auto ArgumentStore::parse(const Description& desc, ast::entity op,
@@ -519,6 +522,56 @@ auto apply_arg(const Arg& arg, const AnySetter& setter, Any& args) -> void {
     });
 }
 
+/// Picks the `AnySpawn` alternative in `spawns` matching `input`, emitting a
+/// diagnostic and failing if none is usable.
+auto select_spawn(const std::vector<AnySpawn>& spawns, element_type_tag input,
+                  location loc, const std::string& docs, diagnostic_handler& dh)
+  -> failure_or<const AnySpawn*> {
+  const AnySpawn* first_non_events = nullptr;
+  const AnySpawn* events_match = nullptr;
+  auto table_slice_match = false;
+  for (const auto& spawn : spawns) {
+    match(spawn, [&]<class Input, class Output, bool MultipleOutputPorts>(
+                   const Spawn<Input, Output, MultipleOutputPorts>&) {
+      if (not input.is<Input>()) {
+        return;
+      }
+      if constexpr (std::same_as<Output, nova::Events>) {
+        if (not events_match) {
+          events_match = &spawn;
+        }
+      } else {
+        if (not first_non_events) {
+          first_non_events = &spawn;
+        }
+        if constexpr (std::same_as<Output, table_slice>) {
+          table_slice_match = true;
+        }
+      }
+    });
+  }
+  if (nova_enabled()) {
+    if (events_match) {
+      return events_match;
+    }
+    if (table_slice_match) {
+      diagnostic::error("operator does not support `--nova` yet")
+        .primary(loc)
+        .note("If you are seeing this as a user in a release, this is a bug")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  if (not first_non_events) {
+    diagnostic::error("operator does not accept {}", input)
+      .primary(loc)
+      .docs(docs)
+      .emit(dh);
+    return failure::promise();
+  }
+  return first_non_events;
+}
+
 } // namespace
 
 auto ArgumentStore::materialize(const Description& desc,
@@ -636,26 +689,14 @@ public:
           });
       }
     }
-    for (auto& spawn : desc_->spawns) {
-      auto output
-        = match(spawn,
-                [&]<class Input, class Output, bool MultipleOutputPorts>(
-                  const Spawn<Input, Output, MultipleOutputPorts>&)
-                  -> Option<element_type_tag> {
-                  if (input.is<Input>()) {
-                    return tag_v<Output>;
-                  }
-                  return None{};
-                });
-      if (output) {
-        return *output;
-      }
-    }
-    diagnostic::error("operator does not accept {}", input)
-      .primary(main_location())
-      .docs(desc_->docs)
-      .emit(dh);
-    return failure::promise();
+    TRY(const auto* spawn,
+        select_spawn(desc_->spawns, input, main_location(), desc_->docs, dh));
+    return match(
+      *spawn,
+      []<class Input, class Output, bool MultipleOutputPorts>(
+        const Spawn<Input, Output, MultipleOutputPorts>&) -> element_type_tag {
+        return tag_v<Output>;
+      });
   }
 
   auto materialize_args() const -> Any {
@@ -694,21 +735,16 @@ public:
         return spawner(std::move(args));
       }));
     }
-    for (auto& spawn : desc_->spawns) {
-      auto result
-        = match(spawn,
-                [&]<class Input, class Output, bool MultipleOutputPorts>(
-                  const Spawn<Input, Output, MultipleOutputPorts>& spawn)
-                  -> Option<AnyOperator> {
-                  if (input.is<Input>()) {
-                    return spawn(std::move(args));
-                  }
-                  return None{};
-                });
-      if (result) {
-        return with_name(std::move(*result));
-      }
-    }
+    auto noop_dh = null_diagnostic_handler{};
+    auto const spawn = select_spawn(desc_->spawns, input, main_location(),
+                                    desc_->docs, noop_dh);
+    TENZIR_ASSERT(spawn and *spawn, "expected valid spawn after `infer_type`");
+    return with_name(match(
+      **spawn,
+      [&]<class Input, class Output, bool MultipleOutputPorts>(
+        const Spawn<Input, Output, MultipleOutputPorts>& spawn) -> AnyOperator {
+        return spawn(std::move(args));
+      }));
     TENZIR_UNREACHABLE();
   }
 

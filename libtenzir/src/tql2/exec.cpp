@@ -256,6 +256,10 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
     [](const chunk_ptr& chunk) -> size_t {
       return chunk ? chunk->size() : 0;
     },
+    [](const nova::Events&) -> size_t {
+      // No byte accounting for nova::Events yet.
+      return 0;
+    },
     [](const Signal&) -> size_t {
       return 0;
     });
@@ -271,6 +275,9 @@ auto count_events(const OperatorMsg<T>& item) -> size_t {
     },
     [](const chunk_ptr&) -> size_t {
       return 0;
+    },
+    [](const nova::Events& events) -> size_t {
+      return static_cast<size_t>(events.active_count());
     },
     [](const Signal&) -> size_t {
       return 0;
@@ -718,6 +725,16 @@ protected:
   auto make_fused_bytes(ChannelId id)
     -> PushPull<OperatorMsg<chunk_ptr>> override {
     return make_profiled_fused_channel<chunk_ptr>(std::move(id));
+  }
+
+  auto make_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>> override {
+    return make_profiled_channel<nova::Events>(std::move(id), events_limit);
+  }
+
+  auto make_fused_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>> override {
+    return make_profiled_fused_channel<nova::Events>(std::move(id));
   }
 
 private:
@@ -1842,8 +1859,9 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Add implicit sink before optimization.
   if (output->is_not<void>()) {
-    auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
-                                              : cfg.implicit_bytes_sink;
+    auto sink_def = output->is<table_slice>() or output->is<nova::Events>()
+                      ? cfg.implicit_events_sink
+                      : cfg.implicit_bytes_sink;
     TRY(auto implicit, parse_implicit(sink_def, implicit_sink_location));
     ir.append(std::move(implicit));
     TRY(output, ir.infer_type(tag_v<void>, ctx));
@@ -1851,7 +1869,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     // TODO: This is a problem with the implicit sink config.
     if (not output->is<void>()) {
       diagnostic::error("last operator must close pipeline, but it returns {}",
-                        operator_type_name(*output))
+                        fmt::to_string(*output))
         // TODO: This location will be unknown.
         .primary(ir.operators.back()->main_location())
         .emit(ctx);

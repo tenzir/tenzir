@@ -6,6 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_system.hpp"
+
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/ip.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
@@ -15,11 +21,40 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
+#include <string_view>
+
+using namespace tenzir::nova;
+
 namespace tenzir::plugins::ip {
 
 namespace {
 
-class ip final : public function_plugin {
+struct IpArgs {
+  ValueArgument x;
+  location call;
+};
+
+class IpFunction final {
+public:
+  auto eval(IpArgs const& args, EvalFrame frame) const -> Array<Data> {
+    return apply_kernel<1>(
+      frame, "ip", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, Ip v) -> Option<Ip> {
+          return v;
+        },
+        [](diagnostic_handler&, std::string_view v) -> Option<Ip> {
+          auto result = tenzir::ip{};
+          if (parsers::ip(v, result)) {
+            return result;
+          }
+          return None{};
+        },
+      });
+  }
+};
+
+class ip final : public FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "ip";
@@ -27,6 +62,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> FunctionDescription override {
+    auto d = FunctionDescriber<IpArgs, IpFunction>{};
+    d.positional("x", &IpArgs::x, "string");
+    d.call_location(&IpArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -87,10 +129,15 @@ enum class check_type {
   link_local
 };
 
+struct IpCheckArgs {
+  ValueArgument x;
+  location call;
+};
+
 template <check_type CheckType>
-class ip_check final : public function_plugin {
+class IpCheckFunction final {
 public:
-  auto name() const -> std::string override {
+  static auto name() -> std::string_view {
     if constexpr (CheckType == check_type::v4) {
       return "is_v4";
     } else if constexpr (CheckType == check_type::v6) {
@@ -108,8 +155,45 @@ public:
     }
   }
 
+  auto eval(IpCheckArgs const& args, EvalFrame frame) const -> Array<Data> {
+    return apply_kernel<1>(
+      frame, name(), {args.x}, args.call,
+      [](diagnostic_handler&, Ip v) -> Option<Bool> {
+        if constexpr (CheckType == check_type::v4) {
+          return v.is_v4();
+        } else if constexpr (CheckType == check_type::v6) {
+          return v.is_v6();
+        } else if constexpr (CheckType == check_type::multicast) {
+          return v.is_multicast();
+        } else if constexpr (CheckType == check_type::loopback) {
+          return v.is_loopback();
+        } else if constexpr (CheckType == check_type::private_) {
+          return v.is_private();
+        } else if constexpr (CheckType == check_type::global) {
+          return v.is_global();
+        } else if constexpr (CheckType == check_type::link_local) {
+          return v.is_link_local();
+        }
+      });
+  }
+};
+
+template <check_type CheckType>
+class ip_check final : public FunctionPlugin {
+public:
+  auto name() const -> std::string override {
+    return std::string{IpCheckFunction<CheckType>::name()};
+  }
+
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> FunctionDescription override {
+    auto d = FunctionDescriber<IpCheckArgs, IpCheckFunction<CheckType>>{};
+    d.positional("x", &IpCheckArgs::x, "ip");
+    d.call_location(&IpCheckArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -167,7 +251,23 @@ public:
   }
 };
 
-class ip_category_plugin final : public function_plugin {
+struct IpCategoryArgs {
+  ValueArgument x;
+  location call;
+};
+
+class IpCategoryFunction final {
+public:
+  auto eval(IpCategoryArgs const& args, EvalFrame frame) const -> Array<Data> {
+    return apply_kernel<1>(frame, "ip_category", {args.x}, args.call,
+                           [](diagnostic_handler&,
+                              Ip v) -> Option<std::string_view> {
+                             return to_string(v.type());
+                           });
+  }
+};
+
+class ip_category_plugin final : public FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "ip_category";
@@ -175,6 +275,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> FunctionDescription override {
+    auto d = FunctionDescriber<IpCategoryArgs, IpCategoryFunction>{};
+    d.positional("x", &IpCategoryArgs::x, "ip");
+    d.call_location(&IpCategoryArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

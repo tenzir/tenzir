@@ -32,7 +32,8 @@ struct FromGoogleCloudStorageArgs : FromArrowFsArgs {
   bool anonymous = false;
 };
 
-class FromGoogleCloudStorageOperator final : public FromArrowFsOperator {
+class FromGoogleCloudStorageOperator final
+  : public FromArrowFsOperator<table_slice> {
 public:
   explicit FromGoogleCloudStorageOperator(FromGoogleCloudStorageArgs args)
     : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},

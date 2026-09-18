@@ -90,6 +90,13 @@ struct Named {
   bool required = false;
 };
 
+/// Renders `positional` and `named` the way usage strings show them, e.g.
+/// `count:int, [ignore_case=bool]`. Arguments whose names start with `_` are
+/// hidden.
+auto usage_arguments(std::span<const Positional> positional,
+                     Option<size_t> first_optional,
+                     std::span<const Named> named) -> std::string;
+
 /// Specification for a let binding to inject into a subpipeline.
 struct LetBinding {
   std::string name;
@@ -146,15 +153,29 @@ using Spawn = SpawnFn<Any, Input, Output, MultipleOutputPorts>;
 // Variant for different operator spawn functions (matches AnyOperator).
 using AnySpawn
   = variant<Spawn<void, void>, Spawn<void, chunk_ptr>, Spawn<void, table_slice>,
-            Spawn<chunk_ptr, chunk_ptr>, Spawn<chunk_ptr, table_slice>,
+            Spawn<void, nova::Events>, Spawn<chunk_ptr, chunk_ptr>,
+            Spawn<chunk_ptr, table_slice>, Spawn<chunk_ptr, nova::Events>,
             Spawn<table_slice, chunk_ptr>, Spawn<table_slice, table_slice>,
             Spawn<table_slice, table_slice, true>, Spawn<table_slice, void>,
+            Spawn<nova::Events, chunk_ptr>, Spawn<nova::Events, nova::Events>,
+            Spawn<nova::Events, nova::Events, true>, Spawn<nova::Events, void>,
             Spawn<chunk_ptr, void>>;
 
 template <class Args, class Input>
 using SpawnWith
   = variant<SpawnFn<Args, Input, void>, SpawnFn<Args, Input, chunk_ptr>,
-            SpawnFn<Args, Input, table_slice>>;
+            SpawnFn<Args, Input, table_slice>,
+            SpawnFn<Args, Input, nova::Events>>;
+
+/// Whether `Spawn<Input, Output>` is a valid `AnySpawn`/`AnyOperator`
+/// element-type transition. Not every `(Input, Output)` combination that
+/// `SpawnWith<Args, Input>` can hold is a real one (e.g.
+/// `table_slice -> nova::Events` is not, since only `void`, `chunk_ptr`, and
+/// `nova::Events` inputs may produce `nova::Events`).
+template <class Input, class Output>
+concept valid_spawn = requires(Spawn<Input, Output> spawn, AnySpawn any) {
+  any = std::move(spawn);
+};
 
 // FIXME: Do we need this?
 class Empty {
@@ -1229,19 +1250,40 @@ public:
                       DescribeCtx& ctx) -> failure_or<Option<AnySpawn>> {
       return match(
         input, [&]<class Input>(tag<Input>) -> failure_or<Option<AnySpawn>> {
-          auto result = spawner.template operator()<Input>(ctx);
-          TRY(auto option, std::move(result));
-          TRY(auto spawn, std::move(option));
-          return match(
-            spawn,
-            [&]<class Output, bool MultipleOutputPorts>(
-              SpawnFn<Args, Input, Output, MultipleOutputPorts>& spawn)
-              -> AnySpawn {
-              return [spawn = std::move(spawn)](Any args)
-                       -> Box<Operator<Input, Output, MultipleOutputPorts>> {
-                return spawn(args.as<Args>());
-              };
-            });
+          if constexpr (std::same_as<Input, nova::Events>) {
+            // `Spawner` is only required to be callable for the classic
+            // element types; nova::Events falls through to the generic
+            // `Describer<Args, Impls...>` spawn path.
+            return None{};
+          } else {
+            auto result = spawner.template operator()<Input>(ctx);
+            TRY(auto option, std::move(result));
+            TRY(auto spawn, std::move(option));
+            return match(
+              spawn,
+              [&]<class Output, bool MultipleOutputPorts>(
+
+                SpawnFn<Args, Input, Output, MultipleOutputPorts>& spawn)
+                -> AnySpawn {
+                if constexpr (valid_spawn<Input, Output>) {
+                  return
+                    [spawn = std::move(spawn)](Any args)
+                      -> Box<Operator<Input, Output, MultipleOutputPorts>> {
+                      return spawn(args.as<Args>());
+                    };
+                } else {
+                  // `SpawnWith<Args, Input>` covers every classic
+                  // `Output` plus `nova::Events`, but not every
+                  // `(Input, Output)` combination is a real operator
+                  // element-type transition (e.g. `table_slice ->
+                  // nova::Events` does not exist in
+                  // `AnyOperator`/`AnySpawn`). A `Spawner` must
+                  // simply never return this alternative for such an
+                  // `Input`.
+                  TENZIR_UNREACHABLE();
+                }
+              });
+          }
         });
     };
   }

@@ -38,7 +38,7 @@ public:
       },
       MetricsDirection::write, MetricsVisibility::internal_,
       MetricsUnit::bytes);
-    if constexpr (std::same_as<Input, table_slice>) {
+    if constexpr (concepts::one_of<Input, table_slice, nova::Events>) {
       write_events_counter_ = ctx.make_counter(
         MetricsLabel{
           "operator",
@@ -52,7 +52,7 @@ public:
 
   auto process(Input input, OpCtx&) -> Task<void> override {
     auto bytes = std::size_t{};
-    if constexpr (std::same_as<Input, table_slice>) {
+    if constexpr (concepts::one_of<Input, table_slice, nova::Events>) {
       bytes = input.approx_bytes();
     } else {
       if (input) {
@@ -62,6 +62,9 @@ public:
     write_bytes_counter_.add(static_cast<uint64_t>(bytes));
     if constexpr (std::same_as<Input, table_slice>) {
       write_events_counter_.add(input.rows());
+    }
+    if constexpr (std::same_as<Input, nova::Events>) {
+      write_events_counter_.add(input.active_count());
     }
     co_return;
   }
@@ -78,7 +81,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<DiscardArgs, Discard<chunk_ptr>, Discard<table_slice>>{};
+    auto d = Describer<DiscardArgs, Discard<chunk_ptr>, Discard<table_slice>,
+                       Discard<nova::Events>>{};
     d.parallelizable();
     return d.unordered();
   }

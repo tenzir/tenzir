@@ -162,7 +162,7 @@ constexpr auto variant_get(V&& v) -> decltype(auto) {
 }
 
 template <has_variant_traits V, class T>
-constexpr auto variant_index = std::invoke(
+inline constexpr auto variant_index = std::invoke(
   []<size_t... Is>(std::index_sequence<Is...>) {
     constexpr static auto arr
       = std::array{std::same_as<variant_alternative<V, Is>, T>...};

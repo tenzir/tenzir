@@ -19,36 +19,53 @@ namespace tenzir::detail {
 struct heterogeneous_string_equal {
   using is_transparent = void;
 
-  bool operator()(const std::string& lhs, const std::string& rhs) const {
-    return lhs == rhs;
+  template <class LhsAllocator, class RhsAllocator>
+  auto operator()(
+    const std::basic_string<char, std::char_traits<char>, LhsAllocator>& lhs,
+    const std::basic_string<char, std::char_traits<char>, RhsAllocator>& rhs)
+    const noexcept -> bool {
+    return std::string_view{lhs} == std::string_view{rhs};
   }
 
-  bool operator()(const std::string& lhs, std::string_view sv) const {
-    return lhs == sv;
+  template <class Allocator>
+  auto operator()(
+    const std::basic_string<char, std::char_traits<char>, Allocator>& lhs,
+    std::string_view rhs) const noexcept -> bool {
+    return std::string_view{lhs} == rhs;
   }
 
-  bool operator()(const std::string_view lhs, const std::string& sv) const {
-    return lhs == sv;
+  template <class Allocator>
+  auto
+  operator()(std::string_view lhs,
+             const std::basic_string<char, std::char_traits<char>, Allocator>&
+               rhs) const noexcept -> bool {
+    return lhs == std::string_view{rhs};
   }
 
-  bool operator()(const std::string& lhs, const char* sv) const {
-    return lhs == sv;
+  template <class Allocator>
+  auto operator()(
+    const std::basic_string<char, std::char_traits<char>, Allocator>& lhs,
+    const char* rhs) const noexcept -> bool {
+    return std::string_view{lhs} == rhs;
   }
 };
 
 struct heterogeneous_string_hash {
   using is_transparent = void;
 
-  [[nodiscard]] size_t operator()(const char* s) const {
+  [[nodiscard]] auto operator()(const char* s) const noexcept -> size_t {
     return std::hash<std::string_view>{}(s);
   }
 
-  [[nodiscard]] size_t operator()(std::string_view s) const {
+  [[nodiscard]] auto operator()(std::string_view s) const noexcept -> size_t {
     return std::hash<std::string_view>{}(s);
   }
 
-  [[nodiscard]] size_t operator()(const std::string& s) const {
-    return std::hash<std::string>{}(s);
+  template <class Allocator>
+  [[nodiscard]] auto
+  operator()(const std::basic_string<char, std::char_traits<char>, Allocator>&
+               s) const noexcept -> size_t {
+    return std::hash<std::string_view>{}(s);
   }
 };
 

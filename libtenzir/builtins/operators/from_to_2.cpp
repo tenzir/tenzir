@@ -14,6 +14,10 @@
 #include <tenzir/glob.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/nova/const_eval.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
@@ -105,6 +109,76 @@ private:
   MetricsCounter read_events_counter_;
 };
 
+class FromEventsNova final : public Operator<void, nova::Events> {
+public:
+  explicit FromEventsNova(std::vector<ast::expression> events)
+    : events_{std::move(events)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    read_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_events",
+      },
+      MetricsDirection::read, MetricsVisibility::internal_, MetricsUnit::bytes);
+    read_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_events",
+      },
+      MetricsDirection::read, MetricsVisibility::internal_,
+      MetricsUnit::events);
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(next_ < events_.size());
+    auto eval_ctx = nova::InstantiateCtx{ctx.dh(), ctx.reg()};
+    auto result = nova::const_eval_array(events_[next_], eval_ctx);
+    if (not result) {
+      co_await assert_cancelled();
+    }
+    auto record = result->get_alternative<nova::Record>();
+    if (not record or not record->present.get(0)) {
+      diagnostic::error("expected `record`").primary(events_[next_]).emit(ctx);
+      co_return;
+    }
+    auto const length = record->data.length();
+    auto events
+      = nova::Events{std::move(record->data), std::move(record->present),
+                     nova::Events::Meta::make_empty(length)};
+    auto const bytes = events.approx_bytes();
+    auto const rows = events.length();
+    co_await push(std::move(events));
+    read_bytes_counter_.add(bytes);
+    read_events_counter_.add(rows);
+    next_ += 1;
+  }
+
+  auto state() -> OperatorState override {
+    if (next_ == events_.size()) {
+      return OperatorState::done;
+    }
+    return OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("next", next_);
+  }
+
+private:
+  size_t next_ = 0;
+  std::vector<ast::expression> events_;
+  MetricsCounter read_bytes_counter_;
+  MetricsCounter read_events_counter_;
+};
+
 class from_ir final : public ir::Operator {
 public:
   from_ir() = default;
@@ -128,6 +202,9 @@ public:
 
   auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
+    if (nova_enabled()) {
+      return FromEventsNova{events_}.with_name("from");
+    }
     return From{events_}.with_name("from");
   }
 
@@ -136,6 +213,9 @@ public:
     if (input.is_not<void>()) {
       diagnostic::error("expected void, got {}", input).primary(self_).emit(dh);
       return failure::promise();
+    }
+    if (nova_enabled()) {
+      return tag_v<nova::Events>;
     }
     return tag_v<table_slice>;
   }

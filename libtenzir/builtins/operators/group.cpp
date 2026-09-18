@@ -178,6 +178,13 @@ public:
               .primary(pipe.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [&](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce nova_events")
+              .primary(pipe.source)
+              .emit(ctx);
+            return failure::promise();
           });
       } else {
         return {};
