@@ -1,0 +1,7 @@
+error: setting `neo` to `false` is no longer supported
+ --> tests/language/neo_directive/false.tql:4:1
+  |
+4 | // neo: false
+  | ^^^^^^^^^^^^^
+  |
+  = hint: please migrate to the neo executor

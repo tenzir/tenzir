@@ -55,6 +55,8 @@ void add_root_opts(command& cmd) {
   cmd.options.add<std::string>("?tenzir", "console-format",
                                "format string for logging to the "
                                "console");
+  cmd.options.add<bool>("?tenzir", "neo",
+                        "deprecated compatibility option; must not be false");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
   cmd.options.add<caf::config_value::list>(

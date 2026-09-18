@@ -9,6 +9,8 @@
 #include "tenzir/tql2/tokens.hpp"
 
 #include "tenzir/concept/parseable/string/char_class.hpp"
+#include "tenzir/detail/string.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/try.hpp"
@@ -55,6 +57,53 @@ auto verify_tokens_impl(std::span<const token> tokens, source_origin origin,
   return result;
 }
 
+// Match a `// neo` or `// neo: false` directive. ASCII whitespace is permitted
+// around `//`, `neo`, and `:`.
+auto match_neo_directive(std::string_view text) -> Option<bool> {
+  text.remove_prefix(2);
+  text = detail::trim(text);
+  if (not text.starts_with("neo")) {
+    return None{};
+  }
+  text.remove_prefix(3);
+  text = detail::trim(text);
+  if (text.empty()) {
+    return true;
+  }
+  if (text.front() == ':') {
+    text.remove_prefix(1);
+    if (detail::trim(text) == "false") {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Reject requests for the removed legacy executor in leading source comments.
+auto verify_neo_directive(std::span<const token> tokens,
+                          std::string_view source, source_origin origin,
+                          session ctx) -> failure_or<void> {
+  auto begin = uint32_t{0};
+  for (const auto& token : tokens) {
+    if (token.kind == token_kind::line_comment) {
+      if (auto neo
+          = match_neo_directive(source.substr(begin, token.end - begin));
+          neo and not *neo) {
+        diagnostic::error("setting `neo` to `false` is no longer supported")
+          .primary(make_location(begin, token.end, origin))
+          .hint("please migrate to the neo executor")
+          .emit(ctx);
+        return failure::promise();
+      }
+    } else if (token.kind != token_kind::whitespace
+               and token.kind != token_kind::newline) {
+      break;
+    }
+    begin = token.end;
+  }
+  return {};
+}
+
 } // namespace
 
 auto tokenize(std::string_view content, source_origin origin, session ctx)
@@ -62,6 +111,7 @@ auto tokenize(std::string_view content, source_origin origin, session ctx)
   TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
   TRY(verify_tokens_impl(tokens, origin, ctx));
+  TRY(verify_neo_directive(tokens, content, origin, ctx));
   return tokens;
 }
 
@@ -69,7 +119,7 @@ auto tokenize(Source const& source, session ctx)
   -> failure_or<std::vector<token>> {
   TRY(validate_utf8(source.text, ctx));
   auto tokens = tokenize_permissive(source.text);
-  TRY(verify_tokens(tokens, source.index, ctx));
+  TRY(verify_tokens(tokens, source, ctx));
   return tokens;
 }
 
@@ -324,7 +374,9 @@ auto verify_tokens(std::span<const token> tokens, source_origin origin,
 
 auto verify_tokens(std::span<const token> tokens, Source const& source,
                    session ctx) -> failure_or<void> {
-  return verify_tokens(tokens, source.index, ctx);
+  TRY(verify_tokens_impl(tokens, source.index, ctx));
+  TRY(verify_neo_directive(tokens, source.text, source.index, ctx));
+  return {};
 }
 
 auto describe(token_kind k) -> std::string_view {

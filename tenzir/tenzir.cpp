@@ -185,6 +185,11 @@ auto main(int argc, char** argv) -> int try {
   // From here on, options from the command line can be used.
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
+  if (not caf::get_or(cfg.content, "tenzir.neo", true)) {
+    fmt::print(stderr, "error: setting `neo` to `false` is no longer supported."
+                       "Please migrate to the neo executor\n");
+    return EXIT_FAILURE;
+  }
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (not log_context) {

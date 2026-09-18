@@ -49,6 +49,24 @@ TEST("tql2 tokenizer: source-aware token errors use source id") {
   CHECK(rendered.find("1 | `") != std::string::npos);
 }
 
+TEST("tql2 tokenizer: neo compatibility directive") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto source = Source::new_source("// neo: false\npass", "<input>", true);
+  auto result = tokenize(*source, provider.as_session());
+  CHECK(not result);
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+  CHECK_EQUAL(diagnostics[0].message,
+              "setting `neo` to `false` is no longer supported");
+
+  auto accepting_dh = collecting_diagnostic_handler{};
+  auto accepting_provider = session_provider::make(accepting_dh);
+  source = Source::new_source("// neo: true\npass", "<input>", true);
+  CHECK(tokenize(*source, accepting_provider.as_session()));
+  CHECK(std::move(accepting_dh).collect().empty());
+}
+
 TEST("tql2 tokenizer: location override is exact") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
