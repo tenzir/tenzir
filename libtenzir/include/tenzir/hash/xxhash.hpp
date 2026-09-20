@@ -13,6 +13,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstring>
+#include <span>
 #include <type_traits>
 
 // Exposes the layout of `XXH64_state_t`, which we hold by value below. Its
