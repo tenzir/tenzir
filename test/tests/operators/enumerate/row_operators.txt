@@ -1,0 +1,1 @@
+Nova row operator regressions passed
