@@ -7,6 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -41,8 +44,62 @@ using uuid_generator_type = std::variant<boost::uuids::nil_generator,     // nil
                                          boost::uuids::time_generator_v7  // v7
                                          >;
 
-class uuid final : public function_plugin {
+struct UuidArgs {
+  Option<located<std::string>> version;
+  uuid_version parsed = uuid_version::v4;
+};
+
+struct UuidFunction {
+  auto eval(UuidArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto generate = [&](auto generator) -> nova::Array<nova::Data> {
+      auto builder = nova::ArrayBuilder<nova::String>{};
+      nova::storage::for_each_true(frame.mask(), [&](auto row) {
+        builder.skip_n(row - builder.length());
+        builder.data(boost::uuids::to_string(generator()));
+      });
+      builder.skip_n(frame.length() - builder.length());
+      return builder.finish();
+    };
+    switch (args.parsed) {
+      case uuid_version::nil:
+        return generate(boost::uuids::nil_generator{});
+      case uuid_version::v1:
+        return generate(boost::uuids::time_generator_v1{});
+      case uuid_version::v4:
+        return generate(boost::uuids::random_generator{});
+      case uuid_version::v6:
+        return generate(boost::uuids::time_generator_v6{});
+      case uuid_version::v7:
+        return generate(boost::uuids::time_generator_v7{});
+    }
+    TENZIR_UNREACHABLE();
+  }
+};
+
+class uuid final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<UuidArgs, UuidFunction>{};
+    d.named("version", &UuidArgs::version);
+    d.validate([](UuidArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+      if (not args.version) {
+        return {};
+      }
+      auto parsed = from_string<uuid_version>(args.version->inner);
+      if (not parsed) {
+        diagnostic::error("unsupported UUID version: `{}`", args.version->inner)
+          .primary(*args.version)
+          .hint("supported versions: `v1`, `v4`, `v6`, `v7`, `nil`")
+          .emit(dh);
+        return failure::promise();
+      }
+      args.parsed = *parsed;
+      return {};
+    });
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "uuid";
   }
