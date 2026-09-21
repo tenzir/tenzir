@@ -1,0 +1,6 @@
+---
+fixtures: [local_files]
+---
+let $path = env("FILE_ROOT") + "/single/data.json"
+from {x: 1}, {x: 2}
+value = file_contents($path)

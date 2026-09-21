@@ -1,0 +1,9 @@
+error: file 'inputs/file-contents/invalid-utf8.bin' holds invalid UTF-8
+ --> tests/functions/file_contents/invalid_utf8.tql:6:23
+  |
+6 | value = file_contents($path)
+  |                       ^^^^^
+  |
+  = hint: use `binary=true` to read contents as a `blob`
+  = usage: file_contents(path:string, [binary=bool])
+  = docs: https://tenzir.com/docs/reference/functions/file_contents

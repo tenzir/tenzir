@@ -1,0 +1,8 @@
+{
+  x: 1,
+  value: "{\"filename\": \"single/data.json\"}\n",
+}
+{
+  x: 2,
+  value: "{\"filename\": \"single/data.json\"}\n",
+}

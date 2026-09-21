@@ -1,0 +1,8 @@
+error: cannot read file `inputs/empty-file.txt` of size 0
+ --> tests/functions/file_contents/empty.tql:6:23
+  |
+6 | value = file_contents($path)
+  |                       ^^^^^
+  |
+  = usage: file_contents(path:string, [binary=bool])
+  = docs: https://tenzir.com/docs/reference/functions/file_contents

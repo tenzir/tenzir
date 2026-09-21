@@ -1,0 +1,8 @@
+error: `path` must be an absolute path
+ --> tests/functions/file_contents/relative_path.tql:5:23
+  |
+5 | value = file_contents("relative")
+  |                       ^^^^^^^^^^
+  |
+  = usage: file_contents(path:string, [binary=bool])
+  = docs: https://tenzir.com/docs/reference/functions/file_contents
