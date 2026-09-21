@@ -1,0 +1,4 @@
+from {x: "hello"}, {x: b"hello"}, {x: null}
+encoded = encode_hex(x)
+decoded = decode_hex(encoded)
+drop x

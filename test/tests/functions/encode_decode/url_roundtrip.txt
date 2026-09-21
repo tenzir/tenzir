@@ -1,0 +1,12 @@
+{
+  encoded: "hello",
+  decoded: b"hello",
+}
+{
+  encoded: "hello",
+  decoded: b"hello",
+}
+{
+  encoded: null,
+  decoded: null,
+}

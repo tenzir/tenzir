@@ -1,0 +1,2 @@
+from {x: "!"}
+y = decode_hex(x)

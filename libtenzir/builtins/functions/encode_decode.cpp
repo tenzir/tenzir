@@ -13,6 +13,8 @@
 #include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -22,9 +24,52 @@ namespace tenzir::plugins::encode_decode {
 
 namespace {
 
+struct CodecArgs {
+  nova::ValueArgument value;
+  location call;
+};
+
+template <detail::string_literal Name, bool encode, auto F>
+struct CodecFunction {
+  auto eval(CodecArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto invalid = nova::WarnOnce{};
+    using Result = std::conditional_t<encode, nova::String, nova::Blob>;
+    auto transform
+      = [&](diagnostic_handler& dh, std::string_view value) -> Option<Result> {
+      if constexpr (encode) {
+        return F(value);
+      } else {
+        auto decoded = F(value);
+        if (not decoded) {
+          invalid(dh, diagnostic::warning("invalid {} encoding", Name)
+                        .primary(args.value.source));
+          return None{};
+        }
+        return blob{as_bytes(*decoded)};
+      }
+    };
+    return nova::apply_kernel<1>(
+      frame, (encode ? "encode_" : "decode_") + std::string{Name}, {args.value},
+      args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<Result> {
+          return None{};
+        },
+        [&](diagnostic_handler& dh, std::string_view value) -> Option<Result> {
+          return transform(dh, value);
+        },
+        [&](diagnostic_handler& dh, blob_view value) -> Option<Result> {
+          return transform(
+            dh, std::string_view{reinterpret_cast<char const*>(value.data()),
+                                 value.size()});
+        }});
+  }
+};
+
 template <detail::string_literal Name, bool encode, auto F,
           fbs::data::SecretTransformations tag>
-class plugin final : public function_plugin {
+class plugin final : public nova::FunctionPlugin {
   using Type = std::conditional_t<encode, string_type, blob_type>;
   auto name() const -> std::string override {
     return (encode ? "encode_" : "decode_") + std::string{Name};
@@ -32,6 +77,14 @@ class plugin final : public function_plugin {
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<CodecArgs, CodecFunction<Name, encode, F>>{};
+    d.positional("value", &CodecArgs::value, "blob|string");
+    d.call_location(&CodecArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

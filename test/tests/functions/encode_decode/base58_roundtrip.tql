@@ -1,0 +1,4 @@
+from {x: "hello"}, {x: b"hello"}, {x: null}
+encoded = encode_base58(x)
+decoded = decode_base58(encoded)
+drop x
