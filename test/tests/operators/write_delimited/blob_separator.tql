@@ -1,0 +1,3 @@
+from {x: b"a"}, {x: b"b"}
+write_delimited x, b"\x00"
+read_all binary=true

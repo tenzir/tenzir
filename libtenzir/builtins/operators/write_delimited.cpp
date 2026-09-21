@@ -8,12 +8,17 @@
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/blob.hpp>
+#include <tenzir/nova/eval.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/try.hpp>
 #include <tenzir/view3.hpp>
+
+#include <set>
+
+#include "write_bytes.hpp"
 
 namespace tenzir::plugins::write_delimited {
 
@@ -38,14 +43,75 @@ auto make_separator_blob(located<data> const& separator) -> blob {
     });
 }
 
-class WriteDelimited final : public Operator<table_slice, chunk_ptr> {
+template <class Input>
+class WriteDelimited final : public Operator<Input, chunk_ptr> {
 public:
   explicit WriteDelimited(WriteDelimitedArgs args)
     : args_{std::move(args)}, separator_{make_separator_blob(args_.separator)} {
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto evaluator = nova::Evaluator::make(
+        args_.value, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (evaluator) {
+        evaluator_ = std::move(*evaluator);
+      }
+    }
+    co_return;
+  }
+
+  auto process(Input input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
+    if constexpr (std::same_as<Input, table_slice>) {
+      co_await process_arrow(std::move(input), push, ctx);
+    } else {
+      if (not evaluator_) {
+        co_return;
+      }
+      auto values = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+      auto buffer = blob{};
+      auto warned_null = false;
+      auto warned_types = std::set<std::string_view>{};
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        auto value = values.get(row);
+        auto append = [&](auto bytes) {
+          buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+          buffer.insert(buffer.end(), separator_.begin(), separator_.end());
+        };
+        match(
+          value,
+          [&](nova::RowView<nova::Null>) {
+            if (not std::exchange(warned_null, true)) {
+              diagnostic::warning("dropped null value")
+                .primary(args_.value)
+                .emit(ctx);
+            }
+          },
+          [&](nova::RowView<nova::String> text) {
+            append(as_bytes(*text));
+          },
+          [&](nova::RowView<nova::Blob> bytes) {
+            append(*bytes);
+          },
+          [&](auto const&) {
+            auto kind = write_bytes::kind(value);
+            if (warned_types.insert(kind).second) {
+              diagnostic::warning("expected `string` or `blob`, but got `{}`",
+                                  kind)
+                .primary(args_.value)
+                .emit(ctx);
+            }
+          });
+      }
+      if (not buffer.empty()) {
+        co_await push(chunk::make(std::move(buffer)));
+      }
+    }
+  }
+
+  auto process_arrow(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> {
     auto evaluated = eval(args_.value, input, ctx.dh());
     auto buffer = blob{};
     auto append_separator = [&] {
@@ -100,6 +166,7 @@ public:
 private:
   WriteDelimitedArgs args_;
   blob separator_;
+  Option<nova::Evaluator> evaluator_;
 };
 
 class plugin final : public virtual OperatorPlugin {
@@ -109,7 +176,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteDelimitedArgs, WriteDelimited>{};
+    auto d = Describer<WriteDelimitedArgs, WriteDelimited<table_slice>,
+                       WriteDelimited<nova::Events>>{};
     d.positional("value", &WriteDelimitedArgs::value, "any");
     auto separator = d.positional("separator", &WriteDelimitedArgs::separator,
                                   "string|blob");
