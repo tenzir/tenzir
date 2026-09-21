@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/allocator.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -897,8 +898,10 @@ TEST("nested field assignment consumes uniquely owned records") {
   auto replacement = *replacement_builder.finish().field("b");
   auto path = make_field_path({"nested", "b"});
 
+  auto dh = tenzir::collecting_diagnostic_handler{};
   auto updated = assign_nested_field(std::move(outer), path.path(),
-                                     std::move(replacement));
+                                     std::move(replacement), dh);
+  CHECK(dh.empty());
 
   auto nested_field = updated.field("nested");
   REQUIRE(nested_field.is_some());
@@ -2645,8 +2648,13 @@ TEST("nested field assignment through a union parent replaces non-record "
   auto outer = make_union_nested_record();
   auto path = make_field_path({"nested", "b"});
 
-  auto updated = assign_nested_field(std::move(outer), path.path(),
-                                     make_b_values(storage::BitMap{3, true}));
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto updated = assign_nested_field(
+    std::move(outer), path.path(), make_b_values(storage::BitMap{3, true}), dh);
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), 1u);
+  CHECK_EQUAL(diagnostics[0].message,
+              "implicit record for `b` field overwrites `int` value");
 
   CHECK_EQUAL(nested_value(updated, 0),
               (tenzir::data{tenzir::record{{"a", std::int64_t{1}},
@@ -2663,8 +2671,11 @@ TEST("nested field assignment through a union parent keeps rows outside the "
   auto outer = make_union_nested_record();
   auto path = make_field_path({"nested", "b"});
 
-  auto updated = assign_nested_field(
-    std::move(outer), path.path(), make_b_values(bitmap({true, false, false})));
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto updated
+    = assign_nested_field(std::move(outer), path.path(),
+                          make_b_values(bitmap({true, false, false})), dh);
+  CHECK(dh.empty());
 
   CHECK_EQUAL(nested_value(updated, 0),
               (tenzir::data{tenzir::record{{"a", std::int64_t{1}},
@@ -2683,8 +2694,11 @@ TEST("nested field assignment keeps a plain record parent present outside "
   auto outer = builder.finish();
   auto path = make_field_path({"nested", "b"});
 
-  auto updated = assign_nested_field(
-    std::move(outer), path.path(), make_b_values(bitmap({false, true, false})));
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto updated
+    = assign_nested_field(std::move(outer), path.path(),
+                          make_b_values(bitmap({false, true, false})), dh);
+  CHECK(dh.empty());
 
   CHECK_EQUAL(nested_value(updated, 0),
               (tenzir::data{tenzir::record{{"a", std::int64_t{1}}}}));
@@ -2693,6 +2707,57 @@ TEST("nested field assignment keeps a plain record parent present outside "
                                            {"b", std::int64_t{20}}}}));
   CHECK_EQUAL(nested_value(updated, 2),
               (tenzir::data{tenzir::record{{"a", std::int64_t{3}}}}));
+}
+
+TEST("nested field assignment prepends new fields and retains existing "
+     "positions") {
+  auto builder = ArrayBuilder<Record>{};
+  auto row = builder.record();
+  row.field("x").data(std::int64_t{1});
+  row.field("nested").record().field("a").data(std::int64_t{2});
+  auto input = builder.finish();
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto assign = [&](std::initializer_list<std::string_view> segments) {
+    auto values = ArrayBuilder<Int>{};
+    values.data(std::int64_t{3});
+    auto path = make_field_path(segments);
+    input = assign_nested_field(std::move(input), path.path(),
+                                {Array<Data>{values.finish()},
+                                 storage::BitMap{1, true}},
+                                dh, FieldPosition::front);
+  };
+  assign({"nested", "b"});
+  CHECK_EQUAL(record_field_names(input.get(0)),
+              (std::vector<std::string>{"x", "nested"}));
+  CHECK_EQUAL(nested_value(input, 0),
+              (tenzir::data{tenzir::record{{"b", std::int64_t{3}},
+                                           {"a", std::int64_t{2}}}}));
+  assign({"new", "b"});
+  CHECK_EQUAL(record_field_names(input.get(0)),
+              (std::vector<std::string>{"new", "x", "nested"}));
+  assign({"nested", "a"});
+  CHECK_EQUAL(nested_value(input, 0),
+              (tenzir::data{tenzir::record{{"b", std::int64_t{3}},
+                                           {"a", std::int64_t{3}}}}));
+  CHECK(dh.empty());
+}
+
+TEST("shape insertion caches distinguish front and back") {
+  auto table = ShapeTable{};
+  auto source = table.with_field(ShapeTable::empty_shape, 0);
+  auto back = table.with_field(source, 1);
+  auto front = table.with_field(source, 1, FieldPosition::front);
+  CHECK_EQUAL(table.fields(back)[0], 0);
+  CHECK_EQUAL(table.fields(back)[1], 1);
+  CHECK_EQUAL(table.fields(front)[0], 1);
+  CHECK_EQUAL(table.fields(front)[1], 0);
+  CHECK_EQUAL(table.with_field(source, 1), back);
+  CHECK_EQUAL(table.with_field(source, 1, FieldPosition::front), front);
+  CHECK_EQUAL(table.with_field(back, 1, FieldPosition::front), back);
+  CHECK_EQUAL(table.without_field(front, 1), source);
+  auto after_removal = table.without_field(back, 0);
+  CHECK_EQUAL(table.with_field(after_removal, 0), front);
+  CHECK_EQUAL(table.with_field(after_removal, 0, FieldPosition::front), back);
 }
 
 TEST("nested drop through a union parent leaves non-record rows untouched") {

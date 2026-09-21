@@ -9,6 +9,7 @@
 #include "tenzir/nova/eval_util.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/union_array.hpp"
@@ -25,11 +26,13 @@ namespace tenzir::nova {
 
 auto assign_nested_field(Array<Record> record,
                          std::span<ast::field_path::segment const> path,
-                         MaskedArray<Array<Data>> value) -> Array<Record> {
+                         MaskedArray<Array<Data>> value, diagnostic_handler& dh,
+                         FieldPosition position) -> Array<Record> {
   TENZIR_ASSERT(not path.empty());
   auto const& name = path[0].id.name;
   if (path.size() == 1) {
-    return std::move(record).with_field_overwrite(name, std::move(value));
+    return std::move(record).with_field_overwrite(name, std::move(value),
+                                                  position);
   }
   auto const length = record.length();
   auto mask = value.present;
@@ -41,6 +44,33 @@ auto assign_nested_field(Array<Record> record,
   // Non-record rows outside `mask` must keep their value.
   auto to_merge = Option<MaskedArray<Array<Data>>>{};
   if (existing) {
+    auto warn
+      = [&]<data_type Tag>(Array<Tag> const&, storage::BitMap const& active) {
+          if constexpr (not std::same_as<Tag, Record>
+                        and not std::same_as<Tag, Null>) {
+            if (not(active & existing->present & mask).any()) {
+              return;
+            }
+            diagnostic::warning("implicit record for `{}` field overwrites "
+                                "`{}` value",
+                                path[1].id.name, Type<Tag>::static_name)
+              .primary(path[1].id)
+              .hint("if this is intentional, drop the parent field before")
+              .emit(dh);
+          }
+        };
+    match(existing->data, [&](auto const& array) {
+      if constexpr (std::same_as<std::remove_cvref_t<decltype(array)>,
+                                 UnionArray>) {
+        for (auto const& alternative : array.fields()) {
+          match(alternative.data, [&](auto const& typed) {
+            warn(typed, alternative.present);
+          });
+        }
+      } else {
+        warn(array, existing->present);
+      }
+    });
     if (auto alternative = existing->data.get_alternative<Record>()) {
       record_rows = std::move(alternative->present) & existing->present;
       sub_record
@@ -53,7 +83,7 @@ auto assign_nested_field(Array<Record> record,
   }
   existing.reset();
   auto updated = Array<Data>{assign_nested_field(
-    std::move(sub_record), path.subspan(1), std::move(value))};
+    std::move(sub_record), path.subspan(1), std::move(value), dh, position)};
   if (to_merge) {
     updated = with_merged(*to_merge, MaskedArray<Array<Data>>{
                                        std::move(updated),
@@ -61,7 +91,8 @@ auto assign_nested_field(Array<Record> record,
                                      });
   }
   return std::move(record).with_field_overwrite(
-    name, MaskedArray<Array<Data>>{std::move(updated), std::move(present)});
+    name, MaskedArray<Array<Data>>{std::move(updated), std::move(present)},
+    position);
 }
 
 struct DropTree::Storage {

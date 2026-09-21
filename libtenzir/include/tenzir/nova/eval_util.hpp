@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/nova/array_base.hpp"
+#include "tenzir/nova/shape_table.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <memory>
@@ -16,9 +17,13 @@
 
 namespace tenzir::nova {
 
+/// Assigns a nested field, inserting new fields at `position` and retaining
+/// existing field positions. Warns when an active scalar parent is replaced.
 auto assign_nested_field(Array<Record> record,
                          std::span<ast::field_path::segment const> path,
-                         MaskedArray<Array<Data>> value) -> Array<Record>;
+                         MaskedArray<Array<Data>> value, diagnostic_handler& dh,
+                         FieldPosition position = FieldPosition::back)
+  -> Array<Record>;
 
 /// A nested-field-drop specification mirroring the shape of
 /// `assign_nested_field`'s path recursion, but for removal instead of writing.

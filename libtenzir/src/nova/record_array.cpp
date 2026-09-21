@@ -286,15 +286,17 @@ auto Array<Record>::dangerously_extract_field(
   return std::move(primary().arrays[it->second]);
 }
 
-auto Array<Record>::with_field_overwrite(std::string_view name,
-                                         MaskedArray value) const& -> Array {
-  return as_unique().with_field_overwrite(name, std::move(value));
+auto Array<Record>::with_field_overwrite(
+  std::string_view name, MaskedArray value,
+  FieldPosition position) const& -> Array {
+  return as_unique().with_field_overwrite(name, std::move(value), position);
 }
 
 auto Array<Record>::with_field_overwrite(std::string_view name,
-                                         MaskedArray value) && -> Array {
+                                         MaskedArray value,
+                                         FieldPosition position) && -> Array {
   if (not is<storage::RecordStorage>(storage())) {
-    return to_primary().with_field_overwrite(name, std::move(value));
+    return to_primary().with_field_overwrite(name, std::move(value), position);
   }
   *this = std::move(*this).as_unique();
   const auto it = primary().names.find(name);
@@ -304,8 +306,8 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
     const auto existing_index = static_cast<storage::Index>(it->second);
     primary().shape_indices = rewrite_shape_indices(
       std::move(primary().shape_indices), primary().shape_table, value.present,
-      [existing_index](ShapeTable& table, ShapeTable::ShapeId id) {
-        return table.with_field(id, existing_index);
+      [existing_index, position](ShapeTable& table, ShapeTable::ShapeId id) {
+        return table.with_field(id, existing_index, position);
       });
     primary().arrays[it->second] = std::move(value);
     return std::move(*this);
@@ -319,8 +321,8 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
   primary().names_by_index.push_back(inserted->first);
   primary().shape_indices = rewrite_shape_indices(
     std::move(primary().shape_indices), primary().shape_table, mask,
-    [new_index](ShapeTable& table, ShapeTable::ShapeId id) {
-      return table.with_field(id, new_index);
+    [new_index, position](ShapeTable& table, ShapeTable::ShapeId id) {
+      return table.with_field(id, new_index, position);
     });
   return std::move(*this);
 }

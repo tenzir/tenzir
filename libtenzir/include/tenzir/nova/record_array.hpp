@@ -61,10 +61,14 @@ public:
   auto
   dangerously_extract_field(std::string_view name) && -> Option<MaskedArray>;
 
-  [[nodiscard]] auto with_field_overwrite(std::string_view name,
-                                          MaskedArray value) const& -> Array;
   [[nodiscard]] auto
-  with_field_overwrite(std::string_view name, MaskedArray value) && -> Array;
+  with_field_overwrite(std::string_view name, MaskedArray value,
+                       FieldPosition position
+                       = FieldPosition::back) const& -> Array;
+  [[nodiscard]] auto
+  with_field_overwrite(std::string_view name, MaskedArray value,
+                       FieldPosition position
+                       = FieldPosition::back) && -> Array;
   [[nodiscard]] auto
   with_fields(std::vector<std::pair<std::string_view, MaskedArray>> fields)
     const& -> Array;

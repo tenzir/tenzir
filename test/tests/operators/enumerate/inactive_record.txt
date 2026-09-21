@@ -1,0 +1,9 @@
+warning: implicit record for `n` field overwrites `int` value
+ --> tests/operators/enumerate/inactive_record.tql:5:13
+  |
+5 | enumerate p.n
+  |             ~
+  |
+  = hint: if this is intentional, drop the parent field before
+{"i":0,"q":{"x":1},"p":{"n":0,"x":1}}
+{"i":1,"q":{"x":2},"p":{"n":1}}
