@@ -131,7 +131,8 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToAzureBlobStorageArgs,
-                       ToAzureBlobStorageOperator<table_slice>>{};
+                       ToAzureBlobStorageOperator<table_slice>,
+                       ToAzureBlobStorageOperator<nova::Events>>{};
     auto account_key_arg
       = d.named("account_key", &ToAzureBlobStorageArgs::account_key);
     auto azure_auth_arg
