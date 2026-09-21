@@ -98,15 +98,12 @@ struct transformer {
     -> ::clickhouse::ColumnRef
     = 0;
 
+  virtual auto is_json() const -> bool {
+    return false;
+  }
+
   virtual ~transformer() = default;
 };
-
-/// Whether `t` targets a ClickHouse `JSON` column. The `to_clickhouse` async
-/// operator serializes such columns to JSON strings before insertion; the
-/// transformer itself also accepts and serializes the raw array (see
-/// `transformer_json::create_column`). Implemented via a type check against the
-/// concrete JSON transformer.
-auto is_json_transformer(const transformer& t) -> bool;
 
 /// Serializes an Arrow array to a one-line JSON `StringArray`, preserving
 /// nulls. Used to render a field bound for a ClickHouse `JSON` column.
@@ -128,6 +125,8 @@ struct transformer_record : transformer {
     = detail::stable_map<std::string, std::unique_ptr<transformer>>;
   schema_transformations transformations;
   std::vector<char> found_column;
+  Option<std::string> catch_all;
+  detail::stable_map<std::string, std::vector<std::string>> mapping_paths;
   const arrow::Array* my_array = nullptr;
   /// Names of `MATERIALIZED`/`ALIAS` columns of the target table. ClickHouse
   /// computes these and rejects explicit values, so they never get a
@@ -199,9 +198,11 @@ auto plain_clickhouse_tuple_elements(
   std::span<const located<field_path_type>> low_cardinality_paths = {},
   std::span<char> low_cardinality_seen = {}) -> failure_or<std::string>;
 
+enum class MappingMode { legacy, lossless };
+
 auto make_functions_from_clickhouse(path_type& path,
                                     const std::string_view clickhouse_typename,
-                                    diagnostic_handler&)
+                                    diagnostic_handler&, MappingMode mode)
   -> std::unique_ptr<transformer>;
 
 /// Builds a transformer for a ClickHouse column whose type we cannot represent

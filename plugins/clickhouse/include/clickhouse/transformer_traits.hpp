@@ -3,8 +3,10 @@
 #pragma once
 #include "clickhouse/transformers.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/compute/api.h>
 #include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/ip6.h>
@@ -12,6 +14,10 @@
 #include <clickhouse/columns/numeric.h>
 #include <clickhouse/columns/string.h>
 #include <clickhouse/columns/tuple.h>
+
+#include <bit>
+#include <cmath>
+#include <limits>
 
 namespace tenzir::plugins::clickhouse::transformer_detail {
 using namespace ::clickhouse;
@@ -314,4 +320,15 @@ struct transformer_from_trait : transformer {
   }
 };
 
+template <typename T, typename Traits = tenzir_to_clickhouse_trait<T>>
+auto make_transformer_impl(bool nullable) -> std::unique_ptr<transformer> {
+  if (nullable) {
+    return std::make_unique<transformer_from_trait<T, true, Traits>>();
+  } else {
+    return std::make_unique<transformer_from_trait<T, false, Traits>>();
+  }
+}
+
+// Preparation normalizes integer signedness. These transformers still check
+// bounds themselves so an unprepared caller cannot silently narrow a value.
 } // namespace tenzir::plugins::clickhouse::transformer_detail

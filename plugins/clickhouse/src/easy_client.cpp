@@ -8,6 +8,10 @@
 #include "clickhouse/easy_client.hpp"
 
 #include "clickhouse/client.h"
+#include "clickhouse/error_codes.h"
+#include "clickhouse/exceptions.h"
+#include "clickhouse/insert_retry.hpp"
+#include "clickhouse/prepare_slice.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/tql2/eval.hpp"
 
@@ -19,6 +23,13 @@
 using namespace clickhouse;
 
 namespace tenzir::plugins::clickhouse {
+
+namespace {
+struct PendingGroup {
+  std::vector<table_slice> slices;
+  std::vector<table_slice> originals;
+};
+} // namespace
 
 auto easy_client::make(arguments args, diagnostic_handler& dh)
   -> std::shared_ptr<easy_client> {
@@ -108,78 +119,41 @@ auto easy_client::remote_create_database(std::string_view database_name)
 
 auto easy_client::remote_fetch_schema_transformations(
   std::string_view table_name) -> failure_or<transformer_record*> {
-  TENZIR_ASSERT_EXPENSIVE(not transformations_.contains(table_name));
-  // We deliberately do not use `describe_compact_output=1` here: the full
-  // output additionally reports each column's `default_type` (block[2]) and
-  // `default_expression` (block[3]), which we use to tolerate columns whose
-  // type we cannot represent as long as they have a default value.
-  auto query = Query{fmt::format("DESCRIBE TABLE {}  "
+  auto query = Query{fmt::format("DESCRIBE TABLE {} "
                                  "SETTINGS describe_compact_output = 0",
                                  table_name)};
-  auto transformations = transformer_record{};
-  bool failed = false;
-  auto cb = [&](const Block& block) {
-    auto path = path_type{};
-    for (size_t i = 0; i < block.GetRowCount(); ++i) {
-      auto name = block[0]->As<ColumnString>()->At(i);
-      auto type_str = remove_non_significant_whitespace(
-        block[1]->As<ColumnString>()->At(i));
-      // A non-empty `default_type` (`DEFAULT`/`MATERIALIZED`/`ALIAS`/
-      // `EPHEMERAL`) means the column is omittable: ClickHouse fills it in when
-      // we do not send it.
-      auto has_default = false;
-      auto is_generated = false;
-      if (block.GetColumnCount() >= 3) {
-        if (auto default_type = block[2]->As<ColumnString>()) {
-          const auto kind = default_type->At(i);
-          has_default = not kind.empty();
-          // `MATERIALIZED`/`ALIAS` columns are computed by ClickHouse, which
-          // rejects explicit values for them. They are never part of an insert.
-          is_generated = kind == "MATERIALIZED" or kind == "ALIAS";
-        }
-      }
-      // Generated columns are never sent, so we neither build nor store a
-      // transformer for them (none of its behavior would ever be used). We only
-      // remember the name to warn if the input provides a value.
-      if (is_generated) {
-        transformations.generated_columns.insert(std::string{name});
-        continue;
-      }
-      path.push_back(name);
-      // Collect diagnostics separately so we can suppress the "unsupported
-      // type" error when a default lets us tolerate the column.
-      auto collector = collecting_diagnostic_handler{};
-      auto functions
-        = make_functions_from_clickhouse(path, type_str, collector);
-      if (not functions and has_default) {
-        // Tolerate the unsupported column: it has a default and will be filled
-        // by ClickHouse as long as we never send it.
-        functions = make_default_only_transformer(std::string{type_str});
-      } else {
-        std::move(collector).forward_to(dh_);
-      }
-      path.pop_back();
-      if (not functions) {
-        failed = true;
-        return;
-      }
-      // Preserve the omittable bit for supported transformers too, so the
-      // missing-column check below treats a defaulted column as optional and
-      // lets ClickHouse fill the default when the input omits it.
-      functions->has_default = has_default;
-      transformations.transformations.try_emplace(std::string{name},
-                                                  std::move(functions));
+  auto description = std::vector<ColumnDescription>{};
+  auto failed = false;
+  query.OnData([&](const Block& block) {
+    if (failed or block.GetRowCount() == 0) {
+      return;
     }
-  };
-  query.OnData(cb);
+    auto columns = read_description(block, dh_);
+    if (not columns.is_success()) {
+      failed = true;
+      return;
+    }
+    for (auto& column : *columns) {
+      description.push_back(std::move(column));
+    }
+  });
   client_.Execute(query);
   if (failed) {
     return failure::promise();
   }
-  transformations.found_column.resize(transformations.transformations.size(),
-                                      false);
-  auto [it, _] = transformations_.try_emplace(std::string{table_name},
-                                              std::move(transformations));
+  const auto now = std::chrono::steady_clock::now();
+  auto previous = descriptions_.find(table_name);
+  if (previous != descriptions_.end()) {
+    auto& transformations = transformations_.find(table_name).value();
+    TRY(refresh_transformations(transformations, previous.value(),
+                                std::move(description), now, dh_));
+    return &transformations;
+  }
+  TRY(auto transformations, build_transformations(description, dh_));
+  descriptions_.insert_or_assign(
+    std::string{table_name}, CachedDescription{std::move(description), now});
+  auto [it, inserted] = transformations_.insert_or_assign(
+    std::string{table_name}, std::move(transformations));
   return &it.value();
 }
 
@@ -311,6 +285,11 @@ auto easy_client::ensure_transformations_impl(const tenzir::record_type& schema,
   -> failure_or<transformer_record*> {
   if (auto it = transformations_.find(table_name);
       it != transformations_.end()) {
+    if (it.value().catch_all
+        and refresh_due(descriptions_.find(table_name).value(),
+                        std::chrono::steady_clock::now())) {
+      return remote_fetch_schema_transformations(table_name);
+    }
     return &it.value();
   }
   auto qualified_database = Option<std::string_view>{};
@@ -388,16 +367,16 @@ auto easy_client::ensure_transformations_impl(const tenzir::record_type& schema,
 auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                          std::string_view query_id) -> failure_or<void> {
   auto guard = std::scoped_lock{client_mutex_};
-  return insert_impl(slice, table_name, query_id);
+  return insert_batch_impl({slice}, effective_table_name(table_name), query_id,
+                           false);
 }
 
 auto easy_client::insert_impl(const table_slice& slice,
                               std::string_view table_name,
-                              std::string_view query_id) -> failure_or<void> {
+                              std::string_view query_id,
+                              transformer_record* transformations)
+  -> failure_or<void> {
   auto resolved_table_name = effective_table_name(table_name);
-  const auto& schema = as<record_type>(slice.schema());
-  TRY(auto transformations,
-      ensure_transformations_impl(schema, resolved_table_name));
   dropmask_.clear();
   dropmask_.resize(slice.rows());
   std::ranges::fill(transformations->found_column, false);
@@ -440,9 +419,8 @@ auto easy_client::insert_impl(const table_slice& slice,
     if (transformations->found_column[i]) {
       continue;
     }
-    // A nullable column or one with a ClickHouse default may be omitted
-    // entirely: the server fills it in, so its absence is not a reason to drop.
-    if (kvp.second->clickhouse_nullable or kvp.second->has_default) {
+    if (transformations->catch_all or kvp.second->clickhouse_nullable
+        or kvp.second->has_default) {
       continue;
     }
     diagnostic::warning(
@@ -496,7 +474,37 @@ auto easy_client::insert_impl(const table_slice& slice,
                 "wrong row count for final block `{} != {} - {}`",
                 block.GetRowCount(), slice.rows(), dropcount);
   if (block.GetRowCount() > 0 and block.GetColumnCount() > 0) {
-    if (query_id.empty()) {
+    if (transformations->catch_all) {
+      // Escape dotted JSON keys only for this insert, without leaking settings
+      // between marked and unmarked dynamic destinations.
+      auto fields = std::vector<std::string>{};
+      for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
+        fields.push_back(quote_identifier_component(block.GetColumnName(i)));
+      }
+      auto query = fmt::format("INSERT INTO {} ({}) SETTINGS "
+                               "json_type_escape_dots_in_keys=1 VALUES",
+                               resolved_table_name, fmt::join(fields, ","));
+      try {
+        std::ignore = client_.BeginInsert(query, std::string{query_id});
+        client_.SendInsertBlock(block);
+        client_.EndInsert();
+      } catch (std::exception const& error) {
+        // The pinned client leaves failed streaming inserts active. Reset so
+        // its destructor cannot call EndInsert again and wait indefinitely.
+        // This reconnects without replaying the block, including when a
+        // transport failure leaves its acceptance unknown.
+        try {
+          client_.ResetConnection();
+        } catch (std::exception const& reset_error) {
+          diagnostic::error("cannot reset ClickHouse connection after "
+                            "failed insert: {}",
+                            reset_error.what())
+            .note("original insertion error: {}", error.what())
+            .emit(dh_);
+        }
+        throw;
+      }
+    } else if (query_id.empty()) {
       client_.Insert(std::string{resolved_table_name}, block);
     } else {
       client_.Insert(std::string{resolved_table_name}, std::string{query_id},
@@ -506,6 +514,68 @@ auto easy_client::insert_impl(const table_slice& slice,
   return {};
 }
 
+auto easy_client::insert_batch(const std::vector<table_slice>& events,
+                               std::string_view table_name,
+                               std::string_view query_id) -> failure_or<void> {
+  auto guard = std::scoped_lock{client_mutex_};
+  return insert_batch_impl(events, effective_table_name(table_name), query_id,
+                           true);
+}
+
+auto easy_client::insert_batch_impl(const std::vector<table_slice>& events,
+                                    std::string_view table_name,
+                                    std::string_view query_id,
+                                    bool normalize_unmarked_input)
+  -> failure_or<void> {
+  if (events.empty()) {
+    return {};
+  }
+  TRY(auto tr, ensure_transformations_impl(
+                 as<record_type>(events.front().schema()), table_name));
+  auto prepare = [&](const std::vector<table_slice>& originals)
+    -> failure_or<std::vector<PendingGroup>> {
+    auto pending = std::vector<PendingGroup>{};
+    auto by_schema = std::unordered_map<type, size_t>{};
+    for (const auto& original : originals) {
+      auto reshaped
+        = tr->catch_all ? prepare_catch_all_slice(original, *tr) : original;
+      auto prepared
+        = tr->catch_all or normalize_unmarked_input
+            ? prepare_slice(reshaped, *tr, dh_, args_.operator_location)
+            : reshaped;
+      auto [it, inserted]
+        = by_schema.try_emplace(prepared.schema(), pending.size());
+      if (inserted) {
+        pending.emplace_back();
+      }
+      auto& group = pending[it->second];
+      group.slices.push_back(std::move(prepared));
+      group.originals.push_back(original);
+    }
+    return pending;
+  };
+  TRY(auto pending, prepare(events));
+  auto write = [&](PendingGroup& group) {
+    auto slice = concatenate(std::move(group.slices));
+    return insert_impl(slice, table_name, query_id, tr);
+  };
+  if (not tr->catch_all) {
+    for (auto& group : pending) {
+      TRY(write(group));
+    }
+    return {};
+  }
+  return drain_pending(
+    dh_, std::move(pending), write,
+    [&]() -> failure_or<bool> {
+      const auto old = descriptions_.find(table_name).value().columns;
+      client_.ResetConnection();
+      TRY(tr, remote_fetch_schema_transformations(table_name));
+      return old != descriptions_.find(table_name).value().columns;
+    },
+    prepare);
+}
+
 auto easy_client::insert_dynamic(const table_slice& slice,
                                  std::string_view query_id)
   -> failure_or<void> {
@@ -513,8 +583,30 @@ auto easy_client::insert_dynamic(const table_slice& slice,
   return split_into_table_runs(
     slice, args_.table, args_.table.get_location(), dh_,
     [&](std::string_view table, const table_slice& run) -> failure_or<void> {
-      return insert_impl(run, table, query_id);
+      return insert_batch_impl({run}, effective_table_name(table), query_id,
+                               false);
     });
+}
+
+auto easy_client::maintain() -> failure_or<void> {
+  auto guard = std::scoped_lock{client_mutex_};
+  auto names = std::vector<std::string>{};
+  for (const auto& [name, transformations] : transformations_) {
+    if (transformations.catch_all
+        and refresh_due(descriptions_.find(name).value(),
+                        std::chrono::steady_clock::now())) {
+      names.push_back(name);
+    }
+  }
+  for (const auto& name : names) {
+    TRY(remote_fetch_schema_transformations(name));
+  }
+  const auto now = std::chrono::steady_clock::now();
+  if (now >= next_ping_) {
+    client_.Ping();
+    next_ping_ = now + connection_ping_interval;
+  }
+  return {};
 }
 
 void easy_client::ping() {
