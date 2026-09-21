@@ -39,10 +39,11 @@ struct FromS3Args : FromArrowFsArgs {
   location operator_location = location::unknown;
 };
 
-class FromS3Operator final : public FromArrowFsOperator<table_slice> {
+template <class Output>
+class FromS3Operator final : public FromArrowFsOperator<Output> {
 public:
   explicit FromS3Operator(FromS3Args args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<Output>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -209,11 +210,12 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromS3Args, FromS3Operator>{};
+    auto d = Describer<FromS3Args, FromS3Operator<table_slice>,
+                       FromS3Operator<nova::Events>>{};
     d.operator_location(&FromS3Args::operator_location);
     auto anon = d.named("anonymous", &FromS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &FromS3Args::aws_iam);
-    FromArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
+    auto pipe_arg = FromArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
       auto anon_value = ctx.get(anon).value_or(false);
       auto has_iam = ctx.get_location(aws_iam_arg).has_value();
       if (anon_value and has_iam) {
@@ -230,6 +232,30 @@ public:
     // resolved at runtime; instances that end up without files simply finish
     // immediately.
     d.parallelizable();
+    // The byte subpipeline determines whether this source emits Arrow or Nova.
+    d.spawner([pipe_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<FromS3Args, Input>>> {
+      if constexpr (not std::same_as<Input, void>) {
+        return {};
+      } else {
+        TRY(auto pipe, ctx.get(pipe_arg));
+        TRY(auto output, pipe.inner.infer_type(tag_v<chunk_ptr>, ctx));
+        return match(
+          output,
+          [](tag<nova::Events>) -> Option<SpawnWith<FromS3Args, Input>> {
+            return SpawnWith<FromS3Args, void>{
+              [](FromS3Args args) -> Box<Operator<void, nova::Events>> {
+                return FromS3Operator<nova::Events>{std::move(args)};
+              }};
+          },
+          [](auto) -> Option<SpawnWith<FromS3Args, Input>> {
+            return SpawnWith<FromS3Args, void>{
+              [](FromS3Args args) -> Box<Operator<void, table_slice>> {
+                return FromS3Operator<table_slice>{std::move(args)};
+              }};
+          });
+      }
+    });
     return d.without_optimize();
   }
 };
