@@ -1,0 +1,10 @@
+warning: integer overflow
+ --> tests/functions/abs/overflow.tql:2:9
+  |
+2 | y = abs(x)
+  |         ~
+  |
+{
+  x: -9223372036854775808,
+  y: null,
+}
