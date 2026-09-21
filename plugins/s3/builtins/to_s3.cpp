@@ -165,7 +165,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToS3Args, ToS3Operator<table_slice>>{};
+    auto d = Describer<ToS3Args, ToS3Operator<table_slice>,
+                       ToS3Operator<nova::Events>>{};
     d.operator_location(&ToS3Args::operator_location);
     auto anon = d.named("anonymous", &ToS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &ToS3Args::aws_iam);
