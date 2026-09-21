@@ -328,6 +328,7 @@ inline auto BitMap::make_inverted() && noexcept -> BitMap {
     const auto value = not all_true();
     return {std::exchange(length_, 0), value};
   }
+  data_ = std::move(data_).as_unique();
   for (auto& word : data_) {
     word = ~word;
   }

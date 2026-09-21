@@ -23,6 +23,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -146,6 +147,307 @@ auto bitmap_data(ErasedArray const& array) -> storage::BitMap::Word const* {
 }
 
 } // namespace
+
+TEST("shared owner builder moves nontrivially movable elements on resize") {
+  struct Element {
+    explicit Element(int& moves) : moves{&moves} {
+    }
+    Element(Element const&) = default;
+    Element(Element&& other) noexcept : moves{other.moves} {
+      ++*moves;
+    }
+    int* moves;
+  };
+  static_assert(std::is_trivially_copy_constructible_v<Element>);
+  static_assert(std::is_trivially_destructible_v<Element>);
+  static_assert(not std::is_trivially_move_constructible_v<Element>);
+  auto moves = 0;
+  auto builder = storage::DataOwner<Element[]>::make_uninitialized(2);
+  builder.emplace_back(moves);
+  builder.emplace_back(moves);
+  builder.reserve_exact(8);
+  CHECK_EQUAL(moves, 2);
+  CHECK_EQUAL(builder.size(), 2);
+  CHECK_EQUAL(builder.capacity(), 8);
+  auto result = builder.finish(true);
+  CHECK_EQUAL(moves, 4);
+  CHECK_EQUAL(result.length(), 2);
+  CHECK_EQUAL(result[0].moves, &moves);
+  CHECK_EQUAL(result[1].moves, &moves);
+}
+
+TEST("shared owner builder preserves move-only resources on resize") {
+  auto builder
+    = storage::DataOwner<std::unique_ptr<int>[]>::make_uninitialized(1);
+  builder.emplace_back(std::make_unique<int>(42));
+  auto const* pointer = builder[0].get();
+  builder.reserve_exact(8);
+  CHECK_EQUAL(builder[0].get(), pointer);
+  auto result = builder.finish(true);
+  CHECK_EQUAL(result.length(), 1);
+  CHECK_EQUAL(result[0].get(), pointer);
+  CHECK_EQUAL(*result[0], 42);
+}
+
+TEST("adopted scalar owns destruction and supports move-only deleters") {
+  auto calls = 0;
+  auto resource = std::make_unique<std::string>("external");
+  auto* pointer = resource.get();
+  auto owner = storage::StructureOwner<std::string>::adopt_mutable(
+    pointer,
+    [resource = std::move(resource), &calls](std::string* ptr) mutable {
+      CHECK_EQUAL(ptr, resource.get());
+      CHECK_EQUAL(*ptr, "external");
+      ++calls;
+      resource.reset();
+    });
+  auto unique = std::move(owner).as_unique();
+  CHECK_EQUAL(unique.get(), pointer);
+  auto alias = unique;
+  auto copy = std::move(unique).as_unique();
+  CHECK_NOT_EQUAL(copy.get(), pointer);
+  *copy = "copy";
+  CHECK_EQUAL(*alias, "external");
+  unique.reset();
+  CHECK_EQUAL(calls, 0);
+  alias.reset();
+  CHECK_EQUAL(calls, 1);
+}
+
+TEST("adopted arrays leave element destruction to the deleter") {
+  auto calls = 0;
+  auto* pointer = new std::string[2]{"first", "second"};
+  auto owner = storage::DataOwner<std::string[]>::adopt_mutable(
+    pointer, 2, [&calls](std::string* ptr) {
+      CHECK_EQUAL(ptr[0], "first");
+      CHECK_EQUAL(ptr[1], "second");
+      ++calls;
+      delete[] ptr;
+    });
+  auto copy = owner.as_unique();
+  CHECK_NOT_EQUAL(copy.begin(), pointer);
+  copy[0] = "copy";
+  auto alias = owner;
+  auto moved = std::move(owner);
+  owner = alias;
+  alias.reset();
+  moved.reset();
+  CHECK_EQUAL(calls, 0);
+  owner.reset();
+  CHECK_EQUAL(calls, 1);
+}
+
+TEST("adopted elements are destroyed exactly once by their deleter") {
+  struct Element {
+    int* destructions;
+    ~Element() {
+      ++*destructions;
+    }
+  };
+  auto destructions = 0;
+  auto owner = storage::DataOwner<Element[]>::adopt_mutable(
+    new Element[2]{{&destructions}, {&destructions}}, 2,
+    [&destructions](Element* pointer) {
+      CHECK_EQUAL(destructions, 0);
+      delete[] pointer;
+    });
+  owner.reset();
+  CHECK_EQUAL(destructions, 2);
+}
+
+TEST("adopted scalar retains its typed deleter through const ownership") {
+  auto calls = 0;
+  auto deleter = [&calls](int* pointer) {
+    ++calls;
+    delete pointer;
+  };
+  auto owner = storage::DataOwner<int>::adopt_mutable(new int{42}, deleter);
+  auto alias = storage::DataOwner<int const>{owner};
+  owner.reset();
+  CHECK_EQUAL(*alias, 42);
+  CHECK_EQUAL(calls, 0);
+  alias.reset();
+  CHECK_EQUAL(calls, 1);
+}
+
+TEST("empty adopted arrays retain their cleanup across copies and moves") {
+  for (auto null : {false, true}) {
+    auto calls = 0;
+    auto* pointer = null ? nullptr : new int[0];
+    auto owner = storage::DataOwner<int[]>::adopt_mutable(
+      pointer, 0, [&calls, pointer](int* ptr) {
+        CHECK_EQUAL(ptr, pointer);
+        ++calls;
+        delete[] ptr;
+      });
+    CHECK_EQUAL(owner.length(), 0);
+    auto copy = owner;
+    auto assigned = storage::DataOwner<int[]>{};
+    assigned = copy;
+    auto moved = std::move(owner);
+    auto move_assigned = storage::DataOwner<int[]>{};
+    move_assigned = std::move(assigned);
+    copy.reset();
+    moved.reset();
+    CHECK_EQUAL(calls, 0);
+    auto unique = std::move(move_assigned).as_unique();
+    unique.reset();
+    CHECK_EQUAL(calls, 1);
+  }
+}
+
+TEST("adopted sparse storage reuses unique and copies shared allocations") {
+  auto calls = 0;
+  {
+    auto owner = storage::DataOwner<int[]>::adopt_mutable(new int[2]{1, 2}, 2,
+                                                          [&calls](int* ptr) {
+                                                            ++calls;
+                                                            delete[] ptr;
+                                                          });
+    auto* pointer = owner.begin();
+    auto source = storage::SparseStorage<int>{std::move(owner)};
+    auto unique = storage::SparseStorage<int>::Mutable{std::move(source)};
+    CHECK_EQUAL(unique.data(), pointer);
+    unique.set(0, 3);
+    source = std::move(unique).finish();
+    auto alias = source;
+    auto copied = storage::SparseStorage<int>::Mutable{std::move(source)};
+    CHECK_NOT_EQUAL(copied.data(), pointer);
+    copied.set(0, 4);
+    CHECK_EQUAL(alias.get(0), 3);
+  }
+  CHECK_EQUAL(calls, 1);
+}
+
+TEST("adopted numeric widths survive concrete and erased arrays") {
+  auto check = []<class T>() {
+    using Tag
+      = std::conditional_t<std::is_floating_point_v<T>, Float,
+                           std::conditional_t<std::is_signed_v<T>, Int, UInt>>;
+    using Physical = storage::SparseStorage<T>;
+    auto calls = 0;
+    {
+      auto owner = storage::DataOwner<T[]>::adopt_mutable(new T[2]{T{7}, T{42}},
+                                                          2, [&calls](T* ptr) {
+                                                            ++calls;
+                                                            delete[] ptr;
+                                                          });
+      auto const* pointer = owner.begin();
+      auto unique = typename Physical::Mutable{Physical{std::move(owner)}};
+      CHECK_EQUAL(unique.data(), pointer);
+      auto concrete = Array<Tag>{std::move(unique).finish()};
+      CHECK_EQUAL(*concrete.get(1), 42);
+      auto erased = ErasedArray{std::move(concrete).as_unique()};
+      constexpr auto index
+        = ErasedDataAlternatives::unique_index_of<Array<Tag>>;
+      {
+        auto recovered
+          = tenzir::variant_traits<ErasedArray>::get<index>(erased);
+        CHECK(tenzir::is<Physical>(recovered.storage()));
+        CHECK_EQUAL(*recovered.get(0), 7);
+      }
+      auto data = Array<Data>{std::move(erased).as_unique()};
+      auto alias = data;
+      auto copy = std::move(data).as_unique();
+      auto recovered = copy.template try_as<Tag>();
+      REQUIRE(recovered.is_some());
+      CHECK(tenzir::is<Physical>(recovered->storage()));
+      CHECK_EQUAL(*recovered->get(1), 42);
+      auto mutable_copy = typename Physical::Mutable{
+        tenzir::as<Physical>(std::move(*recovered).storage())};
+      CHECK_NOT_EQUAL(mutable_copy.data(), pointer);
+      mutable_copy.set(1, T{9});
+      auto original = alias.template try_as<Tag>();
+      REQUIRE(original.is_some());
+      CHECK_EQUAL(*original->get(1), 42);
+      CHECK_EQUAL(calls, 0);
+    }
+    CHECK_EQUAL(calls, 1);
+  };
+  check.operator()<std::int8_t>();
+  check.operator()<std::int16_t>();
+  check.operator()<std::int32_t>();
+  check.operator()<std::int64_t>();
+  check.operator()<std::uint8_t>();
+  check.operator()<std::uint16_t>();
+  check.operator()<std::uint32_t>();
+  check.operator()<std::uint64_t>();
+  check.operator()<float>();
+  check.operator()<double>();
+}
+
+TEST("adopted byte storage uniquifies each external buffer") {
+  auto check = []<class Char, class View>() {
+    using Storage = storage::DenseOffsetBytesStorage<Char, View>;
+    auto calls = 0;
+    {
+      auto data = storage::DataOwner<Char[]>::adopt_mutable(
+        new Char[3]{Char{65}, Char{66}, Char{67}}, 3, [&calls](Char* ptr) {
+          ++calls;
+          delete[] ptr;
+        });
+      auto ranges = storage::DataOwner<storage::Span[]>::adopt_mutable(
+        new storage::Span[1]{{0, 3}}, 1, [&calls](storage::Span* ptr) {
+          ++calls;
+          delete[] ptr;
+        });
+      auto const* pointer = data.begin();
+      auto source = Storage{std::move(data), std::move(ranges)};
+      auto unique = std::move(source).as_unique();
+      CHECK_EQUAL(unique.data().begin(), pointer);
+      auto alias = unique;
+      auto copy = std::move(unique).as_unique();
+      CHECK_NOT_EQUAL(copy.data().begin(), pointer);
+      CHECK_EQUAL(copy.get(0), alias.get(0));
+      auto mutable_copy = typename Storage::Mutable{1};
+      mutable_copy.copy_from(alias);
+      auto result = std::move(mutable_copy).finish();
+      CHECK_EQUAL(result.get(0), alias.get(0));
+    }
+    CHECK_EQUAL(calls, 2);
+  };
+  check.operator()<char, std::string_view>();
+  check.operator()<std::byte, BlobView>();
+}
+
+TEST("nested arrays retain adopted child allocations") {
+  auto calls = 0;
+  {
+    auto values = storage::DataOwner<std::int64_t[]>::adopt_mutable(
+      new std::int64_t[1]{42}, 1, [&calls](std::int64_t* ptr) {
+        ++calls;
+        delete[] ptr;
+      });
+    auto spans = storage::DataOwner<storage::Span[]>::adopt_mutable(
+      new storage::Span[1]{{0, 1}}, 1, [&calls](storage::Span* ptr) {
+        ++calls;
+        delete[] ptr;
+      });
+    auto list = Array<List>{
+      std::move(spans),
+      Array<Data>{storage::SparseStorage<std::int64_t>{std::move(values)}}};
+    auto record = Array<Record>::make_empty(1).with_field_overwrite(
+      "list", {.data = Array<Data>{std::move(list)},
+               .present = storage::BitMap{1, true}});
+    auto alternatives = storage::Vector<UnionArray::MaskedArray>{};
+    alternatives.push_back(
+      {ErasedArray{std::move(record)}, storage::BitMap{1, true}});
+    auto indices = storage::DataOwner<storage::Index[]>::adopt_mutable(
+      new storage::Index[1]{0}, 1, [&calls](storage::Index* ptr) {
+        ++calls;
+        delete[] ptr;
+      });
+    auto source
+      = UnionArray{storage::SparseStorage<storage::Index>{std::move(indices)},
+                   std::move(alternatives)};
+    auto alias = source;
+    auto result = std::move(source).null_where(storage::BitMap{1, true});
+    CHECK(is_null(result.get(0)));
+    CHECK(not is_null(alias.get(0)));
+    CHECK_EQUAL(calls, 0);
+  }
+  CHECK_EQUAL(calls, 3);
+}
 
 TEST("shared owner as_unique copies lvalues") {
   auto source = storage::DataOwner<std::string[]>::make_value(2, "value");

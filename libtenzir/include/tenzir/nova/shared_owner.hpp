@@ -14,6 +14,7 @@
 #include "tenzir/type_traits.hpp"
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -30,13 +31,15 @@ struct Control {
   std::atomic<size_t> strong_reference_count = 0;
   std::atomic<size_t> weak_reference_count = 0;
   ptrdiff_t element_count = 0;
-  Deleter* control_deleter = nullptr;
   Deleter* storage_deleter = nullptr;
 
   struct Deleter {
-    virtual auto deallocate(void const* ptr) -> void {
-      AllocFn().deallocate(const_cast<void*>(ptr));
-    }
+    Deleter() = default;
+    virtual auto deallocate(T* ptr) -> void = 0;
+    Deleter(const Deleter&) = delete;
+    Deleter(Deleter&&) = delete;
+    auto operator=(const Deleter&) = delete;
+    auto operator=(Deleter&&) = delete;
     virtual ~Deleter() = default;
   };
 
@@ -44,21 +47,16 @@ struct Control {
     return strong_reference_count.load(std::memory_order_relaxed) > 1;
   }
 
-  void free(T const* storage) const {
-    std::destroy_n(storage, element_count);
+  void free(T const* storage) {
     if (storage_deleter) {
-      storage_deleter->deallocate(storage);
+      storage_deleter->deallocate(const_cast<T*>(storage));
       // NOLINTNEXTLINE
       delete storage_deleter;
-    }
-    if (control_deleter) {
-      auto* ctrl_del = control_deleter;
-      control_deleter->deallocate(this);
-      // NOLINTNEXTLINE
-      delete ctrl_del;
     } else {
-      Deleter{}.deallocate(this);
+      std::destroy_n(storage, element_count);
     }
+    std::destroy_at(this);
+    AllocFn().deallocate(this);
   }
 };
 
@@ -112,12 +110,24 @@ auto allocate(Index capacity) -> Allocation<T, AllocFn> {
   return result;
 }
 
-/// Grows a combined block in place via `realloc`, re-deriving the
+// Bytewise relocation must preserve the object representation and implement
+// the same transfer as a trivial move, without requiring destruction.
+template <class T>
+inline constexpr auto can_reallocate
+  = std::is_trivially_copyable_v<T>
+    and std::is_trivially_move_constructible_v<T>;
+
+/// Resizes a combined block via `realloc`, re-deriving the
 /// `Control`/`T*` pair. Only valid for trivially relocatable `T`.
 template <class T, auto AllocFn>
 auto reallocate(Control<T, AllocFn>* control, Index new_capacity)
   -> Allocation<T, AllocFn> {
+  static_assert(std::is_trivially_copyable_v<Control<T, AllocFn>>,
+                "realloc requires a trivially copyable control block");
+  static_assert(can_reallocate<T>,
+                "nontrivial elements must be moved into a fresh allocation");
   TENZIR_ASSERT_GT(new_capacity, 0);
+  TENZIR_ASSERT(not control->storage_deleter);
   auto* storage
     = AllocFn().reallocate(control, allocation_size<T, AllocFn>(new_capacity));
   TENZIR_ASSERT(storage);
@@ -221,17 +231,58 @@ public:
     };
   }
 
+  /// Ownership of the allocation passes to the returned SharedOwner. No
+  /// external pointer, reference, or view into the allocation remains valid for
+  /// use after this call. The deleter must destroy and release the object
+  /// without throwing.
+  template <class Deleter>
+    requires(not std::is_const_v<T>
+             and std::invocable<std::decay_t<Deleter>&, T*>)
+  static auto adopt_mutable(T* pointer, Deleter&& deleter) -> SharedOwner {
+    TENZIR_ASSERT(pointer);
+    return adopt_mutable_impl(pointer, 1, std::forward<Deleter>(deleter));
+  }
+
 protected:
   using control_type = _::Control<std::remove_const_t<T>, AllocFn>;
   SharedOwner(control_type* control, T* data) noexcept
     : control_{control}, data_{data} {
   }
 
+  template <class Deleter>
+  static auto adopt_mutable_impl(T* pointer, Index count, Deleter&& deleter)
+    -> SharedOwner {
+    TENZIR_ASSERT_GEQ(count, 0);
+    TENZIR_ASSERT(pointer or count == 0);
+    struct ExternalDeleter final : control_type::Deleter {
+      explicit ExternalDeleter(Deleter&& value)
+        : value{std::forward<Deleter>(value)} {
+      }
+      auto deallocate(std::remove_const_t<T>* ptr) -> void override {
+        std::invoke(value, ptr);
+      }
+      std::decay_t<Deleter> value;
+    };
+    auto* storage = AllocFn().allocate(sizeof(control_type));
+    TENZIR_ASSERT(storage);
+    auto* control = std::construct_at(static_cast<control_type*>(storage));
+    control->strong_reference_count.store(1, std::memory_order_relaxed);
+    control->element_count = count;
+    // NOLINTNEXTLINE
+    control->storage_deleter
+      = new ExternalDeleter{std::forward<Deleter>(deleter)};
+    return {control, pointer};
+  }
+
   template <typename U>
     requires(std::same_as<std::add_const_t<T>, std::add_const_t<U>>)
   void copy_assign_from(const SharedOwner<U, AllocFn>& other) noexcept {
+    if (static_cast<void const*>(this)
+        == static_cast<void const*>(std::addressof(other))) {
+      return;
+    }
     reset();
-    if (not other) {
+    if (not other.control_) {
       return;
     }
     control_ = other.control_;
@@ -242,8 +293,12 @@ protected:
   template <typename U>
     requires(std::same_as<std::add_const_t<T>, std::add_const_t<U>>)
   void move_assign_from(SharedOwner<U, AllocFn>&& other) noexcept {
+    if (static_cast<void const*>(this)
+        == static_cast<void const*>(std::addressof(other))) {
+      return;
+    }
     reset();
-    if (not other) {
+    if (not other.control_) {
       return;
     }
     control_ = std::exchange(other.control_, nullptr);
@@ -263,10 +318,30 @@ class SharedOwner<T[], AllocFn> : private SharedOwner<T, AllocFn> {
   using base = SharedOwner<T, AllocFn>;
   using base::control_;
 
+  explicit SharedOwner(base owner) : base{std::move(owner)} {
+  }
+
 public:
   using base::base;
   using base::operator bool;
   using base::reset;
+
+  SharedOwner() = default;
+
+  /// Ownership of the allocation passes to the returned SharedOwner. No
+  /// external pointer, reference, or view into the allocation remains valid for
+  /// use after this call. Count is the number of initialized elements. The
+  /// deleter must destroy and release the allocation without throwing, even for
+  /// zero count.
+  template <class Deleter>
+    requires(not std::is_const_v<T>
+             and std::invocable<std::decay_t<Deleter>&, T*>)
+  static auto adopt_mutable(T* pointer, Index count, Deleter&& deleter)
+    -> SharedOwner {
+    auto owner = base::adopt_mutable_impl(pointer, count,
+                                          std::forward<Deleter>(deleter));
+    return SharedOwner{std::move(owner)};
+  }
 
   auto as_unique() const& -> SharedOwner
     requires std::copy_constructible<T>;
@@ -400,9 +475,7 @@ public:
       if (N <= capacity_) {
         return;
       }
-      constexpr static auto trivial = std::is_trivially_copy_constructible_v<T>
-                                      and std::is_trivially_destructible_v<T>;
-      if constexpr (trivial) {
+      if constexpr (_::can_reallocate<T>) {
         if (capacity_ > 0) {
           const auto element_count = owner_.control_->element_count;
           auto [control_ptr, data_ptr, actual_capacity]
@@ -450,9 +523,7 @@ public:
         reset();
         return;
       }
-      constexpr static auto trivial = std::is_trivially_copy_constructible_v<T>
-                                      and std::is_trivially_destructible_v<T>;
-      if constexpr (trivial) {
+      if constexpr (_::can_reallocate<T>) {
         auto [control_ptr, data_ptr, actual_capacity]
           = _::reallocate<T, AllocFn>(owner_.control_, element_count);
         control_ptr->element_count = element_count;

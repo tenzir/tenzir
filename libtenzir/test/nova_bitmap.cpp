@@ -62,6 +62,57 @@ const auto expected_xor = [] {
 
 } // namespace
 
+TEST("adopted bitmap supports unique mutation and shared copy-on-write") {
+  auto calls = 0;
+  {
+    auto owner = storage::DataOwner<BitMap::Word[]>::adopt_mutable(
+      new BitMap::Word[1]{5}, 1, [&calls](BitMap::Word* ptr) {
+        ++calls;
+        delete[] ptr;
+      });
+    auto const* pointer = owner.begin();
+    auto source = BitMap{3, std::move(owner)};
+    auto mutable_bitmap = BitMap::Mutable{std::move(source)};
+    mutable_bitmap.set(1, true);
+    source = std::move(mutable_bitmap).finish();
+    CHECK_EQUAL(source.data().data(), pointer);
+    auto alias = source;
+    auto copy = BitMap::Mutable{std::move(source)};
+    copy.set(0, false);
+    auto result = std::move(copy).finish();
+    CHECK_NOT_EQUAL(result.data().data(), pointer);
+    CHECK(alias.get(0));
+    CHECK(not result.get(0));
+    auto rhs = make_bitmap({true, false, true});
+    auto combined = std::move(alias) & rhs;
+    CHECK_EQUAL(combined.data().data(), pointer);
+    CHECK_EQUAL(to_vector(combined), (std::vector<bool>{true, false, true}));
+  }
+  CHECK_EQUAL(calls, 1);
+}
+
+TEST("adopted bitmap inversion preserves shared buffers") {
+  auto calls = 0;
+  {
+    auto owner = storage::DataOwner<BitMap::Word[]>::adopt_mutable(
+      new BitMap::Word[1]{5}, 1, [&calls](BitMap::Word* ptr) {
+        ++calls;
+        delete[] ptr;
+      });
+    auto source = BitMap{3, std::move(owner)};
+    auto alias = source;
+    auto inverted = std::move(source).make_inverted();
+    CHECK_EQUAL(to_vector(alias), (std::vector<bool>{true, false, true}));
+    CHECK_EQUAL(to_vector(inverted), (std::vector<bool>{false, true, false}));
+    CHECK_NOT_EQUAL(inverted.data().data(), alias.data().data());
+    auto const* pointer = alias.data().data();
+    source = BitMap{0, false};
+    auto unique = std::move(alias).make_inverted();
+    CHECK_EQUAL(unique.data().data(), pointer);
+  }
+  CHECK_EQUAL(calls, 1);
+}
+
 TEST("bitmap and_not matches and with inverted rhs") {
   auto lhs = make_bitmap(lhs_bits);
   auto rhs = make_bitmap(rhs_bits);
