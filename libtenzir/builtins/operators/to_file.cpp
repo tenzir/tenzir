@@ -81,7 +81,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToFileArgs, ToFileOperator<table_slice>>{};
+    auto d = Describer<ToFileArgs, ToFileOperator<table_slice>,
+                       ToFileOperator<nova::Events>>{};
     ToArrowFsArgs::describe_to(d);
     d.named("append", &ToFileArgs::append);
     return d.invariant_order_filter();
