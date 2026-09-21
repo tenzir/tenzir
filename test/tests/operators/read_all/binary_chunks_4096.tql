@@ -1,0 +1,6 @@
+from {data: b"\x00\xff\x80\x01"}
+write_all data
+split_bytes 4096
+read_all binary=true
+schema = @name
+write_ndjson

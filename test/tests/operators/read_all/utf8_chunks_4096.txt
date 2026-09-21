@@ -1,0 +1,4 @@
+{
+  data: "aβ\nlast",
+  schema: "tenzir.unknown",
+}
