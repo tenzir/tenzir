@@ -35,9 +35,9 @@ auto materialize(const RowView<Data>& row) -> data {
         result.push_back(materialize(element));
       }
       return data{std::move(result)};
-    } else if constexpr (std::same_as<V, std::string_view>) {
+    } else if constexpr (std::same_as<V, String>) {
       return data{std::string{*view}};
-    } else if constexpr (std::same_as<V, BlobView>) {
+    } else if constexpr (std::same_as<V, Blob>) {
       auto const bytes = *view;
       return data{blob{bytes.begin(), bytes.end()}};
     } else {

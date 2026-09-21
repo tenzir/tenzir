@@ -9,7 +9,7 @@ namespace tenzir::nova {
 
 RowView<Data>::RowView(Data const& value)
   : data_{match(value, []<class T>(T const& x) -> Storage {
-      return typename take_row_view_type<T>::type{x};
+      return RowView<T>{x};
     })} {
 }
 
@@ -193,7 +193,7 @@ auto row_view_for_alternative(nova::storage::Index i, const T& value)
   using Tag = TagForPhysicalStorage<T>;
   // Borrow directly from the physical storage owned by the erased array.
   // A reconstructed logical array would leave structured views dangling.
-  return DataRowView{typename take_row_view_type<Tag>::type{value.get(i)}};
+  return DataRowView{RowView<Tag>{value.get(i)}};
 }
 
 } // namespace
@@ -343,6 +343,69 @@ auto Array<Data>::get_alternative() const
 }
 
 template <data_type Tag>
+auto UnionArray::map_alternative(
+  detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>> f)
+  const& -> UnionArray {
+  return UnionArray{*this}.map_alternative<Tag>(f);
+}
+
+template <data_type Tag>
+auto UnionArray::map_alternative(
+  detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>
+    f) && -> UnionArray {
+  constexpr auto wanted = ErasedDataAlternatives::unique_index_of<Array<Tag>>;
+  for (auto i = std::size_t{0}; i < fields().size(); ++i) {
+    if (variant_traits<ErasedArray>::index(fields()[i].data) != wanted) {
+      continue;
+    }
+    *this = std::move(*this).as_unique();
+    auto& field = storage_->data[i];
+    field.data = match(
+      field.data.data_, [&]<class Storage>(Storage& storage) -> ErasedArray {
+        if constexpr (Type<Tag>::PhysicalStorage::template contains<Storage>) {
+          auto result = f({Array<Tag>{std::move(storage)}, field.present});
+          TENZIR_ASSERT_EQ(result.length(), length());
+          return result;
+        } else {
+          return ErasedArray{std::move(storage)};
+        }
+      });
+    break;
+  }
+  return std::move(*this);
+}
+
+template <data_type Tag>
+auto Array<Data>::map_alternative(
+  detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>> f)
+  const& -> Array<Data> {
+  return Array{*this}.map_alternative<Tag>(f);
+}
+
+template <data_type Tag>
+auto Array<Data>::map_alternative(
+  detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>
+    f) && -> Array<Data> {
+  auto const size = length();
+  auto apply = [&](nova::MaskedArray<Array<Tag>> alternative) {
+    auto result = f(std::move(alternative));
+    TENZIR_ASSERT_EQ(result.length(), size);
+    return result;
+  };
+  return match(data_, [&]<class Physical>(Physical& physical) -> Array<Data> {
+    if constexpr (std::same_as<Physical, UnionArray>) {
+      return Array<Data>{std::move(physical).template map_alternative<Tag>(f)};
+    } else if constexpr (Type<Tag>::PhysicalStorage::template contains<
+                           Physical>) {
+      return apply(
+        {Array<Tag>{std::move(physical)}, nova::storage::BitMap{size, true}});
+    } else {
+      return Array<Data>{std::move(physical)};
+    }
+  });
+}
+
+template <data_type Tag>
 auto UnionArray::get_alternative()
   const& -> Option<nova::MaskedArray<Array<Tag>>> {
   constexpr auto wanted = ErasedDataAlternatives::unique_index_of<Array<Tag>>;
@@ -411,7 +474,19 @@ TENZIR_INSTANTIATE_ARRAY_DATA_MEMBERS(Record);
     const& -> Option<nova::MaskedArray<Array<Tag>>>;                           \
   template auto UnionArray::get_alternative<Tag>() && -> Option<               \
     nova::MaskedArray<Array<Tag>>>;                                            \
-  template auto UnionArray::alternative_mask<Tag>() const -> storage::BitMap
+  template auto UnionArray::alternative_mask<Tag>() const -> storage::BitMap;  \
+  template auto UnionArray::map_alternative<Tag>(                              \
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>)    \
+    const&->UnionArray;                                                        \
+  template auto UnionArray::map_alternative<Tag>(                              \
+    detail::function_view<                                                     \
+      auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>) && -> UnionArray;      \
+  template auto Array<Data>::map_alternative<Tag>(                             \
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>)    \
+    const&->Array<Data>;                                                       \
+  template auto Array<Data>::map_alternative<Tag>(                             \
+    detail::function_view<                                                     \
+      auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>) && -> Array<Data>
 
 TENZIR_INSTANTIATE_DATA_TYPE_MEMBERS(Null);
 TENZIR_INSTANTIATE_DATA_TYPE_MEMBERS(Bool);

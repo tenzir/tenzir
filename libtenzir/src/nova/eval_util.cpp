@@ -12,6 +12,9 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/drop_null_fields.hpp"
+#include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova/union_array.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/variant_traits.hpp"
@@ -23,6 +26,107 @@
 #include <vector>
 
 namespace tenzir::nova {
+
+auto NullFieldSelection::apply(Array<Record>& record,
+                               storage::BitMap const& active) const -> bool {
+  if (not active.any()) {
+    return false;
+  }
+  struct Update {
+    std::size_t index;
+    storage::BitMap removed;
+    std::vector<Update> children;
+  };
+  // Keep only edits, not array handles: the mutation pass can then consume
+  // uniquely owned children, while a no-op leaves even the structure shared.
+  auto prepare
+    = [&](NullFieldSelection const& selection, Array<Record> const& record,
+          storage::BitMap const& active, auto&& self) -> std::vector<Update> {
+    auto updates = std::vector<Update>{};
+    auto visit = [&](std::string_view name, std::size_t index) {
+      auto const* child = &selection;
+      if (not selection.recursive) {
+        auto it = selection.children.find(std::string{name});
+        if (it == selection.children.end()) {
+          return;
+        }
+        child = &it->second;
+      }
+      auto field = record.field(name);
+      TENZIR_ASSERT(field);
+      auto mask = active & field->present;
+      if (not mask.any()) {
+        return;
+      }
+      auto removed = storage::BitMap{record.length(), false};
+      if (child->recursive) {
+        if (auto nulls = field->data.get_alternative<Null>()) {
+          removed = mask & nulls->present;
+        }
+      }
+      auto nested = std::vector<Update>{};
+      if (auto records = field->data.get_alternative<Record>()) {
+        auto rows = mask & records->present;
+        if (rows.any()) {
+          nested = self(*child, records->data, rows, self);
+        }
+      }
+      if (removed.any() or not nested.empty()) {
+        updates.push_back({index, std::move(removed), std::move(nested)});
+      }
+    };
+    match(record.storage(), [&](auto const& source) {
+      if constexpr (std::same_as<std::remove_cvref_t<decltype(source)>,
+                                 storage::RecordStorage>) {
+        for (auto const& [name, index] : (*source).names) {
+          visit(name, index);
+        }
+      } else {
+        auto index = std::size_t{0};
+        for (auto const& [name, value] : source.value()) {
+          visit(name, index++);
+        }
+      }
+    });
+    return updates;
+  };
+  auto updates = prepare(*this, record, active, prepare);
+  if (updates.empty()) {
+    return false;
+  }
+  auto apply = [&](Array<Record> record, std::vector<Update> const& updates,
+                   auto&& self) -> Array<Record> {
+    record = std::move(record).to_primary().as_unique();
+    auto& data = record.primary();
+    auto indices = Option<Array<Record>::IndicesStorage::Mutable>{};
+    for (auto const& [index, removed, children] : updates) {
+      auto& field = data.arrays[index];
+      if (not children.empty()) {
+        field.data
+          = std::move(field.data).map_alternative<Record>([&](auto records) {
+              return self(std::move(records.data), children, self);
+            });
+      }
+      if (removed.any()) {
+        if (not indices) {
+          indices.emplace(std::move(data.shape_indices));
+        }
+        storage::for_each_true(removed, [&](auto row) {
+          auto& shape = indices->data()[row];
+          shape = data.shape_table.without_field(
+            shape, static_cast<storage::Index>(index));
+        });
+        field.present = std::move(field.present).and_not(removed);
+      }
+    }
+    if (indices) {
+      data.shape_indices = std::move(*indices).finish();
+    }
+    return record;
+  };
+  record = apply(std::move(record), updates, apply);
+  return true;
+}
 
 auto assign_nested_field(Array<Record> record,
                          std::span<ast::field_path::segment const> path,
@@ -168,35 +272,25 @@ auto DropTree::apply(Array<Record> record, storage::BitMap mask) const
   }
   for (auto&& [name, child] :
        std::views::zip(storage_->children_names, storage_->children)) {
-    auto const has_record = std::invoke([&] {
+    auto active = [&]() -> storage::BitMap {
       auto preview = record.field(name);
-      return preview and preview->data.get_alternative<Record>().is_some();
-    });
-    if (not has_record) {
+      if (preview) {
+        if (auto records = preview->data.get_alternative<Record>()) {
+          return mask & preview->present & records->present;
+        }
+      }
+      return storage::BitMap{record.length(), false};
+    }();
+    if (not active.any()) {
       continue;
     }
     auto existing = std::move(record).dangerously_extract_field(name);
     TENZIR_ASSERT(existing);
-    auto alternative = existing->data.get_alternative<Record>();
-    TENZIR_ASSERT(alternative);
-    auto record_rows = std::move(alternative->present) & existing->present;
-    // Non-record rows must keep their value.
-    auto present = existing->present;
-    auto to_merge = Option<MaskedArray<Array<Data>>>{};
-    if (existing->present.and_not(record_rows).any()) {
-      to_merge = std::move(existing);
-    }
-    existing.reset();
-    auto updated = Array<Data>{
-      child.apply(std::move(alternative->data), record_rows & mask)};
-    if (to_merge) {
-      updated = with_merged(*to_merge, MaskedArray<Array<Data>>{
-                                         std::move(updated),
-                                         std::move(record_rows),
-                                       });
-    }
-    record = std::move(record).with_field_overwrite(
-      name, MaskedArray<Array<Data>>{std::move(updated), std::move(present)});
+    existing->data
+      = std::move(existing->data).map_alternative<Record>([&](auto records) {
+          return child.apply(std::move(records.data), active);
+        });
+    record = std::move(record).with_field_overwrite(name, std::move(*existing));
   }
   return record;
 }

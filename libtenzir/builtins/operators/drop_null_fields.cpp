@@ -9,6 +9,8 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/drop_null_fields.hpp>
+#include <tenzir/nova/drop_null_fields.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -59,6 +61,35 @@ private:
   EventOrder order_ = EventOrder::ordered;
 };
 
+class DropNullFieldsNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit DropNullFieldsNova(DropNullFieldsArgs args) {
+    selection_.recursive = args.fields.empty();
+    for (auto const& arg : args.fields) {
+      auto path = ast::field_path::try_from(arg);
+      TENZIR_ASSERT(path);
+      auto* node = &selection_;
+      for (auto const& segment : path->path()) {
+        if (node->recursive) {
+          break;
+        }
+        node = &node->children[segment.id.name];
+      }
+      node->recursive = true;
+      node->children.clear();
+    }
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    selection_.apply(input.data, input.mask);
+    co_await push(std::move(input));
+  }
+
+private:
+  nova::NullFieldSelection selection_;
+};
+
 } // namespace
 
 class plugin final : public virtual OperatorPlugin {
@@ -68,7 +99,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<DropNullFieldsArgs, DropNullFields>{};
+    auto d
+      = Describer<DropNullFieldsArgs, DropNullFields, DropNullFieldsNova>{};
     d.parallelizable();
     auto fields
       = d.optional_variadic("fields", &DropNullFieldsArgs::fields, "field");

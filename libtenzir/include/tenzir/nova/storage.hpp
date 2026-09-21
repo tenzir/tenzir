@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/shared_owner.hpp"
 #include "tenzir/nova/storage_fwd.hpp"
@@ -75,6 +76,12 @@ static_assert(storage<NullStorage>);
 
 template <typename StorageT, typename ViewT = StorageT>
 class ConstantStorage {
+  template <class, class>
+  friend class ConstantStorage;
+
+  static constexpr bool inline_value = std::is_trivially_copyable_v<StorageT>;
+  using Value = std::conditional_t<inline_value, StorageT, Arc<StorageT const>>;
+
 public:
   using ViewType = ViewT;
 
@@ -94,20 +101,46 @@ public:
     TENZIR_UNUSED(i);
     TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
     TENZIR_ASSERT_LT_EXPENSIVE(i, length_);
-    return value_;
+    return value();
   }
 
   auto value() const -> StorageT const& {
-    return value_;
+    if constexpr (inline_value) {
+      return value_;
+    } else {
+      return *value_;
+    }
   }
 
   ConstantStorage(Index length, StorageT value)
     : length_{length}, value_(std::move(value)) {
   }
 
+  /// Shares a subvalue owned by this immutable constant. `value` must remain
+  /// alive for the lifetime of this constant's payload.
+  template <class T, class V = T>
+  auto alias(T const& value) const -> ConstantStorage<T, V>
+    requires(not inline_value)
+  {
+    if constexpr (std::is_trivially_copyable_v<T>) {
+      return ConstantStorage<T, V>{length_, value};
+    } else {
+      auto owner = Arc{value_};
+      auto shared = std::shared_ptr<T const>{std::move(owner).into_shared(),
+                                             std::addressof(value)};
+      return ConstantStorage<T, V>{
+        length_, Arc<T const>::from_non_null(std::move(shared)), std::in_place};
+    }
+  }
+
 private:
+  ConstantStorage(Index length, Arc<StorageT const> value, std::in_place_t)
+    requires(not inline_value)
+    : length_{length}, value_{std::move(value)} {
+  }
+
   Index length_ = 0;
-  StorageT value_;
+  Value value_;
 };
 static_assert(storage<ConstantStorage<int>>);
 

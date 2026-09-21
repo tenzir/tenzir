@@ -46,8 +46,10 @@ public:
   auto storage() const& -> PhysicalStorage const&;
   /// Exposes the physical representation for moving.
   auto storage() && -> PhysicalStorage&&;
-  /// Expands constants to columnar storage; primary arrays retain sharing.
-  auto to_primary() const -> Array;
+  /// Converts the record structure to primary storage, keeping constant fields
+  /// constant. Primary arrays retain their storage.
+  auto to_primary() const& -> Array;
+  auto to_primary() && -> Array;
 
   auto as_unique() const& -> Array;
   auto as_unique() && -> Array;
@@ -88,6 +90,7 @@ public:
   [[nodiscard]] static auto make_empty(storage::Index length) -> Array;
 
 private:
+  friend struct NullFieldSelection;
   auto primary() -> storage::RecordStorage::Storage&;
   auto primary() const -> storage::RecordStorage::Storage const&;
   PhysicalStorage storage_;

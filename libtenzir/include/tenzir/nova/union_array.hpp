@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/concepts.hpp"
+#include "tenzir/detail/function.hpp"
 #include "tenzir/nova/array_erasure.hpp"
 #include "tenzir/nova/fundamental_array.hpp"
 #include "tenzir/nova/list_array.hpp"
@@ -30,6 +31,7 @@ using ErasedArrayAlternatives
 
 class ErasedArray : private ImplementErasure<ErasedArrayAlternatives> {
   friend class Array<Data>;
+  friend class UnionArray;
   template <concepts::unqualified>
   friend class ::tenzir::variant_traits;
 
@@ -81,6 +83,19 @@ public:
   template <data_type Tag>
   [[nodiscard]] auto alternative_mask() const -> storage::BitMap;
 
+  /// Maps an existing alternative, preserving its presence mask and length.
+  /// An absent alternative leaves the union unchanged without calling `f`.
+  template <data_type Tag>
+  [[nodiscard]] auto map_alternative(
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>> f)
+    const& -> UnionArray;
+
+  /// Consumes the union, detaching shared storage only if `Tag` is present.
+  template <data_type Tag>
+  [[nodiscard]] auto map_alternative(
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>
+      f) && -> UnionArray;
+
   [[nodiscard]] auto fields() const -> const storage::Vector<MaskedArray>&;
   [[nodiscard]] auto alternative_index_at(storage::Index row) const
     -> storage::Index;
@@ -102,12 +117,7 @@ template <typename Tag>
 struct take_view_type : std::type_identity<typename Type<Tag>::ViewType> {};
 
 using fundamental_view_list = fundamental_type_list::transform<take_view_type>;
-template <typename Tag>
-struct take_row_view_type
-  : std::type_identity<decltype(std::declval<Array<Tag> const&>().get(
-      std::declval<storage::Index>()))> {};
-
-using data_view_list = data_type_list::transform<take_row_view_type>;
+using data_view_list = data_type_list::wrap<RowView>;
 
 template <>
 class RowView<Data> {
@@ -159,6 +169,21 @@ public:
   template <data_type Tag>
   [[nodiscard]] auto get_alternative() const
     -> Option<nova::MaskedArray<Array<Tag>>>;
+
+  /// Maps the `Tag` alternative, leaving other alternatives and presence masks
+  /// unchanged. If absent, returns the original array without calling `f`.
+  /// The callback receives the alternative's presence mask (all true for a
+  /// plain array) and must return an array of the same type and length.
+  template <data_type Tag>
+  [[nodiscard]] auto map_alternative(
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>> f)
+    const& -> Array<Data>;
+  /// Consumes the array, detaching shared union storage only when the
+  /// alternative exists and transferring its storage to the callback.
+  template <data_type Tag>
+  [[nodiscard]] auto map_alternative(
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>
+      f) && -> Array<Data>;
 };
 
 static_assert(storage::unique_ownership<ErasedArray>);
@@ -198,7 +223,19 @@ TENZIR_DECLARE_ARRAY_DATA_MEMBERS(Record);
   extern template auto UnionArray::get_alternative<Tag>() && -> Option<        \
     nova::MaskedArray<Array<Tag>>>;                                            \
   extern template auto UnionArray::alternative_mask<Tag>() const               \
-    -> storage::BitMap
+    -> storage::BitMap;                                                        \
+  extern template auto UnionArray::map_alternative<Tag>(                       \
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>)    \
+    const&->UnionArray;                                                        \
+  extern template auto UnionArray::map_alternative<Tag>(                       \
+    detail::function_view<                                                     \
+      auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>) && -> UnionArray;      \
+  extern template auto Array<Data>::map_alternative<Tag>(                      \
+    detail::function_view<auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>)    \
+    const&->Array<Data>;                                                       \
+  extern template auto Array<Data>::map_alternative<Tag>(                      \
+    detail::function_view<                                                     \
+      auto(nova::MaskedArray<Array<Tag>>)->Array<Tag>>) && -> Array<Data>
 
 TENZIR_DECLARE_DATA_TYPE_MEMBERS(Null);
 TENZIR_DECLARE_DATA_TYPE_MEMBERS(Bool);

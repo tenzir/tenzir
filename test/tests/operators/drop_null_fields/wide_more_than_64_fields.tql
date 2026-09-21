@@ -1,5 +1,5 @@
 from {
-  f00: null.int(),
+  f00: null,
   f01: 1,
   f02: 2,
   f03: 3,
@@ -63,11 +63,11 @@ from {
   f61: 61,
   f62: 62,
   f63: 63,
-  f64: null.int(),
+  f64: null,
   f65: 65,
   f66: 66,
   f67: 67,
   f68: 68,
-  f69: null.int()
+  f69: null
 }
 drop_null_fields

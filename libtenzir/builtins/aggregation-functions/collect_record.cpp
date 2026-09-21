@@ -75,7 +75,7 @@ public:
   auto add_pair(RowView<Data> key, RowView<Data> value, auto& result) -> void {
     match(
       key,
-      [&](RowView<std::string_view> key) {
+      [&](RowView<String> key) {
         result.put(*key, value);
       },
       [&](auto const&) {

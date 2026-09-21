@@ -15,6 +15,7 @@
 #include "tenzir/nova/arrow_export.hpp"
 #include "tenzir/nova/arrow_metadata.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/drop_null_fields.hpp"
 #include "tenzir/nova/eval_util.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/nova/shape_table.hpp"
@@ -49,6 +50,10 @@ namespace {
 template <fundamental_type Tag>
 auto check_scalar_roundtrip(std::vector<typename Type<Tag>::ViewType> values)
   -> void {
+  static_assert(std::same_as<decltype(std::declval<Array<Tag> const&>().get(0)),
+                             RowView<Tag>>);
+  static_assert(std::same_as<decltype(*std::declval<RowView<Tag>>()),
+                             typename Type<Tag>::ViewType const&>);
   auto builder = ArrayBuilder<Tag>{};
   for (const auto& v : values) {
     builder.data(v);
@@ -112,7 +117,7 @@ auto as_int(RowView<Data> value) -> std::int64_t {
 auto as_string(RowView<Data> value) -> std::string_view {
   return match(
     value,
-    [](RowView<Type<String>::ViewType> x) {
+    [](RowView<String> x) {
       return *x;
     },
     [](auto) {
@@ -2270,8 +2275,11 @@ TEST("constant lists preserve nested views through erasure and masks") {
   auto const& physical
     = as<storage::ConstantStorage<List, RowView<List>>>(source.storage());
   auto row = source.get(2);
-  auto string = as<RowView<std::string_view>>(row.get(0));
+  auto string = as<RowView<String>>(row.get(0));
   CHECK_EQUAL((*string).data(), as<String>(physical.value()[0]).data());
+  auto blob = as<RowView<Blob>>(row.get(3));
+  static_assert(std::same_as<decltype(*blob), BlobView const&>);
+  CHECK_EQUAL((*blob).data(), as<Blob>(physical.value()[3]).data());
   auto it = source.get(1).begin();
   CHECK(equal(*it, row.get(0)));
   auto erased = ErasedArray{source};
@@ -2577,9 +2585,13 @@ TEST("physical structured storage shares through erasure and logical "
 }
 
 TEST("physical record mutation detaches and retains nested column sharing") {
-  auto source = constant_array(2, Record{{"nested", Record{{"value", Int{42}}}},
-                                         {"old", Int{1}}})
-                  .to_primary();
+  auto builder = ArrayBuilder<Record>{};
+  for (auto i = 0; i < 2; ++i) {
+    auto row = builder.record();
+    row.field("nested").record().field("value").data(Int{42});
+    row.field("old").data(Int{1});
+  }
+  auto source = builder.finish();
   auto nested = source.field("nested")->data.try_as<Record>();
   REQUIRE(nested);
   auto const* nested_backing
@@ -3526,4 +3538,361 @@ TEST("ArrowExportBuilder retains heterogeneous list stringification") {
         {"xs", tenzir::list{"1", "x", "null", "true", R"({"a":2})"}}}}));
   }
   CHECK(dh.empty());
+}
+
+TEST("mapping an alternative handles plain arrays and absent types") {
+  auto input = Array<Data>{Array<Int>{storage::ConstantStorage<Int>{2, 7}}};
+  auto calls = 0;
+  auto unchanged = input.map_alternative<Record>([&](auto records) {
+    ++calls;
+    return std::move(records.data);
+  });
+  CHECK_EQUAL(calls, 0);
+  CHECK_EQUAL(materialize(unchanged.get(0)), (tenzir::data{int64_t{7}}));
+  auto mapped = input.map_alternative<Int>([&](auto ints) {
+    ++calls;
+    CHECK_EQUAL(ints.present.true_count(), 2);
+    return Array<Int>{storage::ConstantStorage<Int>{2, 9}};
+  });
+  CHECK_EQUAL(calls, 1);
+  CHECK_EQUAL(materialize(mapped.get(1)), (tenzir::data{int64_t{9}}));
+  CHECK_EQUAL(materialize(input.get(1)), (tenzir::data{int64_t{7}}));
+}
+
+TEST("mapping a union alternative preserves other values and selection") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(Int{1});
+  builder.data(std::string_view{"untouched"});
+  builder.null();
+  auto input = builder.finish();
+  auto calls = 0;
+  auto const& before = tenzir::as<UnionArray>(input);
+  auto mapped = Array<Data>{before.map_alternative<Int>([&](auto ints) {
+    ++calls;
+    CHECK_EQUAL(ints.present.true_count(), 1);
+    CHECK(ints.present.get(0));
+    return Array<Int>{storage::ConstantStorage<Int>{3, 42}};
+  })};
+  CHECK_EQUAL(calls, 1);
+  auto const& after = tenzir::as<UnionArray>(mapped);
+  auto before_text = input.get(1);
+  auto after_text = mapped.get(1);
+  CHECK((*tenzir::as<RowView<String>>(before_text)).data()
+        == (*tenzir::as<RowView<String>>(after_text)).data());
+  for (auto row = storage::Index{0}; row < 3; ++row) {
+    CHECK_EQUAL(before.alternative_index_at(row),
+                after.alternative_index_at(row));
+    for (auto i = size_t{0}; i < before.fields().size(); ++i) {
+      CHECK_EQUAL(before.fields()[i].present.get(row),
+                  after.fields()[i].present.get(row));
+    }
+  }
+  CHECK_EQUAL(materialize(mapped.get(0)), (tenzir::data{int64_t{42}}));
+  CHECK_EQUAL(materialize(mapped.get(1)), (tenzir::data{"untouched"}));
+  CHECK_EQUAL(materialize(mapped.get(2)), (tenzir::data{caf::none}));
+  CHECK_EQUAL(materialize(input.get(0)), (tenzir::data{int64_t{1}}));
+  auto unchanged = input.map_alternative<Record>([&](auto records) {
+    ++calls;
+    return std::move(records.data);
+  });
+  CHECK_EQUAL(calls, 1);
+  CHECK_EQUAL(materialize(unchanged.get(0)), (tenzir::data{int64_t{1}}));
+}
+
+TEST("consuming alternative mapping reuses unique storage and detaches shared "
+     "storage") {
+  for (auto union_input : {false, true}) {
+    for (auto shared : {false, true}) {
+      auto builder = ArrayBuilder<Data>{};
+      builder.record().field("x").data(Int{1});
+      if (union_input) {
+        builder.data(std::string_view{"untouched"});
+      }
+      auto input = builder.finish();
+      auto const size = input.length();
+      auto const* record_storage = [&] {
+        auto records = input.get_alternative<Record>();
+        REQUIRE(records);
+        return &*tenzir::as<storage::RecordStorage>(records->data.storage());
+      }();
+      auto const* fields
+        = union_input ? tenzir::as<UnionArray>(input).fields().data() : nullptr;
+      auto const record_index
+        = union_input ? tenzir::as<UnionArray>(input).alternative_index_at(0)
+                      : 0;
+      auto const string_index
+        = union_input ? tenzir::as<UnionArray>(input).alternative_index_at(1)
+                      : 0;
+      auto alias = tenzir::Option<Array<Data>>{};
+      if (shared) {
+        alias = input;
+      }
+      auto calls = 0;
+      auto mapped = std::move(input).map_alternative<Record>([&](auto records) {
+        ++calls;
+        CHECK_EQUAL(records.present.true_count(), 1);
+        return std::move(records.data)
+          .with_field_overwrite("x",
+                                {repeat(Data{Int{9}}, size), records.present});
+      });
+      CHECK_EQUAL(calls, 1);
+      CHECK_EQUAL(materialize(mapped.get(0)),
+                  (tenzir::data{tenzir::record{{"x", int64_t{9}}}}));
+      auto records = mapped.get_alternative<Record>();
+      REQUIRE(records);
+      CHECK_EQUAL(&*tenzir::as<storage::RecordStorage>(records->data.storage())
+                    == record_storage,
+                  not shared);
+      if (alias) {
+        CHECK_EQUAL(materialize(alias->get(0)),
+                    (tenzir::data{tenzir::record{{"x", int64_t{1}}}}));
+      }
+      if (union_input) {
+        auto const& result = tenzir::as<UnionArray>(mapped);
+        CHECK_EQUAL(result.fields().data() == fields, not shared);
+        CHECK_EQUAL(materialize(mapped.get(1)), tenzir::data{"untouched"});
+        CHECK_EQUAL(result.alternative_index_at(0), record_index);
+        CHECK_EQUAL(result.alternative_index_at(1), string_index);
+      }
+    }
+  }
+}
+
+TEST("consuming an absent alternative leaves shared union storage intact") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(Int{1});
+  builder.data(std::string_view{"untouched"});
+  auto input = builder.finish();
+  auto alias = input;
+  auto mapped = std::move(input).map_alternative<Record>([](auto records) {
+    FAIL("callback must not run for an absent alternative");
+    return std::move(records.data);
+  });
+  CHECK(tenzir::as<UnionArray>(mapped).fields().data()
+        == tenzir::as<UnionArray>(alias).fields().data());
+}
+
+TEST("null field removal leaves constant no-op records intact") {
+  auto record = Array<Record>{storage::ConstantStorage<Record, RowView<Record>>{
+    1000, Record{{"text", String(4096, 'x')},
+                 {"nested", Record{{"keep", Int{1}}}},
+                 {"list", List{Record{{"null", Null{}}}}}}}};
+  using Constant = storage::ConstantStorage<Record, RowView<Record>>;
+  auto const* value = &tenzir::as<Constant>(record.storage()).value();
+  auto selection = NullFieldSelection{.recursive = true, .children = {}};
+  CHECK(not selection.apply(record, storage::BitMap{1000, true}));
+  CHECK(&tenzir::as<Constant>(record.storage()).value() == value);
+}
+
+TEST("null field removal keeps constant payloads constant") {
+  auto record = Array<Record>{storage::ConstantStorage<Record, RowView<Record>>{
+    3, Record{{"text", String(4096, 'x')},
+              {"null", Null{}},
+              {"list", List{Record{{"null", Null{}}}}}}}};
+  auto original = record;
+  auto active = storage::BitMap::Mutable{3};
+  active.set(1, true);
+  auto selection = NullFieldSelection{.recursive = true, .children = {}};
+  CHECK(selection.apply(record, std::move(active).finish()));
+  auto text = record.field("text")->data.try_as<String>();
+  REQUIRE(text);
+  CHECK((tenzir::is<storage::ConstantStorage<String, std::string_view>>(
+    text->storage())));
+  auto list = record.field("list")->data.try_as<List>();
+  REQUIRE(list);
+  CHECK((tenzir::is<storage::ConstantStorage<List, RowView<List>>>(
+    list->storage())));
+  CHECK(record.field("null")->present.get(0));
+  CHECK(not record.field("null")->present.get(1));
+  CHECK(record.field("null")->present.get(2));
+  CHECK(original.field("null")->present.get(1));
+  CHECK_EQUAL(record_field_names(record.get(1)).size(), 2u);
+  CHECK_EQUAL(record_field_names(record.get(0)).size(), 3u);
+}
+
+TEST("null field removal preserves union alternatives and source records") {
+  auto builder = ArrayBuilder<Record>{};
+  auto first = builder.record().field("p").record();
+  first.field("null").null();
+  first.field("text").data(std::string_view{"kept"});
+  builder.record().field("p").data(Int{7});
+  auto last = builder.record().field("p").record();
+  last.field("null").null();
+  last.field("text").data(std::string_view{"inactive"});
+  auto record = builder.finish();
+  auto before = record.field("p")->data;
+  auto const& before_union = tenzir::as<UnionArray>(before);
+  auto before_records = before.get_alternative<Record>();
+  REQUIRE(before_records);
+  auto before_text = before_records->data.field("text")->data.try_as<String>();
+  REQUIRE(before_text);
+  auto const* payload
+    = tenzir::as<storage::DenseStringOffsetStorage>(before_text->storage())
+        .data()
+        .begin();
+  auto active = storage::BitMap::Mutable{3};
+  active.set(0, true);
+  auto selection = NullFieldSelection{.recursive = true, .children = {}};
+  CHECK(selection.apply(record, std::move(active).finish()));
+  auto after = record.field("p")->data;
+  auto const& after_union = tenzir::as<UnionArray>(after);
+  for (auto row = storage::Index{0}; row < 3; ++row) {
+    CHECK_EQUAL(before_union.alternative_index_at(row),
+                after_union.alternative_index_at(row));
+  }
+  auto after_records = after.get_alternative<Record>();
+  REQUIRE(after_records);
+  CHECK(not after_records->data.field("null")->present.get(0));
+  CHECK(after_records->data.field("null")->present.get(2));
+  CHECK(before_records->data.field("null")->present.get(0));
+  auto after_text = after_records->data.field("text")->data.try_as<String>();
+  REQUIRE(after_text);
+  CHECK(tenzir::as<storage::DenseStringOffsetStorage>(after_text->storage())
+          .data()
+          .begin()
+        == payload);
+  auto missing = NullFieldSelection{};
+  missing.children["p"].children["missing"].recursive = true;
+  auto const* backing = &after_union.fields();
+  CHECK(not missing.apply(record, storage::BitMap{3, true}));
+  auto unchanged = record.field("p")->data;
+  CHECK(&tenzir::as<UnionArray>(unchanged).fields() == backing);
+}
+
+TEST("null field removal reuses unique record storage and detaches shared "
+     "records") {
+  for (auto shared : {false, true}) {
+    auto builder = ArrayBuilder<Record>{};
+    auto row = builder.record();
+    row.field("keep").data(Int{1});
+    row.field("remove").null();
+    auto record = builder.finish();
+    auto const* backing
+      = &*tenzir::as<storage::RecordStorage>(record.storage());
+    auto alias = tenzir::Option<Array<Record>>{};
+    if (shared) {
+      alias = record;
+    }
+    auto selection = NullFieldSelection{.recursive = true, .children = {}};
+    CHECK(selection.apply(record, storage::BitMap{1, true}));
+    CHECK_EQUAL(&*tenzir::as<storage::RecordStorage>(record.storage())
+                  == backing,
+                not shared);
+    CHECK_EQUAL(record_field_names(record.get(0)),
+                (std::vector<std::string>{"keep"}));
+    if (alias) {
+      CHECK_EQUAL(record_field_names(alias->get(0)),
+                  (std::vector<std::string>{"keep", "remove"}));
+    }
+  }
+}
+
+TEST("recursive drops consume unique children and detach shared children") {
+  for (auto null_fields : {false, true}) {
+    for (auto shared : {false, true}) {
+      auto builder = ArrayBuilder<Record>{};
+      auto nested = builder.record().field("p").record();
+      nested.field("remove").null();
+      nested.field("keep").data(Int{1});
+      builder.record().field("p").data(Int{7});
+      auto record = builder.finish();
+      auto backing = [&] {
+        auto field = record.field("p");
+        auto child = field->data.get_alternative<Record>();
+        return std::pair{
+          tenzir::as<UnionArray>(field->data).fields().data(),
+          &*tenzir::as<storage::RecordStorage>(child->data.storage())};
+      }();
+      auto alias = tenzir::Option<Array<Record>>{};
+      if (shared) {
+        alias = record;
+      }
+      if (null_fields) {
+        auto selection = NullFieldSelection{.recursive = true, .children = {}};
+        CHECK(selection.apply(record, storage::BitMap{2, true}));
+      } else {
+        auto paths = std::vector{make_field_path({"p", "remove"})};
+        record = DropTree::make(paths).apply(std::move(record),
+                                             storage::BitMap{2, true});
+      }
+      auto field = record.field("p");
+      auto child = field->data.get_alternative<Record>();
+      CHECK_EQUAL(tenzir::as<UnionArray>(field->data).fields().data()
+                    == backing.first,
+                  not shared);
+      CHECK_EQUAL(&*tenzir::as<storage::RecordStorage>(child->data.storage())
+                    == backing.second,
+                  not shared);
+      CHECK_EQUAL(record_field_names(child->data.get(0)),
+                  (std::vector<std::string>{"keep"}));
+      CHECK_EQUAL(materialize(field->data.get(1)), (tenzir::data{int64_t{7}}));
+      if (alias) {
+        auto original = alias->field("p")->data.get_alternative<Record>();
+        CHECK(original->data.field("remove")->present.get(0));
+      }
+    }
+  }
+}
+
+TEST("constant records share field payloads across conversion and null "
+     "removal") {
+  auto record = constant_array(
+    3, Record{{"text", String(4096, 'x')},
+              {"bytes", Blob(4096, std::byte{42})},
+              {"nested",
+               Record{{"remove", Null{}}, {"text", String(4096, 'y')}}}});
+  using Constant = storage::ConstantStorage<Record, RowView<Record>>;
+  auto const& value = tenzir::as<Constant>(record.storage()).value();
+  auto const* text = tenzir::as<String>(value.at("text")).data();
+  auto const* bytes = tenzir::as<Blob>(value.at("bytes")).data();
+  auto const* nested_text
+    = tenzir::as<String>(tenzir::as<Record>(value.at("nested")).at("text"))
+        .data();
+  auto copy = record;
+  CHECK(
+    tenzir::as<String>(tenzir::as<Constant>(copy.storage()).value().at("text"))
+      .data()
+    == text);
+  auto converted = record.to_primary();
+  auto selection = NullFieldSelection{.recursive = true, .children = {}};
+  CHECK(selection.apply(record, bitmap({false, true, false})));
+  copy = Array<Record>::make_empty(1);
+  for (auto const* array : {&converted, &record}) {
+    CHECK(
+      (*tenzir::as<RowView<String>>(array->field("text")->data.get(1))).data()
+      == text);
+    CHECK(
+      (*tenzir::as<RowView<Blob>>(array->field("bytes")->data.get(1))).data()
+      == bytes);
+    auto nested = array->field("nested")->data.get_alternative<Record>();
+    CHECK(
+      (*tenzir::as<RowView<String>>(nested->data.field("text")->data.get(1)))
+        .data()
+      == nested_text);
+  }
+  auto nested = record.field("nested")->data.get_alternative<Record>();
+  CHECK(nested->data.field("remove")->present.get(0));
+  CHECK(not nested->data.field("remove")->present.get(1));
+}
+
+TEST("mapping a shared union preserves untouched constant payloads") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.record().field("remove").null();
+  builder.data(std::string_view{"text"});
+  auto input = builder.finish().map_alternative<String>([](auto strings) {
+    return Array<String>{storage::ConstantStorage<String, std::string_view>{
+      strings.data.length(), String(4096, 'x')}};
+  });
+  auto const* payload = (*tenzir::as<RowView<String>>(input.get(1))).data();
+  auto alias = input;
+  auto mapped = std::move(input).map_alternative<Record>([](auto records) {
+    auto selection = NullFieldSelection{.recursive = true, .children = {}};
+    CHECK(selection.apply(records.data, records.present));
+    return std::move(records.data);
+  });
+  CHECK((*tenzir::as<RowView<String>>(mapped.get(1))).data() == payload);
+  CHECK((*tenzir::as<RowView<String>>(alias.get(1))).data() == payload);
+  auto records = mapped.get_alternative<Record>();
+  CHECK(record_field_names(records->data.get(0)).empty());
+  CHECK(alias.get_alternative<Record>()->data.field("remove")->present.get(0));
 }
