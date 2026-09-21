@@ -407,6 +407,14 @@ add_custom_target(otlp-proto DEPENDS ${otlp_proto_generated_files}
 set_source_files_properties(
   ${otlp_proto_generated_files} ${otlp_grpc_generated_files}
   PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
+# Generated code compiled with the project's warnings: the `CHECK`s protobuf
+# inlines expand abseil's nullability macros to a Clang extension, which
+# `-pedantic -Werror` refuses.
+set_source_files_properties(
+  ${otlp_proto_generated_files} ${otlp_grpc_generated_files}
+  PROPERTIES COMPILE_OPTIONS
+             "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-nullability-extension>"
+)
 target_include_directories(libtenzir_builtins
                            PRIVATE "${otlp_proto_binary_dir}")
 TenzirTargetEnableTooling(libtenzir_builtins)
