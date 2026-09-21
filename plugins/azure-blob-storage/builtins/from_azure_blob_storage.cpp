@@ -33,11 +33,11 @@ struct FromAzureBlobStorageArgs : FromArrowFsArgs {
   Option<located<record>> azure_auth;
 };
 
-class FromAzureBlobStorageOperator final
-  : public FromArrowFsOperator<table_slice> {
+template <class Output>
+class FromAzureBlobStorageOperator final : public FromArrowFsOperator<Output> {
 public:
   explicit FromAzureBlobStorageOperator(FromAzureBlobStorageArgs args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<Output>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -170,13 +170,14 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<FromAzureBlobStorageArgs, FromAzureBlobStorageOperator>{};
+    auto d = Describer<FromAzureBlobStorageArgs,
+                       FromAzureBlobStorageOperator<table_slice>,
+                       FromAzureBlobStorageOperator<nova::Events>>{};
     auto account_key_arg
       = d.named("account_key", &FromAzureBlobStorageArgs::account_key);
     auto azure_auth_arg
       = d.named("azure_auth", &FromAzureBlobStorageArgs::azure_auth);
-    FromArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
+    auto pipe_arg = FromArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
       check_azure_auth_args(ctx, account_key_arg, azure_auth_arg);
     });
     // Instances split the discovered files among themselves by path. We cannot
@@ -184,6 +185,36 @@ public:
     // resolved at runtime; instances that end up without files simply finish
     // immediately.
     d.parallelizable();
+    // The byte subpipeline determines whether this source emits Arrow or Nova.
+    d.spawner(
+      [pipe_arg]<class Input>(DescribeCtx& ctx)
+        -> failure_or<Option<SpawnWith<FromAzureBlobStorageArgs, Input>>> {
+        if constexpr (not std::same_as<Input, void>) {
+          return {};
+        } else {
+          TRY(auto pipe, ctx.get(pipe_arg));
+          TRY(auto output, pipe.inner.infer_type(tag_v<chunk_ptr>, ctx));
+          return match(
+            output,
+            [](tag<nova::Events>)
+              -> Option<SpawnWith<FromAzureBlobStorageArgs, Input>> {
+              return SpawnWith<FromAzureBlobStorageArgs, void>{
+                [](FromAzureBlobStorageArgs args)
+                  -> Box<Operator<void, nova::Events>> {
+                  return FromAzureBlobStorageOperator<nova::Events>{
+                    std::move(args)};
+                }};
+            },
+            [](auto) -> Option<SpawnWith<FromAzureBlobStorageArgs, Input>> {
+              return SpawnWith<FromAzureBlobStorageArgs, void>{
+                [](FromAzureBlobStorageArgs args)
+                  -> Box<Operator<void, table_slice>> {
+                  return FromAzureBlobStorageOperator<table_slice>{
+                    std::move(args)};
+                }};
+            });
+        }
+      });
     return d.without_optimize();
   }
 };

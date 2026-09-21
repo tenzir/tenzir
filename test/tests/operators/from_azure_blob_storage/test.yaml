@@ -1,0 +1,7 @@
+suite: from-azure-blob-storage-output-type
+requires:
+  operators:
+    - from_azure_blob_storage
+skip:
+  on:
+    - capability-unavailable
