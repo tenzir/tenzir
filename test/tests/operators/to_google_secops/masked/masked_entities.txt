@@ -1,0 +1,1 @@
+{"parent":"projects/PROJECT/locations/us/instances/INSTANCE","body":{"inlineSource":{"entities":[{"id":1,"nested":{"empty":{},"values":[1,null,3]},"empty":[]},{"id":3,"nested":{"name":"last"},"empty":[]}],"logType":"ASSET"}}}
