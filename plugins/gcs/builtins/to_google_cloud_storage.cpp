@@ -90,7 +90,8 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToGoogleCloudStorageArgs,
-                       ToGoogleCloudStorageOperator<table_slice>>{};
+                       ToGoogleCloudStorageOperator<table_slice>,
+                       ToGoogleCloudStorageOperator<nova::Events>>{};
     d.named("anonymous", &ToGoogleCloudStorageArgs::anonymous);
     ToArrowFsArgs::describe_to(d);
     return d.without_optimize();
