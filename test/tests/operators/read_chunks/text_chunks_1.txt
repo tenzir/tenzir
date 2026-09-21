@@ -1,0 +1,20 @@
+{
+  data: b"h",
+  schema: "tenzir.chunk",
+}
+{
+  data: b"e",
+  schema: "tenzir.chunk",
+}
+{
+  data: b"l",
+  schema: "tenzir.chunk",
+}
+{
+  data: b"l",
+  schema: "tenzir.chunk",
+}
+{
+  data: b"o",
+  schema: "tenzir.chunk",
+}

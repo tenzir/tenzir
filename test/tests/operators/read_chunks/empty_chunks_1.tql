@@ -1,0 +1,4 @@
+from {data: b""}
+write_all data
+split_bytes 1
+read_chunks

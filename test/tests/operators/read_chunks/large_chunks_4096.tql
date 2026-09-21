@@ -1,0 +1,16 @@
+let $input = "x".repeat(8200)
+let $full = decode_hex(encode_hex("x".repeat(4096)))
+let $last = decode_hex(encode_hex("x".repeat(8)))
+from {data: $input}
+write_all data
+split_bytes 4096
+read_chunks
+schema_ok = @name == "tenzir.chunk"
+enumerate index
+valid = (
+  (index < 2 and data == $full)
+  or (index == 2 and data == $last)
+)
+assert valid and schema_ok
+tail 1
+this = {chunks: index + 1}

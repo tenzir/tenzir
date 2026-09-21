@@ -1,0 +1,11 @@
+let $input = "x".repeat(8200)
+let $full = decode_hex(encode_hex("x".repeat(2)))
+from {data: $input}
+write_all data
+split_bytes 2
+read_chunks
+schema_ok = @name == "tenzir.chunk"
+enumerate index
+assert data == $full and schema_ok
+tail 1
+this = {chunks: index + 1}

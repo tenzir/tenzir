@@ -1,0 +1,6 @@
+from_file env("TENZIR_INPUTS") + "/read-chunks/all-bytes.bin" {
+  split_bytes 2
+  read_chunks
+}
+schema = @name
+write_ndjson

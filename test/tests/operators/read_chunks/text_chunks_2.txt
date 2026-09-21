@@ -1,0 +1,12 @@
+{
+  data: b"he",
+  schema: "tenzir.chunk",
+}
+{
+  data: b"ll",
+  schema: "tenzir.chunk",
+}
+{
+  data: b"o",
+  schema: "tenzir.chunk",
+}
