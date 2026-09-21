@@ -508,8 +508,8 @@ target_compile_definitions(
 find_package(xxhash MODULE REQUIRED)
 provide_find_module(xxhash)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
-target_link_libraries(libtenzir PUBLIC xxhash::xxhash)
-dependency_summary("xxHash" xxhash::xxhash "Dependencies")
+target_link_libraries(libtenzir PUBLIC xxhash::xxhash_header_only)
+dependency_summary("xxHash" xxhash::xxhash_header_only "Dependencies")
 
 # Link against libsystemd.
 if (TENZIR_ENABLE_JOURNALD_LOGGING)
