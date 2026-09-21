@@ -21,10 +21,11 @@ struct ToFileArgs : ToArrowFsArgs {
   Option<location> append;
 };
 
-class ToFileOperator final : public ToArrowFsOperator {
+template <class Input>
+class ToFileOperator final : public ToArrowFsOperator<Input> {
 public:
   explicit ToFileOperator(ToFileArgs args)
-    : ToArrowFsOperator{static_cast<ToArrowFsArgs&>(args)},
+    : ToArrowFsOperator<Input>{static_cast<ToArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -80,7 +81,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToFileArgs, ToFileOperator>{};
+    auto d = Describer<ToFileArgs, ToFileOperator<table_slice>>{};
     ToArrowFsArgs::describe_to(d);
     d.named("append", &ToFileArgs::append);
     return d.invariant_order_filter();

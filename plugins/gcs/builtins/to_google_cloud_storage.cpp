@@ -21,10 +21,11 @@ struct ToGoogleCloudStorageArgs : ToArrowFsArgs {
   bool anonymous = false;
 };
 
-class ToGoogleCloudStorageOperator final : public ToArrowFsOperator {
+template <class Input>
+class ToGoogleCloudStorageOperator final : public ToArrowFsOperator<Input> {
 public:
   explicit ToGoogleCloudStorageOperator(ToGoogleCloudStorageArgs args)
-    : ToArrowFsOperator{static_cast<ToArrowFsArgs&>(args)},
+    : ToArrowFsOperator<Input>{static_cast<ToArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -88,8 +89,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<ToGoogleCloudStorageArgs, ToGoogleCloudStorageOperator>{};
+    auto d = Describer<ToGoogleCloudStorageArgs,
+                       ToGoogleCloudStorageOperator<table_slice>>{};
     d.named("anonymous", &ToGoogleCloudStorageArgs::anonymous);
     ToArrowFsArgs::describe_to(d);
     return d.without_optimize();

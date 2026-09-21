@@ -18,6 +18,8 @@
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/let_id.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_util.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/secret.hpp"
@@ -409,16 +411,25 @@ struct ToArrowFsArgs {
             .emit(ctx);
         }
       }
-      TRY(auto pipe, ctx.get(pipe_arg));
-      auto output = pipe.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->template is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes").primary(pipe).emit(ctx);
-      }
       extra(ctx);
       return {};
+    });
+    // `validate` runs without an input type. Check the subpipeline here so it
+    // receives the actual Arrow or Nova input type during type inference.
+    d.spawner([pipe_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<Args, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        TRY(auto pipe, ctx.get(pipe_arg));
+        TRY(auto output, pipe.inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(pipe)
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return None{};
     });
   }
 };
@@ -460,13 +471,14 @@ struct ToArrowFsArgs {
 ///   - For multipart-upload backends (S3 / ABS / GCS) an in-flight upload
 ///     from before the checkpoint is orphaned on the server; rely on the
 ///     provider's multipart-abort lifecycle rule to clean it up.
-class ToArrowFsOperator : public Operator<table_slice, void> {
+template <class Input = table_slice>
+class ToArrowFsOperator : public Operator<Input, void> {
 public:
   explicit ToArrowFsOperator(ToArrowFsArgs args) : base_args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> final;
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> final;
+  auto process(Input input, OpCtx& ctx) -> Task<void> final;
   auto process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> final;
   auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> final;
@@ -494,7 +506,7 @@ protected:
   /// classes can inject synthetic columns (e.g. for partitioning on a
   /// derived value), coerce types, or drop rows by returning an empty
   /// slice. Default implementation is an identity transform.
-  virtual auto preprocess(table_slice input, OpCtx& ctx) -> Task<table_slice>;
+  virtual auto preprocess(Input input, OpCtx& ctx) -> Task<Input>;
 
   /// Called at the top of `start()` before anything else. Lets derived
   /// classes populate `args` fields that need an `OpCtx` (e.g. a built-in
@@ -575,6 +587,8 @@ private:
   ToArrowFsArgs base_args_;
   FileSystemPtr fs_;
   FsUrlTemplate template_;
+  std::vector<nova::Evaluator> partition_evaluators_;
+  Option<nova::DropTree> partition_drop_;
   int64_t next_sub_key_ = 0;
 
   Mutex<State> state_{State{}};

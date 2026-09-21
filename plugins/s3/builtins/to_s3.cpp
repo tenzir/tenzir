@@ -30,10 +30,11 @@ struct ToS3Args : ToArrowFsArgs {
   location operator_location = location::unknown;
 };
 
-class ToS3Operator final : public ToArrowFsOperator {
+template <class Input>
+class ToS3Operator final : public ToArrowFsOperator<Input> {
 public:
   explicit ToS3Operator(ToS3Args args)
-    : ToArrowFsOperator{static_cast<ToArrowFsArgs&>(args)},
+    : ToArrowFsOperator<Input>{static_cast<ToArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -164,7 +165,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToS3Args, ToS3Operator>{};
+    auto d = Describer<ToS3Args, ToS3Operator<table_slice>>{};
     d.operator_location(&ToS3Args::operator_location);
     auto anon = d.named("anonymous", &ToS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &ToS3Args::aws_iam);
