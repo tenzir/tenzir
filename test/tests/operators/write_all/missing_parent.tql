@@ -1,0 +1,2 @@
+from {p: {x: "a"}}, {}
+write_all p.x

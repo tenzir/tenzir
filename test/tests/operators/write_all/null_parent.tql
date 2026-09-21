@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {p: null}
+write_all p.x

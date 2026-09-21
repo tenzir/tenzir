@@ -1,0 +1,2 @@
+from {p: {x: b"a"}}, {}
+write_chunks p.x
