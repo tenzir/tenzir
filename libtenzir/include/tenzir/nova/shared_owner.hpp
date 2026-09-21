@@ -19,7 +19,11 @@
 
 namespace tenzir::nova::storage {
 
-template <class T>
+namespace _ {
+
+/// `AllocFn` is the accessor of the allocator that owns the combined block,
+/// e.g. `&memory::nova_data_allocator`.
+template <class T, auto AllocFn>
 struct Control {
   struct Deleter;
 
@@ -31,7 +35,7 @@ struct Control {
 
   struct Deleter {
     virtual auto deallocate(void const* ptr) -> void {
-      memory::nova_data_allocator().deallocate(const_cast<void*>(ptr));
+      AllocFn().deallocate(const_cast<void*>(ptr));
     }
     virtual ~Deleter() = default;
   };
@@ -58,52 +62,50 @@ struct Control {
   }
 };
 
-namespace shared_owner_detail {
-
-template <typename T>
-struct shared_owner_allocation {
-  Control<T>* control;
+template <class T, auto AllocFn>
+struct Allocation {
+  Control<T, AllocFn>* control;
   T* data;
   Index actual_capacity;
 };
 
-/// Combined `[Control<T> | padding | T[capacity]]` layout, one allocation
+/// Combined `[Control | padding | T[capacity]]` layout, one allocation
 /// shared between the control block and the element storage.
-template <typename T>
-constexpr auto control_size() -> std::size_t {
-  constexpr auto alignment = std::max(alignof(Control<T>), alignof(T));
-  return (sizeof(Control<T>) + alignment - 1) / alignment * alignment;
+template <class T, auto AllocFn>
+constexpr auto padded_control_size() -> std::size_t {
+  constexpr auto alignment = std::max(alignof(Control<T, AllocFn>), alignof(T));
+  return (sizeof(Control<T, AllocFn>) + alignment - 1) / alignment * alignment;
 }
 
-template <typename T>
+template <class T, auto AllocFn>
 auto allocation_size(Index capacity) -> std::size_t {
-  return control_size<T>() + static_cast<std::size_t>(capacity) * sizeof(T);
+  return padded_control_size<T, AllocFn>()
+         + static_cast<std::size_t>(capacity) * sizeof(T);
 }
 
-/// Fixes up the `Control<T>*`/`T*` pair for a combined allocation
-/// starting at `storage`. Does not construct or move anything; the
-/// caller is responsible for the `Control<T>` object itself.
-template <typename T>
-auto layout(void* storage, Index capacity) -> shared_owner_allocation<T> {
-  auto* control_ptr = reinterpret_cast<Control<T>*>(storage);
+/// Fixes up the `Control*`/`T*` pair for a combined allocation starting at
+/// `storage`. Does not construct or move anything; the caller is
+/// responsible for the `Control` object itself.
+template <class T, auto AllocFn>
+auto layout(void* storage, Index capacity) -> Allocation<T, AllocFn> {
+  auto* control_ptr = reinterpret_cast<Control<T, AllocFn>*>(storage);
   auto* data_ptr = reinterpret_cast<T*>(reinterpret_cast<std::byte*>(storage)
-                                        + control_size<T>());
+                                        + padded_control_size<T, AllocFn>());
   return {control_ptr, data_ptr, capacity};
 }
 
 /// Allocates a fresh combined block for `capacity` elements of `T` and
-/// constructs the `Control<T>` at its start. The control's element count
+/// constructs the `Control` at its start. The control's element count
 /// starts at zero and is marked unique.
-template <typename T>
-auto allocate(Index capacity) -> shared_owner_allocation<T> {
+template <class T, auto AllocFn>
+auto allocate(Index capacity) -> Allocation<T, AllocFn> {
   TENZIR_ASSERT_GT(capacity, 0);
-  static_assert(alignof(Control<T>) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__
+  static_assert(alignof(Control<T, AllocFn>) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__
                   and alignof(T) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__,
                 "over-aligned types are not supported by plain malloc");
-  auto* storage
-    = memory::nova_data_allocator().allocate(allocation_size<T>(capacity));
+  auto* storage = AllocFn().allocate(allocation_size<T, AllocFn>(capacity));
   TENZIR_ASSERT(storage);
-  auto result = layout<T>(storage, capacity);
+  auto result = layout<T, AllocFn>(storage, capacity);
   std::construct_at(result.control);
   result.control->strong_reference_count.store(1, std::memory_order_relaxed);
   result.control->element_count = 0;
@@ -111,22 +113,22 @@ auto allocate(Index capacity) -> shared_owner_allocation<T> {
 }
 
 /// Grows a combined block in place via `realloc`, re-deriving the
-/// `Control<T>`/`T*` pair. Only valid for trivially relocatable `T`.
-template <typename T>
-auto reallocate(Control<T>* control, Index new_capacity)
-  -> shared_owner_allocation<T> {
+/// `Control`/`T*` pair. Only valid for trivially relocatable `T`.
+template <class T, auto AllocFn>
+auto reallocate(Control<T, AllocFn>* control, Index new_capacity)
+  -> Allocation<T, AllocFn> {
   TENZIR_ASSERT_GT(new_capacity, 0);
-  auto* storage = memory::nova_data_allocator().reallocate(
-    control, allocation_size<T>(new_capacity));
+  auto* storage
+    = AllocFn().reallocate(control, allocation_size<T, AllocFn>(new_capacity));
   TENZIR_ASSERT(storage);
-  return layout<T>(storage, new_capacity);
+  return layout<T, AllocFn>(storage, new_capacity);
 }
 
-} // namespace shared_owner_detail
+} // namespace _
 
-template <typename T>
+template <class T, auto AllocFn>
 class SharedOwner {
-  friend class SharedOwner<std::add_const_t<T>>;
+  friend class SharedOwner<std::add_const_t<T>, AllocFn>;
 
 public:
   constexpr SharedOwner() = default;
@@ -135,7 +137,7 @@ public:
   SharedOwner(const SharedOwner& other) noexcept : SharedOwner{} {
     copy_assign_from(other);
   }
-  SharedOwner(const SharedOwner<std::remove_const_t<T>>& other)
+  SharedOwner(const SharedOwner<std::remove_const_t<T>, AllocFn>& other)
     requires std::is_const_v<T>
     : SharedOwner{} {
     copy_assign_from(other);
@@ -210,8 +212,7 @@ public:
   template <typename... Args>
     requires std::constructible_from<T, Args...>
   static auto make(Args&&... args) -> SharedOwner {
-    auto [control_ptr, data_ptr, actual_capacity]
-      = shared_owner_detail::allocate<T>(1);
+    auto [control_ptr, data_ptr, actual_capacity] = _::allocate<T, AllocFn>(1);
     data_ptr = std::construct_at(data_ptr, std::forward<Args>(args)...);
     control_ptr->element_count = 1;
     return {
@@ -221,14 +222,14 @@ public:
   }
 
 protected:
-  using control_type = Control<std::remove_const_t<T>>;
+  using control_type = _::Control<std::remove_const_t<T>, AllocFn>;
   SharedOwner(control_type* control, T* data) noexcept
     : control_{control}, data_{data} {
   }
 
   template <typename U>
     requires(std::same_as<std::add_const_t<T>, std::add_const_t<U>>)
-  void copy_assign_from(const SharedOwner<U>& other) noexcept {
+  void copy_assign_from(const SharedOwner<U, AllocFn>& other) noexcept {
     reset();
     if (not other) {
       return;
@@ -240,7 +241,7 @@ protected:
 
   template <typename U>
     requires(std::same_as<std::add_const_t<T>, std::add_const_t<U>>)
-  void move_assign_from(SharedOwner<U>&& other) noexcept {
+  void move_assign_from(SharedOwner<U, AllocFn>&& other) noexcept {
     reset();
     if (not other) {
       return;
@@ -257,9 +258,9 @@ protected:
   T* data_ = nullptr;
 };
 
-template <typename T>
-class SharedOwner<T[]> : private SharedOwner<T> {
-  using base = SharedOwner<T>;
+template <class T, auto AllocFn>
+class SharedOwner<T[], AllocFn> : private SharedOwner<T, AllocFn> {
+  using base = SharedOwner<T, AllocFn>;
   using base::control_;
 
 public:
@@ -405,7 +406,7 @@ public:
         if (capacity_ > 0) {
           const auto element_count = owner_.control_->element_count;
           auto [control_ptr, data_ptr, actual_capacity]
-            = shared_owner_detail::reallocate<T>(owner_.control_, N);
+            = _::reallocate<T, AllocFn>(owner_.control_, N);
           control_ptr->element_count = element_count;
           owner_.control_ = control_ptr;
           owner_.data_ = data_ptr;
@@ -453,7 +454,7 @@ public:
                                       and std::is_trivially_destructible_v<T>;
       if constexpr (trivial) {
         auto [control_ptr, data_ptr, actual_capacity]
-          = shared_owner_detail::reallocate<T>(owner_.control_, element_count);
+          = _::reallocate<T, AllocFn>(owner_.control_, element_count);
         control_ptr->element_count = element_count;
         owner_.control_ = control_ptr;
         owner_.data_ = data_ptr;
@@ -492,26 +493,26 @@ public:
 
   static auto make_uninitialized(Index capacity) -> Builder {
     auto [control_ptr, data_ptr, actual_capacity]
-      = shared_owner_detail::allocate<T>(capacity);
+      = _::allocate<T, AllocFn>(capacity);
     return {
-      SharedOwner<T[]>(control_ptr, data_ptr),
+      SharedOwner(control_ptr, data_ptr),
       actual_capacity,
     };
   }
 
   static auto make_value(Index count, const T& value) -> SharedOwner {
     auto [control_ptr, data_ptr, actual_capacity]
-      = shared_owner_detail::allocate<T>(count);
+      = _::allocate<T, AllocFn>(count);
     for (Index i = 0; i < count; ++i) {
       std::construct_at(data_ptr + i, value);
     }
     control_ptr->element_count = count;
-    return SharedOwner<T[]>(control_ptr, data_ptr);
+    return SharedOwner(control_ptr, data_ptr);
   }
 };
 
-template <typename T>
-auto SharedOwner<T[]>::as_unique() const& -> SharedOwner
+template <class T, auto AllocFn>
+auto SharedOwner<T[], AllocFn>::as_unique() const& -> SharedOwner
   requires std::copy_constructible<T>
 {
   const auto count = length();
@@ -526,8 +527,8 @@ auto SharedOwner<T[]>::as_unique() const& -> SharedOwner
   return std::move(result).finish();
 }
 
-template <typename T>
-auto SharedOwner<T[]>::as_unique() && -> SharedOwner
+template <class T, auto AllocFn>
+auto SharedOwner<T[], AllocFn>::as_unique() && -> SharedOwner
   requires std::copy_constructible<T>
 {
   if (not this->is_shared()) {
@@ -535,5 +536,13 @@ auto SharedOwner<T[]>::as_unique() && -> SharedOwner
   }
   return static_cast<SharedOwner const&>(*this).as_unique();
 }
+
+/// Owns a column's backing storage.
+template <class T>
+using DataOwner = SharedOwner<T, &memory::nova_data_allocator>;
+
+/// Owns the structure of an array, e.g. the fields of a record.
+template <class T>
+using StructureOwner = SharedOwner<T, &memory::nova_structure_allocator>;
 
 } // namespace tenzir::nova::storage

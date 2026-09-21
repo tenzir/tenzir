@@ -134,14 +134,14 @@ public:
     return data_[i];
   }
 
-  SparseStorage(SharedOwner<T[]> data) : data_{std::move(data)} {
+  SparseStorage(DataOwner<T[]> data) : data_{std::move(data)} {
   }
 
   class Mutable {
   public:
     explicit Mutable(Index length)
       requires std::default_initializable<T>
-      : data_{SharedOwner<T[]>::make_value(length, T{})} {
+      : data_{DataOwner<T[]>::make_value(length, T{})} {
     }
 
     explicit Mutable(SparseStorage storage)
@@ -191,11 +191,11 @@ public:
     ~Mutable() = default;
 
   private:
-    SharedOwner<T[]> data_;
+    DataOwner<T[]> data_;
   };
 
 private:
-  SharedOwner<T[]> data_;
+  DataOwner<T[]> data_;
 };
 static_assert(storage<SparseStorage<int>>);
 
@@ -203,8 +203,8 @@ template <typename T>
 class DenseOffsetStorage {
 public:
   using ViewType = T;
-  using DataOwner = SharedOwner<T[]>;
-  using OffsetOwner = SharedOwner<Index[]>;
+  using DataOwner = storage::DataOwner<T[]>;
+  using OffsetOwner = storage::DataOwner<Index[]>;
 
   auto as_unique() const& -> DenseOffsetStorage {
     return DenseOffsetStorage{data_.as_unique(), offsets_.as_unique()};
@@ -278,8 +278,8 @@ template <typename Char, typename View>
 class DenseOffsetBytesStorage {
 public:
   using ViewType = View;
-  using DataOwner = SharedOwner<Char[]>;
-  using RangeOwner = SharedOwner<Span[]>;
+  using DataOwner = storage::DataOwner<Char[]>;
+  using RangeOwner = storage::DataOwner<Span[]>;
 
   auto as_unique() const& -> DenseOffsetBytesStorage {
     return DenseOffsetBytesStorage{data_.as_unique(), ranges_.as_unique()};

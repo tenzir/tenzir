@@ -25,7 +25,7 @@ public:
   using PhysicalStorage = Type<List>::PhysicalStorage::apply<variant>;
   Array(storage::ListStorage storage);
   Array(storage::ConstantStorage<List, RowView<List>> storage);
-  Array(storage::SharedOwner<storage::Span[]> spans, Array<Data> values);
+  Array(storage::DataOwner<storage::Span[]> spans, Array<Data> values);
   ~Array();
 
   Array(const Array&);

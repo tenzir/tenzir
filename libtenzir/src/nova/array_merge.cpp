@@ -421,10 +421,8 @@ auto ArrayMerger::merge_records(MaskedArray<Array<Record>> old,
   }
   old.data = old.data.to_primary();
   new_.data = new_.data.to_primary();
-  auto const& old_storage
-    = as<storage::RecordStorage>(old.data.storage()).data();
-  auto const& new_storage
-    = as<storage::RecordStorage>(new_.data.storage()).data();
+  auto const& old_storage = *as<storage::RecordStorage>(old.data.storage());
+  auto const& new_storage = *as<storage::RecordStorage>(new_.data.storage());
   auto names = old_storage.names;
   auto shape_table = old_storage.shape_table;
   auto arrays = old_storage.arrays;

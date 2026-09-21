@@ -13,10 +13,10 @@
 #include "tenzir/nova/fundamental_array.hpp"
 #include "tenzir/nova/list_array.hpp"
 #include "tenzir/nova/record_array.hpp"
+#include "tenzir/nova/shared_owner.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/variant_traits.hpp"
 
-#include <memory>
 #include <type_traits>
 
 namespace tenzir::nova {
@@ -90,7 +90,8 @@ public:
 private:
   friend class Array<Data>;
   struct Storage;
-  std::shared_ptr<Storage> storage_;
+  explicit UnionArray(storage::StructureOwner<Storage> storage);
+  storage::StructureOwner<Storage> storage_;
 };
 
 using ArrayAlternatives = ErasedArrayAlternatives::join<UnionArray>;

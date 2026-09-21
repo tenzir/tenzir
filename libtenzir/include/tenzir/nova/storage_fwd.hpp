@@ -22,7 +22,7 @@ struct Span {
   Index end;
 };
 
-template <class T>
+template <class T, auto AllocFn>
 class SharedOwner;
 
 template <class T>

@@ -44,6 +44,16 @@ auto ErasedArray::as_unique() && -> ErasedArray {
 }
 
 struct UnionArray::Storage {
+  Storage(nova::storage::SparseStorage<nova::storage::Index> alternative_indices,
+          nova::storage::Vector<MaskedArray> data)
+    : alternative_indices{std::move(alternative_indices)},
+      data{std::move(data)} {
+  }
+  Storage(Storage const&) = default;
+  Storage(Storage&&) noexcept = default;
+  auto operator=(Storage const&) -> Storage& = delete;
+  auto operator=(Storage&&) -> Storage& = delete;
+
   nova::storage::SparseStorage<nova::storage::Index> alternative_indices;
   nova::storage::Vector<MaskedArray> data;
 };
@@ -51,9 +61,12 @@ struct UnionArray::Storage {
 UnionArray::UnionArray(
   nova::storage::SparseStorage<nova::storage::Index> indices,
   nova::storage::Vector<MaskedArray> fields)
-  : storage_{std::make_shared<Storage>(
-      Storage{.alternative_indices = std::move(indices),
-              .data = std::move(fields)})} {
+  : storage_{storage::StructureOwner<Storage>::make(std::move(indices),
+                                                    std::move(fields))} {
+}
+
+UnionArray::UnionArray(storage::StructureOwner<Storage> storage)
+  : storage_{std::move(storage)} {
 }
 
 UnionArray::~UnionArray() = default;
@@ -63,14 +76,11 @@ auto UnionArray::operator=(const UnionArray&) -> UnionArray& = default;
 auto UnionArray::operator=(UnionArray&&) noexcept -> UnionArray& = default;
 
 auto UnionArray::as_unique() const& -> UnionArray {
-  return UnionArray{storage_->alternative_indices.as_unique(), storage_->data};
+  return UnionArray{storage_.as_unique()};
 }
 
 auto UnionArray::as_unique() && -> UnionArray {
-  if (storage_.use_count() == 1) {
-    return std::move(*this);
-  }
-  return static_cast<UnionArray const&>(*this).as_unique();
+  return UnionArray{std::move(storage_).as_unique()};
 }
 
 auto UnionArray::length() const noexcept -> nova::storage::Index {
@@ -349,9 +359,7 @@ auto UnionArray::get_alternative()
 
 template <data_type Tag>
 auto UnionArray::get_alternative() && -> Option<nova::MaskedArray<Array<Tag>>> {
-  if (storage_.use_count() != 1) {
-    return static_cast<UnionArray const&>(*this).get_alternative<Tag>();
-  }
+  storage_ = std::move(storage_).as_unique();
   constexpr auto wanted = ErasedDataAlternatives::unique_index_of<Array<Tag>>;
   for (auto& alternative : storage_->data) {
     if (variant_traits<ErasedArray>::index(alternative.data) == wanted) {

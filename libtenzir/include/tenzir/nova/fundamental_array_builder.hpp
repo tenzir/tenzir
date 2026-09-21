@@ -56,7 +56,7 @@ public:
   auto finish() -> Array<Tag>;
 
 private:
-  storage::SharedOwner<View[]>::Builder data_builder;
+  storage::DataOwner<View[]>::Builder data_builder;
 };
 
 template <>
@@ -102,8 +102,8 @@ public:
   auto finish() -> Array<Tag>;
 
 private:
-  storage::SharedOwner<Char[]>::Builder data_builder;
-  storage::SharedOwner<storage::Span[]>::Builder range_builder;
+  storage::DataOwner<Char[]>::Builder data_builder;
+  storage::DataOwner<storage::Span[]>::Builder range_builder;
 };
 
 template <>

@@ -14,13 +14,25 @@ namespace tenzir::nova {
 namespace storage {
 
 struct ListStorage::Storage {
-  SharedOwner<Span[]> spans;
+  Storage(DataOwner<Span[]> spans, Array<Data> values)
+    : spans{std::move(spans)}, values{std::move(values)} {
+  }
+  Storage(Storage const&) = default;
+  Storage(Storage&&) noexcept = default;
+  auto operator=(Storage const&) -> Storage& = delete;
+  auto operator=(Storage&&) -> Storage& = delete;
+
+  DataOwner<Span[]> spans;
   Array<Data> values;
 };
 
-ListStorage::ListStorage(SharedOwner<Span[]> spans, Array<Data> values)
-  : storage_{
-      std::make_shared<Storage>(Storage{std::move(spans), std::move(values)})} {
+ListStorage::ListStorage(DataOwner<Span[]> spans, Array<Data> values)
+  : storage_{StructureOwner<Storage>::make(
+      Storage{std::move(spans), std::move(values)})} {
+}
+
+ListStorage::ListStorage(StructureOwner<Storage> storage)
+  : storage_{std::move(storage)} {
 }
 
 ListStorage::~ListStorage() = default;
@@ -30,23 +42,15 @@ auto ListStorage::operator=(ListStorage&&) noexcept -> ListStorage& = default;
 auto ListStorage::operator=(ListStorage const&) -> ListStorage& = default;
 
 auto ListStorage::as_unique() const& -> ListStorage {
-  return ListStorage{storage_->spans, storage_->values};
+  return ListStorage{storage_.as_unique()};
 }
 
 auto ListStorage::as_unique() && -> ListStorage {
-  if (storage_.use_count() == 1) {
-    return std::move(*this);
-  }
-  return static_cast<ListStorage const&>(*this).as_unique();
+  return ListStorage{std::move(storage_).as_unique()};
 }
 
-auto ListStorage::data() const& -> Storage const& {
+auto ListStorage::operator*() const -> Storage const& {
   return *storage_;
-}
-
-auto ListStorage::data() && -> Storage&& {
-  *this = std::move(*this).as_unique();
-  return std::move(*storage_);
 }
 
 auto ListStorage::length() const noexcept -> Index {
@@ -64,22 +68,24 @@ auto ListStorage::values() const& -> Array<Data> const& {
 }
 
 auto ListStorage::values() && -> Array<Data>&& {
-  return std::move(std::move(*this).data().values);
+  *this = std::move(*this).as_unique();
+  return std::move(storage_->values);
 }
 
-auto ListStorage::spans() const& -> SharedOwner<Span[]> const& {
+auto ListStorage::spans() const& -> DataOwner<Span[]> const& {
   return storage_->spans;
 }
 
-auto ListStorage::spans() && -> SharedOwner<Span[]>&& {
-  return std::move(std::move(*this).data().spans);
+auto ListStorage::spans() && -> DataOwner<Span[]>&& {
+  *this = std::move(*this).as_unique();
+  return std::move(storage_->spans);
 }
 
 static_assert(storage<ListStorage>);
 static_assert(storage<ConstantStorage<List, RowView<List>>>);
 } // namespace storage
 
-Array<List>::Array(storage::SharedOwner<storage::Span[]> spans,
+Array<List>::Array(storage::DataOwner<storage::Span[]> spans,
                    Array<Data> values)
   : Array{storage::ListStorage{std::move(spans), std::move(values)}} {
 }

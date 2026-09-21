@@ -18,8 +18,8 @@ namespace {
 /// present but empty.
 auto make_empty_lists(storage::Index length) -> Array<List> {
   return Array<List>{
-    storage::SharedOwner<storage::Span[]>::make_value(length,
-                                                      storage::Span{0, 0}),
+    storage::DataOwner<storage::Span[]>::make_value(length,
+                                                    storage::Span{0, 0}),
     ArrayBuilder<Data>{}.finish(),
   };
 }
@@ -76,7 +76,7 @@ auto _::EvalRun::eval(const ast::list& x, EvalFrame frame) -> Array<Data> {
       // wrapping the evaluated array without copying its data.
       auto value = frame.eval(*item);
       auto spans
-        = storage::SharedOwner<storage::Span[]>::make_uninitialized(length);
+        = storage::DataOwner<storage::Span[]>::make_uninitialized(length);
       for (auto i = storage::Index{0}; i < length; ++i) {
         spans.emplace_back(i, i + 1);
       }

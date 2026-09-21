@@ -148,7 +148,7 @@ auto bitmap_data(ErasedArray const& array) -> storage::BitMap::Word const* {
 } // namespace
 
 TEST("shared owner as_unique copies lvalues") {
-  auto source = storage::SharedOwner<std::string[]>::make_value(2, "value");
+  auto source = storage::DataOwner<std::string[]>::make_value(2, "value");
   auto const* source_data = source.begin();
   auto result = source.as_unique();
   CHECK_NOT_EQUAL(result.begin(), source_data);
@@ -158,7 +158,7 @@ TEST("shared owner as_unique copies lvalues") {
 }
 
 TEST("scalar shared owner as_unique copies shared rvalues") {
-  auto source = storage::SharedOwner<std::string>::make("value");
+  auto source = storage::DataOwner<std::string>::make("value");
   auto alias = source;
   auto const* shared_data = source.get();
   auto result = std::move(source).as_unique();
@@ -169,7 +169,7 @@ TEST("scalar shared owner as_unique copies shared rvalues") {
 }
 
 TEST("shared owner as_unique reuses unique rvalues") {
-  auto source = storage::SharedOwner<std::int64_t[]>::make_value(2, 42);
+  auto source = storage::DataOwner<std::int64_t[]>::make_value(2, 42);
   auto const* source_data = source.begin();
   auto result = std::move(source).as_unique();
   CHECK_EQUAL(result.begin(), source_data);
@@ -177,7 +177,7 @@ TEST("shared owner as_unique reuses unique rvalues") {
 }
 
 TEST("shared owner as_unique copies shared rvalues") {
-  auto source = storage::SharedOwner<std::int64_t[]>::make_value(2, 42);
+  auto source = storage::DataOwner<std::int64_t[]>::make_value(2, 42);
   auto alias = source;
   auto const* shared_data = source.begin();
   auto result = std::move(source).as_unique();
@@ -188,9 +188,9 @@ TEST("shared owner as_unique copies shared rvalues") {
 }
 
 TEST("multi-buffer storage as_unique uniquifies every direct owner") {
-  auto data = storage::SharedOwner<char[]>::make_value(3, 'x');
+  auto data = storage::DataOwner<char[]>::make_value(3, 'x');
   auto ranges
-    = storage::SharedOwner<storage::Span[]>::make_value(1, storage::Span{0, 3});
+    = storage::DataOwner<storage::Span[]>::make_value(1, storage::Span{0, 3});
   auto source
     = storage::DenseStringOffsetStorage{std::move(data), std::move(ranges)};
   auto alias = source;
@@ -235,7 +235,7 @@ TEST("union array as_unique preserves nested sharing") {
     .data = ErasedArray{builder.finish()},
     .present = storage::BitMap{2, true},
   });
-  auto indices_owner = storage::SharedOwner<storage::Index[]>::make_value(2, 0);
+  auto indices_owner = storage::DataOwner<storage::Index[]>::make_value(2, 0);
   auto source = UnionArray{
     storage::SparseStorage<storage::Index>{std::move(indices_owner)},
     std::move(alternatives),
@@ -251,7 +251,7 @@ TEST("list array as_unique only uniquifies its array storage") {
   auto value_builder = ArrayBuilder<Int>{};
   value_builder.data(std::int64_t{42});
   auto spans
-    = storage::SharedOwner<storage::Span[]>::make_value(1, storage::Span{0, 1});
+    = storage::DataOwner<storage::Span[]>::make_value(1, storage::Span{0, 1});
   auto source
     = Array<List>{std::move(spans), Array<Data>{value_builder.finish()}};
   auto alias = source;
@@ -270,7 +270,7 @@ TEST("list array as_unique reuses unique array storage") {
   auto value_builder = ArrayBuilder<Int>{};
   value_builder.data(std::int64_t{42});
   auto spans
-    = storage::SharedOwner<storage::Span[]>::make_value(1, storage::Span{0, 1});
+    = storage::DataOwner<storage::Span[]>::make_value(1, storage::Span{0, 1});
   auto source
     = Array<List>{std::move(spans), Array<Data>{value_builder.finish()}};
   auto const* values = &as<storage::ListStorage>(source.storage()).values();
@@ -933,7 +933,7 @@ TEST("array merge recursively merges shared union alternatives") {
 }
 
 TEST("array merge normalizes different physical storages") {
-  auto old_storage = storage::SharedOwner<std::int8_t[]>::Builder{};
+  auto old_storage = storage::DataOwner<std::int8_t[]>::Builder{};
   old_storage.emplace_back(std::int8_t{1});
   old_storage.emplace_back(std::int8_t{2});
   old_storage.emplace_back(std::int8_t{3});
@@ -1626,8 +1626,8 @@ TEST("record array without_fields ignores unknown names") {
   CHECK_EQUAL(updated_names[0], "x");
   auto alias = arr;
   auto moved = std::move(alias).without_fields(names, storage::BitMap{1, true});
-  CHECK(&as<storage::RecordStorage>(moved.storage()).data()
-        == &as<storage::RecordStorage>(arr.storage()).data());
+  CHECK(&*as<storage::RecordStorage>(moved.storage())
+        == &*as<storage::RecordStorage>(arr.storage()));
 }
 
 TEST("record array without_fields preserves heterogeneous shapes") {
@@ -2203,20 +2203,19 @@ TEST("physical structured storage shares through erasure and logical "
     using Physical = typename Type<T>::PrimaryPhysicalStorage;
     auto source = constant_array(2, value).to_primary();
     auto const* backing
-      = std::addressof(tenzir::as<Physical>(source.storage()).data());
+      = std::addressof(*tenzir::as<Physical>(source.storage()));
     auto erased = ErasedArray{source};
     auto data = Array<Data>{source};
     auto copy = data;
     auto extracted = copy.try_as<T>();
     REQUIRE(extracted);
-    CHECK(std::addressof(tenzir::as<Physical>(extracted->storage()).data())
+    CHECK(std::addressof(*tenzir::as<Physical>(extracted->storage()))
           == backing);
     auto view = tenzir::as<RowView<T>>(data.get(0));
     CHECK(view.begin() == source.get(0).begin());
     CHECK(tenzir::as<RowView<T>>(erased.get(0)).begin() == view.begin());
     auto unique = std::move(*extracted).as_unique();
-    CHECK(std::addressof(tenzir::as<Physical>(unique.storage()).data())
-          != backing);
+    CHECK(std::addressof(*tenzir::as<Physical>(unique.storage())) != backing);
     CHECK(equal(RowView<Data>{unique.get(0)}, RowView<Data>{view}));
     // Moving the array and erasing it must preserve the backing a row borrows.
     auto moved = Array<Data>{std::move(source)};
@@ -2234,7 +2233,7 @@ TEST("physical record mutation detaches and retains nested column sharing") {
   auto nested = source.field("nested")->data.try_as<Record>();
   REQUIRE(nested);
   auto const* nested_backing
-    = &tenzir::as<storage::RecordStorage>(nested->storage()).data();
+    = &*tenzir::as<storage::RecordStorage>(nested->storage());
   auto erased = Array<Data>{source};
   auto copy = erased.try_as<Record>();
   REQUIRE(copy);
@@ -2244,13 +2243,8 @@ TEST("physical record mutation detaches and retains nested column sharing") {
   CHECK_EQUAL(*tenzir::as<RowView<Int>>(changed.field("old")->data.get(0)), 2);
   auto changed_nested = changed.field("nested")->data.try_as<Record>();
   REQUIRE(changed_nested);
-  CHECK(&tenzir::as<storage::RecordStorage>(changed_nested->storage()).data()
+  CHECK(&*tenzir::as<storage::RecordStorage>(changed_nested->storage())
         == nested_backing);
-  auto physical = tenzir::as<storage::RecordStorage>(source.storage());
-  auto&& detached = std::move(physical).data();
-  CHECK(&detached
-        != &tenzir::as<storage::RecordStorage>(source.storage()).data());
-  CHECK(&detached == &physical.data());
 }
 
 TEST("consuming list values detaches physical backing") {

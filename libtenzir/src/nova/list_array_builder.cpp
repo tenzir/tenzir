@@ -12,7 +12,7 @@ struct ArrayBuilder<List>::Storage {
   /// while `list_open` is set.
   storage::Index open_begin = 0;
   bool list_open = false;
-  storage::SharedOwner<storage::Span[]>::Builder span_builder;
+  storage::DataOwner<storage::Span[]>::Builder span_builder;
   std::unique_ptr<ArrayBuilder<Data>> values_builder;
 };
 

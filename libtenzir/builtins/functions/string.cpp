@@ -1159,7 +1159,7 @@ public:
       return frame.null();
     }
     auto const length = subject->length();
-    auto ranges = storage::SharedOwner<storage::Span[]>::Builder{};
+    auto ranges = storage::DataOwner<storage::Span[]>::Builder{};
     // Appends one `Span` per piece of `v` split on `pattern`/`ignore_case`,
     // with `base` added to every offset so the spans can point into
     // whichever byte buffer `v` was sliced from.
@@ -1230,7 +1230,7 @@ public:
     return match(
       subject->storage(),
       [&](const storage::DenseStringOffsetStorage& dense) -> Array<Data> {
-        auto spans = storage::SharedOwner<storage::Span[]>::Builder{};
+        auto spans = storage::DataOwner<storage::Span[]>::Builder{};
         auto begin = storage::Index{0};
         for (auto i = storage::Index{0}; i < length; ++i) {
           if (mask.get(i)) {
@@ -1261,7 +1261,7 @@ public:
         auto const piece_count
           = static_cast<storage::Index>(piece_ranges.length());
         auto piece_builder = nova::ArrayBuilder<String>{};
-        auto spans = storage::SharedOwner<storage::Span[]>::Builder{};
+        auto spans = storage::DataOwner<storage::Span[]>::Builder{};
         auto begin = storage::Index{0};
         for (auto i = storage::Index{0}; i < length; ++i) {
           if (not mask.get(i)) {

@@ -42,7 +42,7 @@ public:
   static constexpr auto bit_mask = word_bits - Index{1};
 
   inline BitMap() = delete;
-  inline BitMap(Index length, SharedOwner<Word[]> data,
+  inline BitMap(Index length, DataOwner<Word[]> data,
                 Option<Index> true_count = None{});
   inline BitMap(Index length, bool value);
 
@@ -75,7 +75,7 @@ public:
     /// into `data_builder`.
     inline auto materialize_implicit_bits() -> void;
 
-    SharedOwner<Word[]>::Builder data_builder;
+    DataOwner<Word[]>::Builder data_builder;
     Index length_ = 0;
     Index true_count_ = 0;
   };
@@ -103,7 +103,7 @@ public:
   private:
     inline auto word_length() const noexcept -> Index;
 
-    SharedOwner<Word[]> data_;
+    DataOwner<Word[]> data_;
     Index length_ = 0;
     Index true_count_ = 0;
   };
@@ -112,7 +112,7 @@ private:
   inline auto word_length() const noexcept -> Index;
   inline auto has_storage() const noexcept -> bool;
   inline auto all_true() const noexcept -> bool;
-  static inline auto popcount(const SharedOwner<Word[]>& data) -> Index;
+  static inline auto popcount(const DataOwner<Word[]>& data) -> Index;
   /// The mask of the bits that are in use in the final word, or `~Word{0}` if
   /// `length` ends exactly on a word boundary.
   static inline auto trailing_mask(Index length) -> Word;
@@ -132,7 +132,7 @@ private:
   static inline auto combine(BitMap lhs, BitMap rhs, Operation operation)
     -> BitMap;
 
-  SharedOwner<Word[]> data_;
+  DataOwner<Word[]> data_;
   Index length_ = 0;
   Index true_count_ = 0;
 
@@ -233,7 +233,7 @@ private:
   }
 };
 
-inline auto BitMap::popcount(const SharedOwner<Word[]>& data) -> Index {
+inline auto BitMap::popcount(const DataOwner<Word[]>& data) -> Index {
   auto count = Index{0};
   for (const auto& word : data) {
     count += std::popcount(word);
@@ -279,7 +279,7 @@ inline auto BitMap::combine(BitMap lhs, BitMap rhs, Operation operation)
   return lhs;
 }
 
-inline BitMap::BitMap(Index length, SharedOwner<Word[]> data,
+inline BitMap::BitMap(Index length, DataOwner<Word[]> data,
                       Option<Index> true_count)
   : data_{std::move(data)},
     length_{length},
@@ -315,7 +315,7 @@ inline auto BitMap::make_inverted() const& noexcept -> BitMap {
     return {length_, not all_true()};
   }
   const auto word_count = word_length();
-  auto result = SharedOwner<Word[]>::make_value(word_count, Word{0});
+  auto result = DataOwner<Word[]>::make_value(word_count, Word{0});
   for (auto i = Index{0}; i < word_count; ++i) {
     result[i] = ~data_[i];
   }
@@ -505,7 +505,7 @@ inline auto BitMap::Builder::finish() -> BitMap {
 }
 
 inline BitMap::Mutable::Mutable(Index length)
-  : data_{SharedOwner<Word[]>::make_value(
+  : data_{DataOwner<Word[]>::make_value(
       (length + word_bits - Index{1}) / word_bits, Word{0})},
     length_{length} {
 }
@@ -516,8 +516,8 @@ inline BitMap::Mutable::Mutable(BitMap bitmap)
     data_ = std::move(bitmap.data_).as_unique();
     return;
   }
-  data_ = SharedOwner<Word[]>::make_value(
-    word_length(), bitmap.all_true() ? ~Word{0} : Word{0});
+  data_ = DataOwner<Word[]>::make_value(word_length(),
+                                        bitmap.all_true() ? ~Word{0} : Word{0});
   if (bitmap.all_true() and word_length() > 0) {
     data_.back() &= trailing_mask(length_);
   }

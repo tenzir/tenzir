@@ -14,7 +14,7 @@ namespace tenzir::nova {
 struct ArrayBuilder<Record>::Storage {
   using Slot = MaskedArrayBuilder<ArrayBuilder<Data>>;
 
-  storage::SharedOwner<storage::Index[]>::Builder shape_index_builder;
+  storage::DataOwner<storage::Index[]>::Builder shape_index_builder;
   ShapeTable shape_table;
   Array<Record>::Names names;
   /// Field names by index, viewing the keys of `names`.

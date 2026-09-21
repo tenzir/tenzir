@@ -34,16 +34,16 @@ RecordStorage::Storage::Storage(Storage const& other)
   : Storage{other.shape_indices, other.shape_table, other.names, other.arrays} {
 }
 RecordStorage::Storage::Storage(Storage&&) noexcept = default;
-auto RecordStorage::Storage::operator=(Storage&&) noexcept
-  -> Storage& = default;
-auto RecordStorage::Storage::operator=(Storage const& other) -> Storage& {
-  return *this = Storage{other};
-}
 
 RecordStorage::RecordStorage(IndicesStorage indices, ShapeTable table,
                              Names names, MaskedArrays arrays)
-  : storage_{std::make_shared<Storage>(std::move(indices), std::move(table),
-                                       std::move(names), std::move(arrays))} {
+  : storage_{StructureOwner<Storage>::make(std::move(indices), std::move(table),
+                                           std::move(names),
+                                           std::move(arrays))} {
+}
+
+RecordStorage::RecordStorage(StructureOwner<Storage> storage)
+  : storage_{std::move(storage)} {
 }
 RecordStorage::~RecordStorage() = default;
 RecordStorage::RecordStorage(RecordStorage const&) = default;
@@ -53,29 +53,14 @@ auto RecordStorage::operator=(RecordStorage&&) noexcept
   -> RecordStorage& = default;
 
 auto RecordStorage::as_unique() const& -> RecordStorage {
-  return RecordStorage{storage_->shape_indices, storage_->shape_table,
-                       storage_->names, storage_->arrays};
+  return RecordStorage{storage_.as_unique()};
 }
 
 auto RecordStorage::as_unique() && -> RecordStorage {
-  if (storage_.use_count() == 1) {
-    return std::move(*this);
-  }
-  return static_cast<RecordStorage const&>(*this).as_unique();
+  return RecordStorage{std::move(storage_).as_unique()};
 }
 
-auto RecordStorage::data() const& -> Storage const& {
-  return *storage_;
-}
-
-auto RecordStorage::data() && -> Storage&& {
-  return std::move(mutable_data());
-}
-
-auto RecordStorage::mutable_data() -> Storage& {
-  if (storage_.use_count() != 1) {
-    storage_ = std::make_shared<Storage>(*storage_);
-  }
+auto RecordStorage::operator*() const -> Storage const& {
   return *storage_;
 }
 
@@ -117,11 +102,13 @@ auto Array<Record>::storage() && -> PhysicalStorage&& {
 }
 
 auto Array<Record>::primary() -> storage::RecordStorage::Storage& {
-  return as<storage::RecordStorage>(storage_).mutable_data();
+  auto& physical = as<storage::RecordStorage>(storage_);
+  physical = std::move(physical).as_unique();
+  return *physical.storage_;
 }
 
 auto Array<Record>::primary() const -> storage::RecordStorage::Storage const& {
-  return as<storage::RecordStorage>(storage()).data();
+  return *as<storage::RecordStorage>(storage());
 }
 
 auto Array<Record>::as_unique() const& -> Array {
@@ -166,11 +153,12 @@ auto Array<Record>::field(std::string_view name) const -> Option<MaskedArray> {
   return match(
     storage(),
     [&](storage::RecordStorage const& physical) -> Option<MaskedArray> {
-      auto it = physical.data().names.find(name);
-      if (it == physical.data().names.end()) {
+      auto const& storage = *physical;
+      auto it = storage.names.find(name);
+      if (it == storage.names.end()) {
         return None{};
       }
-      return physical.data().arrays[it->second];
+      return storage.arrays[it->second];
     },
     [&](storage::ConstantStorage<Record, RowView<Record>> const& physical)
       -> Option<MaskedArray> {

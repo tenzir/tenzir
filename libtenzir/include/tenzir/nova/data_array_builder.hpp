@@ -76,7 +76,7 @@ private:
   }
 
   storage::Vector<BuilderVariant> builders_;
-  storage::SharedOwner<storage::Index[]>::Builder alternative_index_builder_;
+  storage::DataOwner<storage::Index[]>::Builder alternative_index_builder_;
   std::array<storage::Index, data_type_list::size> type_to_vector_index_ = [] {
     auto result = std::array<storage::Index, data_type_list::size>{};
     result.fill(-1);
