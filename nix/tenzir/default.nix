@@ -33,31 +33,14 @@ let
       version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
 
       extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
-      bundledPlugins = [
-        "plugins/amqp"
-        "plugins/amazon-kinesis"
-        "plugins/avro"
-        "plugins/azure-blob-storage"
-        "plugins/clickhouse"
-        "plugins/amazon-cloudwatch"
-        "plugins/fluent-bit"
-        "plugins/from_velociraptor"
-        "plugins/gcs"
-        "plugins/google-cloud-pubsub"
-        "plugins/iceberg"
-        "plugins/kafka"
-        "plugins/nats"
-        "plugins/nic"
-        "plugins/parquet"
-        "plugins/prometheus"
-        "plugins/s3"
-        "plugins/sqs"
-        "plugins/web"
-        "plugins/yara"
-        "plugins/zmq"
-      ];
-
-      tenzirPluginNames = import ./plugins/names.nix;
+      privatePluginNames = import ./plugins/names.nix;
+      # Snowflake loads a shared ADBC driver, unavailable in static builds.
+      excludedPluginNames = lib.optional isStatic "snowflake";
+      tenzirPluginNames =
+        if tenzir-plugins-source == null then
+          [ ]
+        else
+          lib.subtractLists excludedPluginNames privatePluginNames;
 
       # The bare interpreter suffices: the `python` operator installs its
       # dependencies from the bundled wheels, which carry the full transitive
@@ -92,8 +75,10 @@ let
         { prevLayer }:
         selection:
         let
-          allPlugins = callPackage ./plugins {
-            inherit stdenv;
+          # Keep this collection free of callPackage's override functions so
+          # callers can select every plugin with builtins.attrValues.
+          allPlugins = import ./plugins {
+            inherit stdenv callPackage;
             tenzir = self;
             tenzir-plugins-srcs = allPluginSrcs;
           };
@@ -151,6 +136,12 @@ let
 
           postUnpack = ''
             ${pkgsBuildHost.file}/bin/file /bin/sh
+            # Private plugins are added separately through withPlugins. Remove
+            # their bundled copies before CMake expands plugins/*, also avoiding
+            # duplicate registration when static builds add extra-plugins/.
+            for plugin in ${lib.escapeShellArgs privatePluginNames}; do
+              rm -rf "source/plugins/$plugin"
+            done
             mkdir -p source/extra-plugins
             for plug in ${lib.concatStringsSep " " extraPlugins}; do
               cp -R $plug source/extra-plugins/$(basename $plug)
@@ -187,7 +178,8 @@ let
             "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
             "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
             "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
-            "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
+            "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" ([ "plugins/*" ] ++ extraPlugins')}"
+            "-DTENZIR_PLUGINS_BLACKLIST=${lib.concatStringsSep ";" excludedPluginNames}"
             # Disabled for now, takes long to compile and integration tests give
             # reasonable coverage.
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
@@ -315,6 +307,8 @@ let
           '';
 
           passthru = {
+            bundledPluginRoot = "${tenzir-source}/plugins";
+            excludedBundledPluginNames = privatePluginNames ++ excludedPluginNames;
             darwinDeploymentTarget = "26.0";
             plugins = [ ];
             withPlugins =

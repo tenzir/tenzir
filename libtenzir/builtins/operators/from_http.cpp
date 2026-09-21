@@ -708,12 +708,14 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
-        // Build connection params once (outside the retry loop).
+        // Do not load Proxygen's default CA bundle when a context is already set.
         auto conn_params = proxygen::coro::HTTPClient::getConnParams(
-          is_secure ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
-                    : proxygen::coro::HTTPClient::SecureTransportImpl::NONE,
+          is_secure and not config.tls_context
+            ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
+            : proxygen::coro::HTTPClient::SecureTransportImpl::NONE,
           host);
         if (is_secure and config.tls_context) {
+          conn_params.serverName = host;
           conn_params.sslContext = config.tls_context;
         }
         auto sess_params = proxygen::coro::HTTPClient::getSessionParams(

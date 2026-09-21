@@ -274,12 +274,14 @@ public:
       co_return;
     }
     evb_ = ctx.io_executor()->getEventBase();
-    auto secure = tls_enabled
+    // Do not load Proxygen's default CA bundle when a context is already set.
+    auto secure = tls_enabled and not ssl_context
                     ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                     : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
     conn_params_ = proxygen::coro::HTTPClient::getConnParams(
       secure, parsed_url_.getHost());
     if (ssl_context) {
+      conn_params_.serverName = parsed_url_.getHost();
       conn_params_.sslContext = std::move(ssl_context);
     }
     // Create the body channel. The request task starts lazily on the first

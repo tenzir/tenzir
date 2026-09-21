@@ -29,7 +29,7 @@ stdenvNoCC.mkDerivation {
           tenzir-test \
             --root "${src}/test" \
             -j $NIX_BUILD_CORES \
-            ${path}/test
+            "${path}/test"
         fi
       '';
     in
@@ -53,6 +53,14 @@ stdenvNoCC.mkDerivation {
       # Remove tests that want networking
       rm -rf test/tests/operators/sockets
       ${template "."}
+      # Discover bundled suites at build time, matching CMake's plugin glob.
+      for plugin in "${unchecked.bundledPluginRoot}"/*; do
+        [ -f "$plugin/CMakeLists.txt" ] || continue
+        case " ${lib.concatStringsSep " " unchecked.excludedBundledPluginNames} " in
+          *" ''${plugin##*/} "*) continue ;;
+        esac
+        ${template "$plugin"}
+      done
       ${lib.concatMapStrings template (map (x: x.src or x) (builtins.concatLists unchecked.plugins))}
     '';
 

@@ -33,10 +33,6 @@ rec {
   '';
 
   excluded-integration-tests = lib.fileset.unions [
-    # plugins not available in the Nix build.
-    ../test/tests/operators/from_sentinelone_data_lake
-    ../test/tests/operators/to_sentinelone_data_lake
-
     # dns lookup output mismatches in the sandboxed environment
     ../test/tests/operators/dns_lookup
 
@@ -142,27 +138,7 @@ rec {
             inherit tenzir-plugins-source;
           };
         in
-        pkg.withPlugins (
-          ps:
-          [
-            ps.compaction
-            ps.context
-            ps.from_microsoft_sql
-            ps.packages
-            ps.pipeline-manager
-            ps.platform
-            ps.microsoft_graph
-            ps.to_amazon_security_lake
-            ps.to_azure_log_analytics
-            ps.to_splunk
-            ps.to_google_secops
-            ps.to_google_cloud_logging
-            ps.vast
-          ]
-          ++ lib.optionals (!linkPkgs.stdenv.hostPlatform.isStatic) [
-            ps.snowflake
-          ]
-        );
+        pkg.withPlugins builtins.attrValues;
     };
   toChecked =
     x:

@@ -201,12 +201,14 @@ struct HttpPool::Impl {
 
 auto make_conn_params(auto const& impl)
   -> proxygen::coro::HTTPCoroConnector::ConnectionParams {
-  auto secure = impl.config.tls
+  // Do not load Proxygen's default CA bundle when a context is already set.
+  auto secure = impl.config.tls and not impl.config.ssl_context
                   ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
   auto conn_params
     = proxygen::coro::HTTPClient::getConnParams(secure, impl.url.getHost());
   if (impl.config.ssl_context) {
+    conn_params.serverName = impl.url.getHost();
     conn_params.sslContext = impl.config.ssl_context;
   }
   return conn_params;
