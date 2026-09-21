@@ -1,0 +1,15 @@
+from {
+  null_value: null,
+  bool: true,
+  int: -42,
+  float: 1.5,
+  string: "hello",
+  blob: b"hi",
+  ip: 1.2.3.4,
+  subnet: 10.0.0.1/24,
+  time: 2020-01-02T03:04:05Z,
+  duration: 1.5s,
+  list: [null, 2],
+  record: {"not an identifier": 3},
+}
+write_tql

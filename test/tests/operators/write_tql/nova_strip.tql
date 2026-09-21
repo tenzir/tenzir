@@ -1,0 +1,8 @@
+from {
+  keep: 1,
+  null_field: null,
+  null_list: [null, 2],
+  empty_list: [],
+  empty_record: {},
+}
+write_tql compact=true, strip=true
