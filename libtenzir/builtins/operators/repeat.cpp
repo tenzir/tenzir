@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -30,7 +31,8 @@ struct RepeatArgs {
   uint64_t count = std::numeric_limits<uint64_t>::max();
 };
 
-class Repeat final : public Operator<table_slice, table_slice> {
+template <class Events>
+class Repeat final : public Operator<Events, Events> {
 public:
   explicit Repeat(RepeatArgs args) : count_{args.count} {
   }
@@ -43,15 +45,15 @@ public:
     co_return;
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(Events input, Push<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     // If count is 0, we don't emit anything (handled by state() returning done)
     if (count_ == 0) {
       co_return;
     }
-    // Cache non-empty slices for repetition
-    if (input.rows() > 0 and count_ > 1) {
+    // Cache slices for repetition.
+    if (count_ > 1) {
       buffer_.push_back(input);
     }
     // Always emit the input during first pass
@@ -63,7 +65,7 @@ public:
     co_return co_await replay_queue_->dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result);
     if ((phase_ != Phase::replay_finite and phase_ != Phase::replay_infinite)
@@ -87,7 +89,7 @@ public:
     schedule_replay(ctx);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<Events>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     if (phase_ == Phase::finished or buffer_.empty() or count_ <= 1) {
@@ -126,7 +128,12 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
-    serde("buffer", buffer_);
+    if constexpr (std::same_as<Events, table_slice>) {
+      serde("buffer", buffer_);
+    } else {
+      // Nova event serialization is not implemented yet.
+      TENZIR_TODO();
+    }
     serde("phase", phase_);
     serde("remaining_repetitions", remaining_repetitions_);
     serde("next_index", next_index_);
@@ -160,7 +167,7 @@ private:
   using ReplayQueue = folly::coro::BoundedQueue<ReplayTick>;
 
   uint64_t count_;
-  std::vector<table_slice> buffer_;
+  std::vector<Events> buffer_;
   Phase phase_ = Phase::input;
   uint64_t remaining_repetitions_ = 0;
   uint64_t next_index_ = 0;
@@ -174,7 +181,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<RepeatArgs, Repeat>{};
+    auto d = Describer<RepeatArgs, Repeat<table_slice>, Repeat<nova::Events>>{};
     d.optional_positional("count", &RepeatArgs::count);
     return d.invariant_order_filter();
   }
