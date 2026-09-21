@@ -1,0 +1,5 @@
+load_stdin
+read_json
+where keep
+drop keep
+write_ndjson

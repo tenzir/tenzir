@@ -13,6 +13,25 @@ from tenzir_test import hooks
 _LOGGER = logging.getLogger("tenzir_test.cli")
 
 
+@hooks.startup
+def use_arrow_for_plugin_discovery(ctx):
+    import tenzir_test.run as run_mod
+
+    if getattr(run_mod, "_tenzir_arrow_plugin_discovery_installed", False):
+        return
+    original = run_mod.Worker._is_operator_available
+
+    def is_operator_available(self, operator, *, env, config_args):
+        # The harness probes with `plugins`, which does not support Nova yet.
+        # Override only the probe; test pipelines still use their own config.
+        return original(
+            self, operator, env=env, config_args=[*config_args, "--nova=false"]
+        )
+
+    run_mod.Worker._is_operator_available = is_operator_available
+    run_mod._tenzir_arrow_plugin_discovery_installed = True
+
+
 def _should_tee_stderr(args: Sequence[str]) -> bool:
     if not args:
         return False

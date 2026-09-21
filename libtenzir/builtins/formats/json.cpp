@@ -11,6 +11,7 @@
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/type_system.hpp"
 
@@ -1559,7 +1560,8 @@ struct WriteJsonArgs {
   uint64_t jobs = 0;
 };
 
-class WriteJson final : public Operator<table_slice, chunk_ptr> {
+template <class Input>
+class WriteJson final : public Operator<Input, chunk_ptr> {
 public:
   explicit WriteJson(WriteJsonArgs args) : args_{args} {
   }
@@ -1584,53 +1586,84 @@ public:
     opts_.omit_empty_lists = args_.strip_empty_lists or args_.strip;
   }
 
-  auto print_slice(table_slice const& input) const -> chunk_ptr {
-    auto printer = tenzir::json_printer{opts_};
-    // TODO: Since this printer is per-schema we can write an optimized
-    // version of it that gets the schema ahead of time and only expects
-    // data corresponding to exactly that schema.
-    auto buffer = std::vector<char>{};
-    auto resolved_slice = resolve_enumerations(input);
-    auto out_iter = std::back_inserter(buffer);
-    auto rows = values3(resolved_slice);
-    auto row = rows.begin();
-    if (args_.arrays_of_objects) {
-      if (array_open_written_) {
-        *out_iter++ = ',';
-        if (not opts_.oneline) {
-          *out_iter++ = '\n';
+  auto print_slice(Input const& input) const -> chunk_ptr {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto printer = nova::json_printer{opts_};
+      auto buffer = std::string{};
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        if (args_.arrays_of_objects) {
+          if (array_open_written_) {
+            buffer.push_back(',');
+            if (not opts_.oneline) {
+              buffer.push_back('\n');
+            }
+          } else {
+            buffer.push_back('[');
+            array_open_written_ = true;
+          }
         }
-      } else {
-        out_iter = fmt::format_to(out_iter, "[");
-        array_open_written_ = true;
+        printer.print(input.data.get(row));
+        auto bytes = printer.bytes();
+        buffer.append(reinterpret_cast<char const*>(bytes.data()),
+                      bytes.size());
+        if (not args_.arrays_of_objects) {
+          buffer.push_back('\n');
+        }
       }
-    }
-    if (row != rows.end()) {
-      auto const ok = printer.print(out_iter, *row);
-      TENZIR_ASSERT(ok);
-      ++row;
-    }
-    for (; row != rows.end(); ++row) {
+      auto meta = chunk_metadata{
+        .content_type = opts_.oneline and not args_.arrays_of_objects
+                          ? "application/x-ndjson"
+                          : "application/json",
+      };
+      return chunk::make(std::move(buffer), meta);
+    } else {
+      auto printer = tenzir::json_printer{opts_};
+      // TODO: Since this printer is per-schema we can write an optimized
+      // version of it that gets the schema ahead of time and only expects
+      // data corresponding to exactly that schema.
+      auto buffer = std::vector<char>{};
+      auto resolved_slice = resolve_enumerations(input);
+      auto out_iter = std::back_inserter(buffer);
+      auto rows = values3(resolved_slice);
+      auto row = rows.begin();
       if (args_.arrays_of_objects) {
-        *out_iter++ = ',';
-        if (not opts_.oneline) {
-          *out_iter++ = '\n';
+        if (array_open_written_) {
+          *out_iter++ = ',';
+          if (not opts_.oneline) {
+            *out_iter++ = '\n';
+          }
+        } else {
+          out_iter = fmt::format_to(out_iter, "[");
+          array_open_written_ = true;
         }
-      } else {
-        out_iter = fmt::format_to(out_iter, "\n");
       }
-      auto const ok = printer.print(out_iter, *row);
-      TENZIR_ASSERT(ok);
+      if (row != rows.end()) {
+        auto const ok = printer.print(out_iter, *row);
+        TENZIR_ASSERT(ok);
+        ++row;
+      }
+      for (; row != rows.end(); ++row) {
+        if (args_.arrays_of_objects) {
+          *out_iter++ = ',';
+          if (not opts_.oneline) {
+            *out_iter++ = '\n';
+          }
+        } else {
+          out_iter = fmt::format_to(out_iter, "\n");
+        }
+        auto const ok = printer.print(out_iter, *row);
+        TENZIR_ASSERT(ok);
+      }
+      if (not args_.arrays_of_objects) {
+        *out_iter++ = '\n';
+      }
+      auto meta = chunk_metadata{
+        .content_type = opts_.oneline and not args_.arrays_of_objects
+                          ? "application/x-ndjson"
+                          : "application/json",
+      };
+      return chunk::make(std::move(buffer), meta);
     }
-    if (not args_.arrays_of_objects) {
-      *out_iter++ = '\n';
-    }
-    auto meta = chunk_metadata{
-      .content_type = opts_.oneline and not args_.arrays_of_objects
-                        ? "application/x-ndjson"
-                        : "application/json",
-    };
-    return chunk::make(std::move(buffer), meta);
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -1645,7 +1678,7 @@ public:
     }
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+  auto process(Input input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs == 0) {
@@ -1705,7 +1738,7 @@ public:
   }
 
 private:
-  /// Worker coroutine that prints table slices on the CPU executor.
+  /// Worker coroutine that prints input batches on the CPU executor.
   auto write_worker_loop() const -> Task<void> {
     try {
       while (true) {
@@ -1723,7 +1756,7 @@ private:
     write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  using WriteInputQueue = folly::coro::BoundedQueue<Option<table_slice>>;
+  using WriteInputQueue = folly::coro::BoundedQueue<Option<Input>>;
   /// @ref ReadOutputQueue
   using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
@@ -1734,56 +1767,6 @@ private:
   std::shared_ptr<WriteOutputQueue> write_output_queue_;
   bool draining_ = false;
   uint64_t finished_workers_ = 0;
-};
-
-/// `nova::Events` counterpart to `WriteJson`. Consumes `nova::Events` and
-/// produces `chunk_ptr` bytes, printing each row using `nova::json_printer`.
-/// Array-of-objects output and parallel printing are not supported yet.
-class WriteJsonEvents final : public Operator<nova::Events, chunk_ptr> {
-public:
-  explicit WriteJsonEvents(WriteJsonArgs args) {
-    opts_.tql = args.tql;
-    if (args.color and args.tql) {
-      opts_.style = tql_style();
-    } else if (args.color) {
-      opts_.style = jq_style();
-    } else {
-      opts_.style = no_style();
-    }
-    opts_.oneline = args.compact;
-    opts_.omit_null_fields = args.strip_null_fields or args.strip;
-    opts_.omit_nulls_in_lists = args.strip_nulls_in_lists or args.strip;
-    opts_.omit_empty_records = args.strip_empty_records or args.strip;
-    opts_.omit_empty_lists = args.strip_empty_lists or args.strip;
-  }
-
-  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    auto const length = input.length();
-    if (length == 0) {
-      co_return;
-    }
-    auto buffer = std::string{};
-    auto printer = nova::json_printer{opts_};
-    for (auto i = nova::storage::Index{0}; i < length; ++i) {
-      if (not input.mask.get(i)) {
-        continue;
-      }
-      printer.print(input.data.get(i));
-      auto const bytes = printer.bytes();
-      buffer.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-      buffer.push_back('\n');
-    }
-    auto meta = chunk_metadata{
-      .content_type
-      = opts_.oneline ? "application/x-ndjson" : "application/json",
-    };
-    co_await push(chunk::make(std::move(buffer), meta));
-  }
-
-private:
-  json_printer_options opts_ = {};
 };
 
 class write_json_plugin final : public virtual operator_factory_plugin,
@@ -1797,8 +1780,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteJsonArgs, WriteJson, WriteJsonEvents>{
-      WriteJsonArgs{.tql = tql_}};
+    auto d = Describer<WriteJsonArgs, WriteJson<table_slice>,
+                       WriteJson<nova::Events>>{WriteJsonArgs{.tql = tql_}};
     d.named("strip", &WriteJsonArgs::strip);
     d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
@@ -1848,8 +1831,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<WriteJsonArgs, WriteJson>{WriteJsonArgs{.compact = true}};
+    auto d = Describer<WriteJsonArgs, WriteJson<table_slice>,
+                       WriteJson<nova::Events>>{WriteJsonArgs{.compact = true}};
     d.named("strip", &WriteJsonArgs::strip);
     d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
