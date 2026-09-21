@@ -11,6 +11,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
@@ -221,7 +222,8 @@ private:
   mutable Arc<ChunkQueue> chunk_queue_{std::in_place, queue_capacity};
 };
 
-class FromStdin final : public Operator<void, table_slice> {
+template <class Output>
+class FromStdin final : public Operator<void, Output> {
 public:
   explicit FromStdin(FromStdinArgs args) : args_{std::move(args)} {
   }
@@ -260,7 +262,7 @@ public:
     co_return co_await chunk_queue_->dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>&, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(result.has_value());
     auto sub = ctx.get_sub(caf::none);
@@ -292,15 +294,20 @@ public:
     }
   }
 
-  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&)
-    -> Task<void> override {
+  auto finish_sub(SubKeyView, Push<Output>&, OpCtx&) -> Task<void> override {
     sub_finished_->notify_one();
     co_return;
   }
 
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
-                   OpCtx&) -> Task<void> override {
-    auto const rows = slice.rows();
+  auto process_sub(SubKeyView, Output slice, Push<Output>& push, OpCtx&)
+    -> Task<void> override {
+    auto const rows = [&] {
+      if constexpr (std::same_as<Output, nova::Events>) {
+        return slice.active_count();
+      } else {
+        return slice.rows();
+      }
+    }();
     co_await push(std::move(slice));
     events_read_counter_.add(rows);
   }
@@ -339,7 +346,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromStdinArgs, FromStdin>{};
+    auto d = Describer<FromStdinArgs, FromStdin<table_slice>,
+                       FromStdin<nova::Events>>{};
     auto pipe_arg
       = d.pipeline(&FromStdinArgs::pipe, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -349,12 +357,35 @@ public:
         return {};
       }
       // FIXME: `spawn_sub` cannot spawn pipelines returning void.
-      if (output->is_not<table_slice>()) {
+      if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(pipe.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
+    });
+    d.spawner([pipe_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<FromStdinArgs, Input>>> {
+      if constexpr (not std::same_as<Input, void>) {
+        return {};
+      } else {
+        TRY(auto pipe, ctx.get(pipe_arg));
+        TRY(auto output, pipe.inner.infer_type(tag_v<chunk_ptr>, ctx));
+        return match(
+          output,
+          [](tag<nova::Events>) -> Option<SpawnWith<FromStdinArgs, Input>> {
+            return SpawnWith<FromStdinArgs, void>{
+              [](FromStdinArgs args) -> Box<Operator<void, nova::Events>> {
+                return FromStdin<nova::Events>{std::move(args)};
+              }};
+          },
+          [](auto) -> Option<SpawnWith<FromStdinArgs, Input>> {
+            return SpawnWith<FromStdinArgs, void>{
+              [](FromStdinArgs args) -> Box<Operator<void, table_slice>> {
+                return FromStdin<table_slice>{std::move(args)};
+              }};
+          });
+      }
     });
     return d.without_optimize();
   }

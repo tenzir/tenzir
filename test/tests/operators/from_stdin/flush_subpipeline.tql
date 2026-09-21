@@ -1,0 +1,5 @@
+from_stdin {
+  read_json
+  tail 2
+}
+write_ndjson
