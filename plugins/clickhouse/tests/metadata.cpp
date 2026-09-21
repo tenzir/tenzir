@@ -71,6 +71,7 @@ TEST("catch-all detection is independent of column ordering and defaults") {
 TEST("marked descriptions reject invalid markers and mappings") {
   for (auto const& invalid : std::vector<std::vector<ColumnDescription>>{
          {{"extra", "String", "", "", "tenzir:catch_all"}},
+         {{"extra", "JSON", "DEFAULT", "'{}'", "tenzir:catch_all"}},
          {{"extra", "JSON", "MATERIALIZED", "'{}'", "tenzir:catch_all"}},
          {{"extra", "JSON", "ALIAS", "'{}'", "tenzir:catch_all"}},
          {{"extra", "JSON", "EPHEMERAL", "'{}'", "tenzir:catch_all"}},

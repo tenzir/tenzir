@@ -123,11 +123,9 @@ auto build_transformations(std::vector<ColumnDescription> const& description,
       return failure::promise();
     }
     // Restricted JSON declarations can discard paths or coerce values.
-    if (column.type != "JSON"
-        or (not column.default_kind.empty()
-            and column.default_kind != "DEFAULT")) {
+    if (column.type != "JSON" or not column.default_kind.empty()) {
       diagnostic::error("invalid ClickHouse catch-all column `{}`", column.name)
-        .note("expected a writable native JSON column")
+        .note("expected a native JSON column without a default expression")
         .emit(dh);
       return failure::promise();
     }

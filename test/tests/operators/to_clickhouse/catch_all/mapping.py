@@ -115,6 +115,14 @@ ENGINE=Memory;
 """)
     run("{id:1}", '"sa_invalid"', fail="invalid ClickHouse catch-all")
     assert query("SELECT count() FROM sa_invalid") == "0"
+    # A catch-all must not declare a default, even though DEFAULT is writable.
+    query("""
+CREATE TABLE sa_default (
+  id Int64, extra JSON DEFAULT '{}' COMMENT 'tenzir:catch_all'
+) ENGINE=Memory;
+""")
+    run("{id:1, other:42}", '"sa_default"', fail="invalid ClickHouse catch-all")
+    assert query("SELECT count() FROM sa_default") == "0"
     # Null object fields are absent in the remainder, including within arrays.
     run(
         "{id:6, other:null, nested:{missing:null}, "
