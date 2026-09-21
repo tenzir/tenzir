@@ -1,0 +1,10 @@
+from {}
+cfg = config()
+this = {
+  caf: cfg.caf?,
+  secrets: cfg.tenzir.secrets?,
+  token: cfg.tenzir.token?,
+  platform_token: cfg.plugins.platform.token?,
+  tenant_id: cfg.plugins.platform["tenant-id"]?,
+  api_key: cfg.plugins.platform["api-key"]?,
+}
