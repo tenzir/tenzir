@@ -17,6 +17,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -545,7 +546,48 @@ struct WriteLinesArgs {
   }
 };
 
-class WriteLines final : public Operator<table_slice, chunk_ptr> {
+auto print_nova_value(nova::RowView<nova::Data> const& value,
+                      std::vector<char>& output, char separator, bool& first)
+  -> void {
+  auto const start = output.size();
+  if (not first) {
+    output.push_back(separator);
+  }
+  auto const printed = match(
+    value,
+    [](nova::RowView<nova::Null>) {
+      return false;
+    },
+    [&](nova::RowView<nova::Record> const& record) {
+      auto first_field = true;
+      for (auto const& [name, field] : record) {
+        print_nova_value(field, output, ' ', first_field);
+      }
+      return not first_field;
+    },
+    [&](nova::RowView<nova::List> const& list) {
+      auto first_element = true;
+      for (auto element : list) {
+        print_nova_value(element, output, ',', first_element);
+      }
+      return not first_element;
+    },
+    [&](auto scalar) {
+      auto out = std::back_inserter(output);
+      auto printer = lines_printer_impl::visitor{out};
+      auto const ok = printer(*scalar);
+      TENZIR_ASSERT(ok);
+      return true;
+    });
+  if (printed) {
+    first = false;
+  } else {
+    output.resize(start);
+  }
+}
+
+template <class Input>
+class WriteLines final : public Operator<Input, chunk_ptr> {
 public:
   explicit WriteLines(WriteLinesArgs args) : args_{args} {
   }
@@ -564,7 +606,7 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     if (args_.jobs == 0) {
-      co_return co_await Operator<table_slice, chunk_ptr>::await_task(dh);
+      co_return co_await Operator<Input, chunk_ptr>::await_task(dh);
     }
     co_return co_await write_output_queue_->dequeue();
   }
@@ -588,7 +630,7 @@ public:
     co_await push(std::move(next));
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+  auto process(Input input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs > 0) {
@@ -613,17 +655,25 @@ public:
   }
 
 private:
-  static auto print_slice(table_slice const& input) -> chunk_ptr {
-    auto printer = lines_printer_impl{};
+  static auto print_slice(Input const& input) -> chunk_ptr {
     auto buffer = std::vector<char>{};
-    auto out_iter = std::back_inserter(buffer);
-    auto resolved_slice = flatten(resolve_enumerations(input)).slice;
-    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-    for (auto const& row : values3(*array)) {
-      TENZIR_ASSERT(row);
-      auto const ok = printer.print_values(out_iter, *row);
-      TENZIR_ASSERT(ok);
-      out_iter = fmt::format_to(out_iter, "\n");
+    if constexpr (std::same_as<Input, nova::Events>) {
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        auto first = true;
+        print_nova_value(input.data.get(row), buffer, ' ', first);
+        buffer.push_back('\n');
+      }
+    } else {
+      auto printer = lines_printer_impl{};
+      auto out_iter = std::back_inserter(buffer);
+      auto resolved_slice = flatten(resolve_enumerations(input)).slice;
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+      for (auto const& row : values3(*array)) {
+        TENZIR_ASSERT(row);
+        auto const ok = printer.print_values(out_iter, *row);
+        TENZIR_ASSERT(ok);
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
     }
     return chunk::make(std::move(buffer),
                        chunk_metadata{.content_type = "text/plain"});
@@ -645,7 +695,7 @@ private:
     write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  using WriteInputQueue = folly::coro::BoundedQueue<Option<table_slice>>;
+  using WriteInputQueue = folly::coro::BoundedQueue<Option<Input>>;
   using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
   WriteLinesArgs args_;
@@ -662,7 +712,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteLinesArgs, WriteLines>{};
+    auto d = Describer<WriteLinesArgs, WriteLines<table_slice>,
+                       WriteLines<nova::Events>>{};
     auto jobs = d.named_optional("_jobs", &WriteLinesArgs::jobs);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and *j == 0) {
