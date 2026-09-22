@@ -34,6 +34,8 @@ IncludeCategories:
     Priority:        1
   - Regex:           '^"[[:alnum:]_.]+/'
     Priority:        2
+  - Regex:           '^<test/'
+    Priority:        2
   - Regex:           '^<tenzir/'
     Priority:        3
   - Regex:           '^<[[:alnum:]_.]+/'

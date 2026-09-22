@@ -59,6 +59,13 @@ public:
   explicit(false) Arc(U x) : ptr_{std::make_shared<U>(std::move(x))} {
   }
 
+  /// Constructs an arc from an arc of a subtype, sharing its object.
+  template <class U>
+    requires std::convertible_to<std::shared_ptr<U>, std::shared_ptr<T>>
+             and (not std::same_as<U, T>)
+  explicit(false) Arc(Arc<U> other) : ptr_{std::move(other).into_shared()} {
+  }
+
   /// Constructs an arc by converting `U` into `T`. This is not selected for
   /// types that are pointer-convertible to prevent slicing.
   template <class U>
