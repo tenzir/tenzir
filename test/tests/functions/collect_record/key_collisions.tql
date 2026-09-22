@@ -1,0 +1,9 @@
+from {
+  pairs: [[42, 1], [true, 2], [null, 3], ["42", 4], ["true", 5], ["null", null]],
+  entries: [{key: 42, value: 1}, {key: true, value: 2}, {key: null, value: 3},
+            {"42": 4}, {"true": 5}, {"null": null}],
+  keys: [42, true, null, "42", "true", "null"],
+  values: [1, 2, 3, 4, 5, null],
+}
+select pairs=collect_record(pairs), entries=collect_record(entries),
+  separate=collect_record(keys, values)

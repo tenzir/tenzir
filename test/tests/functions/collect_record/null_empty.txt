@@ -1,0 +1,27 @@
+{
+  entries: {},
+  separate: {},
+}
+{
+  entries: {},
+  separate: {
+    "null": 1,
+    a: null,
+  },
+}
+{
+  entries: null,
+  separate: null,
+}
+{
+  entries: {
+    a: null,
+  },
+  separate: null,
+}
+{
+  entries: {
+    "null": 2,
+  },
+  separate: null,
+}

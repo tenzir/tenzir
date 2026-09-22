@@ -1,0 +1,6 @@
+from {xs: [], keys: [], values: []},
+     {xs: [null, {}, null], keys: [null, "a"], values: [1, null]},
+     {xs: null, keys: null, values: [1]},
+     {xs: [{a: null}], keys: ["a"], values: null},
+     {xs: [[null, 1], {key: null, value: 2}], keys: null, values: null}
+select entries=collect_record(xs), separate=collect_record(keys, values)

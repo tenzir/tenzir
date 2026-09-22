@@ -1,0 +1,11 @@
+from {
+  keys: [42, -7, 3.5, 42.0, true, false, null, 192.0.2.1, 192.0.2.0/24,
+         2026-01-01, 1s, b"abc", [1, true], {x: 1}, [], {}, "", "a.b", "日本語"],
+}
+pairs = collect_record(keys.map(k => [k, "value"]))
+entries = collect_record(keys.map(k => {key: k, value: "value"}))
+separate = collect_record(keys, keys.map(k => "value"))
+expected = collect_record(keys.map(k => [string(k), "value"]))
+select pairs_match=string(pairs) == string(expected),
+  entries_match=string(entries) == string(expected),
+  separate_match=string(separate) == string(expected), result=pairs

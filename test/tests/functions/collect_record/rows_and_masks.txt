@@ -1,0 +1,37 @@
+{
+  result: {
+    a: 1,
+    b: true,
+  },
+  separate: {
+    x: 1,
+    y: "two",
+  },
+  constant: {
+    k: 1,
+    v: true,
+  },
+}
+{
+  result: {
+    c: [
+      1,
+      "two",
+    ],
+  },
+  separate: {
+    x: null,
+  },
+  constant: {
+    k: 1,
+    v: true,
+  },
+}
+{
+  result: {},
+  separate: {},
+  constant: {
+    k: 1,
+    v: true,
+  },
+}

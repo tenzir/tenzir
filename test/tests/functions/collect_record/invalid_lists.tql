@@ -1,0 +1,5 @@
+from {xs: 42, names: ["a"], values: []},
+     {xs: "bad", names: ["a"], values: true},
+     {xs: [], names: false, values: [1]},
+     {xs: [], names: [42, "valid"], values: [1, 2]}
+select result=collect_record(xs), separate=collect_record(names, values)

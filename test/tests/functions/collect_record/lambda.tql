@@ -1,0 +1,4 @@
+from {xs: [[{key: "a", value: 1}], [["b", true]], [{c: [1, "two"]}]],
+      ys: [{names: ["a", "b"], values: [1, true]}, {names: ["c"], values: [null]}]}
+select entries=xs.map(x => collect_record(x)),
+  separate=ys.map(x => collect_record(x.names, x.values))

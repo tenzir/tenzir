@@ -1,0 +1,3 @@
+from {xs: [1, true, [], ["short"], ["long", 1, 2], [42, "numeric"],
+           {key: false, value: 3}, {key: "good", value: null}, ["valid", 4]]}
+select result=collect_record(xs)

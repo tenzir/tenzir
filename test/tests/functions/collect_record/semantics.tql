@@ -1,0 +1,18 @@
+from {
+  precedence: [{key: "a", value: 1}, {value: 2, key: "b"}],
+  literal: [["key", "a"], ["value", 1]],
+  extra: [{key: "a", value: 1, extra: true}],
+  partial: [{key: "literal"}, {value: null}],
+  nested: [{x: {old: 1}}, {x: {new: 2}}],
+  null_value: [{a: 1, b: 2}, {a: null}],
+  names: [["a.b", 1], ["", true], ["日本語", [1, "two"]]],
+  types: [["ip", 192.0.2.1], ["time", 2026-01-01], ["duration", 1s], ["blob", b"abc"]],
+}
+select precedence=collect_record(precedence),
+  literal=collect_record(literal),
+  extra=collect_record(extra),
+  partial=collect_record(partial),
+  nested=collect_record(nested),
+  null_value=collect_record(null_value),
+  names=collect_record(names),
+  types=collect_record(types)

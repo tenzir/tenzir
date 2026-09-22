@@ -1,0 +1,17 @@
+{
+  pairs: {
+    "42": 4,
+    "true": 5,
+    "null": null,
+  },
+  entries: {
+    "42": 4,
+    "true": 5,
+    "null": null,
+  },
+  separate: {
+    "42": 4,
+    "true": 5,
+    "null": null,
+  },
+}

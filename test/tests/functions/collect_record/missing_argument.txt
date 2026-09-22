@@ -1,0 +1,8 @@
+error: expected at least 1 positional argument
+ --> tests/functions/collect_record/missing_argument.tql:5:15
+  |
+5 | select result=collect_record()
+  |               ^^^^^^^^^^^^^^^^
+  |
+  = usage: collect_record(entries:any, [values:any])
+  = docs: https://tenzir.com/docs/reference/functions/collect_record

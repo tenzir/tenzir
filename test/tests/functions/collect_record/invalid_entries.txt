@@ -1,0 +1,21 @@
+warning: expected a record or a key/value pair
+ --> tests/functions/collect_record/invalid_entries.tql:3:30
+  |
+3 | select result=collect_record(xs)
+  |                              ~~
+  |
+
+warning: expected a two-element entry
+ --> tests/functions/collect_record/invalid_entries.tql:3:30
+  |
+3 | select result=collect_record(xs)
+  |                              ~~
+  |
+{
+  result: {
+    "42": "numeric",
+    "false": 3,
+    good: null,
+    valid: 4,
+  },
+}

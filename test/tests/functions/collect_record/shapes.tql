@@ -1,0 +1,13 @@
+from {
+  entries: [{key: "a", value: 1}, {value: true, key: "b"}],
+  pairs: [["a", 1], ["b", true]],
+  fragments: [{a: 1}, {b: true, c: {nested: [1, "two"]}}],
+  mixed: [{a: 1}, ["a", "pair"], {key: "a", value: true}, {b: 2}],
+  names: ["a", "b", "c"],
+  values: [1, true, {nested: [1, "two"]}],
+}
+select entries=collect_record(entries),
+  pairs=pairs.collect_record(),
+  fragments=collect_record(fragments),
+  mixed=collect_record(mixed),
+  separate=collect_record(names, values)

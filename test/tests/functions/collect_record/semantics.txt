@@ -1,0 +1,42 @@
+{
+  precedence: {
+    a: 1,
+    b: 2,
+  },
+  literal: {
+    key: "a",
+    value: 1,
+  },
+  extra: {
+    key: "a",
+    value: 1,
+    extra: true,
+  },
+  partial: {
+    key: "literal",
+    value: null,
+  },
+  nested: {
+    x: {
+      new: 2,
+    },
+  },
+  null_value: {
+    a: null,
+    b: 2,
+  },
+  names: {
+    "a.b": 1,
+    "": true,
+    "日本語": [
+      1,
+      "two",
+    ],
+  },
+  types: {
+    ip: 192.0.2.1,
+    time: 2026-01-01T00:00:00Z,
+    duration: 1s,
+    blob: b"abc",
+  },
+}

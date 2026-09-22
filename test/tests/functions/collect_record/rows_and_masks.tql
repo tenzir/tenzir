@@ -1,0 +1,9 @@
+from {keep: false, xs: "ignored", names: 42, values: true},
+     {keep: true, xs: [["a", 1], {b: true}], names: ["x", "y"], values: [1, "two"]},
+     {keep: false, xs: [42], names: ["bad"], values: []},
+     {keep: true, xs: [{key: "c", value: [1, "two"]}], names: ["x", "x"], values: [1, null]},
+     {keep: true, xs: [], names: [], values: []}
+where keep
+select result=collect_record(xs),
+  separate=collect_record(names, values),
+  constant=collect_record([["k", 1], ["v", true]])

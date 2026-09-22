@@ -1,0 +1,34 @@
+{
+  entries: {
+    a: 1,
+    b: true,
+  },
+  pairs: {
+    a: 1,
+    b: true,
+  },
+  fragments: {
+    a: 1,
+    b: true,
+    c: {
+      nested: [
+        1,
+        "two",
+      ],
+    },
+  },
+  mixed: {
+    a: true,
+    b: 2,
+  },
+  separate: {
+    a: 1,
+    b: true,
+    c: {
+      nested: [
+        1,
+        "two",
+      ],
+    },
+  },
+}

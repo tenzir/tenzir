@@ -17,32 +17,48 @@
 
 namespace tenzir::nova {
 
-auto stringify(Array<Data> const& array, storage::BitMap const& mask)
-  -> Array<String> {
-  TENZIR_ASSERT_EQ(array.length(), mask.length());
-  auto builder = ArrayBuilder<String>{};
-  auto printer = json_printer{json_printer_options{
+namespace {
+
+auto make_printer() -> json_printer {
+  return json_printer{json_printer_options{
     .tql = true,
     .oneline = true,
     .trailing_commas = false,
   }};
+}
+
+auto stringify_row(RowView<Data> const& row, json_printer& printer)
+  -> std::string_view {
+  return match(
+    row,
+    [](RowView<std::string_view> value) -> std::string_view {
+      return *value;
+    },
+    [&](auto const&) -> std::string_view {
+      printer.print(row);
+      auto const bytes = printer.bytes();
+      return {reinterpret_cast<char const*>(bytes.data()), bytes.size()};
+    });
+}
+
+} // namespace
+
+auto stringify(RowView<Data> const& row) -> std::string {
+  auto printer = make_printer();
+  return std::string{stringify_row(row, printer)};
+}
+
+auto stringify(Array<Data> const& array, storage::BitMap const& mask)
+  -> Array<String> {
+  TENZIR_ASSERT_EQ(array.length(), mask.length());
+  auto builder = ArrayBuilder<String>{};
+  auto printer = make_printer();
   for (auto index : storage::bitmap_iteration(mask)) {
     if (not index) {
       builder.skip();
       continue;
     }
-    auto row = array.get(*index);
-    match(
-      row,
-      [&](RowView<std::string_view> value) {
-        builder.data(*value);
-      },
-      [&](auto) {
-        printer.print(row);
-        auto const bytes = printer.bytes();
-        builder.data(std::string_view{
-          reinterpret_cast<char const*>(bytes.data()), bytes.size()});
-      });
+    builder.data(stringify_row(array.get(*index), printer));
   }
   return builder.finish();
 }
