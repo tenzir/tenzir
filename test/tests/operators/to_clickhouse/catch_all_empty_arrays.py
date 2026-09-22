@@ -1,7 +1,7 @@
 # runner: python
 # fixtures: [clickhouse]
 # timeout: 120
-"""Empty arrays must survive rejected elements with a different input type."""
+"""Retain empty arrays while rejecting incompatible elements and null arrays."""
 
 import json
 import os
@@ -35,6 +35,24 @@ def query(sql: str) -> str:
 def main() -> None:
     failures = []
     for case, dtype, events, expected in (
+        (
+            "null_parent",
+            "Array(UInt32)",
+            "{id:0,payload:null}, {id:1,payload:[uint(7)]}, {id:2,payload:[]}",
+            [{"id": 1, "payload": [7]}, {"id": 2, "payload": []}],
+        ),
+        (
+            "null_parent_nullable_elements",
+            "Array(Nullable(UInt32))",
+            "{id:0,payload:null}, {id:1,payload:[null,uint(7)]}, {id:2,payload:[]}",
+            [{"id": 1, "payload": [None, 7]}, {"id": 2, "payload": []}],
+        ),
+        (
+            "null_inner_array",
+            "Array(Array(UInt32))",
+            "{id:0,payload:[null]}, {id:1,payload:[[uint(7)]]}, {id:2,payload:[[]]}",
+            [{"id": 1, "payload": [[7]]}, {"id": 2, "payload": [[]]}],
+        ),
         (
             "numeric",
             "Array(UInt32)",

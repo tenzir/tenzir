@@ -705,8 +705,18 @@ struct transformer_array : transformer {
                                const arrow::Array& array, dropmask_ref dropmask,
                                tenzir::diagnostic_handler& dh)
     -> drop override {
+    // Array elements may be nullable, but the array itself is not. Validate
+    // parent nulls before child validation can return early. Keep the legacy
+    // writer's null handling unchanged.
+    auto const parent_drop
+      = mode == MappingMode::lossless
+          ? transformer_detail::apply_null_dropmask(array, dropmask, path, dh)
+          : drop::none;
+    if (parent_drop == drop::all) {
+      return parent_drop;
+    }
     if (is<null_type>(type)) {
-      return drop::none;
+      return parent_drop;
     }
     const auto* lt = try_as<list_type>(type);
     if (not lt) {
@@ -727,7 +737,7 @@ struct transformer_array : transformer {
                                                    my_mask, dh);
     path.pop_back();
     if (updated == drop::none) {
-      return drop::none;
+      return parent_drop;
     }
     if (updated == drop::all) {
       if (mode == MappingMode::legacy) {
