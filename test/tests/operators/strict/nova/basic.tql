@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {x: 1}
+strict {
+  assert false, message="nova"
+}

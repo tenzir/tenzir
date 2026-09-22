@@ -1,0 +1,8 @@
+from {id: 0}, {id: 1}, {id: 2}
+write_json
+read_json
+ts = 2025-03-03T12:12:10 + id * 1s
+where id > 0
+delay ts, start=2025-03-03T12:12:10, speed=10.0
+measure cumulative=true
+drop timestamp

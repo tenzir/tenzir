@@ -1,0 +1,14 @@
+warning: dropping input due to rate limit
+ --> tests/operators/throttle/nova/weight_custom.tql:2:45
+  |
+2 | throttle rate=10, window=1h, weight=w, drop=true
+  |                                             ~~~~
+  |
+{
+  x: 1,
+  w: 5,
+}
+{
+  x: 2,
+  w: 5,
+}

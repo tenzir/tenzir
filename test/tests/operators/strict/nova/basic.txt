@@ -1,0 +1,6 @@
+error: assertion failed: "nova"
+ --> tests/operators/strict/nova/basic.tql:7:10
+  |
+7 |   assert false, message="nova"
+  |          ^^^^^
+  |

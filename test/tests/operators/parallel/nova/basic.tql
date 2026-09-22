@@ -1,0 +1,4 @@
+from {x: 1}
+parallel 2 {
+  pass
+}

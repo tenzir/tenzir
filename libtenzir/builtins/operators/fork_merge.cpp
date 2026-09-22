@@ -33,11 +33,12 @@ struct ForkMergeArgs {
   }
 };
 
-/// Runtime operator for `fork_merge`: copies every input slice to each of its
+/// Runtime operator for `fork_merge`: copies every input batch to each of its
 /// N output ports (one per branch).
-class ForkMergeOp final : public Operator<table_slice, table_slice, true> {
+template <class Events>
+class ForkMergeOp final : public Operator<Events, Events, true> {
 public:
-  auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
+  auto process(Events input, PushPorts<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     for (auto port = size_t{0}; port + 1 < push.size(); ++port) {
@@ -118,7 +119,7 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
-    if (input.is_not<table_slice>()) {
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`fork_merge` expects events as input")
         .primary(args_.keyword)
         .emit(dh);
@@ -126,19 +127,29 @@ public:
     }
     for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
       TRY(auto branch_ty, args_.branches[i].infer_type(input, dh));
-      if (branch_ty.is_not<table_slice>()) {
+      if (branch_ty != input) {
         diagnostic::error("`fork_merge` subpipelines must produce events")
           .primary(args_.locations[i])
           .emit(dh);
         return failure::promise();
       }
     }
-    return tag_v<table_slice>;
+    return input;
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice, true>>{
-      ForkMergeOp{}.with_name("fork_merge")};
+  auto spawn(element_type_tag input) const -> AnyOperator override {
+    return input.match(
+      [](tag<table_slice>) -> AnyOperator {
+        return Box<tenzir::Operator<table_slice, table_slice, true>>{
+          ForkMergeOp<table_slice>{}.with_name("fork_merge")};
+      },
+      [](tag<nova::Events>) -> AnyOperator {
+        return Box<tenzir::Operator<nova::Events, nova::Events, true>>{
+          ForkMergeOp<nova::Events>{}.with_name("fork_merge")};
+      },
+      [](auto) -> AnyOperator {
+        TENZIR_UNREACHABLE();
+      });
   }
 
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
@@ -146,7 +157,7 @@ public:
     // `fork_merge` is an N-output operator: it copies each input slice to every
     // branch (one per output port), and the branch tails are returned so the
     // consumer gathers them.
-    auto ty = tag_v<table_slice>;
+    auto ty = input.front().type;
     auto branches = std::move(args_.branches);
     auto node = builder.append_node(std::move(*this).move(), ty, ty);
     builder.add_channels(input, node);

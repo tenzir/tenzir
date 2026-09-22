@@ -123,11 +123,12 @@ private:
   uint64_t parent_operator_index_;
 };
 
-/// Runtime operator for `fork`: forwards every slice unchanged to the main
+/// Runtime operator for `fork`: forwards every batch unchanged to the main
 /// output (port 0) and a copy to the side-effect subpipeline (port 1).
-class ForkOp final : public Operator<table_slice, table_slice, true> {
+template <class Events>
+class ForkOp final : public Operator<Events, Events, true> {
 public:
-  auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
+  auto process(Events input, PushPorts<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     co_await push(0, input);
@@ -173,7 +174,7 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
-    if (input.is_not<table_slice>()) {
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`fork` expects events as input")
         .primary(args_.keyword)
         .emit(dh);
@@ -186,7 +187,7 @@ public:
         .emit(dh);
       return failure::promise();
     }
-    return tag_v<table_slice>;
+    return input;
   }
 
   auto optimize(ir::OptimizeRequest req,
@@ -229,16 +230,26 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice, true>>{
-      ForkOp{}.with_name("fork")};
+  auto spawn(element_type_tag input) const -> AnyOperator override {
+    return input.match(
+      [](tag<table_slice>) -> AnyOperator {
+        return Box<tenzir::Operator<table_slice, table_slice, true>>{
+          ForkOp<table_slice>{}.with_name("fork")};
+      },
+      [](tag<nova::Events>) -> AnyOperator {
+        return Box<tenzir::Operator<nova::Events, nova::Events, true>>{
+          ForkOp<nova::Events>{}.with_name("fork")};
+      },
+      [](auto) -> AnyOperator {
+        TENZIR_UNREACHABLE();
+      });
   }
 
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
             diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
     // `fork` is a two-output operator: port 0 continues the main pipeline
     // unchanged, port 1 drives the side-effect subpipeline.
-    auto ty = tag_v<table_slice>;
+    auto ty = input.front().type;
     auto pipe = args_.pipe;
     auto node = builder.append_node(std::move(*this).move(), ty, ty);
     builder.add_channels(input, node);

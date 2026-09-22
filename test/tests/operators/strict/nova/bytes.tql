@@ -1,0 +1,5 @@
+from {x: 1}
+write_json
+strict {
+  read_json
+}

@@ -1231,7 +1231,9 @@ public:
   /// be used instead.
   ///
   /// Note that this function will also be used for type inference. There should
-  /// this be no side-effects besides potentially emitting diagnostics.
+  /// be no side effects besides potentially emitting diagnostics. A
+  /// spawner that is callable with `nova::Events` also handles that input type;
+  /// otherwise, the normal implementation selection handles it.
   template <class Spawner>
     requires requires(Spawner& s, DescribeCtx& ctx) {
       {
@@ -1250,12 +1252,12 @@ public:
                       DescribeCtx& ctx) -> failure_or<Option<AnySpawn>> {
       return match(
         input, [&]<class Input>(tag<Input>) -> failure_or<Option<AnySpawn>> {
-          if constexpr (std::same_as<Input, nova::Events>) {
-            // `Spawner` is only required to be callable for the classic
-            // element types; nova::Events falls through to the generic
-            // `Describer<Args, Impls...>` spawn path.
-            return None{};
-          } else {
+          if constexpr (requires {
+                          {
+                            spawner.template operator()<Input>(ctx)
+                          } -> std::same_as<
+                            failure_or<Option<SpawnWith<Args, Input>>>>;
+                        }) {
             auto result = spawner.template operator()<Input>(ctx);
             TRY(auto option, std::move(result));
             TRY(auto spawn, std::move(option));
@@ -1283,6 +1285,11 @@ public:
                   TENZIR_UNREACHABLE();
                 }
               });
+          } else {
+            // `Spawner` is only required to be callable for the classic
+            // element types. nova::Events falls through to the generic
+            // `Describer<Args, Impls...>` spawn path when it is not supported.
+            return None{};
           }
         });
     };

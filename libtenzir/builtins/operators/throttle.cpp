@@ -15,6 +15,8 @@
 #include <tenzir/async/task.hpp>
 #include <tenzir/checked_math.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -27,6 +29,7 @@
 #include <folly/CancellationToken.h>
 
 #include <chrono>
+#include <vector>
 
 namespace tenzir::plugins::throttle {
 
@@ -68,7 +71,8 @@ struct ThrottleArgs {
   Option<location> drop;
 };
 
-class Throttle final : public Operator<table_slice, table_slice> {
+template <class Events>
+class Throttle final : public Operator<Events, Events> {
 public:
   explicit Throttle(ThrottleArgs args) : args_{std::move(args)} {
     auto [sender, receiver] = channel<std::chrono::steady_clock::time_point>(1);
@@ -79,6 +83,14 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Events, nova::Events>) {
+      auto evaluator = nova::Evaluator::make(
+        args_.weight, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        co_return;
+      }
+      evaluator_.emplace(std::move(*evaluator));
+    }
     if (args_.drop) {
       throttle_metrics_
         = make_metric_handler(ctx, type{
@@ -92,7 +104,7 @@ public:
     co_return;
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(Events input, Push<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     // While input is stashed in `pending_`, `state()` reports blocked, so the
     // executor defers further input until the pacing timer released it.
@@ -120,16 +132,35 @@ public:
     co_return TimerFired{};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     if (not result.try_as<TimerFired>() or not pending_) {
       co_return;
     }
-    auto input = std::move(*pending_);
+    auto pending = std::move(*pending_);
     pending_ = None{};
     start_ = std::chrono::steady_clock::now();
-    total_ = 0;
-    co_await emit(std::move(input), push, ctx);
+    if (pending.ranges.empty()) {
+      total_ = 0;
+      co_await emit(std::move(pending.input), push, ctx);
+      co_return;
+    }
+    if (stopping_) {
+      auto begin = pending.ranges[pending.next].begin;
+      auto end = pending.ranges.back().end;
+      co_await push(select_range(std::move(pending.input), begin, end));
+      co_return;
+    }
+    auto range = pending.ranges[pending.next];
+    co_await push(select_range(pending.input, range.begin, range.end));
+    ++pending.next;
+    if (pending.next == pending.ranges.size()) {
+      total_ = pending.final_total;
+      co_return;
+    }
+    total_ = args_.rate.inner;
+    pending_ = std::move(pending);
+    arm_timer(*start_ + args_.window.inner);
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -149,8 +180,19 @@ public:
 private:
   struct TimerFired {};
 
-  auto emit(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> {
+  struct PhysicalRange {
+    size_t begin;
+    size_t end;
+  };
+
+  struct Pending {
+    Events input;
+    std::vector<PhysicalRange> ranges;
+    size_t next;
+    uint64_t final_total;
+  };
+
+  auto emit(Events input, Push<Events>& push, OpCtx& ctx) -> Task<void> {
     auto now = std::chrono::steady_clock::now();
     if (args_.drop and last_emit_
         and now - *last_emit_ >= std::chrono::seconds{1}) {
@@ -174,59 +216,86 @@ private:
     // Preemptive check: the previous slice already exhausted the window budget.
     if (total_ >= args_.rate.inner) {
       if (args_.drop) {
-        dropped_events_ += input.rows();
+        dropped_events_ += event_count(input);
         diagnostic::warning("dropping input due to rate limit")
           .primary(*args_.drop)
           .emit(ctx.dh());
         co_return;
       }
-      stash(std::move(input));
+      stash(Pending{std::move(input), {}, 0, 0});
       co_return;
     }
     if (args_.drop) {
       // Find the first cutoff, if any, and drop everything after it.
-      auto first_cutoff = input.rows();
+      auto first_cutoff = physical_count(input);
       for (auto cutoff : find_cutoffs(input, ctx.dh())) {
         first_cutoff = cutoff;
         break;
       }
-      if (first_cutoff != input.rows()) {
-        dropped_events_ += input.rows() - first_cutoff;
-        diagnostic::warning("dropping input due to rate limit")
-          .primary(*args_.drop)
-          .emit(ctx.dh());
-        co_await push(subslice(input, 0, first_cutoff));
+      if (first_cutoff != physical_count(input)) {
+        auto kept = select_range(input, 0, first_cutoff);
+        auto dropped = event_count(input) - event_count(kept);
+        if (dropped > 0) {
+          dropped_events_ += dropped;
+          diagnostic::warning("dropping input due to rate limit")
+            .primary(*args_.drop)
+            .emit(ctx.dh());
+          co_await push(std::move(kept));
+        } else {
+          co_await push(std::move(input));
+        }
       } else {
         co_await push(std::move(input));
       }
       co_return;
     }
-    // Wait path: push events up to the first cutoff and stash the remainder
-    // until the window rolls over.
+    // Partition the batch once. Pending ranges retain the original batch, so
+    // every physical row is materialized at most once across all windows.
+    auto ranges = std::vector<PhysicalRange>{};
     auto begin = size_t{0};
     for (auto cutoff : find_cutoffs(input, ctx.dh())) {
-      co_await push(subslice(input, begin, cutoff));
+      ranges.push_back({begin, cutoff});
       begin = cutoff;
-      // `find_cutoffs` reset `total_` on yield, but the budget of the current
-      // window is spent either way.
-      total_ = args_.rate.inner;
-      if (begin != input.rows()) {
-        stash(subslice(input, begin, input.rows()));
-      }
+    }
+    auto end = physical_count(input);
+    if (ranges.empty()) {
+      co_await push(std::move(input));
       co_return;
     }
-    if (begin != input.rows()) {
-      co_await push(subslice(input, begin, input.rows()));
+    auto final_total = total_;
+    if (begin == end) {
+      // `find_cutoffs` resets `total_` after yielding, but an interval ending
+      // exactly at the batch boundary still exhausts the current window.
+      final_total = args_.rate.inner;
+    } else if (event_count(input, begin, end) == 0) {
+      // Keep an inactive-only physical suffix with the preceding interval.
+      ranges.back().end = end;
+      final_total = args_.rate.inner;
+    } else {
+      ranges.push_back({begin, end});
     }
+    auto first = ranges.front();
+    co_await push(select_range(input, first.begin, first.end));
+    if (ranges.size() == 1) {
+      total_ = final_total;
+      co_return;
+    }
+    ranges.erase(ranges.begin());
+    total_ = args_.rate.inner;
+    stash(Pending{std::move(input), std::move(ranges), 0, final_total});
   }
 
-  auto stash(table_slice remainder) -> void {
+  auto stash(Pending pending) -> void {
     TENZIR_ASSERT(start_);
-    pending_ = std::move(remainder);
-    auto sent = timer_sender_->try_send(*start_ + args_.window.inner);
+    pending_ = std::move(pending);
+    arm_timer(*start_ + args_.window.inner);
+  }
+
+  auto arm_timer(std::chrono::steady_clock::time_point deadline) -> void {
+    auto sent = timer_sender_->try_send(deadline);
     TENZIR_ASSERT(sent.is_ok());
   }
-  auto find_cutoffs(const table_slice& slice, diagnostic_handler& dh)
+  auto find_cutoffs(table_slice const& slice, diagnostic_handler& dh)
     -> generator<size_t> {
     const auto weights = eval(args_.weight, slice, dh);
     auto offset = size_t{};
@@ -287,13 +356,108 @@ private:
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto find_cutoffs(nova::Events const& events, diagnostic_handler& dh)
+    -> generator<size_t> {
+    TENZIR_ASSERT(evaluator_);
+    auto weights = evaluator_->eval(events, nova::EvalCtx{dh});
+    auto ints = weights.get_alternative<nova::Int>();
+    auto uints = weights.get_alternative<nova::UInt>();
+    for (auto i = nova::storage::Index{0}; i < events.length(); ++i) {
+      if (not events.mask.get(i)) {
+        continue;
+      }
+      auto weight = uint64_t{0};
+      if (ints and ints->present.get(i)) {
+        auto value = *ints->data.get(i);
+        if (value < 0) {
+          diagnostic::warning("`weight` must not be negative")
+            .primary(args_.weight)
+            .note("treating as `0`")
+            .emit(dh);
+          continue;
+        }
+        weight = static_cast<uint64_t>(value);
+      } else if (uints and uints->present.get(i)) {
+        weight = *uints->data.get(i);
+      } else {
+        diagnostic::warning("expected `int`")
+          .primary(args_.weight)
+          .note("treating as `0`")
+          .emit(dh);
+        continue;
+      }
+      auto sum = checked_add(total_, weight);
+      if (not sum) {
+        diagnostic::warning("`weight` sum overflowed")
+          .primary(args_.weight)
+          .note("treating as hitting the rate limit")
+          .emit(dh);
+        total_ = args_.rate.inner;
+      } else {
+        total_ = *sum;
+      }
+      if (total_ >= args_.rate.inner) {
+        co_yield static_cast<size_t>(i + 1);
+        total_ = 0;
+      }
+    }
+  }
+
+  static auto physical_count(table_slice const& input) -> size_t {
+    return input.rows();
+  }
+
+  static auto physical_count(nova::Events const& input) -> size_t {
+    return static_cast<size_t>(input.length());
+  }
+
+  static auto event_count(table_slice const& input) -> size_t {
+    return input.rows();
+  }
+
+  static auto event_count(nova::Events const& input) -> size_t {
+    return static_cast<size_t>(input.active_count());
+  }
+
+  static auto event_count(table_slice const& input, size_t begin, size_t end)
+    -> size_t {
+    TENZIR_UNUSED(input);
+    return end - begin;
+  }
+
+  static auto event_count(nova::Events const& input, size_t begin, size_t end)
+    -> size_t {
+    auto result = size_t{0};
+    for (auto i = begin; i < end; ++i) {
+      result += input.mask.get(detail::narrow<nova::storage::Index>(i));
+    }
+    return result;
+  }
+
+  static auto select_range(table_slice input, size_t begin, size_t end)
+    -> table_slice {
+    return subslice(input, begin, end);
+  }
+
+  static auto select_range(nova::Events const& input, size_t begin, size_t end)
+    -> nova::Events {
+    return nova::subslice(input, detail::narrow<nova::storage::Index>(begin),
+                          detail::narrow<nova::storage::Index>(end));
+  }
+
+  auto finalize(Push<Events>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (pending_) {
-      auto input = std::move(*pending_);
+      auto pending = std::move(*pending_);
       pending_ = None{};
-      co_await push(std::move(input));
+      if (pending.ranges.empty()) {
+        co_await push(std::move(pending.input));
+      } else {
+        auto begin = pending.ranges[pending.next].begin;
+        auto end = pending.ranges.back().end;
+        co_await push(select_range(std::move(pending.input), begin, end));
+      }
     }
     if (args_.drop and dropped_events_ > 0) {
       throttle_metrics_.emit({{"dropped_events", int64_t(dropped_events_)}});
@@ -309,13 +473,14 @@ private:
   Option<std::chrono::steady_clock::time_point> last_emit_ = None{};
   bool stopping_ = false;
   /// Input that exhausted the current window budget, released by the timer.
-  Option<table_slice> pending_ = None{};
+  Option<Pending> pending_ = None{};
   /// Wakes the pacing timer in `await_task()`.
   Option<Sender<std::chrono::steady_clock::time_point>> timer_sender_ = None{};
   std::shared_ptr<Receiver<std::chrono::steady_clock::time_point>>
     timer_receiver_;
   /// Interrupts an in-flight pacing sleep on `stop()`.
   folly::CancellationSource stop_cancel_;
+  Option<nova::Evaluator> evaluator_;
 };
 
 class plugin final : public virtual OperatorPlugin {
@@ -325,7 +490,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ThrottleArgs, Throttle>{};
+    auto d
+      = Describer<ThrottleArgs, Throttle<table_slice>, Throttle<nova::Events>>{};
     auto rate = d.named("rate", &ThrottleArgs::rate);
     auto window = d.named_optional("window", &ThrottleArgs::window);
     d.named_optional("weight", &ThrottleArgs::weight, "int");

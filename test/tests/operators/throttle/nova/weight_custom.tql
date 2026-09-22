@@ -1,0 +1,2 @@
+from {x: 1, w: 5}, {x: 2, w: 5}, {x: 3, w: 5}
+throttle rate=10, window=1h, weight=w, drop=true
