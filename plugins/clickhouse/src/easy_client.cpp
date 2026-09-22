@@ -133,8 +133,10 @@ auto easy_client::remote_fetch_schema_transformations(
       failed = true;
       return;
     }
-    for (auto& column : *columns) {
-      description.push_back(std::move(column));
+    if (description.empty()) {
+      description = std::move(*columns);
+    } else {
+      description.append_range(std::views::as_rvalue(*columns));
     }
   });
   client_.Execute(query);
@@ -538,7 +540,7 @@ auto easy_client::insert_batch_impl(const std::vector<table_slice>& events,
     auto by_schema = std::unordered_map<type, size_t>{};
     for (const auto& original : originals) {
       auto reshaped
-        = tr->catch_all ? prepare_catch_all_slice(original, *tr) : original;
+        = tr->catch_all ? restructure_for_catch_all(original, *tr) : original;
       auto prepared
         = tr->catch_all or normalize_unmarked_input
             ? prepare_slice(reshaped, *tr, dh_, args_.operator_location)

@@ -121,8 +121,8 @@ auto remove_mapped_fields(series input, transformer_record const& tr,
 
 } // namespace
 
-auto prepare_catch_all_slice(table_slice const& slice,
-                             transformer_record const& tr) -> table_slice {
+auto restructure_for_catch_all(table_slice const& slice,
+                               transformer_record const& tr) -> table_slice {
   TENZIR_ASSERT(tr.catch_all);
   auto root = series{slice};
   auto fields = std::vector<record_type::field_view>{};

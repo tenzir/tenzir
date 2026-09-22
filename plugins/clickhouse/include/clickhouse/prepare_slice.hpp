@@ -17,7 +17,7 @@ auto prepare_slice(table_slice const& slice, transformer_record const& tr,
 
 // Extract mapped paths and pack the remaining record into the catch-all.
 // Value validation and JSON serialization belong to the existing writer.
-auto prepare_catch_all_slice(table_slice const& slice,
-                             transformer_record const& tr) -> table_slice;
+auto restructure_for_catch_all(table_slice const& slice,
+                               transformer_record const& tr) -> table_slice;
 
 } // namespace tenzir::plugins::clickhouse

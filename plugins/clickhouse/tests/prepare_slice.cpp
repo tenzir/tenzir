@@ -56,7 +56,7 @@ TEST("reshaping extracts dotted paths and keeps the nested remainder") {
   event.field("extra").data("input");
   auto input = builder.finish_as_table_slice("test").front();
   auto tr = destination("src.port", "UInt32", {"src", "port"});
-  auto result = prepare_catch_all_slice(input, tr);
+  auto result = restructure_for_catch_all(input, tr);
   auto columns = series{result}.as<record_type>();
   CHECK_EQUAL(columns->type.field(0).name, "src.port");
   CHECK_EQUAL(columns->type.field(1).name, "extra");
@@ -75,7 +75,7 @@ TEST("reshaping does not move incompatible mapped values to the remainder") {
   event.field("unknown").data("keep");
   auto input = builder.finish_as_table_slice("test").front();
   auto tr = destination("n", "UInt32", {"n"});
-  auto result = prepare_catch_all_slice(input, tr);
+  auto result = restructure_for_catch_all(input, tr);
   auto columns = series{result}.as<record_type>();
   CHECK(is<string_type>(columns->type.field(0).type));
   CHECK_EQUAL(as<arrow::StringArray>(*columns->array->field(0)).GetView(0),
@@ -95,7 +95,7 @@ TEST("JSON printing omits null fields and retains empty records") {
   auto input = builder.finish_as_table_slice("test").front();
   auto tr = destination("n", "UInt32", {"n"});
   auto dh = collecting_diagnostic_handler{};
-  auto result = prepare_slice(prepare_catch_all_slice(input, tr), tr, dh, {});
+  auto result = prepare_slice(restructure_for_catch_all(input, tr), tr, dh, {});
   CHECK_EQUAL(json(result, "extra"), R"({"empty":{}})");
 }
 
@@ -110,7 +110,7 @@ TEST("ordinary JSON printing removes nested nulls and list elements") {
   auto input = builder.finish_as_table_slice("test").front();
   auto tr = destination("payload", "JSON", {"payload"});
   auto dh = collecting_diagnostic_handler{};
-  auto result = prepare_slice(prepare_catch_all_slice(input, tr), tr, dh, {});
+  auto result = prepare_slice(restructure_for_catch_all(input, tr), tr, dh, {});
   CHECK_EQUAL(json(result, "payload"), R"({"nested":{},"items":[1]})");
   CHECK(dh.empty());
 }
@@ -121,7 +121,7 @@ TEST("extracting all children removes only the emptied parent") {
   auto input = builder.finish_as_table_slice("test").front();
   auto tr = destination("src.port", "UInt32", {"src", "port"});
   auto dh = collecting_diagnostic_handler{};
-  auto result = prepare_slice(prepare_catch_all_slice(input, tr), tr, dh, {});
+  auto result = prepare_slice(restructure_for_catch_all(input, tr), tr, dh, {});
   CHECK_EQUAL(json(result, "extra"), "{}");
 }
 
@@ -135,7 +135,7 @@ TEST("reshaping sliced arrays shares value buffers and propagates null "
   auto input = concatenate(inputs);
   auto sliced = subslice(input, 1, 3);
   auto tr = destination("src.port", "Nullable(UInt32)", {"src", "port"});
-  auto result = prepare_catch_all_slice(sliced, tr);
+  auto result = restructure_for_catch_all(sliced, tr);
   auto columns = series{result}.as<record_type>();
   CHECK_EQUAL(result.rows(), 2u);
   CHECK(columns->array->field(0)->IsNull(0));
@@ -152,7 +152,7 @@ TEST("JSON strings pass unchanged through preparation") {
   auto input = builder.finish_as_table_slice("test").front();
   auto tr = destination("payload", "JSON", {"payload"});
   auto dh = collecting_diagnostic_handler{};
-  auto result = prepare_slice(prepare_catch_all_slice(input, tr), tr, dh, {});
+  auto result = prepare_slice(restructure_for_catch_all(input, tr), tr, dh, {});
   CHECK_EQUAL(json(result, "payload"), "{invalid");
   CHECK_EQUAL(json(result, "extra"), "{}");
   CHECK(dh.empty());
