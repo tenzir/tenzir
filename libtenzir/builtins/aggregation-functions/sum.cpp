@@ -10,13 +10,167 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <concepts>
+#include <string_view>
+#include <variant>
+
 namespace tenzir::plugins::sum {
 
 namespace {
+
+struct SumArgs {
+  nova::ValueArgument x;
+};
+
+/// The nova `sum`: `int`s and `uint`s add with overflow checks (their mix is
+/// a `uint`), any `float` turns the sum into a `float`, and `duration`s add
+/// among themselves. Nulls are skipped. A type error or an overflow warns and
+/// poisons the sum, which then stays `null`.
+class SumFunction final
+  : public nova::ListFallback<SumFunction, SumArgs, &SumArgs::x> {
+public:
+  auto update(SumArgs const& args, nova::EvalFrame frame) -> void {
+    using namespace nova;
+    if (poisoned()) {
+      return;
+    }
+    match(
+      args.x.data,
+      [&]<data_type Tag>(Array<Tag> const& array) {
+        update_typed(array, frame.mask(), args.x.source, frame);
+      },
+      [&](UnionArray const& u) {
+        for (auto const& field : u.fields()) {
+          if (poisoned()) {
+            return;
+          }
+          auto const rows = frame.mask() & field.present;
+          if (not rows.any()) {
+            continue;
+          }
+          match(field.data, [&]<data_type Tag>(Array<Tag> const& array) {
+            update_typed(array, rows, args.x.source, frame);
+          });
+        }
+      });
+  }
+
+  auto get() const -> nova::Data {
+    if (not sum_) {
+      return nova::Data{};
+    }
+    return sum_->match([](auto value) {
+      return nova::Data{value};
+    });
+  }
+
+  auto reset() -> void {
+    sum_ = None{};
+    type_name_ = {};
+  }
+
+private:
+  using Sum
+    = variant<nova::Null, nova::Int, nova::UInt, nova::Float, nova::Duration>;
+
+  auto poisoned() const -> bool {
+    return sum_ and std::holds_alternative<nova::Null>(*sum_);
+  }
+
+  template <nova::data_type Tag>
+  auto
+  update_typed(nova::Array<Tag> const& array, nova::storage::BitMap const& rows,
+               location source, diagnostic_handler& dh) -> void {
+    using namespace nova;
+    if constexpr (std::same_as<Tag, Null>) {
+      // Nulls neither contribute nor fix the type.
+      return;
+    } else if constexpr (concepts::one_of<Tag, Int, UInt, Float, Duration>) {
+      if (not sum_) {
+        sum_ = Tag{};
+        type_name_ = Type<Tag>::static_name;
+      }
+      for (auto row : storage::true_bits(rows)) {
+        if (not add(*array.get(row), Type<Tag>::static_name, source, dh)) {
+          sum_ = Null{};
+          return;
+        }
+      }
+    } else {
+      diagnostic::warning("expected `int`, `uint`, `float` or `duration`, "
+                          "got `{}`",
+                          Type<Tag>::static_name)
+        .primary(source)
+        .emit(dh);
+      sum_ = nova::Null{};
+    }
+  }
+
+  /// Adds one value to the sum. Returns false after warning if the value
+  /// cannot be added.
+  template <class Value>
+  auto add(Value value, std::string_view type_name, location source,
+           diagnostic_handler& dh) -> bool {
+    using namespace nova;
+    auto const incompatible = [&] {
+      diagnostic::warning("got incompatible types `{}` and `{}`", type_name_,
+                          type_name)
+        .primary(source)
+        .emit(dh);
+      return false;
+    };
+    // The two lambdas below are split by the value's kind so that each body
+    // only contains expressions that are valid for it.
+    if constexpr (std::same_as<Value, Duration>) {
+      return sum_->match([&]<class Acc>(Acc acc) -> bool {
+        if constexpr (std::same_as<Acc, Null>) {
+          return false;
+        } else if constexpr (std::same_as<Acc, Duration>) {
+          auto checked = checked_add(acc.count(), value.count());
+          if (not checked) {
+            diagnostic::warning("duration overflow").primary(source).emit(dh);
+            return false;
+          }
+          sum_ = Sum{Duration{*checked}};
+          return true;
+        } else {
+          return incompatible();
+        }
+      });
+    } else {
+      return sum_->match([&]<class Acc>(Acc acc) -> bool {
+        if constexpr (std::same_as<Acc, Null>) {
+          return false;
+        } else if constexpr (std::same_as<Acc, Duration>) {
+          return incompatible();
+        } else if constexpr (std::floating_point<Acc>
+                             or std::floating_point<Value>) {
+          sum_ = Sum{static_cast<Float>(acc) + static_cast<Float>(value)};
+          return true;
+        } else {
+          auto checked = checked_add(acc, value);
+          if (not checked) {
+            diagnostic::warning("integer overflow").primary(source).emit(dh);
+            return false;
+          }
+          sum_ = Sum{*checked};
+          return true;
+        }
+      });
+    }
+  }
+
+  /// `None` before the first value, `Null` once poisoned.
+  Option<Sum> sum_;
+  /// The type that fixed the sum's kind, for the incompatible-types warning.
+  std::string_view type_name_;
+};
 
 class sum_instance : public aggregation_instance {
 public:
@@ -213,13 +367,20 @@ private:
   Option<sum_t> sum_;
 };
 
-class plugin : public virtual aggregation_plugin {
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return "sum";
   };
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<SumArgs, SumFunction>{};
+    d.positional("x", &SumArgs::x, "number|duration");
+    return std::move(d).finish();
   }
 
   auto make_aggregation(function_invocation inv, session ctx) const

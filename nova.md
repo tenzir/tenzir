@@ -332,3 +332,64 @@ Key points:
   reports every bad argument, skips `validate` if any failed to prepare, and
   stamps errors with the function's usage and docs. Never use
   `argument_parser2` or the legacy `const_eval`.
+
+### Aggregations
+
+Aggregations derive from `nova::AggregationPlugin`, a `function_plugin` with
+its own `describe() -> AggregationDescription`, not a `FunctionPlugin`. The
+arguments are registered exactly like a function's, through
+`AggregationDescriber<Args, Impl>`, whose `finish()` also records how to build
+the instance. The implementation is stateful, so it does not fit the shared,
+immutable kernel: it is any default constructible class with
+`update(Args const&, EvalFrame) -> void`, `get() const -> Data`, and
+`reset() -> void`, checked by `nova::AggregationImpl`. `update` folds the
+argument values at `frame.mask()` into the state, `get` reads the aggregate
+(`Null` before the first `update`), and `reset` starts over without forgetting
+anything derived from constants.
+
+```cpp
+struct SumArgs {
+  nova::ValueArgument x;
+};
+
+class SumFunction final
+  : public nova::ListFallback<SumFunction, SumArgs, &SumArgs::x> {
+public:
+  auto update(SumArgs const& args, nova::EvalFrame frame) -> void;
+  auto get() const -> nova::Data;
+  auto reset() -> void;
+};
+
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<SumArgs, SumFunction>{};
+    d.positional("x", &SumArgs::x, "number|duration");
+    return std::move(d).finish();
+  }
+  // `name()`, `is_deterministic()`, and the legacy `make_aggregation()`.
+};
+```
+
+`AggregationInstance::make(expr, ctx)` is the evaluator for one aggregation
+call: it fails unless `expr` is a call to an `AggregationPlugin`, prepares the
+expression like `Evaluator::make`, and owns the implementation together with
+it. Operators feed it batches with `update(events, ctx)`, which evaluates the
+arguments for the active rows and hands them to the implementation, and read
+the aggregate with `get()`. Only one erasure is involved: `AggregationInstance`
+is the abstract type, and the class behind it holds the implementation and the
+`Evaluator` directly.
+
+An aggregation in expression position, such as `xs.sum()`, is a regular
+function over list rows. `CallSitePreparer` first looks for a `FunctionPlugin`
+and then for an `AggregationPlugin`, whose description carries the fallback
+kernel: `ListFallback<Derived, Args, Subject>` supplies the `eval` that
+`FunctionImpl` expects. It is not an aggregation itself; for every list row of
+the `Subject` argument it updates a fresh `Derived` with the row's elements,
+reads it, and resets it. A `null` subject propagates silently, an empty list
+yields the initial aggregate, and any other type warns and yields `null`. The
+elements reach `update` through `EvalFrame::detached(mask, f)`, which runs `f`
+with a frame over the list's flat values: a run over a synthesized field-less
+input of that length, sharing the evaluator and context. The subject's
+`ValueArgument` is replaced by the values column, so an implementation only
+ever reads its `Args` at `frame.mask()`.

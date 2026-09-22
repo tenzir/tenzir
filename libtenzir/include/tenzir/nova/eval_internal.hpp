@@ -14,6 +14,7 @@
 /// that builds call sites.
 
 #include "tenzir/any.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -46,6 +47,13 @@ public:
   /// bundle.
   using Kernel = auto (*)(Any const& args, EvalFrame frame) -> Array<Data>;
 
+  /// Builds the `AggregationInstance` of an aggregation call once the
+  /// expression it is the root of has been prepared into `evaluator`. Like
+  /// `Kernel`, one function per implementation type. Null for functions.
+  using AggregationFactory
+    = auto (*)(Evaluator evaluator, ast::function_call const& root)
+      -> Box<AggregationInstance>;
+
   CallSite(Any args, std::vector<ValueSlot> slots, Kernel kernel)
     : args_{std::move(args)}, slots_{std::move(slots)}, kernel_{kernel} {
     TENZIR_ASSERT(kernel_);
@@ -55,6 +63,10 @@ public:
   /// function over the results.
   auto eval(EvalFrame frame) -> Array<Data>;
 
+  /// Evaluates the argument expressions for `frame.mask()` into the bundle
+  /// and returns it. The values are valid until the next call.
+  auto fill(EvalFrame const& frame) -> Any const&;
+
   /// The prepared argument bundle. Only the constants are meaningful outside
   /// a call.
   template <class Args>
@@ -62,10 +74,21 @@ public:
     return args_.as<Args>();
   }
 
+  auto set_aggregation(AggregationFactory factory) -> void {
+    TENZIR_ASSERT(factory);
+    aggregation_ = factory;
+  }
+
+  /// The aggregation factory, or null if this is a function call site.
+  auto aggregation() const -> AggregationFactory {
+    return aggregation_;
+  }
+
 private:
   Any args_;
   std::vector<ValueSlot> slots_;
   Kernel kernel_;
+  AggregationFactory aggregation_ = nullptr;
 };
 
 /// One traversal of a prepared expression over one batch. Instances borrow
@@ -119,6 +142,8 @@ private:
 
   friend class nova::Evaluator;
   friend class nova::EvalFrame;
+  template <class Args, class Impl>
+  friend class AggregationInstanceImpl;
 
   EvalRun(Evaluator& evaluator, Events const* input, EvalCtx ctx);
 

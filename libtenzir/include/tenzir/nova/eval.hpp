@@ -16,7 +16,9 @@
 #include "tenzir/nova/union_array.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <concepts>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -27,11 +29,15 @@ namespace tenzir::nova {
 struct Events;
 class Evaluator;
 class LambdaArgument;
+class AggregationInstance;
 
 namespace _ {
 
 class CallSite;
 class EvalRun;
+
+template <class Args, class Impl>
+class AggregationInstanceImpl;
 
 } // namespace _
 
@@ -148,13 +154,31 @@ public:
   /// frame's length, so a frame can hand out several.
   auto null() const -> Array<Data>;
 
+  /// Calls `f` with a frame over `mask`, in a run over a synthesized input of
+  /// `mask.length()` field-less rows that shares this run's evaluator and
+  /// context. For evaluating over an array whose rows are not the input's,
+  /// such as the elements of a list column. The frame is only valid inside
+  /// `f`, and expressions evaluated under it see no fields.
+  template <std::invocable<EvalFrame> F>
+  auto detached(storage::BitMap mask, F f) const -> void {
+    detached_impl(std::move(mask), std::addressof(f),
+                  [](void* ctx, EvalFrame frame) {
+                    std::invoke(*static_cast<F*>(ctx), std::move(frame));
+                  });
+  }
+
 private:
   friend class _::EvalRun;
   friend class Evaluator;
+  template <class Args, class Impl>
+  friend class _::AggregationInstanceImpl;
 
   EvalFrame(_::EvalRun& run, storage::BitMap mask)
     : run_{std::addressof(run)}, mask_{std::move(mask)} {
   }
+
+  auto detached_impl(storage::BitMap mask, void* ctx,
+                     void (*f)(void*, EvalFrame)) const -> void;
 
   _::EvalRun* run_;
   storage::BitMap mask_;
@@ -190,6 +214,9 @@ public:
 
 private:
   friend class _::EvalRun;
+  friend class AggregationInstance;
+  template <class Args, class Impl>
+  friend class _::AggregationInstanceImpl;
 
   explicit Evaluator(ast::expression expression);
   auto prepare(ast::expression& expression, InstantiateCtx ctx)

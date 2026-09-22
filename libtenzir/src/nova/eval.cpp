@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/nova/aggregation.hpp"
 #include "tenzir/nova/array_base.hpp"
 #include "tenzir/nova/eval_internal.hpp"
 #include "tenzir/nova/events.hpp"
@@ -47,17 +48,25 @@ public:
       return;
     }
     auto const& plugin = static_cast<registry const&>(ctx_).get(call);
-    auto const* nova_plugin
-      = dynamic_cast<FunctionPlugin const*>(std::addressof(plugin));
-    if (not nova_plugin) {
+    // Functions come first; an aggregation invoked in expression position is
+    // instantiated through its own description, whose kernel is the
+    // regular-function fallback over list rows.
+    auto instantiate = [&]() -> failure_or<FunctionDescription::Instantiation> {
+      if (auto const* function
+          = dynamic_cast<FunctionPlugin const*>(std::addressof(plugin))) {
+        return function->instantiate(call, ctx_);
+      }
+      if (auto const* aggregation
+          = dynamic_cast<AggregationPlugin const*>(std::addressof(plugin))) {
+        return aggregation->instantiate(call, ctx_);
+      }
       diagnostic::error("function `{}` is not implemented for the nova model",
                         plugin.function_name())
         .primary(call)
         .emit(ctx_);
-      failed_ = true;
-      return;
-    }
-    auto instantiation = nova_plugin->instantiate(call, ctx_);
+      return failure::promise();
+    };
+    auto instantiation = instantiate();
     if (not instantiation) {
       failed_ = true;
       return;
@@ -127,7 +136,7 @@ ValueArgument::ValueArgument(Array<Data> array, ::tenzir::location loc)
   : data{std::move(array)}, source{loc} {
 }
 
-auto _::CallSite::eval(EvalFrame frame) -> Array<Data> {
+auto _::CallSite::fill(EvalFrame const& frame) -> Any const& {
   // Every value is produced for exactly the rows the call was asked for, so
   // a function never has to think about which rows its arguments cover.
   // Slots are refilled on every call, which is what makes it safe to reuse
@@ -135,7 +144,12 @@ auto _::CallSite::eval(EvalFrame frame) -> Array<Data> {
   for (auto const& slot : slots_) {
     slot.store(args_, frame.eval(LazyArgument{*slot.expr}));
   }
-  return kernel_(args_, std::move(frame));
+  return args_;
+}
+
+auto _::CallSite::eval(EvalFrame frame) -> Array<Data> {
+  auto const& args = fill(frame);
+  return kernel_(args, std::move(frame));
 }
 
 auto Evaluator::call_site(ast::function_call const& call) -> _::CallSite& {
@@ -166,6 +180,18 @@ auto EvalFrame::input() const -> Events const* {
 
 auto EvalFrame::eval(ast::expression const& expr) const -> Array<Data> {
   return run_->eval(expr, *this);
+}
+
+auto EvalFrame::detached_impl(storage::BitMap mask, void* ctx,
+                              void (*f)(void*, EvalFrame)) const -> void {
+  // A field-less input of the mask's length, like the input-less lambda
+  // application: both `make_empty`s are constants, so this is O(1). The root
+  // frame's mask is the input's mask, which establishes the subset invariant.
+  auto const length = mask.length();
+  auto events = Events{Array<Record>::make_empty(length), std::move(mask),
+                       Events::Meta::make_empty(length)};
+  auto run = _::EvalRun{*run_->evaluator_, std::addressof(events), run_->ctx_};
+  f(ctx, EvalFrame{run, events.mask});
 }
 
 auto Evaluator::eval(Events const& events, EvalCtx ctx) -> Array<Data> {
