@@ -1,0 +1,10 @@
+created: 2026-09-22
+title: Parallel processing across transforms and sources
+intro: >-
+  Configured pipeline parallelism now accelerates asynchronous transforms and supported
+  competing-consumer sources, increasing throughput for DNS, context, Python, AMQP,
+  and Google Cloud Pub/Sub workloads. This release also restores the SentinelOne Data
+  Lake operators and adds recursive value search with the new search function.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.17.0
