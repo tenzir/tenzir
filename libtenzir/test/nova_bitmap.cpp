@@ -509,3 +509,74 @@ TEST("bitmap mutable or-assign with an all-true operand stays consistent") {
   CHECK_EQUAL(to_vector(combined), other);
   CHECK_EQUAL(combined.true_count(), count_true(other));
 }
+
+TEST("bitmap keep_first agrees with a row-wise reference") {
+  for (auto length : {0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 385}) {
+    for (auto period : {1, 2, 6, 137}) {
+      auto bits = std::vector<bool>{};
+      for (auto i = Index{0}; i < length; ++i) {
+        bits.push_back(i % period == period - 1);
+      }
+      auto const source = make_bitmap(bits);
+      for (auto count = Index{0}; count <= length + 1; ++count) {
+        auto expected = bits;
+        auto left = count;
+        for (auto&& bit : expected) {
+          if (bit and left > 0) {
+            --left;
+          } else {
+            bit = false;
+          }
+        }
+        auto const check = [&](BitMap const& result) {
+          CHECK_EQUAL(result.length(), length);
+          CHECK_EQUAL(result.true_count(),
+                      std::min(count, source.true_count()));
+          CHECK_EQUAL(to_vector(result), expected);
+          if (not result.data().empty() and length % BitMap::word_bits != 0) {
+            auto padding = result.data().back() >> (length % BitMap::word_bits);
+            CHECK(padding == 0);
+          }
+        };
+        check(source.keep_first(count));
+        check(make_bitmap(bits).keep_first(count));
+      }
+      CHECK_EQUAL(to_vector(source), bits);
+    }
+  }
+}
+
+TEST("bitmap keep_first handles constants without unnecessary allocation") {
+  for (auto value : {false, true}) {
+    auto const source = BitMap{257, value};
+    for (auto count : {0, 1, 127, 128, 129, 256, 257, 300}) {
+      auto result = source.keep_first(count);
+      CHECK_EQUAL(result.length(), source.length());
+      CHECK_EQUAL(result.true_count(), value ? std::min(count, 257) : 0);
+      for (auto i = Index{0}; i < result.length(); ++i) {
+        CHECK_EQUAL(result.get(i), value and i < count);
+      }
+      if (not value or count == 0 or count >= source.length()) {
+        CHECK(result.data().empty());
+      }
+    }
+  }
+}
+
+TEST("bitmap keep_first respects copy-on-write and reuses unique storage") {
+  auto const bits = alternating(257, 6);
+  auto source = make_bitmap(bits);
+  auto const* original_data = source.data().data();
+  auto alias = source;
+  auto unchanged = source.keep_first(source.true_count());
+  CHECK_EQUAL(unchanged.data().data(), original_data);
+  auto result = std::move(source).keep_first(65);
+  CHECK_NOT_EQUAL(result.data().data(), original_data);
+  CHECK_EQUAL(to_vector(alias), bits);
+  CHECK_EQUAL(result.true_count(), 65);
+  auto unique = make_bitmap(bits);
+  auto const* unique_data = unique.data().data();
+  auto reused = std::move(unique).keep_first(65);
+  CHECK_EQUAL(reused.data().data(), unique_data);
+  CHECK_EQUAL(to_vector(reused), to_vector(result));
+}

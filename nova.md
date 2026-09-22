@@ -58,6 +58,7 @@ representation of bool column.
 O(1), and represents all-true and all-false without allocating, so `&`, `|`,
 `^`, and `and_not` short-circuit on constant masks. Use the bitmap iteration
 utilities to efficiently iterate bitmaps rather than going through indices.
+Use `keep_first(count)` to limit active rows without compacting the column.
 
 ### List
 
@@ -110,6 +111,18 @@ Builders share one vocabulary: `data(v)`, `null()`, `record()`, `list()`,
 `none()`/`none_n()`, `length()`, `finish()`. They pad lazily and in bulk — a
 field or alternative catches up only when it next receives a value, and in
 `finish()` — so skipped rows cost nothing.
+
+## Arrow import
+
+Use `nova::import_arrow_array()` from `<tenzir/nova/arrow_import.hpp>` directly,
+without converting through `table_slice` or rebuilding rows. Pass an owning
+`std::shared_ptr<arrow::Array>` to transfer eligible buffers; release unnecessary
+aliases first and do not use borrowed views after the transfer. Use the
+`arrow::Array const&` overload when retaining the original input.
+
+Handle the returned `Result` and keep diagnostics and format-specific conversions
+in the reader. Use the Nova overload of `apply_read_pushdown()` for prepared
+filters and limits, preserving standalone filtering diagnostics.
 
 ## Evaluator
 
@@ -184,6 +197,26 @@ invariant into a structural one. The rules:
 
 ## Writing new Users
 
+### Tests
+
+Migrate tests in place, keeping the existing layout and scenario names. Change
+pipelines and baselines only when needed; remove duplicate legacy tests. Do not
+add `nova/` or `columnar/` directories or execution-mode filename suffixes.
+Do not add or restore legacy-executor tests, even in response to review feedback.
+
+Add or merge this into `tenzir.yaml` in every directory containing migrated TQL
+tests, including nested directories:
+
+```yaml
+tenzir:
+  nova: true
+```
+
+Use `tenzir.yaml`, not `test.yaml`, and do not rely on parent configuration
+inheritance. In Python tests, pass `--nova=true` to the code under test. Use
+`--nova=false` only in separate subprocesses that prepare input when supporting
+operators are not ported yet; prefer fixtures where possible.
+
 ### Operators
 
 There is no `nova::Operator`. Nova is a fourth `element_type_tag` alternative,
@@ -193,6 +226,10 @@ sharing one `Args` bundle with the `table_slice` implementation. Only `void`,
 `chunk_ptr`, and `nova::Events` may produce `nova::Events`. `select_spawn`
 prefers the nova implementation when `nova_enabled()`, and errors with
 "operator does not support `--nova` yet" when only a `table_slice` one exists.
+Keep the legacy implementation unchanged and add a separate Nova implementation,
+not a shared templated execution base. Share arguments and registration; isolate
+legacy code for eventual removal. Serialize resumable state or explicitly reject
+checkpoints. Internal migrations need no changelog or user-facing docs changes.
 
 `Evaluator::make` needs the registry, so build evaluators in `start()` from
 `OpCtx` and hold them in `Option`. Per batch, `get_alternative<Bool>` resolves

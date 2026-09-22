@@ -1,4 +1,4 @@
-error: Feather input contains unsupported types
+error: failed to decode Feather input
  --> tests/operators/read_feather/pushdown/file/unsupported_unprojected.tql:7:3
   |
 7 |   read_feather

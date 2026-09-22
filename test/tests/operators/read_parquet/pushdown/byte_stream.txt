@@ -1,0 +1,1 @@
+Parquet decoding is independent of byte chunking

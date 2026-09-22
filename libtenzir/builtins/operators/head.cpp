@@ -65,18 +65,10 @@ public:
       remaining_ -= active_count;
       co_return co_await push(std::move(input));
     }
-    // The final batch: clear set bits from the back of the mask until only
-    // `remaining_` of them are left.
-    auto mask = nova::storage::BitMap::Mutable{std::move(input.mask)};
-    auto excess = active_count - remaining_;
-    for (auto i = mask.length(); i-- > 0 and excess > 0;) {
-      if (mask.get(i)) {
-        mask.set(i, false);
-        --excess;
-      }
-    }
+    input.mask
+      = std::move(input.mask)
+          .keep_first(detail::narrow<nova::storage::Index>(remaining_));
     remaining_ = 0;
-    input.mask = std::move(mask).finish();
     co_await push(std::move(input));
   }
 

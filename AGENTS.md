@@ -161,6 +161,7 @@ series or slice first, then iterate only when row-wise access is necessary.
 
 ### APIs
 
+- [nova.md](nova.md): Columnar arrays, active masks, Arrow import, evaluators, and operator migration
 - [data-access.md](.agents/references/data-access.md): Reading and iterating columnar data
 - [data-building.md](.agents/references/data-building.md): Constructing series and table slices
 - [data-conversion.md](.agents/references/data-conversion.md): Type-to-type conversion
@@ -212,6 +213,11 @@ Choose the narrowest test that exercises the behavior users rely on:
 - Add an integration test under `test/tests/...` when the behavior is visible
   from TQL, packages, connectors, formats, functions, operators, or command-line
   workflows.
+- For Nova migrations, replace legacy tests in place and retain the existing
+  test layout. Do not keep duplicate legacy suites, add `nova/` or `columnar/`
+  directories, or use execution-mode filename suffixes. Do not add or restore
+  legacy-executor tests, even in response to review feedback. See
+  [the Nova testing conventions](nova.md#tests).
 - Add a C++ unit test under `libtenzir/test/...` or the plugin's `tests/`
   directory when the behavior is an internal algorithm, data structure, parser
   helper, or error path that is hard to drive through TQL.

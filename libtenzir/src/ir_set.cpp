@@ -494,7 +494,6 @@ public:
       }
       data = nova::assign_nested_field(std::move(data), path, std::move(value));
     }
-    input.data = std::move(data);
     co_await push(std::move(input));
   }
 

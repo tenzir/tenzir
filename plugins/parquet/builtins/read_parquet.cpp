@@ -13,6 +13,7 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/enum.hpp>
+#include <tenzir/nova/arrow_import.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/read_detection.hpp>
@@ -25,9 +26,14 @@
 
 namespace tenzir::plugins::parquet {
 
-namespace {
-
 TENZIR_ENUM(decimal_format, string, float_);
+
+struct ReadParquetArgs {
+  Option<located<std::string>> decimal_format;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
+};
+
+namespace {
 
 auto format_decimal_type(std::shared_ptr<arrow::DataType> type,
                          decimal_format format)
@@ -147,10 +153,347 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
     arrow::key_value_metadata(std::move(keys), std::move(values)));
 }
 
-struct ReadParquetArgs {
-  Option<located<std::string>> decimal_format;
-  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
+class ReadParquet final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadParquet(ReadParquetArgs args)
+    : filter_{std::move(args.optimization.filter)},
+      remaining_{args.optimization.limit},
+      decimal_format_{args.decimal_format ? from_string<decimal_format>(
+                                              args.decimal_format->inner)
+                                              .value_or(decimal_format::string)
+                                          : decimal_format::string},
+      projection_{
+        read_projection(std::move(args.optimization.projection), filter_)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (remaining_ == uint64_t{0}) {
+      co_return;
+    }
+    for (auto const& filter : filter_) {
+      auto evaluator = nova::Evaluator::make(
+        filter, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        co_return;
+      }
+      filters_.push_back(std::move(*evaluator));
+    }
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>&, OpCtx&)
+    -> Task<void> override {
+    // NOTE: The parquet format stores key decoding metadata in the file
+    // footer. With plain streaming bytes, we cannot decode row groups before
+    // seeing the footer, so we buffer and parse in `finalize()`. This also
+    // means checkpointing is currently unsupported: restoring would require
+    // persisting potentially huge buffered input and parser progress.
+    //
+    // Keep byte buffering separate from batch conversion and pushdown. A
+    // future seekable input path can share the latter without changing the
+    // behavior behind non-seekable sources such as `decompress_gzip`.
+    if (remaining_ == uint64_t{0} or not input or input->size() == 0) {
+      co_return;
+    }
+    chunks_.push_back(std::move(input));
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (remaining_ == uint64_t{0}) {
+      co_return FinalizeBehavior::done;
+    }
+    auto parquet_chunk = join_chunks(std::move(chunks_));
+    if (parquet_chunk->size() == 0) {
+      co_return FinalizeBehavior::done;
+    }
+    auto input_file = as_arrow_file(std::move(parquet_chunk));
+    auto parquet_reader_properties
+      = ::parquet::ReaderProperties(arrow_memory_pool());
+    parquet_reader_properties.enable_buffered_stream();
+    auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
+    arrow_reader_properties.set_batch_size(defaults::import::table_slice_size);
+    // The input already is an in-memory buffer. Pre-buffering would coalesce
+    // and copy the selected column chunks a second time without any I/O win.
+    arrow_reader_properties.set_pre_buffer(false);
+    std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
+    try {
+      auto input_buffer = ::parquet::ParquetFileReader::Open(
+        std::move(input_file), parquet_reader_properties);
+      auto out_buffer_result = ::parquet::arrow::FileReader::Make(
+        arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
+      if (not out_buffer_result.ok()) {
+        diagnostic::error(
+          "{}", out_buffer_result.status().ToStringWithoutContextLines())
+          .emit(ctx);
+        co_return FinalizeBehavior::done;
+      }
+      out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
+    } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
+      diagnostic::error("invalid or corrupted parquet file: {}", err.what())
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+    auto metadata = out_buffer->parquet_reader()->metadata();
+    auto columns = std::vector<int>{};
+    for (auto i = 0; i < metadata->num_columns(); ++i) {
+      auto const& name = metadata->schema()->GetColumnRoot(i)->name();
+      if (not projection_
+          or std::ranges::find(*projection_, name) != projection_->end()) {
+        columns.push_back(i);
+      }
+    }
+    // Zero-column batches preserve cardinality without decoding unrequested
+    // columns, which may contain unsupported types or corrupt data.
+    auto row_groups = std::vector<int>{};
+    auto available = uint64_t{0};
+    for (auto i = 0; i < metadata->num_row_groups(); ++i) {
+      row_groups.push_back(i);
+      available += metadata->RowGroup(i)->num_rows();
+      if (filter_.empty() and remaining_ and available >= *remaining_) {
+        break;
+      }
+    }
+    auto rb_reader = out_buffer->GetRecordBatchReader(row_groups, columns);
+    if (not rb_reader.ok()) {
+      diagnostic::error("{}", rb_reader.status().ToStringWithoutContextLines())
+        .note("failed create record batches from input data")
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+    auto reader = std::move(*rb_reader);
+    auto maybe_batch = reader->Next();
+    while (true) {
+      if (not maybe_batch.ok()) {
+        diagnostic::error("{}",
+                          maybe_batch.status().ToStringWithoutContextLines())
+          .note("failed read record batch")
+          .emit(ctx);
+        co_return FinalizeBehavior::done;
+      }
+      auto batch = maybe_batch.MoveValueUnsafe();
+      if (not batch) {
+        break;
+      }
+      available -= batch->num_rows();
+      auto next = arrow::Result<std::shared_ptr<arrow::RecordBatch>>{
+        std::shared_ptr<arrow::RecordBatch>{}};
+      if (available == 0
+          or (filter_.empty() and remaining_
+              and *remaining_ <= static_cast<uint64_t>(batch->num_rows()))) {
+        reader.reset();
+        out_buffer.reset();
+      } else {
+        // Arrow retains the last decoded table. One-batch lookahead releases
+        // its aliases so Nova can adopt the current buffers. Defer errors in
+        // the next batch until it is needed; a filter or limit may stop here.
+        next = reader->Next();
+      }
+      auto formatted = format_decimal_arrays(std::move(batch), decimal_format_);
+      if (not formatted.ok()) {
+        diagnostic::error("failed to format parquet decimals")
+          .note("{}", formatted.status().ToStringWithoutContextLines())
+          .emit(ctx);
+        co_return FinalizeBehavior::done;
+      }
+      batch = inject_tenzir_metadata(std::move(*formatted));
+      if (not co_await process_batch(std::move(batch), push, ctx)) {
+        co_return FinalizeBehavior::done;
+      }
+      if (remaining_ == uint64_t{0}) {
+        break;
+      }
+      maybe_batch = std::move(next);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return remaining_ == uint64_t{0} ? OperatorState::done
+                                     : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // Checkpointing this operator would require persisting the buffered parquet
+    // bytes until the footer arrives, which can be arbitrarily large. A future
+    // seekable path will also need an explicit checkpoint/resume contract.
+    diagnostic::error("read_parquet does not support checkpoints yet").throw_();
+  }
+
+private:
+  auto process_batch(std::shared_ptr<arrow::RecordBatch> batch,
+                     Push<nova::Events>& push, OpCtx& ctx) -> Task<bool> {
+    auto events = convert(std::move(batch), ctx.dh());
+    if (not events) {
+      co_return false;
+    }
+    if (events->active_count() != 0) {
+      co_await push(std::move(*events));
+    }
+    co_return true;
+  }
+
+  /// Batch conversion is independent of how the file bytes were obtained.
+  auto convert(std::shared_ptr<arrow::RecordBatch> batch,
+               diagnostic_handler& dh) -> Option<nova::Events> {
+    auto columns = batch->ToStructArray();
+    if (not columns.ok()) {
+      diagnostic::error("failed to read parquet columns")
+        .note("{}", columns.status().ToStringWithoutContextLines())
+        .emit(dh);
+      return {};
+    }
+    // Retain only schema metadata, releasing the batch's aliases before Nova
+    // adopts the decoded buffers. Do not inspect the Arrow columns afterward.
+    auto schema
+      = type::from_arrow(*arrow::schema({}, batch->schema()->metadata()));
+    batch.reset();
+    auto imported = nova::import_arrow_array(std::move(*columns));
+    if (not imported) {
+      diagnostic::error("parquet file contains unsupported types")
+        .note("{}", imported.unwrap_err())
+        .emit(dh);
+      return {};
+    }
+    auto records = imported.unwrap().try_as<nova::Record>();
+    TENZIR_ASSERT(records);
+    auto length = records->length();
+    auto meta = nova::Events::Meta::make_empty(length, schema.name());
+    meta.internal = nova::Array<nova::Bool>{
+      nova::storage::BitMap{length, schema.attribute("internal").has_value()}};
+    return apply_read_pushdown(nova::Events{std::move(*records),
+                                            nova::storage::BitMap{length, true},
+                                            std::move(meta)},
+                               filters_, remaining_, dh);
+  }
+
+  ir::OptimizeFilter filter_;
+  Option<uint64_t> remaining_;
+  decimal_format decimal_format_ = decimal_format::string;
+  std::vector<chunk_ptr> chunks_;
+  Option<std::vector<std::string>> projection_;
+  std::vector<nova::Evaluator> filters_;
 };
+
+// Preserve the pre-Nova reader independently so it can be deleted as a unit.
+namespace legacy {
+
+auto format_decimal_type(std::shared_ptr<arrow::DataType> type,
+                         decimal_format format)
+  -> std::shared_ptr<arrow::DataType> {
+  switch (type->id()) {
+    case arrow::Type::DECIMAL128:
+      return format == decimal_format::string ? arrow::utf8()
+                                              : arrow::float64();
+    case arrow::Type::STRUCT: {
+      auto fields = type->fields();
+      auto changed = false;
+      for (auto& field : fields) {
+        auto field_type = format_decimal_type(field->type(), format);
+        changed |= field_type != field->type();
+        field = field->WithType(std::move(field_type));
+      }
+      return changed ? arrow::struct_(std::move(fields)) : std::move(type);
+    }
+    case arrow::Type::LIST: {
+      auto list_type = std::static_pointer_cast<arrow::ListType>(type);
+      auto value_type = format_decimal_type(list_type->value_type(), format);
+      if (value_type == list_type->value_type()) {
+        return type;
+      }
+      return arrow::list(
+        list_type->value_field()->WithType(std::move(value_type)));
+    }
+    case arrow::Type::MAP: {
+      if (format == decimal_format::float_) {
+        return type;
+      }
+      auto map_type = std::static_pointer_cast<arrow::MapType>(type);
+      auto key_type = format_decimal_type(map_type->key_type(), format);
+      auto item_type = format_decimal_type(map_type->item_type(), format);
+      if (key_type == map_type->key_type()
+          and item_type == map_type->item_type()) {
+        return type;
+      }
+      return std::make_shared<arrow::MapType>(
+        map_type->key_field()->WithType(std::move(key_type)),
+        map_type->item_field()->WithType(std::move(item_type)),
+        map_type->keys_sorted());
+    }
+    default:
+      return type;
+  }
+}
+
+auto format_decimal_arrays(std::shared_ptr<arrow::RecordBatch> batch,
+                           decimal_format format)
+  -> arrow::Result<std::shared_ptr<arrow::RecordBatch>> {
+  auto arrays = arrow::ArrayVector{};
+  auto fields = arrow::FieldVector{};
+  auto changed = false;
+  arrays.reserve(batch->num_columns());
+  fields.reserve(batch->num_columns());
+  for (auto index = 0; index < batch->num_columns(); ++index) {
+    auto array = batch->column(index);
+    auto target_type = format_decimal_type(array->type(), format);
+    if (target_type != array->type()) {
+      ARROW_ASSIGN_OR_RAISE(
+        auto result, arrow::compute::Cast(array, std::move(target_type)));
+      array = result.make_array();
+      changed = true;
+    }
+    arrays.push_back(array);
+    fields.push_back(batch->schema()->field(index)->WithType(array->type()));
+  }
+  if (not changed) {
+    return batch;
+  }
+  auto schema = std::make_shared<arrow::Schema>(std::move(fields),
+                                                batch->schema()->endianness(),
+                                                batch->schema()->metadata());
+  return arrow::RecordBatch::Make(std::move(schema), batch->num_rows(),
+                                  std::move(arrays));
+}
+
+auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto needs_name = true;
+  auto needs_stripping = false;
+  auto metadata = batch->schema()->metadata();
+  auto keys = metadata ? metadata->keys() : std::vector<std::string>{};
+  auto values = metadata ? metadata->values() : std::vector<std::string>{};
+  for (const auto& key : keys) {
+    if (key == "TENZIR:name:0") {
+      needs_name = false;
+      continue;
+    }
+    if (not key.starts_with("TENZIR:")) {
+      needs_stripping = true;
+    }
+  }
+  if (not needs_name and not needs_stripping) {
+    return batch;
+  }
+  if (needs_stripping) {
+    auto kit = keys.begin();
+    auto vit = values.begin();
+    while (kit != keys.end()) {
+      if (not kit->starts_with("TENZIR:")) {
+        vit = values.erase(vit);
+        kit = keys.erase(kit);
+        continue;
+      }
+      ++kit;
+      ++vit;
+    }
+  }
+  if (needs_name) {
+    keys.emplace_back("TENZIR:name:0");
+    values.emplace_back("tenzir.parquet");
+  }
+  TENZIR_ASSERT(keys.size() == values.size());
+  return batch->ReplaceSchemaMetadata(
+    arrow::key_value_metadata(std::move(keys), std::move(values)));
+}
 
 class ReadParquet final : public Operator<chunk_ptr, table_slice> {
 public:
@@ -314,6 +657,8 @@ private:
   Option<std::vector<std::string>> projection_;
 };
 
+} // namespace legacy
+
 class Plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -321,7 +666,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadParquetArgs, ReadParquet>{};
+    auto d = Describer<ReadParquetArgs, legacy::ReadParquet, ReadParquet>{};
     auto decimal_format_arg
       = d.named("decimal_format", &ReadParquetArgs::decimal_format);
     d.validate([decimal_format_arg](DescribeCtx& ctx) -> Empty {

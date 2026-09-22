@@ -15,12 +15,14 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/feather.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/make_byte_reader.hpp>
+#include <tenzir/nova/arrow_import.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -30,7 +32,9 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/io/memory.h>
+#include <arrow/ipc/dictionary.h>
 #include <arrow/ipc/feather.h>
+#include <arrow/ipc/message.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
@@ -40,6 +44,7 @@
 #include <caf/expected.hpp>
 
 #include <chrono>
+#include <deque>
 #include <queue>
 #include <string_view>
 
@@ -781,6 +786,452 @@ struct ReadFeatherArgs {
   OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
 
+class ReadFeather final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadFeather(ReadFeatherArgs args)
+    : args_{std::move(args)},
+      projection_{read_projection(args_.optimization.projection,
+                                  args_.optimization.filter)},
+      remaining_{args_.optimization.limit},
+      done_{remaining_ == uint64_t{0}},
+      listener_{std::make_shared<Listener>()},
+      stream_decoder_{std::in_place, listener_, arrow_ipc_read_options()} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (done_) {
+      co_return;
+    }
+    for (auto const& filter : args_.optimization.filter) {
+      auto evaluator = nova::Evaluator::make(
+        filter, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        done_ = true;
+        co_return;
+      }
+      filters_.push_back(std::move(*evaluator));
+    }
+    co_return;
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (done_ or not input or input->size() == 0) {
+      co_return;
+    }
+    available_ += input->size();
+    chunks_.push_back(std::move(input));
+    if (mode_ == Mode::undecided) {
+      if (available_ < magic.size()) {
+        co_return;
+      }
+      mode_ = starts_with_magic() ? Mode::file : Mode::stream;
+    }
+    if (mode_ == Mode::stream) {
+      co_await parse_available(push, ctx.dh());
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (not done_) {
+      if (mode_ == Mode::file) {
+        co_await parse_file(push, ctx.dh());
+      } else {
+        report_trailing(ctx.dh());
+      }
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // IPC files buffer until the footer; streams retain decoder and dictionary
+    // state between batches. Neither can resume without this state and the
+    // remaining pushed limit, so reject checkpoints until that is supported.
+    diagnostic::error("read_feather does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
+private:
+  enum class Mode {
+    undecided,
+    stream,
+    file,
+  };
+
+  struct Listener final : arrow::ipc::Listener,
+                          arrow::ipc::MessageDecoderListener {
+    auto OnSchemaDecoded(std::shared_ptr<arrow::Schema> input)
+      -> arrow::Status override {
+      schema = std::move(input);
+      return arrow::Status::OK();
+    }
+
+    auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> batch)
+      -> arrow::Status override {
+      batches.push_back(std::move(batch));
+      return arrow::Status::OK();
+    }
+
+    auto OnMessageDecoded(std::unique_ptr<arrow::ipc::Message> message)
+      -> arrow::Status override {
+      // An empty included_fields means "all" to StreamDecoder. For a genuine
+      // zero-column projection, read only record-batch lengths instead. With
+      // an empty schema, ReadRecordBatch never loads any column buffers.
+      if (message->type() == arrow::ipc::MessageType::DICTIONARY_BATCH) {
+        return arrow::Status::OK();
+      }
+      auto memo = arrow::ipc::DictionaryMemo{};
+      ARROW_ASSIGN_OR_RAISE(auto batch,
+                            arrow::ipc::ReadRecordBatch(
+                              *message, arrow::schema({}, schema->metadata()),
+                              &memo, arrow_ipc_read_options()));
+      return OnRecordBatchDecoded(std::move(batch));
+    }
+
+    std::shared_ptr<arrow::Schema> schema;
+    std::deque<std::shared_ptr<arrow::RecordBatch>> batches;
+  };
+
+  struct ReadOptions {
+    arrow::ipc::IpcReadOptions ipc = arrow_ipc_read_options();
+    bool empty_projection = false;
+  };
+
+  static auto is_store_envelope(arrow::Schema const& schema) -> bool {
+    if (schema.num_fields() != 2) {
+      return false;
+    }
+    auto const& import_time = schema.field(0);
+    auto const& event = schema.field(1);
+    auto const& metadata = event->metadata();
+    return import_time->name() == "import_time"
+           and import_time->type()->Equals(time_type::to_arrow_type())
+           and event->name() == "event"
+           and event->type()->id() == arrow::Type::STRUCT and metadata
+           and std::ranges::any_of(metadata->keys(), [](auto const& key) {
+                 return key.starts_with("TENZIR:") or key.starts_with("VAST:");
+               });
+  }
+
+  auto projected_columns(arrow::Schema const& schema) const
+    -> std::vector<int> {
+    TENZIR_ASSERT(projection_);
+    auto columns = std::vector<int>{};
+    for (auto i = 0; i < schema.num_fields(); ++i) {
+      if (std::ranges::find(*projection_, schema.field(i)->name())
+          != projection_->end()) {
+        columns.push_back(i);
+      }
+    }
+    return columns;
+  }
+
+  auto read_options(arrow::Schema const& schema) const -> ReadOptions {
+    auto result = ReadOptions{};
+    // IPC selection is top-level only. Unwrap store envelopes before applying
+    // the event projection, keeping import-time metadata separate throughout.
+    if (projection_ and not is_store_envelope(schema)) {
+      result.ipc.included_fields = projected_columns(schema);
+      result.empty_projection = result.ipc.included_fields.empty();
+    }
+    return result;
+  }
+
+  auto starts_with_magic() const -> bool {
+    auto offset = size_t{0};
+    for (auto const& chunk : chunks_) {
+      auto size = std::min(chunk->size(), magic.size() - offset);
+      if (std::memcmp(chunk->data(), magic.data() + offset, size) != 0) {
+        return false;
+      }
+      offset += size;
+      if (offset == magic.size()) {
+        return true;
+      }
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto take(size_t size) -> chunk_ptr {
+    TENZIR_ASSERT(size > 0);
+    if (available_ < size) {
+      return {};
+    }
+    available_ -= size;
+    if (chunks_.front()->size() == size) {
+      auto result = std::move(chunks_.front());
+      chunks_.pop_front();
+      return result;
+    }
+    if (chunks_.front()->size() > size) {
+      auto result = chunks_.front()->slice(0, size);
+      chunks_.front() = chunks_.front()->slice(size);
+      return result;
+    }
+    // Only concatenate fragmented messages once they are complete. Contiguous
+    // messages and whole IPC files retain their original input allocation.
+    auto parts = std::vector<chunk_ptr>{};
+    while (size > 0) {
+      auto count = std::min(size, chunks_.front()->size());
+      if (count == chunks_.front()->size()) {
+        parts.push_back(std::move(chunks_.front()));
+        chunks_.pop_front();
+      } else {
+        parts.push_back(chunks_.front()->slice(0, count));
+        chunks_.front() = chunks_.front()->slice(count);
+      }
+      size -= count;
+    }
+    return join_chunks(std::move(parts));
+  }
+
+  auto next_required_size() const -> size_t {
+    auto size = empty_decoder_ ? (*empty_decoder_)->next_required_size()
+                               : stream_decoder_->next_required_size();
+    return detail::narrow<size_t>(size);
+  }
+
+  auto report_error(std::string_view message, diagnostic_handler& dh) -> void {
+    diagnostic::error("failed to decode Feather input")
+      .primary(args_.operator_location)
+      .note("{}", message)
+      .emit(dh);
+    done_ = true;
+  }
+
+  auto report_trailing(diagnostic_handler& dh) const -> void {
+    auto size = truncated_bytes_ + available_;
+    if (size != 0) {
+      diagnostic::warning("truncated Feather input")
+        .primary(args_.operator_location)
+        .note("discarded {} trailing bytes", size)
+        .severity(decoded_once_ ? severity::warning : severity::error)
+        .emit(dh);
+    }
+  }
+
+  auto parse_available(Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    while (not done_) {
+      auto required = next_required_size();
+      if (required == 0) {
+        // Every stream has its own schema and physical projection. Do not let
+        // decoder state or column indices leak into a concatenated stream.
+        empty_decoder_ = None{};
+        listener_->schema.reset();
+        stream_decoder_ = Box<arrow::ipc::StreamDecoder>{
+          std::in_place, listener_, arrow_ipc_read_options()};
+        schema_chunks_.clear();
+        truncated_bytes_ = 0;
+        continue;
+      }
+      auto payload = take(required);
+      if (not payload) {
+        co_return;
+      }
+      truncated_bytes_ += payload->size();
+      if (projection_ and not listener_->schema) {
+        schema_chunks_.push_back(payload);
+      }
+      auto status = empty_decoder_
+                      ? (*empty_decoder_)->Consume(as_arrow_buffer(payload))
+                      : stream_decoder_->Consume(as_arrow_buffer(payload));
+      if (not status.ok()) {
+        if (decoded_once_ and not listener_->schema) {
+          report_trailing(dh);
+          done_ = true;
+        } else {
+          report_error(status.ToStringWithoutContextLines(), dh);
+        }
+        co_return;
+      }
+      if (listener_->schema and not schema_chunks_.empty()) {
+        auto options = read_options(*listener_->schema);
+        if (options.empty_projection) {
+          empty_decoder_.emplace(std::in_place, listener_);
+        } else {
+          // Replay only the small schema prefix, never batch data, to configure
+          // the physical projection before decoding any compressed buffers.
+          stream_decoder_ = Box<arrow::ipc::StreamDecoder>{
+            std::in_place, listener_, std::move(options.ipc)};
+          for (auto const& chunk : schema_chunks_) {
+            auto replay = stream_decoder_->Consume(as_arrow_buffer(chunk));
+            if (not replay.ok()) {
+              report_error(replay.ToStringWithoutContextLines(), dh);
+              co_return;
+            }
+          }
+        }
+        schema_chunks_.clear();
+      }
+      if (next_required_size() == 0) {
+        truncated_bytes_ = 0;
+      }
+      while (not listener_->batches.empty()) {
+        auto batch = std::move(listener_->batches.front());
+        listener_->batches.pop_front();
+        decoded_once_ = true;
+        truncated_bytes_ = 0;
+        co_await emit_batch(std::move(batch), push, dh);
+        if (done_) {
+          co_return;
+        }
+      }
+    }
+  }
+
+  auto make_events(std::shared_ptr<arrow::RecordBatch> batch)
+    -> Result<nova::Events, std::string> {
+    auto status = batch->Validate();
+    if (not status.ok()) {
+      return Err{status.ToStringWithoutContextLines()};
+    }
+    auto import_time = time{};
+    auto metadata = batch->schema()->metadata();
+    if (is_store_envelope(*batch->schema())) {
+      auto const& times = as<arrow::TimestampArray>(*batch->column(0));
+      // Preserve the legacy store contract: the last row supplies the import
+      // time for the entire batch; a null last row supplies the epoch.
+      auto last = times.length() - 1;
+      if (last >= 0 and not times.IsNull(last)) {
+        import_time = time{duration{times.Value(last)}};
+      }
+      metadata = batch->schema()->field(1)->metadata();
+      auto const& event = as<arrow::StructArray>(*batch->column(1));
+      auto flattened = event.Flatten(arrow_memory_pool());
+      if (not flattened.ok()) {
+        return Err{flattened.status().ToStringWithoutContextLines()};
+      }
+      batch = arrow::RecordBatch::Make(
+        arrow::schema(event.type()->fields(), metadata), event.length(),
+        flattened.MoveValueUnsafe());
+      if (projection_) {
+        auto selected
+          = batch->SelectColumns(projected_columns(*batch->schema()));
+        if (not selected.ok()) {
+          return Err{selected.status().ToStringWithoutContextLines()};
+        }
+        batch = selected.MoveValueUnsafe();
+      }
+    }
+    // Read schema attributes without asking legacy type conversion to inspect
+    // the data columns. Nova supports physical types that legacy slices do not.
+    auto schema = type::from_arrow(*arrow::schema({}, metadata));
+    auto array = batch->ToStructArray();
+    if (not array.ok()) {
+      return Err{array.status().ToStringWithoutContextLines()};
+    }
+    // Release the batch before handing the array over so eligible decompressed
+    // buffers can move into Nova. Borrowed input bytes still take the safe copy
+    // path, as do dictionaries retained by the stream decoder.
+    batch.reset();
+    TRY(auto imported, nova::import_arrow_array(array.MoveValueUnsafe()));
+    auto records = std::move(imported).try_as<nova::Record>();
+    TENZIR_ASSERT(records);
+    auto length = records->length();
+    auto meta = nova::Events::Meta::make_empty(
+      length, schema.name().empty() ? "undefined" : schema.name());
+    meta.import_time = nova::Array<nova::Time>{
+      nova::storage::ConstantStorage<nova::Time>{length, import_time}};
+    meta.internal = nova::Array<nova::Bool>{
+      nova::storage::BitMap{length, schema.attribute("internal").has_value()}};
+    return nova::Events{std::move(*records),
+                        nova::storage::BitMap{length, true}, std::move(meta)};
+  }
+
+  auto emit_batch(std::shared_ptr<arrow::RecordBatch> batch,
+                  Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    auto result = make_events(std::move(batch));
+    if (not result) {
+      report_error(result.unwrap_err(), dh);
+      co_return;
+    }
+    auto events = apply_read_pushdown(std::move(result).unwrap(), filters_,
+                                      remaining_, dh);
+    if (events.active_count() != 0) {
+      co_await push(std::move(events));
+    }
+    done_ = remaining_ == uint64_t{0};
+  }
+
+  auto parse_file(Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    auto file = as_arrow_file(take(available_));
+    auto opened
+      = arrow::ipc::RecordBatchFileReader::Open(file, arrow_ipc_read_options());
+    if (not opened.ok()) {
+      report_error(opened.status().ToStringWithoutContextLines(), dh);
+      co_return;
+    }
+    auto reader = opened.MoveValueUnsafe();
+    auto options = read_options(*reader->schema());
+    if (options.empty_projection) {
+      // CountRows reads only IPC metadata, including for compressed or
+      // unsupported unrequested columns. Emit bounded, zero-column batches.
+      auto count = reader->CountRows();
+      if (not count.ok()) {
+        report_error(count.status().ToStringWithoutContextLines(), dh);
+        co_return;
+      }
+      if (*count < 0) {
+        report_error("negative Feather row count", dh);
+        co_return;
+      }
+      auto schema = arrow::schema({}, reader->schema()->metadata());
+      for (auto left = *count; left > 0 and not done_;) {
+        auto rows = std::min<int64_t>(left, defaults::import::table_slice_size);
+        left -= rows;
+        co_await emit_batch(arrow::RecordBatch::Make(schema, rows,
+                                                     arrow::ArrayVector{}),
+                            push, dh);
+      }
+    } else {
+      if (not options.ipc.included_fields.empty()) {
+        opened = arrow::ipc::RecordBatchFileReader::Open(file, options.ipc);
+        if (not opened.ok()) {
+          report_error(opened.status().ToStringWithoutContextLines(), dh);
+          co_return;
+        }
+        reader = opened.MoveValueUnsafe();
+      }
+      for (auto i = 0; i < reader->num_record_batches() and not done_; ++i) {
+        auto batch = reader->ReadRecordBatch(i);
+        if (not batch.ok()) {
+          report_error(batch.status().ToStringWithoutContextLines(), dh);
+          co_return;
+        }
+        co_await emit_batch(batch.MoveValueUnsafe(), push, dh);
+      }
+    }
+    done_ = true;
+  }
+
+  static constexpr auto magic = std::string_view{"ARROW1"};
+  ReadFeatherArgs args_;
+  Option<std::vector<std::string>> projection_;
+  Option<uint64_t> remaining_;
+  bool done_ = false;
+  Mode mode_ = Mode::undecided;
+  bool decoded_once_ = false;
+  size_t truncated_bytes_ = 0;
+  std::deque<chunk_ptr> chunks_;
+  size_t available_ = 0;
+  std::vector<chunk_ptr> schema_chunks_;
+  std::shared_ptr<Listener> listener_;
+  Box<arrow::ipc::StreamDecoder> stream_decoder_;
+  Option<Box<arrow::ipc::MessageDecoder>> empty_decoder_;
+  std::vector<nova::Evaluator> filters_;
+};
+
+namespace legacy {
+
 enum class ReadFeatherMode {
   undecided,
   stream,
@@ -1045,6 +1496,8 @@ private:
   std::shared_ptr<callback_listener> listener_;
   Box<arrow::ipc::StreamDecoder> stream_decoder_;
 };
+
+} // namespace legacy
 
 struct WriteFeatherArgs {
   location operator_location = location::unknown;
@@ -1311,7 +1764,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadFeatherArgs, ReadFeather>{};
+    auto d = Describer<ReadFeatherArgs, legacy::ReadFeather, ReadFeather>{};
     d.operator_location(&ReadFeatherArgs::operator_location);
     d.optimization(&ReadFeatherArgs::optimization);
     return d.without_optimize();

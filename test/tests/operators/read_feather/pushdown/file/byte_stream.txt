@@ -1,0 +1,1 @@
+Nova Feather decoding preserves columns and metadata across byte chunking

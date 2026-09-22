@@ -1,0 +1,7 @@
+error: failed to decode Feather input
+ --> tests/operators/read_feather/pushdown/stream/null_subnet_length.tql:7:3
+  |
+7 |   read_feather
+  |   ^^^^^^^^^^^^
+  |
+  = note: non-null subnet contains a null address or prefix length

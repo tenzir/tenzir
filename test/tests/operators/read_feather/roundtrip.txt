@@ -1,0 +1,1 @@
+Nova Feather reads legacy output, including compression and extensions

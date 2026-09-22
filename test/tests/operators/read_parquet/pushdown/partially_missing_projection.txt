@@ -1,10 +1,9 @@
-warning: field `absent` not found
+warning: event does not have field
  --> tests/operators/read_parquet/pushdown/partially_missing_projection.tql:5:12
   |
 5 | select id, absent
   |            ~~~~~~
   |
-  = hint: append `?` to suppress this warning
 {
   id: 0,
   absent: null,

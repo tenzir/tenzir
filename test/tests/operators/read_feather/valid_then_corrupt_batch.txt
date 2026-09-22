@@ -5,4 +5,3 @@ error: failed to decode Feather input
    |   ^^^^^^^^^^^^
    |
    = note: IOError: Invalid flatbuffers message.
-   = note: failed to decode the byte stream into a record batch

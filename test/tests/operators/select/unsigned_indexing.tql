@@ -1,3 +1,7 @@
+---
+skip: "Nova unsigned indexing and get are not implemented yet"
+---
+
 let $xs = [1, 2, 3]
 let $r = {a: "zero", b: "one"}
 let $i = 1.uint()

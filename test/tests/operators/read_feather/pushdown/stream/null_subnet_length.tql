@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from_file f"{env("READ_PUSHDOWN_ROOT")}/subnet-null-length" {
+  split_bytes 1
+  read_feather
+}

@@ -1,85 +1,68 @@
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 512,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 512,
 }
 {
   events: 270,
-  schema_id: "154020317f7cf012",
-  schema: "zeek.conn",
+  selected: 270,
 }

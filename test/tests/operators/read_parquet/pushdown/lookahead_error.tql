@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Report a lookahead error when the filter still needs the corrupt batch.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-lookahead" {
+  read_parquet
+}
+where id >= 8192
+select id
+head 1

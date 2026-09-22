@@ -4,4 +4,4 @@ error: failed to decode Feather input
 7 |   read_feather
   |   ^^^^^^^^^^^^
   |
-  = note: !! format_error: failed to read record batch: IOError: ZSTD decompression failed: Unknown frame descriptor
+  = note: IOError: ZSTD decompression failed: Unknown frame descriptor

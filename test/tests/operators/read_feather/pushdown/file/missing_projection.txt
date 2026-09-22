@@ -1,10 +1,9 @@
-warning: field `absent` not found
+warning: event does not have field
  --> tests/operators/read_feather/pushdown/file/missing_projection.tql:5:8
   |
 5 | select absent
   |        ~~~~~~
   |
-  = hint: append `?` to suppress this warning
 {
   absent: null,
 }

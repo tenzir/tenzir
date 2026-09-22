@@ -5,9 +5,12 @@
 #pragma once
 
 #include "tenzir/ir.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/table_slice.hpp"
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -27,5 +30,12 @@ auto read_projection(Option<ir::OptimizeProjection> projection,
 auto apply_read_pushdown(table_slice slice, ir::OptimizeFilter const& filter,
                          Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> table_slice;
+
+/// Apply prepared predicates and the remaining limit by narrowing the active
+/// mask. Columns and metadata stay intact; only surviving rows count.
+auto apply_read_pushdown(nova::Events events,
+                         std::span<nova::Evaluator> filters,
+                         Option<uint64_t>& remaining, diagnostic_handler& dh)
+  -> nova::Events;
 
 } // namespace tenzir

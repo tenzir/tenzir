@@ -72,4 +72,37 @@ auto apply_read_pushdown(table_slice slice, ir::OptimizeFilter const& filter,
   return slice;
 }
 
+auto apply_read_pushdown(nova::Events events,
+                         std::span<nova::Evaluator> filters,
+                         Option<uint64_t>& remaining, diagnostic_handler& dh)
+  -> nova::Events {
+  for (auto& filter : filters) {
+    if (not events.mask.any()) {
+      break;
+    }
+    auto result = filter.eval(events, nova::EvalCtx{dh});
+    auto predicate = result.get_alternative<nova::Bool>();
+    auto present = predicate ? events.mask & predicate->present
+                             : nova::storage::BitMap{events.length(), false};
+    if (events.mask.and_not(present).any()) {
+      diagnostic::warning("expected `bool`").primary(filter.location()).emit(dh);
+    }
+    events.mask = predicate
+                    ? std::move(present)
+                        & as<nova::storage::BitMap>(predicate->data.storage())
+                    : nova::storage::BitMap{events.length(), false};
+  }
+  if (remaining) {
+    auto count = detail::narrow<uint64_t>(events.active_count());
+    if (count > *remaining) {
+      events.mask
+        = std::move(events.mask)
+            .keep_first(detail::narrow<nova::storage::Index>(*remaining));
+      count = *remaining;
+    }
+    *remaining -= count;
+  }
+  return events;
+}
+
 } // namespace tenzir

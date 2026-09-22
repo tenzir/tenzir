@@ -423,7 +423,10 @@ public:
         return;
       }
       reserve_at_least(size() + static_cast<Index>(count));
-      std::uninitialized_move(begin, end, owner_.end());
+      // Unlike the legacy algorithm, ranges::iter_move also handles iterators
+      // that return prvalues, such as transform_view's, without dangling.
+      std::ranges::uninitialized_move(begin, end, owner_.end(),
+                                      owner_.end() + count);
       owner_.control_->element_count += count;
     }
 

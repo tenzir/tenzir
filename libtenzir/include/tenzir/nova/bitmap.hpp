@@ -54,6 +54,10 @@ public:
   /// Returns `*this & ~other` without materializing the inverted `other`.
   inline auto and_not(const BitMap& other) const& -> BitMap;
   inline auto and_not(const BitMap& other) && -> BitMap;
+  /// Keeps at most `count` set bits, in index order, without changing length.
+  /// Scans whole words and reuses exclusively owned rvalue storage.
+  [[nodiscard]] inline auto keep_first(Index count) const& -> BitMap;
+  [[nodiscard]] inline auto keep_first(Index count) && -> BitMap;
   inline auto any() const -> bool;
   inline auto true_count() const -> Index;
   inline auto get(Index i) const -> bool;
@@ -359,6 +363,55 @@ inline auto BitMap::and_not(const BitMap& other) && -> BitMap {
   return combine(std::move(*this), other, [](Word lhs, Word rhs) -> Word {
     return lhs & ~rhs;
   });
+}
+
+inline auto BitMap::keep_first(Index count) const& -> BitMap {
+  return BitMap{*this}.keep_first(count);
+}
+
+inline auto BitMap::keep_first(Index count) && -> BitMap {
+  TENZIR_ASSERT_LEQ(0, count);
+  if (count >= true_count_) {
+    return std::move(*this);
+  }
+  if (count == 0) {
+    return BitMap{length_, false};
+  }
+  if (not has_storage()) {
+    auto builder = Builder{};
+    builder.append_n(true, count);
+    builder.append_n(false, length_ - count);
+    return builder.finish();
+  }
+  data_ = std::move(data_).as_unique();
+  auto* word = data_.begin();
+  auto left = count;
+  for (; left > 0; ++word) {
+    auto const set = std::popcount(*word);
+    if (set <= left) {
+      left -= set;
+      continue;
+    }
+    // Locate the last retained bit by bisecting just the boundary word.
+    auto bits = *word;
+    auto boundary = Index{0};
+    for (auto width = word_bits / 2; width > 0; width /= 2) {
+      auto const lower = bits & ((Word{1} << width) - 1);
+      auto const below = std::popcount(lower);
+      if (left > below) {
+        left -= below;
+        bits >>= width;
+        boundary += width;
+      } else {
+        bits = lower;
+      }
+    }
+    *word &= trailing_mask(boundary + 1);
+    left = 0;
+  }
+  std::fill(word, data_.end(), Word{0});
+  true_count_ = count;
+  return std::move(*this);
 }
 
 inline auto BitMap::any() const -> bool {

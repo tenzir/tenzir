@@ -1,6 +1,6 @@
-// An empty projection must preserve row counts across batches.
-from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+// Empty projections preserve row counts without importing unsupported columns.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
   read_parquet
 }
+select
 head 4
-summarize n=count()
