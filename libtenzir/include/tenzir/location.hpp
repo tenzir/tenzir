@@ -243,9 +243,10 @@ auto trace_panic_impl(TraceFn&& trace_fn, Fun&& fun) -> decltype(auto) {
     return std::invoke(std::forward<decltype(fun)>(fun));
   } catch (panic_exception& panic) {
     auto trace = into_location{std::invoke(std::forward<TraceFn>(trace_fn))};
-    if (trace != location::unknown
-        and panic.trace.begin == location::unknown.begin
-        and panic.trace.end == location::unknown.end) {
+    const auto stored
+      = location{panic.trace.begin, panic.trace.end, panic.trace.source_index,
+                 panic.trace.callsite_index};
+    if (trace != location::unknown and stored == location::unknown) {
       panic.trace.begin = trace.begin;
       panic.trace.end = trace.end;
       panic.trace.source_index = trace.source_index;
