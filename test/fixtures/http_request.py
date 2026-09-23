@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import shutil
 import ssl
@@ -207,57 +208,25 @@ def http_request() -> FixtureHandle:
                     target_url, data=payload, method=spec.method, headers=headers
                 )
                 try:
-                    with urlopen(
-                        req, timeout=opts.request_timeout, context=ssl_context
-                    ) as response:
-                        body = response.read().decode("utf-8", errors="replace")
-                        if (
-                            spec.expected_status != None
-                            and response.status != spec.expected_status
-                        ):
-                            errors.append(
-                                f"request {req_idx}: expected HTTP status "
-                                f"{spec.expected_status}, got {response.status}"
-                            )
-                        if (
-                            spec.expected_body is not None
-                            and body != spec.expected_body
-                        ):
-                            errors.append(
-                                f"request {req_idx}: expected HTTP body "
-                                f"{spec.expected_body!r}, got {body!r}"
-                            )
-                        responses[req_idx] = (response.status, body)
-                        try:
-                            _capture_response(spec, body)
-                        except (json.JSONDecodeError, ValueError) as exc:
-                            errors.append(f"request {req_idx}: {exc}")
-                        sent_count[0] += 1
-                        sent = True
-                        break
-                except HTTPError as exc:
-                    body = exc.read().decode("utf-8", errors="replace")
-                    if (
-                        spec.expected_status != None
-                        and exc.code != spec.expected_status
-                    ):
-                        errors.append(
-                            f"request {req_idx}: expected HTTP status "
-                            f"{spec.expected_status}, got {exc.code}"
-                        )
-                    if spec.expected_body is not None and body != spec.expected_body:
-                        errors.append(
-                            f"request {req_idx}: expected HTTP body "
-                            f"{spec.expected_body!r}, got {body!r}"
-                        )
-                    responses[req_idx] = (exc.code, body)
                     try:
-                        _capture_response(spec, body)
-                    except (json.JSONDecodeError, ValueError) as capture_error:
-                        errors.append(f"request {req_idx}: {capture_error}")
-                    sent_count[0] += 1
-                    sent = True
-                    break
+                        with urlopen(
+                            req, timeout=opts.request_timeout, context=ssl_context
+                        ) as response:
+                            status = response.status
+                            raw_body = response.read()
+                    except HTTPError as exc:
+                        status = exc.code
+                        raw_body = exc.read()
+                except http.client.IncompleteRead:
+                    # A server that stops between response headers and body,
+                    # e.g., when a downstream `head` hard-stops the pipeline.
+                    # This applies to success and error responses alike. Drops
+                    # before the status line surface as `OSError` below. Other
+                    # protocol errors propagate and fail the fixture.
+                    if spec.stop_on_connection_drop:
+                        stopped_early[0] = True
+                        return
+                    raise
                 except (URLError, OSError) as exc:
                     exc_str = str(exc)
                     if "connection refused" in exc_str.lower():
@@ -266,6 +235,26 @@ def http_request() -> FixtureHandle:
                         stopped_early[0] = True
                         return
                     stop_event.wait(opts.retry_delay)
+                    continue
+                body = raw_body.decode("utf-8", errors="replace")
+                if spec.expected_status != None and status != spec.expected_status:
+                    errors.append(
+                        f"request {req_idx}: expected HTTP status "
+                        f"{spec.expected_status}, got {status}"
+                    )
+                if spec.expected_body is not None and body != spec.expected_body:
+                    errors.append(
+                        f"request {req_idx}: expected HTTP body "
+                        f"{spec.expected_body!r}, got {body!r}"
+                    )
+                responses[req_idx] = (status, body)
+                try:
+                    _capture_response(spec, body)
+                except (json.JSONDecodeError, ValueError) as exc:
+                    errors.append(f"request {req_idx}: {exc}")
+                sent_count[0] += 1
+                sent = True
+                break
             if not sent:
                 attempts = max(opts.max_attempts_per_request, 1)
                 if connection_refused_error is not None:
@@ -278,7 +267,13 @@ def http_request() -> FixtureHandle:
             if opts.inter_request_delay > 0:
                 stop_event.wait(opts.inter_request_delay)
 
-    worker = threading.Thread(target=_worker, daemon=True)
+    def _run_worker() -> None:
+        try:
+            _worker()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"worker failed: {type(exc).__name__}: {exc}")
+
+    worker = threading.Thread(target=_run_worker, daemon=True)
     worker.start()
 
     def _assert_test(

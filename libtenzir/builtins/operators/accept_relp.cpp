@@ -571,8 +571,13 @@ public:
       auto token = folly::cancellation_token_merge(
         co_await folly::coro::co_current_cancellation_token,
         cancel_->getToken());
+      // The listener and all accepted sockets belong to `evb_`, and folly's
+      // socket types are not thread-safe. Run the accept loop, and thereby
+      // all connection tasks it spawns, on that event base so that every
+      // resumption, e.g., after cancellation or a timer, touches the sockets
+      // only from their owning thread.
       co_await folly::coro::co_withCancellation(
-        token, folly::coro::co_withExecutor(io_executor_, accept_loop(ctx)));
+        token, folly::coro::co_withExecutor(evb_, accept_loop(ctx)));
     });
   }
 
@@ -692,6 +697,7 @@ private:
 
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
+    TENZIR_ASSERT(evb_->isInEventBaseThread());
     co_await async_scope([&](AsyncScope& scope) -> Task<void> {
       while (true) {
         auto slot = co_await connection_slots_.acquire();
