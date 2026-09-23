@@ -32,6 +32,11 @@ struct Events {
                                                   = "tenzir.unknown") -> Meta;
   };
 
+  /// An empty batch. Exists only because CAF's type registry
+  /// default-constructs every registered type; prefer the constructor below.
+  Events();
+  Events(Array<Record> data, storage::BitMap mask, Meta meta);
+
   Array<Record> data;
   storage::BitMap mask;
   Meta meta;

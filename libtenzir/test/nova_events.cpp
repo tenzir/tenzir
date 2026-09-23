@@ -6,9 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/test/test.hpp"
+
+#include <caf/type_id.hpp>
 
 using namespace tenzir::nova;
 
@@ -40,4 +44,16 @@ TEST("subslice events preserves physical rows and masks") {
   CHECK(result.mask.get(1));
   CHECK_EQUAL(*result.meta.name.get(0), "name-1");
   CHECK_EQUAL(*result.meta.name.get(1), "name-2");
+}
+
+TEST("default-constructed events are empty") {
+  const auto events = Events{};
+  CHECK_EQUAL(events.length(), 0);
+  CHECK_EQUAL(events.active_count(), 0);
+}
+
+TEST("events have a CAF type id") {
+  // Registration is what lets `nova::Events` appear in actor interfaces. It
+  // carries no inspector yet, so such messages stay within one process.
+  CHECK_NOT_EQUAL(caf::type_id_v<tenzir::nova::Events>, caf::invalid_type_id);
 }

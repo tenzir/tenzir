@@ -575,6 +575,11 @@ public:
   }
 
   static auto make_value(Index count, const T& value) -> SharedOwner {
+    if (count == 0) {
+      // No elements need no allocation. The null owner reports a length of
+      // zero, which is how `BitMap` already represents a storage-free array.
+      return SharedOwner{};
+    }
     auto [control_ptr, data_ptr, actual_capacity]
       = _::allocate<T, AllocFn>(count);
     for (Index i = 0; i < count; ++i) {
