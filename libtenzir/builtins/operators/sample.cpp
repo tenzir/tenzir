@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/sample.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -14,6 +16,8 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
+
+#include <limits>
 
 namespace tenzir::plugins::sample_ {
 
@@ -43,6 +47,7 @@ struct operator_args {
 };
 
 struct SampleArgs {
+  location keyword;
   Option<std::string> mode_str;
   duration period = default_period;
   Option<uint64_t> min_events;
@@ -50,7 +55,8 @@ struct SampleArgs {
   Option<uint64_t> max_samples;
 };
 
-class Sample final : public Operator<table_slice, table_slice> {
+template <class Events>
+class Sample final : public Operator<Events, Events> {
 public:
   explicit Sample(SampleArgs args)
     : args_{std::move(args)}, last_{std::chrono::steady_clock::now()} {
@@ -61,7 +67,7 @@ public:
     }
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(Events input, Push<Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     const auto min_events = args_.min_events.unwrap_or(default_min_events);
@@ -77,18 +83,37 @@ public:
       last_ = now - (now - last_) % args_.period;
       offset_ = 0;
       count_ = 0;
+      sampled_ = 0;
     }
-    if (args_.max_samples and *args_.max_samples <= count_) {
-      co_return;
+    if constexpr (std::same_as<Events, table_slice>) {
+      if (args_.max_samples and *args_.max_samples <= count_) {
+        co_return;
+      }
+      count_ += input.rows();
+      auto batch = to_record_batch(input);
+      const auto rows = batch->num_rows();
+      auto stride_index = make_stride_index(offset_, rows, stride_);
+      offset_ += rows;
+      const auto datum = check(arrow::compute::Take(batch, stride_index));
+      TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
+      co_await push(table_slice{datum.record_batch(), input.schema()});
+    } else {
+      auto const rows = input.active_count();
+      count_ += detail::narrow<uint64_t>(rows);
+      auto const remaining = args_.max_samples
+                               ? *args_.max_samples - sampled_
+                               : std::numeric_limits<uint64_t>::max();
+      input.mask = nova::sample_mask(input.mask, offset_, stride_, remaining);
+      offset_ += rows;
+      sampled_ += detail::narrow<uint64_t>(input.active_count());
+      if (input.mask.any()) {
+        co_await push(std::move(input));
+      }
     }
-    count_ += input.rows();
-    auto batch = to_record_batch(input);
-    const auto rows = batch->num_rows();
-    auto stride_index = make_stride_index(offset_, rows, stride_);
-    offset_ += rows;
-    const auto datum = check(arrow::compute::Take(batch, stride_index));
-    TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
-    co_await push(table_slice{datum.record_batch(), input.schema()});
+  }
+
+  auto snapshot(Serde&) -> void override {
+    TENZIR_TODO();
   }
 
 private:
@@ -122,6 +147,7 @@ private:
 
   std::chrono::steady_clock::time_point last_;
   uint64_t count_ = 0;
+  uint64_t sampled_ = 0;
   int64_t offset_ = 0;
   int64_t stride_ = 1;
 };
@@ -133,7 +159,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SampleArgs, Sample>{};
+    auto d = Describer<SampleArgs, Sample<table_slice>, Sample<nova::Events>>{};
+    d.operator_location(&SampleArgs::keyword);
     auto period_arg = d.optional_positional("period", &SampleArgs::period);
     auto mode_arg = d.named("mode", &SampleArgs::mode_str);
     d.named("min_events", &SampleArgs::min_events);

@@ -1,0 +1,4 @@
+load_stdin
+read_json
+where x != 0
+taste 2

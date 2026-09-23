@@ -1,0 +1,23 @@
+{
+  id: "zero",
+  key: 0,
+}
+{
+  id: "uint",
+  key: 1,
+}
+{
+  id: "int",
+  key: 1,
+}
+{
+  id: "float",
+  key: 1.0,
+}
+{
+  id: "string",
+  key: "a",
+}
+{
+  id: "null",
+}

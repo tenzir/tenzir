@@ -1,0 +1,5 @@
+{"keep":true,"x":1}
+{"keep":false,"ignored":"a"}
+{"keep":true,"y":"b"}
+{"keep":true,"nested":{"z":3}}
+{"keep":false,"ignored":4}

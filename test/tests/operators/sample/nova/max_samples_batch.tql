@@ -1,0 +1,3 @@
+load_stdin
+read_json
+sample 1h, max_samples=3

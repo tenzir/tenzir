@@ -1,0 +1,4 @@
+load_stdin
+read_json
+where keep
+reverse

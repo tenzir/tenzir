@@ -1,0 +1,6 @@
+// `where` leaves a sparse mask in the JSON batch. The initial stride of one
+// keeps every active row without restoring the filtered row.
+load_stdin
+read_json
+where x != 2
+sample 1h

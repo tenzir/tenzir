@@ -7,12 +7,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/coro/Sleep.h>
+
+#include <concepts>
 
 namespace tenzir::plugins::assert_throughput {
 
@@ -43,13 +46,13 @@ auto emit_failure(AssertThroughputArgs const& args, uint64_t count,
     .emit(dh);
 }
 
-class AssertThroughput final : public Operator<table_slice, table_slice> {
+template <class Events>
+class AssertThroughput final : public Operator<Events, Events> {
 public:
   AssertThroughput(AssertThroughputArgs args) : args_{args} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await Operator<table_slice, table_slice>::start(ctx);
     // Spawn a timer task with absolute scheduling to avoid cumulative drift.
     ctx.spawn_task([args = args_, events = num_events_, failures = num_failed_,
                     &dh = ctx.dh()] -> Task<void> {
@@ -71,16 +74,20 @@ public:
         emit_failure(args, count, max_exceeded, *failures, dh);
       }
     });
+    co_return;
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx&)
+  auto process(Events input, Push<Events>& push, OpCtx&)
     -> Task<void> override {
-    num_events_->fetch_add(input.rows());
+    if constexpr (std::same_as<Events, nova::Events>) {
+      num_events_->fetch_add(static_cast<uint64_t>(input.active_count()));
+    } else {
+      num_events_->fetch_add(input.rows());
+    }
     co_await push(std::move(input));
   }
 
-  auto finalize(Push<table_slice>&, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
+  auto finalize(Push<Events>&, OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto count = num_events_->exchange(0);
     if (args_.max_events and count > args_.max_events->inner) {
       emit_failure(args_, count, true, *num_failed_, ctx.dh());
@@ -103,7 +110,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AssertThroughputArgs, AssertThroughput>{};
+    auto d = Describer<AssertThroughputArgs, AssertThroughput<table_slice>,
+                       AssertThroughput<nova::Events>>{};
     auto min_events
       = d.positional("min_events", &AssertThroughputArgs::min_events);
     auto max_events = d.named("max_events", &AssertThroughputArgs::max_events);

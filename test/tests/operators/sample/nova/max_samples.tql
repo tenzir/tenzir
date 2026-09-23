@@ -1,0 +1,3 @@
+// The cap suppresses later batches after the initial stride-one samples.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+sample 1h, max_samples=3
