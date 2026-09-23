@@ -1172,122 +1172,19 @@ auto trim_interval() noexcept -> tenzir::duration;
 /// non-specific one was set. Returns the default otherwise.
 auto selected_backend(const char* env) noexcept -> backend;
 
-#  ifdef TENZIR_ALLOCATOR_HAS_JEMALLOC
-#    define TENZIR_ALLOCATOR_JEMALLOC_INSTANCE(ENV_SUFFIX)                     \
-      static auto jemalloc_                                                    \
-        = detail::basic_allocator<jemalloc::traits, system::traits> {          \
-        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-          enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)           \
-            ? &actor_stats_.value                                              \
-            : nullptr,                                                         \
-          ENV_SUFFIX                                                           \
-      }
-#    define TENZIR_ALLOCATOR_JEMALLOC_CASE()                                   \
-      case backend::jemalloc:                                                  \
-        return static_cast<polymorphic_allocator&>(jemalloc_)
-#  else
-#    define TENZIR_ALLOCATOR_JEMALLOC_INSTANCE() (void)0
-#    define TENZIR_ALLOCATOR_JEMALLOC_CASE()                                   \
-      case backend::jemalloc:                                                  \
-        __builtin_unreachable()
-#  endif
-
-#  ifdef TENZIR_ALLOCATOR_HAS_MIMALLOC
-#    define TENZIR_ALLOCATOR_MIMALLOC_INSTANCE(ENV_SUFFIX)                     \
-      static auto mimalloc_                                                    \
-        = detail::basic_allocator<mimalloc::traits, system::traits> {          \
-        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-          enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)           \
-            ? &actor_stats_.value                                              \
-            : nullptr,                                                         \
-          ENV_SUFFIX                                                           \
-      }
-#    define TENZIR_ALLOCATOR_MIMALLOC_CASE()                                   \
-      case backend::mimalloc:                                                  \
-        return static_cast<polymorphic_allocator&>(mimalloc_)
-#  else
-#    define TENZIR_ALLOCATOR_MIMALLOC_INSTANCE() (void)0
-#    define TENZIR_ALLOCATOR_MIMALLOC_CASE()                                   \
-      case backend::mimalloc:                                                  \
-        __builtin_unreachable()
-#  endif
-
-#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
-    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
-      -> polymorphic_allocator& {                                              \
-      constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_                                                 \
-        = detail::actor_stats_storage<system::traits>{};                       \
-      static auto system_ = system::allocator{                                 \
-        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_.value                                                \
-          : nullptr,                                                           \
-        ENV_SUFFIX};                                                           \
-      TENZIR_ALLOCATOR_JEMALLOC_INSTANCE(ENV_SUFFIX);                          \
-      TENZIR_ALLOCATOR_MIMALLOC_INSTANCE(ENV_SUFFIX);                          \
-      static auto& instance = []() -> polymorphic_allocator& {                 \
-        switch (selected_backend("TENZIR_ALLOC_" ENV_SUFFIX)) {                \
-          TENZIR_ALLOCATOR_JEMALLOC_CASE();                                    \
-          TENZIR_ALLOCATOR_MIMALLOC_CASE();                                    \
-          case backend::system:                                                \
-            return static_cast<polymorphic_allocator&>(system_);               \
-        }                                                                      \
-        __builtin_unreachable();                                               \
-      }();                                                                     \
-      return instance;                                                         \
-    }
+using SelectedAllocator = polymorphic_allocator;
 
 #elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_JEMALLOC
 
-#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
-    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
-      -> jemalloc::allocator& {                                                \
-      constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_                                                 \
-        = detail::actor_stats_storage<jemalloc::traits>{};                     \
-      static auto instance = jemalloc::allocator{                              \
-        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_.value                                                \
-          : nullptr,                                                           \
-        ENV_SUFFIX};                                                           \
-      return instance;                                                         \
-    }
+using SelectedAllocator = jemalloc::allocator;
 
 #elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_MIMALLOC
 
-#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
-    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
-      -> mimalloc::allocator& {                                                \
-      constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_                                                 \
-        = detail::actor_stats_storage<mimalloc::traits>{};                     \
-      static auto instance = mimalloc::allocator{                              \
-        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_.value                                                \
-          : nullptr,                                                           \
-        ENV_SUFFIX};                                                           \
-      return instance;                                                         \
-    }
+using SelectedAllocator = mimalloc::allocator;
 
 #elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_SYSTEM
 
-#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
-    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
-      -> system::allocator& {                                                  \
-      constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_                                                 \
-        = detail::actor_stats_storage<system::traits>{};                       \
-      static auto instance = system::allocator{                                \
-        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_.value                                                \
-          : nullptr,                                                           \
-        ENV_SUFFIX};                                                           \
-      return instance;                                                         \
-    }
+using SelectedAllocator = system::allocator;
 
 #else
 
@@ -1325,30 +1222,25 @@ struct dummy_allocator {
   }
 };
 
-#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
-    [[nodiscard]] inline auto NAME() noexcept -> dummy_allocator& {            \
-      constinit static auto instance = dummy_allocator{};                      \
-      return instance;                                                         \
-    }
+using SelectedAllocator = dummy_allocator;
 
 #endif
 
 /// The allocator used by the arrow memory pool, so for all arrow *buffers*.
-TENZIR_MAKE_ALLOCATOR(arrow_allocator, "ARROW")
-/// The allocator used by `operator new` and `operator delete`.
-TENZIR_MAKE_ALLOCATOR(cpp_allocator, "CPP")
-/// The allocator used by `malloc` and other C/POSIX allocation functions.
-TENZIR_MAKE_ALLOCATOR(c_allocator, "C")
-/// The allocator used by `malloc` and other C/POSIX allocation functions.
-TENZIR_MAKE_ALLOCATOR(nova_structure_allocator, "nova_structure")
-/// The allocator used by `malloc` and other C/POSIX allocation functions.
-TENZIR_MAKE_ALLOCATOR(nova_data_allocator, "nova_data")
+[[nodiscard]] auto arrow_allocator() noexcept -> SelectedAllocator&;
 
-#undef TENZIR_MAKE_ALLOCATOR
-#undef TENZIR_ALLOCATOR_MIMALLOC_INSTANCE
-#undef TENZIR_ALLOCATOR_MIMALLOC_CASE
-#undef TENZIR_ALLOCATOR_JEMALLOC_INSTANCE
-#undef TENZIR_ALLOCATOR_JEMALLOC_CASE
+/// The allocator used by `operator new` and `operator delete`.
+[[nodiscard]] auto cpp_allocator() noexcept -> SelectedAllocator&;
+
+/// The allocator used by `malloc` and other C/POSIX allocation functions.
+[[nodiscard]] auto c_allocator() noexcept -> SelectedAllocator&;
+
+/// The allocator used by `malloc` and other C/POSIX allocation functions.
+[[nodiscard]] auto nova_structure_allocator() noexcept -> SelectedAllocator&;
+
+/// The allocator used by `malloc` and other C/POSIX allocation functions.
+[[nodiscard]] auto nova_data_allocator() noexcept -> SelectedAllocator&;
+
 #undef TENZIR_ALLOCATOR_STRINGIFY
 #undef TENZIR_ALLOCATOR_STRINGIFY2
 #undef TENZIR_ALLOCATOR_ASSERT

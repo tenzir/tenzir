@@ -1,0 +1,23 @@
+{
+  number: -1,
+  text: "hi",
+  numbers: [
+    2,
+    3,
+  ],
+  nested: {
+    flag: true,
+  },
+  encoded: "010468690404060001",
+  decoded: {
+    number: -1,
+    text: "hi",
+    numbers: [
+      2,
+      3,
+    ],
+    nested: {
+      flag: true,
+    },
+  },
+}

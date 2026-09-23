@@ -1,0 +1,7 @@
+from {value: null}, {value: "hi"}
+encoded = print_avro(this, schema={
+  type: "record",
+  name: "event",
+  fields: [{name: "value", type: ["null", "string"]}],
+})
+encoded = encoded.encode_hex()

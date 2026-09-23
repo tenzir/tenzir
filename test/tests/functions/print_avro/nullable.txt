@@ -1,0 +1,8 @@
+{
+  value: null,
+  encoded: "00",
+}
+{
+  value: "hi",
+  encoded: "02046869",
+}

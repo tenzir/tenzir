@@ -1,0 +1,3 @@
+legacy schema-driven Avro encoding: ok
+nova schema-driven Avro encoding: ok
+nova heterogeneous Avro unions: ok
