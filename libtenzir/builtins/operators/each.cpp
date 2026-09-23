@@ -9,9 +9,15 @@
 #include <tenzir/async.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/view3.hpp>
+
+#include <algorithm>
+#include <deque>
+#include <vector>
 
 namespace tenzir::plugins::each {
 
@@ -129,6 +135,160 @@ public:
   }
 };
 
+auto materialize_constant(nova::Events const& events,
+                          nova::storage::Index index) -> ast::constant::kind {
+  return match(
+    nova::materialize(nova::RowView<nova::Data>{events.data.get(index)}),
+    []<class T>(T const& x) -> ast::constant::kind {
+      if constexpr (std::same_as<T, pattern>) {
+        TENZIR_UNREACHABLE();
+      } else {
+        return x;
+      }
+    });
+}
+
+struct EachNovaImpl {
+  explicit EachNovaImpl(EachArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(not todo_);
+    TENZIR_ASSERT(restored_.empty());
+    TENZIR_ASSERT(running_subs_ < args_.parallel);
+    auto take = args_.parallel - running_subs_;
+    todo_ = input;
+    auto remaining = nova::storage::BitMap::Mutable{std::move(todo_->mask)};
+    auto selected = std::vector<nova::storage::Index>{};
+    selected.reserve(std::min<uint64_t>(take, input.active_count()));
+    for (auto index : nova::storage::true_bits(input.mask)) {
+      if (selected.size() == take) {
+        break;
+      }
+      remaining.set(index, false);
+      selected.push_back(index);
+    }
+    todo_->mask = std::move(remaining).finish();
+    if (not todo_->mask.any()) {
+      todo_ = None{};
+    }
+    for (auto index : selected) {
+      co_await spawn_for(materialize_constant(input, index), ctx);
+    }
+  }
+
+  auto spawn_for(ast::constant::kind input, OpCtx& ctx) -> Task<void> {
+    // Bind `$this` to the current event as a `let` binding.
+    auto copy = args_.pipe.inner;
+    copy.bind(args_.this_id, std::move(input));
+    if (not co_await ctx.plan_and_spawn_sub<void>(data{next_key_},
+                                                  std::move(copy))) {
+      // Planning emitted a diagnostic; the pipeline will be torn down.
+      co_return;
+    }
+    next_key_ += 1;
+    running_subs_ += 1;
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, ctx);
+    TENZIR_ASSERT(running_subs_ > 0);
+    running_subs_ -= 1;
+    if (todo_) {
+      auto index = *nova::storage::true_bits(todo_->mask).begin();
+      auto input = materialize_constant(*todo_, index);
+      auto remaining = nova::storage::BitMap::Mutable{std::move(todo_->mask)};
+      remaining.set(index, false);
+      todo_->mask = std::move(remaining).finish();
+      if (not todo_->mask.any()) {
+        todo_ = None{};
+      }
+      co_await spawn_for(std::move(input), ctx);
+    } else if (not restored_.empty()) {
+      auto input = std::move(restored_.front());
+      restored_.pop_front();
+      co_await spawn_for(std::move(input), ctx);
+    }
+  }
+
+  auto state() -> OperatorState {
+    return running_subs_ < args_.parallel ? OperatorState::normal
+                                          : OperatorState::blocked;
+  }
+
+  auto snapshot(Serde& serde) -> void {
+    serde("next_key", next_key_);
+    serde("running_subs", running_subs_);
+    if (serde.is_loading()) {
+      serde("todo", restored_);
+      todo_ = None{};
+      return;
+    }
+    auto pending = std::deque<ast::constant::kind>{};
+    if (todo_) {
+      for (auto index : nova::storage::true_bits(todo_->mask)) {
+        pending.push_back(materialize_constant(*todo_, index));
+      }
+    }
+    pending.insert(pending.end(), restored_.begin(), restored_.end());
+    serde("todo", pending);
+  }
+
+  EachArgs args_;
+  uint64_t next_key_ = 0;
+  size_t running_subs_ = 0;
+  Option<nova::Events> todo_ = None{};
+  std::deque<ast::constant::kind> restored_;
+};
+
+class EachNova final : public Operator<nova::Events, nova::Events>,
+                       private EachNovaImpl {
+public:
+  using EachNovaImpl::EachNovaImpl;
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return EachNovaImpl::process(std::move(input), ctx);
+  }
+
+  auto finish_sub(SubKeyView key, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return EachNovaImpl::finish_sub(key, ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return EachNovaImpl::state();
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    EachNovaImpl::snapshot(serde);
+  }
+};
+
+class EachSinkNova final : public Operator<nova::Events, void>,
+                           private EachNovaImpl {
+public:
+  using EachNovaImpl::EachNovaImpl;
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    return EachNovaImpl::process(std::move(input), ctx);
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    return EachNovaImpl::finish_sub(key, ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return EachNovaImpl::state();
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    EachNovaImpl::snapshot(serde);
+  }
+};
+
 class EachPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -136,7 +296,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<EachArgs, Each>{};
+    auto d = Describer<EachArgs, Each, EachNova>{};
     // Every instance owns its child pipelines and completion state. The
     // `parallel` argument therefore remains a per-instance bound, making the
     // pipeline-wide child-pipeline budget `parallel` times the planner degree.
@@ -155,9 +315,8 @@ public:
     });
     d.spawner([=]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<EachArgs, Input>>> {
-      if constexpr (not std::same_as<Input, table_slice>) {
-        return {};
-      } else {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
         TRY(auto p, ctx.get(pipe));
         auto null_dh = null_diagnostic_handler{};
         auto result = p.inner.infer_type(tag_v<void>, null_dh);
@@ -167,20 +326,42 @@ public:
             .emit(ctx);
           return failure::promise();
         }
-        if (*result == tag_v<table_slice>) {
-          return [](EachArgs args) {
-            return Each{std::move(args)};
-          };
-        }
-        if (*result == tag_v<void>) {
-          return [](EachArgs args) {
-            return EachSink{std::move(args)};
-          };
+        if constexpr (std::same_as<Input, table_slice>) {
+          if (*result == tag_v<table_slice>) {
+            return [](EachArgs args) {
+              return Each{std::move(args)};
+            };
+          }
+          if (*result == tag_v<void>) {
+            return [](EachArgs args) {
+              return EachSink{std::move(args)};
+            };
+          }
+        } else {
+          if (*result == tag_v<nova::Events>) {
+            return [](EachArgs args) {
+              return EachNova{std::move(args)};
+            };
+          }
+          if (*result == tag_v<table_slice>) {
+            diagnostic::error(
+              "pipeline inside Nova `each` must produce Nova events")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          }
+          if (*result == tag_v<void>) {
+            return [](EachArgs args) {
+              return EachSinkNova{std::move(args)};
+            };
+          }
         }
         diagnostic::error("pipeline inside `each` must not produce bytes")
           .primary(p.source)
           .emit(ctx);
         return failure::promise();
+      } else {
+        return {};
       }
     });
     return d.invariant_filter();

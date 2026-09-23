@@ -1,5 +1,18 @@
-from {name: "alice", n: 1}, {name: "bob", n: 2}
-each {
+from {
+  name: "alice",
+  n: 1,
+  nested: {values: [1, 2], optional: null},
+}, {
+  name: "masked",
+  n: 2,
+  nested: {values: []},
+}, {
+  name: "bob",
+  n: 3,
+  nested: {values: [3], optional: "present"},
+}
+where n != 2
+each parallel=1 {
   from $this
 }
-sort name
+write_tql

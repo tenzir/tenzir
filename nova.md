@@ -197,6 +197,20 @@ invariant into a structural one. The rules:
 
 ## Writing new Users
 
+### Event representation invariant
+
+When Nova is enabled, every operator that produces or consumes events must use
+`nova::Events`. A `table_slice` in a Nova pipeline indicates that an operator
+has not been ported yet; it is not a supported mixed-representation pipeline.
+
+An operator with `nova::Events` input may produce `nova::Events`, bytes, or
+`void`, but it must never produce `table_slice`. The same rule applies to
+nested pipelines: a nested pipeline that forwards events from a Nova operator
+must produce `nova::Events`, while one that acts as a sink may produce `void`.
+Do not add `Operator<nova::Events, table_slice>` or an equivalent runtime
+transition. Port the remaining operator to Nova or reject the pipeline with a
+diagnostic.
+
 ### Tests
 
 Migrate tests in place, keeping the existing layout and scenario names. Change

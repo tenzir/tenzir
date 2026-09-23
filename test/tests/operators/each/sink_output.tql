@@ -1,0 +1,9 @@
+---
+error: true
+---
+from {}
+each {
+  from $this
+  discard
+}
+discard

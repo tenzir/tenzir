@@ -1,8 +1,21 @@
 {
   name: "alice",
   n: 1,
+  nested: {
+    values: [
+      1,
+      2,
+    ],
+    optional: null,
+  },
 }
 {
   name: "bob",
-  n: 2,
+  n: 3,
+  nested: {
+    values: [
+      3,
+    ],
+    optional: "present",
+  },
 }

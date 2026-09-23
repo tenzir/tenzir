@@ -1,0 +1,6 @@
+error: pipeline inside Nova `each` must produce Nova events
+ --> tests/operators/each/classic_output.tql:5:6
+  |
+5 | each {
+  |      ^^^^^^^^^^^^^
+  |

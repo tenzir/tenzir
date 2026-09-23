@@ -1,6 +1,5 @@
 from {x: 10}, {x: 20}
-each {
+each parallel=1 {
   from $this
   this.doubled = x * 2
 }
-sort x

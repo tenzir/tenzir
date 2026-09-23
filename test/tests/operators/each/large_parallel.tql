@@ -1,0 +1,5 @@
+from {x: 1}
+each parallel=18446744073709551615 {
+  from $this
+}
+write_tql
