@@ -30,6 +30,7 @@ from . import mysql  # noqa: F401
 from . import nats  # noqa: F401
 from . import openai_responses  # noqa: F401
 from . import otlp_grpc  # noqa: F401
+from . import package_http  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401

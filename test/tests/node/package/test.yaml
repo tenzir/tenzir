@@ -1,2 +1,2 @@
 fixtures: [node]
-timeout: 120
+timeout: 300

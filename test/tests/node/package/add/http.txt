@@ -1,0 +1,11 @@
+ok: HTTP package URLs, query strings, redirects, and inputs
+ok: HTTP errors and invalid package definitions are rejected
+ok: tar and gzip archives, GitLab layout, redirects, and split packages
+ok: archive directory IDs and existing input precedence
+ok: path selects packages with or without an archive wrapper
+ok: invalid paths and path on non-archive sources are rejected
+ok: unsafe, oversized, ambiguous, and invalid archives are rejected
+ok: local tar, gzip, and tgz archives share discovery and path selection
+ok: invalid local archives are rejected
+ok: directory, local archive, and remote archive warnings remain warnings
+ok: warnings accompanying package errors are preserved without installation

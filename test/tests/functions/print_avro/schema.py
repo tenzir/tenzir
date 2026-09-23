@@ -4,6 +4,7 @@ import base64
 from collections import Counter
 import json
 import os
+import platform
 import shlex
 import shutil
 import subprocess
@@ -12,6 +13,12 @@ import subprocess
 binary = shlex.split(
     os.environ.get("TENZIR_BINARY", shutil.which("tenzir") or "tenzir")
 )
+# Nova buffers cross the plugin boundary; tracking must use the same allocator
+# state in the plugin and the core library. Only x86_64 Linux supports actor
+# stats, and other platforms exit at startup when they are requested.
+env = dict(os.environ)
+if platform.system() == "Linux" and platform.machine() == "x86_64":
+    env["TENZIR_ALLOC_ACTOR_STATS"] = "1"
 
 
 def record(**fields):
@@ -29,9 +36,7 @@ def array(items):
 def run(mode, expression):
     return subprocess.run(
         [*binary, *mode, "from {} | this = " + expression + " | write_json"],
-        # Nova buffers cross the plugin boundary; tracking must use the same
-        # allocator state in the plugin and the core library.
-        env={**os.environ, "TENZIR_ALLOC_ACTOR_STATS": "1"},
+        env=env,
         text=True,
         capture_output=True,
         timeout=30,

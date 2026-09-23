@@ -24,6 +24,7 @@ dependencies=(
   gnu-sed
   grpc
   icu4c
+  libarchive
   libevent
   libmaxminddb
   libpcap

@@ -29,6 +29,10 @@ if (NOT _MAC_DEPENDENCY_PATHS)
         list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/icu4c")
         set(ICU_ROOT "${HOMEBREW_PREFIX}/opt/icu4c")
       endif ()
+      # Find libarchive correctly. Homebrew installs it as a keg-only formula.
+      if (EXISTS "${HOMEBREW_PREFIX}/opt/libarchive")
+        list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/libarchive")
+      endif ()
       # Find libunwind-headers correctly. The headers must be installed
       # separately; the library is available as under the umbrealla framework
       # System.framework. Directly linking against libunwind at its location

@@ -233,6 +233,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ca-certificates \
       gnupg2 \
+      libarchive13t64 \
       libasan8 \
       libboost-context1.83.0 \
       libboost-date-time1.83.0 \

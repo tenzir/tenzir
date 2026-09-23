@@ -116,6 +116,33 @@ def _make_handler(capture_path: Path):
         def _handle_request(self, body: bytes) -> None:
             self._record_request(body)
             path = urlsplit(self.path).path
+            if path == "/package/redirect":
+                self._reply(
+                    b"<html>Moved</html>",
+                    [("Location", "/package/package.yaml")],
+                    HTTPStatus.FOUND,
+                )
+                return
+            if path == "/package/package.yaml":
+                self._reply(
+                    b"id: remote_test\nname: Remote test\n"
+                    b"inputs:\n  message:\n    name: Message\n    type: string\n"
+                    b"    default: default\n",
+                    content_type="application/yaml",
+                )
+                return
+            if path == "/package/invalid.yaml":
+                self._reply(b"[", content_type="application/yaml")
+                return
+            if path == "/package/not-record.yaml":
+                self._reply(b"42", content_type="application/yaml")
+                return
+            if path == "/package/invalid-package.yaml":
+                self._reply(b"name: Missing ID\n", content_type="application/yaml")
+                return
+            if path == "/package/missing.yaml":
+                self._reply(b"", status=HTTPStatus.NOT_FOUND)
+                return
             if path == _LINK_BASIC_PAGE_1:
                 self._reply(
                     self._page_payload(1),

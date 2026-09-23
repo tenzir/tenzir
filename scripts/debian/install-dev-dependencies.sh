@@ -15,6 +15,7 @@ apt-get -y --no-install-recommends install \
   gperf \
   git-core \
   gnupg2 gnupg-agent jq \
+  libarchive-dev \
   libboost-context-dev \
   libboost-dev \
   libboost-filesystem-dev \

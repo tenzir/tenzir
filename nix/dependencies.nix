@@ -9,6 +9,7 @@
   caf,
   curl,
   libpcap,
+  libarchive,
   arrow-cpp,
   arrow-adbc-cpp,
   avro-cpp,
@@ -88,6 +89,7 @@ in
     fluent-bit
     iceberg-cpp
     libpcap
+    libarchive
     libunwind
     libnats-c
     rabbitmq-c
@@ -147,6 +149,9 @@ in
   ]
   ++ lib.optionals (!isStatic) [
     arrow-adbc-cpp
+    # The packages plugin links it, and a dynamic build compiles that plugin
+    # as its own derivation that sees only propagated inputs.
+    libarchive
   ];
 
   cmakeExtraPackages = [
