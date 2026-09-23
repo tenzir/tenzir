@@ -77,6 +77,58 @@ to_clickhouse table="{table}", host=env("CLICKHOUSE_HOST"),
                         "diagnostics": result.stderr,
                     }
                 )
+    for catch_all in (False, True):
+        for only_null in (False, True):
+            table = f"null_blobs_{int(catch_all)}_{int(only_null)}"
+            extra = ", extra JSON COMMENT 'tenzir:catch_all'" if catch_all else ""
+            query(
+                f"CREATE TABLE {table} (id Int64, payload Array(UInt8){extra}) ENGINE=Memory"
+            )
+            # Unroll to give the null row the same blob type as its neighbors.
+            selection = "where id == 0" if only_null else ""
+            program = f'''from {{events:[{{id:0,payload:null}},
+                                       {{id:1,payload:b""}},
+                                       {{id:2,payload:b"abc"}}]}}
+unroll events
+this = events
+{selection}
+to_clickhouse table="{table}", host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"), tls=false,
+              mode="append", _jobs=1
+'''
+            result = subprocess.run(
+                [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            rows = [
+                json.loads(line)
+                for line in query(
+                    f"SELECT id, payload FROM {table} ORDER BY id FORMAT JSONEachRow"
+                ).splitlines()
+            ]
+            expected = [] if catch_all else [{"id": 0, "payload": []}]
+            if not only_null:
+                expected += [
+                    {"id": 1, "payload": []},
+                    {"id": 2, "payload": [97, 98, 99]},
+                ]
+            if (
+                result.returncode != 0
+                or rows != expected
+                or (catch_all and "is not nullable" not in result.stderr)
+                or (not catch_all and result.stderr)
+            ):
+                failures.append(
+                    dict(
+                        table=table,
+                        expected=expected,
+                        actual=rows,
+                        diagnostics=result.stderr,
+                    )
+                )
     assert not failures, json.dumps(failures, indent=2)
     print("ok")
 

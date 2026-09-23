@@ -320,6 +320,11 @@ struct transformer_blob : transformer {
         .emit(dh);
       return drop::all;
     }
+    // The list adapter is present only for lossless byte-array mappings.
+    // Blobs must follow the same parent-null policy as list inputs.
+    if (list_transform) {
+      return transformer_detail::apply_null_dropmask(array, dropmask, path, dh);
+    }
     return drop::none;
   }
 
