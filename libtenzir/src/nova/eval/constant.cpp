@@ -17,63 +17,6 @@ namespace tenzir::nova {
 
 namespace {
 
-/// Appends `v` into `b` (an `ArrayBuilder<Data>&` or an
-/// `ArrayBuilder<List>::ListBuilder&`), recursing into `record`/`list`
-/// values. Mirrors `append_row` (which sources from an existing nova
-/// `RowView<Data>`), but sources from a legacy `tenzir::data` value instead.
-auto append_legacy_data(diagnostic_handler& dh, auto&& b, const tenzir::data& v)
-  -> void {
-  tenzir::match(
-    v,
-    [&](caf::none_t) {
-      b.null();
-    },
-    [&](const tenzir::record& r) {
-      auto rb = b.record();
-      for (auto const& [name, field] : r) {
-        append_legacy_data(dh, rb.field(name), field);
-      }
-    },
-    [&](const tenzir::list& l) {
-      auto lb = b.list();
-      for (auto const& elem : l) {
-        append_legacy_data(dh, lb, elem);
-      }
-    },
-    [&](bool scalar) {
-      b.data(scalar);
-    },
-    [&](std::int64_t scalar) {
-      b.data(scalar);
-    },
-    [&](std::uint64_t scalar) {
-      b.data(scalar);
-    },
-    [&](double scalar) {
-      b.data(scalar);
-    },
-    [&](tenzir::duration scalar) {
-      b.data(scalar);
-    },
-    [&](tenzir::time scalar) {
-      b.data(scalar);
-    },
-    [&](const std::string& scalar) {
-      b.data(std::string_view{scalar});
-    },
-    [&](tenzir::ip scalar) {
-      b.data(scalar);
-    },
-    [&](tenzir::subnet scalar) {
-      b.data(scalar);
-    },
-    [&](const auto&) {
-      diagnostic::warning("eval not implemented yet for this constant type")
-        .emit(dh);
-      b.null();
-    });
-}
-
 /// Converts a legacy `tenzir::data` value (or `ast::constant::kind`, which
 /// shares the same alternative set minus `pattern`) into a nova array
 /// broadcast identically to every one of `length` rows selected by `mask`.
@@ -149,7 +92,7 @@ auto eval_data_constant(diagnostic_handler& dh, const auto& v,
         }
         auto lb = builder.list();
         for (auto const& elem : l) {
-          append_legacy_data(dh, lb, elem);
+          append_legacy_data(lb, elem, dh);
         }
       }
       return Array<Data>{builder.finish()};
