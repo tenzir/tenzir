@@ -242,9 +242,10 @@ struct transformer_from_trait : transformer {
                                const arrow::Array& array, dropmask_ref dropmask,
                                tenzir::diagnostic_handler& dh)
     -> drop override {
-    TENZIR_UNUSED(path);
     if constexpr (Nullable) {
-      return drop::none;
+      if (is<null_type>(type)) {
+        return drop::none;
+      }
     }
     const auto correct_type = match(
       type,
@@ -262,6 +263,9 @@ struct transformer_from_trait : transformer {
       });
     if (not correct_type) {
       return drop::all;
+    }
+    if constexpr (Nullable) {
+      return drop::none;
     }
     return apply_null_dropmask(array, dropmask, path, dh);
   }

@@ -36,6 +36,30 @@ def main() -> None:
     failures = []
     for case, dtype, events, expected in (
         (
+            "nullable_null_elements",
+            "Array(Nullable(String))",
+            "{id:0,payload:null}, {id:1,payload:[null]}, {id:2,payload:[]}",
+            [{"id": 1, "payload": [None]}, {"id": 2, "payload": []}],
+        ),
+        (
+            "nullable_string",
+            "Array(Nullable(String))",
+            "{id:0,payload:[]}, {id:1,payload:[1]}, {id:2,payload:[]}",
+            [{"id": 0, "payload": []}, {"id": 2, "payload": []}],
+        ),
+        (
+            "nullable_bool",
+            "Array(Nullable(Bool))",
+            "{id:0,payload:[]}, {id:1,payload:[1]}, {id:2,payload:[]}",
+            [{"id": 0, "payload": []}, {"id": 2, "payload": []}],
+        ),
+        (
+            "nullable_int64",
+            "Array(Nullable(Int64))",
+            '{id:0,payload:[]}, {id:1,payload:["x"]}, {id:2,payload:[]}',
+            [{"id": 0, "payload": []}, {"id": 2, "payload": []}],
+        ),
+        (
             "null_parent",
             "Array(UInt32)",
             "{id:0,payload:null}, {id:1,payload:[uint(7)]}, {id:2,payload:[]}",
