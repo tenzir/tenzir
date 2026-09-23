@@ -427,7 +427,7 @@ auto to_string(url::code code) -> std::string_view {
 
 auto to_string(const url& x) -> std::string {
   auto [code, result] = x.get(url::part::url);
-  TENZIR_ASSERT(code);
+  TENZIR_ASSERT(code == url::code::ok);
   TENZIR_ASSERT(result);
   return std::move(*result);
 }

@@ -57,6 +57,7 @@ TEST("valid URL") {
   CHECK_EQUAL(full_url_code, curl::url::code::ok);
   REQUIRE(full_url);
   CHECK_EQUAL(*full_url, "http://localhost/");
+  CHECK_EQUAL(to_string(url), "http://localhost/");
 }
 
 TEST("invalid URL") {
