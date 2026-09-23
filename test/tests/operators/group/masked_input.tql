@@ -1,0 +1,6 @@
+from {x: 1, group: "a"}, {x: 2, group: "b"}, {x: 3, group: "a"}
+where x != 2
+group group {
+  pass
+}
+sort x

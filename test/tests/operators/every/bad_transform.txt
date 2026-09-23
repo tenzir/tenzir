@@ -1,4 +1,4 @@
-error: expected void, got events
+error: expected void, got nova_events
  --> tests/operators/every/bad_transform.tql:7:3
   |
 7 |   version

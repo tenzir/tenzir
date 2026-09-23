@@ -1,0 +1,8 @@
+from_file f"{env("TENZIR_INPUTS")}/json/group-high-cardinality.json" {
+  read_json
+}
+group x {
+  pass
+}
+sort x
+tail 1

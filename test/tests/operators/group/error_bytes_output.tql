@@ -3,6 +3,7 @@ error: true
 ---
 
 from {x: 1, cat: "a"}
+head 0
 group cat {
   write_json
 }

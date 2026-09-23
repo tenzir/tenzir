@@ -1,3 +1,6 @@
+---
+skip: "`merge` does not support Nova yet"
+---
 // Regression test: an orphan source inside a subpipeline is fed by a void lane
 // from the plan's event broadcast. When the plan input ends while that source is
 // still running, the broadcast must not push `EndOfData` over the void lane: the

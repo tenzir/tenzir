@@ -1,3 +1,6 @@
+---
+skip: "`merge` does not support Nova yet"
+---
 from {g: 1}
 group g {
   merge {

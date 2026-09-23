@@ -1,6 +1,6 @@
-every 1s { 
-  from {}
-  repeat
-  enumerate
+every 1s {
+  every 1ms {
+    from {}
+  }
 }
 head 2

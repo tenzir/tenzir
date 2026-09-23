@@ -11,6 +11,7 @@
 #include <tenzir/async/task.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
@@ -368,6 +369,298 @@ public:
   }
 };
 
+class EveryEventsBase {
+public:
+  explicit EveryEventsBase(EveryArgs args) : args_{std::move(args)} {
+  }
+
+protected:
+  auto start_impl(OpCtx& ctx) -> Task<void> {
+    if (next_sub_id_ == 0) {
+      co_await spawn_new(ctx);
+    }
+  }
+
+  auto await_task_impl() const -> Task<Any> {
+    auto outer = co_await folly::coro::co_current_cancellation_token;
+    auto result
+      = co_await folly::coro::co_awaitTry(folly::coro::co_withCancellation(
+        folly::cancellation_token_merge(outer, stop_source_.getToken()),
+        folly::coro::co_invoke(
+          [this, interval = args_.interval]() mutable -> Task<SemaphorePermit> {
+            auto permit = co_await sleep_permits_.acquire();
+            co_await sleep_for(interval);
+            co_return std::move(permit);
+          })));
+    if (result.hasValue()) {
+      co_return std::move(result).value();
+    }
+    if (outer.isCancellationRequested()) {
+      co_yield folly::coro::co_stopped_may_throw;
+    }
+    co_await wait_forever();
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process_impl(nova::Events input, OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(state_impl() != OperatorState::blocked);
+    TENZIR_ASSERT(next_sub_id_ > 0);
+    auto sub = ctx.get_sub(next_sub_id_ - 1);
+    if (not sub) {
+      co_return;
+    }
+    auto& pipe = as<SubHandle<nova::Events>>(*sub);
+    std::ignore = co_await pipe.push(std::move(input));
+  }
+
+  auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(not sleep_done_);
+    sleep_done_ = std::move(result).as<SemaphorePermit>();
+    TENZIR_ASSERT(next_sub_id_ > 0);
+    auto sub = ctx.get_sub(next_sub_id_ - 1);
+    if (sub) {
+      auto& pipe = as<SubHandle<nova::Events>>(*sub);
+      co_await pipe.close();
+    }
+    co_await maybe_respawn(ctx);
+  }
+
+  auto finish_sub_impl(OpCtx& ctx) -> Task<void> {
+    sub_finished_ = true;
+    co_await maybe_respawn(ctx);
+  }
+
+  auto finalize_impl() -> FinalizeBehavior {
+    stop_spawning_ = true;
+    stop_source_.requestCancellation();
+    return FinalizeBehavior::done;
+  }
+
+  auto state_impl() -> OperatorState {
+    if (stop_spawning_ and sub_finished_) {
+      return OperatorState::done;
+    }
+    return sleep_done_ ? OperatorState::blocked : OperatorState::normal;
+  }
+
+  auto snapshot_impl(Serde&) -> void {
+    TENZIR_TODO();
+  }
+
+private:
+  auto spawn_new(OpCtx& ctx) -> Task<void> {
+    if (not co_await ctx.plan_and_spawn_sub<nova::Events>(next_sub_id_,
+                                                          args_.pipe.inner)) {
+      co_return;
+    }
+    next_sub_id_ += 1;
+  }
+
+  auto maybe_respawn(OpCtx& ctx) -> Task<void> {
+    if (sleep_done_ and sub_finished_ and not stop_spawning_) {
+      sleep_done_ = None{};
+      sub_finished_ = false;
+      co_await spawn_new(ctx);
+    }
+  }
+
+  EveryArgs args_;
+  mutable Semaphore sleep_permits_{1};
+  Option<SemaphorePermit> sleep_done_;
+  int64_t next_sub_id_ = 0;
+  bool sub_finished_ = false;
+  bool stop_spawning_ = false;
+  folly::CancellationSource stop_source_;
+};
+
+class EveryEvents final : public Operator<nova::Events, nova::Events>,
+                          private EveryEventsBase {
+public:
+  using EveryEventsBase::EveryEventsBase;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return process_impl(std::move(input), ctx);
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return process_task_impl(std::move(result), ctx);
+  }
+
+  auto finish_sub(SubKeyView key, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(key, push);
+    return finish_sub_impl(ctx);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    co_return finalize_impl();
+  }
+
+  auto state() -> OperatorState override {
+    return state_impl();
+  }
+
+  auto snapshot(Serde& s) -> void override {
+    snapshot_impl(s);
+  }
+};
+
+class EveryEventsSink final : public Operator<nova::Events, void>,
+                              private EveryEventsBase {
+public:
+  using EveryEventsBase::EveryEventsBase;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    return process_impl(std::move(input), ctx);
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    return process_task_impl(std::move(result), ctx);
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key);
+    return finish_sub_impl(ctx);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_return finalize_impl();
+  }
+
+  auto state() -> OperatorState override {
+    return state_impl();
+  }
+
+  auto snapshot(Serde& s) -> void override {
+    snapshot_impl(s);
+  }
+};
+
+class EveryEventsSource final : public Operator<void, nova::Events> {
+public:
+  explicit EveryEventsSource(EveryArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (next_sub_id_ == 0) {
+      co_await spawn_new(ctx);
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    auto outer = co_await folly::coro::co_current_cancellation_token;
+    auto result
+      = co_await folly::coro::co_awaitTry(folly::coro::co_withCancellation(
+        folly::cancellation_token_merge(outer, stop_source_.getToken()),
+        folly::coro::co_invoke(
+          [this, interval = args_.interval]() mutable -> Task<SemaphorePermit> {
+            auto permit = co_await sleep_permits_.acquire();
+            co_await sleep_for(interval);
+            co_return std::move(permit);
+          })));
+    if (result.hasValue()) {
+      co_return std::move(result).value();
+    }
+    if (outer.isCancellationRequested()) {
+      co_yield folly::coro::co_stopped_may_throw;
+    }
+    co_await wait_forever();
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    TENZIR_ASSERT(not sleep_done_);
+    sleep_done_ = std::move(result).as<SemaphorePermit>();
+    co_await maybe_respawn(ctx);
+  }
+
+  auto finish_sub(SubKeyView key, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(key, push);
+    sub_finished_ = true;
+    co_await maybe_respawn(ctx);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    stop_spawning_ = true;
+    stop_source_.requestCancellation();
+    co_return FinalizeBehavior::done;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    stop_spawning_ = true;
+    stop_source_.requestCancellation();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    if (stop_spawning_ and sub_finished_) {
+      return OperatorState::done;
+    }
+    return sleep_done_ ? OperatorState::blocked : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    TENZIR_TODO();
+  }
+
+private:
+  auto spawn_new(OpCtx& ctx) -> Task<void> {
+    if (not co_await ctx.plan_and_spawn_sub<void>(next_sub_id_,
+                                                  args_.pipe.inner)) {
+      co_return;
+    }
+    next_sub_id_ += 1;
+  }
+
+  auto maybe_respawn(OpCtx& ctx) -> Task<void> {
+    if (sleep_done_ and sub_finished_ and not stop_spawning_) {
+      sleep_done_ = None{};
+      sub_finished_ = false;
+      co_await spawn_new(ctx);
+    }
+  }
+
+  EveryArgs args_;
+  mutable Semaphore sleep_permits_{1};
+  Option<SemaphorePermit> sleep_done_;
+  int64_t next_sub_id_ = 0;
+  bool sub_finished_ = false;
+  bool stop_spawning_ = false;
+  folly::CancellationSource stop_source_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -375,7 +668,10 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<EveryArgs>{};
+    auto d = Describer<EveryArgs, Every<void, table_slice>,
+                       Every<table_slice, table_slice>, Every<void, void>,
+                       Every<table_slice, void>, EveryEventsSource, EveryEvents,
+                       EveryEventsSink>{};
     auto interval = d.positional("interval", &EveryArgs::interval);
     auto pipe = d.pipeline(&EveryArgs::pipe, SubOptimize::from_downstream);
     d.validate([interval](DescribeCtx& ctx) -> Empty {
@@ -388,23 +684,20 @@ public:
     });
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
-      if constexpr (std::same_as<Input, chunk_ptr>
-                    or std::same_as<Input, nova::Events>) {
-        return {};
-      } else {
+      if constexpr (std::same_as<Input, table_slice>) {
         TRY(auto p, ctx.get(pipe));
-        TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
+        TRY(auto output, p.inner.infer_type(tag_v<table_slice>, ctx));
         return match(
           output,
           [](tag<table_slice>)
             -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
             return [](EveryArgs args) {
-              return Every<Input, table_slice>{std::move(args)};
+              return Every<table_slice, table_slice>{std::move(args)};
             };
           },
           [](tag<void>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
             return [](EveryArgs args) {
-              return Every<Input, void>{std::move(args)};
+              return Every<table_slice, void>{std::move(args)};
             };
           },
           [&](
@@ -416,11 +709,77 @@ public:
           },
           [&](tag<nova::Events>)
             -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
-            diagnostic::error("subpipeline must not produce nova_events")
+            diagnostic::error("subpipeline must not produce nova events")
               .primary(p.source)
               .emit(ctx);
             return failure::promise();
           });
+      } else if constexpr (std::same_as<Input, nova::Events>) {
+        TRY(auto p, ctx.get(pipe));
+        TRY(auto output, p.inner.infer_type(tag_v<nova::Events>, ctx));
+        return match(
+          output,
+          [](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            return [](EveryArgs args) {
+              return EveryEvents{std::move(args)};
+            };
+          },
+          [](tag<void>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            return [](EveryArgs args) {
+              return EveryEventsSink{std::move(args)};
+            };
+          },
+          [&](auto) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            diagnostic::error("subpipeline must return nova events or nothing")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          });
+      } else if constexpr (std::same_as<Input, void>) {
+        TRY(auto p, ctx.get(pipe));
+        TRY(auto output, p.inner.infer_type(tag_v<void>, ctx));
+        return match(
+          output,
+          [&](tag<table_slice>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            if (nova_enabled()) {
+              diagnostic::error(
+                "subpipeline must return nova events or nothing")
+                .primary(p.source)
+                .emit(ctx);
+              return failure::promise();
+            }
+            return [](EveryArgs args) {
+              return Every<void, table_slice>{std::move(args)};
+            };
+          },
+          [&](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            if (not nova_enabled()) {
+              diagnostic::error("subpipeline must return events or nothing")
+                .primary(p.source)
+                .emit(ctx);
+              return failure::promise();
+            }
+            return [](EveryArgs args) {
+              return EveryEventsSource{std::move(args)};
+            };
+          },
+          [](tag<void>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            return [](EveryArgs args) {
+              return Every<void, void>{std::move(args)};
+            };
+          },
+          [&](
+            tag<chunk_ptr>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce bytes")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          });
+      } else {
+        return {};
       }
     });
     return d.optimize(

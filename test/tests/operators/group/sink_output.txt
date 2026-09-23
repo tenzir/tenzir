@@ -1,0 +1,7 @@
+error: operator does not accept void
+ --> tests/operators/group/sink_output.tql:8:1
+  |
+8 | discard
+  | ^^^^^^^
+  |
+  = docs: https://tenzir.com/docs/reference/operators/discard

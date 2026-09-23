@@ -10,6 +10,9 @@
 #include <tenzir/async.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
@@ -139,6 +142,116 @@ public:
   }
 };
 
+struct NovaGroup {
+  data key;
+  std::vector<nova::storage::Index> rows;
+};
+
+class GroupNovaBase {
+public:
+  explicit GroupNovaBase(GroupArgs args) : args_{std::move(args)} {
+  }
+
+  auto start_impl(OpCtx& ctx) -> Task<void> {
+    auto evaluator = nova::Evaluator::make(
+      std::move(args_.over), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (evaluator) {
+      evaluator_.emplace(std::move(*evaluator));
+    }
+    co_return;
+  }
+
+  auto process_impl(nova::Events input, OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(evaluator_);
+    auto keys = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto groups = std::vector<NovaGroup>{};
+    auto group_lookup = std::unordered_map<data, size_t>{};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      auto key = nova::materialize(keys.get(row));
+      auto [it, inserted] = group_lookup.try_emplace(key, groups.size());
+      if (inserted) {
+        groups.push_back(NovaGroup{std::move(key), {}});
+      }
+      groups[it->second].rows.push_back(row);
+    }
+    for (auto& group : groups) {
+      auto sub = Option<AnySubHandle&>{};
+      if (seen_keys_.contains(group.key)) {
+        sub = ctx.get_sub(make_view(group.key));
+        if (not sub) {
+          continue;
+        }
+      } else {
+        auto copy = args_.pipe.inner;
+        copy.bind(args_.let, constant_from_key(group.key));
+        sub = co_await ctx.plan_and_spawn_sub<nova::Events>(group.key,
+                                                            std::move(copy));
+        if (not sub) {
+          continue;
+        }
+        seen_keys_.emplace(group.key);
+      }
+      TENZIR_ASSERT(sub);
+      auto mask = nova::storage::BitMap::Mutable{input.length()};
+      for (auto row : group.rows) {
+        mask.set(row, true);
+      }
+      auto events
+        = nova::Events{input.data, std::move(mask).finish(), input.meta};
+      std::ignore
+        = co_await as<SubHandle<nova::Events>>(*sub).push(std::move(events));
+    }
+  }
+
+  auto snapshot_impl(Serde& serde) -> void {
+    serde("seen_keys", seen_keys_);
+  }
+
+  GroupArgs args_;
+  Option<nova::Evaluator> evaluator_;
+  std::unordered_set<data> seen_keys_;
+};
+
+class GroupEvents final : public Operator<nova::Events, nova::Events>,
+                          private GroupNovaBase {
+public:
+  explicit GroupEvents(GroupArgs args) : GroupNovaBase{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return process_impl(std::move(input), ctx);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    snapshot_impl(serde);
+  }
+};
+
+class GroupEventsSink final : public Operator<nova::Events, void>,
+                              private GroupNovaBase {
+public:
+  explicit GroupEventsSink(GroupArgs args) : GroupNovaBase{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    return process_impl(std::move(input), ctx);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    snapshot_impl(serde);
+  }
+};
+
 class group_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -146,7 +259,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<GroupArgs>{};
+    auto d = Describer<GroupArgs, Group<table_slice>, Group<void>, GroupEvents,
+                       GroupEventsSink>{};
     auto over = d.positional("over", &GroupArgs::over, "expr");
     auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
                            {{"group", &GroupArgs::let}});
@@ -182,6 +296,36 @@ public:
           [&](tag<nova::Events>)
             -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
             diagnostic::error("subpipeline must not produce nova_events")
+              .primary(pipe.source)
+              .emit(ctx);
+            return failure::promise();
+          });
+      } else if constexpr (std::same_as<Input, nova::Events>) {
+        TRY(auto pipe, ctx.get(pipe));
+        TRY(auto output, pipe.inner.infer_type(tag_v<nova::Events>, ctx));
+        return match(
+          output,
+          [](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            return [](GroupArgs args) {
+              return GroupEvents{std::move(args)};
+            };
+          },
+          [](tag<void>) -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            return [](GroupArgs args) {
+              return GroupEventsSink{std::move(args)};
+            };
+          },
+          [&](
+            tag<chunk_ptr>) -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce bytes")
+              .primary(pipe.source)
+              .emit(ctx);
+            return failure::promise();
+          },
+          [&](tag<table_slice>)
+            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce legacy events")
               .primary(pipe.source)
               .emit(ctx);
             return failure::promise();

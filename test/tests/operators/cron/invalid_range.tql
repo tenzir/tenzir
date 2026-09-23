@@ -3,5 +3,5 @@ error: true
 ---
 
 cron "120 * * * * *", {
-  version
+  from {}
 }

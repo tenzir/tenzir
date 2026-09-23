@@ -3,5 +3,5 @@ error: true
 ---
 
 every 0 {
-  version
+  from {}
 }

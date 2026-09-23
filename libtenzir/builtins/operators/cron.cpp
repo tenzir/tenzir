@@ -10,10 +10,15 @@
 #include <tenzir/detail/croncpp.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 
+#include <folly/CancellationToken.h>
+#include <folly/coro/CurrentExecutor.h>
+#include <folly/coro/Error.h>
 #include <folly/coro/Sleep.h>
+#include <folly/coro/WithCancellation.h>
 
 #include <chrono>
 
@@ -37,7 +42,7 @@ struct CronArgs {
   located<ir::pipeline> pipe;
 };
 
-class Cron : public Operator<void, table_slice> {
+class Cron final : public Operator<void, table_slice> {
 public:
   explicit Cron(CronArgs args) : args_{std::move(args)} {
     cronexpr_ = detail::cron::make_cron(args_.schedule.inner);
@@ -74,20 +79,96 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-protected:
+private:
   auto spawn(OpCtx& ctx) -> Task<void> {
     cron_fired_ = false;
     sub_finished_ = false;
     co_await ctx.plan_and_spawn_sub<void>(next_sub_key_++, args_.pipe.inner);
   }
 
-private:
   CronArgs args_;
   detail::cron::cronexpr cronexpr_;
   int64_t next_sub_key_ = 0;
   bool cron_fired_ = false;
   bool sub_finished_ = true;
   bool done_ = false;
+};
+
+class CronEvents final : public Operator<void, nova::Events> {
+public:
+  explicit CronEvents(CronArgs args) : args_{std::move(args)} {
+    cronexpr_ = detail::cron::make_cron(args_.schedule.inner);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    auto outer = co_await folly::coro::co_current_cancellation_token;
+    auto result
+      = co_await folly::coro::co_awaitTry(folly::coro::co_withCancellation(
+        folly::cancellation_token_merge(outer, stop_source_.getToken()),
+        sleep_until_next_cron(cronexpr_)));
+    if (result.hasValue()) {
+      co_return {};
+    }
+    if (outer.isCancellationRequested()) {
+      co_yield folly::coro::co_stopped_may_throw;
+    }
+    co_await wait_forever();
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, push);
+    cron_fired_ = true;
+    if (sub_finished_ and not done_) {
+      co_await spawn(ctx);
+    }
+  }
+
+  auto finish_sub(SubKeyView key, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(key, push);
+    sub_finished_ = true;
+    if (cron_fired_ and not done_) {
+      co_await spawn(ctx);
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    done_ = true;
+    stop_source_.requestCancellation();
+    co_return FinalizeBehavior::done;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    done_ = true;
+    stop_source_.requestCancellation();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ and sub_finished_ ? OperatorState::done
+                                   : OperatorState::normal;
+  }
+
+private:
+  auto spawn(OpCtx& ctx) -> Task<void> {
+    cron_fired_ = false;
+    sub_finished_ = false;
+    co_await ctx.plan_and_spawn_sub<void>(next_sub_key_++, args_.pipe.inner);
+  }
+
+  CronArgs args_;
+  detail::cron::cronexpr cronexpr_;
+  int64_t next_sub_key_ = 0;
+  bool cron_fired_ = false;
+  bool sub_finished_ = true;
+  bool done_ = false;
+  folly::CancellationSource stop_source_;
 };
 
 class plugin final : public virtual OperatorPlugin {
@@ -97,7 +178,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<CronArgs, Cron>{};
+    auto d = Describer<CronArgs, Cron, CronEvents>{};
     auto schedule = d.positional("schedule", &CronArgs::schedule, "string");
     auto pipe_arg = d.pipeline(&CronArgs::pipe, SubOptimize::from_downstream);
     d.validate([schedule, pipe_arg](DescribeCtx& ctx) -> Empty {
@@ -120,12 +201,12 @@ public:
       }
       if (auto pipe = ctx.get(pipe_arg)) {
         auto output = pipe->inner.infer_type(tag_v<void>, ctx);
-        if (not output.is_error()) {
-          if (output->is_not<table_slice>()) {
-            diagnostic::error("pipeline must return events")
-              .primary(pipe->source.subloc(0, 1))
-              .emit(ctx);
-          }
+        if (not output.is_error()
+            and ((nova_enabled() and output->is_not<nova::Events>())
+                 or (not nova_enabled() and output->is_not<table_slice>()))) {
+          diagnostic::error("pipeline must return events")
+            .primary(pipe->source.subloc(0, 1))
+            .emit(ctx);
         }
       }
       return {};
