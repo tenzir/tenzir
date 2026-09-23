@@ -11,6 +11,8 @@
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/array_merge.hpp"
+#include "tenzir/nova/arrow_export.hpp"
+#include "tenzir/nova/arrow_metadata.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/eval_util.hpp"
 #include "tenzir/nova/materialize.hpp"
@@ -18,7 +20,12 @@
 #include "tenzir/nova/storage.hpp"
 #include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova/type_system.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/test/test.hpp"
+
+#include <arrow/record_batch.h>
+#include <arrow/type.h>
+#include <arrow/util/key_value_metadata.h>
 
 #include <array>
 #include <chrono>
@@ -2917,4 +2924,541 @@ TEST("record builder replaces a null on a repeated key") {
   CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{std::int64_t{1}}));
   CHECK_EQUAL(field_value(array, "b", 0),
               (tenzir::data{tenzir::list{std::int64_t{1}, caf::none}}));
+}
+
+TEST("nova Arrow schema metadata roundtrips independently of import time") {
+  for (auto internal : {false, true}) {
+    auto metadata = ArrowMetadata{"schema.test", internal};
+    auto schema = metadata.apply(tenzir::type{tenzir::record_type{}});
+    auto imported = ArrowMetadata::from_arrow(*schema.to_arrow_schema());
+    CHECK_EQUAL(imported.name, metadata.name);
+    CHECK_EQUAL(imported.internal, internal);
+    auto meta = imported.to_meta(2);
+    CHECK_EQUAL(*meta.name.get(1), "schema.test");
+    CHECK_EQUAL(*meta.internal.get(1), internal);
+    CHECK_EQUAL(*meta.import_time.get(1), tenzir::time{});
+  }
+}
+
+TEST("nova Arrow schema metadata supports defaults and legacy names") {
+  auto empty = arrow::schema({});
+  CHECK_EQUAL(ArrowMetadata::from_arrow(*empty).name, "");
+  CHECK_EQUAL(ArrowMetadata::from_arrow(*empty, "undefined").name, "undefined");
+  CHECK(not ArrowMetadata::from_arrow(*empty).internal);
+  auto legacy = empty->WithMetadata(
+    arrow::key_value_metadata({"VAST:name:0"}, {"legacy.schema"}));
+  CHECK_EQUAL(ArrowMetadata::from_arrow(*legacy, "undefined").name,
+              "legacy.schema");
+}
+
+TEST("nova events convert active rows to table slices") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::int64_t{1});
+  builder.record().field("x").data(std::int64_t{2});
+  builder.record().field("y").data(std::int64_t{3});
+  auto events = Events{builder.finish(), bitmap({true, true, false}),
+                       Events::Meta::make_empty(3)};
+
+  auto slices = to_table_slices(events);
+
+  REQUIRE_EQUAL(slices.size(), 1u);
+  CHECK_EQUAL(slices[0].rows(), 2u);
+  auto const& layout = tenzir::as<tenzir::record_type>(slices[0].schema());
+  CHECK_EQUAL(layout.num_fields(), 1u);
+  CHECK_EQUAL(layout.field(0).name, "x");
+  CHECK_EQUAL(layout.field(0).type, tenzir::int64_type{});
+}
+
+TEST("nova events retain schema names when converting to table slices") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::int64_t{1});
+  builder.record().field("x").data(std::int64_t{2});
+  auto names = ArrayBuilder<String>{};
+  names.data("schema.one");
+  names.data("schema.two");
+  auto meta = Events::Meta::make_empty(2);
+  meta.name = names.finish();
+  auto events = Events{builder.finish(), bitmap({true, true}), std::move(meta)};
+  auto slices = to_table_slices(events);
+
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK_EQUAL(slices[0].schema().name(), "schema.one");
+  CHECK_EQUAL(slices[1].schema().name(), "schema.two");
+}
+
+TEST("nova events retain internal metadata when converting to table slices") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::int64_t{1});
+  builder.record().field("x").data(std::int64_t{2});
+  auto internal = ArrayBuilder<Bool>{};
+  internal.data(false);
+  internal.data(true);
+  auto meta = Events::Meta::make_empty(2, "schema");
+  meta.internal = internal.finish();
+  auto events = Events{builder.finish(), bitmap({true, true}), std::move(meta)};
+  auto slices = to_table_slices(events);
+
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK(not slices[0].schema().attribute("internal").has_value());
+  CHECK(slices[1].schema().attribute("internal").has_value());
+}
+
+TEST("nova events convert Arrow-compatible heterogeneous lists to table "
+     "slices") {
+  auto builder = ArrayBuilder<Record>{};
+  auto list = builder.record().field("xs").list();
+  list.record().field("a").data(std::int64_t{1});
+  list.record().field("b").data(std::int64_t{2});
+  auto events
+    = Events{builder.finish(), bitmap({true}), Events::Meta::make_empty(1)};
+  auto slices = to_table_slices(events);
+
+  REQUIRE_EQUAL(slices.size(), 1u);
+  auto output = tenzir::series{slices[0]};
+  REQUIRE_EQUAL(output.length(), 1);
+  CHECK_EQUAL(tenzir::materialize(output.at(0)),
+              (tenzir::data{tenzir::record{
+                {"xs",
+                 tenzir::list{
+                   tenzir::record{{"a", std::int64_t{1}}, {"b", caf::none}},
+                   tenzir::record{{"a", caf::none}, {"b", std::int64_t{2}}},
+                 }},
+              }}));
+}
+
+TEST("nova events stringify heterogeneous lists when converting to table "
+     "slices") {
+  auto builder = ArrayBuilder<Record>{};
+  auto list = builder.record().field("xs").list();
+  list.data(std::int64_t{1});
+  list.data(std::string_view{"x"});
+  list.null();
+  list.data(true);
+  list.record().field("a").data(std::int64_t{2});
+  auto events
+    = Events{builder.finish(), bitmap({true}), Events::Meta::make_empty(1)};
+  auto slices = to_table_slices(events);
+  REQUIRE_EQUAL(slices.size(), 1u);
+  auto output = tenzir::series{slices[0]};
+  REQUIRE_EQUAL(output.length(), 1);
+  CHECK_EQUAL(tenzir::materialize(output.at(0)),
+              (tenzir::data{tenzir::record{
+                {"xs", tenzir::list{"1", "x", "null", "true", R"({"a":2})"}},
+              }}));
+}
+
+TEST("nova events preserve compatible numeric lists when converting to table "
+     "slices") {
+  auto builder = ArrayBuilder<Record>{};
+  auto list = builder.record().field("xs").list();
+  list.data(std::int64_t{1});
+  list.data(std::uint64_t{2});
+  list.null();
+  auto events
+    = Events{builder.finish(), bitmap({true}), Events::Meta::make_empty(1)};
+  auto slices = to_table_slices(events);
+  REQUIRE_EQUAL(slices.size(), 1u);
+  auto output = tenzir::series{slices[0]};
+  REQUIRE_EQUAL(output.length(), 1);
+  CHECK_EQUAL(
+    tenzir::materialize(output.at(0)),
+    (tenzir::data{tenzir::record{
+      {"xs", tenzir::list{std::uint64_t{1}, std::uint64_t{2}, caf::none}},
+    }}));
+}
+
+TEST("nova events stringify nested list conflicts when converting to table "
+     "slices") {
+  auto builder = ArrayBuilder<Record>{};
+  auto row = builder.record();
+  auto records = row.field("records").list();
+  records.record().field("value").data(std::int64_t{1});
+  records.record().field("value").list().data(std::int64_t{2});
+  auto nested = row.field("nested").list().list();
+  nested.data(std::int64_t{3});
+  nested.data(std::string_view{"four"});
+  nested.null();
+  auto events
+    = Events{builder.finish(), bitmap({true}), Events::Meta::make_empty(1)};
+  auto slices = to_table_slices(events);
+  REQUIRE_EQUAL(slices.size(), 1u);
+  auto output = tenzir::series{slices[0]};
+  REQUIRE_EQUAL(output.length(), 1);
+  CHECK_EQUAL(tenzir::materialize(output.at(0)),
+              (tenzir::data{tenzir::record{
+                {"records", tenzir::list{tenzir::record{{"value", "1"}},
+                                         tenzir::record{{"value", "[2]"}}}},
+                {"nested", tenzir::list{tenzir::list{"3", "four", "null"}}},
+              }}));
+}
+
+namespace {
+
+auto export_events(Record row, storage::Index count = 1) -> Events {
+  return Events{constant_array(count, std::move(row)),
+                storage::BitMap{count, true}, Events::Meta::make_empty(count)};
+}
+
+auto append_export_row(ArrayBuilder<Record>& builder, Record const& value)
+  -> void {
+  auto row = builder.record();
+  for (auto const& [name, field] : value) {
+    append_data(row.field(name), field);
+  }
+}
+
+auto export_values(std::vector<tenzir::table_slice> const& slices)
+  -> std::vector<tenzir::data> {
+  auto result = std::vector<tenzir::data>{};
+  for (auto const& slice : slices) {
+    CHECK(to_record_batch(slice)->ValidateFull().ok());
+    auto series = tenzir::series{slice};
+    for (auto i = int64_t{0}; i < series.length(); ++i) {
+      result.push_back(tenzir::materialize(series.at(i)));
+    }
+  }
+  return result;
+}
+
+auto check_export_error(tenzir::collecting_diagnostic_handler& dh,
+                        tenzir::location loc)
+  -> std::vector<tenzir::diagnostic> {
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), 1u);
+  CHECK_EQUAL(diagnostics[0].severity, tenzir::severity::error);
+  CHECK_EQUAL(diagnostics[0].message,
+              "input schema changed while writing Arrow data");
+  REQUIRE_EQUAL(diagnostics[0].annotations.size(), 1u);
+  CHECK(diagnostics[0].annotations[0].primary);
+  CHECK_EQUAL(diagnostics[0].annotations[0].source, loc);
+  return diagnostics;
+}
+
+} // namespace
+
+TEST("ArrowExportBuilder refines null across batches and accepts later null") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location{10, 20};
+  auto nulls = export_events(Record{{"x", Null{}}}, 2);
+  auto first = exporter.add(nulls, dh, loc);
+  REQUIRE(first);
+  CHECK(first->empty());
+  auto second = exporter.add(export_events(Record{{"x", Int{42}}}), dh, loc);
+  REQUIRE(second);
+  REQUIRE_EQUAL(second->size(), 1u);
+  CHECK_EQUAL(export_values(*second),
+              (std::vector<tenzir::data>{tenzir::record{{"x", caf::none}},
+                                         tenzir::record{{"x", caf::none}},
+                                         tenzir::record{{"x", int64_t{42}}}}));
+  auto third = exporter.add(nulls, dh, loc);
+  REQUIRE(third);
+  REQUIRE_EQUAL(third->size(), 1u);
+  CHECK_EQUAL((*second)[0].schema(), (*third)[0].schema());
+  CHECK_EQUAL(export_values(*third),
+              (std::vector<tenzir::data>{tenzir::record{{"x", caf::none}},
+                                         tenzir::record{{"x", caf::none}}}));
+  auto end = exporter.finish(dh, loc);
+  REQUIRE(end);
+  CHECK(end->empty());
+  CHECK(dh.empty());
+}
+
+TEST("ArrowExportBuilder recursively refines nested list children") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location::unknown;
+  auto first = exporter.add(
+    export_events(Record{{"xs", List{List{Null{}}, List{}}}}), dh, loc);
+  REQUIRE(first);
+  CHECK(first->empty());
+  auto second
+    = exporter.add(export_events(Record{{"xs", List{List{Int{7}}}}}), dh, loc);
+  REQUIRE(second);
+  CHECK_EQUAL(
+    export_values(*second),
+    (std::vector<tenzir::data>{
+      tenzir::record{
+        {"xs", tenzir::list{tenzir::list{caf::none}, tenzir::list{}}}},
+      tenzir::record{{"xs", tenzir::list{tenzir::list{int64_t{7}}}}}}));
+  auto third = exporter.add(
+    export_events(Record{{"xs", List{List{Null{}}, List{}}}}), dh, loc);
+  REQUIRE(third);
+  REQUIRE_EQUAL(second->size(), 1u);
+  REQUIRE_EQUAL(third->size(), 1u);
+  CHECK_EQUAL((*second)[0].schema(), (*third)[0].schema());
+  CHECK_EQUAL(export_values(*third).front(), export_values(*second).front());
+  CHECK(dh.empty());
+}
+
+TEST("ArrowExportBuilder EOF flushes unresolved nulls and empty lists") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location::unknown;
+  auto empty = exporter.finish(dh, loc);
+  REQUIRE(empty);
+  CHECK(empty->empty());
+  // Use a fresh stream: finish freezes discovery even when no rows arrived.
+  exporter = ArrowExportBuilder{};
+  auto first = exporter.add(
+    export_events(Record{{"x", Null{}}, {"xs", List{}}}), dh, loc);
+  REQUIRE(first);
+  CHECK(first->empty());
+  auto end = exporter.finish(dh, loc);
+  REQUIRE(end);
+  CHECK_EQUAL(export_values(*end),
+              (std::vector<tenzir::data>{
+                tenzir::record{{"x", caf::none}, {"xs", tenzir::list{}}}}));
+  CHECK(dh.empty());
+}
+
+TEST("ArrowExportBuilder row limit freezes discovery within a batch") {
+  auto exporter = ArrowExportBuilder{ArrowExportBuilder::Limits{.rows = 2}};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location{4, 18, 2};
+  auto first = exporter.add(export_events(Record{{"x", Null{}}}), dh, loc);
+  REQUIRE(first);
+  CHECK(first->empty());
+  auto second = exporter.add(export_events(Record{{"x", Null{}}}, 3), dh, loc);
+  REQUIRE(second);
+  CHECK_EQUAL(export_values(*second).size(), 4u);
+  auto late = exporter.add(export_events(Record{{"x", Int{1}}}), dh, loc);
+  CHECK(not late);
+  check_export_error(dh, loc);
+}
+
+TEST("ArrowExportBuilder byte limit freezes even one oversized row") {
+  auto exporter = ArrowExportBuilder{ArrowExportBuilder::Limits{.bytes = 1}};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location{8, 24, 3};
+  auto first = exporter.add(export_events(Record{{"x", Null{}}}), dh, loc);
+  REQUIRE(first);
+  CHECK_EQUAL(export_values(*first).size(), 1u);
+  auto late = exporter.add(export_events(Record{{"x", Int{1}}}), dh, loc);
+  CHECK(not late);
+  check_export_error(dh, loc);
+}
+
+TEST("ArrowExportBuilder byte limit allows discovery before oversized row") {
+  auto exporter = ArrowExportBuilder{ArrowExportBuilder::Limits{.bytes = 4096}};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location{8, 24};
+  auto first = exporter.add(
+    export_events(Record{{"x", Null{}}, {"text", String{"small"}}}), dh, loc);
+  REQUIRE(first);
+  CHECK(first->empty());
+  auto second = exporter.add(
+    export_events(Record{{"x", Null{}}, {"text", String(8192, 'x')}}), dh, loc);
+  REQUIRE(second);
+  CHECK_EQUAL(export_values(*second).size(), 2u);
+  auto late = exporter.add(
+    export_events(Record{{"x", Int{1}}, {"text", String{"small"}}}), dh, loc);
+  CHECK(not late);
+  check_export_error(dh, loc);
+}
+
+TEST("ArrowExportBuilder rejects late refinement within one batch") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").null();
+  builder.record().field("x").null();
+  builder.record().field("x").data(int64_t{1});
+  auto events = Events{builder.finish(), storage::BitMap{3, true},
+                       Events::Meta::make_empty(3)};
+  auto exporter = ArrowExportBuilder{ArrowExportBuilder::Limits{.rows = 2}};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location{12, 20};
+  CHECK(not exporter.add(events, dh, loc));
+  check_export_error(dh, loc);
+}
+
+TEST("ArrowExportBuilder rejects field reordering") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location{4, 12};
+  auto first = exporter.add(export_events(Record{{"x", Int{1}}, {"y", Int{2}}}),
+                            dh, loc);
+  REQUIRE(first);
+  auto second = exporter.add(
+    export_events(Record{{"y", Int{2}}, {"x", Int{1}}}), dh, loc);
+  CHECK(not second);
+  check_export_error(dh, loc);
+}
+
+TEST("ArrowExportBuilder rejects concrete changes and new fields") {
+  for (auto const& changed :
+       {Record{{"x", String{"incompatible"}}},
+        Record{{"x", Int{1}}, {"new", Int{2}}},
+        Record{{"new", Int{2}}, {"x", Int{1}}}, Record{}}) {
+    auto exporter = ArrowExportBuilder{};
+    auto dh = tenzir::collecting_diagnostic_handler{};
+    auto loc = tenzir::location{11, 19};
+    auto first = exporter.add(export_events(Record{{"x", Int{1}}}), dh, loc);
+    REQUIRE(first);
+    auto second = exporter.add(export_events(changed), dh, loc);
+    CHECK(not second);
+    check_export_error(dh, loc);
+  }
+}
+
+TEST("ArrowExportBuilder rejects schema name and internal metadata changes") {
+  for (auto internal : {false, true}) {
+    auto exporter = ArrowExportBuilder{};
+    auto dh = tenzir::collecting_diagnostic_handler{};
+    auto loc = tenzir::location{1, 9};
+    auto events = export_events(Record{{"x", Null{}}});
+    auto first = exporter.add(events, dh, loc);
+    REQUIRE(first);
+    CHECK(first->empty());
+    if (internal) {
+      auto values = ArrayBuilder<Bool>{};
+      values.data(true);
+      events.meta.internal = values.finish();
+    } else {
+      auto values = ArrayBuilder<String>{};
+      values.data("changed");
+      events.meta.name = values.finish();
+    }
+    auto second = exporter.add(events, dh, loc);
+    CHECK(not second);
+    auto diagnostics = check_export_error(dh, loc);
+    REQUIRE(not diagnostics[0].notes.empty());
+    CHECK_EQUAL(diagnostics[0].notes[0].message, "schema metadata changed");
+  }
+}
+
+TEST("ArrowExportBuilder ignores masked schemas and preserves active row "
+     "order") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(int64_t{3});
+  builder.record().field("different").data("ignored");
+  builder.record().field("x").data(int64_t{1});
+  builder.record().field("x").data(int64_t{2});
+  auto events = Events{builder.finish(), bitmap({true, false, true, true}),
+                       Events::Meta::make_empty(4)};
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto first = exporter.add(events, dh, tenzir::location::unknown);
+  REQUIRE(first);
+  CHECK_EQUAL(export_values(*first),
+              (std::vector<tenzir::data>{tenzir::record{{"x", int64_t{3}}},
+                                         tenzir::record{{"x", int64_t{1}}},
+                                         tenzir::record{{"x", int64_t{2}}}}));
+  events.mask = storage::BitMap{4, false};
+  auto empty = exporter.add(events, dh, tenzir::location::unknown);
+  REQUIRE(empty);
+  CHECK(empty->empty());
+  CHECK(dh.empty());
+}
+
+TEST("ArrowExportBuilder validates every frozen row before field union") {
+  auto baseline = Record{{"x", Int{1}}, {"y", Int{2}}};
+  for (auto const& changed :
+       {Record{{"x", Int{1}}}, Record{{"y", Int{2}}, {"x", Int{1}}},
+        Record{{"x", Int{1}}, {"y", Int{2}}, {"z", Null{}}},
+        Record{{"x", String{"wrong"}}, {"y", Int{2}}}}) {
+    for (auto separate_batch : {false, true}) {
+      auto exporter = ArrowExportBuilder{};
+      auto dh = tenzir::collecting_diagnostic_handler{};
+      auto loc = tenzir::location{1, 3};
+      if (separate_batch) {
+        REQUIRE(exporter.add(export_events(baseline), dh, loc));
+      }
+      auto builder = ArrayBuilder<Record>{};
+      append_export_row(builder, baseline);
+      append_export_row(builder, baseline);
+      append_export_row(builder, changed);
+      append_export_row(builder, baseline);
+      auto events = Events{builder.finish(), storage::BitMap{4, true},
+                           Events::Meta::make_empty(4)};
+      CHECK(not exporter.add(events, dh, loc));
+      auto diagnostics = check_export_error(dh, loc);
+      CHECK_EQUAL(diagnostics[0].notes.size(), 3u);
+    }
+  }
+}
+
+TEST("ArrowExportBuilder validates nested frozen record shapes") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location::unknown;
+  auto baseline = Record{{"r", Record{{"x", Int{1}}, {"y", Int{2}}}}};
+  REQUIRE(exporter.add(export_events(baseline), dh, loc));
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, baseline);
+  append_export_row(builder, Record{{"r", Record{{"x", Int{1}}}}});
+  auto events = Events{builder.finish(), storage::BitMap{2, true},
+                       Events::Meta::make_empty(2)};
+  CHECK(not exporter.add(events, dh, loc));
+  check_export_error(dh, loc);
+}
+
+TEST("ArrowExportBuilder bounds frozen output batches and normalizes nulls") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto loc = tenzir::location::unknown;
+  REQUIRE(exporter.add(export_events(Record{{"x", Int{1}}}), dh, loc));
+  auto result
+    = exporter.add(export_events(Record{{"x", Null{}}}, 3000), dh, loc);
+  REQUIRE(result);
+  CHECK_EQUAL(result->size(), 3u);
+  CHECK_EQUAL(export_values(*result).size(), 3000u);
+  for (auto const& slice : *result) {
+    CHECK_EQUAL(to_record_batch(slice)->column(0)->type_id(),
+                arrow::Type::INT64);
+  }
+  CHECK(dh.empty());
+}
+
+TEST("ArrowExportBuilder charges field names and schema names per slice") {
+  for (auto schema_name : {false, true}) {
+    auto exporter
+      = ArrowExportBuilder{ArrowExportBuilder::Limits{.bytes = 4096}};
+    auto dh = tenzir::collecting_diagnostic_handler{};
+    auto loc = tenzir::location::unknown;
+    auto field = schema_name ? std::string{"x"} : std::string(8192, 'x');
+    auto events = export_events(Record{{field, Null{}}});
+    if (schema_name) {
+      auto names = ArrayBuilder<String>{};
+      names.data(std::string(8192, 's'));
+      events.meta.name = names.finish();
+    }
+    auto first = exporter.add(events, dh, loc);
+    REQUIRE(first);
+    CHECK_EQUAL(export_values(*first).size(), 1u);
+    events.data = export_events(Record{{field, Int{1}}}).data;
+    CHECK(not exporter.add(events, dh, loc));
+    auto diagnostics = check_export_error(dh, loc);
+    REQUIRE_EQUAL(diagnostics[0].notes.size(), 4u);
+    CHECK(diagnostics[0].notes.back().message.find("inference window ended")
+          != std::string::npos);
+  }
+}
+
+TEST("ArrowExportBuilder limit note only explains null refinement") {
+  for (auto refinement : {false, true}) {
+    auto exporter = ArrowExportBuilder{ArrowExportBuilder::Limits{.rows = 1}};
+    auto dh = tenzir::collecting_diagnostic_handler{};
+    auto loc = tenzir::location::unknown;
+    REQUIRE(exporter.add(export_events(Record{{"x", Null{}}}), dh, loc));
+    auto changed = refinement ? Record{{"x", Int{1}}} : Record{{"y", Int{1}}};
+    CHECK(not exporter.add(export_events(changed), dh, loc));
+    auto diagnostics = check_export_error(dh, loc);
+    CHECK_EQUAL(diagnostics[0].notes.size(), refinement ? 4u : 3u);
+  }
+}
+
+TEST("ArrowExportBuilder retains heterogeneous list stringification") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto events = export_events(Record{
+    {"xs", List{Int{1}, String{"x"}, Null{}, true, Record{{"a", Int{2}}}}}});
+  for (auto i = 0; i < 2; ++i) {
+    auto result = exporter.add(events, dh, tenzir::location::unknown);
+    REQUIRE(result);
+    CHECK_EQUAL(
+      export_values(*result),
+      (std::vector<tenzir::data>{tenzir::record{
+        {"xs", tenzir::list{"1", "x", "null", "true", R"({"a":2})"}}}}));
+  }
+  CHECK(dh.empty());
 }

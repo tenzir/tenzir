@@ -10,6 +10,7 @@
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/nova/arrow_export.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -178,7 +179,9 @@ public:
   /// Parquet stream. Checkpointing is not supported until we support
   /// seekable/appendable Parquet output.
   auto snapshot(Serde&) -> void override {
-    TENZIR_TODO();
+    diagnostic::error("write_parquet does not support checkpoints yet")
+      .primary(args_.operator_loc)
+      .throw_();
   }
 
   auto state() -> OperatorState override {
@@ -292,6 +295,68 @@ private:
   bool failed_ = false;
 };
 
+class WriteParquetEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteParquetEvents(WriteParquetArgs args)
+    : location_{args.operator_loc}, writer_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await writer_.start(ctx);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    writer_.snapshot(serde);
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : writer_.state();
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    auto slices = exporter_.add(input, ctx.dh(), location_);
+    if (not slices) {
+      failed_ = true;
+      co_return;
+    }
+    for (auto& slice : *slices) {
+      co_await writer_.process(std::move(slice), push, ctx);
+      if (writer_.state() == OperatorState::done) {
+        co_return;
+      }
+    }
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (failed_ or writer_.state() == OperatorState::done) {
+      co_return FinalizeBehavior::done;
+    }
+    auto slices = exporter_.finish(ctx.dh(), location_);
+    if (not slices) {
+      failed_ = true;
+      co_return FinalizeBehavior::done;
+    }
+    for (auto& slice : *slices) {
+      co_await writer_.process(std::move(slice), push, ctx);
+      if (writer_.state() == OperatorState::done) {
+        co_return FinalizeBehavior::done;
+      }
+    }
+    co_return co_await writer_.finalize(push, ctx);
+  }
+
+private:
+  location location_;
+  nova::ArrowExportBuilder exporter_;
+  bool failed_ = false;
+  WriteParquet writer_;
+};
+
 auto validate_args(const Option<located<std::string>>& type,
                    const Option<located<int64_t>>& level, DescribeCtx& ctx) {
   if (not type) {
@@ -347,7 +412,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteParquetArgs, WriteParquet>{};
+    auto d = Describer<WriteParquetArgs, WriteParquet, WriteParquetEvents>{};
     auto compression_level
       = d.named("compression_level", &WriteParquetArgs::compression_level);
     auto compression_type

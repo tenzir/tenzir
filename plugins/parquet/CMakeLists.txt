@@ -16,6 +16,7 @@ TenzirRegisterPlugin(
   TARGET parquet
   ENTRYPOINT parquet.cpp
   SOURCES GLOB "src/*.cpp"
+  TEST_SOURCES GLOB "tests/*.cpp"
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 

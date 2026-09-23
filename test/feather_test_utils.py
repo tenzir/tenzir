@@ -7,6 +7,8 @@ from pathlib import Path
 import shlex
 import subprocess
 
+from format_roundtrip_test_utils import assert_format_roundtrip
+
 
 def run(pipeline: str, *, nova: bool = True, data: bytes | None = None):
     command = [*shlex.split(os.environ["TENZIR_BINARY"]), "--bare-mode"]
@@ -186,22 +188,6 @@ def encode_zeek(batch_size: int, *, compressed: bool = False) -> bytes:
 
 
 def assert_roundtrip():
-    source = (
-        "from {id: 1, ip: 192.0.2.1, subnet: 192.0.2.0/24, list: [1, 2]}, "
-        "{id: 2, ip: 192.0.2.2, subnet: 192.0.2.0/24, list: [3]}\n"
-    )
-    expected = [
-        {"id": 1, "ip": "192.0.2.1", "subnet": "192.0.2.0/24", "list": [1, 2]},
-        {"id": 2, "ip": "192.0.2.2", "subnet": "192.0.2.0/24", "list": [3]},
-    ]
     for writer in ["write_feather", 'write_feather compression_type="zstd"']:
-        encoded = run(source + writer, nova=False)
-        assert not encoded.stderr, encoded.stderr.decode()
-        for reader in ["read_feather", "split_bytes 1\nread_feather"]:
-            decoded = run(
-                f"load_stdin\n{reader}\nwrite_json compact=true", data=encoded.stdout
-            )
-            assert not decoded.stderr, decoded.stderr.decode()
-            rows = [json.loads(line) for line in decoded.stdout.splitlines()]
-            assert rows == expected, (writer, reader, rows)
-    print("Nova Feather reads legacy output, including compression and extensions")
+        assert_format_roundtrip(writer, ["read_feather", "split_bytes 1\nread_feather"])
+    print("Nova Feather roundtrips columns, stringification, and nested conflicts")

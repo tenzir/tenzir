@@ -22,7 +22,9 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/make_byte_reader.hpp>
+#include <tenzir/nova/arrow_export.hpp>
 #include <tenzir/nova/arrow_import.hpp>
+#include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -1120,9 +1122,8 @@ private:
         batch = selected.MoveValueUnsafe();
       }
     }
-    // Read schema attributes without asking legacy type conversion to inspect
-    // the data columns. Nova supports physical types that legacy slices do not.
-    auto schema = type::from_arrow(*arrow::schema({}, metadata));
+    auto schema_metadata = nova::ArrowMetadata::from_arrow(
+      *arrow::schema({}, metadata), "undefined");
     auto array = batch->ToStructArray();
     if (not array.ok()) {
       return Err{array.status().ToStringWithoutContextLines()};
@@ -1135,12 +1136,9 @@ private:
     auto records = std::move(imported).try_as<nova::Record>();
     TENZIR_ASSERT(records);
     auto length = records->length();
-    auto meta = nova::Events::Meta::make_empty(
-      length, schema.name().empty() ? "undefined" : schema.name());
+    auto meta = schema_metadata.to_meta(length);
     meta.import_time = nova::Array<nova::Time>{
       nova::storage::ConstantStorage<nova::Time>{length, import_time}};
-    meta.internal = nova::Array<nova::Bool>{
-      nova::storage::BitMap{length, schema.attribute("internal").has_value()}};
     return nova::Events{std::move(*records),
                         nova::storage::BitMap{length, true}, std::move(meta)};
   }
@@ -1586,6 +1584,14 @@ public:
   explicit WriteFeather(WriteFeatherArgs args) : args_{std::move(args)} {
   }
 
+  auto snapshot(Serde&) -> void override {
+    // Emitted IPC bytes depend on the writer's schema and dictionary state,
+    // which cannot yet be restored after a checkpoint.
+    diagnostic::error("write_feather does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     if (done_) {
@@ -1717,6 +1723,64 @@ private:
   bool done_ = false;
 };
 
+class WriteFeatherEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteFeatherEvents(WriteFeatherArgs args)
+    : location_{args.operator_location}, writer_{std::move(args)} {
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    writer_.snapshot(serde);
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : writer_.state();
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    auto slices = exporter_.add(input, ctx.dh(), location_);
+    if (not slices) {
+      failed_ = true;
+      co_return;
+    }
+    for (auto& slice : *slices) {
+      co_await writer_.process(std::move(slice), push, ctx);
+      if (writer_.state() == OperatorState::done) {
+        co_return;
+      }
+    }
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (failed_ or writer_.state() == OperatorState::done) {
+      co_return FinalizeBehavior::done;
+    }
+    auto slices = exporter_.finish(ctx.dh(), location_);
+    if (not slices) {
+      failed_ = true;
+      co_return FinalizeBehavior::done;
+    }
+    for (auto& slice : *slices) {
+      co_await writer_.process(std::move(slice), push, ctx);
+      if (writer_.state() == OperatorState::done) {
+        co_return FinalizeBehavior::done;
+      }
+    }
+    co_return co_await writer_.finalize(push, ctx);
+  }
+
+private:
+  location location_;
+  nova::ArrowExportBuilder exporter_;
+  bool failed_ = false;
+  WriteFeather writer_;
+};
+
 class plugin final : public virtual store_plugin {
   auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
@@ -1797,7 +1861,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteFeatherArgs, WriteFeather>{};
+    auto d = Describer<WriteFeatherArgs, WriteFeather, WriteFeatherEvents>{};
     d.operator_location(&WriteFeatherArgs::operator_location);
     auto compression_level
       = d.named("compression_level", &WriteFeatherArgs::compression_level);

@@ -14,6 +14,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/enum.hpp>
 #include <tenzir/nova/arrow_import.hpp>
+#include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/read_detection.hpp>
@@ -344,8 +345,7 @@ private:
     }
     // Retain only schema metadata, releasing the batch's aliases before Nova
     // adopts the decoded buffers. Do not inspect the Arrow columns afterward.
-    auto schema
-      = type::from_arrow(*arrow::schema({}, batch->schema()->metadata()));
+    auto metadata = nova::ArrowMetadata::from_arrow(*batch->schema());
     batch.reset();
     auto imported = nova::import_arrow_array(std::move(*columns));
     if (not imported) {
@@ -357,9 +357,7 @@ private:
     auto records = imported.unwrap().try_as<nova::Record>();
     TENZIR_ASSERT(records);
     auto length = records->length();
-    auto meta = nova::Events::Meta::make_empty(length, schema.name());
-    meta.internal = nova::Array<nova::Bool>{
-      nova::storage::BitMap{length, schema.attribute("internal").has_value()}};
+    auto meta = metadata.to_meta(length);
     return apply_read_pushdown(nova::Events{std::move(*records),
                                             nova::storage::BitMap{length, true},
                                             std::move(meta)},
