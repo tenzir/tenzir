@@ -1,0 +1,18 @@
+from {
+  b: true,
+  i: -3,
+  u: 42.uint(),
+  f: 1.5,
+  g: 3.0,
+  s: "a b",
+  q: "say \"hi\"",
+  ip: 10.0.0.1,
+  sn: 10.0.0.0/8,
+  t: 2024-01-01,
+  d: 1s,
+  bl: b"abc",
+  n: null,
+}
+to_stdout {
+  write_kv
+}

@@ -1,0 +1,5 @@
+from {x: 1, keep: true}, {x: 2, keep: false}, {x: 3, keep: true}
+where keep
+to_stdout {
+  write_kv
+}

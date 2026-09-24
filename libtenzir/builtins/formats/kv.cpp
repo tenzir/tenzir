@@ -16,6 +16,9 @@
 #include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/array.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -25,7 +28,12 @@
 #include <re2/re2.h>
 
 #include <algorithm>
+#include <span>
+#include <string>
 #include <string_view>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace tenzir::plugins::kv {
 
@@ -707,6 +715,364 @@ private:
   WriteKvArgs args_;
 };
 
+/// Prints Nova rows as key-value pairs.
+///
+/// Nova records have per-row shapes, so the printer flattens every row while
+/// walking it rather than flattening a schema up front. It follows the
+/// semantics of `flatten`: nested records become fields with joined names,
+/// records in lists become one list per leaf field, and nested lists become a
+/// single list.
+class NovaKvPrinter {
+public:
+  explicit NovaKvPrinter(WriteKvArgs const& args) : args_{args} {
+  }
+
+  auto print(nova::RowView<nova::Record> const& row) -> void {
+    fields_.clear();
+    names_.clear();
+    paths_.clear();
+    name_.clear();
+    collect_fields(row);
+    auto first = true;
+    if (not has_duplicate_names()) {
+      for (auto const& field : fields_) {
+        print_field(first, name_of(field), field);
+      }
+    } else {
+      auto names = unique_names();
+      for (auto i = size_t{0}; i < fields_.size(); ++i) {
+        print_field(first, names[i], fields_[i]);
+      }
+    }
+    out_.push_back('\n');
+  }
+
+  auto take() && -> std::string {
+    return std::move(out_);
+  }
+
+private:
+  using Path = std::vector<std::string_view>;
+
+  /// A flattened field of the current row.
+  struct Field {
+    /// The range of the field name in `names_`.
+    size_t name_begin;
+    size_t name_end;
+    nova::RowView<nova::Data> value;
+    /// The leaf path within the records of a list in `paths_`, if any.
+    Option<size_t> path;
+  };
+
+  auto name_of(Field const& field) const -> std::string_view {
+    return std::string_view{names_}.substr(field.name_begin,
+                                           field.name_end - field.name_begin);
+  }
+
+  auto path_of(Field const& field) const -> std::span<std::string_view const> {
+    if (not field.path) {
+      return {};
+    }
+    return paths_[*field.path];
+  }
+
+  auto add_field(nova::RowView<nova::Data> value, Option<size_t> path) -> void {
+    auto const begin = names_.size();
+    names_ += name_;
+    fields_.push_back(Field{begin, names_.size(), std::move(value), path});
+  }
+
+  /// Collects the fields of `record`, prefixing their names with `name_`.
+  auto collect_fields(nova::RowView<nova::Record> const& record) -> void {
+    auto const prefix = name_.size();
+    for (auto field : record) {
+      if (prefix != 0) {
+        name_ += args_.flatten_separator.inner;
+      }
+      name_ += field.first;
+      match(
+        field.second,
+        [&](nova::RowView<nova::Record> const& nested) {
+          collect_fields(nested);
+        },
+        [&](nova::RowView<nova::List> const& list) {
+          collect_list_field(list);
+        },
+        [&](auto const&) {
+          add_field(field.second, None{});
+        });
+      name_.resize(prefix);
+    }
+  }
+
+  /// Collects a list field named `name_`. A list that contains records turns
+  /// into one field per leaf path of those records.
+  auto collect_list_field(nova::RowView<nova::List> const& list) -> void {
+    auto path = Path{};
+    auto paths = std::vector<Path>{};
+    if (not collect_paths(list, path, paths)) {
+      add_field(list, None{});
+      return;
+    }
+    auto const prefix = name_.size();
+    for (auto& leaf : paths) {
+      for (auto segment : leaf) {
+        name_ += args_.flatten_separator.inner;
+        name_ += segment;
+      }
+      add_field(list, paths_.size());
+      paths_.push_back(std::move(leaf));
+      name_.resize(prefix);
+    }
+  }
+
+  /// Returns whether two fields of the current row share a flattened name,
+  /// e.g., for `{"a.b": 1, a: {b: 2}}`.
+  auto has_duplicate_names() -> bool {
+    seen_.clear();
+    for (auto const& field : fields_) {
+      if (not seen_.insert(name_of(field)).second) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Renames duplicate field names like `flatten`: the first occurrence keeps
+  /// its name, and later ones get the suffix `_1`, `_2`, and so on, skipping
+  /// suffixed names that already exist in the row.
+  auto unique_names() const -> std::vector<std::string> {
+    auto result = std::vector<std::string>{};
+    result.reserve(fields_.size());
+    auto existing = std::unordered_set<std::string_view>{};
+    for (auto const& field : fields_) {
+      result.emplace_back(name_of(field));
+      existing.insert(name_of(field));
+    }
+    auto renamed = std::vector<bool>(fields_.size(), false);
+    for (auto i = size_t{0}; i < fields_.size(); ++i) {
+      if (renamed[i]) {
+        continue;
+      }
+      auto const name = name_of(fields_[i]);
+      auto occurrences = size_t{0};
+      for (auto j = i + 1; j < fields_.size(); ++j) {
+        if (name_of(fields_[j]) != name) {
+          continue;
+        }
+        auto candidate = std::string{};
+        do {
+          ++occurrences;
+          candidate = fmt::format("{}_{}", name, occurrences);
+        } while (existing.contains(candidate));
+        result[j] = std::move(candidate);
+        renamed[j] = true;
+      }
+    }
+    return result;
+  }
+
+  /// Collects the leaf paths of all records in `value` in first-seen order and
+  /// returns whether `value` contains a record.
+  static auto collect_paths(nova::RowView<nova::Data> const& value, Path& path,
+                            std::vector<Path>& paths) -> bool {
+    return match(
+      value,
+      [&](nova::RowView<nova::List> const& list) {
+        auto found = false;
+        for (auto element : list) {
+          found = collect_paths(element, path, paths) or found;
+        }
+        return found;
+      },
+      [&](nova::RowView<nova::Record> const& record) {
+        for (auto field : record) {
+          path.push_back(field.first);
+          if (not collect_paths(field.second, path, paths)
+              and std::ranges::find(paths, path) == paths.end()) {
+            paths.push_back(path);
+          }
+          path.pop_back();
+        }
+        return true;
+      },
+      [](auto const&) {
+        return false;
+      });
+  }
+
+  static auto is_list(nova::RowView<nova::Data> const& value) -> bool {
+    return match(
+      value,
+      [](nova::RowView<nova::List> const&) {
+        return true;
+      },
+      [](auto const&) {
+        return false;
+      });
+  }
+
+  static auto is_null(nova::RowView<nova::Data> const& value) -> bool {
+    return match(
+      value,
+      [](nova::RowView<nova::Null>) {
+        return true;
+      },
+      [](auto const&) {
+        return false;
+      });
+  }
+
+  /// Prints the values at `path` within `value` as list elements. Nested
+  /// lists splice their elements into the enclosing list, and a null in place
+  /// of a nested list contributes nothing. Missing values print as null.
+  auto print_elements(nova::RowView<nova::Data> const& value,
+                      std::span<std::string_view const> path, bool& first)
+    -> void {
+    match(
+      value,
+      [&](nova::RowView<nova::List> const& list) {
+        auto nested = false;
+        for (auto element : list) {
+          if (is_list(element)) {
+            nested = true;
+            break;
+          }
+        }
+        for (auto element : list) {
+          if (not nested or not is_null(element)) {
+            print_elements(element, path, first);
+          }
+        }
+      },
+      [&](nova::RowView<nova::Record> const& record) {
+        if (not path.empty()) {
+          for (auto field : record) {
+            if (field.first == path.front()) {
+              print_elements(field.second, path.subspan(1), first);
+              return;
+            }
+          }
+        }
+        print_element(first, [&] {
+          out_ += args_.null_value.inner;
+        });
+      },
+      [&](nova::RowView<nova::Null>) {
+        print_element(first, [&] {
+          out_ += args_.null_value.inner;
+        });
+      },
+      [&](auto const& scalar) {
+        print_element(first, [&] {
+          if (path.empty()) {
+            print_scalar(*scalar);
+          } else {
+            out_ += args_.null_value.inner;
+          }
+        });
+      });
+  }
+
+  auto print_element(bool& first, auto print_value) -> void {
+    if (not std::exchange(first, false)) {
+      out_ += args_.list_separator.inner;
+    }
+    print_value();
+  }
+
+  auto print_field(bool& first, std::string_view name, Field const& field)
+    -> void {
+    if (not std::exchange(first, false)) {
+      out_ += args_.field_separator.inner;
+    }
+    print_scalar(name);
+    out_ += args_.value_separator.inner;
+    auto first_element = true;
+    print_elements(field.value, path_of(field), first_element);
+  }
+
+  auto print_scalar(auto const& value) -> void {
+    scratch_.clear();
+    fmt::format_to(std::back_inserter(scratch_), "{}", value);
+    auto const contains = [&](std::string const& needle) {
+      return scratch_.find(needle) != std::string::npos;
+    };
+    auto const needs_quoting = contains(args_.field_separator.inner)
+                               or contains(args_.value_separator.inner)
+                               or contains(args_.list_separator.inner)
+                               or (not args_.null_value.inner.empty()
+                                   and contains(args_.null_value.inner));
+    constexpr static auto escaper = [](auto& f, auto out) {
+      switch (*f) {
+        default:
+          *out++ = *f++;
+          return;
+        case '\\':
+          *out++ = '\\';
+          *out++ = '\\';
+          break;
+        case '"':
+          *out++ = '\\';
+          *out++ = '"';
+          break;
+        case '\n':
+          *out++ = '\\';
+          *out++ = 'n';
+          break;
+        case '\r':
+          *out++ = '\\';
+          *out++ = 'r';
+          break;
+      }
+      ++f;
+    };
+    constexpr static auto p = printers::escape(escaper);
+    if (needs_quoting) {
+      out_.push_back('"');
+    }
+    auto out = std::back_inserter(out_);
+    TENZIR_ASSERT(p.print(out, scratch_));
+    if (needs_quoting) {
+      out_.push_back('"');
+    }
+  }
+
+  WriteKvArgs const& args_;
+  std::string out_;
+  /// The flattened name of the field being collected.
+  std::string name_;
+  /// The fields of the current row, their names, and their leaf paths.
+  std::vector<Field> fields_;
+  std::string names_;
+  std::vector<Path> paths_;
+  std::unordered_set<std::string_view> seen_;
+  std::string scratch_;
+};
+
+class WriteKvEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteKvEvents(WriteKvArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx&)
+    -> Task<void> override {
+    auto printer = NovaKvPrinter{args_};
+    auto printed = false;
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      printer.print(input.data.get(row));
+      printed = true;
+    }
+    if (not printed) {
+      co_return;
+    }
+    co_await push(chunk::make(std::move(printer).take()));
+  }
+
+private:
+  WriteKvArgs args_;
+};
+
 auto validate_split_expression(const located<std::string>& split,
                                diagnostic_handler& dh) -> failure_or<void> {
   auto const test = [&](char c) -> failure_or<void> {
@@ -836,7 +1202,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteKvArgs, WriteKv>{};
+    auto d = Describer<WriteKvArgs, WriteKv, WriteKvEvents>{};
     auto field_sep
       = d.named_optional("field_separator", &WriteKvArgs::field_separator);
     auto value_sep

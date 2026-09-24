@@ -1,0 +1,9 @@
+from {x: {y: 1}, "a b": "c|d", l: [1, null, 3], n: null},
+  {x: {y: 2}, "a b": "~", l: [], n: "none"}
+to_stdout {
+  write_kv field_separator="|",
+    value_separator=":",
+    list_separator=";",
+    flatten_separator="_",
+    null_value="~"
+}
