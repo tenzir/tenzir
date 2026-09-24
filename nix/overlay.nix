@@ -63,6 +63,10 @@ in
       pslSupport = false;
     }
   );
+  # The deployment gateway needs libcurl's ws/wss protocols. Overriding `curl`
+  # itself would rebuild cmake, git and the compilers, so only Tenzir and the
+  # libraries it links take this one, which keeps a single libcurl per binary.
+  curl-ws = finalPkgs.curl.override { websocketSupport = true; };
 
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
@@ -71,9 +75,9 @@ in
   # has no avro-cpp with the CMake package config iceberg-cpp consumes.
   avro-cpp = prevPkgs.callPackage ./iceberg-cpp/avro-cpp.nix { };
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
-  fluent-bit = prevPkgs.callPackage ./fluent-bit { };
+  fluent-bit = prevPkgs.callPackage ./fluent-bit { curl = finalPkgs.curl-ws; };
   # Resolved via finalPkgs so it builds against Tenzir's arrow-cpp override.
-  iceberg-cpp = finalPkgs.callPackage ./iceberg-cpp { };
+  iceberg-cpp = finalPkgs.callPackage ./iceberg-cpp { curl = finalPkgs.curl-ws; };
   nanoarrow = prevPkgs.callPackage ./iceberg-cpp/nanoarrow.nix { };
   pfs = prevPkgs.callPackage ./pfs { };
   proxygen = finalPkgs.callPackage ./proxygen { };
@@ -90,18 +94,20 @@ in
   apache-orc = callFunction ./overrides/apache-orc.nix { inherit (prevPkgs) apache-orc; };
   arrow-cpp = (callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; }).override {
     aws-sdk-cpp-arrow = finalPkgs.aws-sdk-cpp-tenzir;
+    curl = finalPkgs.curl-ws;
     google-cloud-cpp = finalPkgs.google-cloud-cpp-tenzir;
     enableGcs = true; # Upstream disabled for darwin.
   };
+  azure-sdk-for-cpp = prevPkgs.azure-sdk-for-cpp.overrideScope (_: _: { curl = finalPkgs.curl-ws; });
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
-    inherit (prevPkgs) aws-sdk-cpp;
+    aws-sdk-cpp = prevPkgs.aws-sdk-cpp.override { curl = finalPkgs.curl-ws; };
   };
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
   fizz = callFunction ./overrides/fizz.nix { inherit (prevPkgs) fizz; };
   folly = callFunction ./overrides/folly.nix { inherit (prevPkgs) folly; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
-    inherit (prevPkgs) google-cloud-cpp;
+    google-cloud-cpp = prevPkgs.google-cloud-cpp.override { curl = finalPkgs.curl-ws; };
   };
   grpc = prevPkgs.grpc.overrideAttrs (orig: {
     patches = (orig.patches or [ ]) ++ [
@@ -112,6 +118,8 @@ in
       })
     ];
   });
+  rdkafka = prevPkgs.rdkafka.override { curl = finalPkgs.curl-ws; };
+  libcpr = prevPkgs.libcpr.override { curl = finalPkgs.curl-ws; };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
   libnats-c = callFunction ./overrides/libnats-c.nix { inherit (prevPkgs) libnats-c; };
   libpcap = prevPkgs.libpcap.overrideAttrs (
@@ -139,6 +147,7 @@ in
   # cross a stdlib boundary, which nothing here does.
   opentelemetry-cpp =
     (prevPkgs.opentelemetry-cpp.override {
+      curl = finalPkgs.curl-ws;
       enableHttp = true;
       cxxStandard = "23";
     }).overrideAttrs

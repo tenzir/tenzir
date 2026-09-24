@@ -9,6 +9,7 @@ let
       tenzir-source,
       tenzirPythonPkgs,
       caf,
+      curl-ws,
       cacert,
       iconv,
       lz4,
@@ -123,6 +124,7 @@ let
 
       deps = callPackage ../dependencies.nix {
         inherit stdenv;
+        curl = curl-ws;
       };
 
     in

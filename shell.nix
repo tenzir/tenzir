@@ -14,7 +14,7 @@ let
     overlays = [ overlay ];
   };
 
-  deps = pkgs.callPackage ./nix/dependencies.nix { };
+  deps = pkgs.callPackage ./nix/dependencies.nix { curl = pkgs.curl-ws; };
   test-deps = pkgs.callPackage ./nix/test-dependencies.nix { };
   python-deps = import ./nix/python-dependencies.nix;
   dev-python = pkgs.python3.withPackages python-deps.dev;
