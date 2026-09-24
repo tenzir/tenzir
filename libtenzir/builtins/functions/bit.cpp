@@ -7,6 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/detail/string_literal.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -14,12 +17,105 @@
 #include <arrow/compute/function.h>
 #include <arrow/compute/registry.h>
 
+#include <bit>
+
 namespace tenzir::plugins::bit {
 
 namespace {
 
-class unary_fn : public virtual function_plugin {
+struct UnaryArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+struct BitNotFunction {
+  static auto eval(UnaryArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(
+      frame, "bit_not", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<nova::Int> {
+          return None{};
+        },
+        []<class T>(diagnostic_handler&, T value) -> Option<T>
+          requires(std::same_as<T, nova::Int> or std::same_as<T, nova::UInt>)
+        {
+          return ~value;
+        }});
+  }
+};
+
+struct BinaryArgs {
+  nova::ValueArgument lhs;
+  nova::ValueArgument rhs;
+  location call;
+};
+
+template <detail::string_literal Name>
+struct BinaryFunction {
+  static constexpr auto shift = Name.str().starts_with("shift_");
+
+  template <class L, class R>
+  using Result
+    = std::conditional_t<std::same_as<L, nova::Int>
+                           or (not shift and std::same_as<R, nova::Int>),
+                         nova::Int, nova::UInt>;
+
+  static auto eval(BinaryArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto out_of_range = nova::WarnOnce{};
+    return nova::apply_kernel<2>(
+      frame, Name, {args.lhs, args.rhs}, args.call,
+      detail::overload{
+        []<class L, class R>(diagnostic_handler&, L, R) -> Option<nova::Int>
+          requires(std::same_as<L, nova::Null> or std::same_as<R, nova::Null>)
+                  {
+                    return None{};
+                  },
+                  [&]<class L, class R>(diagnostic_handler& dh, L lhs,
+                                        R rhs) -> Option<Result<L, R>>
+                    requires((std::same_as<L, nova::Int>
+                              or std::same_as<L, nova::UInt>)
+                             and (std::same_as<R, nova::Int>
+                                  or std::same_as<R, nova::UInt>))
+        {
+          if constexpr (shift) {
+            constexpr auto max = std::same_as<L, nova::Int> ? 62 : 63;
+            if (std::cmp_less(rhs, 0) or std::cmp_greater(rhs, max)) {
+              out_of_range(dh, diagnostic::warning("out of range")
+                                 .primary(args.rhs.source,
+                                          "must be in range [0, {}]", max));
+              return None{};
+            }
+          }
+          // Unsigned arithmetic preserves all 64 bits without signed
+          // left-shift overflow. Signed right shifts remain arithmetic.
+          auto bits = uint64_t{};
+          if constexpr (Name.str() == "bit_and") {
+            bits = uint64_t(lhs) & uint64_t(rhs);
+          } else if constexpr (Name.str() == "bit_or") {
+            bits = uint64_t(lhs) | uint64_t(rhs);
+          } else if constexpr (Name.str() == "bit_xor") {
+            bits = uint64_t(lhs) ^ uint64_t(rhs);
+          } else if constexpr (Name.str() == "shift_left") {
+            bits = uint64_t(lhs) << rhs;
+          } else {
+            bits = static_cast<uint64_t>(lhs >> rhs);
+          }
+          return std::bit_cast<Result<L, R>>(bits);
+        }});
+  }
+};
+
+class unary_fn : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<UnaryArgs, BitNotFunction>{};
+    d.positional("x", &UnaryArgs::x, "int");
+    d.call_location(&UnaryArgs::call);
+    return std::move(d).finish();
+  }
+
   unary_fn(std::string name, std::string compute_fn)
     : name_{std::move(name)}, compute_fn_{std::move(compute_fn)} {
   }
@@ -76,10 +172,19 @@ private:
   std::string compute_fn_;
 };
 
-class binary_fn : public virtual function_plugin {
+template <detail::string_literal Name>
+class binary_fn : public nova::FunctionPlugin {
 public:
-  binary_fn(std::string name, std::string compute_fn)
-    : name_{std::move(name)}, compute_fn_{std::move(compute_fn)} {
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<BinaryArgs, BinaryFunction<Name>>{};
+    d.positional("lhs", &BinaryArgs::lhs, "int");
+    d.positional("rhs", &BinaryArgs::rhs, "int");
+    d.call_location(&BinaryArgs::call);
+    return std::move(d).finish();
+  }
+
+  explicit binary_fn(std::string compute_fn)
+    : compute_fn_{std::move(compute_fn)} {
   }
 
   auto is_deterministic() const -> bool override {
@@ -87,7 +192,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return name_;
+    return Name;
   }
 
   struct impl final : public function_use {
@@ -194,7 +299,6 @@ public:
   }
 
 private:
-  std::string name_;
   std::string compute_fn_;
 };
 
@@ -204,9 +308,9 @@ private:
 
 using namespace tenzir::plugins::bit;
 
-TENZIR_REGISTER_PLUGIN(binary_fn{"bit_and", "bit_wise_and"})
-TENZIR_REGISTER_PLUGIN(binary_fn{"bit_or", "bit_wise_or"})
+TENZIR_REGISTER_PLUGIN(binary_fn<"bit_and">{"bit_wise_and"})
+TENZIR_REGISTER_PLUGIN(binary_fn<"bit_or">{"bit_wise_or"})
 TENZIR_REGISTER_PLUGIN(unary_fn{"bit_not", "bit_wise_not"})
-TENZIR_REGISTER_PLUGIN(binary_fn{"bit_xor", "bit_wise_xor"})
-TENZIR_REGISTER_PLUGIN(binary_fn{"shift_left", "shift_left"})
-TENZIR_REGISTER_PLUGIN(binary_fn{"shift_right", "shift_right"})
+TENZIR_REGISTER_PLUGIN(binary_fn<"bit_xor">{"bit_wise_xor"})
+TENZIR_REGISTER_PLUGIN(binary_fn<"shift_left">{"shift_left"})
+TENZIR_REGISTER_PLUGIN(binary_fn<"shift_right">{"shift_right"})

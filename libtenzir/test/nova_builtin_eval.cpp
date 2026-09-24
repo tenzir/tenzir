@@ -37,6 +37,7 @@
 #include <arrow/compute/initialize.h>
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -461,6 +462,121 @@ TEST("split on a null column is null without a warning") {
                      storage::BitMap{1, true}, dh);
   CHECK(is_null_at(result, 0));
   CHECK(std::move(dh).collect().empty());
+}
+
+TEST("bitwise functions preserve integer signedness and all 64 bits") {
+  auto const max = std::numeric_limits<UInt>::max();
+  struct Case {
+    Data lhs;
+    Data rhs;
+    Data and_result;
+    Data or_result;
+    Data xor_result;
+    Data not_result;
+  };
+  auto cases = std::vector<Case>{
+    {Int{5}, Int{3}, Int{1}, Int{7}, Int{6}, Int{-6}},
+    {UInt{max}, Int{1}, Int{1}, Int{-1}, Int{-2}, UInt{0}},
+    {Int{-1}, UInt{max}, Int{-1}, Int{-1}, Int{0}, Int{0}},
+    {UInt{max}, UInt{1}, UInt{1}, UInt{max}, UInt{max - 1}, UInt{0}},
+  };
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& test : cases) {
+    auto row = builder.record();
+    append_data(row.field("lhs"), test.lhs);
+    append_data(row.field("rhs"), test.rhs);
+  }
+  auto events = make_events(builder.finish());
+  for (auto name : {"bit_and", "bit_or", "bit_xor", "bit_not"}) {
+    auto args = std::vector<ast::expression>{root_field("lhs")};
+    if (std::string_view{name} != "bit_not") {
+      args.push_back(root_field("rhs"));
+    }
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call(name, std::move(args)), events, events.mask, dh);
+    for (auto row = storage::Index{0}; row < result.length(); ++row) {
+      auto const& test = cases[row];
+      auto const& expected
+        = std::string_view{name} == "bit_and"   ? test.and_result
+          : std::string_view{name} == "bit_or"  ? test.or_result
+          : std::string_view{name} == "bit_xor" ? test.xor_result
+                                                : test.not_result;
+      CHECK(equal(result.get(row), repeat(expected, 1).get(0)));
+    }
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("shifts validate counts using lhs signedness and honor masks") {
+  auto builder = ArrayBuilder<Record>{};
+  auto add = [&](Data lhs, Data rhs) {
+    auto row = builder.record();
+    append_data(row.field("lhs"), lhs);
+    append_data(row.field("rhs"), rhs);
+  };
+  add(Int{-8}, UInt{2});
+  add(UInt{1}, Int{63});
+  add(Int{1}, Int{62});
+  add(Int{1}, UInt{63});
+  add(UInt{1}, Int{-1});
+  add(UInt{1}, UInt{64});
+  add(Null{}, Int{-1});
+  auto events = make_events(builder.finish());
+  for (auto name : {"shift_left", "shift_right"}) {
+    for (auto invalid_active : {false, true}) {
+      auto dh = collecting_diagnostic_handler{};
+      auto mask = bitmap({true, true, true, invalid_active, invalid_active,
+                          invalid_active, true});
+      auto result = eval(call(name, {root_field("lhs"), root_field("rhs")}),
+                         events, std::move(mask), dh);
+      auto const left = std::string_view{name} == "shift_left";
+      CHECK_EQUAL(int_at(result, 0), (left ? Int{-32} : Int{-2}));
+      auto unsigneds = result.get_alternative<UInt>();
+      REQUIRE(unsigneds);
+      CHECK(unsigneds->present.get(1));
+      CHECK_EQUAL(*unsigneds->data.get(1), (left ? UInt{1} << 63 : UInt{0}));
+      CHECK_EQUAL(int_at(result, 2), (left ? Int{1} << 62 : Int{0}));
+      if (invalid_active) {
+        for (auto row = 3; row < 6; ++row) {
+          CHECK(is_null_at(result, row));
+        }
+      }
+      CHECK(is_null_at(result, 6));
+      auto diags = std::move(dh).collect();
+      CHECK_EQUAL(diags.size(), invalid_active ? 1uz : 0uz);
+      if (not diags.empty()) {
+        CHECK_EQUAL(diags[0].message, "out of range");
+      }
+    }
+  }
+}
+
+TEST("bitwise functions reject bool and float only on active rows") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(Int{5});
+  builder.record().field("x").null();
+  builder.record().field("x").data(true);
+  builder.record().field("x").data(1.5);
+  auto events = make_events(builder.finish());
+  for (auto name : {"bit_and", "bit_or", "bit_xor", "bit_not", "shift_left",
+                    "shift_right"}) {
+    for (auto invalid_active : {false, true}) {
+      auto args = std::vector<ast::expression>{root_field("x")};
+      if (std::string_view{name} != "bit_not") {
+        args.push_back(int_const(1));
+      }
+      auto dh = collecting_diagnostic_handler{};
+      auto result
+        = eval(call(name, std::move(args)), events,
+               bitmap({true, true, invalid_active, invalid_active}), dh);
+      CHECK(is_null_at(result, 1));
+      if (invalid_active) {
+        CHECK(is_null_at(result, 2));
+        CHECK(is_null_at(result, 3));
+      }
+      CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 2uz : 0uz);
+    }
+  }
 }
 
 TEST("type_of reports null as a type and does not inspect inactive rows") {
