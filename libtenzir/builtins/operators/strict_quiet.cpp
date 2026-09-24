@@ -164,48 +164,68 @@ auto describe_diagnostic_scope() -> Description {
               -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
     TRY(auto p, ctx.get(pipe));
     TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-    return match(
-      output,
-      [&](tag<table_slice>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        if constexpr (std::same_as<Input, nova::Events>) {
-          diagnostic::error("subpipeline must not produce events")
-            .primary(p.source)
-            .emit(ctx);
-          return failure::promise();
-        } else {
+    // Files only feed readers, so the subpipeline must produce events.
+    if constexpr (std::same_as<Input, FileHandle>) {
+      if (output.template is_not<nova::Events>()) {
+        diagnostic::error("subpipeline must produce events, not {}", output)
+          .primary(p.source)
+          .emit(ctx);
+        return failure::promise();
+      }
+      return [](DiagnosticScopeArgs args) {
+        return DiagnosticScopeOp<Behavior, Input, nova::Events>{
+          std::move(args)};
+      };
+    } else {
+      return match(
+        output,
+        [&](tag<table_slice>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          if constexpr (std::same_as<Input, nova::Events>) {
+            diagnostic::error("subpipeline must not produce events")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          } else {
+            return [](DiagnosticScopeArgs args) {
+              return DiagnosticScopeOp<Behavior, Input, table_slice>{
+                std::move(args)};
+            };
+          }
+        },
+        [](tag<chunk_ptr>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
           return [](DiagnosticScopeArgs args) {
-            return DiagnosticScopeOp<Behavior, Input, table_slice>{
+            return DiagnosticScopeOp<Behavior, Input, chunk_ptr>{
               std::move(args)};
           };
-        }
-      },
-      [](tag<chunk_ptr>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        return [](DiagnosticScopeArgs args) {
-          return DiagnosticScopeOp<Behavior, Input, chunk_ptr>{std::move(args)};
-        };
-      },
-      [](tag<void>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        return [](DiagnosticScopeArgs args) {
-          return DiagnosticScopeOp<Behavior, Input, void>{std::move(args)};
-        };
-      },
-      [&](tag<nova::Events>)
-        -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
-        if constexpr (concepts::one_of<Input, void, chunk_ptr, nova::Events>) {
+        },
+        [](tag<void>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
           return [](DiagnosticScopeArgs args) {
-            return DiagnosticScopeOp<Behavior, Input, nova::Events>{
-              std::move(args)};
+            return DiagnosticScopeOp<Behavior, Input, void>{std::move(args)};
           };
-        } else {
-          diagnostic::error("subpipeline must not produce nova_events")
-            .primary(p.source)
-            .emit(ctx);
-          return failure::promise();
-        }
-      });
+        },
+        [&](tag<nova::Events>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          if constexpr (concepts::one_of<Input, void, chunk_ptr, nova::Events>) {
+            return [](DiagnosticScopeArgs args) {
+              return DiagnosticScopeOp<Behavior, Input, nova::Events>{
+                std::move(args)};
+            };
+          } else {
+            diagnostic::error("subpipeline must not produce nova_events")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          }
+        },
+        [](tag<FileHandle>)
+          -> failure_or<Option<SpawnWith<DiagnosticScopeArgs, Input>>> {
+          // Only an empty subpipeline over files produces files.
+          TENZIR_UNREACHABLE();
+        });
+    }
   });
   return d.without_optimize();
 }

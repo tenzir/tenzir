@@ -713,6 +713,11 @@ public:
               .primary(p.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [](tag<FileHandle>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            // Files only feed readers, so no subpipeline produces them.
+            TENZIR_UNREACHABLE();
           });
       } else if constexpr (std::same_as<Input, nova::Events>) {
         TRY(auto p, ctx.get(pipe));
@@ -777,6 +782,11 @@ public:
               .primary(p.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [](tag<FileHandle>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            // Files only feed readers, so no subpipeline produces them.
+            TENZIR_UNREACHABLE();
           });
       } else {
         return {};

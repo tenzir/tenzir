@@ -260,6 +260,10 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
       // No byte accounting for nova::Events yet.
       return 0;
     },
+    [](const FileHandle&) -> size_t {
+      // The bytes behind a handle are accounted where they are read.
+      return 0;
+    },
     [](const Signal&) -> size_t {
       return 0;
     });
@@ -278,6 +282,9 @@ auto count_events(const OperatorMsg<T>& item) -> size_t {
     },
     [](const nova::Events& events) -> size_t {
       return static_cast<size_t>(events.active_count());
+    },
+    [](const FileHandle&) -> size_t {
+      return 0;
     },
     [](const Signal&) -> size_t {
       return 0;
@@ -735,6 +742,15 @@ protected:
   auto make_fused_nova_events(ChannelId id)
     -> PushPull<OperatorMsg<nova::Events>> override {
     return make_profiled_fused_channel<nova::Events>(std::move(id));
+  }
+
+  auto make_files(ChannelId id) -> PushPull<OperatorMsg<FileHandle>> override {
+    return make_profiled_channel<FileHandle>(std::move(id), void_limit);
+  }
+
+  auto make_fused_files(ChannelId id)
+    -> PushPull<OperatorMsg<FileHandle>> override {
+    return make_profiled_fused_channel<FileHandle>(std::move(id));
   }
 
 private:

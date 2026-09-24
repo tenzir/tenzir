@@ -225,8 +225,16 @@ constexpr auto co_match(V&& v, Fs&&... fs) -> CoMatch<V, Fs...> {
   X(13);
   X(14);
   X(15);
+  X(16);
+  X(17);
+  X(18);
+  X(19);
+  X(20);
+  X(21);
+  X(22);
+  X(23);
 #undef X
-  static_assert(count <= 16);
+  static_assert(count <= 24);
   __builtin_unreachable();
 }
 

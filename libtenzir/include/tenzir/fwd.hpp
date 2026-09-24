@@ -220,6 +220,7 @@ struct encrypted_secret_value;
 struct Endpoint;
 struct extract_query_context;
 struct field_extractor;
+struct FileHandle;
 struct flow;
 struct index_state;
 struct invocation;

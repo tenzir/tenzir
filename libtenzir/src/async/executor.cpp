@@ -51,13 +51,15 @@ auto global_registry() -> std::shared_ptr<const registry>;
 using AnyOpPull
   = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
             Box<Pull<OperatorMsg<table_slice>>>,
-            Box<Pull<OperatorMsg<nova::Events>>>>;
+            Box<Pull<OperatorMsg<nova::Events>>>,
+            Box<Pull<OperatorMsg<FileHandle>>>>;
 
 /// Type-erased push.
 using AnyOpPush
   = variant<Box<Push<OperatorMsg<void>>>, Box<Push<OperatorMsg<chunk_ptr>>>,
             Box<Push<OperatorMsg<table_slice>>>,
-            Box<Push<OperatorMsg<nova::Events>>>>;
+            Box<Push<OperatorMsg<nova::Events>>>,
+            Box<Push<OperatorMsg<FileHandle>>>>;
 
 /// A single logical output port of an operator instance: the physical
 /// downstream lanes plus how to route data across them.
@@ -147,7 +149,8 @@ private:
   diagnostic_handler& dh_;
 };
 /// A type-erased stream message: either data or a signal.
-struct AnyOperatorMsg : variant<table_slice, chunk_ptr, nova::Events, Signal> {
+struct AnyOperatorMsg
+  : variant<table_slice, chunk_ptr, nova::Events, FileHandle, Signal> {
   using variant::variant;
 
   template <class T>
@@ -274,6 +277,7 @@ auto SubHandle<Input>::close() -> Task<void>
 template class SubHandle<chunk_ptr>;
 template class SubHandle<table_slice>;
 template class SubHandle<nova::Events>;
+template class SubHandle<FileHandle>;
 // Explicit instantiation of member template `push` (not covered by template
 // class).
 template auto SubHandle<chunk_ptr>::push(chunk_ptr)
@@ -282,6 +286,8 @@ template auto SubHandle<table_slice>::push(table_slice)
   -> Task<Result<void, table_slice>>;
 template auto SubHandle<nova::Events>::push(nova::Events)
   -> Task<Result<void, nova::Events>>;
+template auto SubHandle<FileHandle>::push(FileHandle)
+  -> Task<Result<void, FileHandle>>;
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
@@ -481,6 +487,15 @@ protected:
   auto make_fused_nova_events(ChannelId id)
     -> PushPull<OperatorMsg<nova::Events>> override {
     return inner_.make_fused_channel<nova::Events>(std::move(id));
+  }
+
+  auto make_files(ChannelId id) -> PushPull<OperatorMsg<FileHandle>> override {
+    return inner_.make_fused_channel<FileHandle>(std::move(id));
+  }
+
+  auto make_fused_files(ChannelId id)
+    -> PushPull<OperatorMsg<FileHandle>> override {
+    return inner_.make_fused_channel<FileHandle>(std::move(id));
   }
 
 private:
@@ -1007,6 +1022,10 @@ private:
                 [&](nova::Events output) -> Task<void> {
                   co_await call_process_sub(make_view(key), std::move(output));
                 },
+                [&](FileHandle) -> Task<void> {
+                  // Files only feed readers, so no subpipeline produces them.
+                  TENZIR_UNREACHABLE();
+                },
                 [&](Signal signal) -> Task<void> {
                   co_await co_match(
                     signal,
@@ -1467,6 +1486,13 @@ private:
         co_await call_process(std::move(input));
       },
       [&](nova::Events input) -> Task<void> {
+        LOGV("got input in {}", op_name());
+        if (phase_ != Phase::running) {
+          co_return;
+        }
+        co_await call_process(std::move(input));
+      },
+      [&](FileHandle input) -> Task<void> {
         LOGV("got input in {}", op_name());
         if (phase_ != Phase::running) {
           co_return;

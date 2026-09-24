@@ -13,6 +13,7 @@
 #include "tenzir/async/future_util.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/file_handle.hpp"
 #include "tenzir/fs_url_template.hpp"
 #include "tenzir/glob.hpp"
 #include "tenzir/hash/hash.hpp"
@@ -134,15 +135,33 @@ inline auto arrow_future_to_task(arrow::Future<arrow::internal::Empty> future)
 struct TrackedFile {
   std::string path;
   Option<time> mtime;
+  /// The size at discovery. A reader's position within a file only applies to
+  /// the same file, and an object store's mtime may not change when an object
+  /// is overwritten within the same second.
+  int64_t size = 0;
   int64_t offset = 0;
   uint64_t file_id = 0;
-  std::shared_ptr<arrow::io::InputStream> istream;
 
   friend auto inspect(auto& f, TrackedFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
                               f.field("offset", x.offset),
                               f.field("mtime", x.mtime),
+                              f.field("size", x.size),
                               f.field("file_id", x.file_id));
+  }
+};
+
+/// The file being processed: its persisted state plus what reading it takes
+/// at runtime. Only `file` is part of a checkpoint.
+struct ActiveFile {
+  TrackedFile file;
+  /// The stream that bytes are read from, unless the file is handed over.
+  std::shared_ptr<arrow::io::InputStream> istream = nullptr;
+  /// The planned subpipeline, until it is spawned.
+  Option<ir::Plan> plan = None{};
+
+  friend auto inspect(auto& f, ActiveFile& x) -> bool {
+    return inspect(f, x.file);
   }
 };
 
@@ -168,7 +187,14 @@ struct SubFinished {
   uint64_t file_id;
 };
 
-using AwaitResult = variant<ScanComplete, FileOpen, ReadProgress, SubFinished>;
+/// Result of opening a file for random access, to hand it over as a whole.
+struct HandleOpen {
+  uint64_t file_id;
+  arrow::Result<FileHandle> handle;
+};
+
+using AwaitResult
+  = variant<ScanComplete, FileOpen, ReadProgress, SubFinished, HandleOpen>;
 
 using FileSystemPtr = std::shared_ptr<arrow::fs::FileSystem>;
 
@@ -309,6 +335,14 @@ private:
   /// Start processing the next pending file, if any.
   auto start_next_job(OpCtx& ctx) -> void;
 
+  /// Plans the subpipeline of `job` for the input it gets.
+  auto prepare_job(ActiveFile& job, OpCtx& ctx) -> failure_or<void>;
+  /// Continues the file that was being processed at the last checkpoint.
+  auto resume_job(OpCtx& ctx) -> void;
+  auto spawn_job_sub(OpCtx& ctx) -> Task<AnySubHandle&>;
+  auto enqueue_read(OpCtx& ctx) -> void;
+  auto enqueue_open_handle(OpCtx& ctx) -> void;
+
   /// Abandon the file currently being processed and take the next one.
   auto skip_job(OpCtx& ctx) -> void;
 
@@ -332,7 +366,7 @@ private:
   SeenFileSet previous_;
   SeenFileSet current_;
   std::deque<TrackedFile> pending_;
-  Option<TrackedFile> processing_;
+  Option<ActiveFile> processing_;
   uint64_t next_file_id_ = 0;
   std::vector<std::string> cleanup_pending_;
   mutable Box<BoundedQueue<AwaitResult>> results_{
@@ -342,6 +376,9 @@ private:
   };
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
+  /// Whether the subpipeline accepts files as a whole instead of their bytes.
+  /// Fixed by the subpipeline definition.
+  bool file_handles_ = false;
 };
 
 /// Common arguments for Arrow filesystem-based sink operators.

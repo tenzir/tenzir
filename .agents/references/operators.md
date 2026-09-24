@@ -110,6 +110,13 @@ can be identified reliably, add automatic detection and integration tests under
 applicable. Otherwise, explain in the change description why automatic
 detection is unsafe.
 
+## Seekable readers
+
+To read directly from a seekable file instead of a byte stream, add an
+`Operator<FileHandle, nova::Events>` (`<tenzir/file_handle.hpp>`) to the
+reader's `Describer` implementations; see `ReadParquetFile` in
+`read_parquet.cpp`.
+
 ## Diagnostics
 
 If diagnostics need the operator location, store it in `Args` and register it:

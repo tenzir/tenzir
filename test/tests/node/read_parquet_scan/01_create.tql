@@ -1,0 +1,11 @@
+// The wide file is several MiB of incompressible payload next to a small `id`
+// column. Reading `id` with a limit through `from_file` may fetch only the
+// footer and the first row group's `id` column chunk. The gzipped copy forces
+// the streaming fallback, which has to fetch the whole file.
+let $root = env("READ_PUSHDOWN_ROOT")
+let $scan = f"from_file \"{$root}/wide\" {{ read_parquet }}\nselect id\nhead 1\ndiscard"
+let $stream = f"from_file \"{$root}/wide.gz\" {{ decompress_gzip | read_parquet }}\nselect id\nhead 1\ndiscard"
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: $scan}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000002", definition: $stream}
+discard

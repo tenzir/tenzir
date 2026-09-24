@@ -1,0 +1,17 @@
+// Both pipelines yield one event, but only the scan gets there without
+// fetching the file. Wait for both to report their ingress bytes, then compare
+// them to the file size. The scan reads the footer, which speculatively covers
+// the last 256 KiB of the file, plus one row group's `id` column chunk.
+let $size = env("READ_PUSHDOWN_WIDE_SIZE").int()
+every 1s {
+  metrics "pipeline"
+  where pipeline_id in ["00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"]
+  scan_bytes = ingress.bytes if pipeline_id.ends_with("1") else 0
+  stream_bytes = ingress.bytes if pipeline_id.ends_with("2") else 0
+  summarize scan_bytes=sum(scan_bytes), stream_bytes=sum(stream_bytes)
+  where scan_bytes > 0 and stream_bytes > 0
+}
+head 1
+select \
+  scan_read_footer_and_one_column=(scan_bytes < $size / 4),
+  stream_read_whole_file=(stream_bytes >= $size / 2)

@@ -1,0 +1,1 @@
+S3 Parquet scan and byte-stream fallback agree

@@ -51,6 +51,7 @@
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/file_handle.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/nova/events.hpp"
@@ -108,8 +109,9 @@ private:
   SubPipeline& self_;
 };
 
-using AnySubHandle = variant<SubHandle<void>, SubHandle<chunk_ptr>,
-                             SubHandle<table_slice>, SubHandle<nova::Events>>;
+using AnySubHandle
+  = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>,
+            SubHandle<nova::Events>, SubHandle<FileHandle>>;
 
 enum class DiagnosticBehavior {
   /// Forward diagnostics to the parent unchanged.

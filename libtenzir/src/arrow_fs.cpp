@@ -15,6 +15,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/forwarding_file.hpp"
 #include "tenzir/fs_url_template.hpp"
 #include "tenzir/glob.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
@@ -55,6 +56,64 @@ auto split_at_first_slash(std::string_view path)
 }
 
 namespace {
+
+/// Account for physical reads, not the size of the logical file.
+class CountingFile final : public ForwardingFile {
+public:
+  CountingFile(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               MetricsCounter counter)
+    : ForwardingFile{std::move(file)}, counter_{std::move(counter)} {
+  }
+
+  auto Read(int64_t size, void* out) -> arrow::Result<int64_t> override {
+    ARROW_ASSIGN_OR_RAISE(auto bytes, ForwardingFile::Read(size, out));
+    counter_.add(detail::narrow<uint64_t>(bytes));
+    return bytes;
+  }
+
+  auto Read(int64_t size)
+    -> arrow::Result<std::shared_ptr<arrow::Buffer>> override {
+    ARROW_ASSIGN_OR_RAISE(auto buffer, ForwardingFile::Read(size));
+    count(buffer);
+    return buffer;
+  }
+
+  auto ReadAt(int64_t offset, int64_t size, void* out)
+    -> arrow::Result<int64_t> override {
+    ARROW_ASSIGN_OR_RAISE(auto bytes,
+                          ForwardingFile::ReadAt(offset, size, out));
+    counter_.add(detail::narrow<uint64_t>(bytes));
+    return bytes;
+  }
+
+  auto ReadAt(int64_t offset, int64_t size)
+    -> arrow::Result<std::shared_ptr<arrow::Buffer>> override {
+    ARROW_ASSIGN_OR_RAISE(auto buffer, ForwardingFile::ReadAt(offset, size));
+    count(buffer);
+    return buffer;
+  }
+
+  auto ReadAsync(arrow::io::IOContext const& ctx, int64_t offset, int64_t size)
+    -> arrow::Future<std::shared_ptr<arrow::Buffer>> override {
+    return ForwardingFile::ReadAsync(ctx, offset, size)
+      .Then([counter
+             = counter_](std::shared_ptr<arrow::Buffer> const& buffer) mutable {
+        if (buffer) {
+          counter.add(detail::narrow<uint64_t>(buffer->size()));
+        }
+        return buffer;
+      });
+  }
+
+private:
+  auto count(std::shared_ptr<arrow::Buffer> const& buffer) -> void {
+    if (buffer) {
+      counter_.add(detail::narrow<uint64_t>(buffer->size()));
+    }
+  }
+
+  MetricsCounter counter_;
+};
 
 constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
   -> std::string {
@@ -103,9 +162,17 @@ auto FromArrowFsOperator<Output>::start(JobId job, OpCtx& ctx) -> Task<void> {
     = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
                        MetricsDirection::read, MetricsVisibility::external_,
                        MetricsUnit::events);
+  // Hand over files as a whole if the subpipeline accepts them. Only readers
+  // that produce events do.
+  if constexpr (std::same_as<Output, nova::Events>) {
+    auto ndh = null_diagnostic_handler{};
+    auto output = base_args_.pipe.inner.infer_type(tag_v<FileHandle>, ndh);
+    file_handles_ = output.is_success() and output->is<nova::Events>();
+  }
   co_await restore(ctx);
   auto ndh = null_diagnostic_handler{};
   co_await cleanup_files(ndh);
+  resume_job(ctx);
   if (base_args_.watch or not scan_complete_) {
     spawn_scan_task(ctx);
   }
@@ -137,7 +204,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
         pending_.push_back(TrackedFile{
           .path = file.path(),
           .mtime = to_option_time(file.mtime()),
-          .istream = nullptr,
+          .size = file.size(),
         });
       }
       scan_complete_ = true;
@@ -156,7 +223,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
       }
       auto& file_state = *processing_;
       if (not open.istream.ok()) {
-        diagnostic::error("failed to open `{}`", file_state.path)
+        diagnostic::error("failed to open `{}`", file_state.file.path)
           .primary(base_args_.url)
           .note(open.istream.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
@@ -168,30 +235,8 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
         co_return;
       }
       file_state.istream = open.istream.MoveValueUnsafe();
-      auto pipe = base_args_.pipe.inner;
-      // Bind the file info as a `let` binding
-      auto f_info = record{
-        {"path", file_state.path},
-        {"mtime", file_state.mtime},
-      };
-      pipe.bind(base_args_.file_info, f_info);
-      if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(open.file_id,
-                                                         std::move(pipe))) {
-        skip_job(ctx);
-        co_return;
-      }
-      // Queue the first read.
-      enqueue_task(ctx,
-                   [file_id = open.file_id,
-                    istream = file_state.istream] -> Task<AwaitResult> {
-                     auto read = co_await spawn_blocking([=] {
-                       return istream->Read(read_size);
-                     });
-                     co_return ReadProgress{
-                       file_id,
-                       std::move(read),
-                     };
-                   });
+      co_await spawn_job_sub(ctx);
+      enqueue_read(ctx);
     },
     [this, &ctx](ReadProgress& read) -> Task<void> {
       // The subpipeline can be torn down while a read is in-flight.
@@ -206,7 +251,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
       }
       auto& file_state = *processing_;
       if (not read.result.ok()) {
-        diagnostic::error("failed to read from `{}`", file_state.path)
+        diagnostic::error("failed to read from `{}`", file_state.file.path)
           .primary(base_args_.url)
           .note(read.result.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
@@ -229,28 +274,43 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
         co_return;
       }
       bytes_read_counter_.add(bytes);
-      file_state.offset += detail::narrow<int64_t>(bytes);
+      file_state.file.offset += detail::narrow<int64_t>(bytes);
       if (detail::narrow<size_t>(bytes) < read_size) {
         co_await pipe.close();
         co_return;
       }
-      enqueue_task(ctx,
-                   [file_id = read.file_id,
-                    istream = file_state.istream] -> Task<AwaitResult> {
-                     auto read = co_await spawn_blocking([=] {
-                       return istream->Read(read_size);
-                     });
-                     co_return ReadProgress{
-                       file_id,
-                       std::move(read),
-                     };
-                   });
+      enqueue_read(ctx);
+    },
+    [this, &ctx](HandleOpen& open) -> Task<void> {
+      if (not is_current_file(open.file_id)) {
+        co_return;
+      }
+      if (not open.handle.ok()) {
+        diagnostic::error("failed to open `{}`", processing_->file.path)
+          .primary(base_args_.url)
+          .note(open.handle.status().ToStringWithoutContextLines())
+          .compose([&](auto x) {
+            return is_globbing() ? std::move(x).severity(severity::warning)
+                                 : std::move(x);
+          })
+          .emit(ctx);
+        skip_job(ctx);
+        co_return;
+      }
+      auto handle = open.handle.MoveValueUnsafe();
+      processing_->file.mtime = handle.mtime;
+      processing_->file.size = handle.size;
+      auto& pipe = as<SubHandle<FileHandle>>(co_await spawn_job_sub(ctx));
+      // The subpipeline reads the file on its own and finishes afterwards. If
+      // it finished early, the push fails, which is fine.
+      std::ignore = co_await pipe.push(std::move(handle));
+      co_await pipe.close();
     },
     [this, &ctx](SubFinished& sub) -> Task<void> {
       if (not is_current_file(sub.file_id)) {
         co_return;
       }
-      auto path = std::move(processing_->path);
+      auto path = std::move(processing_->file.path);
       processing_.reset();
       start_next_job(ctx);
       if (ctx.checkpoint_settings()) {
@@ -398,12 +458,12 @@ auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
   auto& state = *processing_;
   // The path can be empty if the file was put to be cleaned-up but the state
   // was not reset.
-  if (state.path.empty()) {
+  if (state.file.path.empty()) {
     processing_.reset();
     co_return;
   }
   // Verify file exists and mtime matches.
-  auto info_future = fs_->GetFileInfoAsync({state.path});
+  auto info_future = fs_->GetFileInfoAsync({state.file.path});
   auto info_result = co_await arrow_future_to_task(std::move(info_future));
   if (not info_result.ok()) {
     processing_.reset();
@@ -416,31 +476,40 @@ auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
   }
   auto& file_info = info[0];
   auto file_mtime = to_option_time(file_info.mtime());
-  if (file_mtime != state.mtime) {
+  // A byte stream can continue after an append, but a reader's position within
+  // a file is only meaningful for the exact file it was taken from.
+  auto resized = file_handles_ and file_info.size() != state.file.size;
+  if (file_mtime != state.file.mtime or resized) {
     diagnostic::warning("file `{}` was modified since last checkpoint",
-                        state.path)
+                        state.file.path)
       .primary(base_args_.url)
       .emit(ctx);
-    if (state.offset < file_info.size()) {
+    if (not file_handles_ and state.file.offset < file_info.size()) {
       // Assume the file was appended to.
-      state.mtime = file_mtime;
+      state.file.mtime = file_mtime;
+      state.file.size = file_info.size();
     } else {
       if (base_args_.watch) {
         pending_.push_back(TrackedFile{
-          .path = state.path,
+          .path = state.file.path,
           .mtime = file_mtime,
-          .istream = nullptr,
+          .size = file_info.size(),
         });
       }
       processing_.reset();
       co_return;
     }
   }
+  if (file_handles_) {
+    // `resume_job` reopens the file to hand it over again.
+    previous_.emplace(file_info);
+    co_return;
+  }
   // Reopen file.
-  auto open_future = fs_->OpenInputStreamAsync(state.path);
+  auto open_future = fs_->OpenInputStreamAsync(state.file.path);
   auto open_result = co_await arrow_future_to_task(std::move(open_future));
   if (not open_result.ok()) {
-    diagnostic::warning("failed to open stream for `{}`: {}", state.path,
+    diagnostic::warning("failed to open stream for `{}`: {}", state.file.path,
                         open_result.status().ToStringWithoutContextLines())
       .primary(base_args_.url)
       .emit(ctx);
@@ -449,9 +518,10 @@ auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
   }
   state.istream = open_result.MoveValueUnsafe();
   // PERF: Downloads skipped bytes.
-  if (auto advance = state.istream->Advance(state.offset); not advance.ok()) {
+  if (auto advance = state.istream->Advance(state.file.offset);
+      not advance.ok()) {
     diagnostic::warning("failed to advance restored stream for `{}`: {}",
-                        state.path, advance.ToStringWithoutContextLines())
+                        state.file.path, advance.ToStringWithoutContextLines())
       .primary(base_args_.url)
       .emit(ctx);
     processing_.reset();
@@ -619,12 +689,22 @@ auto FromArrowFsOperator<Output>::start_next_job(OpCtx& ctx) -> void {
   if (pending_.empty()) {
     return;
   }
-  processing_ = std::move(pending_.front());
-  processing_->file_id = ++next_file_id_;
+  processing_ = ActiveFile{.file = std::move(pending_.front())};
+  processing_->file.file_id = ++next_file_id_;
   pending_.pop_front();
+  if (not prepare_job(*processing_, ctx)) {
+    // The error cancels the pipeline. Skipping to the next file would only
+    // repeat it for every pending file.
+    processing_.reset();
+    return;
+  }
+  if (file_handles_) {
+    enqueue_open_handle(ctx);
+    return;
+  }
   enqueue_task(ctx,
-               [this, file_id = processing_->file_id,
-                path = processing_->path] mutable -> Task<AwaitResult> {
+               [this, file_id = processing_->file.file_id,
+                path = processing_->file.path] mutable -> Task<AwaitResult> {
                  auto result = co_await arrow_future_to_task(
                    fs_->OpenInputStreamAsync(path));
                  co_return FileOpen{file_id, std::move(result)};
@@ -642,13 +722,149 @@ template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
 auto FromArrowFsOperator<Output>::is_current_file(uint64_t file_id) const
   -> bool {
-  return processing_ and processing_->file_id == file_id;
+  return processing_ and processing_->file.file_id == file_id;
 }
 
 template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
 auto FromArrowFsOperator<Output>::is_globbing() const -> bool {
   return glob_.size() != 1 or not is<std::string>(glob_[0]);
+}
+
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::prepare_job(ActiveFile& job, OpCtx& ctx)
+  -> failure_or<void> {
+  auto pipe = base_args_.pipe.inner;
+  pipe.bind(base_args_.file_info,
+            record{{"path", job.file.path}, {"mtime", job.file.mtime}});
+  auto input = file_handles_ ? element_type_tag{tag_v<FileHandle>}
+                             : element_type_tag{tag_v<chunk_ptr>};
+  TRY(auto plan, ir::make_plan(std::move(pipe), input, ctx));
+  job.plan = std::move(plan);
+  return {};
+}
+
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::resume_job(OpCtx& ctx) -> void {
+  if (not processing_) {
+    // The restored file may have been dropped, but pending files remain.
+    start_next_job(ctx);
+    return;
+  }
+  if (not prepare_job(*processing_, ctx)) {
+    // As in `start_next_job`, the error cancels the pipeline.
+    processing_.reset();
+    return;
+  }
+  if (file_handles_) {
+    // The subpipeline resumes from its own checkpoint.
+    enqueue_open_handle(ctx);
+    return;
+  }
+  // `restore_processing` already reopened the stream at the restored offset.
+  enqueue_task(ctx,
+               [file_id = processing_->file.file_id,
+                istream = processing_->istream] -> Task<AwaitResult> {
+                 co_return FileOpen{file_id, std::move(istream)};
+               });
+}
+
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::spawn_job_sub(OpCtx& ctx)
+  -> Task<AnySubHandle&> {
+  TENZIR_ASSERT(processing_ and processing_->plan);
+  auto plan = std::move(*processing_->plan);
+  processing_->plan.reset();
+  co_return co_await ctx.spawn_sub(processing_->file.file_id, std::move(plan));
+}
+
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::enqueue_read(OpCtx& ctx) -> void {
+  TENZIR_ASSERT(processing_ and processing_->istream);
+  enqueue_task(ctx,
+               [file_id = processing_->file.file_id,
+                istream = processing_->istream] -> Task<AwaitResult> {
+                 auto read = co_await spawn_blocking([=] {
+                   return istream->Read(read_size);
+                 });
+                 co_return ReadProgress{
+                   file_id,
+                   std::move(read),
+                 };
+               });
+}
+
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::enqueue_open_handle(OpCtx& ctx) -> void {
+  TENZIR_ASSERT(processing_);
+  enqueue_task(
+    ctx,
+    [fs = fs_, path = processing_->file.path,
+     file_id = processing_->file.file_id, mtime = processing_->file.mtime,
+     counter = bytes_read_counter_,
+     checkpointing
+     = ctx.checkpoint_settings().is_some()]() mutable -> Task<AwaitResult> {
+      auto lookup = [&]() -> Task<arrow::Result<arrow::fs::FileInfo>> {
+        auto infos = co_await arrow_future_to_task(
+          fs->GetFileInfoAsync(std::vector{path}));
+        if (not infos.ok()) {
+          co_return infos.status();
+        }
+        if (infos->size() != 1 or not infos->front().IsFile()) {
+          co_return arrow::Status::IOError("file vanished");
+        }
+        co_return std::move(infos->front());
+      };
+      // A reader checkpoints its position within the file it was handed, and
+      // the file may have been replaced since discovery. Opening and looking
+      // up are separate requests, so look up around the open: if both agree,
+      // the handle refers to that file.
+      auto before = Option<arrow::fs::FileInfo>{};
+      if (checkpointing) {
+        auto info = co_await lookup();
+        if (not info.ok()) {
+          co_return HandleOpen{file_id, info.status()};
+        }
+        before = std::move(*info);
+      }
+      // Open by path: a cached FileInfo size can be stale by now.
+      auto file = co_await arrow_future_to_task(fs->OpenInputFileAsync(path));
+      if (not file.ok()) {
+        co_return HandleOpen{file_id, file.status()};
+      }
+      auto size = co_await spawn_blocking([file = *file] {
+        return file->GetSize();
+      });
+      if (not size.ok()) {
+        co_return HandleOpen{file_id, size.status()};
+      }
+      if (before) {
+        auto after = co_await lookup();
+        if (not after.ok()) {
+          co_return HandleOpen{file_id, after.status()};
+        }
+        if (after->mtime() != before->mtime() or after->size() != before->size()
+            or *size != after->size()) {
+          co_return HandleOpen{
+            file_id, arrow::Status::IOError("file changed while opening")};
+        }
+        mtime = to_option_time(after->mtime());
+      }
+      co_return HandleOpen{
+        file_id,
+        FileHandle{
+          .file = std::make_shared<CountingFile>(std::move(*file), counter),
+          .path = std::move(path),
+          .mtime = mtime,
+          .size = *size,
+        },
+      };
+    });
 }
 
 template class FromArrowFsOperator<table_slice>;

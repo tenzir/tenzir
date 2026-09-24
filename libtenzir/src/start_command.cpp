@@ -21,6 +21,7 @@
 #include "tenzir/error.hpp"
 #include "tenzir/io/write.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/nova_flag.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/spawn_node.hpp"
 #include "tenzir/systemd.hpp"
@@ -68,6 +69,8 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   -> caf::message {
   TENZIR_TRACE("{} {}", TENZIR_ARG(inv.options),
                TENZIR_ARG("args", inv.arguments.begin(), inv.arguments.end()));
+  // Like `exec`, let the node's pipelines opt into the new data model.
+  set_nova_enabled(caf::get_or(inv.options, "tenzir.nova", false));
   auto node_endpoint = Option<Endpoint>{};
   auto listen_endpoint = Option<std::string>{};
   const auto* endpoint_enabled = get_if<bool>(&inv.options, "tenzir.endpoint");

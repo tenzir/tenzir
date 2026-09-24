@@ -1844,6 +1844,11 @@ public:
               .primary(p.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [](tag<FileHandle>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            // Files only feed readers, so no subpipeline produces them.
+            TENZIR_UNREACHABLE();
           });
       } else {
         return {};

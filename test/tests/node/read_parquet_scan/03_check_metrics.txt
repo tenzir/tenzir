@@ -1,0 +1,4 @@
+{
+  scan_read_footer_and_one_column: true,
+  stream_read_whole_file: true,
+}

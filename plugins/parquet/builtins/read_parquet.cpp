@@ -10,15 +10,19 @@
 #include "tenzir/option.hpp"
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/bounded_queue.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/enum.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/nova/arrow_import.hpp>
 #include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/read_detection.hpp>
 #include <tenzir/read_pushdown.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/cast.h>
@@ -35,6 +39,8 @@ struct ReadParquetArgs {
 };
 
 namespace {
+
+using namespace si_literals;
 
 auto format_decimal_type(std::shared_ptr<arrow::DataType> type,
                          decimal_format format)
@@ -154,9 +160,11 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
     arrow::key_value_metadata(std::move(keys), std::move(values)));
 }
 
-class ReadParquet final : public Operator<chunk_ptr, nova::Events> {
-public:
-  explicit ReadParquet(ReadParquetArgs args)
+/// State and steps that the byte-stream and the file reader share: the
+/// pushed-down filter, limit, and projection, and batch conversion.
+class ParquetDecoding {
+protected:
+  explicit ParquetDecoding(ReadParquetArgs args)
     : filter_{std::move(args.optimization.filter)},
       remaining_{args.optimization.limit},
       decimal_format_{args.decimal_format ? from_string<decimal_format>(
@@ -167,18 +175,65 @@ public:
         read_projection(std::move(args.optimization.projection), filter_)} {
   }
 
+  /// Prepares the pushed-down filters, once per reader.
+  auto make_filters(nova::InstantiateCtx ctx) -> failure_or<void> {
+    for (auto const& filter : filter_) {
+      TRY(auto evaluator, nova::Evaluator::make(filter, ctx));
+      filters_.push_back(std::move(evaluator));
+    }
+    return {};
+  }
+
+  /// Batch conversion is independent of how the file bytes were obtained.
+  auto convert(std::shared_ptr<arrow::RecordBatch> batch,
+               diagnostic_handler& dh) -> Option<nova::Events> {
+    auto columns = batch->ToStructArray();
+    if (not columns.ok()) {
+      diagnostic::error("failed to read parquet columns")
+        .note("{}", columns.status().ToStringWithoutContextLines())
+        .emit(dh);
+      return {};
+    }
+    // Retain only schema metadata, releasing the batch's aliases before Nova
+    // adopts the decoded buffers. Do not inspect the Arrow columns afterward.
+    auto metadata = nova::ArrowMetadata::from_arrow(*batch->schema());
+    batch.reset();
+    auto imported = nova::import_arrow_array(std::move(*columns));
+    if (not imported) {
+      diagnostic::error("parquet file contains unsupported types")
+        .note("{}", imported.unwrap_err())
+        .emit(dh);
+      return {};
+    }
+    auto records = imported.unwrap().try_as<nova::Record>();
+    TENZIR_ASSERT(records);
+    auto length = records->length();
+    auto meta = metadata.to_meta(length);
+    return apply_read_pushdown(nova::Events{std::move(*records),
+                                            nova::storage::BitMap{length, true},
+                                            std::move(meta)},
+                               filters_, remaining_, dh);
+  }
+
+  ir::OptimizeFilter filter_;
+  Option<uint64_t> remaining_;
+  decimal_format decimal_format_ = decimal_format::string;
+  Option<std::vector<std::string>> projection_;
+  std::vector<nova::Evaluator> filters_;
+};
+
+class ReadParquet final : public Operator<chunk_ptr, nova::Events>,
+                          ParquetDecoding {
+public:
+  explicit ReadParquet(ReadParquetArgs args)
+    : ParquetDecoding{std::move(args)} {
+  }
+
   auto start(OpCtx& ctx) -> Task<void> override {
     if (remaining_ == uint64_t{0}) {
       co_return;
     }
-    for (auto const& filter : filter_) {
-      auto evaluator = nova::Evaluator::make(
-        filter, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
-      if (not evaluator) {
-        co_return;
-      }
-      filters_.push_back(std::move(*evaluator));
-    }
+    std::ignore = make_filters(nova::InstantiateCtx{ctx.dh(), ctx.reg()});
   }
 
   auto process(chunk_ptr input, Push<nova::Events>&, OpCtx&)
@@ -189,9 +244,8 @@ public:
     // means checkpointing is currently unsupported: restoring would require
     // persisting potentially huge buffered input and parser progress.
     //
-    // Keep byte buffering separate from batch conversion and pushdown. A
-    // future seekable input path can share the latter without changing the
-    // behavior behind non-seekable sources such as `decompress_gzip`.
+    // Keep byte buffering separate from batch conversion and pushdown, which
+    // `ReadParquetFile` shares when it gets the file as a whole.
     if (remaining_ == uint64_t{0} or not input or input->size() == 0) {
       co_return;
     }
@@ -267,7 +321,7 @@ public:
       if (not maybe_batch.ok()) {
         diagnostic::error("{}",
                           maybe_batch.status().ToStringWithoutContextLines())
-          .note("failed read record batch")
+          .note("failed to read record batch")
           .emit(ctx);
         co_return FinalizeBehavior::done;
       }
@@ -315,8 +369,9 @@ public:
 
   auto snapshot(Serde&) -> void override {
     // Checkpointing this operator would require persisting the buffered parquet
-    // bytes until the footer arrives, which can be arbitrarily large. A future
-    // seekable path will also need an explicit checkpoint/resume contract.
+    // bytes until the footer arrives, which can be arbitrarily large. When it
+    // gets the file as a whole, `ReadParquetFile` runs instead and checkpoints
+    // its position.
     diagnostic::error("read_parquet does not support checkpoints yet").throw_();
   }
 
@@ -333,43 +388,375 @@ private:
     co_return true;
   }
 
-  /// Batch conversion is independent of how the file bytes were obtained.
-  auto convert(std::shared_ptr<arrow::RecordBatch> batch,
-               diagnostic_handler& dh) -> Option<nova::Events> {
-    auto columns = batch->ToStructArray();
-    if (not columns.ok()) {
-      diagnostic::error("failed to read parquet columns")
-        .note("{}", columns.status().ToStringWithoutContextLines())
-        .emit(dh);
-      return {};
-    }
-    // Retain only schema metadata, releasing the batch's aliases before Nova
-    // adopts the decoded buffers. Do not inspect the Arrow columns afterward.
-    auto metadata = nova::ArrowMetadata::from_arrow(*batch->schema());
-    batch.reset();
-    auto imported = nova::import_arrow_array(std::move(*columns));
-    if (not imported) {
-      diagnostic::error("parquet file contains unsupported types")
-        .note("{}", imported.unwrap_err())
-        .emit(dh);
-      return {};
-    }
-    auto records = imported.unwrap().try_as<nova::Record>();
-    TENZIR_ASSERT(records);
-    auto length = records->length();
-    auto meta = metadata.to_meta(length);
-    return apply_read_pushdown(nova::Events{std::move(*records),
-                                            nova::storage::BitMap{length, true},
-                                            std::move(meta)},
-                               filters_, remaining_, dh);
+  std::vector<chunk_ptr> chunks_;
+};
+
+/// Where a scan stands, for resuming it after a restart.
+struct ScanPosition {
+  /// Rows of the file consumed so far, including rows the filter dropped.
+  uint64_t rows = 0;
+  /// The part of the pushed-down limit that is still open, if any.
+  Option<uint64_t> remaining = None{};
+
+  friend auto inspect(auto& f, ScanPosition& x) -> bool {
+    return f.object(x).fields(f.field("rows", x.rows),
+                              f.field("remaining", x.remaining));
+  }
+};
+
+/// A batch of events together with the position right after it.
+struct ScanBatch {
+  nova::Events events;
+  ScanPosition position;
+};
+
+/// Reads a seekable Parquet file: the footer first, then only the selected
+/// column chunks, one row group at a time, fetching the next row group while
+/// the current one decodes.
+class ParquetScan final : ParquetDecoding {
+public:
+  explicit ParquetScan(ReadParquetArgs args)
+    : ParquetDecoding{std::move(args)} {
   }
 
-  ir::OptimizeFilter filter_;
-  Option<uint64_t> remaining_;
-  decimal_format decimal_format_ = decimal_format::string;
-  std::vector<chunk_ptr> chunks_;
-  Option<std::vector<std::string>> projection_;
-  std::vector<nova::Evaluator> filters_;
+  /// Prepares the filters and reads the footer, starting at `from` if set.
+  auto open(std::shared_ptr<arrow::io::RandomAccessFile> file,
+            Option<ScanPosition> from, nova::InstantiateCtx ctx)
+    -> Task<failure_or<void>> {
+    if (from) {
+      remaining_ = from->remaining;
+    }
+    if (remaining_ == uint64_t{0}) {
+      co_return {};
+    }
+    CO_TRY(make_filters(ctx));
+    auto metadata = co_await spawn_blocking(
+      [file] -> arrow::Result<std::shared_ptr<::parquet::FileMetaData>> {
+        // Like the byte path, treat an empty file as an empty input.
+        ARROW_ASSIGN_OR_RAISE(auto size, file->GetSize());
+        if (size == 0) {
+          return nullptr;
+        }
+        try {
+          auto properties = ::parquet::ReaderProperties{arrow_memory_pool()};
+          properties.set_footer_read_size(256_Ki);
+          auto reader = ::parquet::ParquetFileReader::Open(file, properties);
+          return reader->metadata();
+        } catch (
+          ::parquet::ParquetInvalidOrCorruptedFileException const& error) {
+          return arrow::Status::Invalid("invalid or corrupted parquet file: ",
+                                        error.what());
+        } catch (::parquet::ParquetException const& error) {
+          return arrow::Status::IOError(error.what());
+        }
+      });
+    if (not metadata.ok()) {
+      diagnostic::error("{}", metadata.status().message()).emit(ctx);
+      co_return failure::promise();
+    }
+    if (not *metadata) {
+      co_return {};
+    }
+    scan_file_ = std::move(file);
+    scan_metadata_ = std::move(*metadata);
+    for (auto i = 0; i < scan_metadata_->num_columns(); ++i) {
+      auto const& name = scan_metadata_->schema()->GetColumnRoot(i)->name();
+      if (not projection_
+          or std::ranges::find(*projection_, name) != projection_->end()) {
+        scan_columns_.push_back(i);
+      }
+    }
+    if (from) {
+      // Skip the row groups consumed before, and the consumed rows of the
+      // row group to resume in.
+      auto rows = from->rows;
+      while (scan_row_group_ < scan_metadata_->num_row_groups()) {
+        auto group_rows = detail::narrow<uint64_t>(
+          scan_metadata_->RowGroup(scan_row_group_)->num_rows());
+        if (rows < group_rows) {
+          break;
+        }
+        rows -= group_rows;
+        ++scan_row_group_;
+      }
+      // The skipped rows count again as they are read and dropped.
+      scan_skip_ = detail::narrow<int64_t>(rows);
+      scan_consumed_ = from->rows - rows;
+    }
+    co_return {};
+  }
+
+  /// Returns the next nonempty batch, or None at exhaustion or after reporting
+  /// an error. Rows that were read ahead are not part of the position.
+  auto next(diagnostic_handler& dh) -> Task<Option<ScanBatch>> {
+    while (remaining_ != uint64_t{0} and scan_file_) {
+      if (not scan_batches_) {
+        if (not scan_prefetch_) {
+          if (scan_row_group_ == scan_metadata_->num_row_groups()) {
+            break;
+          }
+          scan_prefetch_ = co_await open_row_group(scan_row_group_++);
+        }
+        auto opened = std::move(*scan_prefetch_);
+        scan_prefetch_ = None{};
+        if (not opened.ok()) {
+          diagnostic::error("{}", opened.status().ToStringWithoutContextLines())
+            .emit(dh);
+          break;
+        }
+        scan_batches_ = std::move(*opened);
+        scan_rows_ = scan_batches_->rows;
+        // Fetch the next row group while this one decodes, unless the limit
+        // is certain to be met before.
+        auto needs_next
+          = not filter_.empty() or not remaining_
+            or *remaining_ > static_cast<uint64_t>(scan_rows_ - scan_skip_);
+        if (needs_next and scan_row_group_ < scan_metadata_->num_row_groups()) {
+          scan_prefetch_ = co_await open_row_group(scan_row_group_++);
+        }
+        scan_next_ = co_await read_scan_batch();
+      }
+      if (not scan_next_.ok()) {
+        diagnostic::error("{}",
+                          scan_next_.status().ToStringWithoutContextLines())
+          .note("failed to read record batch")
+          .emit(dh);
+        break;
+      }
+      auto batch = std::move(*scan_next_);
+      if (not batch) {
+        scan_batches_.reset();
+        continue;
+      }
+      scan_rows_ -= batch->num_rows();
+      scan_consumed_ += detail::narrow<uint64_t>(batch->num_rows());
+      if (scan_skip_ > 0) {
+        // Drop the rows that were consumed before a restart.
+        auto skipped = std::min(scan_skip_, batch->num_rows());
+        scan_skip_ -= skipped;
+        batch = skipped == batch->num_rows() ? nullptr : batch->Slice(skipped);
+      }
+      if (scan_rows_ == 0
+          or (batch and filter_.empty() and remaining_
+              and *remaining_ <= static_cast<uint64_t>(batch->num_rows()))) {
+        // Release Arrow's aliases before the importer adopts the buffers.
+        scan_batches_.reset();
+      } else {
+        // As in the byte path, defer lookahead errors until the batch is needed.
+        scan_next_ = co_await read_scan_batch();
+      }
+      if (not batch) {
+        continue;
+      }
+      auto formatted = format_decimal_arrays(std::move(batch), decimal_format_);
+      if (not formatted.ok()) {
+        diagnostic::error("failed to format parquet decimals")
+          .note("{}", formatted.status().ToStringWithoutContextLines())
+          .emit(dh);
+        break;
+      }
+      auto events = convert(inject_tenzir_metadata(std::move(*formatted)), dh);
+      if (not events) {
+        break;
+      }
+      if (events->active_count() != 0) {
+        co_return ScanBatch{
+          std::move(*events),
+          ScanPosition{scan_consumed_, remaining_},
+        };
+      }
+    }
+    scan_prefetch_ = None{};
+    scan_batches_.reset();
+    scan_metadata_.reset();
+    scan_file_.reset();
+    co_return None{};
+  }
+
+private:
+  struct ScanBatches {
+    std::unique_ptr<::parquet::arrow::FileReader> reader;
+    std::shared_ptr<arrow::RecordBatchReader> batches;
+    int64_t rows;
+  };
+
+  /// Opens a decoder for one row group and starts fetching its selected column
+  /// chunks without waiting for them.
+  ///
+  /// Every row group gets its own decoder and range cache, reusing the footer.
+  /// Arrow's cache retains everything it fetched until destruction, so one
+  /// cache for the whole file would retain the entire file.
+  auto open_row_group(int group)
+    -> Task<arrow::Result<std::shared_ptr<ScanBatches>>> {
+    co_return co_await spawn_blocking(
+      [file = scan_file_, metadata = scan_metadata_, group,
+       columns
+       = scan_columns_]() -> arrow::Result<std::shared_ptr<ScanBatches>> {
+        try {
+          auto properties = ::parquet::ReaderProperties{arrow_memory_pool()};
+          properties.enable_buffered_stream();
+          auto arrow_properties = ::parquet::ArrowReaderProperties{};
+          arrow_properties.set_batch_size(defaults::import::table_slice_size);
+          arrow_properties.set_pre_buffer(true);
+          // The lazy default defers fetching until the first read.
+          arrow_properties.set_cache_options(
+            arrow::io::CacheOptions::Defaults());
+          auto rows = metadata->RowGroup(group)->num_rows();
+          auto parquet
+            = ::parquet::ParquetFileReader::Open(file, properties, metadata);
+          ARROW_ASSIGN_OR_RAISE(
+            auto reader, ::parquet::arrow::FileReader::Make(arrow_memory_pool(),
+                                                            std::move(parquet),
+                                                            arrow_properties));
+          ARROW_ASSIGN_OR_RAISE(auto batches,
+                                reader->GetRecordBatchReader({group}, columns));
+          return std::make_shared<ScanBatches>(std::move(reader),
+                                               std::move(batches), rows);
+        } catch (::parquet::ParquetException const& error) {
+          return arrow::Status::Invalid(error.what());
+        }
+      });
+  }
+
+  auto read_scan_batch()
+    -> Task<arrow::Result<std::shared_ptr<arrow::RecordBatch>>> {
+    co_return co_await spawn_blocking(
+      [state
+       = scan_batches_] -> arrow::Result<std::shared_ptr<arrow::RecordBatch>> {
+        try {
+          return state->batches->Next();
+        } catch (::parquet::ParquetException const& error) {
+          return arrow::Status::Invalid(error.what());
+        }
+      });
+  }
+
+  std::shared_ptr<arrow::io::RandomAccessFile> scan_file_;
+  std::shared_ptr<::parquet::FileMetaData> scan_metadata_;
+  std::vector<int> scan_columns_;
+  int scan_row_group_ = 0;
+  int64_t scan_rows_ = 0;
+  /// Rows to drop from the start of the next row group when resuming.
+  int64_t scan_skip_ = 0;
+  /// Rows of the file consumed through the last decoded batch.
+  uint64_t scan_consumed_ = 0;
+  std::shared_ptr<ScanBatches> scan_batches_;
+  /// The next row group, whose column chunks are being fetched.
+  Option<arrow::Result<std::shared_ptr<ScanBatches>>> scan_prefetch_;
+  arrow::Result<std::shared_ptr<arrow::RecordBatch>> scan_next_{
+    std::shared_ptr<arrow::RecordBatch>{}};
+};
+
+/// The identity of a file, to recognize it after a restore.
+struct FileIdentity {
+  std::string path;
+  Option<time> mtime;
+  int64_t size = 0;
+
+  friend auto operator==(FileIdentity const&, FileIdentity const&) -> bool
+    = default;
+
+  friend auto inspect(auto& f, FileIdentity& x) -> bool {
+    return f.object(x).fields(f.field("path", x.path),
+                              f.field("mtime", x.mtime),
+                              f.field("size", x.size));
+  }
+};
+
+/// Reads a Parquet file that a file source hands over as a whole, through
+/// range requests instead of buffering it.
+///
+/// The scan runs between executor calls, one batch per `await_task()`, so
+/// checkpoints can happen between batches. Ownership of the scan moves with
+/// each step: `pending_` holds it until `await_task()` takes it to read the
+/// next batch, and `process_task()` puts it back after forwarding the batch.
+class ReadParquetFile final : public Operator<FileHandle, nova::Events> {
+public:
+  explicit ReadParquetFile(ReadParquetArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(FileHandle input, Push<nova::Events>&, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(not received_, "expected a single file");
+    received_ = true;
+    auto identity = FileIdentity{input.path, input.mtime, input.size};
+    if (file_ and *file_ != identity) {
+      // The position after a restore only applies to the same file.
+      diagnostic::error("file `{}` was modified since the last checkpoint",
+                        input.path)
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    file_ = std::move(identity);
+    if (done_) {
+      co_return;
+    }
+    auto scan = Box<ParquetScan>{std::in_place, std::move(args_)};
+    auto opened
+      = co_await scan->open(std::move(input.file), position_,
+                            nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not opened) {
+      done_ = true;
+      co_return;
+    }
+    co_await pending_->enqueue(std::move(scan));
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    auto scan = co_await pending_->dequeue();
+    auto batch = co_await scan->next(dh);
+    co_return Step{std::move(scan), std::move(batch)};
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    auto step = std::move(result).as<Step>();
+    if (not step.batch) {
+      done_ = true;
+      co_return;
+    }
+    co_await push(std::move(step.batch->events));
+    position_ = step.batch->position;
+    if (position_->remaining == uint64_t{0}) {
+      done_ = true;
+      co_return;
+    }
+    co_await pending_->enqueue(std::move(step.scan));
+  }
+
+  auto finalize(Push<nova::Events>&, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    // The file source closes the input right after handing over the file, but
+    // the scan only starts then.
+    co_return received_ and not done_ ? FinalizeBehavior::continue_
+                                      : FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("file", file_);
+    serde("position", position_);
+    serde("done", done_);
+  }
+
+private:
+  struct Step {
+    Box<ParquetScan> scan;
+    Option<ScanBatch> batch;
+  };
+
+  ReadParquetArgs args_;
+  /// The file being read, persisted to validate the file after a restore.
+  Option<FileIdentity> file_;
+  /// The position after the last forwarded batch.
+  Option<ScanPosition> position_;
+  bool done_ = false;
+  bool received_ = false;
+  mutable Box<BoundedQueue<Box<ParquetScan>>> pending_{std::in_place, 1};
 };
 
 // Preserve the pre-Nova reader independently so it can be deleted as a unit.
@@ -664,7 +1051,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadParquetArgs, legacy::ReadParquet, ReadParquet>{};
+    auto d = Describer<ReadParquetArgs, legacy::ReadParquet, ReadParquet,
+                       ReadParquetFile>{};
     auto decimal_format_arg
       = d.named("decimal_format", &ReadParquetArgs::decimal_format);
     d.validate([decimal_format_arg](DescribeCtx& ctx) -> Empty {

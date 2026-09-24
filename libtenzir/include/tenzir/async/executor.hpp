@@ -93,6 +93,8 @@ public:
       return make_bytes(std::move(id));
     } else if constexpr (std::same_as<T, nova::Events>) {
       return make_nova_events(std::move(id));
+    } else if constexpr (std::same_as<T, FileHandle>) {
+      return make_files(std::move(id));
     } else {
       static_assert(false, "unknown type");
     }
@@ -108,6 +110,8 @@ public:
       return make_fused_bytes(std::move(id));
     } else if constexpr (std::same_as<T, nova::Events>) {
       return make_fused_nova_events(std::move(id));
+    } else if constexpr (std::same_as<T, FileHandle>) {
+      return make_fused_files(std::move(id));
     } else {
       static_assert(false, "unknown type");
     }
@@ -179,6 +183,13 @@ protected:
 
   virtual auto make_fused_nova_events(ChannelId id)
     -> PushPull<OperatorMsg<nova::Events>>
+    = 0;
+
+  virtual auto make_files(ChannelId id) -> PushPull<OperatorMsg<FileHandle>>
+    = 0;
+
+  virtual auto make_fused_files(ChannelId id)
+    -> PushPull<OperatorMsg<FileHandle>>
     = 0;
 };
 

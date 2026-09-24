@@ -8,6 +8,10 @@ over a shared, uncompacted column instead of copies.
 `storage::Index` is `std::int32_t`, capping arrays at ~2^31 rows. `-1` is a
 pervasive sentinel: unset offset, absent record row, unassigned shape.
 
+"Nova" is a temporary name; the model becomes the unnamed default. Do not
+mention it in comments, docs, diagnostics, tests, or changelog entries. Existing
+identifiers such as `nova::` and `--nova` stay.
+
 ## Types
 
 ### Registry
@@ -237,7 +241,8 @@ There is no `nova::Operator`. Nova is a fourth `element_type_tag` alternative,
 so derive from the ordinary `Operator<Input, Output>` with `nova::Events` in a
 slot and register the class as an extra `Impls...` argument to `Describer`,
 sharing one `Args` bundle with the `table_slice` implementation. Only `void`,
-`chunk_ptr`, and `nova::Events` may produce `nova::Events`. `select_spawn`
+`chunk_ptr`, `FileHandle`, and `nova::Events` may produce `nova::Events`.
+`select_spawn`
 prefers the nova implementation when `nova_enabled()`, and errors with
 "operator does not support `--nova` yet" when only a `table_slice` one exists.
 Keep the legacy implementation unchanged and add a separate Nova implementation,

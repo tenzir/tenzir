@@ -1,9 +1,12 @@
 """Generate columnar inputs for reader pushdown tests.
 
-READ_PUSHDOWN_ROOT contains input, clean, and corrupt-unused files. IPC formats
-also provide a store envelope; IPC streams additionally provide concatenated
-schemas and trailing corruption. The fixture only generates inputs: TQL tests
-and their baselines check reader behavior.
+READ_PUSHDOWN_ROOT contains input, clean, and corrupt-unused files. Parquet
+also provides a wide file whose size dwarfs the reader's footer read, plus a
+gzipped copy, so that tests can tell a random-access scan from a whole-file
+read by the bytes it fetches. IPC formats also provide a store envelope; IPC
+streams additionally provide concatenated schemas and trailing corruption. The
+fixture only generates inputs: TQL tests and their baselines check reader
+behavior.
 """
 
 # /// script
@@ -12,12 +15,22 @@ and their baselines check reader behavior.
 
 from __future__ import annotations
 
+import gzip
+import random
 import sys
 from decimal import Decimal
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+# Rows in the wide file. With 64 bytes of incompressible payload per row, the
+# file is several MiB; a projection to `id` with a small limit needs a fraction.
+# The payload comes from a seeded generator so that every run produces the same
+# bytes.
+WIDE_ROWS = 40_000
+WIDE_ROW_GROUP_SIZE = 10_000
+WIDE_SEED = 1034
 
 
 def _write_table(
@@ -97,12 +110,27 @@ def _setup_inputs(root: Path, format: str) -> None:
             }
         )
         pq.write_table(batches, root / "batches", row_group_size=batch_rows)
+        pq.write_table(batches, root / "single-group", row_group_size=len(batches))
         damaged = bytearray((root / "batches").read_bytes())
         offset = (
             pq.read_metadata(root / "batches").row_group(1).column(0).data_page_offset
         )
         damaged[offset] = 0
         (root / "corrupt-lookahead").write_bytes(damaged)
+        payload = random.Random(WIDE_SEED)
+        wide = pa.table(
+            {
+                "id": pa.array(range(WIDE_ROWS), pa.int64()),
+                "payload": pa.array(
+                    [payload.randbytes(64) for _ in range(WIDE_ROWS)], pa.binary()
+                ),
+            }
+        )
+        pq.write_table(wide, root / "wide", row_group_size=WIDE_ROW_GROUP_SIZE)
+        # A fixed header timestamp keeps the copy byte-identical across runs.
+        (root / "wide.gz").write_bytes(
+            gzip.compress((root / "wide").read_bytes(), mtime=0)
+        )
         return
     _write_table(root / "unsupported-only", table.select(["unused"]), format)
     subnet_storage = pa.struct(

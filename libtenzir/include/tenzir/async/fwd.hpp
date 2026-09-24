@@ -36,7 +36,8 @@ class Operator;
 /// of lambda instantiations in the generic `match` over this variant, of which
 /// the executor alone has a dozen.
 // `nova::Events` is a peer to `table_slice`, so it gets the same set of
-// Input/Output combinations.
+// Input/Output combinations. `FileHandle` only feeds readers that need random
+// access, plus the identity that the planner may put in front of them.
 using AnyOperator = variant<
   Box<Operator<void, void>>, Box<Operator<void, chunk_ptr>>,
   Box<Operator<void, table_slice>>, Box<Operator<void, nova::Events>>,
@@ -47,6 +48,8 @@ using AnyOperator = variant<
   Box<Operator<table_slice, void>>, Box<Operator<nova::Events, chunk_ptr>>,
   Box<Operator<nova::Events, nova::Events>>,
   Box<Operator<nova::Events, nova::Events, true>>,
-  Box<Operator<nova::Events, void>>, Box<Operator<chunk_ptr, void>>>;
+  Box<Operator<nova::Events, void>>, Box<Operator<chunk_ptr, void>>,
+  Box<Operator<FileHandle, nova::Events>>,
+  Box<Operator<FileHandle, FileHandle>>>;
 
 } // namespace tenzir

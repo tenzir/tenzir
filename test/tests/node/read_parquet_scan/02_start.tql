@@ -1,0 +1,4 @@
+api "/pipeline/update", {id: "00000000-0000-0000-0000-000000000001", action: "start"}
+discard
+api "/pipeline/update", {id: "00000000-0000-0000-0000-000000000002", action: "start"}
+discard

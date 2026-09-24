@@ -1,0 +1,6 @@
+suite: read-parquet-scan
+fixtures:
+  - node
+  - read_pushdown:
+      format: parquet
+timeout: 60

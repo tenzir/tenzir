@@ -16,7 +16,7 @@ namespace tenzir {
 
 /// Describes the input or output type of an operator.
 struct element_type_tag
-  : tag_variant<void, table_slice, chunk_ptr, nova::Events> {
+  : tag_variant<void, table_slice, chunk_ptr, nova::Events, FileHandle> {
   using tag_variant::tag_variant;
 };
 

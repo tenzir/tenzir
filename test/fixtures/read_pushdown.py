@@ -41,4 +41,8 @@ def read_pushdown() -> Iterator[dict[str, str]]:
             ],
             check=True,
         )
-        yield {"READ_PUSHDOWN_ROOT": str(root)}
+        env = {"READ_PUSHDOWN_ROOT": str(root)}
+        wide = root / "wide"
+        if wide.exists():
+            env["READ_PUSHDOWN_WIDE_SIZE"] = str(wide.stat().st_size)
+        yield env

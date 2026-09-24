@@ -1,0 +1,9 @@
+suite: from-s3-read-parquet
+fixtures:
+  - s3
+  - read_pushdown:
+      format: parquet
+timeout: 120
+skip:
+  on:
+    - fixture-unavailable

@@ -159,7 +159,7 @@ using AnySpawn
             Spawn<table_slice, table_slice, true>, Spawn<table_slice, void>,
             Spawn<nova::Events, chunk_ptr>, Spawn<nova::Events, nova::Events>,
             Spawn<nova::Events, nova::Events, true>, Spawn<nova::Events, void>,
-            Spawn<chunk_ptr, void>>;
+            Spawn<chunk_ptr, void>, Spawn<FileHandle, nova::Events>>;
 
 template <class Args, class Input>
 using SpawnWith

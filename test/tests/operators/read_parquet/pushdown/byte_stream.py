@@ -3,20 +3,30 @@
 
 """Exercise Parquet decoding through file, split-byte, and compressed input."""
 
+from concurrent.futures import ThreadPoolExecutor
 import gzip
 import json
 import os
 from pathlib import Path
 import shlex
 import subprocess
+import tempfile
+
+# Pipelines are independent, so run a few at a time to stay well within the
+# test timeout on loaded machines.
+WORKERS = 4
 
 
-def read(path: Path, tail: str = "", mode: str = "file", reader: str = "read_parquet"):
+def run(path: Path, tail: str = "", mode: str = "file", reader: str = "read_parquet"):
     source = path
     prefix = ""
     if mode == "gzip":
-        source = Path(os.environ["TENZIR_TMP_DIR"]) / f"{path.name}.gz"
-        source.write_bytes(gzip.compress(path.read_bytes(), mtime=0))
+        # A file per call keeps concurrent cases from sharing a copy.
+        with tempfile.NamedTemporaryFile(
+            dir=os.environ["TENZIR_TMP_DIR"], suffix=".gz", delete=False
+        ) as copy:
+            copy.write(gzip.compress(path.read_bytes(), mtime=0))
+        source = Path(copy.name)
         prefix = "decompress_gzip\n"
     if mode != "file":
         prefix += "split_bytes 97\n"
@@ -30,6 +40,11 @@ def read(path: Path, tail: str = "", mode: str = "file", reader: str = "read_par
         text=True,
         timeout=20,
     )
+    return pipeline, result
+
+
+def read(path: Path, tail: str = "", mode: str = "file", reader: str = "read_parquet"):
+    pipeline, result = run(path, tail, mode, reader)
     assert result.returncode == 0, (pipeline, result.stderr)
     assert not result.stderr, (pipeline, result.stderr)
     return [json.loads(line) for line in result.stdout.splitlines()]
@@ -48,6 +63,13 @@ def main():
         (root / "corrupt-unused", "select\nhead 4", "read_parquet", 4),
         (root / "unsupported-only", "select\nhead 4", "read_parquet", 4),
         (root / "batches", "", "read_parquet", 16385),
+        (root / "single-group", "", "read_parquet", 16385),
+        (
+            root / "single-group",
+            "where id >= 8192\nselect id\nhead 3",
+            "read_parquet",
+            3,
+        ),
         (root / "batches", "where id >= 8192\nselect id\nhead 3", "read_parquet", 3),
         (
             root / "corrupt-lookahead",
@@ -63,7 +85,9 @@ def main():
         (inputs / "decimal128.parquet", "", "read_parquet", 3),
         (inputs / "decimal128.parquet", "", 'read_parquet decimal_format="float"', 3),
     ]
-    for path, tail, reader, count in cases:
+
+    def check(case):
+        path, tail, reader, count = case
         expected = read(path, tail, reader=reader)
         assert len(expected) == count, (path, tail, expected)
         if path == root / "input" and count == 2:
@@ -72,9 +96,9 @@ def main():
             assert expected == [{"id": 0}, {"id": 1}]
         if tail == "select\nhead 4":
             assert expected == [{}] * 4
-        if path == root / "batches" and not tail:
+        if path.name in {"batches", "single-group"} and not tail:
             assert expected == [{"id": i, "text": "value"} for i in range(16385)]
-        if path == root / "batches" and count == 3:
+        if path.name in {"batches", "single-group"} and count == 3:
             assert expected == [{"id": i} for i in range(8192, 8195)]
         if path == root / "corrupt-lookahead":
             assert expected == [{"id": 0}]
@@ -103,6 +127,9 @@ def main():
         for mode in ["split", "gzip"]:
             actual = read(path, tail, mode, reader)
             assert actual == expected, (path, tail, mode, expected, actual)
+
+    with ThreadPoolExecutor(WORKERS) as pool:
+        list(pool.map(check, cases))
     # The filesystem source must forward events and retain file bindings
     # across independently instantiated readers. Order files only in the test.
     files = Path(os.environ["TENZIR_TMP_DIR"]) / "files"
@@ -121,6 +148,30 @@ def main():
         (3, "b"),
     ], rows
     assert len(read(files / "*", "head 5\nselect id")) == 5
+    # Failures must look the same whether the reader seeks or buffers.
+    tmp = Path(os.environ["TENZIR_TMP_DIR"])
+    (tmp / "empty").write_bytes(b"")
+    (tmp / "not-parquet").write_bytes(b"not a parquet file")
+    failures = [
+        (root / "corrupt-lookahead", "where id >= 8192\nselect id\nhead 1"),
+        (root / "corrupt-unused", "head 1"),
+        (tmp / "empty", ""),
+        (tmp / "not-parquet", ""),
+    ]
+
+    def check_failure(case):
+        path, tail = case
+        _, expected = run(path, tail)
+        for mode in ["split", "gzip"]:
+            _, actual = run(path, tail, mode)
+            assert (actual.returncode, actual.stdout, actual.stderr) == (
+                expected.returncode,
+                expected.stdout,
+                expected.stderr,
+            ), (path, tail, mode, expected.stderr, actual.stderr)
+
+    with ThreadPoolExecutor(WORKERS) as pool:
+        list(pool.map(check_failure, failures))
     print("Parquet decoding is independent of byte chunking")
 
 

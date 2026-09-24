@@ -27,6 +27,9 @@ auto formatter<tenzir::element_type_tag>::format(
     },
     [&](tenzir::tag<tenzir::nova::Events>) {
       return fmt::format_to(ctx.out(), "nova_events");
+    },
+    [&](tenzir::tag<tenzir::FileHandle>) {
+      return fmt::format_to(ctx.out(), "file");
     });
 }
 

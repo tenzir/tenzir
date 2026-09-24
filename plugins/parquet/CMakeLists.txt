@@ -35,6 +35,9 @@ if (Parquet_VERSION_MAJOR LESS 12)
 endif ()
 
 target_link_libraries(parquet PRIVATE "${PARQUET_LIBRARY}")
+if (TARGET parquet-test)
+  target_link_libraries(parquet-test PRIVATE "${PARQUET_LIBRARY}")
+endif ()
 
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   # Work around missing dependency links in the Parquet target
