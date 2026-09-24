@@ -1,0 +1,5 @@
+from {keep: true}, {keep: false}, {keep: true}
+where keep
+value = random()
+assert value >= 0.0 and value < 1.0
+select kind = type_of(value).kind

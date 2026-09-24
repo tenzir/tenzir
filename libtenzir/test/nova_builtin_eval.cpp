@@ -24,6 +24,7 @@
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/events.hpp"
@@ -660,6 +661,41 @@ TEST("subnet ignores invalid inactive rows and propagates nulls") {
     }
     CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
   }
+}
+
+TEST("sqrt ignores invalid inactive rows and propagates nulls") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(UInt{9});
+  builder.record().field("x").null();
+  builder.record().field("x").data(true);
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("sqrt", {root_field("x")}), events,
+                       bitmap({true, true, invalid_active}), dh);
+    CHECK_EQUAL(*as<RowView<Float>>(result.get(0)), 3.0);
+    CHECK(is_null_at(result, 1));
+    if (invalid_active) {
+      CHECK(is_null_at(result, 2));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+  }
+}
+
+TEST("random produces values for sparse and empty masks") {
+  auto events = make_events(Array<Record>::make_empty(5));
+  auto dh = collecting_diagnostic_handler{};
+  for (auto mask :
+       {bitmap({false, true, false, true, false}), storage::BitMap{5, false}}) {
+    auto result = eval(call("random", {}), events, mask, dh);
+    CHECK_EQUAL(result.length(), 5);
+    for (auto row : storage::true_bits(mask)) {
+      auto value = *as<RowView<Float>>(result.get(row));
+      CHECK(value >= 0.0);
+      CHECK(value < 1.0);
+    }
+  }
+  CHECK(std::move(dh).collect().empty());
 }
 
 TEST("type_of reports null as a type and does not inspect inactive rows") {
