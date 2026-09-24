@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "parquet/row_group_pruning.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/option.hpp"
 
@@ -299,14 +300,21 @@ public:
     }
     // Zero-column batches preserve cardinality without decoding unrequested
     // columns, which may contain unsupported types or corrupt data.
+    auto selected = select_row_groups(filter_, *metadata);
     auto row_groups = std::vector<int>{};
     auto available = uint64_t{0};
     for (auto i = 0; i < metadata->num_row_groups(); ++i) {
+      if (not selected.get(i)) {
+        continue;
+      }
       row_groups.push_back(i);
       available += metadata->RowGroup(i)->num_rows();
       if (filter_.empty() and remaining_ and available >= *remaining_) {
         break;
       }
+    }
+    if (row_groups.empty()) {
+      co_return FinalizeBehavior::done;
     }
     auto rb_reader = out_buffer->GetRecordBatchReader(row_groups, columns);
     if (not rb_reader.ok()) {
@@ -466,6 +474,15 @@ public:
         scan_columns_.push_back(i);
       }
     }
+    // Every row group starts at the rows of the ones before, which positions
+    // count even if they are skipped.
+    auto start = uint64_t{0};
+    for (auto i = 0; i < scan_metadata_->num_row_groups(); ++i) {
+      scan_starts_.push_back(start);
+      start
+        += detail::narrow<uint64_t>(scan_metadata_->RowGroup(i)->num_rows());
+    }
+    scan_selected_ = select_row_groups(filter_, *scan_metadata_);
     if (from) {
       // Skip the row groups consumed before, and the consumed rows of the
       // row group to resume in.
@@ -479,8 +496,11 @@ public:
         rows -= group_rows;
         ++scan_row_group_;
       }
-      // The skipped rows count again as they are read and dropped.
-      scan_skip_ = detail::narrow<int64_t>(rows);
+      // The skipped rows count again as they are read and dropped. Nothing
+      // needs to be dropped from a row group that is skipped altogether.
+      auto resumed = scan_row_group_ < scan_metadata_->num_row_groups()
+                     and scan_selected_.get(scan_row_group_);
+      scan_skip_ = resumed ? detail::narrow<int64_t>(rows) : 0;
       scan_consumed_ = from->rows - rows;
     }
     co_return {};
@@ -492,10 +512,11 @@ public:
     while (remaining_ != uint64_t{0} and scan_file_) {
       if (not scan_batches_) {
         if (not scan_prefetch_) {
-          if (scan_row_group_ == scan_metadata_->num_row_groups()) {
+          auto group = next_row_group();
+          if (not group) {
             break;
           }
-          scan_prefetch_ = co_await open_row_group(scan_row_group_++);
+          scan_prefetch_ = co_await open_row_group(*group);
         }
         auto opened = std::move(*scan_prefetch_);
         scan_prefetch_ = None{};
@@ -506,13 +527,16 @@ public:
         }
         scan_batches_ = std::move(*opened);
         scan_rows_ = scan_batches_->rows;
+        scan_consumed_ = scan_starts_[scan_batches_->group];
         // Fetch the next row group while this one decodes, unless the limit
         // is certain to be met before.
         auto needs_next
           = not filter_.empty() or not remaining_
             or *remaining_ > static_cast<uint64_t>(scan_rows_ - scan_skip_);
-        if (needs_next and scan_row_group_ < scan_metadata_->num_row_groups()) {
-          scan_prefetch_ = co_await open_row_group(scan_row_group_++);
+        if (needs_next) {
+          if (auto group = next_row_group()) {
+            scan_prefetch_ = co_await open_row_group(*group);
+          }
         }
         scan_next_ = co_await read_scan_batch();
       }
@@ -578,7 +602,20 @@ private:
     std::unique_ptr<::parquet::arrow::FileReader> reader;
     std::shared_ptr<arrow::RecordBatchReader> batches;
     int64_t rows;
+    int group;
   };
+
+  /// The next row group to read, past the ones whose statistics rule out the
+  /// filter.
+  auto next_row_group() -> Option<int> {
+    while (scan_row_group_ < scan_metadata_->num_row_groups()) {
+      auto group = scan_row_group_++;
+      if (scan_selected_.get(group)) {
+        return group;
+      }
+    }
+    return None{};
+  }
 
   /// Opens a decoder for one row group and starts fetching its selected column
   /// chunks without waiting for them.
@@ -611,7 +648,7 @@ private:
           ARROW_ASSIGN_OR_RAISE(auto batches,
                                 reader->GetRecordBatchReader({group}, columns));
           return std::make_shared<ScanBatches>(std::move(reader),
-                                               std::move(batches), rows);
+                                               std::move(batches), rows, group);
         } catch (::parquet::ParquetException const& error) {
           return arrow::Status::Invalid(error.what());
         }
@@ -634,6 +671,10 @@ private:
   std::shared_ptr<arrow::io::RandomAccessFile> scan_file_;
   std::shared_ptr<::parquet::FileMetaData> scan_metadata_;
   std::vector<int> scan_columns_;
+  /// The first row of every row group within the file.
+  std::vector<uint64_t> scan_starts_;
+  /// Whether a row group may contain rows that satisfy the filter.
+  nova::storage::BitMap scan_selected_{0, true};
   int scan_row_group_ = 0;
   int64_t scan_rows_ = 0;
   /// Rows to drop from the start of the next row group when resuming.

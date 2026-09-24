@@ -674,8 +674,9 @@ TEST("a filter keeps reading row groups until the limit is met") {
   auto buffer = make_file();
   auto metadata = ::parquet::ReadMetaData(
     std::make_shared<arrow::io::BufferReader>(buffer));
-  // Matches start in the third row group.
-  auto result = run(buffer, {.filter = {id_filter("id >= 250")},
+  // Matches start in the third row group. The statistics cannot decide
+  // arithmetic, so every row group remains a candidate.
+  auto result = run(buffer, {.filter = {id_filter("id / 10 >= 25")},
                              .order = EventOrder::ordered,
                              .limit = uint64_t{1},
                              .projection = projection_of("id")});
@@ -693,6 +694,311 @@ TEST("a filter keeps reading row groups until the limit is met") {
   for (auto group = 0; group < row_groups; ++group) {
     CHECK(not touches(reads, column_chunk(*metadata, group, 1)));
   }
+}
+
+/// The row groups that a read fetched data from.
+auto read_row_groups(Run const& result,
+                     std::shared_ptr<arrow::Buffer> const& buffer)
+  -> std::vector<int> {
+  auto metadata = ::parquet::ReadMetaData(
+    std::make_shared<arrow::io::BufferReader>(buffer));
+  auto reads = data_reads(result.file->reads());
+  auto groups = std::vector<int>{};
+  for (auto group = 0; group < metadata->num_row_groups(); ++group) {
+    if (touches(reads, column_chunk(*metadata, group, 0))) {
+      groups.push_back(group);
+    }
+  }
+  return groups;
+}
+
+/// Reads `buffer` with the filter `text`, projected to `id`.
+auto run_filter(std::shared_ptr<arrow::Buffer> const& buffer,
+                std::string_view text) -> Run {
+  auto result = run(buffer, {.filter = {id_filter(text)},
+                             .order = EventOrder::ordered,
+                             .projection = projection_of("id")});
+  CHECK(result.diagnostics.empty());
+  return result;
+}
+
+TEST("row groups whose statistics rule out the filter are never read") {
+  auto buffer = make_file();
+  auto result = run_filter(buffer, "id >= 250");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{350});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{2, 3, 4, 5}));
+  // A constant on the left compares the other way around.
+  result = run_filter(buffer, "250 <= id");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{350});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{2, 3, 4, 5}));
+  result = run_filter(buffer, "id < 150");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{150});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{0, 1}));
+}
+
+TEST("an equality reads only the row groups that may contain the value") {
+  auto buffer = make_file();
+  auto result = run_filter(buffer, "id == 342");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{1});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{3}));
+  // No row group is all 342.
+  result = run_filter(buffer, "id != 342");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{599});
+  CHECK_EQUAL(read_row_groups(result, buffer).size(), size_t{row_groups});
+}
+
+TEST("conjunctions and disjunctions combine their operands") {
+  auto buffer = make_file();
+  auto result = run_filter(buffer, "id >= 150 and id < 250");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{100});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{1, 2}));
+  result = run_filter(buffer, "id < 50 or id >= 550");
+  CHECK_EQUAL(total_rows(result.events), uint64_t{100});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{0, 5}));
+}
+
+TEST("strings and nulls compare against their statistics") {
+  auto buffer = make_file();
+  // Every payload starts with a digit, which sorts before letters.
+  auto result = run(buffer, {.filter = {id_filter("payload == \"x\"")},
+                             .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  CHECK(result.events.empty());
+  CHECK(data_reads(result.file->reads()).empty());
+  // The file has no nulls.
+  result = run_filter(buffer, "id == null");
+  CHECK(result.events.empty());
+  CHECK(data_reads(result.file->reads()).empty());
+}
+
+TEST("filters that the statistics cannot decide read every row group") {
+  auto buffer = make_file();
+  for (auto text : {"not (id < 250)", "id + 0 >= 250", "id >= 250.0"}) {
+    auto result = run_filter(buffer, text);
+    CHECK_EQUAL(total_rows(result.events), uint64_t{350});
+    CHECK_EQUAL(read_row_groups(result, buffer).size(), size_t{row_groups});
+  }
+}
+
+TEST("an inequality keeps float row groups with NaNs that statistics omit") {
+  // The first row group holds 1 and NaN, whose statistics say min = max = 1.
+  auto builder = arrow::DoubleBuilder{};
+  for (auto x : {1.0, std::numeric_limits<double>::quiet_NaN(), 2.0, 2.0}) {
+    REQUIRE(builder.Append(x).ok());
+  }
+  auto table
+    = arrow::Table::Make(arrow::schema({arrow::field("x", arrow::float64())}),
+                         {builder.Finish().ValueOrDie()});
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  REQUIRE(
+    ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, 2)
+      .ok());
+  auto buffer = sink->Finish().ValueOrDie();
+  auto result = run(buffer, {.filter = {id_filter("x != 1.0")},
+                             .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{3});
+  // An equality cannot match a NaN, so it still skips.
+  result = run(buffer, {.filter = {id_filter("x == 2.0")},
+                        .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{2});
+  CHECK_EQUAL(data_reads(result.file->reads()).size(), size_t{1});
+}
+
+/// Writes one column in row groups of `rows_per_row_group` rows, optionally
+/// embedding the Arrow schema that restores the column's Arrow type.
+auto write_column(std::string name, std::shared_ptr<arrow::Array> array,
+                  int64_t rows_per_row_group, bool store_schema = false)
+  -> std::shared_ptr<arrow::Buffer> {
+  auto table = arrow::Table::Make(
+    arrow::schema({arrow::field(std::move(name), array->type())}), {array});
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto arrow_properties = ::parquet::ArrowWriterProperties::Builder{};
+  if (store_schema) {
+    arrow_properties.store_schema();
+  }
+  REQUIRE(::parquet::arrow::WriteTable(
+            *table, arrow::default_memory_pool(), sink, rows_per_row_group,
+            ::parquet::default_writer_properties(), arrow_properties.build())
+            .ok());
+  return sink->Finish().ValueOrDie();
+}
+
+TEST("orderings that warn at runtime read every row group") {
+  auto buffer = make_file();
+  // Strings have no order. The statistics rule the filter out, but reading
+  // the rows reports the comparison.
+  auto result = run(buffer, {.filter = {id_filter("payload > \"x\"")},
+                             .order = EventOrder::ordered});
+  CHECK(result.events.empty());
+  CHECK(not result.diagnostics.empty());
+  CHECK_EQUAL(data_reads(result.file->reads()).size(), size_t{row_groups});
+  // Nulls do not order either. The first row group holds 1 and null, the
+  // second one 10 and 10.
+  auto builder = arrow::Int64Builder{};
+  REQUIRE(builder.Append(1).ok());
+  REQUIRE(builder.AppendNull().ok());
+  REQUIRE(builder.Append(10).ok());
+  REQUIRE(builder.Append(10).ok());
+  buffer = write_column("x", builder.Finish().ValueOrDie(), 2);
+  result = run(buffer,
+               {.filter = {id_filter("x > 5")}, .order = EventOrder::ordered});
+  CHECK_EQUAL(total_rows(result.events), uint64_t{2});
+  CHECK(not result.diagnostics.empty());
+  CHECK_EQUAL(data_reads(result.file->reads()).size(), size_t{2});
+}
+
+TEST("a predicate that may warn keeps what later predicates rule out") {
+  auto buffer = make_file();
+  auto request = [](ir::OptimizeFilter filter) {
+    return ir::OptimizeRequest{.filter = std::move(filter),
+                               .order = EventOrder::ordered};
+  };
+  // The left operand warns for every row, so it must see every row group.
+  for (auto filter : {
+         ir::OptimizeFilter{id_filter("payload > \"x\" and id > 1000")},
+         ir::OptimizeFilter{id_filter("payload > \"x\""), id_filter("id > "
+                                                                    "1000")},
+         ir::OptimizeFilter{id_filter("id > 1000 or payload > \"x\"")},
+       }) {
+    auto result = run(buffer, request(std::move(filter)));
+    CHECK(result.events.empty());
+    CHECK(not result.diagnostics.empty());
+    CHECK_EQUAL(data_reads(result.file->reads()).size(), size_t{row_groups});
+  }
+  // The runtime never evaluates the right operand if the left one rejects
+  // every row, so skipping hides nothing.
+  auto result
+    = run(buffer, request({id_filter("id > 1000 and payload > \"x\"")}));
+  CHECK(result.events.empty());
+  CHECK(result.diagnostics.empty());
+  CHECK(data_reads(result.file->reads()).empty());
+}
+
+TEST("columns that the reader restores as another type are not pruned") {
+  // Arrow stores durations as plain INT64 and restores them from the schema it
+  // embeds, so the statistics of `d` read as the integers 1 and 2.
+  auto builder = arrow::DurationBuilder{arrow::duration(arrow::TimeUnit::NANO),
+                                        arrow::default_memory_pool()};
+  REQUIRE(builder.Append(1).ok());
+  REQUIRE(builder.Append(2).ok());
+  auto durations = builder.Finish().ValueOrDie();
+  auto buffer = write_column("d", durations, 2, true);
+  auto result = run(buffer, {.filter = {id_filter("d == 100")},
+                             .order = EventOrder::ordered});
+  // Comparing a duration with an integer warns, which skipping would hide.
+  CHECK(result.events.empty());
+  CHECK(not result.diagnostics.empty());
+  // Without the embedded schema, the column imports as integers, which the
+  // statistics then describe correctly.
+  buffer = write_column("d", durations, 2);
+  result = run(buffer, {.filter = {id_filter("d == 100")},
+                        .order = EventOrder::ordered});
+  CHECK(result.events.empty());
+  CHECK(result.diagnostics.empty());
+}
+
+TEST("duplicate column paths are not pruned") {
+  // The import keeps the last of duplicate fields, so `x` is 2, although the
+  // statistics of the first `x` say 1.
+  auto ones = arrow::Int64Builder{};
+  auto twos = arrow::Int64Builder{};
+  REQUIRE(ones.Append(1).ok());
+  REQUIRE(twos.Append(2).ok());
+  auto table = arrow::Table::Make(
+    arrow::schema(
+      {arrow::field("x", arrow::int64()), arrow::field("x", arrow::int64())}),
+    {ones.Finish().ValueOrDie(), twos.Finish().ValueOrDie()});
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  REQUIRE(
+    ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, 1)
+      .ok());
+  auto buffer = sink->Finish().ValueOrDie();
+  auto result = run(buffer, {.filter = {id_filter("x == 2")},
+                             .order = EventOrder::ordered});
+  CHECK_EQUAL(total_rows(result.events), uint64_t{1});
+}
+
+TEST("leaves beneath duplicate parents are not pruned") {
+  // The import keeps the second `x`, so `x.a` does not exist, which warns,
+  // although the statistics of the first `x.a` say 1.
+  auto ones = arrow::Int64Builder{};
+  auto twos = arrow::Int64Builder{};
+  REQUIRE(ones.Append(1).ok());
+  REQUIRE(twos.Append(2).ok());
+  auto a = arrow::StructArray::Make({ones.Finish().ValueOrDie()},
+                                    std::vector<std::string>{"a"})
+             .ValueOrDie();
+  auto b = arrow::StructArray::Make({twos.Finish().ValueOrDie()},
+                                    std::vector<std::string>{"b"})
+             .ValueOrDie();
+  auto table = arrow::Table::Make(
+    arrow::schema({arrow::field("x", a->type()), arrow::field("x", b->type())}),
+    {a, b});
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  REQUIRE(
+    ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink, 1)
+      .ok());
+  auto buffer = sink->Finish().ValueOrDie();
+  auto result = run(buffer, {.filter = {id_filter("x.a == 2")},
+                             .order = EventOrder::ordered});
+  CHECK(result.events.empty());
+  CHECK(not result.diagnostics.empty());
+}
+
+TEST("row groups with timestamps that nanoseconds cannot represent are read") {
+  // Year 2500 in milliseconds, which exceeds nanoseconds since the epoch.
+  auto builder
+    = arrow::TimestampBuilder{arrow::timestamp(arrow::TimeUnit::MILLI, "UTC"),
+                              arrow::default_memory_pool()};
+  REQUIRE(builder.Append(16'725'225'600'000).ok());
+  auto buffer = write_column("time", builder.Finish().ValueOrDie(), 1);
+  // Multiplied without a check, the statistic wraps around to 1915.
+  auto result = run(buffer, {.filter = {id_filter("time > 2026-01-01")},
+                             .order = EventOrder::ordered});
+  // The row group is read, so the import reports the timestamp.
+  CHECK(result.events.empty());
+  REQUIRE_EQUAL(result.diagnostics.size(), 1u);
+  CHECK_EQUAL(result.diagnostics.front().severity, severity::error);
+  // With 2026 and 2500 in one row group, only the maximum overflows, but the
+  // row group fails to import all the same.
+  builder
+    = arrow::TimestampBuilder{arrow::timestamp(arrow::TimeUnit::MILLI, "UTC"),
+                              arrow::default_memory_pool()};
+  REQUIRE(builder.Append(1'767'225'600'000).ok());
+  REQUIRE(builder.Append(16'725'225'600'000).ok());
+  buffer = write_column("time", builder.Finish().ValueOrDie(), 2);
+  result = run(buffer, {.filter = {id_filter("time < 1900-01-01")},
+                        .order = EventOrder::ordered});
+  CHECK(result.events.empty());
+  REQUIRE_EQUAL(result.diagnostics.size(), 1u);
+  CHECK_EQUAL(result.diagnostics.front().severity, severity::error);
+}
+
+TEST("timestamps compare against time constants") {
+  // Three row groups of 100 events, one second apart.
+  auto builder
+    = arrow::TimestampBuilder{arrow::timestamp(arrow::TimeUnit::MICRO, "UTC"),
+                              arrow::default_memory_pool()};
+  auto start = int64_t{1'767'225'600'000'000}; // 2026-01-01T00:00:00Z
+  for (auto i = int64_t{0}; i < 3 * rows_per_group; ++i) {
+    REQUIRE(builder.Append(start + i * 1'000'000).ok());
+  }
+  auto table
+    = arrow::Table::Make(arrow::schema({arrow::field("time", builder.type())}),
+                         {builder.Finish().ValueOrDie()});
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  REQUIRE(::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
+                                       sink, rows_per_group)
+            .ok());
+  auto buffer = sink->Finish().ValueOrDie();
+  auto result
+    = run(buffer, {.filter = {id_filter("time >= 2026-01-01T00:03:20Z")},
+                   .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{100});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{2}));
 }
 
 TEST("a restore resumes after the batch of its checkpoint") {
