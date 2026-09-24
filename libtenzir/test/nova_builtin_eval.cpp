@@ -463,6 +463,32 @@ TEST("split on a null column is null without a warning") {
   CHECK(std::move(dh).collect().empty());
 }
 
+TEST("type_of reports null as a type and does not inspect inactive rows") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").null();
+  builder.record();
+  builder.record().field("x").data(Int{42});
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("type_of", {root_field("x")}), events,
+                     bitmap({true, false, true}), dh);
+  auto records = result.try_as<Record>();
+  REQUIRE(records);
+  auto kinds = records->field("kind");
+  REQUIRE(kinds);
+  CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(0)), "null");
+  CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(2)), "int");
+  auto constant = eval(call("type_of", {int_const(42)}), events,
+                       bitmap({false, true, false}), dh);
+  auto constant_records = constant.try_as<Record>();
+  REQUIRE(constant_records);
+  CHECK((is<storage::ConstantStorage<Record, RowView<Record>>>(
+    constant_records->storage())));
+  CHECK_EQUAL(
+    *as<RowView<String>>(constant_records->field("kind")->data.get(1)), "int");
+  CHECK(std::move(dh).collect().empty());
+}
+
 TEST("match_regex matches anywhere and propagates null silently") {
   auto events = make_mixed_string_events();
   auto dh = collecting_diagnostic_handler{};

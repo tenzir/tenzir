@@ -1,0 +1,1 @@
+from {integer: type_of(42), null_value: type_of(null), blob: type_of(b"bytes")}

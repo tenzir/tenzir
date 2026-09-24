@@ -1,0 +1,40 @@
+{
+  type: {
+    name: null,
+    kind: "record",
+    attributes: [],
+    state: {
+      fields: [
+        {
+          name: "a",
+          type: {
+            name: null,
+            kind: "int",
+            attributes: [],
+            state: null,
+          },
+        },
+      ],
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "record",
+    attributes: [],
+    state: {
+      fields: [
+        {
+          name: "b",
+          type: {
+            name: null,
+            kind: "null",
+            attributes: [],
+            state: null,
+          },
+        },
+      ],
+    },
+  },
+}

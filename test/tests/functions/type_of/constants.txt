@@ -1,0 +1,20 @@
+{
+  integer: {
+    name: null,
+    kind: "int",
+    attributes: [],
+    state: null,
+  },
+  null_value: {
+    name: null,
+    kind: "null",
+    attributes: [],
+    state: null,
+  },
+  blob: {
+    name: null,
+    kind: "blob",
+    attributes: [],
+    state: null,
+  },
+}

@@ -1,0 +1,88 @@
+{
+  type: {
+    name: null,
+    kind: "null",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "bool",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "int",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "uint",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "float",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "string",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "blob",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "duration",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "time",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "ip",
+    attributes: [],
+    state: null,
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "subnet",
+    attributes: [],
+    state: null,
+  },
+}
