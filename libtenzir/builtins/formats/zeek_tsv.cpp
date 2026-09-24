@@ -19,12 +19,16 @@
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
 #include "tenzir/detail/zeekify.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/read_detection.hpp"
@@ -45,8 +49,11 @@
 #include <cctype>
 #include <iterator>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace tenzir::plugins::zeek_tsv {
 
@@ -520,6 +527,7 @@ struct WriteZeekTsvArgs {
   std::string empty_field = "(empty)";
   std::string unset_field = "-";
   bool disable_timestamp_tags = false;
+  location operator_location = location::unknown;
 };
 
 class ReadZeekTsv final : public Operator<chunk_ptr, table_slice> {
@@ -953,6 +961,542 @@ private:
   Option<type> last_schema_;
 };
 
+/// The Zeek type of a value whose type is not yet known.
+constexpr auto zeek_unknown_type = std::string_view{"none"};
+
+/// Combines two Zeek types of the same column. The left-hand side is the type
+/// in the header, the right-hand side the type of a new value. Unknown types
+/// (`none`, also nested as in `vector[none]`) are compatible with any type. A
+/// `fixed` header was already written, so its unknown types cannot change.
+auto refine_zeek_type(std::string_view lhs, std::string_view rhs, bool fixed)
+  -> Option<std::string> {
+  if (lhs == rhs or rhs == zeek_unknown_type) {
+    return std::string{lhs};
+  }
+  if (lhs == zeek_unknown_type) {
+    if (fixed) {
+      return None{};
+    }
+    return std::string{rhs};
+  }
+  constexpr auto vector_prefix = std::string_view{"vector["};
+  if (lhs.starts_with(vector_prefix) and rhs.starts_with(vector_prefix)
+      and lhs.ends_with(']') and rhs.ends_with(']')) {
+    auto inner = refine_zeek_type(
+      lhs.substr(vector_prefix.size(), lhs.size() - vector_prefix.size() - 1),
+      rhs.substr(vector_prefix.size(), rhs.size() - vector_prefix.size() - 1),
+      fixed);
+    if (not inner) {
+      return None{};
+    }
+    return fmt::format("vector[{}]", *inner);
+  }
+  return None{};
+}
+
+/// Returns whether `name` is a flattened field nested below `prefix`.
+auto is_nested_field(std::string_view name, std::string_view prefix) -> bool {
+  return name.size() > prefix.size() and name.starts_with(prefix)
+         and name[prefix.size()] == '.';
+}
+
+/// The contents of a Zeek TSV header.
+struct ZeekSchema {
+  std::string path;
+  std::vector<std::string> fields;
+  std::vector<std::string> types;
+
+  friend auto inspect(auto& f, ZeekSchema& x) -> bool {
+    return f.object(x).fields(f.field("path", x.path),
+                              f.field("fields", x.fields),
+                              f.field("types", x.types));
+  }
+};
+
+/// A Zeek TSV header with lookup structures for its fields.
+class ZeekHeader {
+public:
+  explicit ZeekHeader(ZeekSchema schema) : schema_{std::move(schema)} {
+    index();
+  }
+
+  auto schema() const -> ZeekSchema const& {
+    return schema_;
+  }
+
+  auto path() const -> std::string_view {
+    return schema_.path;
+  }
+
+  auto size() const -> size_t {
+    return schema_.fields.size();
+  }
+
+  auto field(size_t i) const -> std::string_view {
+    return schema_.fields[i];
+  }
+
+  auto type(size_t i) const -> std::string_view {
+    return schema_.types[i];
+  }
+
+  /// Returns the column of a flattened field.
+  auto find(std::string_view name) const -> Option<size_t> {
+    if (auto it = columns_.find(name); it != columns_.end()) {
+      return it->second;
+    }
+    return None{};
+  }
+
+  /// Returns whether the header has fields nested below `name`.
+  auto has_nested(std::string_view name) const -> bool {
+    return prefixes_.contains(name);
+  }
+
+  auto assign(std::vector<std::string> fields, std::vector<std::string> types)
+    -> void {
+    schema_.fields = std::move(fields);
+    schema_.types = std::move(types);
+    index();
+  }
+
+private:
+  auto index() -> void {
+    TENZIR_ASSERT(schema_.fields.size() == schema_.types.size());
+    columns_.clear();
+    prefixes_.clear();
+    for (auto i = size_t{0}; i < schema_.fields.size(); ++i) {
+      auto const& field = schema_.fields[i];
+      columns_.emplace(field, i);
+      for (auto dot = field.find('.'); dot != std::string::npos;
+           dot = field.find('.', dot + 1)) {
+        prefixes_.emplace(field.substr(0, dot));
+      }
+    }
+  }
+
+  ZeekSchema schema_;
+  detail::heterogeneous_string_hashmap<size_t> columns_;
+  detail::heterogeneous_string_hashset prefixes_;
+};
+
+/// Writes Nova events as Zeek TSV.
+///
+/// A Zeek TSV header fixes the path, the flattened field names, and their
+/// types, whereas the rows of a Nova batch may differ in all three. We
+/// therefore split the active rows into consecutive blocks that share one
+/// header, and start a new header whenever a row does not fit the current one:
+///
+/// - The schema name must match.
+/// - A missing field and a `null` value fit any column, and a `null` record
+///   fits all columns below it. Field order does not matter.
+/// - A header that is not written yet adopts new fields, and a column that is
+///   `null` so far adopts the type, or the nested fields, of the first value.
+/// - A written header, e.g., one of a previous batch, no longer changes, so a
+///   row with a new field or with a value of another type needs a new one.
+class WriteZeekTsvEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteZeekTsvEvents(WriteZeekTsvArgs args)
+    : args_{std::move(args)},
+      printer_{resolved_set_separator(), args_.empty_field, args_.unset_field,
+               args_.disable_timestamp_tags} {
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto buffer = std::string{};
+    auto fixed = true;
+    auto rows = std::vector<nova::storage::Index>{};
+    auto flush = [&] {
+      if (rows.empty()) {
+        return;
+      }
+      TENZIR_ASSERT(header_);
+      if (not fixed) {
+        print_header(buffer);
+        fixed = true;
+      }
+      for (auto row : rows) {
+        collect(input.data.get(row), ctx.dh());
+        print_row(buffer, ctx.dh());
+      }
+      rows.clear();
+    };
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      collect(input.data.get(row), ctx.dh());
+      auto path = *input.meta.name.get(row);
+      if (not header_ or not merge(*header_, path, fixed)) {
+        if (not rows.empty()) {
+          // Flushing reuses the leaves, so we must collect the row again.
+          flush();
+          collect(input.data.get(row), ctx.dh());
+        }
+        header_.emplace(make_schema(path));
+        fixed = false;
+      }
+      rows.push_back(row);
+    }
+    flush();
+    if (buffer.empty()) {
+      co_return;
+    }
+    co_await push(
+      chunk::make(std::move(buffer), {.content_type = "application/x-zeek"}));
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // Between two calls to `process`, the current header is always written.
+    auto has_header = header_.has_value();
+    auto schema = header_ ? header_->schema() : ZeekSchema{};
+    serde("has_header", has_header);
+    serde("header", schema);
+    if (serde.is_loading()) {
+      header_ = None{};
+      if (has_header) {
+        header_.emplace(std::move(schema));
+      }
+      written_ = has_header;
+    }
+  }
+
+private:
+  /// One flattened field of a row.
+  struct Leaf {
+    std::string name;
+    std::string type;
+    nova::RowView<nova::Data> value;
+  };
+
+  auto resolved_set_separator() const -> char {
+    auto converted = to_xsv_sep(args_.set_separator.inner);
+    TENZIR_ASSERT(converted);
+    return *converted;
+  }
+
+  auto leaves() const -> std::span<Leaf const> {
+    return std::span{leaves_}.first(leaf_count_);
+  }
+
+  /// Flattens a row into `leaves_`, reusing previously allocated strings.
+  auto collect(nova::RowView<nova::Record> row, diagnostic_handler& dh)
+    -> void {
+    leaf_count_ = 0;
+    prefix_.clear();
+    collect_record(row, dh);
+  }
+
+  auto collect_record(nova::RowView<nova::Record> record,
+                      diagnostic_handler& dh) -> void {
+    for (auto [key, value] : record) {
+      if (auto const* nested = try_as<nova::RowView<nova::Record>>(value)) {
+        auto size = prefix_.size();
+        prefix_.append(key);
+        prefix_.push_back('.');
+        collect_record(*nested, dh);
+        prefix_.resize(size);
+        continue;
+      }
+      if (leaf_count_ == leaves_.size()) {
+        leaves_.emplace_back(std::string{}, std::string{}, value);
+      }
+      auto& leaf = leaves_[leaf_count_++];
+      leaf.name.assign(prefix_);
+      leaf.name.append(key);
+      leaf.type.clear();
+      leaf.value = value;
+      append_type(leaf.type, value, dh);
+    }
+  }
+
+  auto append_type(std::string& out, nova::RowView<nova::Data> const& value,
+                   diagnostic_handler& dh) -> void {
+    match(
+      value,
+      [&](nova::RowView<nova::Null>) {
+        out.append(zeek_unknown_type);
+      },
+      [&](nova::RowView<nova::Bool>) {
+        out.append("bool");
+      },
+      [&](nova::RowView<nova::Int>) {
+        out.append("int");
+      },
+      [&](nova::RowView<nova::UInt>) {
+        out.append("count");
+      },
+      [&](nova::RowView<nova::Float>) {
+        out.append("double");
+      },
+      [&](nova::RowView<nova::Duration>) {
+        out.append("interval");
+      },
+      [&](nova::RowView<nova::Time>) {
+        out.append("time");
+      },
+      [&](nova::RowView<nova::String>) {
+        out.append("string");
+      },
+      [&](nova::RowView<nova::Blob>) {
+        out.append("string");
+      },
+      [&](nova::RowView<nova::Ip>) {
+        out.append("addr");
+      },
+      [&](nova::RowView<nova::Subnet>) {
+        out.append("subnet");
+      },
+      [&](nova::RowView<nova::Record> const&) {
+        // Only reachable for records in lists, all others are flattened.
+        out.append("record");
+      },
+      [&](nova::RowView<nova::List> const& list) {
+        auto element_type = std::string{zeek_unknown_type};
+        auto scratch = std::string{};
+        for (auto element : list) {
+          scratch.clear();
+          append_type(scratch, element, dh);
+          if (auto refined = refine_zeek_type(element_type, scratch, false)) {
+            element_type = std::move(*refined);
+          } else if (not std::exchange(warned_mixed_list_, true)) {
+            diagnostic::warning("list elements have mixed types")
+              .note("using `{}` in the header instead of `{}`", element_type,
+                    scratch)
+              .primary(args_.operator_location)
+              .emit(dh);
+          }
+        }
+        fmt::format_to(std::back_inserter(out), "vector[{}]", element_type);
+      });
+  }
+
+  /// Creates a new header for the current row.
+  auto make_schema(std::string_view path) const -> ZeekSchema {
+    auto result = ZeekSchema{};
+    result.path = std::string{path};
+    result.fields.reserve(leaf_count_);
+    result.types.reserve(leaf_count_);
+    for (auto const& leaf : leaves()) {
+      result.fields.push_back(leaf.name);
+      result.types.push_back(leaf.type);
+    }
+    return result;
+  }
+
+  /// Tries to fit the current row into `header`, refining it if not `fixed`.
+  auto merge(ZeekHeader& header, std::string_view path, bool fixed) const
+    -> bool {
+    if (header.path() != path) {
+      return false;
+    }
+    // Fast path: The row fits the header as is.
+    auto fits = std::ranges::all_of(leaves(), [&](Leaf const& leaf) {
+      if (auto column = header.find(leaf.name)) {
+        return leaf.type == zeek_unknown_type
+               or leaf.type == header.type(*column);
+      }
+      return leaf.type == zeek_unknown_type and header.has_nested(leaf.name);
+    });
+    if (fits) {
+      return true;
+    }
+    if (fixed) {
+      // A written header only fits rows that need no refinement, but a value
+      // of a nested type may still be compatible, e.g., an empty list.
+      return std::ranges::all_of(leaves(), [&](Leaf const& leaf) {
+        if (auto column = header.find(leaf.name)) {
+          auto refined
+            = refine_zeek_type(header.type(*column), leaf.type, true);
+          return refined and *refined == header.type(*column);
+        }
+        return leaf.type == zeek_unknown_type and header.has_nested(leaf.name);
+      });
+    }
+    // Slow path: Refine a copy of the header, and adopt it if all fields fit.
+    auto fields = header.schema().fields;
+    auto types = header.schema().types;
+    auto find = [&](std::string_view name) -> Option<size_t> {
+      auto it = std::ranges::find(fields, name);
+      if (it == fields.end()) {
+        return None{};
+      }
+      return static_cast<size_t>(it - fields.begin());
+    };
+    auto has_nested = [&](std::string_view name) {
+      return std::ranges::any_of(fields, [&](std::string const& field) {
+        return is_nested_field(field, name);
+      });
+    };
+    // New fields go after the last column of their parent record.
+    auto end_of_parent
+      = [&](this auto const& self, std::string_view name) -> size_t {
+      auto dot = name.rfind('.');
+      if (dot == std::string_view::npos) {
+        return fields.size();
+      }
+      auto parent = name.substr(0, dot);
+      for (auto i = fields.size(); i > 0; --i) {
+        if (is_nested_field(fields[i - 1], parent)) {
+          return i;
+        }
+      }
+      return self(parent);
+    };
+    for (auto const& leaf : leaves()) {
+      if (auto column = find(leaf.name)) {
+        auto refined = refine_zeek_type(types[*column], leaf.type, false);
+        if (not refined) {
+          return false;
+        }
+        types[*column] = std::move(*refined);
+        continue;
+      }
+      if (has_nested(leaf.name)) {
+        // Only a `null` record fits fields nested below it.
+        if (leaf.type != zeek_unknown_type) {
+          return false;
+        }
+        continue;
+      }
+      // A field that was `null` so far may turn out to be a record.
+      auto parent = Option<size_t>{};
+      for (auto dot = leaf.name.find('.'); dot != std::string::npos;
+           dot = leaf.name.find('.', dot + 1)) {
+        parent = find(std::string_view{leaf.name}.substr(0, dot));
+        if (parent) {
+          break;
+        }
+      }
+      if (parent) {
+        if (types[*parent] != zeek_unknown_type) {
+          return false;
+        }
+        fields[*parent] = leaf.name;
+        types[*parent] = leaf.type;
+        continue;
+      }
+      auto position = end_of_parent(leaf.name);
+      fields.insert(fields.begin() + position, leaf.name);
+      types.insert(types.begin() + position, leaf.type);
+    }
+    header.assign(std::move(fields), std::move(types));
+    return true;
+  }
+
+  auto print_header(std::string& out) -> void {
+    TENZIR_ASSERT(header_);
+    auto it = std::back_inserter(out);
+    if (std::exchange(written_, true)) {
+      printer_.print_closing_line(it);
+    }
+    it = fmt::format_to(it,
+                        "#separator \\x{0:02x}\n"
+                        "#set_separator{0}{1}\n"
+                        "#empty_field{0}{2}\n"
+                        "#unset_field{0}{3}\n"
+                        "#path{0}{4}",
+                        printer_.sep, printer_.set_sep, printer_.empty_field,
+                        printer_.unset_field, header_->path());
+    if (not printer_.disable_timestamp_tags) {
+      it = fmt::format_to(it, "\n#open{}{}", printer_.sep,
+                          printer_.generate_timestamp());
+    }
+    it = fmt::format_to(it, "\n#fields");
+    for (auto i = size_t{0}; i < header_->size(); ++i) {
+      it = fmt::format_to(it, "{}{}", printer_.sep, header_->field(i));
+    }
+    it = fmt::format_to(it, "\n#types");
+    for (auto i = size_t{0}; i < header_->size(); ++i) {
+      it = fmt::format_to(it, "{}{}", printer_.sep, header_->type(i));
+    }
+    out.push_back('\n');
+  }
+
+  /// Prints the current row, which must fit the current header.
+  auto print_row(std::string& out, diagnostic_handler& dh) -> void {
+    TENZIR_ASSERT(header_);
+    columns_.assign(header_->size(), nullptr);
+    auto i = size_t{0};
+    for (auto const& leaf : leaves()) {
+      if (i < header_->size() and header_->field(i) == leaf.name) {
+        columns_[i++] = &leaf;
+        continue;
+      }
+      if (auto column = header_->find(leaf.name)) {
+        columns_[*column] = &leaf;
+        i = *column + 1;
+        continue;
+      }
+      // A `null` record, which leaves all columns below it unset.
+      TENZIR_ASSERT(leaf.type == zeek_unknown_type
+                    and header_->has_nested(leaf.name));
+    }
+    for (auto column = size_t{0}; column < columns_.size(); ++column) {
+      if (column > 0) {
+        out.push_back(printer_.sep);
+      }
+      if (auto const* leaf = columns_[column]) {
+        print_value(out, leaf->value, dh);
+      } else {
+        out.append(printer_.unset_field);
+      }
+    }
+    out.push_back('\n');
+  }
+
+  auto print_value(std::string& out, nova::RowView<nova::Data> const& value,
+                   diagnostic_handler& dh) -> void {
+    match(
+      value,
+      [&](nova::RowView<nova::Null>) {
+        out.append(printer_.unset_field);
+      },
+      [&](nova::RowView<nova::Record> const&) {
+        // Only reachable for records in lists, all others are flattened.
+        if (not std::exchange(warned_record_in_list_, true)) {
+          diagnostic::warning("cannot write records in lists")
+            .note("writing `{}` instead", printer_.unset_field)
+            .primary(args_.operator_location)
+            .emit(dh);
+        }
+        out.append(printer_.unset_field);
+      },
+      [&](nova::RowView<nova::List> const& list) {
+        if (list.length() == 0) {
+          out.append(printer_.empty_field);
+          return;
+        }
+        auto first = true;
+        for (auto element : list) {
+          if (not std::exchange(first, false)) {
+            out.push_back(printer_.set_sep);
+          }
+          print_value(out, element, dh);
+        }
+      },
+      [&]<class T>(nova::RowView<T> const& x) {
+        auto it = std::back_inserter(out);
+        auto visitor = zeek_printer::visitor<decltype(it)>{it, printer_};
+        visitor(*x);
+      });
+  }
+
+  WriteZeekTsvArgs args_;
+  zeek_printer printer_;
+  /// The current header. It is written unless we are within `process`.
+  Option<ZeekHeader> header_;
+  /// Whether we wrote any header, so that the next one closes it.
+  bool written_ = false;
+  /// The flattened fields of the current row, of which the first `leaf_count_`
+  /// are valid.
+  std::vector<Leaf> leaves_;
+  size_t leaf_count_ = 0;
+  std::string prefix_;
+  /// The row's leaf for every column of the header, if any.
+  std::vector<Leaf const*> columns_;
+  bool warned_mixed_list_ = false;
+  bool warned_record_in_list_ = false;
+};
+
 auto is_zeek_separator_header(std::string_view line) -> bool {
   constexpr auto prefix = std::string_view{"#separator"};
   if (not line.starts_with(prefix)) {
@@ -1058,7 +1602,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteZeekTsvArgs, WriteZeekTsv>{};
+    auto d = Describer<WriteZeekTsvArgs, WriteZeekTsv, WriteZeekTsvEvents>{};
+    d.operator_location(&WriteZeekTsvArgs::operator_location);
     auto set_separator
       = d.named_optional("set_separator", &WriteZeekTsvArgs::set_separator);
     d.named_optional("empty_field", &WriteZeekTsvArgs::empty_field);

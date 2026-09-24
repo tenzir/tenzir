@@ -1,0 +1,7 @@
+// A header that was written for an earlier batch no longer changes, so values
+// of a new type start a new header and close the previous one.
+from {x: 1}, {x: null}, {x: 2}, {x: "a"}, {x: null}, {y: []}, {y: ["b"]}, {y: []}
+write_zeek_tsv
+read_lines
+line = "#open <time>" if line.starts_with("#open") else "#close <time>" if line.starts_with("#close") else line
+write_lines

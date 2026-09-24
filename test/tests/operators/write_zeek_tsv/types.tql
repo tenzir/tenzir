@@ -1,0 +1,19 @@
+from {
+  int: -1,
+  float: 1.5,
+  whole_float: 3.0,
+  duration: 1.5s,
+  time: 2021-01-01T00:00:00.5,
+  string: "a\tb,c",
+  empty_string: "",
+  blob: b"x\x80",
+  ip: 1.2.3.4,
+  subnet: 10.0.0.0/8,
+  list: [1, 2],
+  empty_list: [],
+  string_list: ["a,b", "", null],
+  unset: null,
+  record: {x: 1, y: {z: "nested"}},
+  bool: true,
+}
+write_zeek_tsv disable_timestamp_tags=true

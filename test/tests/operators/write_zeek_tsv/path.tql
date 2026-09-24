@@ -1,0 +1,4 @@
+// The schema name becomes the `#path`.
+load_stdin
+read_lines
+write_zeek_tsv disable_timestamp_tags=true

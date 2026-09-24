@@ -1,0 +1,43 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#open <time>
+#fields	x
+#types	int
+1
+-
+2
+#close <time>
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#open <time>
+#fields	x
+#types	string
+a
+-
+#close <time>
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#open <time>
+#fields	y
+#types	vector[none]
+(empty)
+#close <time>
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#open <time>
+#fields	y
+#types	vector[string]
+b
+(empty)

@@ -1,0 +1,5 @@
+// Rows of one batch share a header until a row has a field or type that does
+// not fit it. Missing fields and nulls fit any column.
+load_stdin
+read_json
+write_zeek_tsv disable_timestamp_tags=true

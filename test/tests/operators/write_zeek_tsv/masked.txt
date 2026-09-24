@@ -3,7 +3,7 @@
 #empty_field	(empty)
 #unset_field	-
 #path	tenzir.unknown
-#fields	uid	msg
-#types	string	string
-foo	bar
-baz	qux
+#fields	id	value
+#types	int	string
+1	a
+3	-

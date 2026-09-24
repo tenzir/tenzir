@@ -1,0 +1,4 @@
+{"keep": true, "id": 1, "value": "a"}
+{"keep": false, "id": 2, "value": 42}
+{"keep": true, "id": 3, "value": null}
+{"keep": false, "id": 4, "value": 43}

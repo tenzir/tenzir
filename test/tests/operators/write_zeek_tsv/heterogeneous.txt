@@ -1,0 +1,39 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#fields	ts	uid	service	conn.orig	conn.resp	extra
+#types	int	string	string	int	string	bool
+1	a	dns	1	-	-
+2	b	-	-	-	-
+3	c	-	-	-	T
+4	d	-	2	z	-
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#fields	ts	uid	service	nested.key
+#types	int	string	int	int
+5	e	3	-
+6	f	-	-
+7	g	-	1
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#fields	ts	uid	nested	tags
+#types	int	string	int	vector[string]
+8	h	2	-
+9	i	-	(empty)
+10	j	-	x
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#fields	ts	uid	tags
+#types	int	string	vector[int]
+11	k	1

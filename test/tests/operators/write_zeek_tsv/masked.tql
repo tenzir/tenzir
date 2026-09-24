@@ -1,0 +1,6 @@
+// Inactive rows neither print nor affect the header.
+load_stdin
+read_json
+where keep
+drop keep
+write_zeek_tsv disable_timestamp_tags=true

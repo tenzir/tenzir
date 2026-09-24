@@ -1,0 +1,8 @@
+#separator \x09
+#set_separator	;
+#empty_field	E
+#unset_field	U
+#path	tenzir.unknown
+#fields	list	empty	unset
+#types	vector[string]	string	none
+a\x3Bb;c,d;E	E	U

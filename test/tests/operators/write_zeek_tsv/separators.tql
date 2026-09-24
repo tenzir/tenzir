@@ -1,0 +1,2 @@
+from {list: ["a;b", "c,d", ""], empty: "", unset: null}
+write_zeek_tsv set_separator=";", empty_field="E", unset_field="U", disable_timestamp_tags=true

@@ -1,0 +1,2 @@
+from {mixed: [1, "a", null], records: [{x: 1}], nested: [[1, 2], [], [3]]}
+write_zeek_tsv disable_timestamp_tags=true

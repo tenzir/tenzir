@@ -1,0 +1,8 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#fields	int	float	whole_float	duration	time	string	empty_string	blob	ip	subnet	list	empty_list	string_list	unset	record.x	record.y.z	bool
+#types	int	double	double	interval	time	string	string	string	addr	subnet	vector[int]	vector[none]	vector[string]	none	int	string	bool
+-1	1.5	3.0	1.5s	2021-01-01T00:00:00.500Z	a\x09b\x2Cc	(empty)	x\x80	1.2.3.4	10.0.0.0/8	1,2	(empty)	a\x2Cb,(empty),-	-	1	nested	T

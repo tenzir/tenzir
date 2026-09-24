@@ -1,0 +1,11 @@
+{"ts": 1, "uid": "a", "service": "dns", "conn": {"orig": 1}}
+{"ts": 2, "uid": "b", "conn": null}
+{"uid": "c", "ts": 3, "extra": true}
+{"ts": 4, "uid": "d", "conn": {"orig": 2, "resp": "z"}}
+{"ts": 5, "uid": "e", "service": 3}
+{"ts": 6, "uid": "f", "nested": null}
+{"ts": 7, "uid": "g", "nested": {"key": 1}}
+{"ts": 8, "uid": "h", "nested": 2}
+{"ts": 9, "uid": "i", "tags": []}
+{"ts": 10, "uid": "j", "tags": ["x"]}
+{"ts": 11, "uid": "k", "tags": [1]}

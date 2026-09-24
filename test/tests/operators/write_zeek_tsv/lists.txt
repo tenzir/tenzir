@@ -1,0 +1,23 @@
+warning: list elements have mixed types
+ --> tests/operators/write_zeek_tsv/lists.tql:2:1
+  |
+2 | write_zeek_tsv disable_timestamp_tags=true
+  | ~~~~~~~~~~~~~~
+  |
+  = note: using `int` in the header instead of `string`
+
+warning: cannot write records in lists
+ --> tests/operators/write_zeek_tsv/lists.tql:2:1
+  |
+2 | write_zeek_tsv disable_timestamp_tags=true
+  | ~~~~~~~~~~~~~~
+  |
+  = note: writing `-` instead
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tenzir.unknown
+#fields	mixed	records	nested
+#types	vector[int]	vector[record]	vector[vector[int]]
+1,a,-	-	1,2,(empty),3
