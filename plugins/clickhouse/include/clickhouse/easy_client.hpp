@@ -9,6 +9,7 @@
 #pragma once
 
 #include "clickhouse/arguments.hpp"
+#include "clickhouse/table_description.hpp"
 #include "clickhouse/transformers.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async/mutex.hpp"
@@ -200,6 +201,8 @@ public:
 
   void ping();
 
+  auto maintain() -> failure_or<void>;
+
   /// Ensures the client knows the transformations for `table_name` given the
   /// input `schema`, creating the table if necessary. Returns a pointer into
   /// cached state (valid until the next fetch for the same name). This performs
@@ -217,6 +220,10 @@ public:
               std::string_view query_id = ::clickhouse::Query::default_query_id)
     -> failure_or<void>;
 
+  auto insert_batch(const std::vector<table_slice>& events,
+                    std::string_view table_name, std::string_view query_id)
+    -> failure_or<void>;
+
   /// Evaluates the `table` expression against `slice`, splits it into contiguous
   /// same-table runs, and inserts each run. Used by the legacy generator sink;
   /// the async operator evaluates the table in `process` instead. Blocking.
@@ -226,6 +233,10 @@ public:
     -> failure_or<void>;
 
 private:
+  // Stay below the server default receive timeout of five minutes.
+  static constexpr auto connection_ping_interval = std::chrono::minutes{3};
+  static_assert(connection_ping_interval < std::chrono::minutes{5});
+
   auto effective_table_name(std::string_view table_name) const -> std::string;
   /// Lock-free core of `ensure_transformations`; the caller must hold
   /// `client_mutex_` and pass an already-resolved table name.
@@ -234,7 +245,11 @@ private:
     -> failure_or<transformer_record*>;
   /// Lock-free core of `insert`; the caller must hold `client_mutex_`.
   auto insert_impl(const table_slice& slice, std::string_view table_name,
-                   std::string_view query_id) -> failure_or<void>;
+                   std::string_view query_id,
+                   transformer_record* transformations) -> failure_or<void>;
+  auto insert_batch_impl(const std::vector<table_slice>& events,
+                         std::string_view table_name, std::string_view query_id,
+                         bool normalize_unmarked_input) -> failure_or<void>;
   /// Checks the DB if an object of the given kind exists.
   auto remote_check_exists(std::string_view object_kind,
                            std::string_view object_name) -> failure_or<bool>;
@@ -253,6 +268,10 @@ private:
   arguments args_;
   transforming_diagnostic_handler dh_;
   detail::heterogeneous_string_hashmap<transformer_record> transformations_;
+
+  detail::heterogeneous_string_hashmap<CachedDescription> descriptions_;
+  std::chrono::steady_clock::time_point next_ping_
+    = std::chrono::steady_clock::now() + connection_ping_interval;
   dropmask_type dropmask_;
 };
 

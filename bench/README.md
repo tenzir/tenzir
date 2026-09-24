@@ -37,3 +37,14 @@ together:
 TENZIR_BIN="$(scripts/build.sh --print-build-dir)/bin/tenzir" \
   bench/manual/accept_relp_rsyslog/run.sh 100000
 ```
+
+## Run the manual ClickHouse benchmark
+
+The [ClickHouse write benchmark](manual/clickhouse_write/README.md) measures
+catch-all insertion for valid and incompatible values and verifies stored data
+with SQL. Configure a disposable ClickHouse instance and the environment
+variables described in its README, then run:
+
+```sh
+python3 bench/manual/clickhouse_write/write.py
+```

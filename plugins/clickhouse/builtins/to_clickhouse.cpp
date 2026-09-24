@@ -45,14 +45,6 @@ namespace {
 
 constexpr auto clickhouse_plaintext_port = uint64_t{9000};
 constexpr auto clickhouse_tls_port = uint64_t{9440};
-/// Must stay below ClickHouse's server-side `receive_timeout`, which defaults
-/// to 300 seconds in `src/Core/Defines.h` as
-/// `DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC` and is applied to native TCP connections
-/// in `src/Server/TCPHandler.cpp` via `socket().setReceiveTimeout(...)`.
-constexpr auto clickhouse_ping_interval = std::chrono::minutes{3};
-static_assert(clickhouse_ping_interval < std::chrono::minutes{5},
-              "clickhouse_ping_interval must stay below 5 minutes");
-
 auto clickhouse_error_diagnostic(std::string_view message, location loc)
   -> diagnostic_builder {
   return diagnostic::error("ClickHouse error: {}", message).primary(loc);
@@ -630,108 +622,32 @@ private:
                            const std::vector<table_slice>& events,
                            std::string query_id, location operator_location)
     -> failure_or<void> {
-    // Group by schema so `insert` gets single-schema slices. Serializing JSON
-    // columns and dropping table-absent columns (below) may collapse several
-    // input schemas into one.
-    auto by_schema = std::unordered_map<type, std::vector<table_slice>>{};
-    for (const auto& original : events) {
-      // Discover the target table's columns (blocking DESCRIBE/CREATE), then
-      // serialize JSON fields and drop columns the table does not accept.
-      TRY(auto tr, client.ensure_transformations(
-                     as<record_type>(original.schema()), table));
-      auto slice = prepare_slice(original, *tr, client.dh(), operator_location);
-      auto schema = slice.schema();
-      by_schema[std::move(schema)].push_back(std::move(slice));
-    }
-    for (auto& [schema, slices] : by_schema) {
-      TRY(client.insert(concatenate(std::move(slices)), table, query_id));
-    }
-    return {};
-  }
-
-  /// Rewrites `slice` for insertion into the target table described by `tr`:
-  /// - fields that target a ClickHouse `JSON` column, at any nesting depth
-  ///   (top-level or nested inside records/lists), are replaced with their
-  ///   opaque JSON-string rendering (a field already of type `string` is left
-  ///   unchanged, assumed to be JSON);
-  /// - top-level columns the table does not accept (unknown, or generated
-  ///   `MATERIALIZED`/`ALIAS` columns) are dropped with a warning.
-  ///
-  /// Dropping table-absent columns here — before the by-schema grouping in
-  /// `insert_table` — lets events that differ only in such columns collapse
-  /// into one schema and batch together. Pre-serializing JSON fields at any
-  /// depth (not just top-level) similarly lets events that differ only in the
-  /// shape of a nested JSON-bound field (e.g. OCSF's `file.xattributes`)
-  /// collapse into one schema.
-  static auto
-  prepare_slice(const table_slice& slice, const transformer_record& tr,
-                diagnostic_handler& dh, location operator_location)
-    -> table_slice {
-    auto fields = std::vector<record_type::field_view>{};
-    auto arrays = arrow::ArrayVector{};
-    auto changed = false;
-    for (const auto& column : columns_of(slice)) {
-      const auto trafo = tr.transfrom_and_index_for(column.name).trafo;
-      if (not trafo) {
-        // The column is not a writable target column: drop it (and warn),
-        // shrinking the schema so more slices coalesce.
-        if (tr.generated_columns.contains(column.name)) {
-          diagnostic::warning("column `{}` is a generated ClickHouse column "
-                              "and "
-                              "cannot be written",
-                              column.name)
-            .note("the provided value is ignored; ClickHouse computes the "
-                  "column")
-            .primary(operator_location)
-            .emit(dh);
-        } else {
-          diagnostic::warning("column `{}` does not exist in the ClickHouse "
-                              "table",
-                              column.name)
-            .note("column will be dropped")
-            .primary(operator_location)
-            .emit(dh);
-        }
-        changed = true;
-        continue;
-      }
-      if (auto replaced
-          = prepare_json_fields(column.type, column.array.Slice(0), *trafo)) {
-        fields.emplace_back(column.name, replaced->type);
-        arrays.push_back(std::move(replaced->array));
-        changed = true;
-      } else {
-        fields.emplace_back(column.name, column.type);
-        arrays.push_back(column.array.Slice(0));
-      }
-    }
-    if (not changed) {
-      return slice;
-    }
-    auto new_schema = type{"tenzir.clickhouse-prepared", record_type{fields}};
-    auto batch
-      = arrow::RecordBatch::Make(new_schema.to_arrow_schema(),
-                                 detail::narrow_cast<int64_t>(slice.rows()),
-                                 std::move(arrays));
-    auto result = table_slice{batch, std::move(new_schema)};
-    result.offset(slice.offset());
-    result.import_time(slice.import_time());
-    return result;
+    TENZIR_UNUSED(operator_location);
+    return client.insert_batch(events, table, query_id);
   }
 
   static auto ping_loop(runtime_state* shared_state,
                         Arc<Mutex<easy_client>> client) -> Task<void> {
     TENZIR_UNUSED(shared_state);
     while (true) {
-      co_await folly::coro::sleep(clickhouse_ping_interval);
+      co_await folly::coro::sleep(schema_refresh_interval);
       // Serialize the ping against the worker's insert on the shared client.
       // The ping itself does a blocking network round-trip, so run it off the
       // async executor while holding the guard.
       auto guard = co_await client->lock();
       auto& c = *guard;
-      co_await spawn_blocking([&] {
-        c.ping();
+      auto ok = co_await spawn_blocking([&] {
+        try {
+          return c.maintain().is_success();
+        } catch (const std::exception& error) {
+          diagnostic::error("ClickHouse maintenance failed: {}", error.what())
+            .emit(c.dh());
+          return false;
+        }
       });
+      if (not ok) {
+        co_return;
+      }
       guard.unlock();
     }
   }
