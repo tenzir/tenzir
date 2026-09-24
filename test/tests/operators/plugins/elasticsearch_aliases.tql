@@ -1,4 +1,3 @@
 plugins
 where name in ["accept_elasticsearch", "to_elasticsearch"]
-sort name
 select name

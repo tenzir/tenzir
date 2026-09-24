@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -98,8 +100,101 @@ auto openapi_record() -> record {
   return openapi;
 }
 
+template <class Builder>
+auto append_openapi_data(Builder builder, data const& value) -> void {
+  match(
+    value,
+    [&](caf::none_t) {
+      builder.null();
+    },
+    [&](record const& record) {
+      auto result = builder.record();
+      for (auto const& [name, field] : record) {
+        append_openapi_data(result.field(name), field);
+      }
+    },
+    [&](list const& list) {
+      auto result = builder.list();
+      for (auto const& element : list) {
+        append_openapi_data(result, element);
+      }
+    },
+    [&](std::string const& string) {
+      builder.data(std::string_view{string});
+    },
+    [&](pattern const& pattern) {
+      builder.data(pattern.string());
+    },
+    [&](enumeration enumeration) {
+      builder.data(static_cast<uint64_t>(enumeration));
+    },
+    [&](map const& map) {
+      auto result = builder.list();
+      for (auto const& [key, field] : map) {
+        auto entry = result.record();
+        append_openapi_data(entry.field("key"), key);
+        append_openapi_data(entry.field("value"), field);
+      }
+    },
+    [&](blob const& blob) {
+      builder.data(blob_view{blob});
+    },
+    [&](secret const&) {
+      builder.null();
+    },
+    [&](auto const& x) {
+      builder.data(x);
+    });
+}
+
 struct OpenapiArgs {
   // No arguments.
+};
+
+class OpenapiEvents final : public Operator<void, nova::Events> {
+public:
+  explicit OpenapiEvents(OpenapiArgs /*args*/) {
+  }
+
+  auto start(OpCtx&) -> Task<void> override {
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return {};
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto record = builder.record();
+    for (auto const& [name, field] : openapi_record()) {
+      append_openapi_data(record.field(name), field);
+    }
+    auto output = builder.finish();
+    auto const rows = output.length();
+    co_await push(
+      nova::Events{std::move(output), nova::storage::BitMap{rows, true},
+                   nova::Events::Meta::make_empty(rows, "tenzir.openapi")});
+    done_ = true;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+private:
+  bool done_ = false;
 };
 
 class Openapi final : public Operator<void, table_slice> {
@@ -148,7 +243,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<OpenapiArgs, Openapi>{};
+    auto d = Describer<OpenapiArgs, Openapi, OpenapiEvents>{};
     return d.without_optimize();
   }
 };

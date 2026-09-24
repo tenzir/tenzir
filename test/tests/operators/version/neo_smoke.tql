@@ -1,0 +1,4 @@
+version
+where version != null
+select version, build.type
+discard
