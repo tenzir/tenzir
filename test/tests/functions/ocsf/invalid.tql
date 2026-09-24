@@ -1,0 +1,5 @@
+from {name: "No Such Class", id: 12345},
+  {name: "Also Unknown", id: 18446744073709551615},
+  {name: "File System Activity", id: 1001}
+class_uid = ocsf_class_uid(name)
+class_name = ocsf_class_name(id)

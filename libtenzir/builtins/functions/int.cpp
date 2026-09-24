@@ -46,6 +46,9 @@ public:
     return apply_kernel<1>(
       frame, name, {args.x}, args.call,
       detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<NovaTag> {
+          return None{};
+        },
         [](diagnostic_handler&, NovaTag v) -> Option<NovaTag> {
           return v;
         },

@@ -1,0 +1,38 @@
+warning: log does not accept the argument type combination `(string, int)`
+ --> tests/functions/exponential/mixed_types.tql:2:8
+  |
+2 | log2 = log(x, 2)
+  |        ~~~~~~~~~
+  |
+
+warning: pow does not accept the argument type combination `(string, int)`
+ --> tests/functions/exponential/mixed_types.tql:3:11
+  |
+3 | squared = pow(x, 2)
+  |           ~~~~~~~~~
+  |
+{
+  x: 4,
+  log2: 2.0,
+  squared: 16,
+}
+{
+  x: 8,
+  log2: 3.0,
+  squared: 64.0,
+}
+{
+  x: 16.0,
+  log2: 4.0,
+  squared: 256.0,
+}
+{
+  x: null,
+  log2: null,
+  squared: null,
+}
+{
+  x: "32",
+  log2: null,
+  squared: null,
+}

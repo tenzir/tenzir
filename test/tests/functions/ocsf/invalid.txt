@@ -1,0 +1,33 @@
+warning: invalid OCSF class name
+ --> tests/functions/ocsf/invalid.tql:4:28
+  |
+4 | class_uid = ocsf_class_uid(name)
+  |                            ~~~~
+  |
+  = note: got `No Such Class`
+
+warning: invalid OCSF class ID
+ --> tests/functions/ocsf/invalid.tql:5:30
+  |
+5 | class_name = ocsf_class_name(id)
+  |                              ~~
+  |
+  = note: got `12345`
+{
+  name: "No Such Class",
+  id: 12345,
+  class_uid: null,
+  class_name: null,
+}
+{
+  name: "Also Unknown",
+  id: 18446744073709551615,
+  class_uid: null,
+  class_name: null,
+}
+{
+  name: "File System Activity",
+  id: 1001,
+  class_uid: 1001,
+  class_name: "File System Activity",
+}

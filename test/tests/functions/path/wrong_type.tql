@@ -1,0 +1,3 @@
+from {path: "/tmp/a"}, {path: 42}
+file = file_name(path)
+parent = parent_dir(path)

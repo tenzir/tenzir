@@ -1,0 +1,10 @@
+{
+  category_uid: 4,
+  category_name: "Network Activity",
+  class_uid: 4003,
+  class_name: "DNS Activity",
+  type_uid: 400301,
+  type_name: "DNS Activity: Query",
+  null_uid: null,
+  null_name: null,
+}

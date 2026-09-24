@@ -1,0 +1,7 @@
+from {path: "/var/log/syslog"},
+  {path: "C:\\Windows\\System32\\cmd.exe"},
+  {path: "relative/dir/"},
+  {path: "file.txt"},
+  {path: null}
+file = file_name(path)
+parent = parent_dir(path)

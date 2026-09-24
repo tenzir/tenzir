@@ -8,6 +8,9 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/checked_math.hpp>
+#include <tenzir/concepts.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -177,8 +180,155 @@ auto apply_binary(series left, series right, ast::expression const& left_expr,
   return {double_type{}, finish(builder)};
 }
 
-class exp final : public function_plugin {
+template <class T>
+concept NovaNumber = concepts::one_of<T, nova::Int, nova::UInt, nova::Float>;
+
+template <class T>
+concept NovaNumberOrNull = NovaNumber<T> or std::same_as<T, nova::Null>;
+
+auto log_with_base(double value, double base) -> double {
+  if (not std::isfinite(base) or base <= 0.0 or base == 1.0) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  if (base == 2.0) {
+    return std::log2(value);
+  }
+  if (base == 10.0) {
+    return std::log10(value);
+  }
+  return std::log(value) / std::log(base);
+}
+
+/// Applies `function` to a single numeric argument, producing a `float`.
+template <class Function>
+auto apply_nova_unary(nova::EvalFrame frame, std::string_view name,
+                      nova::ValueArgument const& x, location call,
+                      Function function) -> nova::Array<nova::Data> {
+  return nova::apply_kernel<1>(
+    frame, name, {x}, call,
+    // Constrained to exact types, since `bool` converts implicitly.
+    [&]<NovaNumberOrNull T>(diagnostic_handler&, T v) -> Option<nova::Float> {
+      if constexpr (std::same_as<T, nova::Null>) {
+        return None{};
+      } else {
+        return function(static_cast<double>(v));
+      }
+    });
+}
+
+/// Applies `function` to two numeric arguments, producing a `float`.
+template <class Function>
+auto apply_nova_binary(nova::EvalFrame frame, std::string_view name,
+                       nova::ValueArgument const& x,
+                       nova::ValueArgument const& y, location call,
+                       Function function) -> nova::Array<nova::Data> {
+  return nova::apply_kernel<2>(
+    frame, name, {x, y}, call,
+    [&]<NovaNumberOrNull L, NovaNumberOrNull R>(diagnostic_handler&, L l,
+                                                R r) -> Option<nova::Float> {
+      if constexpr (std::same_as<L, nova::Null>
+                    or std::same_as<R, nova::Null>) {
+        return None{};
+      } else {
+        return function(static_cast<double>(l), static_cast<double>(r));
+      }
+    });
+}
+
+struct ExpArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+struct ExpFunction {
+  auto eval(ExpArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return apply_nova_unary(frame, "exp", args.x, args.call, [](double value) {
+      return std::exp(value);
+    });
+  }
+};
+
+struct LogArgs {
+  nova::ValueArgument x;
+  Option<nova::ValueArgument> base;
+  location call;
+};
+
+struct LogFunction {
+  auto eval(LogArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    if (not args.base) {
+      return apply_nova_unary(frame, "log", args.x, args.call,
+                              [](double value) {
+                                return std::log(value);
+                              });
+    }
+    return apply_nova_binary(frame, "log", args.x, *args.base, args.call,
+                             log_with_base);
+  }
+};
+
+struct PowArgs {
+  nova::ValueArgument base;
+  nova::ValueArgument exponent;
+  location call;
+};
+
+struct PowFunction {
+  auto eval(PowArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto warn_negative = nova::WarnOnce{};
+    auto warn_overflow = nova::WarnOnce{};
+    return nova::apply_kernel<2>(
+      frame, "pow", {args.base, args.exponent}, args.call,
+      detail::overload{
+        [&]<class L, class R>(diagnostic_handler& dh, L base,
+                              R exponent) -> Option<nova::Int>
+          requires(std::same_as<L, nova::Int> and std::same_as<R, nova::Int>)
+                  {
+                    auto result = checked_pow(base, exponent);
+                    if (not result) {
+                      if (exponent < 0) {
+                        warn_negative(dh, diagnostic::warning(
+                                            "negative exponent in integer "
+                                            "`pow`")
+                                            .primary(args.exponent.source));
+                      } else {
+                        warn_overflow(
+                          dh, diagnostic::warning("integer overflow in `pow`")
+                                .primary(args.exponent.source));
+                      }
+                    }
+                    return result;
+                  },
+                  []<NovaNumberOrNull L, NovaNumberOrNull R>(
+                    diagnostic_handler&, L base,
+                    R exponent) -> Option<nova::Float>
+                    requires(not(std::same_as<L, nova::Int>
+                                 and std::same_as<R, nova::Int>))
+        {
+          if constexpr (std::same_as<L, nova::Null>
+                        or std::same_as<R, nova::Null>) {
+            return None{};
+          } else {
+            return std::pow(static_cast<double>(base),
+                            static_cast<double>(exponent));
+          }
+        },
+        });
+  }
+};
+
+class exp final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ExpArgs, ExpFunction>{};
+    d.positional("x", &ExpArgs::x, "number");
+    d.call_location(&ExpArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "exp";
   }
@@ -204,8 +354,16 @@ public:
   }
 };
 
-class log final : public function_plugin {
+class log final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<LogArgs, LogFunction>{};
+    d.positional("x", &LogArgs::x, "number");
+    d.optional_positional("base", &LogArgs::base, "number");
+    d.call_location(&LogArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "log";
   }
@@ -233,27 +391,23 @@ public:
       }
       return map_series(
         eval(x), eval(*base), [&](series input, series base_value) {
-          return apply_binary(
-            std::move(input), std::move(base_value), x, *base, "log", ctx,
-            [](double value, double base) {
-              if (not std::isfinite(base) or base <= 0.0 or base == 1.0) {
-                return std::numeric_limits<double>::quiet_NaN();
-              }
-              if (base == 2.0) {
-                return std::log2(value);
-              }
-              if (base == 10.0) {
-                return std::log10(value);
-              }
-              return std::log(value) / std::log(base);
-            });
+          return apply_binary(std::move(input), std::move(base_value), x, *base,
+                              "log", ctx, log_with_base);
         });
     });
   }
 };
 
-class pow final : public function_plugin {
+class pow final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PowArgs, PowFunction>{};
+    d.positional("base", &PowArgs::base, "number");
+    d.positional("exponent", &PowArgs::exponent, "number");
+    d.call_location(&PowArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "pow";
   }

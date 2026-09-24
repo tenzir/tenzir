@@ -1,0 +1,21 @@
+warning: float does not accept the argument type `bool`
+ --> tests/functions/float/wrong_type.tql:2:5
+  |
+2 | y = x.float()
+  |     ~~~~~~~~~
+  |
+
+warning: float does not accept the argument type `duration`
+ --> tests/functions/float/wrong_type.tql:2:5
+  |
+2 | y = x.float()
+  |     ~~~~~~~~~
+  |
+{
+  x: true,
+  y: null,
+}
+{
+  x: 1s,
+  y: null,
+}

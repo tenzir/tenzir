@@ -1,0 +1,10 @@
+from {
+  category_uid: ocsf_category_uid("Network Activity"),
+  category_name: ocsf_category_name(4),
+  class_uid: ocsf_class_uid("DNS Activity"),
+  class_name: ocsf_class_name(4003),
+  type_uid: ocsf_type_uid("DNS Activity: Query"),
+  type_name: ocsf_type_name(uint(400301)),
+  null_uid: ocsf_class_uid(null),
+  null_name: ocsf_class_name(null),
+}

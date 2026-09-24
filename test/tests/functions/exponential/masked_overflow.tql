@@ -1,0 +1,3 @@
+from {base: 2, exponent: 63}, {base: 2, exponent: 10}
+where exponent == 10
+power = pow(base, exponent)

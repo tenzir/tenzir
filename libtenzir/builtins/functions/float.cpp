@@ -11,6 +11,8 @@
 #include "tenzir/concept/parseable/tenzir/si.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -18,8 +20,52 @@ namespace tenzir::plugins::float_ {
 
 namespace {
 
-class float_ final : public function_plugin {
+struct FloatArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+struct FloatFunction {
+  auto eval(FloatArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto warn_parse = nova::WarnOnce{};
+    return nova::apply_kernel<1>(
+      frame, "float", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<nova::Float> {
+          return None{};
+        },
+        // Constrained to exact types, since `bool` converts implicitly.
+        []<class T>(diagnostic_handler&, T v) -> Option<nova::Float>
+          requires concepts::one_of<T, nova::Int, nova::UInt, nova::Float>
+        {
+          return static_cast<nova::Float>(v);
+        },
+        [&](diagnostic_handler& dh, std::string_view v) -> Option<nova::Float> {
+          constexpr auto p = ignore(*parsers::space) >> parsers::number
+                             >> ignore(*parsers::space);
+          auto result = double{};
+          if (p(v, result)) {
+            return result;
+          }
+          warn_parse(dh, diagnostic::warning("failed to parse string")
+                           .primary(args.x.source)
+                           .note("tried to convert: {}", v));
+          return None{};
+        },
+        });
+  }
+};
+
+class float_ final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<FloatArgs, FloatFunction>{};
+    d.positional("x", &FloatArgs::x, "number|string");
+    d.call_location(&FloatArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "float";
   }

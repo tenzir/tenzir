@@ -1,0 +1,26 @@
+warning: `geo_distance` expected `number`, but got `string`
+ --> tests/functions/geo_distance/mixed_types.tql:5:31
+  |
+5 | distance_m = int(geo_distance(lon, 52.52, 0, 0, spheroid=spheroid))
+  |                               ~~~
+  |
+{
+  lon: 13,
+  spheroid: false,
+  distance_m: 5964249,
+}
+{
+  lon: 13.405,
+  spheroid: true,
+  distance_m: 5954148,
+}
+{
+  lon: "13.405",
+  spheroid: true,
+  distance_m: null,
+}
+{
+  lon: null,
+  spheroid: false,
+  distance_m: null,
+}

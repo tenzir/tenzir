@@ -1,0 +1,2 @@
+from {x: true}, {x: 1s}
+y = x.float()

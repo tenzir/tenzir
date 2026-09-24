@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -14,8 +16,61 @@ namespace tenzir::plugins::path {
 
 namespace {
 
-class file_name final : public function_plugin {
+struct PathArgs {
+  nova::ValueArgument path;
+  location call;
+};
+
+// TODO: We don't know whether this is a Windows or POSIX path, and string
+// might not be a good type for paths because of invalid UTF-8.
+auto file_name_of(std::string_view path) -> std::string_view {
+  auto pos = path.find_last_of("/\\");
+  if (pos == std::string_view::npos) {
+    return path;
+  }
+  return path.substr(pos + 1);
+}
+
+auto parent_dir_of(std::string_view path) -> std::string_view {
+  auto pos = path.find_last_of("/\\");
+  if (pos == std::string_view::npos) {
+    return path;
+  }
+  return path.substr(0, pos);
+}
+
+template <bool FileName>
+struct PathFunction {
+  auto eval(PathArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(
+      frame, FileName ? "file_name" : "parent_dir", {args.path}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<std::string_view> {
+          return None{};
+        },
+        [](diagnostic_handler&,
+           std::string_view path) -> Option<std::string_view> {
+          return FileName ? file_name_of(path) : parent_dir_of(path);
+        },
+      });
+  }
+};
+
+template <bool FileName>
+auto describe_path_function() -> nova::FunctionDescription {
+  auto d = nova::FunctionDescriber<PathArgs, PathFunction<FileName>>{};
+  d.positional("path", &PathArgs::path, "string");
+  d.call_location(&PathArgs::call);
+  return std::move(d).finish();
+}
+
+class file_name final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    return describe_path_function<true>();
+  }
+
   auto name() const -> std::string override {
     return "file_name";
   }
@@ -72,8 +127,12 @@ public:
   }
 };
 
-class parent_dir final : public function_plugin {
+class parent_dir final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    return describe_path_function<false>();
+  }
+
   auto name() const -> std::string override {
     return "parent_dir";
   }

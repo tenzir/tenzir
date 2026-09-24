@@ -1,0 +1,5 @@
+from {lon: 13, spheroid: false},
+  {lon: 13.405, spheroid: true},
+  {lon: "13.405", spheroid: true},
+  {lon: null, spheroid: false}
+distance_m = int(geo_distance(lon, 52.52, 0, 0, spheroid=spheroid))

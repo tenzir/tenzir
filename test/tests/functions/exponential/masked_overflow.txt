@@ -1,0 +1,5 @@
+{
+  base: 2,
+  exponent: 10,
+  power: 1024,
+}

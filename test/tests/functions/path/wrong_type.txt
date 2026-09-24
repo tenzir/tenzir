@@ -1,0 +1,23 @@
+warning: file_name does not accept the argument type `int`
+ --> tests/functions/path/wrong_type.tql:2:8
+  |
+2 | file = file_name(path)
+  |        ~~~~~~~~~~~~~~~
+  |
+
+warning: parent_dir does not accept the argument type `int`
+ --> tests/functions/path/wrong_type.tql:3:10
+  |
+3 | parent = parent_dir(path)
+  |          ~~~~~~~~~~~~~~~~
+  |
+{
+  path: "/tmp/a",
+  file: "a",
+  parent: "/tmp",
+}
+{
+  path: 42,
+  file: null,
+  parent: null,
+}

@@ -1,0 +1,17 @@
+warning: ocsf_class_uid does not accept the argument type `int`
+ --> tests/functions/ocsf/wrong_type.tql:2:8
+  |
+2 |   uid: ocsf_class_uid(1001),
+  |        ~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: ocsf_class_name does not accept the argument type `string`
+ --> tests/functions/ocsf/wrong_type.tql:3:9
+  |
+3 |   name: ocsf_class_name("File System Activity"),
+  |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  uid: null,
+  name: null,
+}

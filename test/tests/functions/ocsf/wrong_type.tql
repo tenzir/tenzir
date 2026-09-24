@@ -1,0 +1,4 @@
+from {
+  uid: ocsf_class_uid(1001),
+  name: ocsf_class_name("File System Activity"),
+}

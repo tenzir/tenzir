@@ -7,7 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/concepts.hpp>
 #include <tenzir/detail/geodesic.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -16,6 +20,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 namespace tenzir::plugins::geo_distance {
 
@@ -89,8 +94,136 @@ auto spheroidal_distance(double lon1, double lat1, double lon2, double lat2)
   return tenzir::detail::wgs84_distance(lon1, lat1, lon2, lat2);
 }
 
-class plugin final : public function_plugin {
+/// Computes the distance in meters, or `None` for invalid coordinates.
+auto distance(double lon1, double lat1, double lon2, double lat2, bool spheroid)
+  -> Option<double> {
+  auto valid_longitude = [](double x) {
+    return std::isfinite(x) and x >= -180.0 and x <= 180.0;
+  };
+  auto valid_latitude = [](double x) {
+    return std::isfinite(x) and x >= -90.0 and x <= 90.0;
+  };
+  if (not valid_longitude(lon1) or not valid_latitude(lat1)
+      or not valid_longitude(lon2) or not valid_latitude(lat2)) {
+    return None{};
+  }
+  auto result = spheroid ? spheroidal_distance(lon1, lat1, lon2, lat2)
+                         : spherical_distance(lon1, lat1, lon2, lat2);
+  if (not std::isfinite(result) or result < 0.0) {
+    return None{};
+  }
+  return result;
+}
+
+/// Extracts the values of `arg` at the rows of `mask` as `Out`, leaving null
+/// and mistyped rows empty. `Accepts` decides which alternatives are valid;
+/// the first mistyped alternative with active rows emits a warning.
+template <class Out, class Accepts>
+auto extract(nova::ValueArgument const& arg, nova::storage::BitMap const& mask,
+             std::string_view expected, diagnostic_handler& dh)
+  -> std::vector<Option<Out>> {
+  auto result = std::vector<Option<Out>>(static_cast<size_t>(mask.length()));
+  auto warned = false;
+  auto visit = [&]<nova::data_type Tag>(nova::Array<Tag> const& array,
+                                        nova::storage::BitMap const& rows) {
+    if constexpr (Accepts::template value<Tag>) {
+      nova::storage::for_each_true(rows, [&](nova::storage::Index i) {
+        result[static_cast<size_t>(i)] = static_cast<Out>(*array.get(i));
+      });
+    } else if constexpr (not std::same_as<Tag, nova::Null>) {
+      if (not warned and rows.any()) {
+        warned = true;
+        diagnostic::warning("`geo_distance` expected `{}`, but got `{}`",
+                            expected, nova::Type<Tag>::static_name)
+          .primary(arg.source)
+          .emit(dh);
+      }
+    }
+  };
+  match(
+    arg.data,
+    [&]<nova::data_type Tag>(nova::Array<Tag> const& array) {
+      visit(array, mask);
+    },
+    [&](nova::UnionArray const& array) {
+      for (auto const& field : array.fields()) {
+        match(field.data,
+              [&]<nova::data_type Tag>(nova::Array<Tag> const& alternative) {
+                visit(alternative, mask & field.present);
+              });
+      }
+    });
+  return result;
+}
+
+struct AcceptsNumber {
+  template <class Tag>
+  static constexpr bool value
+    = concepts::one_of<Tag, nova::Int, nova::UInt, nova::Float>;
+};
+
+struct AcceptsBool {
+  template <class Tag>
+  static constexpr bool value = std::same_as<Tag, nova::Bool>;
+};
+
+struct GeoDistanceArgs {
+  nova::ValueArgument lon1;
+  nova::ValueArgument lat1;
+  nova::ValueArgument lon2;
+  nova::ValueArgument lat2;
+  Option<nova::ValueArgument> spheroid;
+};
+
+struct GeoDistanceFunction {
+  auto eval(GeoDistanceArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto const& mask = frame.mask();
+    auto number = [&](nova::ValueArgument const& arg) {
+      return extract<double, AcceptsNumber>(arg, mask, "number", frame);
+    };
+    auto lon1 = number(args.lon1);
+    auto lat1 = number(args.lat1);
+    auto lon2 = number(args.lon2);
+    auto lat2 = number(args.lat2);
+    auto spheroid = std::vector<Option<bool>>{};
+    if (args.spheroid) {
+      spheroid
+        = extract<bool, AcceptsBool>(*args.spheroid, mask, "bool", frame);
+    }
+    auto results = nova::Results{mask.length()};
+    nova::storage::for_each_true(mask, [&](nova::storage::Index row) {
+      auto i = static_cast<size_t>(row);
+      auto use_spheroid = args.spheroid ? spheroid[i] : Option<bool>{false};
+      if (not lon1[i] or not lat1[i] or not lon2[i] or not lat2[i]
+          or not use_spheroid) {
+        results.set_null(row);
+        return;
+      }
+      auto result
+        = distance(*lon1[i], *lat1[i], *lon2[i], *lat2[i], *use_spheroid);
+      if (not result) {
+        results.set_null(row);
+        return;
+      }
+      results.set<nova::Float>(row, *result);
+    });
+    return std::move(results).finish(mask);
+  }
+};
+
+class plugin final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<GeoDistanceArgs, GeoDistanceFunction>{};
+    d.positional("lon1", &GeoDistanceArgs::lon1, "number");
+    d.positional("lat1", &GeoDistanceArgs::lat1, "number");
+    d.positional("lon2", &GeoDistanceArgs::lon2, "number");
+    d.positional("lat2", &GeoDistanceArgs::lat2, "number");
+    d.named_optional("spheroid", &GeoDistanceArgs::spheroid, "bool");
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "geo_distance";
   }

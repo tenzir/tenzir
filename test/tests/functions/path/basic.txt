@@ -1,0 +1,25 @@
+{
+  path: "/var/log/syslog",
+  file: "syslog",
+  parent: "/var/log",
+}
+{
+  path: "C:\\Windows\\System32\\cmd.exe",
+  file: "cmd.exe",
+  parent: "C:\\Windows\\System32",
+}
+{
+  path: "relative/dir/",
+  file: "",
+  parent: "relative/dir",
+}
+{
+  path: "file.txt",
+  file: "file.txt",
+  parent: "file.txt",
+}
+{
+  path: null,
+  file: null,
+  parent: null,
+}
