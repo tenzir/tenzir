@@ -84,10 +84,10 @@ private:
       [&](nova::RowView<nova::Float> v) {
         print_double(*v);
       },
-      [&](nova::RowView<std::string_view> v) {
+      [&](nova::RowView<nova::String> v) {
         append(options_.style.string, "{}", json_string_fmt_wrapper{*v});
       },
-      [&](nova::RowView<nova::BlobView> v) {
+      [&](nova::RowView<nova::Blob> v) {
         auto const bytes = *v;
         if (options_.tql) {
           append(options_.style.blob, "b{}",

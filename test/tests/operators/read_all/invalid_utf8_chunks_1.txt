@@ -1,0 +1,7 @@
+warning: got invalid UTF-8
+ --> tests/operators/read_all/invalid_utf8_chunks_1.tql:4:1
+  |
+4 | read_all
+  | ~~~~~~~~
+  |
+  = hint: use `binary=true` if you are reading binary data

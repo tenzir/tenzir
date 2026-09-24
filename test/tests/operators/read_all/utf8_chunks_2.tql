@@ -1,0 +1,5 @@
+from {data: "aβ\nlast"}
+write_all data
+split_bytes 2
+read_all
+schema = @name

@@ -28,11 +28,7 @@ namespace {
 auto hash_type(RowView<Data> row) -> legacy_hash::result_type {
   return match(row, []<typename T>(RowView<T> value) {
     auto hash = legacy_hash{};
-    if constexpr (fundamental_view_type<T>) {
-      hash_append(hash, Type<TagForViewType<T>>::static_name);
-    } else {
-      hash_append(hash, Type<T>::static_name);
-    }
+    hash_append(hash, Type<T>::static_name);
     if constexpr (std::same_as<T, Record>) {
       for (auto [name, field] : value) {
         hash_append(hash, name, hash_type(field));

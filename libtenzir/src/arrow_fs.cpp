@@ -17,6 +17,10 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/fs_url_template.hpp"
 #include "tenzir/glob.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_util.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/set.hpp"
@@ -654,12 +658,26 @@ template class FromArrowFsOperator<nova::Events>;
 // ToArrowFsOperator
 // =============================================================================
 
-auto ToArrowFsOperator::setup_args(ToArrowFsArgs&, OpCtx&)
+namespace {
+
+auto row_count(table_slice const& input) -> uint64_t {
+  return input.rows();
+}
+
+auto row_count(nova::Events const& input) -> uint64_t {
+  return input.active_count();
+}
+
+} // namespace
+
+template <class Input>
+auto ToArrowFsOperator<Input>::setup_args(ToArrowFsArgs&, OpCtx&)
   -> Task<failure_or<void>> {
   co_return {};
 }
 
-auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::start(OpCtx& ctx) -> Task<void> {
   if (not co_await setup_args(base_args_, ctx)) {
     co_return;
   }
@@ -688,6 +706,19 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   // emits any `{uuid}`-placement diagnostics.
   // TODO: Consider using separate types here to differentiate.
   template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
+  if constexpr (std::same_as<Input, nova::Events>) {
+    auto fields = template_.partition_fields();
+    partition_evaluators_.reserve(fields.size());
+    for (auto const& field : fields) {
+      auto evaluator = nova::Evaluator::make(
+        field.inner(), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        co_return;
+      }
+      partition_evaluators_.push_back(std::move(*evaluator));
+    }
+    partition_drop_ = nova::DropTree::make(fields);
+  }
   if (not template_.has_uuid()) {
     if (base_args_.max_size) {
       diagnostic::warning("`max_size` has no effect without a `{{uuid}}` "
@@ -714,50 +745,83 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
                        MetricsUnit::events);
 }
 
-auto ToArrowFsOperator::preprocess(table_slice input, OpCtx&)
-  -> Task<table_slice> {
+template <class Input>
+auto ToArrowFsOperator<Input>::preprocess(Input input, OpCtx&) -> Task<Input> {
   co_return input;
 }
 
-auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::process(Input input, OpCtx& ctx) -> Task<void> {
   input = co_await preprocess(std::move(input), ctx);
-  if (input.rows() == 0) {
+  if (row_count(input) == 0) {
     co_return;
   }
   auto const fields = template_.partition_fields();
-  auto by = std::vector<series>{};
-  by.reserve(fields.size());
-  for (auto const& field : fields) {
-    by.emplace_back(eval(field, input, ctx.dh()));
-  }
-  auto const rows = detail::narrow<int64_t>(input.rows());
-  auto boundaries = std::set<int64_t>{rows};
-  for (auto& s : by) {
-    for (auto i = int64_t{0}; i + 1 < rows; ++i) {
-      if (s.at(i) != s.at(i + 1)) {
-        boundaries.insert(i + 1);
+  auto masks = [&] {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto by = std::vector<nova::Array<nova::Data>>{};
+      by.reserve(partition_evaluators_.size());
+      for (auto& evaluator : partition_evaluators_) {
+        by.push_back(evaluator.eval(input, nova::EvalCtx{ctx.dh()}));
       }
+      auto result = std::unordered_map<data, nova::storage::BitMap::Mutable>{};
+      nova::storage::for_each_true(input.mask, [&](auto row) {
+        auto key = list{};
+        for (auto const& column : by) {
+          key.push_back(nova::materialize(column.get(row)));
+        }
+        auto [it, inserted]
+          = result.try_emplace(std::move(key), input.length());
+        it->second.set(row, true);
+      });
+      return result;
+    } else {
+      auto by = std::vector<series>{};
+      by.reserve(fields.size());
+      for (auto const& field : fields) {
+        by.emplace_back(eval(field, input, ctx.dh()));
+      }
+      auto const rows = detail::narrow<int64_t>(input.rows());
+      auto boundaries = std::set<int64_t>{rows};
+      for (auto& s : by) {
+        for (auto i = int64_t{0}; i + 1 < rows; ++i) {
+          if (s.at(i) != s.at(i + 1)) {
+            boundaries.insert(i + 1);
+          }
+        }
+      }
+      // Hash-bucket runs into one boolean mask per distinct key.
+      // Within-partition row order is preserved; cross-partition order is
+      // unobservable (each partition writes to its own stream).
+      auto masks = std::unordered_map<data, std::shared_ptr<arrow::Buffer>>{};
+      auto run_start = int64_t{0};
+      for (auto boundary : boundaries) {
+        auto key = list{};
+        key.reserve(by.size());
+        for (auto& s : by) {
+          key.push_back(materialize(s.at(run_start)));
+        }
+        auto [it, inserted] = masks.try_emplace(std::move(key));
+        if (inserted) {
+          it->second
+            = check(arrow::AllocateEmptyBitmap(rows, arrow_memory_pool()));
+        }
+        arrow::bit_util::SetBitsTo(it->second->mutable_data(), run_start,
+                                   boundary - run_start, true);
+        run_start = boundary;
+      }
+      return masks;
     }
-  }
-  // Hash-bucket runs into one boolean mask per distinct key. Within-partition
-  // row order is preserved; cross-partition order is unobservable (each
-  // partition writes to its own stream).
-  auto masks = std::unordered_map<data, std::shared_ptr<arrow::Buffer>>{};
-  auto run_start = int64_t{0};
-  for (auto boundary : boundaries) {
-    auto key = list{};
-    key.reserve(by.size());
-    for (auto& s : by) {
-      key.push_back(materialize(s.at(run_start)));
+  }();
+  auto without_partitions = [&] {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto result = input;
+      result.data = partition_drop_->apply(std::move(result.data), result.mask);
+      return result;
+    } else {
+      return drop(input, fields, ctx, false);
     }
-    auto [it, inserted] = masks.try_emplace(std::move(key));
-    if (inserted) {
-      it->second = check(arrow::AllocateEmptyBitmap(rows, arrow_memory_pool()));
-    }
-    arrow::bit_util::SetBitsTo(it->second->mutable_data(), run_start,
-                               boundary - run_start, true);
-    run_start = boundary;
-  }
+  }();
   // One push per bucket. `process_sub` erases `key_to_sub` under the
   // guard when rotation fires, so the next iteration's lookup naturally
   // spawns a fresh sub without us having to drain anything in between.
@@ -767,8 +831,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
       auto guard = co_await state_.lock();
       auto& kts = guard->key_to_sub;
       if (auto it = kts.find(key); it == kts.end()) {
-        auto plan
-          = ir::make_plan(base_args_.pipe.inner, tag_v<table_slice>, ctx);
+        auto plan = ir::make_plan(base_args_.pipe.inner, tag_v<Input>, ctx);
         if (not plan) {
           // Instantiation emitted a diagnostic; the pipeline will be torn down.
           co_return;
@@ -809,15 +872,23 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
         .emit(ctx.dh());
       co_return;
     }
-    auto without_partitions = drop(input, fields, ctx, false);
-    auto slice = filter(without_partitions, arrow::BooleanArray{rows, bitmap});
-    auto const slice_rows = slice.rows();
+    auto slice = [&] {
+      if constexpr (std::same_as<Input, nova::Events>) {
+        auto result = without_partitions;
+        result.mask = std::move(bitmap).finish();
+        return result;
+      } else {
+        return filter(without_partitions,
+                      arrow::BooleanArray{static_cast<int64_t>(input.rows()),
+                                          bitmap});
+      }
+    }();
+    auto const slice_rows = row_count(slice);
     // `push` runs without the guard. If it suspends on a full input
     // channel and we still hold the guard, `process_sub` on the draining
     // side cannot acquire the guard to look up the partition, and
     // nothing drains — deadlock.
-    auto result
-      = co_await as<SubHandle<table_slice>>(*sub).push(std::move(slice));
+    auto result = co_await as<SubHandle<Input>>(*sub).push(std::move(slice));
     if (not result) {
       diagnostic::error("subpipeline closed unexpectedly")
         .primary(base_args_.pipe)
@@ -828,21 +899,26 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ToArrowFsOperator::await_task(diagnostic_handler&) const -> Task<Any> {
+template <class Input>
+auto ToArrowFsOperator<Input>::await_task(diagnostic_handler&) const
+  -> Task<Any> {
   co_return co_await control_queue_->dequeue();
 }
 
-auto ToArrowFsOperator::process_task(Any result, OpCtx& ctx) -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::process_task(Any result, OpCtx& ctx)
+  -> Task<void> {
   auto msg = std::move(result).as<Message>();
   co_await co_match(msg, [&](RotateRequested& r) -> Task<void> {
     if (auto sub = ctx.get_sub(r.sub_key)) {
-      co_await as<SubHandle<table_slice>>(*sub).close();
+      co_await as<SubHandle<Input>>(*sub).close();
     }
   });
 }
 
-auto ToArrowFsOperator::process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
-  -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::process_sub(SubKeyView key, chunk_ptr chunk,
+                                           OpCtx& ctx) -> Task<void> {
   auto sk = as<int64_t>(key);
   if (not chunk or chunk->size() == 0) {
     co_return;
@@ -876,7 +952,8 @@ auto ToArrowFsOperator::process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
   }
 }
 
-auto ToArrowFsOperator::rotate(int64_t sk) -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::rotate(int64_t sk) -> Task<void> {
   auto guard = co_await state_.lock();
   auto it = guard->partitions.find(sk);
   if (it == guard->partitions.end() or it->second.is_rotating) {
@@ -890,7 +967,9 @@ auto ToArrowFsOperator::rotate(int64_t sk) -> Task<void> {
   control_queue_->enqueue(RotateRequested{sk});
 }
 
-auto ToArrowFsOperator::finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::finish_sub(SubKeyView key, OpCtx& ctx)
+  -> Task<void> {
   auto sk = as<int64_t>(key);
   auto part = co_await find_partition(sk);
   TENZIR_ASSERT(part, "partition must exist: finish_sub is the sole eraser");
@@ -907,14 +986,16 @@ auto ToArrowFsOperator::finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
   --partition_count_;
 }
 
-auto ToArrowFsOperator::state() -> OperatorState {
+template <class Input>
+auto ToArrowFsOperator<Input>::state() -> OperatorState {
   if (finalized_ and partition_count_ == 0) {
     return OperatorState::done;
   }
   return OperatorState::normal;
 }
 
-auto ToArrowFsOperator::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+template <class Input>
+auto ToArrowFsOperator<Input>::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
   finalized_ = true;
   auto subs = std::vector<int64_t>{};
   {
@@ -929,7 +1010,7 @@ auto ToArrowFsOperator::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
   close_tasks.reserve(subs.size());
   for (auto sub_key : subs) {
     if (auto sub = ctx.get_sub(sub_key)) {
-      close_tasks.push_back(as<SubHandle<table_slice>>(*sub).close());
+      close_tasks.push_back(as<SubHandle<Input>>(*sub).close());
     }
   }
   co_await folly::coro::collectAllRange(std::move(close_tasks));
@@ -939,7 +1020,8 @@ auto ToArrowFsOperator::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
   co_return FinalizeBehavior::continue_;
 }
 
-auto ToArrowFsOperator::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+template <class Input>
+auto ToArrowFsOperator<Input>::prepare_snapshot(OpCtx& ctx) -> Task<void> {
   auto tasks = std::vector<Task<void>>{};
   {
     auto guard = co_await state_.lock();
@@ -965,7 +1047,9 @@ auto ToArrowFsOperator::prepare_snapshot(OpCtx& ctx) -> Task<void> {
   co_await folly::coro::collectAllRange(std::move(tasks));
 }
 
-auto ToArrowFsOperator::find_partition(int64_t sk) -> Task<Option<Partition&>> {
+template <class Input>
+auto ToArrowFsOperator<Input>::find_partition(int64_t sk)
+  -> Task<Option<Partition&>> {
   auto guard = co_await state_.lock();
   auto it = guard->partitions.find(sk);
   if (it == guard->partitions.end()) {
@@ -974,8 +1058,9 @@ auto ToArrowFsOperator::find_partition(int64_t sk) -> Task<Option<Partition&>> {
   co_return it->second;
 }
 
-auto ToArrowFsOperator::open_stream(Partition& part,
-                                    diagnostic_handler& dh) const
+template <class Input>
+auto ToArrowFsOperator<Input>::open_stream(Partition& part,
+                                           diagnostic_handler& dh) const
   -> Task<failure_or<void>> {
   auto path = template_.fill_path(part.key);
   auto [parent, _] = arrow::fs::internal::GetAbstractPathParent(path);
@@ -1010,8 +1095,9 @@ auto ToArrowFsOperator::open_stream(Partition& part,
   co_return {};
 }
 
-auto ToArrowFsOperator::close_stream(Partition& part,
-                                     diagnostic_handler& dh) const
+template <class Input>
+auto ToArrowFsOperator<Input>::close_stream(Partition& part,
+                                            diagnostic_handler& dh) const
   -> Task<void> {
   if (not part.stream) {
     co_return;
@@ -1026,5 +1112,8 @@ auto ToArrowFsOperator::close_stream(Partition& part,
       .emit(dh);
   }
 }
+
+template class ToArrowFsOperator<table_slice>;
+template class ToArrowFsOperator<nova::Events>;
 
 } // namespace tenzir

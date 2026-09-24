@@ -1,0 +1,5 @@
+load_stdin
+read_json _batch_size=10
+original = p
+drop_null_fields p.n, p, p, missing
+write_json compact=true

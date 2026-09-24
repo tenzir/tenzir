@@ -1,0 +1,8 @@
+{
+  caf: null,
+  secrets: null,
+  token: null,
+  platform_token: null,
+  tenant_id: null,
+  api_key: null,
+}

@@ -1,3 +1,0 @@
-{
-  total_entries: 1000,
-}

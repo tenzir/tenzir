@@ -39,21 +39,31 @@ ShapeTable::ShapeTable() {
                            ShapeIds{empty_shape, {}});
 }
 
-auto ShapeTable::with_field(ShapeId id, storage::Index field) -> ShapeId {
+auto ShapeTable::with_field(ShapeId id, storage::Index field,
+                            FieldPosition position) -> ShapeId {
   TENZIR_ASSERT_LEQ_EXPENSIVE(0, id);
   TENZIR_ASSERT_LT_EXPENSIVE(id, static_cast<ShapeId>(nodes_.size()));
   auto& node = nodes_[static_cast<std::size_t>(id)];
-  if (auto const cached = node.add_edges.find(field); cached >= 0) {
+  auto& edges
+    = position == FieldPosition::front ? node.prepend_edges : node.add_edges;
+  if (auto const cached = edges.find(field); cached >= 0) {
     return cached;
   }
   if (std::ranges::find(node.fields, field) != node.fields.end()) {
-    node.add_edges.insert(field, id);
+    edges.insert(field, id);
     return id;
   }
   auto candidate = node.fields;
-  candidate.push_back(field);
+  if (position == FieldPosition::front) {
+    candidate.insert(candidate.begin(), field);
+  } else {
+    candidate.push_back(field);
+  }
   const auto new_id = find_or_add(std::move(candidate));
-  nodes_[static_cast<std::size_t>(id)].add_edges.insert(field, new_id);
+  auto& updated = nodes_[static_cast<std::size_t>(id)];
+  auto& updated_edges = position == FieldPosition::front ? updated.prepend_edges
+                                                         : updated.add_edges;
+  updated_edges.insert(field, new_id);
   nodes_[static_cast<std::size_t>(new_id)].remove_edges.insert(field, id);
   return new_id;
 }
@@ -78,7 +88,8 @@ auto ShapeTable::without_field(ShapeId id, storage::Index field) -> ShapeId {
   }
   const auto new_id = find_or_add(std::move(candidate));
   nodes_[static_cast<std::size_t>(id)].remove_edges.insert(field, new_id);
-  nodes_[static_cast<std::size_t>(new_id)].add_edges.insert(field, id);
+  // Removing an arbitrary field is not the inverse of appending or prepending.
+  // Let insertion compute the transition for its requested position.
   return new_id;
 }
 
@@ -149,8 +160,10 @@ auto ShapeTable::find_or_add(FieldsType candidate) -> ShapeId {
     }
   }
   const auto new_id = static_cast<ShapeId>(nodes_.size());
-  nodes_.push_back(ShapeNode{
-    .fields = std::move(candidate), .add_edges = {}, .remove_edges = {}});
+  nodes_.push_back(ShapeNode{.fields = std::move(candidate),
+                             .add_edges = {},
+                             .prepend_edges = {},
+                             .remove_edges = {}});
   auto [it, inserted] = ids_by_hash_.try_emplace(digest, ShapeIds{new_id, {}});
   if (not inserted) {
     it->second.overflow.push_back(new_id);

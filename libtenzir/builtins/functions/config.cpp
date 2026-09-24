@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/data.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -15,8 +16,30 @@ namespace tenzir::plugins::config {
 
 namespace {
 
-class plugin final : public virtual function_plugin {
+struct ConfigArgs {
+  ast::expression value;
+};
+
+struct ConfigFunction {
+  auto eval(ConfigArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return frame.eval(args.value);
+  }
+};
+
+class plugin final : public virtual nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ConfigArgs, ConfigFunction>{};
+    d.validate(
+      [this](ConfigArgs& args, diagnostic_handler&) -> failure_or<void> {
+        args.value
+          = ast::constant::make(located<data>{config_, location::unknown});
+        return {};
+      });
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "config";
   }

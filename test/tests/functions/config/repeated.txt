@@ -1,0 +1,8 @@
+{
+  x: 1,
+  nova: true,
+}
+{
+  x: 2,
+  nova: true,
+}

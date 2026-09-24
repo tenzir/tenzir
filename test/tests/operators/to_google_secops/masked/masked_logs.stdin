@@ -1,0 +1,4 @@
+{"keep":true,"text":"first","type":"A","ns":"one"}
+{"keep":false,"text":42,"type":false,"ns":null}
+{"keep":true,"text":"second","type":"B","ns":"two"}
+{"keep":true,"text":"third","type":"A","ns":"three"}

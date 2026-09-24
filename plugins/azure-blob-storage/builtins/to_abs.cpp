@@ -25,10 +25,11 @@ struct ToAzureBlobStorageArgs : ToArrowFsArgs {
   Option<located<record>> azure_auth;
 };
 
-class ToAzureBlobStorageOperator final : public ToArrowFsOperator {
+template <class Input>
+class ToAzureBlobStorageOperator final : public ToArrowFsOperator<Input> {
 public:
   explicit ToAzureBlobStorageOperator(ToAzureBlobStorageArgs args)
-    : ToArrowFsOperator{static_cast<ToArrowFsArgs&>(args)},
+    : ToArrowFsOperator<Input>{static_cast<ToArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -129,7 +130,9 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToAzureBlobStorageArgs, ToAzureBlobStorageOperator>{};
+    auto d = Describer<ToAzureBlobStorageArgs,
+                       ToAzureBlobStorageOperator<table_slice>,
+                       ToAzureBlobStorageOperator<nova::Events>>{};
     auto account_key_arg
       = d.named("account_key", &ToAzureBlobStorageArgs::account_key);
     auto azure_auth_arg

@@ -276,7 +276,7 @@ private:
         return size_t{4};
       } else if constexpr (std::same_as<T, time>) {
         return size_t{5};
-      } else if constexpr (std::same_as<T, std::string_view>) {
+      } else if constexpr (std::same_as<T, nova::String>) {
         return size_t{6};
       } else if constexpr (std::same_as<T, ip>) {
         return size_t{7};
@@ -287,7 +287,7 @@ private:
       } else if constexpr (std::same_as<T, nova::Record>) {
         return size_t{10};
       } else {
-        static_assert(std::same_as<T, blob_view>);
+        static_assert(std::same_as<T, nova::Blob>);
         return size_t{11};
       }
     });

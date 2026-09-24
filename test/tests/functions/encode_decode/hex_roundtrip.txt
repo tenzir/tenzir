@@ -1,0 +1,12 @@
+{
+  encoded: "68656C6C6F",
+  decoded: b"hello",
+}
+{
+  encoded: "68656C6C6F",
+  decoded: b"hello",
+}
+{
+  encoded: null,
+  decoded: null,
+}

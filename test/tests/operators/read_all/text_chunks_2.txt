@@ -1,0 +1,4 @@
+{
+  data: "hello",
+  schema: "tenzir.unknown",
+}

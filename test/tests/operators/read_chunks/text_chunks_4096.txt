@@ -1,0 +1,4 @@
+{
+  data: b"hello",
+  schema: "tenzir.chunk",
+}

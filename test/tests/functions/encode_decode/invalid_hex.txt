@@ -1,0 +1,10 @@
+warning: invalid hex encoding
+ --> tests/functions/encode_decode/invalid_hex.tql:2:16
+  |
+2 | y = decode_hex(x)
+  |                ~
+  |
+{
+  x: "!",
+  y: null,
+}

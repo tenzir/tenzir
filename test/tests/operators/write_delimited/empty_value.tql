@@ -1,0 +1,2 @@
+from {x: "a"}, {x: ""}, {x: "b"}
+write_delimited x, "|"

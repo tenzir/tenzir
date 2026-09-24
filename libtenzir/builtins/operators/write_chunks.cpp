@@ -13,6 +13,8 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/view3.hpp>
 
+#include "write_bytes.hpp"
+
 namespace tenzir::plugins::write_chunks {
 
 namespace {
@@ -34,14 +36,60 @@ struct WriteChunksArgs {
   location operator_location;
 };
 
-class WriteChunks final : public Operator<table_slice, chunk_ptr> {
+template <class Input>
+class WriteChunks final : public Operator<Input, chunk_ptr> {
 public:
   explicit WriteChunks(WriteChunksArgs args) : args_{std::move(args)} {
   }
 
-  auto process(table_slice slice, Push<chunk_ptr>& push, OpCtx& ctx)
+  auto process(Input input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto selected = select_field(slice, ctx);
+    if constexpr (std::same_as<Input, table_slice>) {
+      co_await process_arrow(std::move(input), push, ctx);
+    } else {
+      co_await process_nova(std::move(input), push, ctx);
+    }
+  }
+
+  auto process_nova(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> {
+    auto selected = Option<nova::MaskedArray<nova::Array<nova::Data>>>{};
+    if (args_.field.path().empty()) {
+      auto field = input.data.field("data");
+      if (not field or input.mask.and_not(field->present).any()) {
+        diagnostic::warning("expected a field named `data`")
+          .primary(args_.operator_location)
+          .emit(ctx);
+      }
+      if (field) {
+        selected = nova::MaskedArray{std::move(field->data),
+                                     input.mask & field->present};
+      }
+    } else {
+      selected = write_bytes::resolve_field(input, args_.field, ctx);
+    }
+    if (not selected) {
+      co_return;
+    }
+    for (auto row : nova::storage::true_bits(selected->present)) {
+      auto value = selected->data.get(row);
+      if (auto bytes = try_as<nova::RowView<nova::Blob>>(value)) {
+        co_await push(chunk::copy(**bytes));
+      } else if (not is<nova::RowView<nova::Null>>(value)) {
+        diagnostic::error("field has unsupported type `{}`",
+                          write_bytes::kind(value))
+          .primary(args_.operator_location)
+          .hint("`write_chunks` expects a field of type `blob`")
+          .emit(ctx);
+        co_return;
+      }
+    }
+    co_return;
+  }
+
+  auto process_arrow(table_slice slice, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> {
+    Option<series> selected = select_field(slice, ctx);
     if (not selected) {
       co_return;
     }
@@ -104,7 +152,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteChunksArgs, WriteChunks>{};
+    auto d = Describer<WriteChunksArgs, WriteChunks<table_slice>,
+                       WriteChunks<nova::Events>>{};
     d.optional_positional("field", &WriteChunksArgs::field, "field");
     d.operator_location(&WriteChunksArgs::operator_location);
     return d.without_optimize();

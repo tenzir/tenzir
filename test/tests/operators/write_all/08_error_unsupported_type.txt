@@ -1,4 +1,4 @@
-error: field has unsupported type `int64`
+error: field has unsupported type `int`
  --> tests/operators/write_all/08_error_unsupported_type.tql:7:13
   |
 7 |   write_all data

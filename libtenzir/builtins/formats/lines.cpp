@@ -16,6 +16,9 @@
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
@@ -153,14 +156,18 @@ struct ReadLinesArgs {
 };
 
 /// The read_lines operator using the new async execution API.
-/// Transforms chunk_ptr input into table_slice output by splitting on newlines.
-class ReadLines final : public Operator<chunk_ptr, table_slice> {
+/// Transforms bytes into events by splitting on newlines.
+template <class Output>
+class ReadLines final : public Operator<chunk_ptr, Output> {
+  using Builder
+    = std::conditional_t<std::same_as<Output, nova::Events>,
+                         nova::ArrayBuilder<nova::Record>, series_builder>;
+
 public:
   explicit ReadLines(ReadLinesArgs args) : args_{args} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await Operator<chunk_ptr, table_slice>::start(ctx);
     if (args_.jobs > 0) {
       auto capacity = static_cast<uint32_t>(args_.jobs * 2);
       read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
@@ -169,13 +176,14 @@ public:
         ctx.spawn_task(read_worker_loop(ctx.dh()));
       }
     }
+    co_return;
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
     if (args_.jobs > 0) {
       co_return co_await read_output_queue_->dequeue();
     } else {
-      co_await pusher_.wait();
+      co_await timeout_.wait();
       co_return {};
     }
   }
@@ -188,33 +196,36 @@ public:
                                            : OperatorState::normal;
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs > 0) {
-      auto slice = std::move(result).as<table_slice>();
-      if (slice.rows() == 0) {
+      auto slice = std::move(result).as<Option<Output>>();
+      if (not slice) {
         ++finished_workers_;
         co_return;
       }
-      co_await push(std::move(slice));
+      co_await push(std::move(*slice));
     } else {
-      co_await pusher_.push(builder_.yield_ready(TNAME), push);
+      co_await push_ready(push);
       co_return;
     }
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
+    if (not input or input->size() == 0) {
+      co_return;
+    }
     if (args_.jobs > 0) {
       co_await process_parallel(std::move(input));
     } else {
       process_sequential(std::move(input), ctx);
-      co_await pusher_.push(builder_.yield_ready(TNAME), push);
+      co_await push_ready(push);
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<Output>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     draining_ = true;
     if (args_.jobs > 0) {
@@ -240,8 +251,7 @@ public:
     co_return FinalizeBehavior::done;
   }
 
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto prepare_snapshot(Push<Output>& push, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs == 0) {
       co_await flush_non_parallel(push);
@@ -254,36 +264,45 @@ public:
   }
 
 private:
-  auto flush_non_parallel(Push<table_slice>& push) -> Task<void> {
+  static auto finish(Builder& builder) -> Output {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      auto data = builder.finish();
+      builder = Builder{};
+      auto const length = data.length();
+      return nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                          nova::Events::Meta::make_empty(length, TNAME)};
+    } else {
+      return builder.finish_assert_one_slice(TNAME);
+    }
+  }
+
+  auto push_ready(Push<Output>& push) -> Task<void> {
+    if (static_cast<uint64_t>(builder_.length())
+          >= defaults::import::table_slice_size
+        or timeout_.poll(builder_.length())) {
+      co_await flush_non_parallel(push);
+    }
+  }
+
+  auto flush_non_parallel(Push<Output>& push) -> Task<void> {
     if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+      auto output = finish(builder_);
+      timeout_.reset();
+      co_await push(std::move(output));
     }
   }
 
   auto emit_line(std::string_view line, OpCtx& ctx) -> void {
-    if (line.empty() and args_.skip_empty) {
-      return;
-    }
-    if (args_.binary) {
-      builder_.record().field("line", as_bytes(line));
-    } else {
-      if (not arrow::util::ValidateUTF8(line)) {
-        diagnostic::warning("got invalid UTF-8")
-          .hint("use `binary=true` if you are reading binary data")
-          .emit(ctx);
-        return;
-      }
-      builder_.record().field("line", line);
-    }
+    emit_line(line, ctx.dh(), builder_);
   }
 
   auto emit_line(std::string_view line, diagnostic_handler& dh,
-                 series_builder& builder) const -> void {
+                 Builder& builder) const -> void {
     if (line.empty() and args_.skip_empty) {
       return;
     }
     if (args_.binary) {
-      builder.record().field("line", as_bytes(line));
+      builder.record().field("line").data(blob_view{as_bytes(line)});
     } else {
       if (not arrow::util::ValidateUTF8(line)) {
         diagnostic::warning("got invalid UTF-8")
@@ -291,7 +310,7 @@ private:
           .emit(dh);
         return;
       }
-      builder.record().field("line", line);
+      builder.record().field("line").data(line);
     }
   }
 
@@ -423,7 +442,7 @@ private:
 
   /// Worker coroutine that splits lines on the CPU executor.
   auto read_worker_loop(diagnostic_handler& dh) const -> Task<void> {
-    auto builder = series_builder{};
+    auto builder = Builder{};
     try {
       while (true) {
         co_await folly::coro::co_reschedule_on_current_executor;
@@ -457,20 +476,16 @@ private:
         }
         // Yield ready results to the output queue.
         if (builder.length() > 0) {
-          for (auto& slice : builder.finish_as_table_slice("tenzir.line")) {
-            read_output_queue_->enqueue(std::move(slice));
-          }
+          read_output_queue_->enqueue(finish(builder));
         }
       }
     } catch (folly::OperationCancelled const&) {
     }
     // Finalize: flush remaining data.
     if (builder.length() > 0) {
-      for (auto& slice : builder.finish_as_table_slice("tenzir.line")) {
-        read_output_queue_->enqueue(std::move(slice));
-      }
+      read_output_queue_->enqueue(finish(builder));
     }
-    read_output_queue_->enqueue(table_slice{});
+    read_output_queue_->enqueue(None{});
   }
 
   constexpr static const auto TNAME = "tenzir.line";
@@ -479,7 +494,7 @@ private:
   /// The output queue is unbounded to avoid a theoretical deadlock where the
   /// main thread wants to push to a full input queue while all workers want to
   /// push to a full output queue.
-  using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
+  using ReadOutputQueue = folly::coro::UnboundedQueue<Option<Output>>;
 
   ReadLinesArgs args_;
   std::string buffer_;
@@ -487,8 +502,8 @@ private:
   bool draining_ = false;
   size_t finished_workers_ = 0;
   // Non-parallel mode state.
-  series_builder builder_;
-  SeriesPusher pusher_;
+  Builder builder_;
+  BatchTimeout timeout_{defaults::import::batch_timeout};
   // Parallel mode state.
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
@@ -503,7 +518,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadLinesArgs, ReadLines>{};
+    auto d = Describer<ReadLinesArgs, ReadLines<table_slice>,
+                       ReadLines<nova::Events>>{};
     d.named("binary", &ReadLinesArgs::binary);
     d.named("skip_empty", &ReadLinesArgs::skip_empty);
     auto jobs = d.named_optional("_jobs", &ReadLinesArgs::jobs);
@@ -530,7 +546,48 @@ struct WriteLinesArgs {
   }
 };
 
-class WriteLines final : public Operator<table_slice, chunk_ptr> {
+auto print_nova_value(nova::RowView<nova::Data> const& value,
+                      std::vector<char>& output, char separator, bool& first)
+  -> void {
+  auto const start = output.size();
+  if (not first) {
+    output.push_back(separator);
+  }
+  auto const printed = match(
+    value,
+    [](nova::RowView<nova::Null>) {
+      return false;
+    },
+    [&](nova::RowView<nova::Record> const& record) {
+      auto first_field = true;
+      for (auto const& [name, field] : record) {
+        print_nova_value(field, output, ' ', first_field);
+      }
+      return not first_field;
+    },
+    [&](nova::RowView<nova::List> const& list) {
+      auto first_element = true;
+      for (auto element : list) {
+        print_nova_value(element, output, ',', first_element);
+      }
+      return not first_element;
+    },
+    [&](auto scalar) {
+      auto out = std::back_inserter(output);
+      auto printer = lines_printer_impl::visitor{out};
+      auto const ok = printer(*scalar);
+      TENZIR_ASSERT(ok);
+      return true;
+    });
+  if (printed) {
+    first = false;
+  } else {
+    output.resize(start);
+  }
+}
+
+template <class Input>
+class WriteLines final : public Operator<Input, chunk_ptr> {
 public:
   explicit WriteLines(WriteLinesArgs args) : args_{args} {
   }
@@ -549,7 +606,7 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     if (args_.jobs == 0) {
-      co_return co_await Operator<table_slice, chunk_ptr>::await_task(dh);
+      co_return co_await Operator<Input, chunk_ptr>::await_task(dh);
     }
     co_return co_await write_output_queue_->dequeue();
   }
@@ -573,7 +630,7 @@ public:
     co_await push(std::move(next));
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+  auto process(Input input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs > 0) {
@@ -598,17 +655,25 @@ public:
   }
 
 private:
-  static auto print_slice(table_slice const& input) -> chunk_ptr {
-    auto printer = lines_printer_impl{};
+  static auto print_slice(Input const& input) -> chunk_ptr {
     auto buffer = std::vector<char>{};
-    auto out_iter = std::back_inserter(buffer);
-    auto resolved_slice = flatten(resolve_enumerations(input)).slice;
-    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-    for (auto const& row : values3(*array)) {
-      TENZIR_ASSERT(row);
-      auto const ok = printer.print_values(out_iter, *row);
-      TENZIR_ASSERT(ok);
-      out_iter = fmt::format_to(out_iter, "\n");
+    if constexpr (std::same_as<Input, nova::Events>) {
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        auto first = true;
+        print_nova_value(input.data.get(row), buffer, ' ', first);
+        buffer.push_back('\n');
+      }
+    } else {
+      auto printer = lines_printer_impl{};
+      auto out_iter = std::back_inserter(buffer);
+      auto resolved_slice = flatten(resolve_enumerations(input)).slice;
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+      for (auto const& row : values3(*array)) {
+        TENZIR_ASSERT(row);
+        auto const ok = printer.print_values(out_iter, *row);
+        TENZIR_ASSERT(ok);
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
     }
     return chunk::make(std::move(buffer),
                        chunk_metadata{.content_type = "text/plain"});
@@ -630,7 +695,7 @@ private:
     write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  using WriteInputQueue = folly::coro::BoundedQueue<Option<table_slice>>;
+  using WriteInputQueue = folly::coro::BoundedQueue<Option<Input>>;
   using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
   WriteLinesArgs args_;
@@ -647,7 +712,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteLinesArgs, WriteLines>{};
+    auto d = Describer<WriteLinesArgs, WriteLines<table_slice>,
+                       WriteLines<nova::Events>>{};
     auto jobs = d.named_optional("_jobs", &WriteLinesArgs::jobs);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and *j == 0) {

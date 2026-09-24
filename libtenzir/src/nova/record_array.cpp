@@ -3,7 +3,6 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
-#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova/storage.hpp"
 #include "tenzir/nova/union_array.hpp"
@@ -135,18 +134,55 @@ auto Array<Record>::get(storage::Index i) const -> RowView<Record> {
   });
 }
 
-auto Array<Record>::to_primary() const -> Array {
+namespace {
+
+auto share_field(storage::ConstantStorage<Record, RowView<Record>> const& owner,
+                 Data const& value) -> Array<Data> {
+  return match(value, [&]<class T>(T const& field) -> Array<Data> {
+    if constexpr (std::same_as<T, Null>) {
+      return Array<Null>{storage::NullStorage{owner.length()}};
+    } else if constexpr (std::same_as<T, Bool>) {
+      return Array<Bool>{storage::BitMap{owner.length(), field}};
+    } else {
+      return Array<T>{
+        owner.template alias<T, typename Type<T>::ViewType>(field)};
+    }
+  });
+}
+
+} // namespace
+
+auto Array<Record>::to_primary() const& -> Array {
   if (is<storage::RecordStorage>(storage())) {
     return *this;
   }
-  auto builder = ArrayBuilder<Record>{};
-  for (auto i = storage::Index{0}; i < length(); ++i) {
-    auto row = builder.record();
-    for (auto [name, value] : get(i)) {
-      append_row(row.field(name), value);
-    }
+  if (length() == 0) {
+    return Array{IndicesStorage{storage::DataOwner<storage::Index[]>{}},
+                 ShapeTable{}, Names{}, MaskedArrays{}};
   }
-  return builder.finish();
+  auto const& source
+    = as<storage::ConstantStorage<Record, RowView<Record>>>(storage());
+  auto names = Names{};
+  auto fields = MaskedArrays{};
+  auto shapes = ShapeTable{};
+  auto shape = ShapeTable::empty_shape;
+  for (auto const& [name, value] : source.value()) {
+    auto index = static_cast<storage::Index>(fields.size());
+    names.emplace(storage::String<>{name}, fields.size());
+    fields.push_back(
+      {share_field(source, value), storage::BitMap{length(), true}});
+    shape = shapes.with_field(shape, index);
+  }
+  auto rows = storage::DataOwner<storage::Index[]>::make_value(length(), shape);
+  return Array{IndicesStorage{std::move(rows)}, std::move(shapes),
+               std::move(names), std::move(fields)};
+}
+
+auto Array<Record>::to_primary() && -> Array {
+  if (is<storage::RecordStorage>(storage())) {
+    return std::move(*this);
+  }
+  return std::as_const(*this).to_primary();
 }
 
 auto Array<Record>::field(std::string_view name) const -> Option<MaskedArray> {
@@ -167,7 +203,7 @@ auto Array<Record>::field(std::string_view name) const -> Option<MaskedArray> {
       if (it == value.end()) {
         return None{};
       }
-      return MaskedArray{repeat(it->second, length()),
+      return MaskedArray{share_field(physical, it->second),
                          storage::BitMap{length(), true}};
     });
 }
@@ -286,15 +322,17 @@ auto Array<Record>::dangerously_extract_field(
   return std::move(primary().arrays[it->second]);
 }
 
-auto Array<Record>::with_field_overwrite(std::string_view name,
-                                         MaskedArray value) const& -> Array {
-  return as_unique().with_field_overwrite(name, std::move(value));
+auto Array<Record>::with_field_overwrite(
+  std::string_view name, MaskedArray value,
+  FieldPosition position) const& -> Array {
+  return as_unique().with_field_overwrite(name, std::move(value), position);
 }
 
 auto Array<Record>::with_field_overwrite(std::string_view name,
-                                         MaskedArray value) && -> Array {
+                                         MaskedArray value,
+                                         FieldPosition position) && -> Array {
   if (not is<storage::RecordStorage>(storage())) {
-    return to_primary().with_field_overwrite(name, std::move(value));
+    return to_primary().with_field_overwrite(name, std::move(value), position);
   }
   *this = std::move(*this).as_unique();
   const auto it = primary().names.find(name);
@@ -304,8 +342,8 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
     const auto existing_index = static_cast<storage::Index>(it->second);
     primary().shape_indices = rewrite_shape_indices(
       std::move(primary().shape_indices), primary().shape_table, value.present,
-      [existing_index](ShapeTable& table, ShapeTable::ShapeId id) {
-        return table.with_field(id, existing_index);
+      [existing_index, position](ShapeTable& table, ShapeTable::ShapeId id) {
+        return table.with_field(id, existing_index, position);
       });
     primary().arrays[it->second] = std::move(value);
     return std::move(*this);
@@ -319,8 +357,8 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
   primary().names_by_index.push_back(inserted->first);
   primary().shape_indices = rewrite_shape_indices(
     std::move(primary().shape_indices), primary().shape_table, mask,
-    [new_index](ShapeTable& table, ShapeTable::ShapeId id) {
-      return table.with_field(id, new_index);
+    [new_index, position](ShapeTable& table, ShapeTable::ShapeId id) {
+      return table.with_field(id, new_index, position);
     });
   return std::move(*this);
 }

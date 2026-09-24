@@ -619,7 +619,8 @@ public:
         std::move(input.data), cfg_.count_field->path(),
         {nova::Array<nova::Data>{
            nova::Array<nova::Int>{std::move(counts).finish()}},
-         input.mask});
+         input.mask},
+        ctx.dh());
     }
     co_await push(std::move(input));
   }

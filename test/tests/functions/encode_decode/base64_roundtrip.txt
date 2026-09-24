@@ -1,0 +1,12 @@
+{
+  encoded: "aGVsbG8=",
+  decoded: b"hello",
+}
+{
+  encoded: "aGVsbG8=",
+  decoded: b"hello",
+}
+{
+  encoded: null,
+  decoded: null,
+}

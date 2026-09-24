@@ -1,0 +1,5 @@
+from {data: b""}
+write_all data
+split_bytes 4096
+read_all
+schema = @name

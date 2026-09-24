@@ -414,8 +414,8 @@ TEST("split propagates null silently and warns once for a non-string row") {
   REQUIRE(lists->present.get(0));
   auto pieces = lists->data.get(0);
   REQUIRE_EQUAL(pieces.length(), 2);
-  CHECK_EQUAL(*as<RowView<std::string_view>>(pieces.get(0)), "a");
-  CHECK_EQUAL(*as<RowView<std::string_view>>(pieces.get(1)), "b");
+  CHECK_EQUAL(*as<RowView<String>>(pieces.get(0)), "a");
+  CHECK_EQUAL(*as<RowView<String>>(pieces.get(1)), "b");
   CHECK(is_null_at(result, 1));
   CHECK(is_null_at(result, 2));
   auto diags = std::move(dh).collect();

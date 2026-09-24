@@ -31,7 +31,7 @@ auto stringify_row(RowView<Data> const& row, json_printer& printer)
   -> std::string_view {
   return match(
     row,
-    [](RowView<std::string_view> value) -> std::string_view {
+    [](RowView<String> value) -> std::string_view {
       return *value;
     },
     [&](auto const&) -> std::string_view {

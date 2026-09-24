@@ -492,7 +492,8 @@ public:
                                        field.rhs_location, ctx.dh());
         continue;
       }
-      data = nova::assign_nested_field(std::move(data), path, std::move(value));
+      data = nova::assign_nested_field(std::move(data), path, std::move(value),
+                                       ctx.dh());
     }
     co_await push(std::move(input));
   }

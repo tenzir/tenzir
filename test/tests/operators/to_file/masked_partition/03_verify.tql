@@ -1,0 +1,1 @@
+from_file env("FILE_ROOT") + "/out/masked/region=eu/events.json" { read_json }

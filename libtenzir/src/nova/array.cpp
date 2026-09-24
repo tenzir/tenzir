@@ -100,9 +100,9 @@ auto hash(const RowView<Data>& row) noexcept -> std::size_t {
       return tenzir::hash(category::record, combined, size);
     } else {
       constexpr auto tag = [] {
-        if constexpr (std::same_as<V, std::string_view>) {
+        if constexpr (std::same_as<V, String>) {
           return category::string;
-        } else if constexpr (std::same_as<V, BlobView>) {
+        } else if constexpr (std::same_as<V, Blob>) {
           return category::blob;
         } else if constexpr (std::same_as<V, Ip>) {
           return category::ip;

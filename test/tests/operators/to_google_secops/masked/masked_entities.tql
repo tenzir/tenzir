@@ -1,0 +1,6 @@
+load_stdin
+read_json
+where keep
+drop keep
+to_google_secops _dry_run=true, project="PROJECT", region="us",
+  instance="INSTANCE", mode="udm_entity", log_type="ASSET"

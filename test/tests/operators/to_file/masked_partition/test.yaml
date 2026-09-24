@@ -1,0 +1,3 @@
+suite: to-file-masked-partition
+fixtures: [local_files]
+timeout: 30

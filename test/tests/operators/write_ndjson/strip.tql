@@ -1,0 +1,2 @@
+from {a: null, b: [], c: {}, d: [null, 1], records: [{}, {x: 1}], lists: [[], [1]], e: {x: null, y: 2}}
+write_ndjson strip=true

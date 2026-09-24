@@ -24,9 +24,9 @@ auto Array<Tag>::length() const noexcept -> storage::Index {
 }
 
 template <fundamental_type Tag>
-auto Array<Tag>::get(storage::Index i) const -> RowView<ViewType> {
+auto Array<Tag>::get(storage::Index i) const -> RowView<Tag> {
   return match(storage_, [i](const auto& storage) {
-    return RowView<ViewType>{static_cast<ViewType>(storage.get(i))};
+    return RowView<Tag>{static_cast<ViewType>(storage.get(i))};
   });
 }
 

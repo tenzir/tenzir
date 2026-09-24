@@ -4,6 +4,7 @@ warning: expected `string`, got `null`
 9 |                         payload=message?,
   |                                 ~~~~~~~
   |
+  = note: skipping invalid payload
 
 warning: skipping log without a payload
  --> tests/operators/to_google_cloud_logging/mixed_payload/01_send.tql:9:33

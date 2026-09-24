@@ -1,0 +1,4 @@
+from {x: "hello"}, {x: b"hello"}, {x: null}
+encoded = encode_base64(x)
+decoded = decode_base64(encoded)
+drop x

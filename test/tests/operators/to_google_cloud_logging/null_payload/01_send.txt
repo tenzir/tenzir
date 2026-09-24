@@ -4,6 +4,7 @@ warning: expected `string`, got `null`
 9 |                         payload=missing_field?,
   |                                 ~~~~~~~~~~~~~
   |
+  = note: skipping invalid payload
 
 warning: skipping log without a payload
  --> tests/operators/to_google_cloud_logging/null_payload/01_send.tql:9:33

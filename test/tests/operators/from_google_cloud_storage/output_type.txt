@@ -1,0 +1,1 @@
+output types and validation: ok

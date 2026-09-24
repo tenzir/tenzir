@@ -1,0 +1,7 @@
+load_stdin
+read_json
+where keep
+drop keep
+to_google_cloud_logging log_id="masked", project="test-project",
+  resource_type=kind, resource_labels=labels,
+  service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS"))

@@ -1,0 +1,12 @@
+{
+  encoded: "Cn8eVZg",
+  decoded: b"hello",
+}
+{
+  encoded: "Cn8eVZg",
+  decoded: b"hello",
+}
+{
+  encoded: null,
+  decoded: null,
+}

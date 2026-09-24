@@ -1,0 +1,9 @@
+---
+error: true
+runner: dump-plan
+---
+
+from {x: 1}
+to_file "/tmp/test.json" {
+  pass
+}

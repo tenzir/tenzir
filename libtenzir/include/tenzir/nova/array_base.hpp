@@ -27,15 +27,17 @@ class ErasedArray;
 template <class T>
 class RowView {
 public:
-  explicit RowView(T value) : value_{std::move(value)} {
+  using ViewType = typename Type<T>::ViewType;
+
+  explicit RowView(ViewType value) : value_{std::move(value)} {
   }
 
-  auto operator*() const -> T const& {
+  auto operator*() const -> ViewType const& {
     return value_;
   }
 
 private:
-  T value_;
+  ViewType value_;
 };
 
 template <class Array>

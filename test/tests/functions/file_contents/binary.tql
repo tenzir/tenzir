@@ -1,0 +1,4 @@
+let $path = env("TENZIR_INPUTS") + "/file-contents/invalid-utf8.bin"
+from {}
+value = file_contents($path, binary=true)
+write_ndjson

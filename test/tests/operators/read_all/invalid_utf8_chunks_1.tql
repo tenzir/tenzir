@@ -1,0 +1,5 @@
+from {data: b"\xff"}
+write_all data
+split_bytes 1
+read_all
+schema = @name

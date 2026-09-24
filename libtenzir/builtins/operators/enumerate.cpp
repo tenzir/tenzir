@@ -10,6 +10,12 @@
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -20,8 +26,9 @@
 #include <arrow/type.h>
 #include <tsl/robin_map.h>
 
-#include <type_traits>
+#include <algorithm>
 #include <utility>
+#include <vector>
 
 namespace tenzir::plugins::enumerate {
 
@@ -45,12 +52,10 @@ struct EnumerateArgs {
 
 using GroupMap = tsl::robin_map<data, int64_t>;
 
-auto find_group(GroupMap& groups, data_view3 const value)
-  -> GroupMap::iterator {
-  auto key = materialize(value);
+auto find_group(GroupMap& groups, data key) -> GroupMap::iterator {
   auto it = groups.find(key);
   match(
-    value,
+    key,
     [&]<class T>(T const& x)
       requires concepts::integer<T>
     {
@@ -79,7 +84,7 @@ public:
     if (args_.group) {
       for (auto const& result : eval(*args_.group, input, ctx)) {
         for (auto const& value : result.values()) {
-          auto it = find_group(groups_, value);
+          auto it = find_group(groups_, materialize(value));
           check(builder->Append(it.value()++));
         }
       }
@@ -105,6 +110,62 @@ private:
   GroupMap groups_;
 };
 
+class EnumerateNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit EnumerateNova(EnumerateArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (args_.out.path().empty()) {
+      diagnostic::error("enumerate output must be a field path")
+        .primary(args_.out)
+        .emit(ctx);
+      co_return;
+    }
+    if (args_.group) {
+      auto evaluator = nova::Evaluator::make(
+        std::move(*args_.group), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        co_return;
+      }
+      group_.emplace(std::move(*evaluator));
+    }
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto builder = nova::ArrayBuilder<nova::Int>{};
+    auto keys = Option<nova::Array<nova::Data>>{};
+    if (group_) {
+      keys = group_->eval(input, nova::EvalCtx{ctx.dh()});
+    }
+    nova::storage::for_each_true(input.mask, [&](auto row) {
+      builder.skip_n(row - builder.length());
+      auto& counter
+        = keys ? find_group(groups_, nova::materialize(keys->get(row))).value()
+               : next_id_;
+      builder.data(counter++);
+    });
+    builder.skip_n(input.length() - builder.length());
+    input.data
+      = nova::assign_nested_field(std::move(input.data), args_.out.path(),
+                                  {builder.finish(), input.mask}, ctx.dh(),
+                                  nova::FieldPosition::front);
+    co_await push(std::move(input));
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("next_id", next_id_);
+    serde("groups", groups_);
+  }
+
+private:
+  EnumerateArgs args_;
+  Option<nova::Evaluator> group_;
+  int64_t next_id_ = 0;
+  GroupMap groups_;
+};
+
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -112,7 +173,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<EnumerateArgs, Enumerate>{};
+    auto d = Describer<EnumerateArgs, Enumerate, EnumerateNova>{};
     auto out = d.optional_positional("out", &EnumerateArgs::out);
     auto group = d.named("group", &EnumerateArgs::group, "any");
     // `enumerate` numbers events by arrival order (per group). Predicates

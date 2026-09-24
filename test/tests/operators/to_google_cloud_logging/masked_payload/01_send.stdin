@@ -1,0 +1,3 @@
+{"keep":true,"id":1,"kind":"global","labels":{"host":"one"},"empty_record":{},"empty_list":[]}
+{"keep":false,"id":2,"kind":false,"labels":42}
+{"keep":true,"id":3,"kind":"generic_node","labels":{"host":"three"},"empty_record":{},"empty_list":[]}

@@ -4,6 +4,7 @@ warning: expected `string`, got `null`
 10 |                         resource_type=rt,
    |                                       ~~
    |
+   = note: skipping invalid resource_type
 
 warning: defaulting `null` resource to `global`
   --> tests/operators/to_google_cloud_logging/null_resource_type/01_send.tql:10:39

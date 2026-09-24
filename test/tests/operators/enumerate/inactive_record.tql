@@ -1,0 +1,6 @@
+// The record alternative retains q's backing values at the scalar row.
+load_stdin
+read_json _batch_size=10
+p = q if i == 0 else 5
+enumerate p.n
+write_json compact=true

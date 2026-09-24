@@ -18,6 +18,11 @@
 
 namespace tenzir::nova {
 
+enum class FieldPosition {
+  front,
+  back,
+};
+
 class ShapeTable {
 public:
   using ShapeId = storage::Index;
@@ -26,7 +31,8 @@ public:
 
   ShapeTable();
 
-  auto with_field(ShapeId id, storage::Index field) -> ShapeId;
+  auto with_field(ShapeId id, storage::Index field,
+                  FieldPosition position = FieldPosition::back) -> ShapeId;
   auto without_field(ShapeId id, storage::Index field) -> ShapeId;
   auto without_fields(ShapeId id, std::span<const storage::Index> fields)
     -> ShapeId;
@@ -55,6 +61,7 @@ private:
   struct ShapeNode {
     FieldsType fields;
     EdgeCache add_edges;
+    EdgeCache prepend_edges;
     EdgeCache remove_edges;
   };
 

@@ -1,0 +1,4 @@
+from {x: "hello"}, {x: b"hello"}, {x: null}
+encoded = encode_url(x)
+decoded = decode_url(encoded)
+drop x

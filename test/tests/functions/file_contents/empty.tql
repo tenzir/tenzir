@@ -1,0 +1,6 @@
+---
+error: true
+---
+let $path = env("TENZIR_INPUTS") + "/empty-file.txt"
+from {}
+value = file_contents($path)

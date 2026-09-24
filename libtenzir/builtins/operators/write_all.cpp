@@ -16,6 +16,8 @@
 
 #include <string_view>
 
+#include "write_bytes.hpp"
+
 namespace tenzir::plugins::write_all {
 
 namespace {
@@ -36,13 +38,56 @@ auto emit_resolve_error(resolve_error const& err, diagnostic_handler& dh)
                    });
 }
 
-class WriteAll final : public Operator<table_slice, chunk_ptr> {
+template <class Input>
+class WriteAll final : public Operator<Input, chunk_ptr> {
 public:
   explicit WriteAll(WriteAllArgs args) : args_{std::move(args)} {
   }
 
-  auto process(table_slice slice, Push<chunk_ptr>&, OpCtx& ctx)
+  auto process(Input input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
+    if constexpr (std::same_as<Input, table_slice>) {
+      co_await process_arrow(std::move(input), push, ctx);
+    } else {
+      co_await process_nova(std::move(input), push, ctx);
+    }
+  }
+
+  auto process_nova(nova::Events input, Push<chunk_ptr>&, OpCtx& ctx)
+    -> Task<void> {
+    auto selected = write_bytes::resolve_field(input, args_.field, ctx);
+    if (not selected) {
+      co_return;
+    }
+    for (auto row : nova::storage::true_bits(selected->present)) {
+      auto value = selected->data.get(row);
+      auto invalid = false;
+      match(
+        value, [](nova::RowView<nova::Null>) {},
+        [&](nova::RowView<nova::String> text) {
+          auto bytes = as_bytes(*text);
+          buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+        },
+        [&](nova::RowView<nova::Blob> bytes) {
+          buffer_.insert(buffer_.end(), (*bytes).begin(), (*bytes).end());
+        },
+        [&](auto const&) {
+          invalid = true;
+          diagnostic::error("field has unsupported type `{}`",
+                            write_bytes::kind(value))
+            .primary(args_.field)
+            .hint("`write_all` supports `string` and `blob` fields")
+            .emit(ctx);
+        });
+      if (invalid) {
+        co_return;
+      }
+    }
+    co_return;
+  }
+
+  auto process_arrow(table_slice slice, Push<chunk_ptr>&, OpCtx& ctx)
+    -> Task<void> {
     auto resolved = resolve(args_.field, slice);
     if (auto* error = std::get_if<resolve_error>(&resolved)) {
       emit_resolve_error(*error, ctx);
@@ -103,7 +148,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteAllArgs, WriteAll>{};
+    auto d
+      = Describer<WriteAllArgs, WriteAll<table_slice>, WriteAll<nova::Events>>{};
     auto field = d.positional("field", &WriteAllArgs::field, "field");
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto value = ctx.get(field);

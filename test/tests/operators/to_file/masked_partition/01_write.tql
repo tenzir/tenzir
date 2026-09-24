@@ -1,0 +1,7 @@
+load_stdin
+read_json
+where keep
+drop keep
+to_file env("FILE_ROOT") + "/out/masked/**/events.json", partition_by=[region] {
+  write_ndjson
+}

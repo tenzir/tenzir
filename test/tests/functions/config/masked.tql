@@ -1,0 +1,4 @@
+from {x: 1}, {x: 2}
+where x == 2
+cfg = config()
+this = {x: x, nova: cfg.tenzir.nova}

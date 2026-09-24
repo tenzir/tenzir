@@ -32,11 +32,12 @@ struct FromGoogleCloudStorageArgs : FromArrowFsArgs {
   bool anonymous = false;
 };
 
+template <class Output>
 class FromGoogleCloudStorageOperator final
-  : public FromArrowFsOperator<table_slice> {
+  : public FromArrowFsOperator<Output> {
 public:
   explicit FromGoogleCloudStorageOperator(FromGoogleCloudStorageArgs args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<Output>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -130,15 +131,46 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<FromGoogleCloudStorageArgs, FromGoogleCloudStorageOperator>{};
+    auto d = Describer<FromGoogleCloudStorageArgs,
+                       FromGoogleCloudStorageOperator<table_slice>,
+                       FromGoogleCloudStorageOperator<nova::Events>>{};
     d.named("anonymous", &FromGoogleCloudStorageArgs::anonymous);
-    FromArrowFsArgs::describe_to(d);
+    auto pipe_arg = FromArrowFsArgs::describe_to(d);
     // Instances split the discovered files among themselves by path. We cannot
     // restrict this to globbing URLs because `url` is a secret that is only
     // resolved at runtime; instances that end up without files simply finish
     // immediately.
     d.parallelizable();
+    // The byte subpipeline determines whether this source emits Arrow or Nova.
+    d.spawner(
+      [pipe_arg]<class Input>(DescribeCtx& ctx)
+        -> failure_or<Option<SpawnWith<FromGoogleCloudStorageArgs, Input>>> {
+        if constexpr (not std::same_as<Input, void>) {
+          return {};
+        } else {
+          TRY(auto pipe, ctx.get(pipe_arg));
+          TRY(auto output, pipe.inner.infer_type(tag_v<chunk_ptr>, ctx));
+          return match(
+            output,
+            [](tag<nova::Events>)
+              -> Option<SpawnWith<FromGoogleCloudStorageArgs, Input>> {
+              return SpawnWith<FromGoogleCloudStorageArgs, void>{
+                [](FromGoogleCloudStorageArgs args)
+                  -> Box<Operator<void, nova::Events>> {
+                  return FromGoogleCloudStorageOperator<nova::Events>{
+                    std::move(args)};
+                }};
+            },
+            [](auto) -> Option<SpawnWith<FromGoogleCloudStorageArgs, Input>> {
+              return SpawnWith<FromGoogleCloudStorageArgs, void>{
+                [](FromGoogleCloudStorageArgs args)
+                  -> Box<Operator<void, table_slice>> {
+                  return FromGoogleCloudStorageOperator<table_slice>{
+                    std::move(args)};
+                }};
+            });
+        }
+      });
     return d.without_optimize();
   }
 };

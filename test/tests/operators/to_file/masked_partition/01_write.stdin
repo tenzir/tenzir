@@ -1,0 +1,4 @@
+{"keep":true,"id":1,"region":"us","payload":{"a":1}}
+{"keep":false,"id":2,"region":"excluded","payload":null}
+{"keep":true,"id":3,"region":"eu","payload":[1,2]}
+{"keep":true,"id":4,"region":"us","payload":{"b":"last"}}

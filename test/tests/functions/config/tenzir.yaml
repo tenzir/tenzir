@@ -1,0 +1,9 @@
+tenzir:
+  nova: true
+  secrets:
+    regression-secret: must-not-be-exposed
+  token: tnz_testonlymustnotbeexposed
+plugins:
+  platform:
+    tenant-id: must-not-be-exposed
+    api-key: must-not-be-exposed

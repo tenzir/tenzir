@@ -10,6 +10,8 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -21,8 +23,59 @@ namespace tenzir::plugins::abs {
 
 namespace {
 
-class abs final : public function_plugin {
+struct AbsArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+struct AbsFunction {
+  auto eval(AbsArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto integer_overflow = nova::WarnOnce{};
+    auto duration_overflow = nova::WarnOnce{};
+    return nova::apply_kernel<1>(
+      frame, "abs", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<nova::Int> {
+          return None{};
+        },
+        [](diagnostic_handler&, nova::UInt v) -> Option<nova::UInt> {
+          return v;
+        },
+        [](diagnostic_handler&, nova::Float v) -> Option<nova::Float> {
+          return std::abs(v);
+        },
+        [&](diagnostic_handler& dh, nova::Int v) -> Option<nova::Int> {
+          if (v == std::numeric_limits<nova::Int>::lowest()) {
+            integer_overflow(
+              dh,
+              diagnostic::warning("integer overflow").primary(args.x.source));
+            return None{};
+          }
+          return std::abs(v);
+        },
+        [&](diagnostic_handler& dh,
+            nova::Duration v) -> Option<nova::Duration> {
+          if (v.count() == std::numeric_limits<nova::Duration::rep>::lowest()) {
+            duration_overflow(
+              dh,
+              diagnostic::warning("duration overflow").primary(args.x.source));
+            return None{};
+          }
+          return nova::Duration{std::abs(v.count())};
+        }});
+  }
+};
+
+class abs final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<AbsArgs, AbsFunction>{};
+    d.positional("x", &AbsArgs::x, "duration|number");
+    d.call_location(&AbsArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "abs";
   }

@@ -1,0 +1,6 @@
+error: type `null` has no field `x`
+ --> tests/operators/write_all/null_parent.tql:5:13
+  |
+5 | write_all p.x
+  |             ^
+  |
