@@ -579,6 +579,32 @@ TEST("bitwise functions reject bool and float only on active rows") {
   }
 }
 
+TEST("blob preserves bytes and nulls and ignores masked invalid inputs") {
+  auto bytes = std::string{"\0\xff", 2};
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::string_view{bytes});
+  builder.record().field("x").data(blob_view{as_bytes(bytes)});
+  builder.record().field("x").null();
+  builder.record().field("x").data(Int{42});
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("blob", {root_field("x")}), events,
+                       bitmap({true, true, true, invalid_active}), dh);
+    auto blobs = result.get_alternative<Blob>();
+    REQUIRE(blobs);
+    for (auto row : {0, 1}) {
+      CHECK(blobs->present.get(row));
+      CHECK_EQUAL(*blobs->data.get(row), blob_view{as_bytes(bytes)});
+    }
+    CHECK(is_null_at(result, 2));
+    if (invalid_active) {
+      CHECK(is_null_at(result, 3));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+  }
+}
+
 TEST("type_of reports null as a type and does not inspect inactive rows") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").null();
