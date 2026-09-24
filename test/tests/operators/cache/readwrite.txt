@@ -1,9 +1,2 @@
-{
-  x: 1,
-}
-{
-  x: 2,
-}
-{
-  x: 3,
-}
+error: `cache` is only available in node pipelines
+  = note: launch the pipeline on the node instead of running it from a client

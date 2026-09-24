@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "cache/cache2.hpp"
+
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/fetch_node.hpp>
@@ -18,6 +20,8 @@
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/node.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -398,11 +402,18 @@ public:
     : self_{self}, max_bytes_{max_events} {
   }
 
+  ~cache_manager() {
+    cache2::shutdown();
+  }
+
   auto make_behavior() -> cache_manager_actor::behavior_type {
     // Every 30 seconds, we check the total size of all caches, and evict the
     // oldest if we've gone over the limit.
     detail::weak_run_delayed_loop(self_, std::chrono::seconds{30}, [this] {
       check_total_size();
+    });
+    detail::weak_run_delayed_loop(self_, std::chrono::milliseconds{100}, [] {
+      cache2::expire();
     });
     return {
       [this](atom::get, std::string id,
@@ -543,20 +554,6 @@ private:
 };
 
 // -- new async executor operators ---------------------------------------------
-
-struct CacheArgs {
-  std::string id;
-  Option<located<uint64_t>> capacity;
-  Option<located<duration>> read_timeout;
-  Option<located<duration>> write_timeout;
-
-  friend auto inspect(auto& f, CacheArgs& x) -> bool {
-    return f.object(x).fields(f.field("id", x.id),
-                              f.field("capacity", x.capacity),
-                              f.field("read_timeout", x.read_timeout),
-                              f.field("write_timeout", x.write_timeout));
-  }
-};
 
 class WriteCacheSink final : public Operator<table_slice, void> {
 public:
@@ -968,7 +965,7 @@ public:
     -> failure_or<element_type_tag> override {
     TRY(auto mode, resolve_mode(dh));
     if (mode == "write") {
-      if (input.is_not<table_slice>()) {
+      if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
         diagnostic::error("`cache mode=\"write\"` expects events as input")
           .primary(op_loc_)
           .emit(dh);
@@ -983,16 +980,19 @@ public:
           .emit(dh);
         return failure::promise();
       }
+      if (nova_enabled()) {
+        return tag_v<nova::Events>;
+      }
       return tag_v<table_slice>;
     }
     TENZIR_ASSERT(mode == "readwrite");
-    if (input.is_not<table_slice>()) {
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`cache` expects events as input")
         .primary(op_loc_)
         .emit(dh);
       return failure::promise();
     }
-    return tag_v<table_slice>;
+    return input;
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -1103,14 +1103,23 @@ public:
     TENZIR_ASSERT(mode);
     auto args = *args_resolved_;
     if (*mode == "write") {
+      if (input.is<nova::Events>()) {
+        return cache2::make_write(std::move(args));
+      }
       TENZIR_ASSERT(input.is<table_slice>());
       return WriteCacheSink{std::move(args)}.with_name("cache");
     }
     if (*mode == "read") {
       TENZIR_ASSERT(input.is<void>());
+      if (nova_enabled()) {
+        return cache2::make_read(std::move(args));
+      }
       return ReadCacheSource{std::move(args)}.with_name("cache");
     }
     TENZIR_ASSERT(*mode == "readwrite");
+    if (input.is<nova::Events>()) {
+      return cache2::make_readwrite(std::move(args));
+    }
     TENZIR_ASSERT(input.is<table_slice>());
     return CacheReadwrite{std::move(args)}.with_name("cache");
   }
@@ -1156,6 +1165,7 @@ public:
       return diagnostic::error("cache capacity must be at least 64 MiB")
         .to_error();
     }
+    cache2::configure(cache_capacity_);
     return {};
   }
 

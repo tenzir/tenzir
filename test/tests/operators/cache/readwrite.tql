@@ -1,5 +1,8 @@
-// In the default `readwrite` mode, `cache` writes its input into the named
-// cache and then replays it downstream, so the pipeline behaves transparently.
+---
+error: true
+---
+// Nova caches live in the node process, so this client pipeline must fail
+// instead of creating a process-local cache.
 from {x: 2}, {x: 1}, {x: 3}
 cache "readwrite-roundtrip"
 sort x

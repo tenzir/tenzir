@@ -20,8 +20,6 @@
 namespace tenzir::nova {
 
 struct Events {
-  Array<Record> data;
-  storage::BitMap mask;
   struct Meta {
     Array<String> name;
     Array<Time> import_time;
@@ -32,7 +30,11 @@ struct Events {
     /// a constant, so this costs one allocation regardless of `length`.
     static auto make_empty(storage::Index length, std::string_view name
                                                   = "tenzir.unknown") -> Meta;
-  } meta;
+  };
+
+  Array<Record> data;
+  storage::BitMap mask;
+  Meta meta;
 
   /// The physical number of rows in `data` and `mask`.
   auto length() const noexcept -> storage::Index {
