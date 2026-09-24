@@ -1,0 +1,13 @@
+// Uses explicit expressions, heterogeneous events, and masked input rows.
+from {pri: {f: 4, s: 2}, host: "a", text: "first", keep: true},
+{pri: {f: 30, s: 30}, host: "b", text: "skipped", keep: false},
+{pri: {f: uint(16), s: uint(0)}, host: "c", text: "third", keep: true},
+{pri: {f: null, s: null}, text: "fourth", extra: 1, keep: true}
+where keep
+to_stdout {
+  write_syslog facility=pri.f,
+               severity=pri.s,
+               hostname=host,
+               app_name="app",
+               message=f"{text}!"
+}

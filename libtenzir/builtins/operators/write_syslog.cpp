@@ -10,16 +10,23 @@
 
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/eval_as.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 
+#include <array>
 #include <chrono>
 #include <ranges>
+#include <set>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include "write_bytes.hpp"
 
 namespace tenzir::plugins::write_syslog {
 
@@ -220,6 +227,311 @@ private:
   WriteSyslogArgs args_;
 };
 
+/// One evaluated argument of a batch. Warns about unexpected types at most
+/// once per type and about `null` at most once, if the argument has a default.
+class SyslogColumn {
+public:
+  SyslogColumn(std::string_view name, ast::expression const& expr,
+               nova::Array<nova::Data> values, Option<uint64_t> fallback)
+    : name_{name},
+      expr_{expr},
+      values_{std::move(values)},
+      fallback_{fallback} {
+  }
+
+  /// Returns the value at `row` if it has type `T`, and `None` otherwise.
+  template <class T>
+  auto get(nova::storage::Index row, diagnostic_handler& dh)
+    -> Option<typename nova::Type<T>::ViewType> {
+    using Result = Option<typename nova::Type<T>::ViewType>;
+    auto value = values_.get(row);
+    return match(
+      value,
+      [&](nova::RowView<nova::Null>) -> Result {
+        warn_null(dh);
+        return None{};
+      },
+      [](nova::RowView<T> const& x) -> Result {
+        if constexpr (nova::structured_type<T>) {
+          return x;
+        } else {
+          return *x;
+        }
+      },
+      [&](auto const&) -> Result {
+        warn_type(nova::Type<T>::static_name, write_bytes::kind(value), dh);
+        return None{};
+      });
+  }
+
+  /// Returns the value at `row` as an unsigned integer, accepting
+  /// non-negative signed integers as well.
+  auto get_uint(nova::storage::Index row, diagnostic_handler& dh) -> uint64_t {
+    TENZIR_ASSERT(fallback_);
+    auto value = values_.get(row);
+    return match(
+      value,
+      [&](nova::RowView<nova::Null>) {
+        warn_null(dh);
+        return *fallback_;
+      },
+      [](nova::RowView<nova::UInt> x) {
+        return *x;
+      },
+      [&](nova::RowView<nova::Int> x) {
+        if (*x < 0) {
+          if (not std::exchange(warned_overflow_, true)) {
+            diagnostic::warning("overflow in `{}`, got `{}`", name_, *x)
+              .primary(expr_.get())
+              .note("defaulting to `{}`", *fallback_)
+              .emit(dh);
+          }
+          return *fallback_;
+        }
+        return static_cast<uint64_t>(*x);
+      },
+      [&](auto const&) {
+        warn_type("int", write_bytes::kind(value), dh);
+        return *fallback_;
+      });
+  }
+
+  auto name() const -> std::string_view {
+    return name_;
+  }
+
+  auto expr() const -> ast::expression const& {
+    return *expr_;
+  }
+
+private:
+  auto warn_null(diagnostic_handler& dh) -> void {
+    if (not fallback_ or std::exchange(warned_null_, true)) {
+      return;
+    }
+    diagnostic::warning("`{}` evaluated to `null`", name_)
+      .primary(expr_.get())
+      .note("defaulting to `{}`", *fallback_)
+      .emit(dh);
+  }
+
+  auto warn_type(std::string_view expected, std::string_view actual,
+                 diagnostic_handler& dh) -> void {
+    if (not warned_types_.insert(actual).second) {
+      return;
+    }
+    auto d = diagnostic::warning("`{}` must be `{}`, got `{}`", name_, expected,
+                                 actual)
+               .primary(expr_.get());
+    if (fallback_) {
+      d = std::move(d).note("defaulting to `{}`", *fallback_);
+    }
+    std::move(d).emit(dh);
+  }
+
+  std::string_view name_;
+  Ref<ast::expression const> expr_;
+  nova::Array<nova::Data> values_;
+  Option<uint64_t> fallback_;
+  bool warned_null_ = false;
+  bool warned_overflow_ = false;
+  std::set<std::string_view> warned_types_;
+};
+
+class WriteSyslogEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteSyslogEvents(WriteSyslogArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    for (auto i = size_t{0}; i < fields.size(); ++i) {
+      auto evaluator = nova::Evaluator::make(
+        args_.*fields[i].expr, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not evaluator) {
+        co_return;
+      }
+      evaluators_[i].emplace(std::move(*evaluator));
+    }
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not evaluators_.back()) {
+      co_return;
+    }
+    auto& dh = ctx.dh();
+    auto column = [&](size_t i, Option<uint64_t> fallback = None{}) {
+      auto const& expr = args_.*fields[i].expr;
+      // Suppress diagnostics like missing fields for the implicit defaults.
+      auto ndh = null_diagnostic_handler{};
+      auto& eval_dh
+        = expr.get_location() ? dh : static_cast<diagnostic_handler&>(ndh);
+      auto values = evaluators_[i]->eval(input, nova::EvalCtx{eval_dh});
+      return SyslogColumn{fields[i].name, expr, std::move(values), fallback};
+    };
+    auto facility = column(0, 1);
+    auto severity = column(1, 6);
+    auto timestamp = column(2);
+    auto hostname = column(3);
+    auto app_name = column(4);
+    auto process_id = column(5);
+    auto message_id = column(6);
+    auto structured_data = column(7);
+    auto message = column(8);
+    auto buffer = std::vector<char>{};
+    auto it = std::back_inserter(buffer);
+    auto format_n
+      = [&](SyslogColumn& column, nova::storage::Index row, size_t count) {
+          auto str = column.get<nova::String>(row, dh);
+          if (not str or str->empty()) {
+            fmt::format_to(it, " -");
+            return;
+          }
+          if (str->size() > count) {
+            diagnostic::warning("`{}` must not be longer than {} characters",
+                                column.name(), count)
+              .primary(column.expr())
+              .emit(dh);
+          }
+          fmt::format_to(it, " {}", str->substr(0, count));
+        };
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      // PRI and VERSION
+      auto f = facility.get_uint(row, dh);
+      auto s = severity.get_uint(row, dh);
+      if (f > 23u) {
+        diagnostic::warning("`facility` must be in the range 0 to 23, got `{}`",
+                            f)
+          .primary(args_.facility)
+          .note("defaulting to `1`")
+          .emit(dh);
+        f = 1;
+      }
+      if (s > 7u) {
+        diagnostic::warning("`severity` must be in the range 0 to 7, got `{}`",
+                            s)
+          .primary(args_.severity)
+          .note("defaulting to `6`")
+          .emit(dh);
+        s = 6;
+      }
+      fmt::format_to(it, "<{}>{}", (f * 8) + s, 1);
+      // TIMESTAMP
+      if (auto t = timestamp.get<nova::Time>(row, dh)) {
+        fmt::format_to(
+          it, " {:%FT%TZ}",
+          std::chrono::time_point_cast<std::chrono::microseconds>(*t));
+      } else {
+        fmt::format_to(it, " -");
+      }
+      // HOSTNAME, APP-NAME, PROCID, and MSGID
+      format_n(hostname, row, 255);
+      format_n(app_name, row, 48);
+      format_n(process_id, row, 128);
+      format_n(message_id, row, 32);
+      // STRUCTURED-DATA
+      auto sd = structured_data.get<nova::Record>(row, dh);
+      if (sd and sd->begin() != sd->end()) {
+        fmt::format_to(it, " ");
+        for (auto [name, value] : *sd) {
+          auto params = try_as<nova::RowView<nova::Record>>(value);
+          if (not params) {
+            diagnostic::warning("structured data `{}` must be of type `record`",
+                                name)
+              .primary(args_.structured_data)
+              .note("skipping structured data `{}`", name)
+              .emit(dh);
+            continue;
+          }
+          fmt::format_to(it, "[{}", name);
+          for (auto [k, v] : *params) {
+            fmt::format_to(it, " {}=", k);
+            format_param(it, k, v, dh);
+          }
+          fmt::format_to(it, "]");
+        }
+      } else {
+        fmt::format_to(it, " -");
+      }
+      // MSG
+      if (auto msg = message.get<nova::String>(row, dh)) {
+        fmt::format_to(it, " {}", *msg);
+      }
+      buffer.push_back('\n');
+    }
+    if (not buffer.empty()) {
+      co_await push(chunk::make(std::move(buffer)));
+    }
+  }
+
+private:
+  struct Field {
+    std::string_view name;
+    ast::expression WriteSyslogArgs::* expr;
+  };
+
+  /// The arguments in the order of the evaluators.
+  static constexpr auto fields = std::array{
+    Field{"facility", &WriteSyslogArgs::facility},
+    Field{"severity", &WriteSyslogArgs::severity},
+    Field{"timestamp", &WriteSyslogArgs::timestamp},
+    Field{"hostname", &WriteSyslogArgs::hostname},
+    Field{"app_name", &WriteSyslogArgs::app_name},
+    Field{"process_id", &WriteSyslogArgs::process_id},
+    Field{"message_id", &WriteSyslogArgs::message_id},
+    Field{"structured_data", &WriteSyslogArgs::structured_data},
+    Field{"message", &WriteSyslogArgs::message},
+  };
+
+  static auto format_escaped(auto& it, std::string_view x) -> void {
+    *it++ = '"';
+    for (auto c : x) {
+      if (c == '\\' or c == '"' or c == ']') {
+        *it++ = '\\';
+      }
+      *it++ = c;
+    }
+    *it++ = '"';
+  }
+
+  auto
+  format_param(auto& it, std::string_view k, nova::RowView<nova::Data> const& v,
+               diagnostic_handler& dh) const -> void {
+    match(
+      v,
+      [&](nova::RowView<nova::Null>) {
+        fmt::format_to(it, "\"\"");
+      },
+      [&](nova::RowView<nova::Int> x) {
+        fmt::format_to(it, "\"{}\"", *x);
+      },
+      [&](nova::RowView<nova::UInt> x) {
+        fmt::format_to(it, "\"{}\"", *x);
+      },
+      [&](nova::RowView<nova::String> x) {
+        format_escaped(it, *x);
+      },
+      [&](nova::RowView<nova::Record> const&) {
+        diagnostic::warning("`structured_data` field `{}` has type `record`", k)
+          .primary(args_.structured_data)
+          .emit(dh);
+        fmt::format_to(it, "\"\"");
+      },
+      [&](nova::RowView<nova::List> const&) {
+        diagnostic::warning("`structured_data` field `{}` has type `list`", k)
+          .primary(args_.structured_data)
+          .emit(dh);
+        fmt::format_to(it, "\"\"");
+      },
+      [&](auto const& x) {
+        format_escaped(it, fmt::format("{}", *x));
+      });
+  }
+
+  WriteSyslogArgs args_;
+  std::array<Option<nova::Evaluator>, fields.size()> evaluators_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -227,7 +539,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteSyslogArgs, WriteSyslog>{};
+    auto d = Describer<WriteSyslogArgs, WriteSyslog, WriteSyslogEvents>{};
     d.named_optional("facility", &WriteSyslogArgs::facility, "int");
     d.named_optional("severity", &WriteSyslogArgs::severity, "int");
     d.named_optional("timestamp", &WriteSyslogArgs::timestamp, "time");

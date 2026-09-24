@@ -1,0 +1,30 @@
+warning: overflow in `severity`, got `-1`
+  = note: defaulting to `6`
+
+warning: `facility` must be in the range 0 to 23, got `24`
+  = note: defaulting to `1`
+
+warning: `timestamp` must be `time`, got `string`
+
+warning: `hostname` must be `string`, got `int`
+
+warning: `app_name` must not be longer than 48 characters
+
+warning: `structured_data` field `nested` has type `record`
+
+warning: `structured_data` field `xs` has type `list`
+
+warning: structured data `bad` must be of type `record`
+  = note: skipping structured data `bad`
+
+warning: `message` must be `string`, got `int`
+
+warning: `facility` must be `int`, got `string`
+  = note: defaulting to `1`
+
+warning: `severity` must be in the range 0 to 7, got `8`
+  = note: defaulting to `6`
+
+warning: `structured_data` must be `record`, got `string`
+<14>1 - - abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuv 1 m [ok flag="true" ratio="1.5" addr="10.0.0.1" nested="" xs=""]
+<14>1 2023-01-01T00:00:00.000000Z - app 2 m - second

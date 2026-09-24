@@ -1,0 +1,25 @@
+warning: event does not have field
+  --> tests/operators/write_syslog/custom_fields.tql:10:25
+   |
+10 |                hostname=host,
+   |                         ~~~~
+   |
+
+warning: `facility` evaluated to `null`
+ --> tests/operators/write_syslog/custom_fields.tql:8:25
+  |
+8 |   write_syslog facility=pri.f,
+  |                         ~~~~~
+  |
+  = note: defaulting to `1`
+
+warning: `severity` evaluated to `null`
+ --> tests/operators/write_syslog/custom_fields.tql:9:25
+  |
+9 |                severity=pri.s,
+  |                         ~~~~~
+  |
+  = note: defaulting to `6`
+<34>1 - a app - - - first!
+<128>1 - c app - - - third!
+<14>1 - - app - - - fourth!
