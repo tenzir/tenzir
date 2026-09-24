@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/community_id.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/ether_type.hpp>
@@ -15,12 +14,15 @@
 #include <tenzir/location.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/mac.hpp>
-#include <tenzir/pipeline.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
+#include <tenzir/nova/union_array.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <arrow/record_batch.h>
 #include <netinet/in.h>
 
 #include <string_view>
@@ -202,7 +204,10 @@ struct segment {
 /// Parses a packet in a sequence where each step is split into two parts:
 /// 1. Reconstruct the header structure into a dedicated structure.
 /// 2. Append the structure to the builder.
-auto parse(record_ref builder, std::span<const std::byte> bytes,
+///
+/// Works with both the legacy `record_ref` and nova's record builder.
+template <class RecordBuilder>
+auto parse(RecordBuilder builder, std::span<const std::byte> bytes,
            frame_type type) -> Option<diagnostic> {
   // Parse layer 2.
   auto frame_payload = std::span<const std::byte>{};
@@ -223,6 +228,8 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
       auto dst_str = fmt::to_string(frame->dst);
       ether.field("src").data(std::string_view{src_str});
       ether.field("dst").data(std::string_view{dst_str});
+      // Finish `ether` before adding a sibling field.
+      ether.field("type").data(static_cast<uint64_t>(frame->type));
       if (frame->outer_vid) {
         auto vlan = builder.field("vlan").record();
         vlan.field("outer").data(static_cast<uint64_t>(*frame->outer_vid));
@@ -230,7 +237,6 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
           vlan.field("inner").data(static_cast<uint64_t>(*frame->inner_vid));
         }
       }
-      ether.field("type").data(static_cast<uint64_t>(frame->type));
       frame_payload = frame->payload;
       frame_type = frame->type;
       break;
@@ -290,12 +296,11 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   auto conn = make_flow(packet->src, packet->dst, segment->src, segment->dst,
                         segment->type);
   auto cid = community_id::make(conn);
-  builder.field("community_id").data(cid);
+  builder.field("community_id").data(std::string_view{cid});
   return None{};
 }
 
-auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
-  -> Option<series> {
+auto decapsulate(const series& s, diagnostic_handler& dh) -> Option<series> {
   // Get the packet payload.
   if (s.type.kind().is_not<record_type>()) {
     if (s.type.kind().is_not<null_type>()) {
@@ -349,29 +354,96 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
   }
   auto new_s = builder.finish_assert_one_array();
   new_s.type = type{s.type.name(), new_s.type};
-  if (include_old) {
-    // Add back the untouched data column at the end.
-    auto transformation = indexed_transformation{
-      .index = {as<record_type>(new_s.type).num_fields() - 1},
-      .fun = [&](struct record_type::field in_field,
-                 std::shared_ptr<arrow::Array> in_array)
-        -> indexed_transformation::result_type {
-        return {
-          {std::move(in_field), std::move(in_array)},
-          {{"pcap", s.type}, s.array},
-        };
-      },
-    };
-    const auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(new_s.array);
-    TENZIR_ASSERT(ptr);
-    auto [ty, transformed]
-      = transform_columns(new_s.type, ptr, {std::move(transformation)});
-    return series{ty, transformed};
-  }
   return new_s;
 }
 
-class plugin final : public virtual function_plugin {
+auto kind(nova::RowView<nova::Data> const& value) -> std::string_view {
+  return match(value, []<class T>(nova::RowView<T> const&) -> std::string_view {
+    return nova::Type<T>::static_name;
+  });
+}
+
+auto find_field(nova::RowView<nova::Record> const& row, std::string_view name)
+  -> Option<nova::RowView<nova::Data>> {
+  for (auto const& [key, value] : row) {
+    if (key == name) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+struct DecapsulateArgs {
+  nova::ValueArgument packet;
+};
+
+struct DecapsulateFunction {
+  auto eval(DecapsulateArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto wrong_type = nova::WarnOnce{};
+    auto malformed = nova::WarnOnce{};
+    auto warn_malformed = [&](std::string_view note) {
+      malformed(frame,
+                diagnostic::warning("got a malformed 'pcap.packet' event")
+                  .primary(args.packet.source)
+                  .note("{}", note));
+    };
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto append = [&](nova::storage::Index row) {
+      auto value = args.packet.data.get(row);
+      auto const* packet = try_as<nova::RowView<nova::Record>>(value);
+      if (not packet) {
+        if (not is<nova::RowView<nova::Null>>(value)) {
+          wrong_type(frame, diagnostic::warning("expected `record`, got `{}`",
+                                                kind(value))
+                              .primary(args.packet.source));
+        }
+        builder.null();
+        return;
+      }
+      auto linktype = find_field(*packet, "linktype");
+      if (not linktype) {
+        warn_malformed("schema 'pcap.packet' must have a 'linktype' field");
+        builder.null();
+        return;
+      }
+      auto frame_kind = uint64_t{0};
+      if (auto const* x = try_as<nova::RowView<nova::UInt>>(*linktype)) {
+        frame_kind = **x;
+      } else if (not is<nova::RowView<nova::Null>>(*linktype)) {
+        warn_malformed("field 'linktype' not of type uint64");
+        builder.null();
+        return;
+      }
+      auto data = find_field(*packet, "data");
+      if (not data) {
+        warn_malformed("schema 'pcap.packet' must have a 'data' field");
+        builder.null();
+        return;
+      }
+      auto const* bytes = try_as<nova::RowView<nova::Blob>>(*data);
+      if (not bytes) {
+        if (not is<nova::RowView<nova::Null>>(*data)) {
+          warn_malformed("field 'data' not of type blob");
+        }
+        builder.null();
+        return;
+      }
+      if (auto diag = parse(builder.record(), **bytes,
+                            static_cast<frame_type>(frame_kind))) {
+        static_cast<diagnostic_handler&>(frame).emit(std::move(*diag));
+      }
+    };
+    nova::storage::for_each_true(frame.mask(), [&](auto row) {
+      builder.skip_n(row - builder.length());
+      append(row);
+    });
+    builder.skip_n(frame.length() - builder.length());
+    return builder.finish();
+  }
+};
+
+class plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "decapsulate";
@@ -379,6 +451,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<DecapsulateArgs, DecapsulateFunction>{};
+    d.positional("packet", &DecapsulateArgs::packet, "record");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -390,16 +468,13 @@ public:
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) {
         return map_series(eval(expr), [&](series series) {
-          if (auto op = decapsulate(series, ctx.dh(), false)) {
+          if (auto op = decapsulate(series, ctx.dh())) {
             return op.value();
           }
           return series::null(null_type{}, series.length());
         });
       });
   }
-
-private:
-  record config_;
 };
 
 } // namespace

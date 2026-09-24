@@ -1,9 +1,12 @@
+// TODO(TNZ-1134): Use `"x".repeat(262145)` as payload once `repeat` runs on
+// Nova. The payload must exceed 256 KiB.
+let $payload = f"{env("TENZIR_INPUTS")}/pcap/large-single-chunk.pcap"
 from {
   linktype: uint(1),
-  timestamp: time("2020-01-02T03:04:05.123456789Z"),
-  captured_packet_length: uint(262145),
-  original_packet_length: uint(262145),
-  data: "x".repeat(262145),
+  timestamp: 2020-01-02T03:04:05.123456789Z,
+  captured_packet_length: uint(1114153),
+  original_packet_length: uint(1114153),
+  data: file_contents($payload, binary=true),
   section_id: uint(0),
   interface_id: uint(0),
 }

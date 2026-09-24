@@ -1,0 +1,4 @@
+// Values that are not strings keep the previous schema name.
+from {value: "a"}, {value: null}, {value: 42}
+@name = value
+name = @name

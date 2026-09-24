@@ -1,3 +1,7 @@
+---
+skip: "TODO(TNZ-1121): `hash_md5` does not run on Nova yet"
+---
+
 // Re-produce an identical copy of the input by taking the input PCAP file
 // header as blueprint for the output trace. The MD5 of the original input
 // is 2696858410a08f5edb405b8630a9858c.

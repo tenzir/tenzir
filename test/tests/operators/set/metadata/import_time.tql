@@ -1,0 +1,7 @@
+// A missing, invalid, or epoch import time reads as null.
+from {value: 2020-01-01T00:00:00Z},
+  {value: null},
+  {value: 1970-01-01T00:00:00Z},
+  {value: "invalid"}
+@import_time = value
+import_time = @import_time

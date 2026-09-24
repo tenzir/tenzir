@@ -108,7 +108,8 @@ def assert_byte_stream():
             assert all(row["schema"] == "test.feather" for row in expected)
         if name == "historical":
             times = ["1970-01-01T00:00:00.000000002Z"] * 3
-            times += ["1970-01-01T00:00:00Z"] * 3
+            # A missing import time reads as `null`.
+            times += [None] * 3
             times += ["1970-01-01T00:00:00.000000008Z"] * 3
             assert expected == [
                 {

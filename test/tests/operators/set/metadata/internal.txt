@@ -1,0 +1,29 @@
+warning: cannot set `@internal` to `null`
+ --> tests/operators/set/metadata/internal.tql:4:1
+  |
+4 | @internal = value
+  | ~~~~~~~~~
+  |
+
+warning: expected bool but got int
+ --> tests/operators/set/metadata/internal.tql:4:1
+  |
+4 | @internal = value
+  | ~~~~~~~~~
+  |
+{
+  value: true,
+  internal: true,
+}
+{
+  value: false,
+  internal: false,
+}
+{
+  value: null,
+  internal: true,
+}
+{
+  value: 1,
+  internal: true,
+}

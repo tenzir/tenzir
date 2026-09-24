@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/as_bytes.hpp>
 #include <tenzir/async/pusher.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/detail/flat_map.hpp>
@@ -14,6 +15,11 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/make_byte_reader.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/record_array.hpp>
+#include <tenzir/nova/union_array.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pcap.hpp>
 #include <tenzir/pcapng.hpp>
@@ -30,6 +36,7 @@
 #include <concepts>
 #include <cstring>
 #include <limits>
+#include <set>
 
 namespace tenzir::plugins::pcap {
 
@@ -300,6 +307,68 @@ struct PcapngInterface {
 
 struct ReadPcapArgs {
   bool emit_file_headers = false;
+};
+
+/// Accumulates Nova packet events and decides when to emit them.
+class EventBatch {
+public:
+  auto reset(CaptureFormat) -> void {
+    builder_ = {};
+    timeout_.reset();
+  }
+
+  auto record() {
+    return builder_.record();
+  }
+
+  auto length() const -> int64_t {
+    return builder_.length();
+  }
+
+  auto wait() const -> Task<void> {
+    return timeout_.wait();
+  }
+
+  auto push_ready(Push<nova::Events>& push) -> Task<void> {
+    if (timeout_.poll(detail::narrow<size_t>(builder_.length()))) {
+      co_await flush(push);
+    }
+  }
+
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    if (builder_.length() == 0) {
+      co_return;
+    }
+    auto events = make_events(std::exchange(builder_, {}), "pcap.packet");
+    timeout_.reset();
+    co_await push(std::move(events));
+  }
+
+  static auto file_header(FileHeader const& header, uint32_t raw_magic)
+    -> nova::Events {
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto event = builder.record();
+    event.field("magic_number").data(uint64_t{raw_magic});
+    event.field("major_version").data(uint64_t{header.major_version});
+    event.field("minor_version").data(uint64_t{header.minor_version});
+    event.field("reserved1").data(uint64_t{header.reserved1});
+    event.field("reserved2").data(uint64_t{header.reserved2});
+    event.field("snaplen").data(uint64_t{header.snaplen});
+    event.field("linktype").data(uint64_t{header.linktype});
+    return make_events(std::move(builder), "pcap.file_header");
+  }
+
+private:
+  static auto make_events(nova::ArrayBuilder<nova::Record> builder,
+                          std::string_view name) -> nova::Events {
+    auto data = builder.finish();
+    auto length = data.length();
+    return nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                        nova::Events::Meta::make_empty(length, name)};
+  }
+
+  nova::ArrayBuilder<nova::Record> builder_;
+  BatchTimeout timeout_{defaults::import::batch_timeout};
 };
 
 class ReadPcap final : public Operator<chunk_ptr, table_slice> {
@@ -895,6 +964,594 @@ private:
   SeriesPusher pusher_;
 };
 
+class ReadPcapEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadPcapEvents(ReadPcapArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    append(as_bytes(input));
+    co_await parse_available(push, ctx.dh());
+    co_await builder_.push_ready(push);
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await builder_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await builder_.push_ready(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (not failed_) {
+      co_await parse_available(push, ctx.dh());
+    }
+    if (builder_.length() > 0) {
+      co_await flush_packets(push);
+    }
+    if (failed_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (format_ == CaptureFormat::pcapng) {
+      if (available() > 0) {
+        diagnostic::error("truncated PCAPNG block")
+          .note("got {} trailing bytes", available())
+          .emit(ctx.dh());
+      }
+      co_return FinalizeBehavior::done;
+    }
+    if (pending_packet_header_) {
+      auto const captured_packet_length
+        = pending_packet_header_->captured_packet_length;
+      diagnostic::error("truncated last packet; expected {} but got {}",
+                        captured_packet_length, available())
+        .note("from `pcap`")
+        .emit(ctx.dh());
+      co_return FinalizeBehavior::done;
+    }
+    if (available() == 0) {
+      co_return FinalizeBehavior::done;
+    }
+    if (not have_file_header_) {
+      diagnostic::error("PCAP file header to short")
+        .note("from `pcap`")
+        .note("expected {} bytes, but got {}", sizeof(FileHeader), available())
+        .emit(ctx.dh());
+      co_return FinalizeBehavior::done;
+    }
+    if (available() < sizeof(PacketHeader)) {
+      diagnostic::error("PCAP packet header to short")
+        .note("from `pcap`")
+        .note("expected {} bytes, but got {}", sizeof(PacketHeader),
+              available())
+        .emit(ctx.dh());
+      co_return FinalizeBehavior::done;
+    }
+    auto header = PacketHeader{};
+    auto bytes = view(sizeof(PacketHeader));
+    TENZIR_ASSERT(bytes);
+    std::memcpy(&header, bytes->data(), bytes->size());
+    if (is_file_header(header)) {
+      diagnostic::error("failed to read remaining PCAP file header")
+        .hint("got {} bytes but needed {}", available() - sizeof(PacketHeader),
+              sizeof(FileHeader) - sizeof(PacketHeader))
+        .emit(ctx.dh());
+      co_return FinalizeBehavior::done;
+    }
+    if (need_swap_) {
+      header = byteswap(header);
+    }
+    auto const captured_packet_length = header.captured_packet_length;
+    diagnostic::error("truncated last packet; expected {} but got {}",
+                      captured_packet_length,
+                      available() - sizeof(PacketHeader))
+      .note("from `pcap`")
+      .emit(ctx.dh());
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await flush_packets(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // An incomplete header, block, or packet cannot be flushed at a checkpoint.
+    compact();
+    serde("buffer", buffer_);
+    auto format = static_cast<uint8_t>(format_);
+    serde("format", format);
+    TENZIR_ASSERT(format <= static_cast<uint8_t>(CaptureFormat::pcapng));
+    format_ = static_cast<CaptureFormat>(format);
+    serde("failed", failed_);
+    serde("have_file_header", have_file_header_);
+    serde("need_swap", need_swap_);
+    serde("current_file_header_raw_magic", current_file_header_raw_magic_);
+    snapshot_file_header(serde, current_file_header_);
+    auto has_pending_packet_header = pending_packet_header_.has_value();
+    serde("has_pending_packet_header", has_pending_packet_header);
+    if (serde.is_loading()) {
+      pending_packet_header_
+        = has_pending_packet_header ? Option{PacketHeader{}} : None{};
+    }
+    if (pending_packet_header_) {
+      snapshot_packet_header(serde, *pending_packet_header_);
+    }
+    serde("pcapng_have_section", pcapng_have_section_);
+    serde("pcapng_need_swap", pcapng_need_swap_);
+    serde("pcapng_section_id", pcapng_section_id_);
+    serde("pcapng_interfaces", pcapng_interfaces_);
+    if (serde.is_loading()) {
+      builder_.reset(format_);
+    }
+  }
+
+private:
+  auto compact() -> void {
+    if (offset_ == 0) {
+      return;
+    }
+    if (offset_ == buffer_.size()) {
+      buffer_.clear();
+      offset_ = 0;
+      return;
+    }
+    auto remaining = available();
+    std::memmove(buffer_.data(), buffer_.data() + offset_, remaining);
+    buffer_.resize(remaining);
+    offset_ = 0;
+  }
+
+  auto append(std::span<std::byte const> bytes) -> void {
+    if (offset_ > 0
+        and (offset_ == buffer_.size() or offset_ * 2 >= buffer_.size())) {
+      compact();
+    }
+    buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+  }
+
+  auto available() const -> size_t {
+    return buffer_.size() - offset_;
+  }
+
+  auto view(size_t size) const -> Option<std::span<std::byte const>> {
+    if (available() < size) {
+      return None{};
+    }
+    return std::span<std::byte const>{buffer_.data() + offset_, size};
+  }
+
+  auto consume(size_t size) -> void {
+    TENZIR_ASSERT(available() >= size);
+    offset_ += size;
+    if (offset_ == buffer_.size()) {
+      buffer_.clear();
+      offset_ = 0;
+    }
+  }
+
+  auto parse_file_header_bytes(std::span<std::byte const> bytes,
+                               diagnostic_handler& dh) -> Option<FileHeader> {
+    TENZIR_ASSERT(bytes.size() == sizeof(FileHeader));
+    auto header = FileHeader{};
+    std::memcpy(&header, bytes.data(), bytes.size());
+    auto raw_magic = header.magic_number;
+    auto need_swap = tenzir::pcap::need_byte_swap(raw_magic);
+    if (not need_swap) {
+      diagnostic::error("invalid PCAP magic number: {0:x}", uint32_t{raw_magic})
+        .note("from `pcap`")
+        .emit(dh);
+      failed_ = true;
+      return None{};
+    }
+    need_swap_ = *need_swap;
+    current_file_header_raw_magic_ = raw_magic;
+    if (*need_swap) {
+      TENZIR_DEBUG("detected different byte order in file and host");
+      header = byteswap(header);
+    } else {
+      TENZIR_DEBUG("detected identical byte order in file and host");
+    }
+    return header;
+  }
+
+  auto emit_file_header(FileHeader const& header, Push<nova::Events>& push)
+    -> Task<void> {
+    if (builder_.length() > 0) {
+      co_await flush_packets(push);
+    }
+    if (args_.emit_file_headers) {
+      co_await push(
+        EventBatch::file_header(header, current_file_header_raw_magic_));
+    }
+  }
+
+  auto append_packet(PacketHeader const& header,
+                     std::span<std::byte const> data) -> void {
+    auto seconds = std::chrono::seconds(header.timestamp);
+    auto timestamp = time{std::chrono::duration_cast<duration>(seconds)};
+    if (uses_microsecond_precision(current_file_header_raw_magic_)) {
+      timestamp += std::chrono::microseconds(header.timestamp_fraction);
+    } else {
+      timestamp += std::chrono::nanoseconds(header.timestamp_fraction);
+    }
+    auto event = builder_.record();
+    event.field("linktype")
+      .data(uint64_t{current_file_header_.linktype & 0xFFFF});
+    event.field("timestamp").data(timestamp);
+    event.field("captured_packet_length")
+      .data(uint64_t{header.captured_packet_length});
+    event.field("original_packet_length")
+      .data(uint64_t{header.original_packet_length});
+    event.field("data").data(tenzir::view<blob>{data.data(), data.size()});
+  }
+
+  auto flush_packets(Push<nova::Events>& push) -> Task<void> {
+    co_await builder_.flush(push);
+  }
+
+  auto flush_packets_if_full(Push<nova::Events>& push) -> Task<void> {
+    if (builder_.length()
+        >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)) {
+      co_await flush_packets(push);
+    }
+  }
+
+  auto fail_pcapng(std::string message, diagnostic_handler& dh) -> void {
+    diagnostic::error("{}", message).note("from `pcapng`").emit(dh);
+    failed_ = true;
+  }
+
+  auto parse_pcapng_section(std::span<std::byte const> block, bool need_swap,
+                            diagnostic_handler& dh) -> bool {
+    if (block.size() < pcapng::section_header_block_min_size) {
+      fail_pcapng("PCAPNG section header block is too short", dh);
+      return false;
+    }
+    auto major = read_number<uint16_t>(block, 12, need_swap);
+    auto minor = read_number<uint16_t>(block, 14, need_swap);
+    if (major != pcapng::current_major_version
+        or (minor != pcapng::current_minor_version
+            and minor != pcapng::compatible_minor_version)) {
+      diagnostic::error("unsupported PCAPNG version {}.{}", major, minor)
+        .note("from `pcapng`")
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    pcapng_need_swap_ = need_swap;
+    pcapng_have_section_ = true;
+    ++pcapng_section_id_;
+    pcapng_interfaces_.clear();
+    return true;
+  }
+
+  auto parse_pcapng_interface(std::span<std::byte const> block,
+                              diagnostic_handler& dh) -> bool {
+    if (block.size() < pcapng::interface_description_block_min_size) {
+      fail_pcapng("PCAPNG interface description block is too short", dh);
+      return false;
+    }
+    if (pcapng_interfaces_.size() >= maximum_pcapng_interfaces_per_section) {
+      diagnostic::error("PCAPNG section exceeds maximum interface count")
+        .note("maximum is {}", maximum_pcapng_interfaces_per_section)
+        .note("from `pcapng`")
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    auto interface = PcapngInterface{
+      .linktype = read_number<uint16_t>(block, 8, pcapng_need_swap_),
+      .snaplen = read_number<uint32_t>(block, 12, pcapng_need_swap_),
+    };
+    auto offset = size_t{16};
+    auto options_end = block.size() - sizeof(uint32_t);
+    while (offset < options_end) {
+      if (options_end - offset < 4) {
+        fail_pcapng("truncated PCAPNG interface option", dh);
+        return false;
+      }
+      auto code = read_number<uint16_t>(block, offset, pcapng_need_swap_);
+      auto length = read_number<uint16_t>(block, offset + 2, pcapng_need_swap_);
+      offset += 4;
+      auto padded_length
+        = detail::narrow_cast<size_t>(pcapng::padded_size(length));
+      if (padded_length > options_end - offset) {
+        fail_pcapng("invalid PCAPNG interface option length", dh);
+        return false;
+      }
+      if (code == pcapng::end_of_options) {
+        break;
+      }
+      if (code == pcapng::interface_timestamp_resolution_option
+          and length == 1) {
+        interface.timestamp_resolution
+          = std::to_integer<uint8_t>(block[offset]);
+      } else if (code == pcapng::interface_timestamp_offset_option
+                 and length == 8) {
+        auto raw = read_number<uint64_t>(block, offset, pcapng_need_swap_);
+        interface.timestamp_offset = std::bit_cast<int64_t>(raw);
+      }
+      offset += padded_length;
+    }
+    pcapng_interfaces_.push_back(interface);
+    return true;
+  }
+
+  auto parse_pcapng_packet(std::span<std::byte const> block,
+                           diagnostic_handler& dh) -> bool {
+    if (block.size() < pcapng::packet_block_min_size) {
+      fail_pcapng("PCAPNG packet block is too short", dh);
+      return false;
+    }
+    auto block_type = read_number<uint32_t>(block, 0, pcapng_need_swap_);
+    auto interface_id
+      = block_type == pcapng::packet_block
+          ? uint32_t{read_number<uint16_t>(block, 8, pcapng_need_swap_)}
+          : read_number<uint32_t>(block, 8, pcapng_need_swap_);
+    if (interface_id >= pcapng_interfaces_.size()) {
+      diagnostic::error("PCAPNG packet references unknown interface {}",
+                        interface_id)
+        .note("from `pcapng`")
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    auto timestamp_high = read_number<uint32_t>(block, 12, pcapng_need_swap_);
+    auto timestamp_low = read_number<uint32_t>(block, 16, pcapng_need_swap_);
+    auto captured_length = read_number<uint32_t>(block, 20, pcapng_need_swap_);
+    auto original_length = read_number<uint32_t>(block, 24, pcapng_need_swap_);
+    if (captured_length > original_length) {
+      fail_pcapng("PCAPNG captured packet length exceeds original length", dh);
+      return false;
+    }
+    auto packet_end = uint64_t{pcapng::packet_data_offset}
+                      + pcapng::padded_size(captured_length);
+    if (packet_end + sizeof(uint32_t) > block.size()) {
+      fail_pcapng("PCAPNG packet data exceeds its block", dh);
+      return false;
+    }
+    auto const& interface = pcapng_interfaces_[interface_id];
+    if (interface.snaplen != pcapng::unlimited_snaplen
+        and captured_length > interface.snaplen) {
+      fail_pcapng("PCAPNG captured packet length exceeds interface snaplen",
+                  dh);
+      return false;
+    }
+    auto raw_timestamp = (uint64_t{timestamp_high} << 32) | timestamp_low;
+    auto timestamp = pcapng::decode_timestamp(
+      raw_timestamp, {.resolution = interface.timestamp_resolution,
+                      .offset_seconds = interface.timestamp_offset});
+    if (not timestamp) {
+      fail_pcapng("PCAPNG packet timestamp is out of range", dh);
+      return false;
+    }
+    auto data = block.subspan(pcapng::packet_data_offset, captured_length);
+    auto event = builder_.record();
+    event.field("linktype").data(uint64_t{interface.linktype});
+    event.field("timestamp").data(*timestamp);
+    event.field("captured_packet_length").data(uint64_t{captured_length});
+    event.field("original_packet_length").data(uint64_t{original_length});
+    event.field("data").data(tenzir::view<blob>{data.data(), data.size()});
+    event.field("section_id").data(pcapng_section_id_);
+    event.field("interface_id").data(uint64_t{interface_id});
+    return true;
+  }
+
+  auto parse_pcapng_simple_packet(std::span<std::byte const> block,
+                                  diagnostic_handler& dh) -> bool {
+    if (block.size() < pcapng::simple_packet_block_min_size) {
+      fail_pcapng("PCAPNG simple packet block is too short", dh);
+      return false;
+    }
+    if (pcapng_interfaces_.empty()) {
+      fail_pcapng("PCAPNG simple packet references unknown interface 0", dh);
+      return false;
+    }
+    auto original_length = read_number<uint32_t>(block, 8, pcapng_need_swap_);
+    auto const& interface = pcapng_interfaces_.front();
+    auto captured_length = interface.snaplen == pcapng::unlimited_snaplen
+                             ? original_length
+                             : std::min(original_length, interface.snaplen);
+    auto packet_end = uint64_t{pcapng::simple_packet_data_offset}
+                      + pcapng::padded_size(captured_length);
+    if (packet_end + sizeof(uint32_t) != block.size()) {
+      fail_pcapng("PCAPNG simple packet data size does not match its block",
+                  dh);
+      return false;
+    }
+    auto data
+      = block.subspan(pcapng::simple_packet_data_offset, captured_length);
+    auto event = builder_.record();
+    event.field("linktype").data(uint64_t{interface.linktype});
+    // Simple packet blocks carry no timestamp.
+    event.field("timestamp").null();
+    event.field("captured_packet_length").data(uint64_t{captured_length});
+    event.field("original_packet_length").data(uint64_t{original_length});
+    event.field("data").data(tenzir::view<blob>{data.data(), data.size()});
+    event.field("section_id").data(pcapng_section_id_);
+    event.field("interface_id").data(uint64_t{0});
+    return true;
+  }
+
+  auto parse_pcapng_available(Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    while (not failed_) {
+      auto header = view(12);
+      if (not header) {
+        co_return;
+      }
+      auto raw_type = read_number<uint32_t>(*header, 0, false);
+      auto block_need_swap = pcapng_need_swap_;
+      if (raw_type == pcapng::magic_number) {
+        auto raw_byte_order = read_number<uint32_t>(*header, 8, false);
+        if (raw_byte_order == pcapng::byte_order_magic) {
+          block_need_swap = false;
+        } else if (detail::byteswap(raw_byte_order)
+                   == pcapng::byte_order_magic) {
+          block_need_swap = true;
+        } else {
+          fail_pcapng("invalid PCAPNG byte-order magic", dh);
+          co_return;
+        }
+      } else if (not pcapng_have_section_) {
+        fail_pcapng("PCAPNG file does not start with a section header", dh);
+        co_return;
+      }
+      auto block_length = read_number<uint32_t>(*header, 4, block_need_swap);
+      if (block_length < pcapng::block_min_size
+          or block_length % pcapng::block_alignment != 0) {
+        fail_pcapng("invalid PCAPNG block length", dh);
+        co_return;
+      }
+      if (block_length > maximum_pcapng_block_size) {
+        diagnostic::error("PCAPNG block exceeds maximum supported size")
+          .note("declared {} bytes but maximum is {}", block_length,
+                maximum_pcapng_block_size)
+          .note("from `pcapng`")
+          .emit(dh);
+        failed_ = true;
+        co_return;
+      }
+      auto block = view(block_length);
+      if (not block) {
+        co_return;
+      }
+      auto trailing_length = read_number<uint32_t>(
+        *block, block->size() - sizeof(uint32_t), block_need_swap);
+      if (trailing_length != block_length) {
+        fail_pcapng("PCAPNG block lengths do not match", dh);
+        co_return;
+      }
+      auto block_type = read_number<uint32_t>(*block, 0, block_need_swap);
+      if (block_type == pcapng::magic_number) {
+        if (not parse_pcapng_section(*block, block_need_swap, dh)) {
+          co_return;
+        }
+      } else if (block_type == pcapng::interface_description_block) {
+        if (not parse_pcapng_interface(*block, dh)) {
+          co_return;
+        }
+      } else if (block_type == pcapng::enhanced_packet_block
+                 or block_type == pcapng::packet_block) {
+        if (not parse_pcapng_packet(*block, dh)) {
+          co_return;
+        }
+        co_await flush_packets_if_full(push);
+      } else if (block_type == pcapng::simple_packet_block) {
+        if (not parse_pcapng_simple_packet(*block, dh)) {
+          co_return;
+        }
+        co_await flush_packets_if_full(push);
+      }
+      consume(block_length);
+    }
+  }
+
+  auto parse_pcap_available(Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    while (not failed_) {
+      if (not have_file_header_) {
+        auto bytes = view(sizeof(FileHeader));
+        if (not bytes) {
+          break;
+        }
+        auto header = parse_file_header_bytes(*bytes, dh);
+        if (not header) {
+          co_return;
+        }
+        current_file_header_ = *header;
+        have_file_header_ = true;
+        consume(sizeof(FileHeader));
+        co_await emit_file_header(current_file_header_, push);
+        continue;
+      }
+      if (pending_packet_header_) {
+        auto bytes = view(pending_packet_header_->captured_packet_length);
+        if (not bytes) {
+          break;
+        }
+        append_packet(*pending_packet_header_, *bytes);
+        pending_packet_header_ = None{};
+        consume(bytes->size());
+        co_await flush_packets_if_full(push);
+        continue;
+      }
+      auto bytes = view(sizeof(PacketHeader));
+      if (not bytes) {
+        break;
+      }
+      auto header = PacketHeader{};
+      std::memcpy(&header, bytes->data(), bytes->size());
+      if (is_file_header(header)) {
+        auto full_header = view(sizeof(FileHeader));
+        if (not full_header) {
+          break;
+        }
+        auto next_file_header = parse_file_header_bytes(*full_header, dh);
+        if (not next_file_header) {
+          co_return;
+        }
+        current_file_header_ = *next_file_header;
+        consume(sizeof(FileHeader));
+        co_await emit_file_header(current_file_header_, push);
+        continue;
+      }
+      consume(sizeof(PacketHeader));
+      if (need_swap_) {
+        header = byteswap(header);
+      }
+      pending_packet_header_ = header;
+    }
+  }
+
+  auto parse_available(Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    if (format_ == CaptureFormat::unknown) {
+      auto magic = view(sizeof(uint32_t));
+      if (not magic) {
+        co_return;
+      }
+      auto raw_magic = read_number<uint32_t>(*magic, 0, false);
+      if (raw_magic == pcapng::magic_number) {
+        format_ = CaptureFormat::pcapng;
+        builder_.reset(format_);
+      } else {
+        format_ = CaptureFormat::pcap;
+      }
+    }
+    if (format_ == CaptureFormat::pcapng) {
+      co_await parse_pcapng_available(push, dh);
+    } else {
+      co_await parse_pcap_available(push, dh);
+    }
+  }
+
+  ReadPcapArgs args_;
+  std::vector<std::byte> buffer_;
+  size_t offset_ = 0;
+  CaptureFormat format_ = CaptureFormat::unknown;
+  bool failed_ = false;
+  bool have_file_header_ = false;
+  bool need_swap_ = false;
+  uint32_t current_file_header_raw_magic_ = magic_number_2;
+  FileHeader current_file_header_{};
+  Option<PacketHeader> pending_packet_header_;
+  bool pcapng_have_section_ = false;
+  bool pcapng_need_swap_ = false;
+  uint64_t pcapng_section_id_ = std::numeric_limits<uint64_t>::max();
+  std::vector<PcapngInterface> pcapng_interfaces_;
+  EventBatch builder_;
+};
+
 struct WritePcapArgs {
   Option<std::string> format;
 };
@@ -1402,6 +2059,402 @@ private:
   bool failed_ = false;
 };
 
+auto kind(nova::RowView<nova::Data> const& value) -> std::string_view {
+  return match(value, []<class T>(nova::RowView<T> const&) -> std::string_view {
+    return nova::Type<T>::static_name;
+  });
+}
+
+auto find_field(nova::RowView<nova::Record> const& row, std::string_view name)
+  -> Option<nova::RowView<nova::Data>> {
+  for (auto const& [key, value] : row) {
+    if (key == name) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+/// Extracts a non-negative integer, accepting both `uint` and `int` values.
+auto to_unsigned(nova::RowView<nova::Data> const& value) -> Option<uint64_t> {
+  if (auto const* x = try_as<nova::RowView<nova::UInt>>(value)) {
+    return **x;
+  }
+  if (auto const* x = try_as<nova::RowView<nova::Int>>(value); x and **x >= 0) {
+    return static_cast<uint64_t>(**x);
+  }
+  return None{};
+}
+
+/// Extracts a PCAP file header, or returns a diagnostic explaining why the
+/// row does not describe one.
+auto make_nova_file_header(nova::RowView<nova::Record> const& row)
+  -> std::variant<FileHeader, diagnostic> {
+  auto magic_number = uint32_t{0};
+  auto major_version = uint16_t{0};
+  auto minor_version = uint16_t{0};
+  auto reserved1 = uint32_t{0};
+  auto reserved2 = uint32_t{0};
+  auto snaplen = uint32_t{0};
+  auto linktype = uint32_t{0};
+  for (auto const& [key, value] : row) {
+    auto assign = [&]<class T>(T& field) -> Option<diagnostic> {
+      auto number = to_unsigned(value);
+      if (not number) {
+        return diagnostic::warning("failed to parse PCAP file header")
+          .note("expected a non-negative integer for `{}`, but got `{}`", key,
+                kind(value))
+          .done();
+      }
+      if (*number > std::numeric_limits<T>::max()) {
+        return diagnostic::warning("failed to parse PCAP file header")
+          .note("`{}` is out of range: got {} but maximum is {}", key, *number,
+                std::numeric_limits<T>::max())
+          .done();
+      }
+      field = static_cast<T>(*number);
+      return None{};
+    };
+    auto error = Option<diagnostic>{};
+    if (key == "magic_number") {
+      error = assign(magic_number);
+    } else if (key == "major_version") {
+      error = assign(major_version);
+    } else if (key == "minor_version") {
+      error = assign(minor_version);
+    } else if (key == "reserved1") {
+      error = assign(reserved1);
+    } else if (key == "reserved2") {
+      error = assign(reserved2);
+    } else if (key == "snaplen") {
+      error = assign(snaplen);
+    } else if (key == "linktype") {
+      error = assign(linktype);
+    }
+    if (error) {
+      return std::move(*error);
+    }
+  }
+  if (not normalized_magic_number(magic_number)) {
+    return diagnostic::warning("failed to parse PCAP file header")
+      .note("invalid magic number")
+      .done();
+  }
+  return FileHeader{
+    .magic_number = magic_number,
+    .major_version = major_version,
+    .minor_version = minor_version,
+    .reserved1 = reserved1,
+    .reserved2 = reserved2,
+    .snaplen = snaplen,
+    .linktype = linktype,
+  };
+}
+
+/// Extracts a packet and its timestamp, or returns a diagnostic explaining why
+/// the row does not describe one.
+auto to_nova_packet_event(nova::RowView<nova::Record> const& row)
+  -> std::variant<PacketEvent, diagnostic> {
+  auto result = PacketEvent{};
+  auto type_error = [](std::string_view key, std::string_view expected,
+                       nova::RowView<nova::Data> const& value) {
+    return diagnostic::error("packet field `{}` has an unexpected type", key)
+      .note("expected {}, but got `{}`", expected, kind(value))
+      .done();
+  };
+  // Lengths beyond 32 bits are kept for `validate_packet_length_ranges`.
+  auto narrow_length = [](uint64_t length) -> uint32_t {
+    return length <= std::numeric_limits<uint32_t>::max()
+             ? static_cast<uint32_t>(length)
+             : 0;
+  };
+  for (auto const& [key, value] : row) {
+    if (key == "linktype") {
+      auto linktype = to_unsigned(value);
+      if (not linktype) {
+        return type_error(key, "a non-negative integer", value);
+      }
+      result.linktype = *linktype;
+    } else if (key == "timestamp") {
+      if (auto const* timestamp = try_as<nova::RowView<nova::Time>>(value)) {
+        result.timestamp = **timestamp;
+      } else if (not is<nova::RowView<nova::Null>>(value)) {
+        return type_error(key, "`time`", value);
+      }
+    } else if (key == "captured_packet_length") {
+      auto length = to_unsigned(value);
+      if (not length) {
+        return type_error(key, "a non-negative integer", value);
+      }
+      result.packet.declared_captured_packet_length = *length;
+      result.packet.header.captured_packet_length = narrow_length(*length);
+    } else if (key == "original_packet_length") {
+      auto length = to_unsigned(value);
+      if (not length) {
+        return type_error(key, "a non-negative integer", value);
+      }
+      result.packet.declared_original_packet_length = *length;
+      result.packet.header.original_packet_length = narrow_length(*length);
+    } else if (key == "data") {
+      if (auto const* data = try_as<nova::RowView<nova::Blob>>(value)) {
+        result.packet.data = **data;
+      } else if (auto const* str = try_as<nova::RowView<nova::String>>(value)) {
+        result.packet.data = as_bytes(**str);
+      } else {
+        return type_error(key, "`blob` or `string`", value);
+      }
+    }
+  }
+  return result;
+}
+
+auto has_pcapng_fields(nova::RowView<nova::Record> const& row) -> bool {
+  return find_field(row, "section_id") and find_field(row, "interface_id");
+}
+
+class WritePcapEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WritePcapEvents(WritePcapArgs args) {
+    if (args.format) {
+      if (*args.format == "pcap") {
+        format_ = CaptureFormat::pcap;
+      } else if (*args.format == "pcapng") {
+        format_ = CaptureFormat::pcapng;
+      }
+    }
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    auto buffer = std::vector<std::byte>{};
+    // Deduplicate warnings within a batch. The views point into `input`.
+    auto unknown_schemas = std::set<std::string_view>{};
+    auto warned_malformed = false;
+    auto warned_file_header = false;
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      auto name = *input.meta.name.get(row);
+      auto record = input.data.get(row);
+      if (name == "pcap.file_header") {
+        if (format_ == CaptureFormat::unknown) {
+          format_ = CaptureFormat::pcap;
+        }
+        if (format_ == CaptureFormat::pcapng) {
+          if (not std::exchange(warned_file_header, true)) {
+            diagnostic::warning(
+              "ignoring classic PCAP file header for PCAPNG output")
+              .emit(ctx.dh());
+          }
+          continue;
+        }
+        append_file_header(buffer, record, ctx.dh());
+        continue;
+      }
+      auto packet = Option<nova::RowView<nova::Record>>{};
+      if (name == "pcap.packet") {
+        packet = record;
+      } else if (name == "tenzir.packet") {
+        auto pcap = find_field(record, "pcap");
+        if (not pcap or is<nova::RowView<nova::Null>>(*pcap)) {
+          continue;
+        }
+        auto const* nested = try_as<nova::RowView<nova::Record>>(*pcap);
+        if (not nested) {
+          if (not std::exchange(warned_malformed, true)) {
+            diagnostic::warning("got a malformed 'tenzir.packet' event")
+              .note("field 'pcap' not a record")
+              .emit(ctx.dh());
+          }
+          continue;
+        }
+        packet = *nested;
+      } else {
+        if (unknown_schemas.insert(name).second) {
+          diagnostic::warning("received unprocessable schema")
+            .note("cannot handle schema `{}`", name)
+            .emit(ctx.dh());
+        }
+        continue;
+      }
+      if (format_ == CaptureFormat::unknown) {
+        format_ = has_pcapng_fields(*packet) ? CaptureFormat::pcapng
+                                             : CaptureFormat::pcap;
+      }
+      auto appended = format_ == CaptureFormat::pcapng
+                        ? append_pcapng_row(buffer, *packet, ctx.dh())
+                        : append_pcap_row(buffer, *packet, ctx.dh());
+      if (not appended) {
+        failed_ = true;
+        co_return;
+      }
+      if (buffer.size() >= pcapng_output_flush_size) {
+        co_await flush(buffer, push);
+      }
+    }
+    co_await flush(buffer, push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    auto format = static_cast<uint8_t>(format_);
+    serde("format", format);
+    TENZIR_ASSERT(format <= static_cast<uint8_t>(CaptureFormat::pcapng));
+    format_ = static_cast<CaptureFormat>(format);
+    auto has_current_file_header = current_file_header_.has_value();
+    serde("has_current_file_header", has_current_file_header);
+    if (serde.is_loading()) {
+      current_file_header_
+        = has_current_file_header ? Option{FileHeader{}} : None{};
+    }
+    if (current_file_header_) {
+      snapshot_file_header(serde, *current_file_header_);
+    }
+    serde("pcapng_interface_ids", pcapng_interface_ids_);
+    serde("pcapng_section_emitted", pcapng_section_emitted_);
+    serde("failed", failed_);
+  }
+
+private:
+  auto flush(std::vector<std::byte>& buffer, Push<chunk_ptr>& push)
+    -> Task<void> {
+    if (buffer.empty()) {
+      co_return;
+    }
+    auto const& metadata
+      = format_ == CaptureFormat::pcapng ? pcapng_metadata_ : metadata_;
+    co_await push(chunk::make(std::exchange(buffer, {}), metadata));
+  }
+
+  auto append_file_header(std::vector<std::byte>& buffer,
+                          nova::RowView<nova::Record> const& row,
+                          diagnostic_handler& dh) -> void {
+    auto header = make_nova_file_header(row);
+    if (auto* error = std::get_if<diagnostic>(&header)) {
+      dh.emit(std::move(*error));
+      return;
+    }
+    current_file_header_ = std::get<FileHeader>(header);
+    auto serialized_header = serialize_file_header(*current_file_header_);
+    auto bytes = as_bytes(serialized_header);
+    buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+  }
+
+  auto validated_packet_event(nova::RowView<nova::Record> const& row,
+                              diagnostic_handler& dh) -> Option<PacketEvent> {
+    auto result = to_nova_packet_event(row);
+    if (auto* error = std::get_if<diagnostic>(&result)) {
+      dh.emit(std::move(*error));
+      return None{};
+    }
+    auto& event = std::get<PacketEvent>(result);
+    if (not event.timestamp) {
+      diagnostic::error("packet timestamp is missing").emit(dh);
+      return None{};
+    }
+    if (auto error = validate_packet_length_ranges(event.packet)) {
+      dh.emit(std::move(*error));
+      return None{};
+    }
+    return std::move(event);
+  }
+
+  auto append_pcap_row(std::vector<std::byte>& buffer,
+                       nova::RowView<nova::Record> const& row,
+                       diagnostic_handler& dh) -> bool {
+    auto event = validated_packet_event(row, dh);
+    if (not event) {
+      return false;
+    }
+    auto& [packet, linktype, timestamp] = *event;
+    if (auto error = validate_packet(packet)) {
+      dh.emit(std::move(*error));
+      return false;
+    }
+    if (linktype > std::numeric_limits<uint32_t>::max()) {
+      diagnostic::error("PCAP link type {} is out of range", linktype).emit(dh);
+      return false;
+    }
+    auto output_linktype = static_cast<uint32_t>(linktype);
+    set_pcap_timestamp(packet, *timestamp);
+    if (not current_file_header_) {
+      current_file_header_ = make_file_header(output_linktype);
+      auto serialized_header = serialize_file_header(*current_file_header_);
+      auto bytes = as_bytes(serialized_header);
+      buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+    } else if (output_linktype != current_file_header_->linktype) {
+      diagnostic::error("packet linktype doesn't match file header").emit(dh);
+      return false;
+    } else if (uses_microsecond_precision(current_file_header_->magic_number)) {
+      packet.header.timestamp_fraction /= 1'000;
+    }
+    auto serialized_packet_header = serialize_packet_header(
+      packet.header, current_file_header_->magic_number);
+    auto header = as_bytes(serialized_packet_header);
+    buffer.insert(buffer.end(), header.begin(), header.end());
+    buffer.insert(buffer.end(), packet.data.begin(), packet.data.end());
+    return true;
+  }
+
+  auto append_pcapng_row(std::vector<std::byte>& buffer,
+                         nova::RowView<nova::Record> const& row,
+                         diagnostic_handler& dh) -> bool {
+    auto event = validated_packet_event(row, dh);
+    if (not event) {
+      return false;
+    }
+    auto& [packet, linktype, timestamp] = *event;
+    auto block_size
+      = pcapng_packet_block_size(packet.header.captured_packet_length);
+    if (block_size > maximum_pcapng_block_size) {
+      diagnostic::error("PCAPNG packet exceeds maximum block size")
+        .note("requires {} bytes but maximum is {}", block_size,
+              maximum_pcapng_block_size)
+        .emit(dh);
+      return false;
+    }
+    if (auto error = validate_packet(packet)) {
+      dh.emit(std::move(*error));
+      return false;
+    }
+    if (linktype > std::numeric_limits<uint16_t>::max()) {
+      diagnostic::error("PCAPNG link type {} is out of range", linktype)
+        .emit(dh);
+      return false;
+    }
+    auto raw_timestamp = pcapng::encode_timestamp(
+      *timestamp, {.resolution = pcapng::nanosecond_timestamp_resolution});
+    if (not raw_timestamp) {
+      diagnostic::error("PCAPNG packet timestamp is out of range").emit(dh);
+      return false;
+    }
+    if (not pcapng_section_emitted_) {
+      append_pcapng_section_header(buffer);
+      pcapng_section_emitted_ = true;
+    }
+    auto output_linktype = static_cast<uint16_t>(linktype);
+    auto it = pcapng_interface_ids_.find(output_linktype);
+    if (it == pcapng_interface_ids_.end()) {
+      auto output_id = detail::narrow<uint32_t>(pcapng_interface_ids_.size());
+      append_pcapng_interface(buffer, output_linktype);
+      it = pcapng_interface_ids_.emplace(output_linktype, output_id).first;
+    }
+    if (not append_pcapng_packet(buffer, it->second, packet, *raw_timestamp)) {
+      diagnostic::error("failed to serialize PCAPNG packet").emit(dh);
+      return false;
+    }
+    return true;
+  }
+
+  chunk_metadata metadata_{.content_type = std::string{pcap::content_type}};
+  chunk_metadata pcapng_metadata_{.content_type = "application/x-pcapng"};
+  CaptureFormat format_ = CaptureFormat::unknown;
+  Option<FileHeader> current_file_header_;
+  detail::flat_map<uint16_t, uint32_t> pcapng_interface_ids_;
+  bool pcapng_section_emitted_ = false;
+  bool failed_ = false;
+};
+
 class ReadPlugin final : public virtual operator_factory_plugin,
                          public virtual ReadOperatorPlugin {
 public:
@@ -1410,7 +2463,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadPcapArgs, ReadPcap>{};
+    auto d = Describer<ReadPcapArgs, ReadPcap, ReadPcapEvents>{};
     d.named("emit_file_headers", &ReadPcapArgs::emit_file_headers);
     return d.without_optimize();
   }
@@ -1452,7 +2505,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WritePcapArgs, WritePcap>{};
+    auto d = Describer<WritePcapArgs, WritePcap, WritePcapEvents>{};
     auto format = d.named("format", &WritePcapArgs::format);
     d.validate([format](DescribeCtx& ctx) -> Empty {
       auto value = ctx.get(format).value_or("auto");

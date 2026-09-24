@@ -12,7 +12,9 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/nova/array.hpp"
+#include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/eval_util.hpp"
@@ -420,13 +422,147 @@ auto extract_record_or_empty(nova::MaskedArray<nova::Array<nova::Data>> value,
   return result;
 }
 
+/// Returns the type name of the first row in `rows`, for diagnostics.
+auto first_kind(nova::Array<nova::Data> const& values,
+                nova::storage::BitMap const& rows) -> std::string_view {
+  for (auto row : nova::storage::true_bits(rows)) {
+    return match(values.get(row),
+                 []<class T>(nova::RowView<T> const&) -> std::string_view {
+                   return nova::Type<T>::static_name;
+                 });
+  }
+  TENZIR_UNREACHABLE();
+}
+
+/// Splits the active `mask` rows of `values` into those of type `Tag`, nulls,
+/// and everything else.
+template <class Tag>
+struct MetaValues {
+  static auto make(nova::Array<nova::Data> const& values,
+                   nova::storage::BitMap const& mask) -> MetaValues {
+    auto alternative = values.get_alternative<Tag>();
+    auto nulls = values.get_alternative<nova::Null>();
+    auto matching = alternative ? mask & alternative->present
+                                : nova::storage::BitMap{mask.length(), false};
+    auto null = nulls ? mask & nulls->present
+                      : nova::storage::BitMap{mask.length(), false};
+    auto other = mask.and_not(matching).and_not(null);
+    return MetaValues{
+      .alternative = std::move(alternative),
+      .matching = std::move(matching),
+      .null = std::move(null),
+      .other = std::move(other),
+    };
+  }
+
+  Option<nova::MaskedArray<nova::Array<Tag>>> alternative;
+  nova::storage::BitMap matching;
+  nova::storage::BitMap null;
+  nova::storage::BitMap other;
+};
+
+/// Takes the matching values, `fallback` for the other rows in `mask`, and
+/// `old` elsewhere. A `None` fallback keeps `old`.
+template <class Tag>
+auto merge_meta(nova::Array<Tag> const& old, MetaValues<Tag> const& values,
+                nova::storage::BitMap const& mask,
+                Option<typename nova::Type<Tag>::ViewType> fallback)
+  -> nova::Array<Tag> {
+  auto const length = old.length();
+  if (not values.matching.any() and not(fallback and mask.any())) {
+    return old;
+  }
+  if (values.matching.true_count() == length) {
+    return values.alternative->data;
+  }
+  auto builder = nova::ArrayBuilder<Tag>{};
+  for (auto row = nova::storage::Index{0}; row < length; ++row) {
+    if (values.matching.get(row)) {
+      builder.data(*values.alternative->data.get(row));
+    } else if (fallback and mask.get(row)) {
+      builder.data(*fallback);
+    } else {
+      builder.data(*old.get(row));
+    }
+  }
+  return builder.finish();
+}
+
+/// Assigns `values` to the metadata `target` of the active rows, with the
+/// same diagnostics and fallbacks as the legacy `set`.
+auto assign_meta(nova::Events& events, ast::meta const& target,
+                 nova::Array<nova::Data> const& values, diagnostic_handler& dh)
+  -> void {
+  auto const& mask = events.mask;
+  switch (target.kind) {
+    case ast::meta::name: {
+      auto split = MetaValues<nova::String>::make(values, mask);
+      if (split.other.any()) {
+        diagnostic::warning("expected string but got {}",
+                            first_kind(values, split.other))
+          .primary(target)
+          .emit(dh);
+      }
+      if (split.null.any()) {
+        diagnostic::warning("schema name must not be `null`")
+          .primary(target)
+          .emit(dh);
+      }
+      events.meta.name = merge_meta(events.meta.name, split, mask, None{});
+      return;
+    }
+    case ast::meta::import_time: {
+      // The import time is not nullable. The default-constructed time marks
+      // `null`, and replaces values that are not times.
+      auto split = MetaValues<nova::Time>::make(values, mask);
+      if (split.other.any()) {
+        diagnostic::warning("expected `time` but got `{}`",
+                            first_kind(values, split.other))
+          .primary(target)
+          .emit(dh);
+      }
+      for (auto row : nova::storage::true_bits(split.matching)) {
+        if (*split.alternative->data.get(row) == time{}) {
+          diagnostic::warning("import time cannot be `{}`", time{})
+            .primary(target)
+            .hint("consider using `null` instead")
+            .emit(dh);
+          break;
+        }
+      }
+      events.meta.import_time
+        = merge_meta(events.meta.import_time, split, mask, time{});
+      return;
+    }
+    case ast::meta::internal: {
+      auto split = MetaValues<nova::Bool>::make(values, mask);
+      if (split.other.any()) {
+        diagnostic::warning("expected bool but got {}",
+                            first_kind(values, split.other))
+          .primary(target)
+          .emit(dh);
+      }
+      if (split.null.any()) {
+        diagnostic::warning("cannot set `@internal` to `null`")
+          .primary(target)
+          .emit(dh);
+      }
+      events.meta.internal
+        = merge_meta(events.meta.internal, split, mask, None{});
+      return;
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
 /// Implements `set`/`select` for the nova columnar representation.
 class SetNova final : public Operator<nova::Events, nova::Events> {
 public:
   /// One assignment `SetNova` will apply, in order, to the original input.
   struct Field {
-    /// Empty `path()` means a bare `this = expr` assignment.
-    ast::field_path target;
+    /// A metadata reference, or a field path. An empty `path()` means a bare
+    /// `this = expr` assignment.
+    ast::selector target;
     location rhs_location;
     ast::expression rhs;
   };
@@ -437,10 +573,8 @@ public:
       auto [pruned, moved] = resolve_move_keyword(std::move(assignment));
       auto selector = ast::selector::try_from(pruned.left);
       TENZIR_ASSERT(selector);
-      auto* target = try_as<ast::field_path>(&*selector);
-      TENZIR_ASSERT(target);
       fields_.push_back(Field{
-        .target = *target,
+        .target = std::move(*selector),
         .rhs_location = pruned.right.get_location(),
         .rhs = std::move(pruned.right),
       });
@@ -486,7 +620,11 @@ public:
       data = drop_tree_.apply(std::move(data), input.mask);
     }
     for (auto [field, value] : std::views::zip(fields_, values)) {
-      auto path = field.target.path();
+      if (auto* meta = try_as<ast::meta>(&field.target)) {
+        assign_meta(input, *meta, value.data, ctx.dh());
+        continue;
+      }
+      auto path = as<ast::field_path>(field.target).path();
       if (path.empty()) {
         data = extract_record_or_empty(std::move(value), data.length(),
                                        field.rhs_location, ctx.dh());
@@ -522,19 +660,17 @@ auto validate_assignment_target(ast::expression const& expression,
 }
 
 /// Checks that `assignment`'s left side is a target `SetNova` can handle: a
-/// field path of any depth, or `this`. Rejects metadata (`@x`) and
+/// field path of any depth, `this`, or metadata (`@x`). Rejects
 /// dynamic/computed paths (`$var`, `foo[expr]`), and `move this` (there is
 /// no field to drop for a `this`-level move).
 auto validate_nova_target(ast::assignment const& assignment,
                           diagnostic_handler& dh) -> failure_or<void> {
   auto const& expression = assignment.left;
-  auto selector = ast::selector::try_from(expression);
-  const auto* path = selector ? try_as<ast::field_path>(&*selector) : nullptr;
-  if (path == nullptr) {
+  if (not ast::selector::try_from(expression)) {
     diagnostic::error("set operator does not yet support this assignment "
                       "target with nova events")
-      .primary(expression, "expected a field path or `this`, e.g. `x`, "
-                           "`x.y`, or `this`")
+      .primary(expression, "expected a field path, `this`, or metadata, e.g. "
+                           "`x`, `x.y`, `this`, or `@name`")
       .emit(dh);
     return failure::promise();
   }

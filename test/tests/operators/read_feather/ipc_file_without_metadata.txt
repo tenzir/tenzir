@@ -1,15 +1,15 @@
 {
   x: 1,
   schema: "undefined",
-  timestamp: 1970-01-01T00:00:00Z,
+  timestamp: null,
 }
 {
   x: 2,
   schema: "undefined",
-  timestamp: 1970-01-01T00:00:00Z,
+  timestamp: null,
 }
 {
   x: 3,
   schema: "undefined",
-  timestamp: 1970-01-01T00:00:00Z,
+  timestamp: null,
 }

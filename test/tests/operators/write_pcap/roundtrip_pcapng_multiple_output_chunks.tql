@@ -1,15 +1,36 @@
-from {i: [0, 1, 2]}
-unroll i
-this = {
+// TODO(TNZ-1134, TNZ-1213): Build the packets with `unroll` and use
+// `"x".repeat(600000)` as payload once both run on Nova. Each payload must be
+// large enough to force a separate output chunk.
+let $payload = f"{env("TENZIR_INPUTS")}/pcap/large-single-chunk.pcap"
+from {
   linktype: uint(1),
-  timestamp: time("2020-01-02T03:04:05.123456789Z"),
-  captured_packet_length: uint(600000),
-  original_packet_length: uint(600000),
-  data: "x".repeat(600000),
-  section_id: uint(i),
-  interface_id: uint(i),
+  timestamp: 2020-01-02T03:04:05.123456789Z,
+  captured_packet_length: uint(1114153),
+  original_packet_length: uint(1114153),
+  data: file_contents($payload, binary=true),
+  section_id: uint(0),
+  interface_id: uint(0),
+}, {
+  linktype: uint(1),
+  timestamp: 2020-01-02T03:04:05.123456789Z,
+  captured_packet_length: uint(1114153),
+  original_packet_length: uint(1114153),
+  data: file_contents($payload, binary=true),
+  section_id: uint(1),
+  interface_id: uint(1),
+}, {
+  linktype: uint(1),
+  timestamp: 2020-01-02T03:04:05.123456789Z,
+  captured_packet_length: uint(1114153),
+  original_packet_length: uint(1114153),
+  data: file_contents($payload, binary=true),
+  section_id: uint(2),
+  interface_id: uint(2),
 }
 @name = "pcap.packet"
 write_pcap format="pcapng"
 read_pcap
-summarize count=count()
+// TODO(TNZ-1219): Use `summarize count=count()` once it runs on Nova.
+enumerate n
+tail 1
+select count=n+1

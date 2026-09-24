@@ -1,0 +1,8 @@
+// Values that are not valid packets decapsulate to null.
+from {packet: 42},
+  {packet: null},
+  {packet: {data: b"\x00"}},
+  {packet: {linktype: "ethernet", data: b"\x00"}},
+  {packet: {linktype: uint(1), data: null}},
+  {packet: {linktype: uint(1), data: b"\x00"}}
+select x = decapsulate(packet)

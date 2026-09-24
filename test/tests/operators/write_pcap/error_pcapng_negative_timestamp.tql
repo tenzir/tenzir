@@ -4,7 +4,7 @@ error: true
 
 from {
   linktype: uint(1),
-  timestamp: time("1969-12-31T23:59:59.999999999Z"),
+  timestamp: 1969-12-31T23:59:59.999999999Z,
   captured_packet_length: uint(1),
   original_packet_length: uint(1),
   data: b"\x00",

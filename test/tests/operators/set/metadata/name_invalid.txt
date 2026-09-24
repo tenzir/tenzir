@@ -1,0 +1,25 @@
+warning: schema name must not be `null`
+ --> tests/operators/set/metadata/name_invalid.tql:3:1
+  |
+3 | @name = value
+  | ~~~~~
+  |
+
+warning: expected string but got int
+ --> tests/operators/set/metadata/name_invalid.tql:3:1
+  |
+3 | @name = value
+  | ~~~~~
+  |
+{
+  value: "a",
+  name: "a",
+}
+{
+  value: null,
+  name: "tenzir.unknown",
+}
+{
+  value: 42,
+  name: "tenzir.unknown",
+}

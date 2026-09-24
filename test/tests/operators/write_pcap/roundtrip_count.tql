@@ -3,4 +3,7 @@ from_file f"{env("TENZIR_INPUTS")}/pcap/vlan-single-tagging.pcap" {
 }
 write_pcap
 read_pcap
-summarize count=count()
+// TODO(TNZ-1219): Use `summarize count=count()` once it runs on Nova.
+enumerate n
+tail 1
+select count=n+1

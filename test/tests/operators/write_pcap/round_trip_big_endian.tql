@@ -1,10 +1,11 @@
 // Re-produce an identical copy of the input by taking the input PCAP file
-// header as blueprint for the output trace. The MD5 of the original input
-// is bead1d02a0c44484e51b00b00c3fc869.
-from_file f"{env("TENZIR_INPUTS")}/pcap/big-endian-single-packet.pcap" {
+// header as blueprint for the output trace.
+let $input = f"{env("TENZIR_INPUTS")}/pcap/big-endian-single-packet.pcap"
+from_file $input {
   read_pcap emit_file_headers=true
 }
 write_pcap
 read_all binary=true
-hash = data.hash_md5()
-drop data
+// TODO(TNZ-1121): Compare against the MD5 bead1d02a0c44484e51b00b00c3fc869 with
+// `hash_md5` once it runs on Nova.
+select identical = data == file_contents($input, binary=true)

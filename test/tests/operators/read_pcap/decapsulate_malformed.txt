@@ -1,0 +1,32 @@
+warning: expected `record`, got `int`
+ --> tests/operators/read_pcap/decapsulate_malformed.tql:8:24
+  |
+8 | select x = decapsulate(packet)
+  |                        ~~~~~~
+  |
+
+warning: got a malformed 'pcap.packet' event
+ --> tests/operators/read_pcap/decapsulate_malformed.tql:8:24
+  |
+8 | select x = decapsulate(packet)
+  |                        ~~~~~~
+  |
+  = note: schema 'pcap.packet' must have a 'linktype' field
+{
+  x: null,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}
+{
+  x: {},
+}

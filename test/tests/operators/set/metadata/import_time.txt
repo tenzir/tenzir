@@ -1,0 +1,30 @@
+warning: import time cannot be `1970-01-01 00:00:00.000000000`
+ --> tests/operators/set/metadata/import_time.tql:6:1
+  |
+6 | @import_time = value
+  | ~~~~~~~~~~~~
+  |
+  = hint: consider using `null` instead
+
+warning: expected `time` but got `string`
+ --> tests/operators/set/metadata/import_time.tql:6:1
+  |
+6 | @import_time = value
+  | ~~~~~~~~~~~~
+  |
+{
+  value: 2020-01-01T00:00:00Z,
+  import_time: 2020-01-01T00:00:00Z,
+}
+{
+  value: null,
+  import_time: null,
+}
+{
+  value: 1970-01-01T00:00:00Z,
+  import_time: null,
+}
+{
+  value: "invalid",
+  import_time: null,
+}

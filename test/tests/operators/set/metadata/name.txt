@@ -1,0 +1,8 @@
+{
+  x: 1,
+  name: "schema1",
+}
+{
+  x: 3,
+  name: "schema3",
+}

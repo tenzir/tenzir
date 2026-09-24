@@ -1,0 +1,5 @@
+// Values that are not booleans keep the previous setting.
+from {value: true}, {value: false}, {value: null}, {value: 1}
+@internal = true
+@internal = value
+internal = @internal
