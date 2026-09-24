@@ -1,0 +1,8 @@
+error: cannot drop `this`
+ --> tests/functions/drop_null_fields/this_selector.tql:5:37
+  |
+5 | select result = drop_null_fields(x, this.a)
+  |                                     ^^^^^^
+  |
+  = usage: drop_null_fields(record:record, [fields:field...])
+  = docs: https://tenzir.com/docs/reference/functions/drop_null_fields

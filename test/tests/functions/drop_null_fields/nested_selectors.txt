@@ -1,0 +1,38 @@
+{
+  selected: {
+    a: null,
+    b: {
+      d: null,
+      keep: 1,
+    },
+  },
+  subtree: {
+    a: null,
+    b: {
+      keep: 1,
+    },
+  },
+  missing: {
+    a: null,
+    b: {
+      c: null,
+      d: null,
+      keep: 1,
+    },
+  },
+}
+{
+  selected: {
+    b: {
+      d: null,
+    },
+  },
+  subtree: {
+    b: {},
+  },
+  missing: {
+    b: {
+      d: null,
+    },
+  },
+}

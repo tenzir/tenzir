@@ -605,6 +605,36 @@ TEST("blob preserves bytes and nulls and ignores masked invalid inputs") {
   }
 }
 
+TEST("drop_null_fields distinguishes absent fields and null parents under "
+     "masks") {
+  auto builder = ArrayBuilder<Record>{};
+  append_data(builder.record().field("x"),
+              Record{{"gone", Null{}}, {"keep", Int{1}}});
+  append_data(builder.record().field("x"), Record{{"keep", Int{2}}});
+  builder.record().field("x").null();
+  builder.record().field("x").data(Int{42});
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("drop_null_fields", {root_field("x")}), events,
+                       bitmap({true, true, true, invalid_active}), dh);
+    auto records = result.get_alternative<Record>();
+    REQUIRE(records);
+    auto gone = records->data.field("gone");
+    CHECK(not gone or not gone->present.any());
+    CHECK_EQUAL(*as<RowView<Int>>(records->data.field("keep")->data.get(0)), 1);
+    CHECK_EQUAL(*as<RowView<Int>>(records->data.field("keep")->data.get(1)), 2);
+    CHECK(is_null_at(result, 2));
+    if (invalid_active) {
+      CHECK(is_null_at(result, 3));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+    auto original = events.data.field("x")->data.get_alternative<Record>();
+    REQUIRE(original);
+    CHECK(original->data.field("gone")->present.get(0));
+  }
+}
+
 TEST("type_of reports null as a type and does not inspect inactive rows") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").null();

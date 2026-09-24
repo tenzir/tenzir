@@ -1,0 +1,25 @@
+{
+  result: {
+    b: {
+      d: 1,
+    },
+    xs: [
+      {
+        n: null,
+      },
+    ],
+  },
+}
+{
+  result: {
+    b: {
+      d: 2,
+    },
+  },
+}
+{
+  result: null,
+}
+{
+  result: {},
+}

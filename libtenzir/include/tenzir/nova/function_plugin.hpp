@@ -276,6 +276,30 @@ auto into_member(located<value_type_t<Member>> value) -> Member {
   }
 }
 
+/// Prepares a selector without evaluation, or a constant argument.
+template <class Member>
+auto prepare_argument(ast::expression& expr, InstantiateCtx ctx)
+  -> failure_or<Member> {
+  if constexpr (std::same_as<value_type_t<Member>, ast::field_path>) {
+    auto path = ast::field_path::try_from(expr);
+    if (not path) {
+      diagnostic::error("expected a selector").primary(expr).emit(ctx);
+      return failure::promise();
+    }
+    return Member{std::move(*path)};
+  } else if constexpr (std::same_as<value_type_t<Member>, Data>) {
+    TRY(auto value, prepare_data(expr, ctx));
+    return Member{into_data_member<option_value_t<Member>>(
+      std::move(value), expr.get_location())};
+  } else if constexpr (std::same_as<value_type_t<Member>, Secret>) {
+    TRY(auto value, prepare_secret(expr, ctx));
+    return into_member<Member>(std::move(value));
+  } else {
+    TRY(auto value, prepare_constant<value_type_t<Member>>(expr, ctx));
+    return into_member<Member>(std::move(value));
+  }
+}
+
 /// The `CallSite::Kernel` of `Impl`: runs `Impl::eval` over a type-erased
 /// `Args` bundle.
 template <class Args, FunctionImpl<Args> Impl>
@@ -551,42 +575,12 @@ private:
   /// thereof.
   template <class Member>
   static auto prepare_member(Member Args::* ptr) -> Prepare {
-    if constexpr (std::same_as<_::value_type_t<Member>, ast::field_path>) {
-      return [ptr](PrepareSink sink, ast::expression& expr,
-                   InstantiateCtx ctx) -> failure_or<void> {
-        auto path = ast::field_path::try_from(expr);
-        if (not path) {
-          diagnostic::error("expected a selector").primary(expr).emit(ctx);
-          return failure::promise();
-        }
-        sink.args.as<Args>().*ptr = Member{std::move(*path)};
-        return {};
-      };
-    } else if constexpr (std::same_as<_::value_type_t<Member>, Data>) {
-      return [ptr](PrepareSink sink, ast::expression& expr,
-                   InstantiateCtx ctx) -> failure_or<void> {
-        TRY(auto value, _::prepare_data(expr, ctx));
-        sink.args.as<Args>().*ptr
-          = Member{_::into_data_member<_::option_value_t<Member>>(
-            std::move(value), expr.get_location())};
-        return {};
-      };
-    } else if constexpr (std::same_as<_::value_type_t<Member>, Secret>) {
-      return [ptr](PrepareSink sink, ast::expression& expr,
-                   InstantiateCtx ctx) -> failure_or<void> {
-        TRY(auto value, _::prepare_secret(expr, ctx));
-        sink.args.as<Args>().*ptr = _::into_member<Member>(std::move(value));
-        return {};
-      };
-    } else {
-      return [ptr](PrepareSink sink, ast::expression& expr,
-                   InstantiateCtx ctx) -> failure_or<void> {
-        TRY(auto value,
-            _::prepare_constant<_::value_type_t<Member>>(expr, ctx));
-        sink.args.as<Args>().*ptr = _::into_member<Member>(std::move(value));
-        return {};
-      };
-    }
+    return [ptr](PrepareSink sink, ast::expression& expr,
+                 InstantiateCtx ctx) -> failure_or<void> {
+      TRY(auto value, _::prepare_argument<Member>(expr, ctx));
+      sink.args.as<Args>().*ptr = std::move(value);
+      return {};
+    };
   }
 
   /// Appends a constant to a variadic member.
@@ -594,23 +588,9 @@ private:
   static auto prepare_element(std::vector<T> Args::* ptr) -> Prepare {
     return [ptr](PrepareSink sink, ast::expression& expr,
                  InstantiateCtx ctx) -> failure_or<void> {
-      if constexpr (std::same_as<_::value_type_t<T>, Data>) {
-        TRY(auto value, _::prepare_data(expr, ctx));
-        (sink.args.as<Args>().*ptr)
-          .push_back(
-            _::into_data_member<T>(std::move(value), expr.get_location()));
-        return {};
-      } else if constexpr (std::same_as<_::value_type_t<T>, Secret>) {
-        TRY(auto value, _::prepare_secret(expr, ctx));
-        (sink.args.as<Args>().*ptr)
-          .push_back(_::into_member<T>(std::move(value)));
-        return {};
-      } else {
-        TRY(auto value, _::prepare_constant<_::value_type_t<T>>(expr, ctx));
-        (sink.args.as<Args>().*ptr)
-          .push_back(_::into_member<T>(std::move(value)));
-        return {};
-      }
+      TRY(auto value, _::prepare_argument<T>(expr, ctx));
+      (sink.args.as<Args>().*ptr).push_back(std::move(value));
+      return {};
     };
   }
 
