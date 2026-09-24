@@ -635,6 +635,33 @@ TEST("drop_null_fields distinguishes absent fields and null parents under "
   }
 }
 
+TEST("subnet ignores invalid inactive rows and propagates nulls") {
+  auto builder = ArrayBuilder<Record>{};
+  auto first = builder.record();
+  first.field("ip").data(std::string_view{"10.1.2.3"});
+  first.field("prefix").data(UInt{24});
+  auto second = builder.record();
+  second.field("ip").null();
+  second.field("prefix").data(Int{24});
+  auto third = builder.record();
+  third.field("ip").data(Int{42});
+  third.field("prefix").data(true);
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto mask = bitmap({true, true, invalid_active});
+    auto subnet = eval(call("subnet", {root_field("ip"), root_field("prefix")}),
+                       events, mask, dh);
+    CHECK_EQUAL(fmt::format("{}", *as<RowView<Subnet>>(subnet.get(0))),
+                "10.1.2.0/24");
+    CHECK(is_null_at(subnet, 1));
+    if (invalid_active) {
+      CHECK(is_null_at(subnet, 2));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+  }
+}
+
 TEST("type_of reports null as a type and does not inspect inactive rows") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").null();
