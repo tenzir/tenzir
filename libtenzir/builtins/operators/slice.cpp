@@ -23,6 +23,7 @@
 #include <arrow/compute/api.h>
 #include <arrow/type.h>
 
+#include <limits>
 #include <ranges>
 
 namespace tenzir::plugins::slice {
@@ -424,6 +425,42 @@ private:
   bool done_ = false;
 };
 
+/// Returns how many leading input events `slice` needs to produce its output,
+/// or its first `output_limit` output events if given. Returns `None` if the
+/// output depends on events beyond a fixed prefix: a negative index resolves
+/// against the total event count, and a negative stride starts from the end.
+auto slice_input_bound(Option<int64_t> begin, Option<int64_t> end,
+                       Option<int64_t> stride, Option<uint64_t> output_limit)
+  -> Option<uint64_t> {
+  auto b = begin.unwrap_or(0);
+  auto s = stride.unwrap_or(1);
+  if (b < 0 or s <= 0 or (end and *end < 0)) {
+    return None{};
+  }
+  auto result = Option<uint64_t>{};
+  if (end) {
+    result = static_cast<uint64_t>(*end);
+  }
+  if (output_limit) {
+    // The first N outputs are the inputs at b, b + s, ..., b + (N - 1) * s.
+    auto needed = Option<uint64_t>{uint64_t{0}};
+    if (*output_limit > 0) {
+      auto steps = *output_limit - 1;
+      auto su = static_cast<uint64_t>(s);
+      auto max = std::numeric_limits<uint64_t>::max();
+      if (steps > (max - static_cast<uint64_t>(b) - 1) / su) {
+        needed = None{};
+      } else {
+        needed = static_cast<uint64_t>(b) + steps * su + 1;
+      }
+    }
+    if (needed) {
+      result = result ? std::min(*result, *needed) : *needed;
+    }
+  }
+  return result;
+}
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -433,8 +470,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<SliceArgs, Slice, SliceNova>{};
     d.operator_location(&SliceArgs::operator_location);
-    d.named("begin", &SliceArgs::begin);
-    d.named("end", &SliceArgs::end);
+    auto begin = d.named("begin", &SliceArgs::begin);
+    auto end = d.named("end", &SliceArgs::end);
     auto stride = d.named("stride", &SliceArgs::stride);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(stride));
@@ -445,7 +482,31 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize([=](DescribeCtx& ctx,
+                          ir::OptimizeRequest req) -> Optimization {
+      // `slice` selects events by position, so it needs ordered input and
+      // all predicates stay behind it. The projection passes through,
+      // because `slice` reads no fields. With non-negative indexes and a
+      // positive stride, the output depends only on a prefix of the input,
+      // which bounds the events that upstream must produce. A downstream
+      // limit tightens that bound only if no predicate runs in between.
+      // An argument that is present but cannot be evaluated yields no hint.
+      auto known = [&](Argument<SliceArgs, int64_t> arg) {
+        return ctx.get(arg) or not ctx.get_location(arg);
+      };
+      auto limit = Option<uint64_t>{};
+      if (known(begin) and known(end) and known(stride)) {
+        auto output_limit = req.filter.empty() ? req.limit : Option<uint64_t>{};
+        limit = slice_input_bound(ctx.get(begin), ctx.get(end), ctx.get(stride),
+                                  output_limit);
+      }
+      return {
+        .order = EventOrder::ordered,
+        .filter_self = std::move(req.filter),
+        .limit_upstream = limit,
+        .projection_upstream = std::move(req.projection),
+      };
+    });
   }
 };
 
@@ -463,16 +524,22 @@ public:
       .operator_location = {},
     }};
     d.operator_location(&SliceArgs::operator_location);
-    return d.optimize([](DescribeCtx&, EventOrder order,
-                         ir::OptimizeFilter filter) -> Optimization {
-      return {
-        // invariant to order and filters
-        .order = order,
-        .filter_upstream = std::move(filter),
-        // drop if downstream does not care about order
-        .drop = order == EventOrder::unordered,
-      };
-    });
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        // Reversing permutes events without changing them, so every
+        // predicate commutes with it and the projection passes through.
+        // Without an ordering requirement, `reverse` is a no-op that we drop
+        // along with forwarding the limit. Otherwise, a limit on the reversed
+        // output selects a suffix of the input and must stay behind.
+        auto unordered = req.order == EventOrder::unordered;
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(req.filter),
+          .drop = unordered,
+          .limit_upstream = unordered ? req.limit : Option<uint64_t>{},
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

@@ -1,0 +1,4 @@
+export
+slice end=10
+where x == 1
+head 2

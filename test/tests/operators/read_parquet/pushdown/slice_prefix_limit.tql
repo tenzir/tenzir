@@ -1,0 +1,7 @@
+// `slice end=...` bounds the input, so the corrupted second row group is never
+// decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-lookahead" {
+  read_parquet
+}
+slice begin=8190, end=8192
+select id

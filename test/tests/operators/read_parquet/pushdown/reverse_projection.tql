@@ -1,0 +1,8 @@
+// `reverse` forwards the projection, so the corrupted unselected column is
+// never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+reverse
+select id
+head 2

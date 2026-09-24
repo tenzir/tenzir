@@ -1,0 +1,8 @@
+// A negative stride starts from the last event, so a downstream limit must not
+// reach the reader.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/batches" {
+  read_parquet
+}
+slice stride=-8192
+select id
+head 2

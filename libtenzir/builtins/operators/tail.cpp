@@ -142,8 +142,28 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<TailArgs, Tail, TailNova>{};
     d.operator_location(&TailArgs::keyword);
-    d.optional_positional("count", &TailArgs::count);
-    return d.without_optimize();
+    auto count = d.optional_positional("count", &TailArgs::count);
+    return d.optimize([=](DescribeCtx& ctx,
+                          ir::OptimizeRequest req) -> Optimization {
+      // `tail` keeps the last events of the entire stream, so it needs
+      // ordered input. Predicates and limits change which events come
+      // last: both stay behind `tail`. The projection passes through,
+      // because `tail` only counts events and reads no fields.
+      auto limit = Option<uint64_t>{};
+      // An argument that cannot be evaluated yields no hint.
+      auto value = ctx.get_location(count) ? ctx.get(count)
+                                           : Option<uint64_t>{TailArgs{}.count};
+      if (value and *value == 0) {
+        // Zero trailing events need no input at all.
+        limit = 0;
+      }
+      return {
+        .order = EventOrder::ordered,
+        .filter_self = std::move(req.filter),
+        .limit_upstream = limit,
+        .projection_upstream = std::move(req.projection),
+      };
+    });
   }
 };
 

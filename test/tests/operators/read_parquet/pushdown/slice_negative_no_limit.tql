@@ -1,0 +1,7 @@
+// Negative indexes and strides resolve against the whole input, so no limit
+// may reach the reader.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/batches" {
+  read_parquet
+}
+slice begin=-2
+select id

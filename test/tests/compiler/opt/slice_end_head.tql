@@ -1,0 +1,4 @@
+export
+slice end=20
+select x
+head 4

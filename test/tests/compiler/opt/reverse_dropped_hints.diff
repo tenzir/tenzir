@@ -1,0 +1,149 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    GenericIr {
+-      desc: "reverse",
+-      store: {
+-        op: {
+-          path: [
+-            `reverse` @ [1]:7..14 from 0
+-          ],
+-          ref: std::reverse/op
+-        },
+-        args: [
+-          
+-        ],
+-        named_args: [
+-          
+-        ]
+-      },
+-      filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:15..20 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `x` @ [1]:21..22 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 1 @ [1]:26..27 from 0,
+           location: [1]:21..27 from 0
+         }
+       ],
+-      named_args: [
+-        
++      order: "unordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `y` @ [1]:35..36 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `y` @ [1]:35..36 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `x` @ [1]:21..22 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `x` @ [1]:21..22 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `y` @ [1]:35..36 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `y` @ [1]:35..36 from 0,
+             has_question_mark: false
+           },
+           location: [1]:35..36 from 0
+         }
+       ],
+-      order: "ordered"
++      order: "unordered"
+     },
+     GenericIr {
+       desc: "discard",
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:37..44 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     }
+   ]
+ }
