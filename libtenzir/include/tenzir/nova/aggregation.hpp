@@ -44,6 +44,17 @@
 
 namespace tenzir::nova {
 
+/// An `AggregationImpl` that evaluates part of its work once per batch; see
+/// there.
+template <class Impl, class Args>
+concept BatchedAggregationImpl
+  = requires(Impl& impl, Args const& args, EvalFrame const& batch_frame,
+             EvalFrame&& frame) {
+      {
+        impl.update(args, Impl::prepare(args, batch_frame), std::move(frame))
+      } -> std::same_as<void>;
+    };
+
 /// The accumulator half of a nova aggregation: a default constructible type
 /// with
 ///
@@ -55,16 +66,29 @@ namespace tenzir::nova {
 /// state, with diagnostics going to `frame`; `get` reads the aggregate, which
 /// is `Null` before the first `update`; `reset` returns to the initial state
 /// without forgetting anything derived from constant arguments.
+///
+/// The arguments are evaluated once per batch, but `update` runs once per
+/// group. An aggregation that evaluates more than its arguments, such as a
+/// lambda, does so once per batch in a static
+///
+///     static auto prepare(Args const& args, EvalFrame const& frame) -> Batch;
+///
+/// over every active row, and replaces `update` with
+///
+///     auto update(Args const& args, Batch const& batch, EvalFrame frame)
+///       -> void;
+///
+/// whose frame is narrowed from the one `prepare` saw.
 template <class Impl, class Args>
-concept AggregationImpl = std::default_initializable<Impl>
-                          and requires(Impl& impl, Impl const& cimpl,
-                                       Args const& args, EvalFrame&& frame) {
-                                {
-                                  impl.update(args, std::move(frame))
-                                } -> std::same_as<void>;
-                                { impl.reset() } -> std::same_as<void>;
-                                { cimpl.get() } -> std::same_as<Data>;
-                              };
+concept AggregationImpl
+  = std::default_initializable<Impl>
+    and (requires(Impl& impl, Args const& args, EvalFrame&& frame) {
+          { impl.update(args, std::move(frame)) } -> std::same_as<void>;
+        } or BatchedAggregationImpl<Impl, Args>)
+    and requires(Impl& impl, Impl const& cimpl) {
+          { impl.reset() } -> std::same_as<void>;
+          { cimpl.get() } -> std::same_as<Data>;
+        };
 
 /// The function half of a nova aggregation: a static member
 ///
@@ -199,7 +223,7 @@ public:
 
   auto update(Events const& events, std::span<AggregationGroup const> groups,
               EvalCtx ctx) -> void override {
-    with_args(events, ctx, [&](Args const& args, EvalFrame const& frame) {
+    with_fold(events, ctx, [&](auto const& fold, EvalFrame const& frame) {
       // One mask buffer serves every group: set a group's rows, fold them
       // through a narrowed frame, and clear them again. The narrowed frame
       // releases its copy of the mask when the fold returns, so the buffer is
@@ -214,7 +238,7 @@ public:
         }
         auto selected = std::move(mask).finish();
         auto& state = static_cast<AggregationStateImpl<Impl>&>(*group.state);
-        state.impl.update(args, frame.narrow(selected));
+        fold(state.impl, frame.narrow(selected));
         mask = storage::BitMap::Mutable{std::move(selected)};
         for (auto row : group.rows) {
           mask.set(row, false);
@@ -225,16 +249,17 @@ public:
 
   auto update(Events const& events, AggregationState& state, EvalCtx ctx)
     -> void override {
-    with_args(events, ctx, [&](Args const& args, EvalFrame const& frame) {
-      static_cast<AggregationStateImpl<Impl>&>(state).impl.update(args, frame);
+    with_fold(events, ctx, [&](auto const& fold, EvalFrame const& frame) {
+      fold(static_cast<AggregationStateImpl<Impl>&>(state).impl, frame);
     });
   }
 
 private:
-  /// Evaluates the arguments for the active rows of `events` and calls
-  /// `f(args, frame)` with them and the frame over those rows.
+  /// Evaluates the arguments for the active rows of `events`, runs `prepare`
+  /// if `Impl` has one, and calls `f(fold, frame)` with the frame over those
+  /// rows. `fold(impl, rows)` folds a frame narrowed from it into `impl`.
   template <class F>
-  auto with_args(Events const& events, EvalCtx ctx, F f) -> void {
+  auto with_fold(Events const& events, EvalCtx ctx, F f) -> void {
     // An empty mask has nothing to fold, and `EvalRun::eval` skips call sites
     // for it as well.
     if (not events.mask.any()) {
@@ -244,7 +269,22 @@ private:
     auto const frame = EvalFrame{run, events.mask};
     // The values are produced for all active rows, so a narrowed frame reads
     // exactly its group's rows of them.
-    f(evaluator_.call_site(*root_).fill(frame).template as<Args>(), frame);
+    auto const& args
+      = evaluator_.call_site(*root_).fill(frame).template as<Args>();
+    if constexpr (BatchedAggregationImpl<Impl, Args>) {
+      auto const batch = Impl::prepare(args, frame);
+      f(
+        [&](Impl& impl, EvalFrame rows) {
+          impl.update(args, batch, std::move(rows));
+        },
+        frame);
+    } else {
+      f(
+        [&](Impl& impl, EvalFrame rows) {
+          impl.update(args, std::move(rows));
+        },
+        frame);
+    }
   }
 
   /// Owns the expression and every call site, including the root's.

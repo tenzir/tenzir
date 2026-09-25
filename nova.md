@@ -402,7 +402,11 @@ the aggregation. `Impl` provides two separate implementations:
   by `nova::AggregationImpl`. `update` folds the argument values at
   `frame.mask()` into the state, `get` reads the aggregate (`Null` before the
   first `update`), and `reset` starts over without forgetting anything
-  derived from constants.
+  derived from constants. `update` runs once per group, so an accumulator
+  that evaluates more than its arguments, such as a lambda, does so in a
+  `static auto prepare(Args const&, EvalFrame const&) -> Batch` over all
+  active rows and folds a group with `update(Args const&, Batch const&,
+  EvalFrame)` instead. `count_if` evaluates its predicate this way.
 - The function kernel, for calls in expression position such as `xs.sum()`:
   `static auto eval(Args const&, EvalFrame) -> Array<Data>`, checked by
   `nova::AggregationFunctionImpl`. It must be static: the kernel is shared by
@@ -447,7 +451,8 @@ from `make_state()`, one per group. `update(events, groups, ctx)` evaluates the
 arguments once for `events.mask` and then folds each `AggregationGroup`, a
 state plus its ascending active rows, through a narrowed frame over one reused
 mask buffer. Grouping is thus the operator's concern, while argument
-evaluation happens once per batch regardless of the number of groups.
+evaluation, including `prepare`, happens once per batch regardless of the
+number of groups.
 `nova::hash_rows` hashes whole key columns consistently with `nova::hash`,
 for grouping and routing. `AggregationInstance` pairs an
 `Aggregation` with a single state for callers that do not group.

@@ -9,7 +9,8 @@
 /// Tests for nova aggregations: `AggregationInstance` as the stateful
 /// evaluator of an aggregation call, `Aggregation` with one state per group,
 /// and the static function kernel through which an aggregation serves as a
-/// regular function over list rows. `sum` is the implementation under test.
+/// regular function over list rows. `sum` is the main implementation under
+/// test; `count_if` covers aggregations that evaluate a lambda per batch.
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/aggregation.hpp"
@@ -59,6 +60,17 @@ auto call(std::string name, std::vector<ast::expression> args)
   result.fn.ref = entity_path{
     std::string{entity_pkg_std}, {std::move(name)}, entity_ns::fn};
   return ast::expression{std::move(result)};
+}
+
+auto constant(data value) -> ast::expression {
+  return ast::expression{
+    ast::constant::make(located<data>{std::move(value), location::unknown})};
+}
+
+auto lambda(std::string parameter, ast::expression body) -> ast::expression {
+  return ast::expression{
+    ast::lambda_expr{ast::identifier{std::move(parameter), location::unknown},
+                     location::unknown, std::move(body)}};
 }
 
 auto bitmap(std::vector<bool> bits) -> storage::BitMap {
@@ -342,4 +354,65 @@ TEST("Aggregation folds each group's rows into its own state") {
   CHECK(is_null(a->get()));
   CHECK_EQUAL(get_as<Int>(b->get()), Option{Int{30}});
   CHECK(std::move(dh).collect().empty());
+}
+
+TEST("count_if evaluates its predicate once per batch across groups") {
+  auto builder = ArrayBuilder<Record>{};
+  auto const add_row = [&](Option<Int> x, Int t) {
+    auto row = builder.record();
+    if (x) {
+      row.field("x").data(*x);
+    } else {
+      row.field("x").null();
+    }
+    row.field("t").data(t);
+  };
+  add_row(Int{1}, Int{0});
+  add_row(Int{5}, Int{2});
+  add_row(None{}, Int{2});
+  add_row(Int{3}, Int{4});
+  add_row(Int{7}, Int{0});
+  auto events = make_events(builder.finish());
+  // The last row is inactive, so it must reach no group.
+  events.mask = bitmap({true, true, true, true, false});
+  auto const a_rows = std::vector<storage::Index>{0, 1, 2};
+  auto const b_rows = std::vector<storage::Index>{3};
+  auto const reg = global_registry();
+  auto const count_if = [&](ast::expression body, diagnostic_handler& dh) {
+    auto aggregation = Aggregation::make(
+      call("count_if", {root_field("x"), lambda("v", std::move(body))}),
+      InstantiateCtx{dh, *reg});
+    REQUIRE(aggregation);
+    return std::move(*aggregation);
+  };
+  {
+    // The predicate captures `t` from the row of each value, and nulls never
+    // reach it.
+    auto dh = collecting_diagnostic_handler{};
+    auto aggregation
+      = count_if(ast::expression{ast::binary_expr{
+                   root_field("v"), ast::binary_op::gt, root_field("t")}},
+                 dh);
+    auto a = aggregation->make_state();
+    auto b = aggregation->make_state();
+    auto const groups
+      = std::vector<AggregationGroup>{{*a, a_rows}, {*b, b_rows}};
+    aggregation->update(events, groups, EvalCtx{dh});
+    CHECK_EQUAL(get_as<Int>(a->get()), Option{Int{2}});
+    CHECK_EQUAL(get_as<Int>(b->get()), Option{Int{0}});
+    CHECK(std::move(dh).collect().empty());
+  }
+  {
+    // A predicate that evaluated once per group would warn once per group.
+    auto dh = collecting_diagnostic_handler{};
+    auto aggregation = count_if(constant(data{int64_t{1}}), dh);
+    auto a = aggregation->make_state();
+    auto b = aggregation->make_state();
+    auto const groups
+      = std::vector<AggregationGroup>{{*a, a_rows}, {*b, b_rows}};
+    aggregation->update(events, groups, EvalCtx{dh});
+    CHECK_EQUAL(get_as<Int>(a->get()), Option{Int{0}});
+    CHECK_EQUAL(get_as<Int>(b->get()), Option{Int{0}});
+    CHECK_EQUAL(std::move(dh).collect().size(), 1u);
+  }
 }

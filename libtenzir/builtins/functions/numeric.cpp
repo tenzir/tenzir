@@ -345,20 +345,24 @@ public:
     return builder.finish();
   }
 
-  auto update(CountIfArgs const& args, nova::EvalFrame frame) -> void {
+  /// Evaluates the predicate once for the whole batch rather than once per
+  /// group, and returns the rows at which it holds.
+  static auto prepare(CountIfArgs const& args, nova::EvalFrame const& frame)
+    -> nova::storage::BitMap {
     using namespace nova;
-    auto const rows = non_null_rows(args.x.data, frame.mask());
+    auto rows = non_null_rows(args.x.data, frame.mask());
     if (not rows.any()) {
-      return;
+      return rows;
     }
     TENZIR_ASSERT(frame.input());
     auto const result
       = frame.eval(args.predicate, MaskedArray<Array<Data>>{args.x.data, rows},
                    *frame.input());
+    auto holds = storage::BitMap{frame.length(), false};
     auto non_bool = rows;
     if (auto bools = result.get_alternative<Bool>()) {
       auto const& bits = as<storage::BitMap>(bools->data.storage());
-      count_ += (rows & bools->present & bits).true_count();
+      holds = rows & bools->present & bits;
       non_bool = std::move(non_bool).and_not(bools->present);
     }
     if (auto nulls = result.get_alternative<Null>()) {
@@ -366,6 +370,15 @@ public:
     }
     if (non_bool.any()) {
       warn_non_bool(args.predicate, frame);
+    }
+    return holds;
+  }
+
+  auto update(CountIfArgs const&, nova::storage::BitMap const& holds,
+              nova::EvalFrame frame) -> void {
+    // Reading the group's rows avoids allocating a batch-length mask per group.
+    for (auto row : nova::storage::true_bits(frame.mask())) {
+      count_ += holds.get(row) ? 1 : 0;
     }
   }
 
