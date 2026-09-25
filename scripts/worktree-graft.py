@@ -13,7 +13,8 @@ Usage as a worktrunk pre-start hook in `.config/wt.toml`:
   repair-worktree-metadata = "engine/scripts/worktree-graft.py {{ worktree_path }}"
 
 What it does:
-  - Copies tracked file timestamps (preserves build cache validity)
+  - Copies the timestamps of tracked files whose content is the same in both
+    worktrees (keeps build outputs valid for them, rebuilds the others)
   - Copies populated submodules with their .git directories (avoids network fetches)
   - Copies or fixes CMake build directories and repairs embedded paths
   - Fixes ninja build files (.ninja_log hashes, .ninja_deps paths)
@@ -25,6 +26,7 @@ When a repo opts in via `.worktreeinclude`, pair this with
 from __future__ import annotations
 
 import contextlib
+import filecmp
 import json
 import logging
 import os
@@ -575,24 +577,149 @@ def resolve_source_worktree(
     return find_primary_worktree(worktree_path)
 
 
-def get_tracked_files(worktree_path: Path) -> list[Path]:
-    """Return tracked regular files for a worktree."""
-    result = run_git(["ls-files", "-z"], cwd=worktree_path, text=False)
+def get_index_entries(worktree_path: Path) -> dict[str, tuple[str, str]] | None:
+    """Return the mode and blob id of every tracked regular file in an index."""
+    result = run_git(["ls-files", "--stage", "-v", "-z"], cwd=worktree_path, text=False)
     if result.returncode != 0:
         _LOGGER.debug(f"Could not list tracked files in {worktree_path}")
-        return []
-
-    tracked_files = []
+        return None
+    entries = {}
     for entry in result.stdout.split(b"\x00"):
         if not entry:
             continue
-        path = worktree_path / entry.decode(errors="surrogateescape")
-        try:
-            if path.is_file() and not path.is_symlink():
-                tracked_files.append(path)
-        except OSError:
+        info, _, path = entry.partition(b"\t")
+        tag, mode, blob, _ = info.split(b" ")
+        # Keep only plain regular files. `git diff` does not report changes to
+        # files marked assume-unchanged (lowercase tags) or skip-worktree
+        # (`S`), and symlinks and submodules have modes 120000 and 160000.
+        if tag == b"H" and mode.startswith(b"100"):
+            entries[path.decode(errors="surrogateescape")] = (
+                mode.decode(),
+                blob.decode(),
+            )
+    return entries
+
+
+def get_modified_paths(worktree_path: Path) -> set[str] | None:
+    """Return the tracked paths whose working tree content differs from the index."""
+    result = run_git(
+        ["diff", "--name-only", "--ignore-submodules", "-z"],
+        cwd=worktree_path,
+        text=False,
+    )
+    if result.returncode != 0:
+        _LOGGER.debug(f"Could not list modified files in {worktree_path}")
+        return None
+    return {
+        path.decode(errors="surrogateescape")
+        for path in result.stdout.split(b"\x00")
+        if path
+    }
+
+
+# The attributes that decide how git materializes a blob in a worktree.
+CHECKOUT_ATTRIBUTES = (
+    "text",
+    "eol",
+    "crlf",
+    "working-tree-encoding",
+    "ident",
+    "filter",
+)
+
+
+def get_checkout_attributes(
+    worktree_path: Path, paths: list[str]
+) -> dict[str, tuple[bytes, ...]] | None:
+    """Return the checkout attributes of `paths` in a worktree, in any source."""
+    result = subprocess.run(
+        ["git", "check-attr", "--stdin", "-z", *CHECKOUT_ATTRIBUTES],
+        cwd=worktree_path,
+        input=b"\x00".join(path.encode(errors="surrogateescape") for path in paths),
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        _LOGGER.debug(f"Could not check the attributes of {worktree_path}")
+        return None
+    # Each attribute of each path yields the path, the attribute, and its value.
+    fields = result.stdout.split(b"\x00")
+    values: dict[str, list[bytes]] = {}
+    for i in range(0, len(fields) - 2, 3):
+        values.setdefault(fields[i].decode(errors="surrogateescape"), []).append(
+            fields[i + 2]
+        )
+    return {path: tuple(value) for path, value in values.items()}
+
+
+def have_same_bytes(lhs: Path, rhs: Path) -> bool:
+    """Return whether two files have the same content."""
+    try:
+        return filecmp.cmp(lhs, rhs, shallow=False)
+    except OSError:
+        return False
+
+
+def get_unchanged_files(source: Path, target: Path) -> list[Path]:
+    """Return the tracked regular files of `source` with identical content in `target`.
+
+    The worktrees may be at different commits, and either may have uncommitted
+    changes. A build output only stays valid for a file whose content matches,
+    so all other files keep their own timestamps and get rebuilt.
+    """
+    source_entries = get_index_entries(source)
+    target_entries = get_index_entries(target)
+    source_modified = get_modified_paths(source)
+    target_modified = get_modified_paths(target)
+    if (
+        source_entries is None
+        or target_entries is None
+        or source_modified is None
+        or target_modified is None
+    ):
+        return []
+
+    # Checkout rules such as `eol` or filters can turn one blob into different
+    # bytes, which neither the index nor `git diff` reveals. Treat changed
+    # rules as a change of every file.
+    def attributes(entries: dict[str, tuple[str, str]]) -> dict[str, tuple[str, str]]:
+        return {
+            path: entry
+            for path, entry in entries.items()
+            if Path(path).name == ".gitattributes"
+        }
+
+    if attributes(source_entries) != attributes(target_entries) or any(
+        Path(path).name == ".gitattributes"
+        for path in source_modified | target_modified
+    ):
+        _LOGGER.debug("Checkout rules differ between the worktrees")
+        return []
+    candidates = [
+        path
+        for path, entry in source_entries.items()
+        if target_entries.get(path) == entry
+        and path not in source_modified
+        and path not in target_modified
+    ]
+    # Attributes can also come from untracked files, so compare them per file
+    # as each worktree sees them. With the same attributes, only a filter can
+    # materialize one blob as different bytes, for example if one worktree
+    # skipped it, so compare the bytes of these few files.
+    source_attributes = get_checkout_attributes(source, candidates)
+    target_attributes = get_checkout_attributes(target, candidates)
+    if source_attributes is None or target_attributes is None:
+        return []
+    filter_value = CHECKOUT_ATTRIBUTES.index("filter")
+    unchanged = []
+    for path in candidates:
+        attributes = source_attributes.get(path)
+        if attributes is None or attributes != target_attributes.get(path):
             continue
-    return tracked_files
+        filtered = attributes[filter_value] not in (b"unspecified", b"unset")
+        if filtered and not have_same_bytes(source / path, target / path):
+            continue
+        unchanged.append(source / path)
+    return unchanged
 
 
 def remove_stale_lock(worktree_path: Path) -> bool:
@@ -959,7 +1086,7 @@ class Task(ABC):
 
 
 class TimestampTask(Task):
-    """Copy file timestamps from source to target worktree."""
+    """Copy the timestamps of unchanged files from source to target worktree."""
 
     name = "timestamps"
     description = "copying file timestamps"
@@ -972,14 +1099,22 @@ class TimestampTask(Task):
         def copy_timestamp(src_file: Path) -> None:
             rel_path = src_file.relative_to(source)
             dst_file = target / rel_path
-            if dst_file.exists():
-                try:
-                    src_stat = src_file.stat()
-                    os.utime(dst_file, (src_stat.st_atime, src_stat.st_mtime))
-                except OSError:
-                    pass  # Skip files that can't be stat'd or utime'd
+            try:
+                src_stat = src_file.stat()
+                dst_stat = dst_file.stat()
+                # The same index entry can still check out differently: as
+                # different bytes if one worktree skipped a smudge filter, or
+                # with different executable bits, which Git ignores with
+                # `core.fileMode=false`.
+                if dst_stat.st_size != src_stat.st_size or (
+                    (dst_stat.st_mode ^ src_stat.st_mode) & 0o111
+                ):
+                    return
+                os.utime(dst_file, (src_stat.st_atime, src_stat.st_mtime))
+            except OSError:
+                pass  # Skip files that can't be stat'd or utime'd
 
-        files = get_tracked_files(source)
+        files = get_unchanged_files(source, target)
         with ThreadPoolExecutor(max_workers=8) as executor:
             list(executor.map(copy_timestamp, files))
 
