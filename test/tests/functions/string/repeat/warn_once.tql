@@ -1,0 +1,3 @@
+// Invalid rows in one evaluation produce one warning per condition.
+from {counts: [-1, -2, 2147483648, 2147483649, 2]}
+select x = counts.map(n => "x".repeat(n))

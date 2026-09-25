@@ -2168,8 +2168,17 @@ auto to_nova_packet_event(nova::RowView<nova::Record> const& row)
              ? static_cast<uint32_t>(length)
              : 0;
   };
+  // Nova rows may each have a different set of fields, so a packet row can lack
+  // fields that the legacy schema always has. Only the link type and the data
+  // are required: the lengths default to the size of the data, which means the
+  // packet is not truncated. A missing timestamp is reported by the caller.
+  auto has_linktype = false;
+  auto has_captured_packet_length = false;
+  auto has_original_packet_length = false;
+  auto has_data = false;
   for (auto const& [key, value] : row) {
     if (key == "linktype") {
+      has_linktype = true;
       auto linktype = to_unsigned(value);
       if (not linktype) {
         return type_error(key, "a non-negative integer", value);
@@ -2182,6 +2191,7 @@ auto to_nova_packet_event(nova::RowView<nova::Record> const& row)
         return type_error(key, "`time`", value);
       }
     } else if (key == "captured_packet_length") {
+      has_captured_packet_length = true;
       auto length = to_unsigned(value);
       if (not length) {
         return type_error(key, "a non-negative integer", value);
@@ -2189,6 +2199,7 @@ auto to_nova_packet_event(nova::RowView<nova::Record> const& row)
       result.packet.declared_captured_packet_length = *length;
       result.packet.header.captured_packet_length = narrow_length(*length);
     } else if (key == "original_packet_length") {
+      has_original_packet_length = true;
       auto length = to_unsigned(value);
       if (not length) {
         return type_error(key, "a non-negative integer", value);
@@ -2196,6 +2207,7 @@ auto to_nova_packet_event(nova::RowView<nova::Record> const& row)
       result.packet.declared_original_packet_length = *length;
       result.packet.header.original_packet_length = narrow_length(*length);
     } else if (key == "data") {
+      has_data = true;
       if (auto const* data = try_as<nova::RowView<nova::Blob>>(value)) {
         result.packet.data = **data;
       } else if (auto const* str = try_as<nova::RowView<nova::String>>(value)) {
@@ -2204,6 +2216,23 @@ auto to_nova_packet_event(nova::RowView<nova::Record> const& row)
         return type_error(key, "`blob` or `string`", value);
       }
     }
+  }
+  if (not has_linktype) {
+    return diagnostic::error("packet field `linktype` is missing").done();
+  }
+  if (not has_data) {
+    return diagnostic::error("packet field `data` is missing").done();
+  }
+  if (not has_captured_packet_length) {
+    auto size = uint64_t{result.packet.data.size()};
+    result.packet.declared_captured_packet_length = size;
+    result.packet.header.captured_packet_length = narrow_length(size);
+  }
+  if (not has_original_packet_length) {
+    result.packet.declared_original_packet_length
+      = result.packet.declared_captured_packet_length;
+    result.packet.header.original_packet_length
+      = result.packet.header.captured_packet_length;
   }
   return result;
 }

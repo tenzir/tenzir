@@ -1,0 +1,17 @@
+warning: repeat does not accept the argument type combination `(int, int)`
+ --> tests/functions/string/repeat/bad_type.tql:2:18
+  |
+2 |   wrong_subject: 42.repeat(3),
+  |                  ~~~~~~~~~~~~
+  |
+
+warning: repeat does not accept the argument type combination `(string, string)`
+ --> tests/functions/string/repeat/bad_type.tql:3:16
+  |
+3 |   wrong_count: "x".repeat("3"),
+  |                ~~~~~~~~~~~~~~~
+  |
+{
+  wrong_subject: null,
+  wrong_count: null,
+}

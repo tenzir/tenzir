@@ -1,0 +1,22 @@
+warning: `repeat` expected non-negative count, but got -1
+ --> tests/functions/string/repeat/warn_once.tql:3:39
+  |
+3 | select x = counts.map(n => "x".repeat(n))
+  |                                       ~
+  |
+
+warning: `repeat` result exceeds maximum string size
+ --> tests/functions/string/repeat/warn_once.tql:3:39
+  |
+3 | select x = counts.map(n => "x".repeat(n))
+  |                                       ~
+  |
+{
+  x: [
+    null,
+    null,
+    null,
+    null,
+    "xx",
+  ],
+}

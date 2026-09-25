@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// The link type tells readers how to decode the data, so it has no default.
+from {timestamp: 2020-01-02T03:04:05.123456789Z}
+@name = "pcap.packet"
+to_stdout { write_pcap }

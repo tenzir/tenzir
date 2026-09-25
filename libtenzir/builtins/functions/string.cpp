@@ -569,7 +569,86 @@ private:
   bool pad_left_;
 };
 
-class repeat : public virtual function_plugin {
+struct RepeatArgs {
+  nova::ValueArgument x;
+  nova::ValueArgument n;
+  location call;
+};
+
+class RepeatFunction final {
+public:
+  auto eval(RepeatArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    // Like the legacy function, bound the size of each result and of the
+    // whole array. Warn once per condition, not once per row.
+    auto total_size = size_t{0};
+    auto warn_negative = WarnOnce{};
+    auto warn_too_large = WarnOnce{};
+    auto warn_array_too_large = WarnOnce{};
+    auto repeat = [&](diagnostic_handler& dh, std::string_view str,
+                      uint64_t n) -> Option<std::string> {
+      if (n == 0 or str.empty()) {
+        return std::string{};
+      }
+      if (n > max_string_size / str.size()) {
+        warn_too_large(dh, diagnostic::warning("`repeat` result exceeds "
+                                               "maximum string size")
+                             .primary(args.n.source));
+        return None{};
+      }
+      auto size = static_cast<size_t>(n) * str.size();
+      if (size > max_string_size - total_size) {
+        warn_array_too_large(dh,
+                             diagnostic::warning("`repeat` result exceeds "
+                                                 "maximum string array size")
+                               .primary(args.n.source));
+        return None{};
+      }
+      auto result = std::string{};
+      result.reserve(size);
+      for (auto i = uint64_t{0}; i < n; ++i) {
+        result += str;
+      }
+      total_size += size;
+      return result;
+    };
+    return apply_kernel<2>(
+      frame, "repeat", {args.x, args.n}, args.call,
+      detail::overload{
+        [&](diagnostic_handler& dh, std::string_view str,
+            int64_t n) -> Option<std::string> {
+          if (n < 0) {
+            warn_negative(dh, diagnostic::warning("`repeat` expected "
+                                                  "non-negative count, but "
+                                                  "got {}",
+                                                  n)
+                                .primary(args.n.source));
+            return None{};
+          }
+          return repeat(dh, str, static_cast<uint64_t>(n));
+        },
+        [&](diagnostic_handler& dh, std::string_view str,
+            uint64_t n) -> Option<std::string> {
+          return repeat(dh, str, n);
+        },
+        // A null subject or count yields null without a warning.
+        [](diagnostic_handler&, Null, Null) -> Option<std::string> {
+          return None{};
+        },
+        [](diagnostic_handler&, Null, int64_t) -> Option<std::string> {
+          return None{};
+        },
+        [](diagnostic_handler&, Null, uint64_t) -> Option<std::string> {
+          return None{};
+        },
+        [](diagnostic_handler&, std::string_view, Null) -> Option<std::string> {
+          return None{};
+        }});
+  }
+};
+
+class repeat : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "repeat_fn";
@@ -581,6 +660,14 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<RepeatArgs, RepeatFunction>{};
+    d.positional("x", &RepeatArgs::x, "string");
+    d.positional("n", &RepeatArgs::n, "int");
+    d.call_location(&RepeatArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
