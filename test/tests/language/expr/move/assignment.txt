@@ -1,0 +1,6 @@
+{
+  untouched: 42,
+  destination: {
+    nested: "value",
+  },
+}

@@ -1,0 +1,7 @@
+from {
+  source: {
+    nested: "value",
+  },
+  untouched: 42,
+}
+destination = move source
