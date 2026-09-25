@@ -229,7 +229,7 @@ struct PrependArgs {
 
 class PrependFunction final {
 public:
-  auto eval(PrependArgs const& args, nova::EvalFrame frame) const
+  static auto eval(PrependArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto list = resolve_list(args.xs, frame);
@@ -297,7 +297,7 @@ public:
 
 class AppendFunction final {
 public:
-  auto eval(PrependArgs const& args, nova::EvalFrame frame) const
+  static auto eval(PrependArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto list = resolve_list(args.xs, frame);
@@ -370,7 +370,7 @@ struct ConcatenateArgs {
 
 class ConcatenateFunction final {
 public:
-  auto eval(ConcatenateArgs const& args, nova::EvalFrame frame) const
+  static auto eval(ConcatenateArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto left = resolve_list(args.xs, frame);
@@ -448,7 +448,7 @@ struct AddArgs {
 
 class AddFunction final {
 public:
-  auto eval(AddArgs const& args, nova::EvalFrame frame) const
+  static auto eval(AddArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const& present = frame.mask();
@@ -608,7 +608,7 @@ struct RemoveArgs {
 
 class RemoveFunction final {
 public:
-  auto eval(RemoveArgs const& args, nova::EvalFrame frame) const
+  static auto eval(RemoveArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto invalid = invalid_list_rows(args.xs, frame);
@@ -716,7 +716,7 @@ struct ZipArgs {
 
 class ZipFunction final {
 public:
-  auto eval(ZipArgs const& args, nova::EvalFrame frame) const
+  static auto eval(ZipArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto invalid = invalid_list_rows(args.left, frame)
@@ -895,7 +895,7 @@ struct DeltasArgs {
 
 class DeltasFunction final {
 public:
-  auto eval(DeltasArgs const& args, nova::EvalFrame frame) const
+  static auto eval(DeltasArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto list = resolve_list(args.xs, frame);

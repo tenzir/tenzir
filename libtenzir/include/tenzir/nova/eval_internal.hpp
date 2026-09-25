@@ -129,6 +129,7 @@ private:
   auto eval(const ast::record&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::list&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::meta&, EvalFrame frame) -> Array<Data>;
+  auto eval(const ast::resolved_secret&, EvalFrame frame) -> Array<Data>;
 
   template <class T>
     requires(::tenzir::detail::tl_contains<ast::expression_kinds, T>::value)

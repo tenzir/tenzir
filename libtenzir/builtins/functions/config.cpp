@@ -21,7 +21,7 @@ struct ConfigArgs {
 };
 
 struct ConfigFunction {
-  auto eval(ConfigArgs const& args, nova::EvalFrame frame) const
+  static auto eval(ConfigArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return frame.eval(args.value);
   }

@@ -340,8 +340,8 @@ public:
         .emit(ctx);
       co_return;
     }
-    auto evaluator = nova::Evaluator::make(
-      std::move(args_.field), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto evaluator
+      = co_await nova::Evaluator::make(std::move(args_.field), ctx);
     if (evaluator) {
       evaluator_.emplace(std::move(*evaluator));
     }

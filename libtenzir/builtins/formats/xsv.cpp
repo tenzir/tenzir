@@ -906,6 +906,8 @@ private:
         }
       } else if constexpr (std::same_as<T, nova::Blob>) {
         print_scalar(out, detail::base64::encode(*x), printer);
+      } else if constexpr (std::same_as<T, nova::Secret>) {
+        print_scalar(out, std::string_view{"***"}, printer);
       } else {
         print_scalar(out, *x, printer);
       }

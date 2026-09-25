@@ -793,6 +793,11 @@ auto evaluator::eval(ast::assignment const& x, ActiveRows const& active)
   return null();
 }
 
+auto evaluator::eval(ast::resolved_secret const&, ActiveRows const&)
+  -> multi_series {
+  TENZIR_UNREACHABLE();
+}
+
 auto evaluator::eval(ast::constant const& x, ActiveRows const& active)
   -> multi_series {
   TENZIR_UNUSED(active);

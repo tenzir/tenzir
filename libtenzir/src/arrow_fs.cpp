@@ -926,8 +926,7 @@ auto ToArrowFsOperator<Input>::start(OpCtx& ctx) -> Task<void> {
     auto fields = template_.partition_fields();
     partition_evaluators_.reserve(fields.size());
     for (auto const& field : fields) {
-      auto evaluator = nova::Evaluator::make(
-        field.inner(), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto evaluator = co_await nova::Evaluator::make(field.inner(), ctx);
       if (not evaluator) {
         co_return;
       }
@@ -984,7 +983,7 @@ auto ToArrowFsOperator<Input>::process(Input input, OpCtx& ctx) -> Task<void> {
       nova::storage::for_each_true(input.mask, [&](auto row) {
         auto key = list{};
         for (auto const& column : by) {
-          key.push_back(nova::materialize(column.get(row)));
+          key.push_back(nova::materialize_legacy(column.get(row)));
         }
         auto [it, inserted]
           = result.try_emplace(std::move(key), input.length());

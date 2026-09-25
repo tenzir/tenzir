@@ -345,8 +345,8 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     for (auto i = size_t{0}; i < fields.size(); ++i) {
-      auto evaluator = nova::Evaluator::make(
-        args_.*fields[i].expr, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto evaluator
+        = co_await nova::Evaluator::make(args_.*fields[i].expr, ctx);
       if (not evaluator) {
         co_return;
       }

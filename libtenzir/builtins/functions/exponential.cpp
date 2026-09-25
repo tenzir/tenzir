@@ -241,7 +241,7 @@ struct ExpArgs {
 };
 
 struct ExpFunction {
-  auto eval(ExpArgs const& args, nova::EvalFrame frame) const
+  static auto eval(ExpArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return apply_nova_unary(frame, "exp", args.x, args.call, [](double value) {
       return std::exp(value);
@@ -256,7 +256,7 @@ struct LogArgs {
 };
 
 struct LogFunction {
-  auto eval(LogArgs const& args, nova::EvalFrame frame) const
+  static auto eval(LogArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     if (not args.base) {
       return apply_nova_unary(frame, "log", args.x, args.call,
@@ -276,7 +276,7 @@ struct PowArgs {
 };
 
 struct PowFunction {
-  auto eval(PowArgs const& args, nova::EvalFrame frame) const
+  static auto eval(PowArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto warn_negative = nova::WarnOnce{};
     auto warn_overflow = nova::WarnOnce{};

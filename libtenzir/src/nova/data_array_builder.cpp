@@ -132,6 +132,9 @@ auto append_data_impl(Builder& builder, const Data& value) -> void {
     [&](const Blob& x) {
       builder.data(BlobView{x});
     },
+    [&](const Secret& x) {
+      builder.data(SecretView{x});
+    },
     [&]<class T>(const T& x)
       requires fundamental_view_type<T>
     {
@@ -275,6 +278,7 @@ template auto FieldBuilder::data(uint64_t) -> void;
 template auto FieldBuilder::data(double) -> void;
 template auto FieldBuilder::data<std::string_view>(std::string_view) -> void;
 template auto FieldBuilder::data(blob_view) -> void;
+template auto FieldBuilder::data(SecretView) -> void;
 template auto FieldBuilder::data(ip) -> void;
 template auto FieldBuilder::data(subnet) -> void;
 template auto FieldBuilder::data<time>(time) -> void;

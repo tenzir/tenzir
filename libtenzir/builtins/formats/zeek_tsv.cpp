@@ -1239,6 +1239,9 @@ private:
       [&](nova::RowView<nova::Blob>) {
         out.append("string");
       },
+      [&](nova::RowView<nova::Secret>) {
+        out.append("string");
+      },
       [&](nova::RowView<nova::Ip>) {
         out.append("addr");
       },
@@ -1449,6 +1452,9 @@ private:
       value,
       [&](nova::RowView<nova::Null>) {
         out.append(printer_.unset_field);
+      },
+      [&](nova::RowView<nova::Secret>) {
+        out.append("***");
       },
       [&](nova::RowView<nova::Record> const&) {
         // Only reachable for records in lists, all others are flattened.

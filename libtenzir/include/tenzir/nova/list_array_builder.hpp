@@ -76,6 +76,7 @@ extern template auto
   ArrayBuilder<List>::ListBuilder::data<std::string_view>(std::string_view)
     -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(blob_view) -> void;
+extern template auto ArrayBuilder<List>::ListBuilder::data(SecretView) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(ip) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data(subnet) -> void;
 extern template auto ArrayBuilder<List>::ListBuilder::data<time>(time) -> void;

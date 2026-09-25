@@ -133,15 +133,13 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto invariant = nova::Evaluator::make(
-      args_.invariant, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto invariant = co_await nova::Evaluator::make(args_.invariant, ctx);
     if (not invariant) {
       co_return;
     }
     invariant_.emplace(std::move(*invariant));
     if (args_.message) {
-      auto message = nova::Evaluator::make(
-        *args_.message, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto message = co_await nova::Evaluator::make(*args_.message, ctx);
       if (not message) {
         co_return;
       }

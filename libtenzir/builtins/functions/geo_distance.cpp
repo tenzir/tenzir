@@ -176,7 +176,7 @@ struct GeoDistanceArgs {
 };
 
 struct GeoDistanceFunction {
-  auto eval(GeoDistanceArgs const& args, nova::EvalFrame frame) const
+  static auto eval(GeoDistanceArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto const& mask = frame.mask();
     auto number = [&](nova::ValueArgument const& arg) {

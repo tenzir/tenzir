@@ -558,6 +558,10 @@ auto print_nova_value(nova::RowView<nova::Data> const& value,
     [](nova::RowView<nova::Null>) {
       return false;
     },
+    [&](nova::RowView<nova::Secret> v) {
+      fmt::format_to(std::back_inserter(output), "{}", *v);
+      return true;
+    },
     [&](nova::RowView<nova::Record> const& record) {
       auto first_field = true;
       for (auto const& [name, field] : record) {

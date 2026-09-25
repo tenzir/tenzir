@@ -98,6 +98,9 @@ private:
                  json_string_fmt_wrapper{detail::base64::encode(bytes)});
         }
       },
+      [&](nova::RowView<nova::Secret>) {
+        append(options_.style.string, "\"***\"");
+      },
       [&](nova::RowView<nova::Ip> v) {
         if (options_.tql) {
           append(options_.style.ip, "{}", to_string(*v));

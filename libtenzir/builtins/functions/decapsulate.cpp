@@ -378,7 +378,7 @@ struct DecapsulateArgs {
 };
 
 struct DecapsulateFunction {
-  auto eval(DecapsulateArgs const& args, nova::EvalFrame frame) const
+  static auto eval(DecapsulateArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto wrong_type = nova::WarnOnce{};
     auto malformed = nova::WarnOnce{};

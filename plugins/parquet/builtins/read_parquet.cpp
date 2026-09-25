@@ -178,12 +178,15 @@ protected:
   }
 
   /// Prepares the pushed-down filters, once per reader.
-  auto make_filters(nova::InstantiateCtx ctx) -> failure_or<void> {
+  auto make_filters(OpCtx& ctx) -> Task<failure_or<void>> {
     for (auto const& filter : filter_) {
-      TRY(auto evaluator, nova::Evaluator::make(filter, ctx));
-      filters_.push_back(std::move(evaluator));
+      auto evaluator = co_await nova::Evaluator::make(filter, ctx);
+      if (not evaluator) {
+        co_return failure::promise();
+      }
+      filters_.push_back(std::move(*evaluator));
     }
-    return {};
+    co_return {};
   }
 
   /// Batch conversion is independent of how the file bytes were obtained.
@@ -236,7 +239,9 @@ public:
     if (remaining_ == uint64_t{0}) {
       co_return;
     }
-    std::ignore = make_filters(nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not co_await make_filters(ctx)) {
+      co_return;
+    }
   }
 
   auto process(chunk_ptr input, Push<nova::Events>&, OpCtx&)
@@ -449,15 +454,14 @@ public:
 
   /// Prepares the filters and reads the footer, starting at `from` if set.
   auto open(std::shared_ptr<arrow::io::RandomAccessFile> file,
-            Option<ScanPosition> from, nova::InstantiateCtx ctx)
-    -> Task<failure_or<void>> {
+            Option<ScanPosition> from, OpCtx& ctx) -> Task<failure_or<void>> {
     if (from) {
       remaining_ = from->remaining;
     }
     if (remaining_ == uint64_t{0}) {
       co_return {};
     }
-    CO_TRY(make_filters(ctx));
+    CO_TRY(co_await make_filters(ctx));
     auto metadata = co_await spawn_blocking(
       [file] -> arrow::Result<std::shared_ptr<::parquet::FileMetaData>> {
         // Like the byte path, treat an empty file as an empty input.
@@ -754,9 +758,7 @@ public:
       co_return;
     }
     auto scan = Box<ParquetScan>{std::in_place, std::move(args_)};
-    auto opened
-      = co_await scan->open(std::move(input.file), position_,
-                            nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto opened = co_await scan->open(std::move(input.file), position_, ctx);
     if (not opened) {
       done_ = true;
       co_return;

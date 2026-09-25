@@ -45,6 +45,10 @@ auto equal_impl(const RowView<Data>& l, const RowView<Data>& r) -> bool {
           }
         }
         return compare<ast::binary_op::eq>(*lv, *rv);
+      } else if constexpr (std::same_as<L, Secret>
+                           and std::same_as<R, Secret>) {
+        // Secrets never expose their value, so all of them are equivalent.
+        return true;
       } else if constexpr (std::same_as<L, R>) {
         return *lv == *rv;
       } else {
@@ -79,6 +83,7 @@ enum class category : uint8_t {
   boolean,
   list,
   record,
+  secret,
 };
 
 /// The hash of one value of type `V`, consistent with `equal`: numbers hash
@@ -129,6 +134,10 @@ auto hash_view(RowView<V> const& view) noexcept -> std::size_t {
       ++size;
     }
     return tenzir::hash(category::record, combined, size);
+  } else if constexpr (std::same_as<V, Secret>) {
+    // Secrets never expose their value, so all of them hash alike.
+    TENZIR_UNUSED(view);
+    return tenzir::hash(category::secret);
   } else {
     constexpr auto tag = [] {
       if constexpr (std::same_as<V, String>) {

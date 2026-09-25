@@ -26,7 +26,7 @@ struct FloatArgs {
 };
 
 struct FloatFunction {
-  auto eval(FloatArgs const& args, nova::EvalFrame frame) const
+  static auto eval(FloatArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto warn_parse = nova::WarnOnce{};
     return nova::apply_kernel<1>(

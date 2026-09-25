@@ -41,7 +41,7 @@ auto parent_dir_of(std::string_view path) -> std::string_view {
 
 template <bool FileName>
 struct PathFunction {
-  auto eval(PathArgs const& args, nova::EvalFrame frame) const
+  static auto eval(PathArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return nova::apply_kernel<1>(
       frame, FileName ? "file_name" : "parent_dir", {args.path}, args.call,

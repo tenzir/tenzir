@@ -1024,7 +1024,7 @@ TEST("chunks with a single value import as constants") {
     CHECK(is_constant_string(events, "group"));
     CHECK(not is_constant_string(events, "mixed"));
     auto group = events.data.field("group")->data.get(0);
-    CHECK_EQUAL(nova::materialize(group),
+    CHECK_EQUAL(nova::materialize_legacy(group),
                 data{index == 0 ? "first" : "second"});
     ++index;
   }

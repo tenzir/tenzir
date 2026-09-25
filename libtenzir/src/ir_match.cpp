@@ -289,8 +289,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto scrutinee = nova::Evaluator::make(
-      args_.scrutinee, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto scrutinee = co_await nova::Evaluator::make(args_.scrutinee, ctx);
     if (not scrutinee) {
       co_return;
     }
@@ -301,8 +300,7 @@ public:
         guards_.push_back(None{});
         continue;
       }
-      auto guard = nova::Evaluator::make(
-        *arm.guard, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto guard = co_await nova::Evaluator::make(*arm.guard, ctx);
       if (not guard) {
         co_return;
       }
@@ -554,6 +552,8 @@ auto compare_nova_row(nova::RowView<nova::Data> const& value, data const& other)
       return std::partial_ordering::unordered;
     } else if constexpr (std::same_as<View, nova::RowView<nova::Null>>) {
       return partial_order(data_view3{caf::none}, other);
+    } else if constexpr (std::same_as<View, nova::RowView<nova::Secret>>) {
+      return std::partial_ordering::unordered;
     } else {
       return partial_order(data_view3{*view}, other);
     }
@@ -570,7 +570,7 @@ auto matches_pattern(nova::RowView<nova::Data> const& value,
       auto order = compare_nova_row(value, constant.value);
       return order == std::partial_ordering::equivalent
              or (order == std::partial_ordering::unordered
-                 and nova::materialize(value) == constant.value);
+                 and nova::materialize_legacy(value) == constant.value);
     },
     [&](MatchPattern::Range const& range) {
       auto lower = compare_nova_row(value, range.lower);

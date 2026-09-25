@@ -2,5 +2,5 @@
 error: true
 ---
 
-from {payload: "payload", key: "my_key"}
-select digest = hmac(payload, key, algorithm="sha3_256")
+from {payload: "payload"}
+select digest = hmac(payload, "my_key", algorithm="sha3_256")

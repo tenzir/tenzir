@@ -5,6 +5,7 @@
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/read_pushdown.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 
@@ -40,8 +41,8 @@ TEST("reader filters narrow existing masks before counting the limit") {
     auto expr = parse_expression_with_location_override(text, location::unknown,
                                                         session);
     REQUIRE(expr);
-    auto evaluator = nova::Evaluator::make(
-      std::move(*expr), nova::InstantiateCtx{dh, session.reg()});
+    auto evaluator
+      = tenzir::test::make_evaluator(std::move(*expr), dh, session.reg());
     REQUIRE(evaluator);
     filters.push_back(std::move(*evaluator));
   }
@@ -76,8 +77,8 @@ TEST("reader predicates diagnose active non-boolean rows including nulls") {
     auto expr = parse_expression_with_location_override(
       test.predicate, location::unknown, session);
     REQUIRE(expr);
-    auto evaluator = nova::Evaluator::make(
-      std::move(*expr), nova::InstantiateCtx{dh, session.reg()});
+    auto evaluator
+      = tenzir::test::make_evaluator(std::move(*expr), dh, session.reg());
     REQUIRE(evaluator);
     auto filters = std::vector<nova::Evaluator>{};
     filters.push_back(std::move(*evaluator));
@@ -101,8 +102,8 @@ TEST("reader predicates do not diagnose fully inactive input") {
   auto expr = parse_expression_with_location_override(
     "absent", location::unknown, session);
   REQUIRE(expr);
-  auto evaluator = nova::Evaluator::make(
-    std::move(*expr), nova::InstantiateCtx{dh, session.reg()});
+  auto evaluator
+    = tenzir::test::make_evaluator(std::move(*expr), dh, session.reg());
   REQUIRE(evaluator);
   auto filters = std::vector<nova::Evaluator>{};
   filters.push_back(std::move(*evaluator));

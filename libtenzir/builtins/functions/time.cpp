@@ -335,7 +335,7 @@ struct SinceEpochArgs {
 
 class SinceEpochFunction final {
 public:
-  auto eval(SinceEpochArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SinceEpochArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return nova::apply_kernel<1>(frame, "since_epoch", {args.x}, args.call,
                                  [](diagnostic_handler&,
@@ -412,7 +412,7 @@ struct FromEpochArgs {
 
 class FromEpochFunction final {
 public:
-  auto eval(FromEpochArgs const& args, nova::EvalFrame frame) const
+  static auto eval(FromEpochArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return nova::apply_kernel<1>(frame, "from_epoch", {args.x}, args.call,
                                  [](diagnostic_handler&,
@@ -490,7 +490,7 @@ struct TimeComponentArgs {
 
 class TimeComponentFunction final {
 public:
-  auto eval(TimeComponentArgs const& args, nova::EvalFrame frame) const
+  static auto eval(TimeComponentArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     if (args.hms == hms_subtype::second) {
@@ -745,7 +745,7 @@ struct NowArgs {};
 
 class NowFunction final {
 public:
-  auto eval(NowArgs const&, nova::EvalFrame frame) const
+  static auto eval(NowArgs const&, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return nova::Array<nova::Time>{nova::storage::ConstantStorage<nova::Time>{
       frame.length(), time{time::clock::now()}}};
@@ -790,7 +790,7 @@ struct FormatTimeArgs {
 
 class FormatTimeFunction final {
 public:
-  auto eval(FormatTimeArgs const& args, nova::EvalFrame frame) const
+  static auto eval(FormatTimeArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const& mask = frame.mask();

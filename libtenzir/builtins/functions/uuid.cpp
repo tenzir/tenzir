@@ -50,7 +50,7 @@ struct UuidArgs {
 };
 
 struct UuidFunction {
-  auto eval(UuidArgs const& args, nova::EvalFrame frame) const
+  static auto eval(UuidArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto generate = [&](auto generator) -> nova::Array<nova::Data> {
       auto builder = nova::ArrayBuilder<nova::String>{};

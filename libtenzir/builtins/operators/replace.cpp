@@ -324,16 +324,14 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto what = nova::Evaluator::make(
-      ast::expression{ast::constant::make(std::move(args_.what))},
-      nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto what = co_await nova::Evaluator::make(
+      ast::expression{ast::constant::make(std::move(args_.what))}, ctx);
     if (not what) {
       co_return;
     }
     what_.emplace(std::move(*what));
-    auto with = nova::Evaluator::make(
-      ast::expression{ast::constant::make(std::move(args_.with))},
-      nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto with = co_await nova::Evaluator::make(
+      ast::expression{ast::constant::make(std::move(args_.with))}, ctx);
     if (not with) {
       co_return;
     }

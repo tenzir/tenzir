@@ -3617,12 +3617,13 @@ public:
     }
     if (entry->second.second) {
       auto const materialized
-        = nova::materialize(entry->second.second->get(row));
+        = nova::materialize_legacy(entry->second.second->get(row));
       if (auto const* value = try_as<std::string>(&materialized)) {
         path = *value;
       }
     }
-    return {nova::materialize(entry->second.first.get(row)), std::move(path)};
+    return {nova::materialize_legacy(entry->second.first.get(row)),
+            std::move(path)};
   }
 
 private:
@@ -4159,7 +4160,8 @@ auto field_regex_match_row(nova::RowView<nova::Data> const& value,
       return false;
     },
     [&](auto const&) {
-      return re2::RE2::PartialMatch(to_string(nova::materialize(value)), regex);
+      return re2::RE2::PartialMatch(to_string(nova::materialize_legacy(value)),
+                                    regex);
     });
 }
 
@@ -4206,7 +4208,7 @@ struct SigmaKeywordsArgs {
 
 class SigmaKeywordsImpl final {
 public:
-  auto eval(SigmaKeywordsArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SigmaKeywordsArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto const limit
       = args.field_count.inner < 0
@@ -4306,7 +4308,7 @@ struct SigmaRegexArgs {
 
 class SigmaRegexImpl final {
 public:
-  auto eval(SigmaRegexArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SigmaRegexArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return eval_row_booleans(
       args.input.data, frame,
@@ -4397,7 +4399,7 @@ struct SigmaFieldArgs {
 
 class SigmaFieldImpl final {
 public:
-  auto eval(SigmaFieldArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SigmaFieldArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto builder = nova::ArrayBuilder<nova::Data>{};
     for (auto row = nova::storage::Index{0}; row < frame.length(); ++row) {
@@ -4468,7 +4470,7 @@ struct SigmaHasArgs {
 
 class SigmaHasImpl final {
 public:
-  auto eval(SigmaHasArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SigmaHasArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return eval_row_booleans(
       args.input.data, frame,

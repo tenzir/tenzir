@@ -13,6 +13,7 @@
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/secret.hpp"
 #include "tenzir/nova/storage.hpp"
 #include "tenzir/nova/type_list.hpp"
 #include "tenzir/subnet.hpp"
@@ -33,22 +34,15 @@ using DenseStringOffsetStorage
   = DenseOffsetBytesStorage<char, std::string_view>;
 using DenseBlobOffsetStorage
   = DenseOffsetBytesStorage<std::byte, tenzir::blob_view>;
+using DenseSecretOffsetStorage = DenseOffsetBytesStorage<std::byte, SecretView>;
 
 static_assert(storage<DenseStringOffsetStorage>);
 static_assert(storage<DenseBlobOffsetStorage>);
+static_assert(storage<DenseSecretOffsetStorage>);
 
 } // namespace tenzir::nova::storage
 
 namespace tenzir::nova {
-
-template <typename T>
-struct StrongType {
-  T value;
-
-  constexpr operator T() noexcept {
-    return value;
-  }
-};
 
 using Null = std::monostate;
 using Bool = bool;
@@ -62,6 +56,7 @@ using Time = tenzir::time;
 using Duration = tenzir::duration;
 using Blob = tenzir::blob;
 using BlobView = tenzir::blob_view;
+
 class Data;
 class List : public std::vector<Data> {
 public:
@@ -83,8 +78,9 @@ class ListStorage;
 class RecordStorage;
 } // namespace storage
 
-using fundamental_type_list = TypeList<Null, Bool, Int, UInt, Float, String,
-                                       Blob, Ip, Subnet, Time, Duration>;
+using fundamental_type_list
+  = TypeList<Null, Bool, Int, UInt, Float, String, Blob, Secret, Ip, Subnet,
+             Time, Duration>;
 
 using structured_type_list = TypeList<List, Record>;
 
@@ -202,6 +198,10 @@ DEFINE_FUNDAMENTAL_TYPE(
 DEFINE_FUNDAMENTAL_TYPE("blob", Blob, BlobView, storage::DenseBlobOffsetStorage,
                         TypeList<storage::DenseBlobOffsetStorage>::append<
                           storage::ConstantStorage<Blob, BlobView>>);
+DEFINE_FUNDAMENTAL_TYPE("secret", Secret, SecretView,
+                        storage::DenseSecretOffsetStorage,
+                        TypeList<storage::DenseSecretOffsetStorage>::append<
+                          storage::ConstantStorage<Secret, SecretView>>);
 
 template <>
 class Type<List> {

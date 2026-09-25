@@ -57,7 +57,8 @@ struct GetValueCounts {
     auto keys = std::vector<data>{};
     keys.reserve(values.size());
     for (auto const* value : values) {
-      keys.push_back(nova::materialize(nova::RowView<nova::Data>{*value}));
+      keys.push_back(
+        nova::materialize_legacy(nova::RowView<nova::Data>{*value}));
     }
     std::ranges::stable_sort(order, std::less<>{}, [&](size_t i) {
       return keys[i];

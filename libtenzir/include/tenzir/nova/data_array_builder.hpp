@@ -141,6 +141,7 @@ extern template auto FieldBuilder::data(double) -> void;
 extern template auto FieldBuilder::data<std::string_view>(std::string_view)
   -> void;
 extern template auto FieldBuilder::data(blob_view) -> void;
+extern template auto FieldBuilder::data(SecretView) -> void;
 extern template auto FieldBuilder::data(ip) -> void;
 extern template auto FieldBuilder::data(subnet) -> void;
 extern template auto FieldBuilder::data<time>(time) -> void;

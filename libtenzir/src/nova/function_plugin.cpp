@@ -11,7 +11,6 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/secret.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
@@ -92,36 +91,6 @@ auto _::default_type_name(type_kind kind) -> std::string {
     });
 }
 
-auto _::convert_constant(located<data> constant, type_kind expected,
-                         InstantiateCtx ctx) -> failure_or<located<data>> {
-  auto& value = constant.inner;
-  if (expected.is<uint64_type>()) {
-    if (auto* signed_value = try_as<int64_t>(&value)) {
-      if (*signed_value < 0) {
-        diagnostic::error("expected positive integer, got `{}`", *signed_value)
-          .primary(constant.source)
-          .emit(ctx);
-        return failure::promise();
-      }
-      value = static_cast<uint64_t>(*signed_value);
-    }
-  }
-  if (expected.is<secret_type>()) {
-    if (auto* str = try_as<std::string>(&value)) {
-      value = secret::make_literal(*str);
-    }
-  }
-  const auto actual = type_kind_of_data(value);
-  if (actual != expected) {
-    diagnostic::error("expected argument of type `{}`, but got `{}`", expected,
-                      actual)
-      .primary(constant.source)
-      .emit(ctx);
-    return failure::promise();
-  }
-  return constant;
-}
-
 auto FunctionDescription::usage(std::string_view name) const -> std::string {
   auto result = std::string{};
   auto has_previous = false;
@@ -170,18 +139,40 @@ auto FunctionDescription::usage(std::string_view name) const -> std::string {
   return fmt::format("{}({})", name, result);
 }
 
+auto _::prepare_secret(ast::expression& expr, InstantiateCtx ctx)
+  -> failure_or<located<Secret>> {
+  if (auto const* resolved = try_as<ast::resolved_secret>(&expr)) {
+    return located<Secret>{resolved->value, resolved->source};
+  }
+  TRY(auto constant, const_eval(expr, ctx));
+  if (auto const* resolved = try_as<Secret>(&constant)) {
+    return located<Secret>{*resolved, expr.get_location()};
+  }
+  if (auto const* value = try_as<std::string>(&constant)) {
+    auto bytes = std::as_bytes(std::span{value->data(), value->size()});
+    return located<Secret>{
+      Secret{ecc::cleansing_blob{bytes.begin(), bytes.end()}},
+      expr.get_location()};
+  }
+  diagnostic::error("expected a resolved secret or constant string")
+    .primary(expr)
+    .emit(ctx);
+  return failure::promise();
+}
+
+auto _::prepare_data(ast::expression& expr, InstantiateCtx ctx)
+  -> failure_or<Data> {
+  return const_eval(expr, ctx);
+}
+
 auto FunctionDescription::instantiate(std::string_view name,
                                       ast::function_call& call,
                                       InstantiateCtx ctx) const
   -> failure_or<Instantiation> {
-  // All diagnostics below carry the usage and documentation of this function,
-  // including those of nested constant evaluation.
   auto docs
     = fmt::format("https://tenzir.com/docs/reference/functions/{}", name);
   auto diagnostics = _::DiagnosticScope{ctx, usage(name), std::move(docs)};
   ctx = InstantiateCtx{diagnostics.handler(), ctx};
-  // Sort the call's arguments into positional and named ones, checking the
-  // shape of the call but not yet looking at the argument values.
   auto positional = std::vector<ast::expression*>{};
   auto named = std::vector<std::pair<size_t, ast::expression*>>{};
   auto named_found = std::vector<Option<location>>(named_.size());

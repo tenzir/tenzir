@@ -184,8 +184,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     for (auto& key : keys_) {
-      auto evaluator = nova::Evaluator::make(
-        std::move(key.expr), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto evaluator = co_await nova::Evaluator::make(std::move(key.expr), ctx);
       if (not evaluator) {
         co_return;
       }
@@ -286,9 +285,11 @@ private:
         return size_t{9};
       } else if constexpr (std::same_as<T, nova::Record>) {
         return size_t{10};
+      } else if constexpr (std::same_as<T, nova::Secret>) {
+        return size_t{11};
       } else {
         static_assert(std::same_as<T, nova::Blob>);
-        return size_t{11};
+        return size_t{12};
       }
     });
   }
@@ -363,6 +364,8 @@ private:
           }
           return lhs_it == lhs.end() ? std::weak_ordering::less
                                      : std::weak_ordering::greater;
+        } else if constexpr (std::same_as<L, nova::Secret>) {
+          return std::weak_ordering::equivalent;
         } else if constexpr (std::same_as<L, blob_view>) {
           if (std::ranges::lexicographical_compare(*lhs, *rhs)) {
             return std::weak_ordering::less;

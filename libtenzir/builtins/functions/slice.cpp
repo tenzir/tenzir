@@ -86,7 +86,7 @@ struct SliceArgs {
 
 class SliceFunction final {
 public:
-  auto eval(SliceArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SliceArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const begin

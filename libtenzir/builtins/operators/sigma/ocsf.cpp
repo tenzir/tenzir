@@ -1063,6 +1063,9 @@ auto kind_name(RowView<nova::Data> const& value) -> std::string_view {
     [](RowView<nova::Blob> const&) {
       return to_string(type_kind::of<blob_type>);
     },
+    [](RowView<nova::Secret> const&) {
+      return to_string(type_kind::of<secret_type>);
+    },
     [](RowView<nova::Ip> const&) {
       return to_string(type_kind::of<ip_type>);
     },

@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -750,9 +751,9 @@ TEST("data builders implicitly convert timestamps and strings") {
   builder.data(text);
   builder.data("literal");
   auto array = builder.finish();
-  CHECK_EQUAL(materialize(array.get(0)), expected);
-  CHECK_EQUAL(materialize(array.get(1)), (tenzir::data{text}));
-  CHECK_EQUAL(materialize(array.get(2)),
+  CHECK_EQUAL(materialize_legacy(array.get(0)), expected);
+  CHECK_EQUAL(materialize_legacy(array.get(1)), (tenzir::data{text}));
+  CHECK_EQUAL(materialize_legacy(array.get(2)),
               (tenzir::data{std::string{"literal"}}));
   auto records = ArrayBuilder<Record>{};
   auto record = records.record();
@@ -761,17 +762,18 @@ TEST("data builders implicitly convert timestamps and strings") {
   auto record_array = records.finish();
   auto field = record_array.field("timestamp");
   REQUIRE(field.is_some());
-  CHECK_EQUAL(materialize(field->data.get(0)), expected);
+  CHECK_EQUAL(materialize_legacy(field->data.get(0)), expected);
   auto text_field = record_array.field("text");
   REQUIRE(text_field.is_some());
-  CHECK_EQUAL(materialize(text_field->data.get(0)), (tenzir::data{text}));
+  CHECK_EQUAL(materialize_legacy(text_field->data.get(0)),
+              (tenzir::data{text}));
   auto lists = ArrayBuilder<List>{};
   auto list = lists.list();
   list.data(timestamp);
   list.data(text);
   list.data("literal");
   auto list_array = lists.finish();
-  CHECK_EQUAL(materialize(RowView<Data>{list_array.get(0)}),
+  CHECK_EQUAL(materialize_legacy(RowView<Data>{list_array.get(0)}),
               (tenzir::data{tenzir::list{expected, text, "literal"}}));
 }
 
@@ -2483,8 +2485,8 @@ TEST("constant structured materialization and formatting match primary "
   auto source = constant_array(2, Record{{"z", List{Int{1}, Null{}, Record{}}},
                                          {"a", String{"text"}}});
   auto primary = source.to_primary();
-  CHECK(materialize(RowView<Data>{source.get(1)})
-        == materialize(RowView<Data>{primary.get(1)}));
+  CHECK(materialize_legacy(RowView<Data>{source.get(1)})
+        == materialize_legacy(RowView<Data>{primary.get(1)}));
   auto constant_strings
     = stringify(Array<Data>{source}, storage::BitMap{2, true});
   auto primary_strings
@@ -2719,7 +2721,7 @@ auto nested_value(Array<Record> const& outer, storage::Index row)
   auto field = outer.field("nested");
   REQUIRE(field.is_some());
   REQUIRE(field->present.get(row));
-  return materialize(field->data.get(row));
+  return materialize_legacy(field->data.get(row));
 }
 
 /// Values for a new field `b` on three rows, present where `mask` says so.
@@ -2888,7 +2890,7 @@ auto field_value(Array<Record> const& array, std::string_view name,
   auto field = array.field(name);
   REQUIRE(field.is_some());
   REQUIRE(field->present.get(row));
-  return materialize(field->data.get(row));
+  return materialize_legacy(field->data.get(row));
 }
 
 } // namespace
@@ -2897,7 +2899,8 @@ TEST("take_last pops fundamental builders and keeps earlier rows") {
   auto ints = ArrayBuilder<Int>{};
   ints.data(1);
   ints.data(2);
-  CHECK(ints.take_last() == Data{Int{2}});
+  CHECK(materialize_legacy(ints.take_last())
+        == materialize_legacy(Data{Int{2}}));
   ints.data(3);
   auto int_array = ints.finish();
   REQUIRE_EQUAL(int_array.length(), 2);
@@ -2906,7 +2909,8 @@ TEST("take_last pops fundamental builders and keeps earlier rows") {
   auto strings = ArrayBuilder<String>{};
   strings.data("keep");
   strings.data("drop");
-  CHECK(strings.take_last() == Data{String{"drop"}});
+  CHECK(materialize_legacy(strings.take_last())
+        == materialize_legacy(Data{String{"drop"}}));
   strings.data("new");
   auto string_array = strings.finish();
   REQUIRE_EQUAL(string_array.length(), 2);
@@ -2916,11 +2920,14 @@ TEST("take_last pops fundamental builders and keeps earlier rows") {
   auto bools = ArrayBuilder<Bool>{};
   bools.data(true);
   bools.data(true);
-  CHECK(bools.take_last() == Data{true});
+  CHECK(materialize_legacy(bools.take_last())
+        == materialize_legacy(Data{true}));
   bools.data(false);
   bools.data(true);
-  CHECK(bools.take_last() == Data{true});
-  CHECK(bools.take_last() == Data{false});
+  CHECK(materialize_legacy(bools.take_last())
+        == materialize_legacy(Data{true}));
+  CHECK(materialize_legacy(bools.take_last())
+        == materialize_legacy(Data{false}));
   auto bool_array = bools.finish();
   REQUIRE_EQUAL(bool_array.length(), 1);
   CHECK_EQUAL(*bool_array.get(0), true);
@@ -2928,13 +2935,15 @@ TEST("take_last pops fundamental builders and keeps earlier rows") {
   auto nulls = ArrayBuilder<Null>{};
   nulls.null();
   nulls.null();
-  CHECK(nulls.take_last() == Data{Null{}});
+  CHECK(materialize_legacy(nulls.take_last())
+        == materialize_legacy(Data{Null{}}));
   CHECK_EQUAL(nulls.finish().length(), 1);
 
   auto durations = ArrayBuilder<Duration>{};
   durations.data(std::chrono::seconds{1});
   durations.data(std::chrono::seconds{2});
-  CHECK(durations.take_last() == Data{Duration{std::chrono::seconds{2}}});
+  CHECK(materialize_legacy(durations.take_last())
+        == materialize_legacy(Data{Duration{std::chrono::seconds{2}}}));
   CHECK_EQUAL(durations.finish().length(), 1);
 }
 
@@ -2942,12 +2951,14 @@ TEST("take_last pops a union, a list, and a nested record") {
   auto data_builder = ArrayBuilder<Data>{};
   data_builder.data(std::int64_t{1});
   data_builder.data(std::string_view{"two"});
-  CHECK(data_builder.take_last() == Data{String{"two"}});
+  CHECK(materialize_legacy(data_builder.take_last())
+        == materialize_legacy(Data{String{"two"}}));
   data_builder.data(2.5);
   auto data_array = data_builder.finish();
   REQUIRE_EQUAL(data_array.length(), 2);
-  CHECK_EQUAL(materialize(data_array.get(0)), (tenzir::data{std::int64_t{1}}));
-  CHECK_EQUAL(materialize(data_array.get(1)), (tenzir::data{2.5}));
+  CHECK_EQUAL(materialize_legacy(data_array.get(0)),
+              (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(data_array.get(1)), (tenzir::data{2.5}));
 
   auto lists = ArrayBuilder<List>{};
   auto first = lists.list();
@@ -2962,12 +2973,13 @@ TEST("take_last pops a union, a list, and a nested record") {
   auto nested = Record{};
   nested.emplace("x", String{"y"});
   expected_list.emplace_back(std::move(nested));
-  CHECK(lists.take_last() == Data{std::move(expected_list)});
+  CHECK(materialize_legacy(lists.take_last())
+        == materialize_legacy(Data{std::move(expected_list)}));
   auto third = lists.list();
   third.data(std::int64_t{3});
   auto list_array = lists.finish();
   REQUIRE_EQUAL(list_array.length(), 2);
-  CHECK_EQUAL(materialize(RowView<Data>{list_array.get(1)}),
+  CHECK_EQUAL(materialize_legacy(RowView<Data>{list_array.get(1)}),
               (tenzir::data{tenzir::list{std::int64_t{3}}}));
 
   auto records = ArrayBuilder<Record>{};
@@ -2980,7 +2992,8 @@ TEST("take_last pops a union, a list, and a nested record") {
   auto inner = Record{};
   inner.emplace("c", true);
   expected_record.emplace("b", std::move(inner));
-  CHECK(records.take_last() == Data{std::move(expected_record)});
+  CHECK(materialize_legacy(records.take_last())
+        == materialize_legacy(Data{std::move(expected_record)}));
   records.record().field("b").data(std::int64_t{3});
   auto record_array = records.finish();
   REQUIRE_EQUAL(record_array.length(), 2);
@@ -3629,15 +3642,15 @@ TEST("mapping an alternative handles plain arrays and absent types") {
     return std::move(records.data);
   });
   CHECK_EQUAL(calls, 0);
-  CHECK_EQUAL(materialize(unchanged.get(0)), (tenzir::data{int64_t{7}}));
+  CHECK_EQUAL(materialize_legacy(unchanged.get(0)), (tenzir::data{int64_t{7}}));
   auto mapped = input.map_alternative<Int>([&](auto ints) {
     ++calls;
     CHECK_EQUAL(ints.present.true_count(), 2);
     return Array<Int>{storage::ConstantStorage<Int>{2, 9}};
   });
   CHECK_EQUAL(calls, 1);
-  CHECK_EQUAL(materialize(mapped.get(1)), (tenzir::data{int64_t{9}}));
-  CHECK_EQUAL(materialize(input.get(1)), (tenzir::data{int64_t{7}}));
+  CHECK_EQUAL(materialize_legacy(mapped.get(1)), (tenzir::data{int64_t{9}}));
+  CHECK_EQUAL(materialize_legacy(input.get(1)), (tenzir::data{int64_t{7}}));
 }
 
 TEST("mapping a union alternative preserves other values and selection") {
@@ -3668,16 +3681,16 @@ TEST("mapping a union alternative preserves other values and selection") {
                   after.fields()[i].present.get(row));
     }
   }
-  CHECK_EQUAL(materialize(mapped.get(0)), (tenzir::data{int64_t{42}}));
-  CHECK_EQUAL(materialize(mapped.get(1)), (tenzir::data{"untouched"}));
-  CHECK_EQUAL(materialize(mapped.get(2)), (tenzir::data{caf::none}));
-  CHECK_EQUAL(materialize(input.get(0)), (tenzir::data{int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(mapped.get(0)), (tenzir::data{int64_t{42}}));
+  CHECK_EQUAL(materialize_legacy(mapped.get(1)), (tenzir::data{"untouched"}));
+  CHECK_EQUAL(materialize_legacy(mapped.get(2)), (tenzir::data{caf::none}));
+  CHECK_EQUAL(materialize_legacy(input.get(0)), (tenzir::data{int64_t{1}}));
   auto unchanged = input.map_alternative<Record>([&](auto records) {
     ++calls;
     return std::move(records.data);
   });
   CHECK_EQUAL(calls, 1);
-  CHECK_EQUAL(materialize(unchanged.get(0)), (tenzir::data{int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(unchanged.get(0)), (tenzir::data{int64_t{1}}));
 }
 
 TEST("consuming alternative mapping reuses unique storage and detaches shared "
@@ -3717,7 +3730,7 @@ TEST("consuming alternative mapping reuses unique storage and detaches shared "
                                 {repeat(Data{Int{9}}, size), records.present});
       });
       CHECK_EQUAL(calls, 1);
-      CHECK_EQUAL(materialize(mapped.get(0)),
+      CHECK_EQUAL(materialize_legacy(mapped.get(0)),
                   (tenzir::data{tenzir::record{{"x", int64_t{9}}}}));
       auto records = mapped.get_alternative<Record>();
       REQUIRE(records);
@@ -3725,13 +3738,14 @@ TEST("consuming alternative mapping reuses unique storage and detaches shared "
                     == record_storage,
                   not shared);
       if (alias) {
-        CHECK_EQUAL(materialize(alias->get(0)),
+        CHECK_EQUAL(materialize_legacy(alias->get(0)),
                     (tenzir::data{tenzir::record{{"x", int64_t{1}}}}));
       }
       if (union_input) {
         auto const& result = tenzir::as<UnionArray>(mapped);
         CHECK_EQUAL(result.fields().data() == fields, not shared);
-        CHECK_EQUAL(materialize(mapped.get(1)), tenzir::data{"untouched"});
+        CHECK_EQUAL(materialize_legacy(mapped.get(1)),
+                    tenzir::data{"untouched"});
         CHECK_EQUAL(result.alternative_index_at(0), record_index);
         CHECK_EQUAL(result.alternative_index_at(1), string_index);
       }
@@ -3906,7 +3920,8 @@ TEST("recursive drops consume unique children and detach shared children") {
                   not shared);
       CHECK_EQUAL(record_field_names(child->data.get(0)),
                   (std::vector<std::string>{"keep"}));
-      CHECK_EQUAL(materialize(field->data.get(1)), (tenzir::data{int64_t{7}}));
+      CHECK_EQUAL(materialize_legacy(field->data.get(1)),
+                  (tenzir::data{int64_t{7}}));
       if (alias) {
         auto original = alias->field("p")->data.get_alternative<Record>();
         CHECK(original->data.field("remove")->present.get(0));
@@ -3976,4 +3991,23 @@ TEST("mapping a shared union preserves untouched constant payloads") {
   auto records = mapped.get_alternative<Record>();
   CHECK(record_field_names(records->data.get(0)).empty());
   CHECK(alias.get_alternative<Record>()->data.field("remove")->present.get(0));
+}
+
+TEST("secrets are equivalent in generic data paths") {
+  auto make_secret = [](std::string_view text) {
+    auto const bytes = std::as_bytes(std::span{text.data(), text.size()});
+    return Secret{tenzir::ecc::cleansing_blob{bytes.begin(), bytes.end()}};
+  };
+  auto builder = ArrayBuilder<Data>{};
+  append_data(builder, Data{make_secret("first")});
+  append_data(builder, Data{make_secret("second")});
+  auto record = builder.record();
+  append_data(record.field("nested"), Data{make_secret("third")});
+  auto values = builder.finish();
+  REQUIRE_EQUAL(values.length(), 3);
+  CHECK(is<RowView<Secret>>(values.get(0)));
+  CHECK(is<RowView<Secret>>(values.get(1)));
+  CHECK(equal(values.get(0), values.get(1)));
+  CHECK_EQUAL(hash(values.get(0)), hash(values.get(1)));
+  CHECK(not equal(values.get(0), RowView<Data>{RowView<String>{"***"}}));
 }

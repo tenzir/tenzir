@@ -29,7 +29,7 @@ struct AbsArgs {
 };
 
 struct AbsFunction {
-  auto eval(AbsArgs const& args, nova::EvalFrame frame) const
+  static auto eval(AbsArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto integer_overflow = nova::WarnOnce{};
     auto duration_overflow = nova::WarnOnce{};

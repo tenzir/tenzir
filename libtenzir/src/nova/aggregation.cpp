@@ -8,6 +8,7 @@
 
 #include "tenzir/nova/aggregation.hpp"
 
+#include "tenzir/async.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -44,10 +45,16 @@ auto Aggregation::make(ast::expression expr, InstantiateCtx ctx)
   return factory(std::move(evaluator), *call);
 }
 
-auto AggregationInstance::make(ast::expression expr, InstantiateCtx ctx)
-  -> failure_or<Box<AggregationInstance>> {
-  TRY(auto aggregation, Aggregation::make(std::move(expr), ctx));
-  return AggregationInstance{std::move(aggregation)};
+auto Aggregation::make(ast::expression expr, OpCtx& ctx)
+  -> Task<failure_or<Box<Aggregation>>> {
+  CO_TRY(co_await resolve_secrets(expr, ctx, ctx.dh()));
+  co_return make(std::move(expr), InstantiateCtx{ctx.dh(), ctx.reg()});
+}
+
+auto AggregationInstance::make(ast::expression expr, OpCtx& ctx)
+  -> Task<failure_or<Box<AggregationInstance>>> {
+  CO_TRY(auto aggregation, co_await Aggregation::make(std::move(expr), ctx));
+  co_return AggregationInstance{std::move(aggregation)};
 }
 
 auto AggregationDescription::instantiate(std::string_view name,

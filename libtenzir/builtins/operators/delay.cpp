@@ -111,8 +111,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto evaluator = nova::Evaluator::make(
-      args_.expr, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto evaluator = co_await nova::Evaluator::make(args_.expr, ctx);
     if (not evaluator) {
       co_return;
     }

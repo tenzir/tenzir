@@ -2,6 +2,8 @@
 
 #include "tenzir/detail/assert.hpp"
 
+#include <span>
+
 namespace tenzir::nova {
 
 template <fundamental_type Tag>
@@ -119,9 +121,9 @@ auto DenseOffsetArrayBuilder<Tag, Char>::take_last() -> Data {
   TENZIR_ASSERT_LEQ(0, span.begin);
   range_builder.pop_back();
   auto result = Tag{};
-  result.reserve(static_cast<std::size_t>(span.end - span.begin));
-  for (auto i = span.begin; i < span.end; ++i) {
-    result.push_back(data_builder[i]);
+  if (auto const size = span.end - span.begin; size > 0) {
+    result.append_range(
+      std::span{&data_builder[span.begin], static_cast<std::size_t>(size)});
   }
   data_builder.truncate(span.begin);
   return Data{std::move(result)};
@@ -135,6 +137,7 @@ auto DenseOffsetArrayBuilder<Tag, Char>::finish() -> Array<Tag> {
 
 template class DenseOffsetArrayBuilder<String, char>;
 template class DenseOffsetArrayBuilder<Blob, std::byte>;
+template class DenseOffsetArrayBuilder<Secret, std::byte>;
 
 template class ArrayBuilder<Int>;
 template class ArrayBuilder<UInt>;

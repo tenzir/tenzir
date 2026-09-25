@@ -1772,11 +1772,10 @@ public:
         .emit(ctx);
       co_return;
     }
-    auto ictx = nova::InstantiateCtx{ctx.dh(), ctx.reg()};
     auto groups = std::vector<nova::Evaluator>{};
     groups.reserve(config_.groups.size());
     for (auto const& group : config_.groups) {
-      auto evaluator = nova::Evaluator::make(group.expr.inner(), ictx);
+      auto evaluator = co_await nova::Evaluator::make(group.expr.inner(), ctx);
       if (not evaluator) {
         done_ = true;
         co_return;
@@ -1786,8 +1785,8 @@ public:
     auto aggregations = std::vector<Box<nova::Aggregation>>{};
     aggregations.reserve(config_.aggregates.size());
     for (auto const& aggregate : config_.aggregates) {
-      auto aggregation
-        = nova::Aggregation::make(ast::expression{aggregate.call}, ictx);
+      auto aggregation = co_await nova::Aggregation::make(
+        ast::expression{aggregate.call}, ctx);
       if (not aggregation) {
         done_ = true;
         co_return;

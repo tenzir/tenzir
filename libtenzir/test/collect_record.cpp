@@ -9,6 +9,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/aggregation.hpp"
 #include "tenzir/nova/materialize.hpp"
+#include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/registry.hpp"
 
@@ -39,8 +40,8 @@ auto collect_record_call(bool separate) -> ast::expression {
 auto make_collect_record(diagnostic_handler& dh, bool separate = false)
   -> Box<AggregationInstance> {
   auto reg = global_registry();
-  auto result = AggregationInstance::make(collect_record_call(separate),
-                                          InstantiateCtx{dh, *reg});
+  auto result
+    = tenzir::test::make_aggregation(collect_record_call(separate), dh, *reg);
   REQUIRE(result);
   return std::move(*result);
 }
@@ -58,7 +59,7 @@ auto events(std::initializer_list<Record> rows) -> Events {
 }
 
 auto result_of(AggregationInstance const& instance) -> data {
-  return materialize(RowView<Data>{instance.get()});
+  return materialize_legacy(RowView<Data>{instance.get()});
 }
 
 } // namespace
@@ -67,7 +68,7 @@ TEST("collect_record scalar calls preserve sparse rows and constant lists") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
   auto evaluator
-    = Evaluator::make(collect_record_call(false), InstantiateCtx{dh, *reg});
+    = tenzir::test::make_evaluator(collect_record_call(false), dh, *reg);
   REQUIRE(evaluator);
   auto input = events(
     {Record{{"x", Int{42}}}, Record{{"x", List{List{String{"a"}, Int{1}}}}},
@@ -80,15 +81,16 @@ TEST("collect_record scalar calls preserve sparse rows and constant lists") {
   input.mask = std::move(mask).finish();
   auto result = evaluator->eval(input, EvalCtx{dh});
   CHECK_EQUAL(result.length(), input.length());
-  CHECK_EQUAL(materialize(result.get(1)), (data{record{{"a", int64_t{1}}}}));
-  CHECK_EQUAL(materialize(result.get(3)), (data{record{{"b", true}}}));
+  CHECK_EQUAL(materialize_legacy(result.get(1)),
+              (data{record{{"a", int64_t{1}}}}));
+  CHECK_EQUAL(materialize_legacy(result.get(3)), (data{record{{"b", true}}}));
   input.data = input.data.with_field_overwrite(
     "x", {repeat(Data{List{List{String{"constant"}, Int{2}}}}, input.length()),
           storage::BitMap{input.length(), true}});
   result = evaluator->eval(input, EvalCtx{dh});
-  CHECK_EQUAL(materialize(result.get(1)),
+  CHECK_EQUAL(materialize_legacy(result.get(1)),
               (data{record{{"constant", int64_t{2}}}}));
-  CHECK_EQUAL(materialize(result.get(3)),
+  CHECK_EQUAL(materialize_legacy(result.get(3)),
               (data{record{{"constant", int64_t{2}}}}));
   CHECK(std::move(dh).collect().empty());
 }
@@ -97,17 +99,17 @@ TEST("collect_record scalar calls align two columns and reset each row") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
   auto evaluator
-    = Evaluator::make(collect_record_call(true), InstantiateCtx{dh, *reg});
+    = tenzir::test::make_evaluator(collect_record_call(true), dh, *reg);
   REQUIRE(evaluator);
   auto input = events({Record{{"x", List{String{"a"}, String{"b"}}},
                               {"y", List{Int{1}, Bool{true}}}},
                        Record{{"x", List{}}, {"y", List{}}},
                        Record{{"x", List{String{"c"}}}, {"y", List{Null{}}}}});
   auto result = evaluator->eval(input, EvalCtx{dh});
-  CHECK_EQUAL(materialize(result.get(0)),
+  CHECK_EQUAL(materialize_legacy(result.get(0)),
               (data{record{{"a", int64_t{1}}, {"b", true}}}));
-  CHECK_EQUAL(materialize(result.get(1)), (data{record{}}));
-  CHECK_EQUAL(materialize(result.get(2)), (data{record{{"c", data{}}}}));
+  CHECK_EQUAL(materialize_legacy(result.get(1)), (data{record{}}));
+  CHECK_EQUAL(materialize_legacy(result.get(2)), (data{record{{"c", data{}}}}));
   CHECK(std::move(dh).collect().empty());
 }
 
@@ -115,12 +117,12 @@ TEST("collect_record skips batches without usable list alternatives") {
   auto check_null = [](Record row, bool separate, size_t warnings) {
     auto dh = collecting_diagnostic_handler{};
     auto reg = global_registry();
-    auto evaluator = Evaluator::make(collect_record_call(separate),
-                                     InstantiateCtx{dh, *reg});
+    auto evaluator
+      = tenzir::test::make_evaluator(collect_record_call(separate), dh, *reg);
     REQUIRE(evaluator);
     auto result = evaluator->eval(events({std::move(row)}), EvalCtx{dh});
     CHECK_EQUAL(result.length(), 1);
-    CHECK_EQUAL(materialize(result.get(0)), data{});
+    CHECK_EQUAL(materialize_legacy(result.get(0)), data{});
     auto diagnostics = std::move(dh).collect();
     CHECK_EQUAL(diagnostics.size(), warnings);
     for (auto const& diagnostic : diagnostics) {
@@ -140,7 +142,7 @@ TEST("collect_record validates list masks once per argument") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
   auto evaluator
-    = Evaluator::make(collect_record_call(true), InstantiateCtx{dh, *reg});
+    = tenzir::test::make_evaluator(collect_record_call(true), dh, *reg);
   REQUIRE(evaluator);
   auto input = events({Record{{"x", Int{42}}, {"y", Int{42}}},
                        Record{{"x", Int{42}}, {"y", Null{}}},
@@ -159,9 +161,10 @@ TEST("collect_record validates list masks once per argument") {
   auto result = evaluator->eval(input, EvalCtx{dh});
   CHECK_EQUAL(result.length(), input.length());
   for (auto row = storage::Index{1}; row < 7; ++row) {
-    CHECK_EQUAL(materialize(result.get(row)), data{});
+    CHECK_EQUAL(materialize_legacy(result.get(row)), data{});
   }
-  CHECK_EQUAL(materialize(result.get(7)), (data{record{{"a", int64_t{1}}}}));
+  CHECK_EQUAL(materialize_legacy(result.get(7)),
+              (data{record{{"a", int64_t{1}}}}));
   auto diagnostics = std::move(dh).collect();
   REQUIRE_EQUAL(diagnostics.size(), size_t{2});
   for (auto const& diagnostic : diagnostics) {
@@ -176,8 +179,8 @@ TEST("collect_record validates list masks once per argument") {
   input.mask = std::move(null_mask).finish();
   auto null_dh = collecting_diagnostic_handler{};
   result = evaluator->eval(input, EvalCtx{null_dh});
-  CHECK_EQUAL(materialize(result.get(1)), data{});
-  CHECK_EQUAL(materialize(result.get(2)), data{});
+  CHECK_EQUAL(materialize_legacy(result.get(1)), data{});
+  CHECK_EQUAL(materialize_legacy(result.get(2)), data{});
   CHECK(std::move(null_dh).collect().empty());
 }
 
@@ -185,7 +188,7 @@ TEST("collect_record replaces duplicate values instead of merging them") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
   auto evaluator
-    = Evaluator::make(collect_record_call(false), InstantiateCtx{dh, *reg});
+    = tenzir::test::make_evaluator(collect_record_call(false), dh, *reg);
   REQUIRE(evaluator);
   auto input = events({Record{
     {"x", List{
@@ -196,7 +199,7 @@ TEST("collect_record replaces duplicate values instead of merging them") {
             Record{{"nested", Record{{"new", Int{2}}}}, {"nullable", Null{}}},
           }}}});
   auto result = evaluator->eval(input, EvalCtx{dh});
-  CHECK_EQUAL(materialize(result.get(0)),
+  CHECK_EQUAL(materialize_legacy(result.get(0)),
               (data{record{{"a", list{int64_t{3}}},
                            {"nested", record{{"new", int64_t{2}}}},
                            {"nullable", data{}}}}));

@@ -55,9 +55,9 @@ TEST("Arrow scalar slices preserve values and nulls") {
   auto input = builder.Finish().ValueOrDie()->Slice(1);
   auto result = import(*input);
   CHECK_EQUAL(result.length(), 3);
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{int64_t{-7}});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(2)), data{int64_t{42}});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{int64_t{-7}});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{int64_t{42}});
 }
 
 TEST("Arrow list slices rebase their child offsets and preserve nested nulls") {
@@ -74,10 +74,10 @@ TEST("Arrow list slices rebase their child offsets and preserve nested nulls") {
   auto input = lists.Finish().ValueOrDie()->Slice(1);
   auto result = import(*input);
   CHECK_EQUAL(result.length(), 3);
-  CHECK_EQUAL(nova::materialize(result.get(0)),
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)),
               (data{list{int64_t{1}, data{}, int64_t{3}}}));
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(2)), data{list{}});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{list{}});
   CHECK_EQUAL(import(*input->Slice(input->length(), 0)).length(), 0);
 }
 
@@ -91,8 +91,8 @@ TEST("Arrow struct slices honor the parent validity offset") {
         .ValueOrDie();
   auto result = import(*records->Slice(1));
   CHECK_EQUAL(result.length(), 2);
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(1)),
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)),
               (data{record{{"x", int64_t{3}}}}));
 }
 
@@ -126,9 +126,9 @@ TEST("Arrow dictionaries import their values rather than their indices") {
                                          builder.Finish().ValueOrDie())
         .ValueOrDie();
   auto result = import(*dictionary);
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{"second"});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(2)), data{"first"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{"second"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{"first"});
 }
 
 namespace {
@@ -169,14 +169,14 @@ TEST("Arrow dictionaries whose rows name one value import as constants") {
   auto result = import(*make_dictionary({0, 0, 0}, make_strings({"only"})));
   CHECK(is_constant<nova::String>(result));
   CHECK_EQUAL(result.length(), 3);
-  CHECK_EQUAL(nova::materialize(result.get(2)), data{"only"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{"only"});
   // Rows may all name one of several values, also within a slice.
   auto input
     = make_dictionary({0, 1, 1, 1}, make_strings({"a", "b"}))->Slice(1);
   result = import(*input);
   CHECK(is_constant<nova::String>(result));
   CHECK_EQUAL(result.length(), 3);
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{"b"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{"b"});
   auto bytes = arrow::BinaryBuilder{};
   REQUIRE(bytes.Append(std::string_view{"\x01\x02"}).ok());
   result = import(*make_dictionary({0, 0}, bytes.Finish().ValueOrDie()));
@@ -184,22 +184,22 @@ TEST("Arrow dictionaries whose rows name one value import as constants") {
   auto expected = blob{};
   expected.push_back(std::byte{1});
   expected.push_back(std::byte{2});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{expected});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{expected});
 }
 
 TEST("Arrow dictionaries with nulls or several values import per row") {
   auto result = import(*make_dictionary({0, 1}, make_strings({"a", "b"})));
   CHECK(not is_constant<nova::String>(result));
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{"a"});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{"b"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{"a"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{"b"});
   result = import(*make_dictionary({0, None{}, 0}, make_strings({"a"})));
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{"a"});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(2)), data{"a"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{"a"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{"a"});
   // A null value is not a constant of its type.
   result = import(*make_dictionary({0, 0}, make_strings({None{}})));
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
   result = import(*make_dictionary({}, make_strings({"a"})));
   CHECK_EQUAL(result.length(), 0);
 }
@@ -227,7 +227,7 @@ TEST("Arrow numeric imports preserve physical widths and own their buffers") {
     CHECK_EQUAL(*values->data.get(4),
                 static_cast<Tag>(std::numeric_limits<Value>::max()));
     CHECK(not values->present.get(1));
-    CHECK_EQUAL(nova::materialize(result.get(1)), data{});
+    CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
     auto empty = import(*builder.Finish().ValueOrDie());
     CHECK_EQUAL(empty.length(), 0);
   };
@@ -257,7 +257,7 @@ TEST("Arrow boolean and validity bitmaps honor slices and clear padding") {
       for (auto i = 0; i < length; ++i) {
         auto row = offset + i;
         auto expected = row % 7 == 1 ? data{} : data{row % 5 != 2};
-        CHECK_EQUAL(nova::materialize(result.get(i)), expected);
+        CHECK_EQUAL(nova::materialize_legacy(result.get(i)), expected);
       }
       if (auto values = result.get_alternative<nova::Bool>()) {
         auto const& bits = as<nova::storage::BitMap>(values->data.storage());
@@ -311,7 +311,7 @@ TEST("Arrow byte columns copy sliced payloads once and rebase spans") {
       CHECK(std::equal(bytes.begin(), bytes.end(),
                        reinterpret_cast<Char const*>(expected.data())));
     }
-    CHECK_EQUAL(nova::materialize(result.get(2)), data{});
+    CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{});
     REQUIRE(builder.Append("").ok());
     REQUIRE(builder.AppendNull().ok());
     REQUIRE(builder.Append("").ok());
@@ -320,7 +320,7 @@ TEST("Arrow byte columns copy sliced payloads once and rebase spans") {
     REQUIRE(empty_values);
     CHECK((*empty_values->data.get(0)).empty());
     CHECK((*empty_values->data.get(2)).empty());
-    CHECK_EQUAL(nova::materialize(only_empty.get(1)), data{});
+    CHECK_EQUAL(nova::materialize_legacy(only_empty.get(1)), data{});
   };
   check.template operator()<arrow::StringType, nova::String, char>();
   check.template operator()<arrow::BinaryType, nova::Blob, std::byte>();
@@ -337,9 +337,9 @@ TEST("Arrow structs build a shared shape and retain duplicate-field "
                                         std::vector<std::string>{"x", "y", "x"})
                  .ValueOrDie();
   auto result = import(*input->Slice(1));
-  CHECK_EQUAL(nova::materialize(result.get(0)),
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)),
               (data{record{{"x", int64_t{5}}, {"y", int64_t{2}}}}));
-  CHECK_EQUAL(nova::materialize(result.get(1)),
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)),
               (data{record{{"x", int64_t{6}}, {"y", int64_t{3}}}}));
   CHECK_EQUAL(import(*input->Slice(3, 0)).length(), 0);
 }
@@ -356,9 +356,9 @@ TEST("Arrow dictionary values and indices both contribute nulls") {
                                                   builder.Finish().ValueOrDie())
                  .ValueOrDie();
   auto result = import(*input);
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{"first"});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(2)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{"first"});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(2)), data{});
 }
 
 TEST("Arrow duration slices normalize units without losing nulls") {
@@ -368,8 +368,8 @@ TEST("Arrow duration slices normalize units without losing nulls") {
   REQUIRE(builder.AppendNull().ok());
   REQUIRE(builder.Append(-3).ok());
   auto result = import(*builder.Finish().ValueOrDie()->Slice(1));
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{duration{-3000}});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{duration{-3000}});
 }
 
 TEST("Arrow extension slices retain nulls and own their converted values") {
@@ -381,8 +381,8 @@ TEST("Arrow extension slices retain nulls and own their converted values") {
     auto input = builder.Finish().ValueOrDie();
     auto result = import(*input->Slice(1));
     input.reset();
-    CHECK_EQUAL(nova::materialize(result.get(0)), data{});
-    CHECK_EQUAL(nova::materialize(result.get(1)), data{value});
+    CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{});
+    CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{value});
   };
   check(ip_type{}, ip::v4(0x01020304));
   check(subnet_type{}, subnet{ip::v4(0xc0000200), 120});
@@ -412,7 +412,8 @@ TEST("Arrow subnet imports reject null children only in valid rows") {
             // Arrow permits null struct children even with a valid parent.
             REQUIRE(input->ValidateFull().ok());
             auto valid_tail = import(*input->Slice(2 - offset));
-            CHECK_EQUAL(nova::materialize(valid_tail.get(0)), data{value});
+            CHECK_EQUAL(nova::materialize_legacy(valid_tail.get(0)),
+                        data{value});
             auto result = owned ? nova::import_arrow_array(std::move(input))
                                 : nova::import_arrow_array(*input);
             if (not null_parent and (null_address or null_length)) {
@@ -428,7 +429,7 @@ TEST("Arrow subnet imports reject null children only in valid rows") {
             for (auto i = 0; i < imported.length(); ++i) {
               auto expected
                 = null_parent and i + offset == 1 ? data{} : data{value};
-              CHECK_EQUAL(nova::materialize(imported.get(i)), expected);
+              CHECK_EQUAL(nova::materialize_legacy(imported.get(i)), expected);
             }
           }
         }
@@ -442,7 +443,7 @@ TEST("Arrow empty structs retain their row count") {
   auto result = import(input);
   CHECK_EQUAL(result.length(), 3);
   for (auto i = 0; i < 3; ++i) {
-    CHECK_EQUAL(nova::materialize(result.get(i)), data{record{}});
+    CHECK_EQUAL(nova::materialize_legacy(result.get(i)), data{record{}});
   }
 }
 
@@ -460,7 +461,7 @@ TEST("owned Arrow numeric slices transfer buffers and retain their lifetime") {
     {
       auto result = import(std::move(input));
       CHECK(not lifetime.expired());
-      CHECK_EQUAL(nova::materialize(result.get(1)), data{});
+      CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
       auto physical = take_sparse<Tag, Value>(std::move(result));
       auto mutable_values =
         typename nova::storage::SparseStorage<Value>::Mutable{
@@ -507,7 +508,7 @@ TEST("owned Arrow byte slices transfer their payload buffers") {
     CHECK_EQUAL(physical.data().length(), 5);
     CHECK_EQUAL(physical.span(0).begin, 0);
     CHECK_EQUAL(physical.span(0).end, 5);
-    CHECK_EQUAL(nova::materialize(result.get(1)), data{});
+    CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
   };
   check.template operator()<arrow::StringType, nova::String>();
   check.template operator()<arrow::BinaryType, nova::Blob>();
@@ -527,7 +528,7 @@ TEST("owned Arrow bitmaps reuse aligned storage and copy unaligned slices") {
     for (auto i = 0; i < 129; ++i) {
       auto row = offset + i;
       auto expected = row % 7 == 1 ? data{} : data{row % 5 != 2};
-      CHECK_EQUAL(nova::materialize(result.get(i)), expected);
+      CHECK_EQUAL(nova::materialize_legacy(result.get(i)), expected);
     }
     auto values = result.get_alternative<nova::Bool>();
     REQUIRE(values);
@@ -597,8 +598,8 @@ TEST("owned Arrow imports copy unaligned numeric buffers") {
   auto input = std::make_shared<arrow::Int32Array>(
     2, arrow::SliceMutableBuffer(std::move(allocation), 1, size));
   auto result = import(std::move(input));
-  CHECK_EQUAL(nova::materialize(result.get(0)), data{int64_t{7}});
-  CHECK_EQUAL(nova::materialize(result.get(1)), data{int64_t{13}});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), data{int64_t{7}});
+  CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{int64_t{13}});
 }
 
 TEST("Arrow record batches adopt only unaliased nested payloads") {
@@ -623,7 +624,7 @@ TEST("Arrow record batches adopt only unaliased nested payloads") {
       strings->storage());
     CHECK_EQUAL(static_cast<void const*>(physical.data().begin()) == original,
                 not retain_child);
-    CHECK_EQUAL(nova::materialize(result.get(0)),
+    CHECK_EQUAL(nova::materialize_legacy(result.get(0)),
                 (data{record{{"x", "value"}}}));
   }
 }
@@ -692,7 +693,7 @@ TEST("compressed IPC files and streams transfer decoded buffers into Nova") {
           strings->storage());
       CHECK_EQUAL(static_cast<void const*>(payload.data().begin()),
                   original_strings);
-      CHECK_EQUAL(nova::materialize(result.get(127)),
+      CHECK_EQUAL(nova::materialize_legacy(result.get(127)),
                   (data{record{{"n", int64_t{42}}, {"s", "value"}}}));
       auto numbers = records->field("n");
       REQUIRE(numbers);
@@ -723,7 +724,7 @@ TEST("owned Arrow list slices transfer flattened child payloads") {
   auto const& bytes
     = as<nova::Type<nova::String>::PrimaryPhysicalStorage>(strings->storage());
   CHECK_EQUAL(static_cast<void const*>(bytes.data().begin()), original);
-  CHECK_EQUAL(nova::materialize(result.get(0)), (data{list{"value"}}));
+  CHECK_EQUAL(nova::materialize_legacy(result.get(0)), (data{list{"value"}}));
 }
 
 TEST("Arrow import rejects unsupported columns without materializing them") {

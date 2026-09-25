@@ -153,8 +153,7 @@ public:
   }
 
   auto start_impl(OpCtx& ctx) -> Task<void> {
-    auto evaluator = nova::Evaluator::make(
-      std::move(args_.over), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto evaluator = co_await nova::Evaluator::make(std::move(args_.over), ctx);
     if (evaluator) {
       evaluator_.emplace(std::move(*evaluator));
     }
@@ -167,7 +166,7 @@ public:
     auto groups = std::vector<NovaGroup>{};
     auto group_lookup = std::unordered_map<data, size_t>{};
     for (auto row : nova::storage::true_bits(input.mask)) {
-      auto key = nova::materialize(keys.get(row));
+      auto key = nova::materialize_legacy(keys.get(row));
       auto [it, inserted] = group_lookup.try_emplace(key, groups.size());
       if (inserted) {
         groups.push_back(NovaGroup{std::move(key), {}});

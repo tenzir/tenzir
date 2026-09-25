@@ -36,7 +36,7 @@ struct IpArgs {
 
 class IpFunction final {
 public:
-  auto eval(IpArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(IpArgs const& args, EvalFrame frame) -> Array<Data> {
     return apply_kernel<1>(
       frame, "ip", {args.x}, args.call,
       detail::overload{
@@ -155,7 +155,7 @@ public:
     }
   }
 
-  auto eval(IpCheckArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(IpCheckArgs const& args, EvalFrame frame) -> Array<Data> {
     return apply_kernel<1>(
       frame, name(), {args.x}, args.call,
       [](diagnostic_handler&, Ip v) -> Option<Bool> {
@@ -258,7 +258,7 @@ struct IpCategoryArgs {
 
 class IpCategoryFunction final {
 public:
-  auto eval(IpCategoryArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(IpCategoryArgs const& args, EvalFrame frame) -> Array<Data> {
     return apply_kernel<1>(frame, "ip_category", {args.x}, args.call,
                            [](diagnostic_handler&,
                               Ip v) -> Option<std::string_view> {

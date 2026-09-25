@@ -12,7 +12,6 @@
 
 #include "tenzir/allocator_config.hpp"
 #include "tenzir/execution_node_name_guard.hpp"
-#include "tenzir/option.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/abstract_actor.hpp>
@@ -42,7 +41,7 @@
 namespace tenzir::memory {
 
 inline auto write_error(const char* txt, std::size_t size) noexcept {
-  write(STDERR_FILENO, txt, size);
+  (void)write(STDERR_FILENO, txt, size);
 }
 inline auto write_error(const char* txt) noexcept {
   write_error(txt, std::strlen(txt));

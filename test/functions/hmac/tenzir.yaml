@@ -1,0 +1,4 @@
+tenzir:
+  nova: true
+  secrets:
+    hmac-key: key

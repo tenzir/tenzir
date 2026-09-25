@@ -582,8 +582,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto evaluator = nova::Evaluator::make(
-      std::move(expr_), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto evaluator = co_await nova::Evaluator::make(std::move(expr_), ctx);
     if (not evaluator) {
       co_return;
     }
@@ -711,7 +710,7 @@ struct ListWhereArgs {
 
 class ListWhereFunction final {
 public:
-  auto eval(ListWhereArgs const& args, nova::EvalFrame frame) const
+  static auto eval(ListWhereArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const& present = frame.mask();
@@ -827,7 +826,7 @@ struct MapArgs {
 
 class MapFunction final {
 public:
-  auto eval(MapArgs const& args, nova::EvalFrame frame) const
+  static auto eval(MapArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const& present = frame.mask();

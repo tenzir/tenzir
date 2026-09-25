@@ -187,6 +187,8 @@ auto print_event_node(YAML::Emitter& out,
       out << std::string{*value};
     } else if constexpr (std::same_as<Tag, nova::Blob>) {
       out << detail::base64::encode(*value);
+    } else if constexpr (std::same_as<Tag, nova::Secret>) {
+      out << "***";
     } else if constexpr (detail::is_any_v<Tag, nova::Float, nova::Duration,
                                           nova::Time, nova::Ip, nova::Subnet>) {
       out << fmt::to_string(data{*value});

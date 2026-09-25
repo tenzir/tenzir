@@ -131,7 +131,7 @@ struct IntoDurationArgs {
 template <class T>
 class IntoDurationFunction final {
 public:
-  auto eval(IntoDurationArgs const& args, nova::EvalFrame frame) const
+  static auto eval(IntoDurationArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto const name = duration_function_name<T>();
     const auto unit = std::chrono::duration_cast<tenzir::duration>(T{1});
@@ -307,7 +307,7 @@ struct CountDurationArgs {
 template <class T>
 class CountDurationFunction final {
 public:
-  auto eval(CountDurationArgs const& args, nova::EvalFrame frame) const
+  static auto eval(CountDurationArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto const name = duration_function_name<T, true>();
     const auto unit = std::chrono::duration_cast<tenzir::duration>(T{1});

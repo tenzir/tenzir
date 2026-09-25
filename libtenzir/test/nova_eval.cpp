@@ -18,6 +18,7 @@
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -38,8 +39,7 @@ auto eval(tenzir::ast::expression expression, Events events,
           storage::BitMap mask, tenzir::diagnostic_handler& dh,
           tenzir::registry const& reg) -> Array<Data> {
   events.mask = std::move(mask);
-  auto evaluator
-    = Evaluator::make(std::move(expression), InstantiateCtx{dh, reg});
+  auto evaluator = tenzir::test::make_evaluator(std::move(expression), dh, reg);
   REQUIRE(evaluator);
   return evaluator->eval(events, EvalCtx{dh});
 }
@@ -166,9 +166,9 @@ TEST("unary not handles mixed bool and null rows under a mask") {
     root_field("x")}};
   auto result = eval(expr, events, all_rows(events).keep_first(3), dh, reg);
   CHECK_EQUAL(std::move(dh).collect().size(), 0u);
-  CHECK_EQUAL(materialize(result.get(0)), tenzir::data{false});
-  CHECK_EQUAL(materialize(result.get(1)), tenzir::data{});
-  CHECK_EQUAL(materialize(result.get(2)), tenzir::data{true});
+  CHECK_EQUAL(materialize_legacy(result.get(0)), tenzir::data{false});
+  CHECK_EQUAL(materialize_legacy(result.get(1)), tenzir::data{});
+  CHECK_EQUAL(materialize_legacy(result.get(2)), tenzir::data{true});
 }
 
 TEST("unary not still rejects numeric operands") {
@@ -1095,12 +1095,12 @@ TEST("record spread over a union turns non-record rows into empty records") {
   CHECK_EQUAL(std::move(dh).collect().size(), 1u);
 
   REQUIRE(result.try_as<Record>().is_some());
-  CHECK_EQUAL(materialize(result.get(0)),
+  CHECK_EQUAL(materialize_legacy(result.get(0)),
               (tenzir::data{tenzir::record{{"a", std::int64_t{1}},
                                            {"y", std::int64_t{1}}}}));
-  CHECK_EQUAL(materialize(result.get(1)),
+  CHECK_EQUAL(materialize_legacy(result.get(1)),
               (tenzir::data{tenzir::record{{"y", std::int64_t{1}}}}));
-  CHECK_EQUAL(materialize(result.get(2)),
+  CHECK_EQUAL(materialize_legacy(result.get(2)),
               (tenzir::data{tenzir::record{{"b", std::int64_t{2}},
                                            {"y", std::int64_t{1}}}}));
 }
@@ -1148,16 +1148,18 @@ TEST("numeric index selects list elements and warns out of bounds") {
   auto dh = tenzir::collecting_diagnostic_handler{};
   auto first = eval(index_expr(root_field("xs"), int_const(0)), events,
                     all_rows(events), dh, reg);
-  CHECK_EQUAL(materialize(first.get(0)), (tenzir::data{std::int64_t{1}}));
-  CHECK_EQUAL(materialize(first.get(1)), (tenzir::data{std::int64_t{4}}));
-  CHECK_EQUAL(materialize(first.get(2)), (tenzir::data{}));
+  CHECK_EQUAL(materialize_legacy(first.get(0)),
+              (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(first.get(1)),
+              (tenzir::data{std::int64_t{4}}));
+  CHECK_EQUAL(materialize_legacy(first.get(2)), (tenzir::data{}));
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), 1u);
   CHECK_EQUAL(diags[0].message, "cannot index into `null`");
   auto last = eval(index_expr(root_field("xs"), int_const(-2)), events,
                    bitmap_of({true, true, false}), dh, reg);
-  CHECK_EQUAL(materialize(last.get(0)), (tenzir::data{std::int64_t{2}}));
-  CHECK_EQUAL(materialize(last.get(1)), (tenzir::data{}));
+  CHECK_EQUAL(materialize_legacy(last.get(0)), (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize_legacy(last.get(1)), (tenzir::data{}));
   diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), 1u);
   CHECK_EQUAL(diags[0].message, "list index out of bounds");
@@ -1180,11 +1182,13 @@ TEST("numeric index selects record fields by position") {
   auto dh = tenzir::collecting_diagnostic_handler{};
   auto second = eval(index_expr(root_field("r"), int_const(1)), events,
                      all_rows(events), dh, reg);
-  CHECK_EQUAL(materialize(second.get(0)), (tenzir::data{std::int64_t{2}}));
-  CHECK_EQUAL(materialize(second.get(1)), (tenzir::data{std::int64_t{10}}));
+  CHECK_EQUAL(materialize_legacy(second.get(0)),
+              (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize_legacy(second.get(1)),
+              (tenzir::data{std::int64_t{10}}));
   auto missing = eval(index_expr(root_field("r"), int_const(2)), events,
                       all_rows(events), dh, reg);
-  CHECK_EQUAL(materialize(missing.get(0)), (tenzir::data{}));
+  CHECK_EQUAL(materialize_legacy(missing.get(0)), (tenzir::data{}));
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), 1u);
   CHECK_EQUAL(diags[0].message, "index out of bounds");
@@ -1218,29 +1222,33 @@ TEST("record indexing specializes only active types and diagnoses nulls") {
   auto mask = bitmap_of({true, true, true, false});
   auto dynamic = eval(index_expr(root_field("r"), root_field("key")), events,
                       mask, dh, reg);
-  CHECK_EQUAL(materialize(dynamic.get(0)), (tenzir::data{std::int64_t{1}}));
-  CHECK_EQUAL(materialize(dynamic.get(1)), tenzir::data{});
-  CHECK_EQUAL(materialize(dynamic.get(2)), tenzir::data{});
+  CHECK_EQUAL(materialize_legacy(dynamic.get(0)),
+              (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(dynamic.get(1)), tenzir::data{});
+  CHECK_EQUAL(materialize_legacy(dynamic.get(2)), tenzir::data{});
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), 2u);
   CHECK_EQUAL(diags[0].message, "cannot index into `null`");
   CHECK_EQUAL(diags[1].message, "cannot use `null` as index");
   auto constant = eval(index_expr(root_field("r"), string_const("a")), events,
                        mask, dh, reg);
-  CHECK_EQUAL(materialize(constant.get(0)), (tenzir::data{std::int64_t{1}}));
-  CHECK_EQUAL(materialize(constant.get(1)), (tenzir::data{std::int64_t{2}}));
-  CHECK_EQUAL(materialize(constant.get(2)), tenzir::data{});
+  CHECK_EQUAL(materialize_legacy(constant.get(0)),
+              (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(constant.get(1)),
+              (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize_legacy(constant.get(2)), tenzir::data{});
   diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), 1u);
   CHECK_EQUAL(diags[0].message, "cannot index into `null`");
   auto optional = eval(index_expr(root_field("r"), root_field("key"), true),
                        events, mask, dh, reg);
-  CHECK_EQUAL(materialize(optional.get(0)), (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(optional.get(0)),
+              (tenzir::data{std::int64_t{1}}));
   CHECK(std::move(dh).collect().empty());
   auto missing
     = eval(index_expr(root_field("r"), string_const("missing"), true), events,
            mask, dh, reg);
-  CHECK_EQUAL(materialize(missing.get(0)), tenzir::data{});
+  CHECK_EQUAL(materialize_legacy(missing.get(0)), tenzir::data{});
   CHECK(std::move(dh).collect().empty());
 }
 
@@ -1253,14 +1261,15 @@ TEST("constant list indices handle unsigned and signed extremes") {
   auto dh = tenzir::collecting_diagnostic_handler{};
   auto first = eval(index_expr(root_field("xs"), uint_const(0), true), events,
                     all_rows(events), dh, reg);
-  CHECK_EQUAL(materialize(first.get(0)), (tenzir::data{std::int64_t{42}}));
-  CHECK_EQUAL(materialize(first.get(1)), tenzir::data{});
+  CHECK_EQUAL(materialize_legacy(first.get(0)),
+              (tenzir::data{std::int64_t{42}}));
+  CHECK_EQUAL(materialize_legacy(first.get(1)), tenzir::data{});
   for (auto index : {int_const(std::numeric_limits<int64_t>::min()),
                      uint_const(std::numeric_limits<uint64_t>::max())}) {
     auto result = eval(index_expr(root_field("xs"), index, true), events,
                        all_rows(events), dh, reg);
-    CHECK_EQUAL(materialize(result.get(0)), tenzir::data{});
-    CHECK_EQUAL(materialize(result.get(1)), tenzir::data{});
+    CHECK_EQUAL(materialize_legacy(result.get(0)), tenzir::data{});
+    CHECK_EQUAL(materialize_legacy(result.get(1)), tenzir::data{});
   }
   CHECK(std::move(dh).collect().empty());
 }

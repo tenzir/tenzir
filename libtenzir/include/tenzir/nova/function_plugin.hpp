@@ -13,6 +13,7 @@
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/eval_internal.hpp"
@@ -36,17 +37,31 @@
 
 namespace tenzir::nova {
 
+/// A constant argument of any type together with the location of its
+/// expression. It stands in for `located<Data>`, which cannot be instantiated
+/// because its defaulted comparison recurses through `Data`.
+struct ConstantArgument {
+  Data inner;
+  location source;
+
+  auto get_location() const -> location {
+    return source;
+  }
+};
+
 /// Constant argument types that a nova function can register. Expressions
 /// arrive as an evaluated `ValueArgument` (or a borrowed `LazyArgument`),
 /// lambdas as a `LambdaArgument`.
 template <class T>
-concept ArgType = tenzir::_::operator_plugin::ArgType<T>
-                  and not concepts::one_of<T, ast::expression, ast::lambda_expr,
-                                           located<ir::pipeline>>;
+concept ArgType
+  = (tenzir::_::operator_plugin::ArgType<T>
+     and not concepts::one_of<T, ast::expression, ast::lambda_expr,
+                              located<ir::pipeline>, data, located<data>>)
+    or concepts::one_of<T, Data, ConstantArgument, Secret, located<Secret>>;
 
 /// The kernel of a nova function: a default constructible type with
 ///
-///     auto eval(Args const& args, EvalFrame frame) const -> Array<Data>;
+///     static auto eval(Args const& args, EvalFrame frame) -> Array<Data>;
 ///
 /// that produces the rows of `frame.mask()`, with diagnostics going to
 /// `frame`. Everything it needs is in `Args`: the framework evaluates the
@@ -56,11 +71,12 @@ concept ArgType = tenzir::_::operator_plugin::ArgType<T>
 /// Derive precomputed data from constants in `validate`, which may store it in
 /// `Args`.
 template <class Impl, class Args>
-concept FunctionImpl
-  = std::default_initializable<Impl>
-    and requires(Impl const& impl, Args const& args, EvalFrame&& frame) {
-          { impl.eval(args, std::move(frame)) } -> std::same_as<Array<Data>>;
-        };
+concept FunctionImpl = std::default_initializable<Impl>
+                       and requires(Args const& args, EvalFrame&& frame) {
+                             {
+                               Impl::eval(args, std::move(frame))
+                             } -> std::same_as<Array<Data>>;
+                           };
 
 /// The registered arguments of a nova function together with the recipe for
 /// turning them into a `CallSite`. Built with `FunctionDescriber`.
@@ -152,6 +168,9 @@ struct ValueType : std::type_identity<Member> {};
 template <class T>
 struct ValueType<located<T>> : std::type_identity<T> {};
 
+template <>
+struct ValueType<ConstantArgument> : std::type_identity<Data> {};
+
 template <class T>
 struct ValueType<Option<T>> : ValueType<T> {};
 
@@ -166,8 +185,10 @@ auto default_type_name(type_kind kind) -> std::string;
 
 template <class T>
 auto default_type_name() -> std::string {
-  if constexpr (std::same_as<T, data>) {
+  if constexpr (std::same_as<T, Data>) {
     return "any";
+  } else if constexpr (std::same_as<T, Secret>) {
+    return "string|secret";
   } else if constexpr (std::same_as<T, ast::field_path>) {
     return "field";
   } else {
@@ -175,29 +196,71 @@ auto default_type_name() -> std::string {
   }
 }
 
-/// Converts a constant to `expected`: negative integers are rejected for
-/// `uint64`, strings are wrapped for `secret`, and everything else must match
-/// exactly. Emits a diagnostic on failure.
-auto convert_constant(located<data> constant, type_kind expected,
-                      InstantiateCtx ctx) -> failure_or<located<data>>;
-
 /// Constant evaluates `expr` and converts the result to `T`.
 template <class T>
 auto prepare_constant(ast::expression& expr, InstantiateCtx ctx)
   -> failure_or<located<T>> {
   TRY(auto constant, const_eval(expr, ctx));
-  if constexpr (std::same_as<T, data>) {
-    return constant;
+  if constexpr (std::same_as<T, Data>) {
+    return located<T>{std::move(constant), expr.get_location()};
   } else {
-    TRY(auto converted,
-        convert_constant(std::move(constant), type_kind::of<data_to_type_t<T>>,
-                         ctx));
-    return located<T>{std::move(as<T>(converted.inner)), converted.source};
+    if constexpr (std::same_as<T, std::uint64_t>) {
+      if (auto const* signed_value = try_as<std::int64_t>(&constant)) {
+        if (*signed_value < 0) {
+          diagnostic::error("expected positive integer, got `{}`",
+                            *signed_value)
+            .primary(expr.get_location())
+            .emit(ctx);
+          return failure::promise();
+        }
+        return located<T>{static_cast<T>(*signed_value), expr.get_location()};
+      }
+    }
+    if (auto const* value = try_as<T>(&constant)) {
+      return located<T>{*value, expr.get_location()};
+    }
+    auto const actual = match(constant, []<class V>(V const&) {
+      return Type<V>::static_name;
+    });
+    diagnostic::error("expected argument of type `{}`, but got `{}`",
+                      default_type_name<T>(), actual)
+      .primary(expr.get_location())
+      .emit(ctx);
+    return failure::promise();
   }
 }
 
+/// Evaluates a constant expression and returns its Nova Data value.
+auto prepare_data(ast::expression& expr, InstantiateCtx ctx)
+  -> failure_or<Data>;
+
+/// The payload type of `Option<T>`, or `T` itself.
+template <class T>
+struct OptionValue : std::type_identity<T> {};
+
+template <class T>
+struct OptionValue<Option<T>> : std::type_identity<T> {};
+
+template <class T>
+using option_value_t = typename OptionValue<T>::type;
+
+/// Turns a constant into a `Data` or `ConstantArgument` member.
+template <class T>
+auto into_data_member(Data value, location source) -> T {
+  if constexpr (std::same_as<T, ConstantArgument>) {
+    return ConstantArgument{std::move(value), source};
+  } else {
+    static_assert(std::same_as<T, Data>);
+    return value;
+  }
+}
+
+/// Converts a resolved-secret AST node or a plain string constant to Secret.
+auto prepare_secret(ast::expression& expr, InstantiateCtx ctx)
+  -> failure_or<located<Secret>>;
 /// Turns a constant into the representation of a member of type `Member`.
 template <class Member>
+  requires(not std::same_as<value_type_t<Member>, Data>)
 auto into_member(located<value_type_t<Member>> value) -> Member {
   if constexpr (std::same_as<Member, Option<location>>) {
     if (value.inner) {
@@ -213,12 +276,11 @@ auto into_member(located<value_type_t<Member>> value) -> Member {
   }
 }
 
-/// The `CallSite::Kernel` of `Impl`: runs the one shared instance over a
-/// type-erased `Args` bundle.
+/// The `CallSite::Kernel` of `Impl`: runs `Impl::eval` over a type-erased
+/// `Args` bundle.
 template <class Args, FunctionImpl<Args> Impl>
 auto function_kernel(Any const& args, EvalFrame frame) -> Array<Data> {
-  static auto const impl = Impl{};
-  return impl.eval(args.as<Args>(), std::move(frame));
+  return Impl::eval(args.as<Args>(), std::move(frame));
 }
 
 } // namespace _
@@ -500,6 +562,22 @@ private:
         sink.args.as<Args>().*ptr = Member{std::move(*path)};
         return {};
       };
+    } else if constexpr (std::same_as<_::value_type_t<Member>, Data>) {
+      return [ptr](PrepareSink sink, ast::expression& expr,
+                   InstantiateCtx ctx) -> failure_or<void> {
+        TRY(auto value, _::prepare_data(expr, ctx));
+        sink.args.as<Args>().*ptr
+          = Member{_::into_data_member<_::option_value_t<Member>>(
+            std::move(value), expr.get_location())};
+        return {};
+      };
+    } else if constexpr (std::same_as<_::value_type_t<Member>, Secret>) {
+      return [ptr](PrepareSink sink, ast::expression& expr,
+                   InstantiateCtx ctx) -> failure_or<void> {
+        TRY(auto value, _::prepare_secret(expr, ctx));
+        sink.args.as<Args>().*ptr = _::into_member<Member>(std::move(value));
+        return {};
+      };
     } else {
       return [ptr](PrepareSink sink, ast::expression& expr,
                    InstantiateCtx ctx) -> failure_or<void> {
@@ -516,9 +594,23 @@ private:
   static auto prepare_element(std::vector<T> Args::* ptr) -> Prepare {
     return [ptr](PrepareSink sink, ast::expression& expr,
                  InstantiateCtx ctx) -> failure_or<void> {
-      TRY(auto value, _::prepare_constant<_::value_type_t<T>>(expr, ctx));
-      (sink.args.as<Args>().*ptr).push_back(_::into_member<T>(std::move(value)));
-      return {};
+      if constexpr (std::same_as<_::value_type_t<T>, Data>) {
+        TRY(auto value, _::prepare_data(expr, ctx));
+        (sink.args.as<Args>().*ptr)
+          .push_back(
+            _::into_data_member<T>(std::move(value), expr.get_location()));
+        return {};
+      } else if constexpr (std::same_as<_::value_type_t<T>, Secret>) {
+        TRY(auto value, _::prepare_secret(expr, ctx));
+        (sink.args.as<Args>().*ptr)
+          .push_back(_::into_member<T>(std::move(value)));
+        return {};
+      } else {
+        TRY(auto value, _::prepare_constant<_::value_type_t<T>>(expr, ctx));
+        (sink.args.as<Args>().*ptr)
+          .push_back(_::into_member<T>(std::move(value)));
+        return {};
+      }
     };
   }
 

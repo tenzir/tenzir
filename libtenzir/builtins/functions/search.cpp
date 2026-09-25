@@ -14,6 +14,7 @@
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_kernel.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
@@ -167,14 +168,21 @@ auto contains(nova::RowView<nova::Data> input, const data& target, bool exact,
             return exact ? folded == needle : folded.contains(needle);
           }
         }
-        return equals(data_view3{*value}, target, exact);
+        if constexpr (std::same_as<T, nova::Secret>) {
+          // Secrets never expose their value, so they never match.
+          return false;
+        } else {
+          return equals(data_view3{*value}, target, exact);
+        }
       }
     });
 }
 
 struct SearchArgs {
   nova::ValueArgument input;
-  located<data> target;
+  nova::ConstantArgument target_argument;
+  /// The target as legacy data, derived from `target_argument` in `validate`.
+  data target;
   bool exact = false;
   bool ignore_case = false;
   location call;
@@ -183,13 +191,13 @@ struct SearchArgs {
 template <bool Deprecated>
 class SearchFunction final {
 public:
-  auto eval(SearchArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SearchArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto result = nova::Results{frame.mask().length()};
     nova::storage::for_each_true(frame.mask(), [&](nova::storage::Index row) {
-      result.set<nova::Bool>(row, contains(args.input.data.get(row),
-                                           args.target.inner, args.exact,
-                                           args.ignore_case));
+      result.set<nova::Bool>(row,
+                             contains(args.input.data.get(row), args.target,
+                                      args.exact, args.ignore_case));
     });
     return std::move(result).finish(frame.mask());
   }
@@ -208,7 +216,7 @@ class Plugin final : public nova::FunctionPlugin {
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<SearchArgs, SearchFunction<Deprecated>>{};
     d.positional("input", &SearchArgs::input, "any");
-    d.positional("target", &SearchArgs::target);
+    d.positional("target", &SearchArgs::target_argument);
     d.named_optional("exact", &SearchArgs::exact);
     d.named_optional("ignore_case", &SearchArgs::ignore_case);
     d.call_location(&SearchArgs::call);
@@ -220,15 +228,22 @@ class Plugin final : public nova::FunctionPlugin {
             .hint("use `search` instead")
             .emit(dh);
         }
-        if (is<record>(args.target.inner) or is<list>(args.target.inner)) {
+        auto const& target = args.target_argument;
+        if (is<nova::Record>(target.inner) or is<nova::List>(target.inner)) {
           diagnostic::error("`target` cannot be a list or a record")
-            .primary(args.target)
+            .primary(target)
             .emit(dh);
           return failure::promise();
         }
-        if (args.ignore_case and is<std::string>(args.target.inner)) {
-          args.target.inner
-            = detail::utf8_fold_case(as<std::string>(args.target.inner));
+        if (is<nova::Secret>(target.inner)) {
+          diagnostic::error("`target` cannot be a secret")
+            .primary(target)
+            .emit(dh);
+          return failure::promise();
+        }
+        args.target = nova::materialize_legacy(target.inner);
+        if (args.ignore_case and is<std::string>(args.target)) {
+          args.target = detail::utf8_fold_case(as<std::string>(args.target));
         }
         return {};
       });

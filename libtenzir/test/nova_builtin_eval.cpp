@@ -29,6 +29,7 @@
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -86,7 +87,7 @@ auto eval(ast::expression expression, Events events, storage::BitMap mask,
   events.mask = std::move(mask);
   auto const reg = global_registry();
   auto evaluator
-    = Evaluator::make(std::move(expression), InstantiateCtx{dh, *reg});
+    = tenzir::test::make_evaluator(std::move(expression), dh, *reg);
   REQUIRE(evaluator);
   return evaluator->eval(events, EvalCtx{dh});
 }
@@ -478,9 +479,8 @@ TEST("match_regex matches anywhere and propagates null silently") {
 TEST("match_regex rejects an invalid regex at instantiation") {
   auto dh = collecting_diagnostic_handler{};
   auto const reg = global_registry();
-  auto evaluator
-    = Evaluator::make(call("match_regex", {root_field("x"), str_const("(")}),
-                      InstantiateCtx{dh, *reg});
+  auto evaluator = tenzir::test::make_evaluator(
+    call("match_regex", {root_field("x"), str_const("(")}), dh, *reg);
   CHECK(not evaluator);
   auto diags = std::move(dh).collect();
   REQUIRE(not diags.empty());
@@ -547,4 +547,15 @@ TEST("time components and format_time read a time column") {
   CHECK_EQUAL(string_at(formatted, 0), Option<std::string>{"2024-06-15 24"});
   CHECK(is_null_at(formatted, 1));
   CHECK(std::move(dh).collect().empty());
+}
+
+TEST("secret rejects data-dependent names") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto expression = call("secret", {root_field("x")});
+  CHECK(not tenzir::test::make_evaluator(std::move(expression), dh, *reg));
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE(not diagnostics.empty());
+  CHECK(diagnostics.front().severity == severity::error);
+  CHECK_EQUAL(diagnostics.front().message, "expected a constant expression");
 }

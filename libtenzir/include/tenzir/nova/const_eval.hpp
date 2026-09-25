@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/eval.hpp"
@@ -24,14 +23,13 @@ namespace tenzir::nova {
 auto const_eval_array(const ast::expression& expr, InstantiateCtx ctx)
   -> failure_or<Array<Data>>;
 
-/// Like `const_eval_array`, but materializes the single row as a legacy
-/// `data` value (an explicit `Null` becomes `null`), located at `expr`.
+/// Like `const_eval_array`, but materializes the single row as Nova `Data`
+/// (an explicit `Null` becomes `Null`).
 auto const_eval(const ast::expression& expr, InstantiateCtx ctx)
-  -> failure_or<located<data>>;
+  -> failure_or<Data>;
 
 /// Tries to evaluate a deterministic expression to a constant value. Emits
 /// diagnostics only if the evaluation succeeded.
 auto try_const_eval(const ast::expression& expr, InstantiateCtx ctx)
-  -> Option<located<data>>;
-
+  -> Option<Data>;
 } // namespace tenzir::nova

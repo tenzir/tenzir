@@ -205,7 +205,7 @@ struct LengthArgs {
 
 class LengthFunction final {
 public:
-  auto eval(LengthArgs const& args, nova::EvalFrame frame) const
+  static auto eval(LengthArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto present = frame.mask();
@@ -455,7 +455,7 @@ struct HasArgs {
 
 class HasFunction final {
 public:
-  auto eval(HasArgs const& args, nova::EvalFrame frame) const
+  static auto eval(HasArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const& present = frame.mask();

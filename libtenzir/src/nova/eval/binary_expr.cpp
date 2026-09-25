@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <concepts>
+#include <span>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -64,8 +65,26 @@ concept other_number_than = concepts::number<U> and not std::same_as<T, U>;
 template <class T, ast::binary_op Op>
 concept self_comparable
   = fundamental_view_type<T> and not std::same_as<T, Null>
+    and not std::same_as<T, SecretView>
     and (not _::is_ordering(Op)
          or concepts::one_of<T, Int, UInt, Float, Time, Duration>);
+
+/// Byte-sequence views that `+` concatenates.
+template <class T>
+concept concat_view
+  = concepts::one_of<T, std::string_view, BlobView, SecretView>;
+
+/// Operands of equal type concatenate to that type, and a secret on either
+/// side makes the result a secret. `string + blob` stays unsupported.
+template <class L, class R>
+concept concatenable
+  = concat_view<L> and concat_view<R>
+    and (std::same_as<L, R> or concepts::one_of<SecretView, L, R>);
+
+template <class L, class R>
+using concat_result_t = std::conditional_t<
+  concepts::one_of<SecretView, L, R>, Secret,
+  std::conditional_t<std::same_as<L, std::string_view>, String, Blob>>;
 
 /// The rows must stay mutually exclusive: `apply_kernel` probes them with
 /// `std::is_invocable_v`, which is `false` for an ambiguous call, so an
@@ -345,22 +364,45 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
                       or std::same_as<T, Float>)
                      and (std::same_as<U, Int> or std::same_as<U, UInt>
                           or std::same_as<U, Float>))
+                    {
+                      if constexpr (std::same_as<T, Float>
+                                    or std::same_as<U, Float>) {
+                        return Option{static_cast<Float>(lhs)
+                                      + static_cast<Float>(rhs)};
+                      } else {
+                        auto result = checked_add(lhs, rhs);
+                        using ResultType =
+                          typename decltype(result)::value_type;
+                        if (not result) {
+                          warn_int_overflow(
+                            dh,
+                            diagnostic::warning("integer overflow").primary(x));
+                          return Option<ResultType>{None{}};
+                        }
+                        return Option<ResultType>{*result};
+                      }
+                    },
+                    [](diagnostic_handler&, Time lhs,
+                       Duration rhs) -> Option<Time> {
+                      return lhs + rhs;
+                    },
+                    []<class L, class R>(diagnostic_handler&, L lhs,
+                                         R rhs) -> Option<concat_result_t<L, R>>
+                      requires concatenable<L, R>
           {
-            if constexpr (std::same_as<T, Float> or std::same_as<U, Float>) {
-              return Option{static_cast<Float>(lhs) + static_cast<Float>(rhs)};
-            } else {
-              auto result = checked_add(lhs, rhs);
-              using ResultType = typename decltype(result)::value_type;
-              if (not result) {
-                warn_int_overflow(
-                  dh, diagnostic::warning("integer overflow").primary(x));
-                return Option<ResultType>{None{}};
+            using Result = concat_result_t<L, R>;
+            auto result = Result{};
+            auto append = [&](auto view) {
+              if constexpr (std::same_as<Result, String>) {
+                result.append_range(view);
+              } else {
+                result.append_range(
+                  std::as_bytes(std::span{view.data(), view.size()}));
               }
-              return Option<ResultType>{*result};
-            }
-          },
-          [](diagnostic_handler&, Time lhs, Duration rhs) -> Option<Time> {
-            return lhs + rhs;
+            };
+            append(lhs);
+            append(rhs);
+            return result;
           },
           [](diagnostic_handler&, Duration lhs, Time rhs) -> Option<Time> {
             return lhs + rhs;

@@ -41,7 +41,7 @@ struct RoundArgs {
 template <mode Mode>
 class RoundFunction final {
 public:
-  auto eval(RoundArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(RoundArgs const& args, EvalFrame frame) -> Array<Data> {
     auto const name = to_string(Mode);
     if (not args.unit) {
       // fn(<number>)

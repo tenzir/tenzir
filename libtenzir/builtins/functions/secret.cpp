@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
@@ -18,7 +19,22 @@ namespace tenzir::plugins::secrets {
 
 namespace {
 
-class secret final : public function_plugin {
+struct SecretArgs {
+  located<std::string> name;
+  location call;
+};
+
+/// Never evaluated: `nova::Evaluator::make` replaces every resolvable call
+/// before preparation, and validation rejects all others.
+class SecretFunction {
+public:
+  static auto eval(SecretArgs const&, nova::EvalFrame)
+    -> nova::Array<nova::Data> {
+    TENZIR_UNREACHABLE();
+  }
+};
+
+class secret final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "secret";
@@ -26,6 +42,24 @@ public:
 
   auto is_deterministic() const -> bool final {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SecretArgs, SecretFunction>{};
+    d.positional("name", &SecretArgs::name);
+    d.call_location(&SecretArgs::call);
+    d.validate(
+      [](SecretArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        /// Nova secret resolution happens during the evaluator construction.
+        /// Any use site that does not use the async Evaluator factory will end
+        /// up trying to instantiate this function, which then must fail because
+        /// the secret cannot be used without being resolved.
+        diagnostic::error("`secret` cannot be used in this context")
+          .primary(args.call)
+          .emit(dh);
+        return failure::promise();
+      });
+    return std::move(d).finish();
   }
 
   auto initialize(const record&, const record& global_config)
@@ -151,87 +185,8 @@ private:
   detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
 };
 
-class dump_repr final : public function_plugin {
-public:
-  auto name() const -> std::string override {
-    return "_dump_repr";
-  }
-
-  auto is_deterministic() const -> bool final {
-    return true;
-  }
-
-  static auto dump_repr_impl(const tenzir::secret_view& s) -> std::string {
-    const auto f = detail::overload{
-      [&](const fbs::data::SecretLiteral& x) -> std::string {
-        return fmt::format("lit({})", x.value()->string_view());
-      },
-      [&](const fbs::data::SecretName& x) -> std::string {
-        return fmt::format("name({})", x.value()->string_view());
-      },
-      [&](this const auto& self,
-          const fbs::data::SecretConcatenation& x) -> std::string {
-        auto res = std::string{};
-        res += fmt::format("concat(");
-        for (const auto* e : *x.secrets()) {
-          res += match(*e, self);
-          res += fmt::format(",");
-        }
-        res += fmt::format(")");
-        return res;
-      },
-      [&](this const auto& self,
-          const fbs::data::SecretTransformed& x) -> std::string {
-        auto res = std::string{};
-        res += fmt::format("trafo(");
-        res += match(*x.secret(), self);
-        res += fmt::format(
-          ",{})", fbs::data::EnumNameSecretTransformations(x.transformation()));
-        return res;
-      },
-    };
-    return match(s, f);
-  }
-
-  auto make_function(function_invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function(name())
-          .positional("s", expr, "secret")
-          .parse(inv, ctx));
-    return function_use::make([expr](evaluator eval, session ctx) -> series {
-      auto b = arrow::StringBuilder{};
-      for (auto& value : eval(expr)) {
-        auto f = detail::overload{
-          [&](const secret_type::array_type& array) {
-            for (auto v : values3(array)) {
-              if (not v) {
-                check(b.AppendNull());
-                continue;
-              }
-              check(b.Append(dump_repr_impl(*v)));
-            }
-          },
-          [&](const arrow::NullArray&) {
-            check(b.AppendNulls(eval.length()));
-          },
-          [&](const auto&) {
-            diagnostic::warning("expected `secret`, got `{}`",
-                                value.type.kind())
-              .primary(expr)
-              .emit(ctx);
-          },
-        };
-        match(*value.array, f);
-      }
-      return series{string_type{}, finish(b)};
-    });
-  }
-};
-
 } // namespace
 
 } // namespace tenzir::plugins::secrets
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::secret)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::dump_repr)

@@ -17,10 +17,14 @@
 #include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/tql2/registry.hpp"
+
+#include <folly/coro/BlockingWait.h>
+#include <folly/coro/CurrentExecutor.h>
 
 #include <cstdint>
 #include <deque>
@@ -50,7 +54,7 @@ struct TestArgs {
 
 class TestFunction final {
 public:
-  auto eval(TestArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(TestArgs const& args, EvalFrame frame) -> Array<Data> {
     diagnostic::warning("test_fn was evaluated").primary(args.call).emit(frame);
     return frame.null();
   }
@@ -74,7 +78,7 @@ struct LambdaArgs {
 /// Applies the lambda to an all-null subject.
 class LambdaFunction final {
 public:
-  auto eval(LambdaArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(LambdaArgs const& args, EvalFrame frame) -> Array<Data> {
     auto subject = MaskedArray<Array<Data>>{frame.null(), frame.mask()};
     if (auto const* input = frame.input()) {
       return frame.eval(args.fn, std::move(subject), *input);
@@ -94,12 +98,12 @@ struct VariadicArgs {
   located<std::string> mode;
   Option<location> flag;
   Option<ast::field_path> sel;
-  Option<located<data>> any;
+  Option<Data> any;
 };
 
 class VariadicFunction final {
 public:
-  auto eval(VariadicArgs const&, EvalFrame frame) const -> Array<Data> {
+  static auto eval(VariadicArgs const&, EvalFrame frame) -> Array<Data> {
     return frame.null();
   }
 };
@@ -123,7 +127,7 @@ struct HeadVariadicArgs {
 
 class HeadVariadicFunction final {
 public:
-  auto eval(HeadVariadicArgs const&, EvalFrame frame) const -> Array<Data> {
+  static auto eval(HeadVariadicArgs const&, EvalFrame frame) -> Array<Data> {
     return frame.null();
   }
 };
@@ -154,7 +158,7 @@ struct OptionalExprArgs {
 
 class OptionalExprFunction final {
 public:
-  auto eval(OptionalExprArgs const&, EvalFrame frame) const -> Array<Data> {
+  static auto eval(OptionalExprArgs const&, EvalFrame frame) -> Array<Data> {
     return frame.null();
   }
 };
@@ -177,7 +181,7 @@ struct LazyArgs {
 
 class LazyFunction final {
 public:
-  auto eval(LazyArgs const& args, EvalFrame frame) const -> Array<Data> {
+  static auto eval(LazyArgs const& args, EvalFrame frame) -> Array<Data> {
     if (args.all) {
       return frame.eval(args.x).data;
     }
@@ -194,28 +198,64 @@ auto describe_lazy() -> FunctionDescriber<LazyArgs, LazyFunction> {
   return d;
 }
 
-struct SharedArgs {
-  ValueArgument x;
+struct ResolvedArgs {
+  Secret value;
+  Option<located<Secret>> optional;
+  std::vector<Secret> rest;
 };
 
-class SharedFunction final {
+/// Sums the resolved sizes at evaluation time.
+class ResolvedFunction {
 public:
-  SharedFunction() {
-    ++constructions;
+  static auto eval(ResolvedArgs const& args, EvalFrame frame) -> Array<Data> {
+    auto size = std::int64_t{0};
+    size += static_cast<std::int64_t>(args.value.data.size());
+    for (auto const& value : args.rest) {
+      size += static_cast<std::int64_t>(value.data.size());
+    }
+    if (args.optional) {
+      size += static_cast<std::int64_t>(args.optional->inner.data.size());
+    }
+    return repeat(Data{size}, frame.length());
   }
-
-  auto eval(SharedArgs const&, EvalFrame frame) const -> Array<Data> {
-    return frame.null();
-  }
-
-  static inline auto constructions = size_t{0};
 };
 
-auto describe_shared() -> FunctionDescriber<SharedArgs, SharedFunction> {
-  auto d = FunctionDescriber<SharedArgs, SharedFunction>{};
-  d.positional("x", &SharedArgs::x, "any");
+auto describe_resolved() -> FunctionDescriber<ResolvedArgs, ResolvedFunction> {
+  auto d = FunctionDescriber<ResolvedArgs, ResolvedFunction>{};
+  d.positional("value", &ResolvedArgs::value);
+  d.optional_variadic("rest", &ResolvedArgs::rest);
+  d.named("optional", &ResolvedArgs::optional);
   return d;
 }
+
+/// Counts resolutions and resolves every secret to the same bytes, or fails.
+class SecretCtx final : public tenzir::test::NovaOpCtx {
+public:
+  using NovaOpCtx::NovaOpCtx;
+
+  auto resolve_secrets(std::vector<secret_request> requests)
+    -> Task<failure_or<void>> override {
+    co_await folly::coro::co_reschedule_on_current_executor;
+    for (auto& request : requests) {
+      ++resolutions;
+      if (fail) {
+        diagnostic::error("test secret resolution failed")
+          .primary(request.location)
+          .emit(dh());
+        co_return failure::promise();
+      }
+      auto const text = std::string_view{"resolved"};
+      auto const bytes = std::as_bytes(std::span{text.data(), text.size()});
+      CO_TRY(request.callback(
+        resolved_secret_value{ecc::cleansing_blob{bytes.begin(), bytes.end()},
+                              request.secret.is_all_literal()}));
+    }
+    co_return failure_or<void>{};
+  }
+
+  int resolutions = 0;
+  bool fail = false;
+};
 
 /// A nova function plugin that is described by a fixed describer.
 template <class Describer>
@@ -255,7 +295,7 @@ public:
     add(lambda_fn_);
     add(variadic_fn_);
     add(lazy_fn_);
-    add(shared_fn_);
+    add(resolved_fn_);
   }
 
   explicit(false) operator const registry&() const {
@@ -276,8 +316,8 @@ private:
     "var_fn", &describe_variadic};
   TestPlugin<FunctionDescriber<LazyArgs, LazyFunction>> lazy_fn_{
     "lazy_fn", &describe_lazy};
-  TestPlugin<FunctionDescriber<SharedArgs, SharedFunction>> shared_fn_{
-    "shared_fn", &describe_shared};
+  TestPlugin<FunctionDescriber<ResolvedArgs, ResolvedFunction>> resolved_fn_{
+    "resolved_fn", &describe_resolved};
   registry reg_;
 };
 
@@ -444,7 +484,7 @@ TEST("instantiate rejects constants of the wrong type") {
                         call({root_field("x"), constant(std::string{"three"})}),
                         InstantiateCtx{dh, reg}));
   CHECK_EQUAL(first_error(std::move(dh).collect()),
-              "expected argument of type `int64`, but got `string`");
+              "expected argument of type `int`, but got `string`");
   dh = collecting_diagnostic_handler{};
   CHECK(not instantiate(desc,
                         call({root_field("x"), constant(std::int64_t{3}),
@@ -591,7 +631,7 @@ TEST("instantiate reports every bad argument value") {
   auto diags = errors(std::move(dh).collect());
   REQUIRE_EQUAL(diags.size(), size_t{2});
   CHECK_EQUAL(diags[0].message,
-              "expected argument of type `int64`, but got `string`");
+              "expected argument of type `int`, but got `string`");
   CHECK_EQUAL(diags[1].message, "expected positive integer, got `-1`");
 }
 
@@ -612,7 +652,7 @@ TEST("the validator does not run when preparing an argument failed") {
   auto diags = errors(std::move(dh).collect());
   REQUIRE_EQUAL(diags.size(), size_t{1});
   CHECK_EQUAL(diags.front().message,
-              "expected argument of type `int64`, but got `string`");
+              "expected argument of type `int`, but got `string`");
 }
 
 TEST("a failed variadic element does not leave a partial vector visible") {
@@ -628,7 +668,7 @@ TEST("a failed variadic element does not leave a partial vector visible") {
           constant(std::int64_t{3}), named("m", constant(std::string{}))}),
     InstantiateCtx{dh, reg}));
   CHECK_EQUAL(first_error(std::move(dh).collect()),
-              "expected argument of type `int64`, but got `string`");
+              "expected argument of type `int`, but got `string`");
 }
 
 TEST("optional expression and lambda arguments may be omitted") {
@@ -690,7 +730,9 @@ TEST("variadic, aliased, selector, and flag arguments") {
   REQUIRE_EQUAL(args.sel->path().size(), size_t{1});
   CHECK_EQUAL(args.sel->path()[0].id.name, "foo");
   REQUIRE(args.any);
-  CHECK_EQUAL(args.any->inner, data{std::string{"anything"}});
+  auto const* any = try_as<std::string>(&*args.any);
+  REQUIRE(any);
+  CHECK_EQUAL(*any, "anything");
   dh = collecting_diagnostic_handler{};
   CHECK(not instantiate(
     desc, call("var_fn", {named("mode", constant(std::string{"fast"}))}),
@@ -722,10 +764,10 @@ TEST("variadic, aliased, selector, and flag arguments") {
 TEST("evaluation diagnostics go to the evaluation handler") {
   auto reg = TestRegistry{};
   auto instantiate_dh = collecting_diagnostic_handler{};
-  auto evaluator
-    = Evaluator::make(ast::expression{call({constant(std::int64_t{2}),
-                                            constant(std::int64_t{1})})},
-                      InstantiateCtx{instantiate_dh, reg});
+  auto evaluator = tenzir::test::make_evaluator(
+    ast::expression{
+      call({constant(std::int64_t{2}), constant(std::int64_t{1})})},
+    instantiate_dh, reg);
   REQUIRE(evaluator);
   CHECK(std::move(instantiate_dh).collect().empty());
   // The handler used for instantiation is gone; evaluation uses another one.
@@ -744,10 +786,10 @@ TEST("nested functions are instantiated with their own usage") {
   auto inner = std::move(describe_lambda()).finish();
   // The inner call lacks its argument. Nested calls are prepared by the
   // evaluator, together with the expression they belong to.
-  auto evaluator = Evaluator::make(
+  auto evaluator = tenzir::test::make_evaluator(
     ast::expression{
       call({root_field("x"), ast::expression{call("lambda_fn", {})}})},
-    InstantiateCtx{dh, reg});
+    dh, reg);
   CHECK(not evaluator);
   auto diags = errors(std::move(dh).collect());
   REQUIRE_EQUAL(diags.size(), size_t{1});
@@ -771,7 +813,7 @@ TEST("nested functions are instantiated with their own usage") {
   diags = errors(std::move(dh).collect());
   REQUIRE_EQUAL(diags.size(), size_t{1});
   CHECK_EQUAL(diags.front().message,
-              "expected argument of type `bool`, but got `int64`");
+              "expected argument of type `bool`, but got `int`");
   CHECK_EQUAL(note(diags.front(), diagnostic_note_kind::usage),
               variadic.usage("var_fn"));
 }
@@ -779,11 +821,11 @@ TEST("nested functions are instantiated with their own usage") {
 TEST("expression arguments are evaluated before the function runs") {
   auto reg = TestRegistry{};
   auto dh = collecting_diagnostic_handler{};
-  auto evaluator = Evaluator::make(
+  auto evaluator = tenzir::test::make_evaluator(
     ast::expression{call({ast::expression{call({constant(std::int64_t{1}),
                                                 constant(std::int64_t{1})})},
                           constant(std::int64_t{2})})},
-    InstantiateCtx{dh, reg});
+    dh, reg);
   REQUIRE(evaluator);
   CHECK(std::move(dh).collect().empty());
   auto eval_dh = collecting_diagnostic_handler{};
@@ -798,37 +840,17 @@ TEST("expression arguments are evaluated before the function runs") {
   CHECK_EQUAL(diags.back().message, "test_fn was evaluated");
 }
 
-TEST("functions are shared by their call sites") {
-  auto reg = TestRegistry{};
-  auto dh = collecting_diagnostic_handler{};
-  // Two call sites of the same function: the outer call's argument is another
-  // call to it.
-  auto evaluator = Evaluator::make(
-    ast::expression{
-      call("shared_fn",
-           {ast::expression{call("shared_fn", {constant(std::int64_t{1})})}})},
-    InstantiateCtx{dh, reg});
-  REQUIRE(evaluator);
-  CHECK(std::move(dh).collect().empty());
-  auto eval_dh = collecting_diagnostic_handler{};
-  auto events = make_events(Array<Record>::make_empty(2));
-  auto value = evaluator->eval(events, EvalCtx{eval_dh});
-  CHECK_EQUAL(value.length(), 2);
-  CHECK(std::move(eval_dh).collect().empty());
-  CHECK_EQUAL(SharedFunction::constructions, size_t{1});
-}
-
 TEST("lazy arguments are evaluated by the function, for the rows it picks") {
   auto reg = TestRegistry{};
   auto dh = collecting_diagnostic_handler{};
   // The argument is a call that warns whenever it is evaluated.
   auto prepare = [&](bool all) {
-    return Evaluator::make(
+    return tenzir::test::make_evaluator(
       ast::expression{
         call("lazy_fn", {ast::expression{call({constant(std::int64_t{1}),
                                                constant(std::int64_t{1})})},
                          named("all", constant(all))})},
-      InstantiateCtx{dh, reg});
+      dh, reg);
   };
   auto lazy = prepare(false);
   REQUIRE(lazy);
@@ -850,19 +872,19 @@ TEST("lambda bodies are prepared by the enclosing evaluator") {
   auto dh = collecting_diagnostic_handler{};
   // A nested call inside the lambda body is checked while preparing, because
   // its call site belongs to the enclosing expression.
-  CHECK(not Evaluator::make(
+  CHECK(not tenzir::test::make_evaluator(
     ast::expression{call(
       "lambda_fn", {lambda("a", ast::expression{call({root_field("a")})})})},
-    InstantiateCtx{dh, reg}));
+    dh, reg));
   CHECK_EQUAL(first_error(std::move(dh).collect()),
               "expected exactly 2 positional arguments");
   dh = collecting_diagnostic_handler{};
-  auto evaluator = Evaluator::make(
+  auto evaluator = tenzir::test::make_evaluator(
     ast::expression{
       call("lambda_fn",
            {lambda("a", ast::expression{call(
                           {root_field("a"), constant(std::int64_t{1})})})})},
-    InstantiateCtx{dh, reg});
+    dh, reg);
   REQUIRE(evaluator);
   CHECK(std::move(dh).collect().empty());
   // Applying the lambda evaluates the body in the same run, so the body's
@@ -878,9 +900,9 @@ TEST("lambda bodies are prepared by the enclosing evaluator") {
 TEST("lambda captures are rejected when there is no input") {
   auto reg = TestRegistry{};
   auto dh = collecting_diagnostic_handler{};
-  auto evaluator = Evaluator::make(
-    ast::expression{call("lambda_fn", {lambda("a", root_field("y"))})},
-    InstantiateCtx{dh, reg});
+  auto evaluator = tenzir::test::make_evaluator(
+    ast::expression{call("lambda_fn", {lambda("a", root_field("y"))})}, dh,
+    reg);
   REQUIRE(evaluator);
   CHECK(std::move(dh).collect().empty());
   auto eval_dh = collecting_diagnostic_handler{};
@@ -905,8 +927,206 @@ TEST("speculative constant evaluation of function calls stays silent") {
                        {constant(std::int64_t{1}), constant(std::int64_t{2})})},
                      InstantiateCtx{dh, reg});
   REQUIRE(result);
-  CHECK_EQUAL(result->inner, data{});
+  CHECK(result->index() == 0);
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), size_t{1});
   CHECK_EQUAL(diags.front().message, "test_fn was evaluated");
+}
+
+TEST("secret arguments resolve during construction and are reused") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto expression = ast::expression{
+    call("resolved_fn",
+         {call("secret", {constant("key")}), constant(std::string{"literal"}),
+          named("optional", constant(std::string{"literal"}))})};
+  auto evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  CHECK_EQUAL(ctx.resolutions, 1);
+  auto events = make_events(Array<Record>::make_empty(4));
+  auto result = evaluator->eval(events, EvalCtx{dh});
+  REQUIRE(is<Array<Int>>(result));
+  CHECK_EQUAL(*result.try_as<Int>()->get(3), 22);
+  auto moved = std::move(*evaluator);
+  result = moved.eval(events, EvalCtx{dh});
+  CHECK_EQUAL(*result.try_as<Int>()->get(0), 22);
+  CHECK_EQUAL(ctx.resolutions, 1);
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("failed secret resolution and nonconstant arguments abort construction") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  ctx.fail = true;
+  auto expression
+    = ast::expression{call("resolved_fn", {call("secret", {constant("key")})})};
+  CHECK(
+    not folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx)));
+  CHECK_EQUAL(first_error(std::move(dh).collect()),
+              "test secret resolution failed");
+  dh = collecting_diagnostic_handler{};
+  ctx.fail = false;
+  expression = ast::expression{call("resolved_fn", {root_field("value")})};
+  CHECK(
+    not folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx)));
+  CHECK_EQUAL(ctx.resolutions, 1);
+  CHECK_EQUAL(first_error(std::move(dh).collect()),
+              "expected a constant expression");
+}
+
+TEST("secret arguments in lambda bodies resolve during construction") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto body
+    = ast::expression{call("resolved_fn", {call("secret", {constant("key")})})};
+  auto expression
+    = ast::expression{call("lambda_fn", {lambda("x", std::move(body))})};
+  auto evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  CHECK_EQUAL(ctx.resolutions, 1);
+  auto result = evaluator->eval(EvalCtx{dh});
+  REQUIRE(result.try_as<Int>());
+  CHECK_EQUAL(*result.try_as<Int>()->get(0), 8);
+  CHECK_EQUAL(ctx.resolutions, 1);
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("secret calls in value positions resolve to secret arrays") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto expression = ast::expression{call("secret", {constant("key")})};
+  auto evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  CHECK_EQUAL(ctx.resolutions, 1);
+  auto events = make_events(Array<Record>::make_empty(3));
+  auto result = evaluator->eval(events, EvalCtx{dh});
+  auto secrets = result.try_as<Secret>();
+  REQUIRE(secrets);
+  CHECK_EQUAL(secrets->length(), 3);
+  CHECK_EQUAL((*secrets->get(2)).size(), size_t{8});
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("secret names must be constant strings") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto expression = ast::expression{call("secret", {root_field("name")})};
+  CHECK(
+    not folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx)));
+  CHECK_EQUAL(first_error(std::move(dh).collect()),
+              "expected a constant expression");
+  dh = collecting_diagnostic_handler{};
+  expression = ast::expression{call("secret", {constant(int64_t{1})})};
+  CHECK(
+    not folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx)));
+  CHECK_EQUAL(first_error(std::move(dh).collect()),
+              "`secret` expects a string");
+  CHECK_EQUAL(ctx.resolutions, 0);
+}
+
+namespace {
+
+auto format(std::vector<ast::format_expr::segment> segments)
+  -> ast::expression {
+  return ast::expression{
+    ast::format_expr{std::move(segments), location::unknown}};
+}
+
+auto replace(ast::expression expr) -> ast::format_expr::segment {
+  return ast::format_expr::replacement{std::move(expr)};
+}
+
+auto secret_text(SecretView value) -> std::string {
+  return std::string{reinterpret_cast<char const*>(value.data()), value.size()};
+}
+
+} // namespace
+
+TEST("format strings with a secret replacement produce secrets") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto expression = format({std::string{"Bearer "},
+                            replace(call("secret", {constant("key")})),
+                            std::string{"!"}, replace(constant(data{}))});
+  auto evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  auto events = make_events(Array<Record>::make_empty(3));
+  auto result = evaluator->eval(events, EvalCtx{dh});
+  auto secrets = result.try_as<Secret>();
+  REQUIRE(secrets);
+  REQUIRE_EQUAL(secrets->length(), 3);
+  for (auto i = storage::Index{0}; i < 3; ++i) {
+    CHECK_EQUAL(secret_text(*secrets->get(i)), "Bearer resolved!null");
+  }
+  expression = format({replace(call("secret", {constant("key")}))});
+  evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  result = evaluator->eval(events, EvalCtx{dh});
+  secrets = result.try_as<Secret>();
+  REQUIRE(secrets);
+  CHECK_EQUAL(secret_text(*secrets->get(0)), "resolved");
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("format strings without secrets produce strings") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto expression = format(
+    {std::string{"n="}, replace(constant(std::int64_t{42})), std::string{"."}});
+  auto evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  auto events = make_events(Array<Record>::make_empty(2));
+  auto result = evaluator->eval(events, EvalCtx{dh});
+  auto strings = result.try_as<String>();
+  REQUIRE(strings);
+  CHECK_EQUAL(*strings->get(1), "n=42.");
+  CHECK_EQUAL(ctx.resolutions, 0);
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("format strings produce secrets only for rows with a secret") {
+  auto reg = TestRegistry{};
+  auto dh = collecting_diagnostic_handler{};
+  auto ctx = SecretCtx{dh, reg};
+  auto choice = ast::expression{ast::binary_expr{
+    ast::expression{ast::binary_expr{call("secret", {constant("key")}),
+                                     ast::binary_op::if_, root_field("c")}},
+    ast::binary_op::else_, constant(std::string{"plain"})}};
+  auto expression
+    = format({std::string{"<"}, replace(std::move(choice)), std::string{">"}});
+  auto evaluator
+    = folly::coro::blockingWait(Evaluator::make(std::move(expression), ctx));
+  REQUIRE(evaluator);
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("c").data(true);
+  builder.record().field("c").data(false);
+  builder.record().field("c").data(true);
+  auto events = make_events(builder.finish());
+  auto result = evaluator->eval(events, EvalCtx{dh});
+  REQUIRE_EQUAL(result.length(), 3);
+  auto secrets = result.get_alternative<Secret>();
+  auto strings = result.get_alternative<String>();
+  REQUIRE(secrets);
+  REQUIRE(strings);
+  CHECK(secrets->present.get(0));
+  CHECK(not secrets->present.get(1));
+  CHECK(secrets->present.get(2));
+  CHECK(strings->present.get(1));
+  CHECK_EQUAL(secret_text(*secrets->data.get(0)), "<resolved>");
+  CHECK_EQUAL(secret_text(*secrets->data.get(2)), "<resolved>");
+  CHECK_EQUAL(*strings->data.get(1), "<plain>");
+  CHECK(std::move(dh).collect().empty());
 }

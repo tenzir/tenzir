@@ -37,7 +37,7 @@ public:
   using Type = std::conditional_t<Signed, int64_type, uint64_type>;
   using Data = type_to_data_t<Type>;
 
-  auto eval(IntArgs const& args, EvalFrame frame) const
+  static auto eval(IntArgs const& args, EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto const name = Signed ? "int" : "uint";
     using NovaTag = std::conditional_t<Signed, nova::Int, nova::UInt>;

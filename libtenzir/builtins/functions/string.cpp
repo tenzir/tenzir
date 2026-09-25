@@ -206,7 +206,7 @@ struct StartsEndsWithArgs {
 template <bool StartsWith>
 class StartsEndsWithFunction final {
 public:
-  auto eval(StartsEndsWithArgs const& args, nova::EvalFrame frame) const
+  static auto eval(StartsEndsWithArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     return apply_kernel<2>(
@@ -311,7 +311,7 @@ struct MatchRegexArgs {
 
 class MatchRegexFunction final {
 public:
-  auto eval(MatchRegexArgs const& args, nova::EvalFrame frame) const
+  static auto eval(MatchRegexArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     return apply_kernel<1>(
@@ -626,7 +626,7 @@ struct RepeatArgs {
 
 class RepeatFunction final {
 public:
-  auto eval(RepeatArgs const& args, nova::EvalFrame frame) const
+  static auto eval(RepeatArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     // Like the legacy function, bound the size of each result and of the
@@ -925,7 +925,7 @@ struct ReplaceArgs {
 
 class ReplaceFunction final {
 public:
-  auto eval(ReplaceArgs const& args, nova::EvalFrame frame) const
+  static auto eval(ReplaceArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto max = args.max ? args.max->inner : int64_t{-1};
@@ -1185,7 +1185,7 @@ struct StringArgs {
 template <bool Deprecated>
 class StringFunction final {
 public:
-  auto eval(StringArgs const& args, nova::EvalFrame frame) const
+  static auto eval(StringArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     if constexpr (Deprecated) {
@@ -1250,7 +1250,7 @@ struct SplitArgs {
 
 class SplitFunction final {
 public:
-  auto eval(SplitArgs const& args, nova::EvalFrame frame) const
+  static auto eval(SplitArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto present = frame.mask();
@@ -1582,7 +1582,7 @@ struct JoinArgs {
 
 class JoinFunction final {
 public:
-  auto eval(JoinArgs const& args, nova::EvalFrame frame) const
+  static auto eval(JoinArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
     auto const separator = args.separator

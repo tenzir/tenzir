@@ -62,6 +62,9 @@ public:
 
   auto eval(ast::constant const& x, ActiveRows const& active) -> multi_series;
 
+  auto eval(ast::resolved_secret const& x, ActiveRows const& active)
+    -> multi_series;
+
   auto eval(ast::record const& x, ActiveRows const& active) -> multi_series;
 
   auto eval(ast::list const& x, ActiveRows const& active) -> multi_series;

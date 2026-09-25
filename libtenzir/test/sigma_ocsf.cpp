@@ -494,7 +494,7 @@ TEST("OCSF Sigma row field resolution prefers exact keys") {
   });
   auto const exact = ocsf::resolve_field(rows.get(0), "a.b");
   REQUIRE(exact);
-  CHECK_EQUAL(nova::materialize(*exact), data{std::int64_t{1}});
+  CHECK_EQUAL(nova::materialize_legacy(*exact), data{std::int64_t{1}});
   // A field that exists with a `null` value is present, a field below a
   // scalar is not.
   CHECK(ocsf::resolve_presence(rows.get(1), "a.b"));
@@ -654,18 +654,18 @@ TEST("OCSF Sigma row projections and guards") {
     rows, rows_mask, "User",
     ocsf::FieldProjection{
       .value = ocsf::PrincipalField{"user.domain", "user.name", "user"}});
-  CHECK_EQUAL(nova::materialize(principal.value.get(0)),
+  CHECK_EQUAL(nova::materialize_legacy(principal.value.get(0)),
               data{std::string{"CORP\\alice"}});
-  CHECK_EQUAL(nova::materialize(principal.value.get(1)),
+  CHECK_EQUAL(nova::materialize_legacy(principal.value.get(1)),
               data{std::string{"bob"}});
   CHECK(principal.presence.get(0));
   CHECK(not principal.evidence_path);
   auto const hashes = ocsf::project(
     rows, rows_mask, "Hashes",
     ocsf::FieldProjection{.value = ocsf::FingerprintListField{"hashes"}});
-  CHECK_EQUAL(nova::materialize(hashes.value.get(0)),
+  CHECK_EQUAL(nova::materialize_legacy(hashes.value.get(0)),
               data{std::string{"MD5=abc,X=def"}});
-  CHECK_EQUAL(nova::materialize(hashes.value.get(1)), data{});
+  CHECK_EQUAL(nova::materialize_legacy(hashes.value.get(1)), data{});
   CHECK(not hashes.presence.get(1));
   auto guard = ocsf::EvaluationGuard{};
   guard.event.class_uid = 1007;

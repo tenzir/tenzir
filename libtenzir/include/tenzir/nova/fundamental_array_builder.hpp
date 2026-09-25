@@ -87,8 +87,9 @@ private:
   storage::Index length_ = 0;
 };
 
-/// Shared implementation for the variable-length tags (`String`, `Blob`),
-/// whose payloads are appended to one flat buffer plus a per-row `Span`.
+/// Shared implementation for the variable-length tags (`String`, `Blob`,
+/// `Secret`), whose payloads are appended to one flat buffer plus a per-row
+/// `Span`.
 template <fundamental_type Tag, typename Char>
 class DenseOffsetArrayBuilder {
 public:
@@ -112,8 +113,13 @@ class ArrayBuilder<String> : public DenseOffsetArrayBuilder<String, char> {};
 template <>
 class ArrayBuilder<Blob> : public DenseOffsetArrayBuilder<Blob, std::byte> {};
 
+template <>
+class ArrayBuilder<Secret> : public DenseOffsetArrayBuilder<Secret, std::byte> {
+};
+
 extern template class DenseOffsetArrayBuilder<String, char>;
 extern template class DenseOffsetArrayBuilder<Blob, std::byte>;
+extern template class DenseOffsetArrayBuilder<Secret, std::byte>;
 
 extern template class ArrayBuilder<Int>;
 extern template class ArrayBuilder<UInt>;

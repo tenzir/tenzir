@@ -10,6 +10,8 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/base58.hpp"
 #include "tenzir/detail/hex_encode.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
@@ -31,7 +33,7 @@ struct CodecArgs {
 
 template <detail::string_literal Name, bool encode, auto F>
 struct CodecFunction {
-  auto eval(CodecArgs const& args, nova::EvalFrame frame) const
+  static auto eval(CodecArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto invalid = nova::WarnOnce{};
     using Result = std::conditional_t<encode, nova::String, nova::Blob>;
@@ -63,6 +65,18 @@ struct CodecFunction {
           return transform(
             dh, std::string_view{reinterpret_cast<char const*>(value.data()),
                                  value.size()});
+        },
+        [&](diagnostic_handler& dh,
+            nova::SecretView value) -> Option<nova::Secret> {
+          // The result is derived from the plaintext, so it stays a secret.
+          auto result = transform(
+            dh, std::string_view{reinterpret_cast<char const*>(value.data()),
+                                 value.size()});
+          if (not result) {
+            return None{};
+          }
+          auto bytes = as_bytes(*result);
+          return nova::Secret{ecc::cleansing_blob{bytes.begin(), bytes.end()}};
         }});
   }
 };
@@ -71,6 +85,10 @@ template <detail::string_literal Name, bool encode, auto F,
           fbs::data::SecretTransformations tag>
 class plugin final : public nova::FunctionPlugin {
   using Type = std::conditional_t<encode, string_type, blob_type>;
+  struct Args {
+    nova::ValueArgument value;
+  };
+
   auto name() const -> std::string override {
     return (encode ? "encode_" : "decode_") + std::string{Name};
   }
@@ -168,9 +186,9 @@ using decode_url = plugin<"url", false, curl::try_unescape,
                           fbs::data::SecretTransformations::decode_url>;
 
 using encode_base58 = plugin<"base58", true, detail::base58::encode,
-                             fbs::data::SecretTransformations::encode_url>;
+                             fbs::data::SecretTransformations::encode_base58>;
 using decode_base68 = plugin<"base58", false, detail::base58::decode,
-                             fbs::data::SecretTransformations::decode_url>;
+                             fbs::data::SecretTransformations::decode_base58>;
 
 using encode_hex = plugin<"hex", true, detail::hex::encode,
                           fbs::data::SecretTransformations::encode_hex>;

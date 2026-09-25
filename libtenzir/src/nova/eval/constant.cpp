@@ -110,4 +110,10 @@ auto _::EvalRun::eval(const ast::constant& x, EvalFrame frame) -> Array<Data> {
   return eval_data_constant(frame, x.value, frame.length(), frame.mask());
 }
 
+auto _::EvalRun::eval(const ast::resolved_secret& x, EvalFrame frame)
+  -> Array<Data> {
+  return Array<Data>{Array<Secret>{
+    storage::ConstantStorage<Secret, SecretView>{frame.length(), x.value}}};
+}
+
 } // namespace tenzir::nova

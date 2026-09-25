@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/location.hpp"
@@ -23,6 +24,11 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+
+namespace tenzir {
+class OpCtx;
+struct secret_request;
+} // namespace tenzir
 
 namespace tenzir::nova {
 
@@ -197,11 +203,31 @@ private:
   storage::BitMap mask_;
 };
 
+/// Replaces every `secret(name)` call in `expression` with the secret it
+/// resolves to through the operator context, emitting diagnostics to `dh`.
+/// Fails if a name is not a constant string or does not resolve.
+auto resolve_secrets(ast::expression& expression, OpCtx& ctx,
+                     diagnostic_handler& dh) -> Task<failure_or<void>>;
+
 /// A prepared expression and its mutable call sites. Prepared evaluators must
 /// only be moved and evaluated sequentially.
 class Evaluator {
 public:
   Evaluator() = default;
+
+  /// Prepares `expression` for an operator: instantiates its call sites and
+  /// resolves secret function arguments through the operator context.
+  static auto make(ast::expression expression, OpCtx& ctx)
+    -> Task<failure_or<Evaluator>>;
+
+  /// Like above, but emits the preparation diagnostics to `dh`.
+  static auto make(ast::expression expression, OpCtx& ctx,
+                   diagnostic_handler& dh) -> Task<failure_or<Evaluator>>;
+
+  /// Synchronous preparation without an operator context, e.g., for constant
+  /// evaluation, validation ahead of execution, or expressions that an
+  /// operator derives itself. Resolves no secrets, so the `secret` function
+  /// fails its validation here.
   static auto make(ast::expression expression, InstantiateCtx ctx)
     -> failure_or<Evaluator>;
 

@@ -138,7 +138,7 @@ public:
 auto materialize_constant(nova::Events const& events,
                           nova::storage::Index index) -> ast::constant::kind {
   return match(
-    nova::materialize(nova::RowView<nova::Data>{events.data.get(index)}),
+    nova::materialize_legacy(nova::RowView<nova::Data>{events.data.get(index)}),
     []<class T>(T const& x) -> ast::constant::kind {
       if constexpr (std::same_as<T, pattern>) {
         TENZIR_UNREACHABLE();

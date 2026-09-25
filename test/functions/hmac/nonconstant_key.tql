@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {value: "payload", key: "my_key"}
+select digest = hmac(value, key)

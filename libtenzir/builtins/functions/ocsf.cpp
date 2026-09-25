@@ -36,7 +36,7 @@ struct MappingArgs {
 
 template <class In, class Out>
 struct MappingFunction {
-  auto eval(MappingArgs<In, Out> const& args, nova::EvalFrame frame) const
+  static auto eval(MappingArgs<In, Out> const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using OutView = std::conditional_t<std::same_as<Out, int64_t>, nova::Int,
                                        std::string_view>;

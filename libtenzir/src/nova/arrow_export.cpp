@@ -27,7 +27,7 @@ auto to_table_slices(Events const& events) -> std::vector<table_slice> {
   };
   auto builders = std::vector<Builder>{};
   for (auto index : storage::true_bits(events.mask)) {
-    auto value = materialize(events.data.get(index));
+    auto value = materialize_legacy(events.data.get(index));
     auto metadata = ArrowMetadata{std::string{*events.meta.name.get(index)},
                                   *events.meta.internal.get(index)};
     auto it = std::ranges::find_if(builders, [&](auto const& entry) {
@@ -278,7 +278,7 @@ auto ArrowExportBuilder::add(Events const& events, diagnostic_handler& dh,
   for (auto index : storage::true_bits(events.mask)) {
     auto metadata = ArrowMetadata{std::string{*events.meta.name.get(index)},
                                   *events.meta.internal.get(index)};
-    builder.data(materialize(events.data.get(index)));
+    builder.data(materialize_legacy(events.data.get(index)));
     // A batch builder unions record fields and loses each original row's
     // shape/order. Convert each row separately before validation, retaining
     // the builder's heterogeneous-list coercion within that row.

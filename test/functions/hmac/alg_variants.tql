@@ -1,4 +1,4 @@
-from {payload: "payload", key: "my_key"}
-select sha384 = hmac(payload, key, algorithm="sha384"),
-       sha1 = hmac(payload, key, algorithm="sha1"),
-       md5 = hmac(payload, key, algorithm="md5")
+from {payload: "payload"}
+select sha384 = hmac(payload, "my_key", algorithm="sha384"),
+       sha1 = hmac(payload, "my_key", algorithm="sha1"),
+       md5 = hmac(payload, "my_key", algorithm="md5")

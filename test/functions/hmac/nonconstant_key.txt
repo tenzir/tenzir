@@ -1,0 +1,8 @@
+error: expected a constant expression
+ --> functions/hmac/nonconstant_key.tql:6:29
+  |
+6 | select digest = hmac(value, key)
+  |                             ^^^
+  |
+  = usage: hmac(data:any, key:string|secret, [algorithm=string])
+  = docs: https://tenzir.com/docs/reference/functions/hmac

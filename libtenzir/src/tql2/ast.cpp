@@ -756,6 +756,9 @@ auto ast::expression::is_deterministic(const registry& reg) const -> bool {
     [](ast::meta const&) {
       return true;
     },
+    [](ast::resolved_secret const&) {
+      return true;
+    },
     [](ast::this_ const&) {
       return true;
     },

@@ -47,6 +47,7 @@ template class Array<UInt>;
 template class Array<Float>;
 template class Array<String>;
 template class Array<Blob>;
+template class Array<Secret>;
 template class Array<Ip>;
 template class Array<Subnet>;
 template class Array<Time>;

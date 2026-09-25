@@ -16,6 +16,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/nova/secret.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
@@ -271,10 +272,27 @@ struct root_field {
   }
 };
 
-using expression_kinds = detail::type_list<
-  record, list, meta, this_, root_field, pipeline_expr, constant, field_access,
-  index_expr, binary_expr, unary_expr, function_call, lambda_expr, underscore,
-  unpack, assignment, dollar_var, pkg_dollar_var, format_expr, type_expr>;
+struct resolved_secret {
+  nova::Secret value;
+  location source;
+
+  auto get_location() const -> location {
+    return source;
+  }
+
+  /// Only exists inside a prepared Nova evaluator and is never serialized.
+  friend auto inspect(auto& f, resolved_secret& x) -> bool {
+    TENZIR_UNUSED(f, x);
+    TENZIR_UNREACHABLE();
+  }
+};
+
+using expression_kinds
+  = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
+                      constant, field_access, index_expr, binary_expr,
+                      unary_expr, function_call, lambda_expr, underscore,
+                      unpack, assignment, dollar_var, pkg_dollar_var,
+                      format_expr, type_expr, resolved_secret>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -1374,6 +1392,10 @@ protected:
   }
 
   void enter(constant& x) {
+    TENZIR_UNUSED(x);
+  }
+
+  void enter(resolved_secret& x) {
     TENZIR_UNUSED(x);
   }
 

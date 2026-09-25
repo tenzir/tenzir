@@ -84,8 +84,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if constexpr (std::same_as<Events, nova::Events>) {
-      auto evaluator = nova::Evaluator::make(
-        args_.weight, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto evaluator = co_await nova::Evaluator::make(args_.weight, ctx);
       if (not evaluator) {
         co_return;
       }

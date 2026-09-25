@@ -147,11 +147,36 @@ argument type combinations, warning and returning all-null for the rest without
 instantiating the body, unwrapping unions per alternative. `const_eval` is an
 `Evaluator` run with no input.
 
+### Secrets
+
+`Secret` is a Nova fundamental type holding plaintext bytes. An owned `Secret`
+keeps them in cleansing memory, while `Array<Secret>` uses the same dense byte
+storage as `Blob`. `SecretView` offers the read-only interface of
+`std::string_view` and `BlobView`. It never crosses into legacy `data`, FlatBuffers, or Arrow: printers
+redact it as `***`, and `materialize_legacy` turns it into the string `***`.
+
+`Evaluator::make(expr, OpCtx&)` resolves every `secret(name)` call in the
+expression once, before preparation. The name must be a constant string; a
+data-dependent name fails constant evaluation. Each resolved call is replaced
+by an internal `ast::resolved_secret` node, which evaluates to a constant
+`Array<Secret>`. Everywhere the walk does not run, such as constant evaluation,
+the `secret` function plugin rejects the call in its validation.
+
+Functions opt into secrets by taking a `Secret` or `located<Secret>` argument,
+which accepts a resolved secret or a constant string. There are no implicit
+conversions from `Secret` to other types: `+`, format strings, and the
+encoding functions yield a `Secret` whenever an input is one. A format string
+yields a `Secret` for every row with a top-level secret replacement and a
+`String` otherwise; nested secrets are stringified as `***`. The comparison
+operators reject secrets. Generic code paths, such as sorting, hashing, and
+deduplication, treat all secrets as equivalent.
+
 ### Contexts
 
 Three context types, each with one job and none of them retained:
 
-- `InstantiateCtx` (diagnostics and registry) is for preparation only.
+- `InstantiateCtx` provides diagnostics and the registry during preparation.
+  Asynchronous preparation also borrows an operator context to resolve secrets.
 - `EvalCtx` (diagnostics) is the boundary type. Operators hand it to
   `Evaluator::eval`, where no `EvalRun` exists yet.
 - `EvalFrame` is one node's place in an `EvalRun`, and what everything below
@@ -265,8 +290,7 @@ class WhereEvents final : public Operator<nova::Events, nova::Events> {
   Option<nova::Evaluator> evaluator_;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto evaluator = nova::Evaluator::make(
-      std::move(expr_), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    auto evaluator = co_await nova::Evaluator::make(std::move(expr_), ctx);
     if (not evaluator) {
       co_return;
     }

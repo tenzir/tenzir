@@ -805,8 +805,7 @@ public:
       co_return;
     }
     for (auto const& filter : args_.optimization.filter) {
-      auto evaluator = nova::Evaluator::make(
-        filter, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto evaluator = co_await nova::Evaluator::make(filter, ctx);
       if (not evaluator) {
         done_ = true;
         co_return;

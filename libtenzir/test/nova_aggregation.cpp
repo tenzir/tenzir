@@ -25,6 +25,7 @@
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -106,8 +107,8 @@ auto events_of(Ts... values) -> Events {
 
 auto make_sum(diagnostic_handler& dh) -> Box<AggregationInstance> {
   auto const reg = global_registry();
-  auto instance = AggregationInstance::make(call("sum", {root_field("x")}),
-                                            InstantiateCtx{dh, *reg});
+  auto instance
+    = tenzir::test::make_aggregation(call("sum", {root_field("x")}), dh, *reg);
   REQUIRE(instance);
   return std::move(*instance);
 }
@@ -153,7 +154,7 @@ auto eval(ast::expression expression, Events events, storage::BitMap mask,
   events.mask = std::move(mask);
   auto const reg = global_registry();
   auto evaluator
-    = Evaluator::make(std::move(expression), InstantiateCtx{dh, *reg});
+    = tenzir::test::make_evaluator(std::move(expression), dh, *reg);
   REQUIRE(evaluator);
   return evaluator->eval(events, EvalCtx{dh});
 }
@@ -163,8 +164,7 @@ auto eval(ast::expression expression, Events events, storage::BitMap mask,
 TEST("AggregationInstance::make rejects an expression that is not a call") {
   auto dh = collecting_diagnostic_handler{};
   auto const reg = global_registry();
-  auto instance
-    = AggregationInstance::make(root_field("x"), InstantiateCtx{dh, *reg});
+  auto instance = tenzir::test::make_aggregation(root_field("x"), dh, *reg);
   CHECK(not instance);
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), size_t{1});
@@ -175,8 +175,8 @@ TEST("AggregationInstance::make rejects an expression that is not a call") {
 TEST("AggregationInstance::make rejects a regular function") {
   auto dh = collecting_diagnostic_handler{};
   auto const reg = global_registry();
-  auto instance = AggregationInstance::make(call("length", {root_field("x")}),
-                                            InstantiateCtx{dh, *reg});
+  auto instance = tenzir::test::make_aggregation(
+    call("length", {root_field("x")}), dh, *reg);
   CHECK(not instance);
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), size_t{1});
@@ -436,8 +436,8 @@ TEST("sketch aggregations honor masks, accumulate across batches, and reset") {
   for (auto name : {"hll", "tdigest", "quantile", "median"}) {
     auto dh = collecting_diagnostic_handler{};
     auto reg = global_registry();
-    auto aggregate = AggregationInstance::make(call(name, {root_field("x")}),
-                                               InstantiateCtx{dh, *reg});
+    auto aggregate
+      = tenzir::test::make_aggregation(call(name, {root_field("x")}), dh, *reg);
     REQUIRE(aggregate);
     CHECK(is_null((*aggregate)->get()));
     auto events = events_of(Int{1}, std::string_view{"masked out"}, Int{3});
@@ -514,7 +514,7 @@ TEST("HLL registers retain the persisted type-sensitive hash contract") {
   for (auto const& value : values) {
     auto field = builder.record().field("x");
     append_data(field, value);
-    auto owned = materialize(RowView<Data>{value});
+    auto owned = materialize_legacy(value);
     // Hash through the persisted data contract, not through another executor.
     auto digest = tenzir::hash<xxh3_64>(make_view(owned));
     auto index = digest >> (64 - 14);
@@ -524,8 +524,8 @@ TEST("HLL registers retain the persisted type-sensitive hash contract") {
   }
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
-  auto aggregate = AggregationInstance::make(call("hll", {root_field("x")}),
-                                             InstantiateCtx{dh, *reg});
+  auto aggregate
+    = tenzir::test::make_aggregation(call("hll", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
   (*aggregate)->update(make_events(builder.finish()), EvalCtx{dh});
   auto value = (*aggregate)->get();
@@ -540,8 +540,8 @@ TEST("HLL registers retain the persisted type-sensitive hash contract") {
 TEST("quantile narrows duration limits without overflowing") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
-  auto aggregate = AggregationInstance::make(
-    call("quantile", {root_field("x")}), InstantiateCtx{dh, *reg});
+  auto aggregate = tenzir::test::make_aggregation(
+    call("quantile", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
   for (auto count : {std::numeric_limits<Duration::rep>::min(),
                      std::numeric_limits<Duration::rep>::max()}) {
@@ -573,8 +573,8 @@ TEST("quantile and median list warnings are scoped to an evaluation") {
   for (auto name : {"quantile", "median"}) {
     auto prepare_dh = collecting_diagnostic_handler{};
     auto reg = global_registry();
-    auto evaluator = Evaluator::make(call(name, {root_field("xs")}),
-                                     InstantiateCtx{prepare_dh, *reg});
+    auto evaluator = tenzir::test::make_evaluator(
+      call(name, {root_field("xs")}), prepare_dh, *reg);
     REQUIRE(evaluator);
     CHECK(std::move(prepare_dh).collect().empty());
     // Deduplication spans list rows, but not subsequent evaluations.
@@ -601,8 +601,8 @@ TEST("quantile and median list warnings are scoped to an evaluation") {
 TEST("t-digest aggregation type warnings survive resets") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
-  auto aggregate = AggregationInstance::make(call("tdigest", {root_field("x")}),
-                                             InstantiateCtx{dh, *reg});
+  auto aggregate = tenzir::test::make_aggregation(
+    call("tdigest", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
   for (auto value : {Int{1}, Int{2}, Int{3}}) {
     (*aggregate)->update(events_of(std::string_view{"bad"}, value), EvalCtx{dh});
@@ -637,8 +637,8 @@ TEST("t-digest list type warnings are scoped to an evaluation") {
   auto events = make_events(builder.finish());
   auto prepare_dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
-  auto evaluator = Evaluator::make(call("tdigest", {root_field("xs")}),
-                                   InstantiateCtx{prepare_dh, *reg});
+  auto evaluator = tenzir::test::make_evaluator(
+    call("tdigest", {root_field("xs")}), prepare_dh, *reg);
   REQUIRE(evaluator);
   CHECK(std::move(prepare_dh).collect().empty());
   // Reusing a call site must not suppress warnings in subsequent evaluations.
@@ -664,8 +664,8 @@ TEST("t-digest list type warnings are scoped to an evaluation") {
 TEST("t-digest accessors propagate null and ignore inactive invalid queries") {
   auto dh = collecting_diagnostic_handler{};
   auto reg = global_registry();
-  auto aggregate = AggregationInstance::make(call("tdigest", {root_field("x")}),
-                                             InstantiateCtx{dh, *reg});
+  auto aggregate = tenzir::test::make_aggregation(
+    call("tdigest", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
   (*aggregate)->update(events_of(Int{1}, Int{2}, Int{3}), EvalCtx{dh});
   auto input = events_of(Float{0.5}, std::string_view{"masked out"}, Null{});

@@ -135,9 +135,16 @@ public:
   virtual ~Aggregation() = default;
 
   /// Prepares `expr`, which must be a call to an `AggregationPlugin`. Emits an
-  /// error and fails otherwise, or if the call does not instantiate.
+  /// error and fails otherwise, or if the call does not instantiate. Resolves
+  /// no secrets, so calls to `secret` fail their validation; this suits
+  /// validating a call ahead of execution.
   static auto make(ast::expression expr, InstantiateCtx ctx)
     -> failure_or<Box<Aggregation>>;
+
+  /// Like above, but first resolves the secrets in `expr` through the operator
+  /// context, like `Evaluator::make` does for an expression.
+  static auto make(ast::expression expr, OpCtx& ctx)
+    -> Task<failure_or<Box<Aggregation>>>;
 
   /// A state in its initial condition.
   virtual auto make_state() const -> Box<AggregationState> = 0;
@@ -163,8 +170,8 @@ public:
 class AggregationInstance {
 public:
   /// See `Aggregation::make`.
-  static auto make(ast::expression expr, InstantiateCtx ctx)
-    -> failure_or<Box<AggregationInstance>>;
+  static auto make(ast::expression expr, OpCtx& ctx)
+    -> Task<failure_or<Box<AggregationInstance>>>;
 
   explicit AggregationInstance(Box<Aggregation> aggregation)
     : aggregation_{std::move(aggregation)}, state_{aggregation_->make_state()} {

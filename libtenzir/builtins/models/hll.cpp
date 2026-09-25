@@ -364,14 +364,16 @@ private:
 
 // Keep the persisted hash contract independent of the column representation.
 // In particular, numeric type tags and record field order remain significant.
+// Secrets are hashed as `***` and set `saw_secret`.
 template <class Tag>
-auto append_hash(xxh3_64& hash, nova::RowView<Tag> value) -> void {
+auto append_hash(xxh3_64& hash, nova::RowView<Tag> value, bool& saw_secret)
+  -> void {
   if constexpr (std::same_as<Tag, nova::List>) {
     hash_append(hash, list_type::type_index);
     auto size = int64_t{0};
     for (auto element : value) {
       match(element, [&](auto typed) {
-        append_hash(hash, typed);
+        append_hash(hash, typed, saw_secret);
       });
       ++size;
     }
@@ -382,13 +384,16 @@ auto append_hash(xxh3_64& hash, nova::RowView<Tag> value) -> void {
     for (auto [name, field] : value) {
       hash_append(hash, name);
       match(field, [&](auto typed) {
-        append_hash(hash, typed);
+        append_hash(hash, typed, saw_secret);
       });
       ++size;
     }
     hash_append(hash, size);
   } else if constexpr (std::same_as<Tag, nova::Null>) {
     hash_append(hash, data_view3{caf::none});
+  } else if constexpr (std::same_as<Tag, nova::Secret>) {
+    saw_secret = true;
+    hash_append(hash, std::string_view{"***"});
   } else {
     hash_append(hash, data_view3{*value});
   }
@@ -445,8 +450,15 @@ public:
     } else {
       ++state_.count;
       auto hash = xxh3_64{};
-      append_hash(hash, value);
+      auto saw_secret = false;
+      append_hash(hash, value, saw_secret);
       add_hash(state_.registers, state_.precision, hash.finish());
+      if (saw_secret and not warned_secret_) {
+        warned_secret_ = true;
+        diagnostic::warning("secret values are hashed as `***`")
+          .primary(source)
+          .emit(dh);
+      }
     }
   }
 
@@ -457,6 +469,7 @@ public:
 private:
   model state_;
   bool warned_overflow_ = false;
+  bool warned_secret_ = false;
 };
 
 class HllFunction {
@@ -501,7 +514,7 @@ struct CardinalityArgs {
 
 class CardinalityFunction {
 public:
-  auto eval(CardinalityArgs const& args, nova::EvalFrame frame) const
+  static auto eval(CardinalityArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return nova::apply_kernel<1>(
       frame, "hll_cardinality", {args.model}, args.call,

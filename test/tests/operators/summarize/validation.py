@@ -31,7 +31,7 @@ for pipeline, error in (
     ("from []\nsummarize result=sum()", "expected exactly 1 positional argument"),
     (
         "let $normalize = 42\nfrom []\nsummarize result=entropy(x, normalize=$normalize)",
-        "expected argument of type `bool`, but got `int64`",
+        "expected argument of type `bool`, but got `int`",
     ),
     (
         "from []\nif false { summarize result=sum() }",

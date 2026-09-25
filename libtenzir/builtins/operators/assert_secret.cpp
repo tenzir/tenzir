@@ -9,6 +9,7 @@
 #include "tenzir/async.hpp"
 
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -25,7 +26,8 @@ struct AssertSecretArgs {
   located<data> expected;
 };
 
-class AssertSecret final : public Operator<table_slice, table_slice> {
+template <class Events>
+class AssertSecret final : public Operator<Events, Events> {
 public:
   explicit AssertSecret(AssertSecretArgs args)
     : secret_{std::move(args.secret)}, expected_{std::move(args.expected)} {
@@ -59,7 +61,7 @@ public:
     }
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx&)
+  auto process(Events input, Push<Events>& push, OpCtx&)
     -> Task<void> override {
     // Pass through data (should not be called since we return done)
     co_await push(std::move(input));
@@ -94,7 +96,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AssertSecretArgs, AssertSecret>{};
+    auto d = Describer<AssertSecretArgs, AssertSecret<table_slice>,
+                       AssertSecret<nova::Events>>{};
     auto arg = d.named("secret", &AssertSecretArgs::secret);
     d.named("expected", &AssertSecretArgs::expected);
     d.validate(

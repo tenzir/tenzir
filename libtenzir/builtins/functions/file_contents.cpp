@@ -102,7 +102,7 @@ struct FileContentsArgs {
 };
 
 struct FileContentsFunction {
-  auto eval(FileContentsArgs const& args, nova::EvalFrame frame) const
+  static auto eval(FileContentsArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     return nova::repeat(args.content, frame.length());
   }

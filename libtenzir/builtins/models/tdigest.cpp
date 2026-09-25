@@ -750,7 +750,7 @@ struct QueryArgs {
 template <unary_operation Operation>
 class QueryFunction {
 public:
-  auto eval(QueryArgs const& args, nova::EvalFrame frame) const
+  static auto eval(QueryArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     auto warned_value = nova::WarnOnce{};
     auto warned_type = nova::WarnOnce{};

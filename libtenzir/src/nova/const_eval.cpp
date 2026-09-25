@@ -10,10 +10,15 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova/stringify.hpp"
+#include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/try.hpp"
 
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "diagnostics.hpp"
 
@@ -35,16 +40,16 @@ auto const_eval_array(const ast::expression& expr, InstantiateCtx ctx)
 }
 
 auto const_eval(const ast::expression& expr, InstantiateCtx ctx)
-  -> failure_or<located<data>> {
+  -> failure_or<Data> {
   TRY(auto result, const_eval_array(expr, ctx));
   // The single row is always requested, so it always holds a value;
-  // `materialize` renders an explicit `Null` as `data{}`.
-  auto value = materialize(result.get(0));
-  return located{std::move(value), expr.get_location()};
+  // `materialize_data` preserves an explicit `Null` as Nova `Null`.
+  auto value = materialize_data(result.get(0));
+  return value;
 }
 
 auto try_const_eval(const ast::expression& expr, InstantiateCtx ctx)
-  -> Option<located<data>> {
+  -> Option<Data> {
   const registry& reg = ctx;
   if (not expr.is_deterministic(reg)) {
     return None{};

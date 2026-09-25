@@ -123,8 +123,8 @@ public:
       co_return;
     }
     if (args_.group) {
-      auto evaluator = nova::Evaluator::make(
-        std::move(*args_.group), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      auto evaluator
+        = co_await nova::Evaluator::make(std::move(*args_.group), ctx);
       if (not evaluator) {
         co_return;
       }
@@ -142,7 +142,8 @@ public:
     nova::storage::for_each_true(input.mask, [&](auto row) {
       builder.skip_n(row - builder.length());
       auto& counter
-        = keys ? find_group(groups_, nova::materialize(keys->get(row))).value()
+        = keys ? find_group(groups_, nova::materialize_legacy(keys->get(row)))
+                   .value()
                : next_id_;
       builder.data(counter++);
     });

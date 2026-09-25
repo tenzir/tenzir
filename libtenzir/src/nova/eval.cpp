@@ -9,13 +9,18 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/aggregation.hpp"
 #include "tenzir/nova/array_base.hpp"
+#include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval_internal.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/secret.hpp"
+#include "tenzir/secret_resolution.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 #include "tenzir/try.hpp"
 
+#include <algorithm>
 #include <functional>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -23,88 +28,123 @@ namespace tenzir::nova {
 
 namespace {
 
-class CallSitePreparer final : public ast::visitor<CallSitePreparer> {
-public:
-  CallSitePreparer(
-    InstantiateCtx ctx,
-    std::unordered_map<ast::function_call const*, Box<_::CallSite>>& call_sites)
-    : ctx_{ctx}, call_sites_{call_sites} {
-  }
+auto is_secret_call(ast::function_call const& call) -> bool {
+  auto const& ref = call.fn.ref;
+  return ref.pkg() == entity_pkg_std and ref.segments().size() == 1
+         and ref.segments()[0] == "secret";
+}
 
-  auto run(ast::expression& expression) -> failure_or<void> {
-    visit(expression);
-    return failed_ ? failure_or<void>{failure::promise()} : failure_or<void>{};
+class SecretResolver final : public ast::visitor<SecretResolver> {
+public:
+  SecretResolver(InstantiateCtx ctx, std::vector<secret_request>& requests)
+    : ctx_{ctx}, requests_{requests} {
   }
 
   template <class T>
   auto visit(T& x) -> void {
-    if (not failed_) {
-      enter(x);
+    enter(x);
+  }
+
+  auto visit(ast::expression& expression) -> void {
+    expression.match([this, &expression](auto& node) {
+      visit_node(expression, node);
+    });
+  }
+
+  auto visit_node(ast::expression&, auto& node) -> void {
+    enter(node);
+  }
+
+  auto visit_node(ast::expression& expression, ast::function_call& call)
+    -> void {
+    if (not is_secret_call(call)) {
+      enter(call);
+      return;
     }
+    if (call.args.size() != 1) {
+      diagnostic::error("`secret` expects exactly one string argument")
+        .primary(call)
+        .emit(ctx_);
+      failed = true;
+      return;
+    }
+    auto name = const_eval(call.args.front(), ctx_);
+    if (not name) {
+      failed = true;
+      return;
+    }
+    auto* name_string = try_as<std::string>(&*name);
+    if (not name_string) {
+      diagnostic::error("`secret` expects a string")
+        .primary(call.args.front())
+        .emit(ctx_);
+      failed = true;
+      return;
+    }
+    auto const target = std::addressof(expression);
+    auto const source = call.get_location();
+    requests_.emplace_back(
+      secret::make_managed(*name_string), source,
+      [target, source](resolved_secret_value value) -> failure_or<void> {
+        auto secret = Secret{
+          ecc::cleansing_blob{value.blob().begin(), value.blob().end()}};
+        *target = ast::resolved_secret{std::move(secret), source};
+        return {};
+      });
+  }
+
+  bool failed = false;
+
+private:
+  InstantiateCtx ctx_;
+  std::vector<secret_request>& requests_;
+};
+
+/// Collect only the calls at this level. Their descriptions decide which
+/// arguments are constants and which expressions need subsequent preparation.
+class CallSiteCollector final : public ast::visitor<CallSiteCollector> {
+public:
+  explicit CallSiteCollector(InstantiateCtx ctx) : ctx_{ctx} {
+  }
+
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
   }
 
   auto visit(ast::function_call& call) -> void {
-    if (failed_) {
-      return;
-    }
-    auto const& plugin = static_cast<registry const&>(ctx_).get(call);
-    // Functions come first; an aggregation invoked in expression position is
-    // instantiated through its own description, whose kernel is the
-    // regular-function fallback over list rows.
-    auto instantiate = [&]() -> failure_or<FunctionDescription::Instantiation> {
-      if (auto const* function
-          = dynamic_cast<FunctionPlugin const*>(std::addressof(plugin))) {
-        return function->instantiate(call, ctx_);
-      }
-      if (auto const* aggregation
-          = dynamic_cast<AggregationPlugin const*>(std::addressof(plugin))) {
-        return aggregation->instantiate(call, ctx_);
-      }
-      diagnostic::error("function `{}` is not implemented for the nova model",
-                        plugin.function_name())
-        .primary(call)
-        .emit(ctx_);
-      return failure::promise();
-    };
-    auto instantiation = instantiate();
-    if (not instantiation) {
-      failed_ = true;
-      return;
-    }
-    // Everything the call evaluates later — argument expressions, lambda
-    // bodies — is part of this expression, not of a nested evaluation: its
-    // call sites go into the same call-site table, keyed by node address like
-    // any other. Instantiation reports those nodes because it borrows them
-    // instead of taking ownership.
-    for (auto* expr : instantiation->deferred) {
-      visit(*expr);
-      if (failed_) {
-        return;
-      }
-    }
-    auto const inserted
-      = call_sites_
-          .emplace(std::addressof(call), std::move(instantiation->call_site))
-          .second;
-    TENZIR_ASSERT(inserted);
+    calls.push_back(std::addressof(call));
   }
 
-  /// A lambda in expression position, i.e. one that is not the argument of a
-  /// function that registered it as such.
   auto visit(ast::lambda_expr& lambda) -> void {
     diagnostic::error("expected an expression, got a lambda")
       .primary(lambda)
       .emit(ctx_);
-    failed_ = true;
+    failed = true;
   }
+
+  std::vector<ast::function_call*> calls;
+  bool failed = false;
 
 private:
   InstantiateCtx ctx_;
-  std::unordered_map<ast::function_call const*, Box<_::CallSite>>& call_sites_;
-  bool failed_ = false;
 };
 
 } // namespace
+
+auto resolve_secrets(ast::expression& expression, OpCtx& ctx,
+                     diagnostic_handler& dh) -> Task<failure_or<void>> {
+  auto secrets = std::vector<secret_request>{};
+  auto resolver = SecretResolver{InstantiateCtx{dh, ctx.reg()}, secrets};
+  resolver.visit(expression);
+  if (resolver.failed) {
+    co_return failure::promise();
+  }
+  if (not secrets.empty()) {
+    CO_TRY(co_await ctx.resolve_secrets(std::move(secrets)));
+  }
+  co_return {};
+}
 
 Evaluator::Evaluator(ast::expression expression)
   : expression_{std::move(expression)} {
@@ -123,10 +163,59 @@ auto Evaluator::make(ast::expression expression, InstantiateCtx ctx)
   return result;
 }
 
+auto Evaluator::make(ast::expression expression, OpCtx& ctx)
+  -> Task<failure_or<Evaluator>> {
+  return make(std::move(expression), ctx, ctx.dh());
+}
+
+auto Evaluator::make(ast::expression expression, OpCtx& ctx,
+                     diagnostic_handler& dh) -> Task<failure_or<Evaluator>> {
+  CO_TRY(co_await resolve_secrets(expression, ctx, dh));
+  co_return make(std::move(expression), InstantiateCtx{dh, ctx.reg()});
+}
+
 auto Evaluator::prepare(ast::expression& expression, InstantiateCtx ctx)
   -> failure_or<void> {
-  auto preparer = CallSitePreparer{ctx, call_sites_};
-  return preparer.run(expression);
+  auto collector = CallSiteCollector{ctx};
+  collector.visit(expression);
+  if (collector.failed) {
+    return failure::promise();
+  }
+  for (auto* call : collector.calls) {
+    auto const& plugin = static_cast<registry const&>(ctx).get(*call);
+    // Functions come first; an aggregation invoked in expression position is
+    // instantiated through its own description, whose kernel is the
+    // regular-function fallback over list rows.
+    auto instantiate = [&]() -> failure_or<FunctionDescription::Instantiation> {
+      if (auto const* function
+          = dynamic_cast<FunctionPlugin const*>(std::addressof(plugin))) {
+        return function->instantiate(*call, ctx);
+      }
+      if (auto const* aggregation
+          = dynamic_cast<AggregationPlugin const*>(std::addressof(plugin))) {
+        return aggregation->instantiate(*call, ctx);
+      }
+      diagnostic::error("function `{}` is not implemented for the nova model",
+                        plugin.function_name())
+        .primary(*call)
+        .emit(ctx);
+      return failure::promise();
+    };
+    TRY(auto instantiation, instantiate());
+    // Everything the call evaluates later — argument expressions, lambda
+    // bodies — is part of this expression, not of a nested evaluation: its
+    // call sites go into the same call-site table, keyed by node address like
+    // any other. Instantiation reports those nodes because it borrows them
+    // instead of taking ownership. Their call sites join this evaluator's
+    // single preparation pass.
+    for (auto* expr : instantiation.deferred) {
+      TRY(prepare(*expr, ctx));
+    }
+    auto const inserted
+      = call_sites_.emplace(call, std::move(instantiation.call_site)).second;
+    TENZIR_ASSERT(inserted);
+  }
+  return {};
 }
 
 ValueArgument::ValueArgument() : data{Array<Null>{storage::NullStorage{0}}} {

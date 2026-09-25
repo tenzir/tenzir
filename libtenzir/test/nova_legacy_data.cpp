@@ -26,7 +26,7 @@ auto round_trip(const data& value) -> data {
   append_legacy_data(builder, value, dh);
   const auto array = builder.finish();
   REQUIRE_EQUAL(array.length(), 1);
-  return materialize(array.get(0));
+  return materialize_legacy(array.get(0));
 }
 
 /// Like `round_trip`, but routes the value through a record field, which is
@@ -38,7 +38,7 @@ auto round_trip_field(const data& value) -> data {
   append_legacy_data(row.field("x"), value, dh);
   const auto array = builder.finish();
   REQUIRE_EQUAL(array.length(), 1);
-  const auto materialized = materialize(Array<Data>{array}.get(0));
+  const auto materialized = materialize_legacy(Array<Data>{array}.get(0));
   const auto* rec = try_as<record>(materialized);
   REQUIRE(rec);
   const auto it = rec->find("x");
