@@ -284,6 +284,11 @@ tenzir:
   # controls the maximum memory usage when importing events.
   max-buffered-events: 12Mi
 
+  # Maximum estimated bytes retained by buffered, active, and sealing Nova
+  # imports.
+  # This is separate from the event limit and rebuild memory budget.
+  max-buffered-bytes: 1073741824
+
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
   # disable.
