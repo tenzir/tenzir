@@ -13,6 +13,9 @@
 #include "tenzir/async.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/nova/array_merge.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/eval.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
@@ -315,6 +318,116 @@ private:
   bool replace_with_null_ = false;
 };
 
+class ReplaceNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit ReplaceNova(ReplaceArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto what = nova::Evaluator::make(
+      ast::expression{ast::constant::make(std::move(args_.what))},
+      nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not what) {
+      co_return;
+    }
+    what_.emplace(std::move(*what));
+    auto with = nova::Evaluator::make(
+      ast::expression{ast::constant::make(std::move(args_.with))},
+      nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (not with) {
+      co_return;
+    }
+    with_.emplace(std::move(*with));
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not what_ or not with_) {
+      co_return;
+    }
+    auto what = what_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto with = with_->eval(input, nova::EvalCtx{ctx.dh()});
+    input.data = replace_record(std::move(input.data), input.mask, args_.path,
+                                0, what, with);
+    co_await push(std::move(input));
+  }
+
+private:
+  auto replace_data(nova::Array<nova::Data> input,
+                    const nova::storage::BitMap& active,
+                    const std::vector<ast::field_path>& paths, size_t index,
+                    const nova::Array<nova::Data>& what,
+                    const nova::Array<nova::Data>& with) const
+    -> nova::Array<nova::Data> {
+    auto matches = nova::storage::BitMap::Mutable{input.length()};
+    nova::storage::for_each_true(active, [&](auto row) {
+      matches.set(row, nova::equal(input.get(row), what.get(row)));
+    });
+    auto matched = std::move(matches).finish();
+    auto nested = active.and_not(matched);
+    if (nested.any()) {
+      input = std::move(input).map_alternative<nova::Record>(
+        [&](nova::MaskedArray<nova::Array<nova::Record>> records) {
+          auto record_rows = nested & records.present;
+          return replace_record(std::move(records.data), record_rows, paths,
+                                index, what, with);
+        });
+    }
+    if (not matched.any()) {
+      return input;
+    }
+    return nova::with_merged(
+      {input, nova::storage::BitMap{input.length(), true}}, {with, matched});
+  }
+
+  auto replace_record(nova::Array<nova::Record> input,
+                      const nova::storage::BitMap& active,
+                      const std::vector<ast::field_path>& paths, size_t index,
+                      const nova::Array<nova::Data>& what,
+                      const nova::Array<nova::Data>& with) const
+    -> nova::Array<nova::Record> {
+    const auto replace_all
+      = paths.empty() or std::ranges::any_of(paths, [&](const auto& path) {
+          return index >= path.path().size();
+        });
+    auto names = std::vector<std::string>{};
+    if (replace_all) {
+      nova::storage::for_each_true(active, [&](auto row) {
+        for (auto [name, unused] : input.get(row)) {
+          TENZIR_UNUSED(unused);
+          if (not std::ranges::contains(names, name)) {
+            names.emplace_back(name);
+          }
+        }
+      });
+    } else {
+      for (const auto& path : paths) {
+        auto segments = path.path();
+        if (index < segments.size()
+            and not std::ranges::contains(names, segments[index].id.name)) {
+          names.push_back(segments[index].id.name);
+        }
+      }
+    }
+    for (const auto& name : names) {
+      auto field = std::move(input).dangerously_extract_field(name);
+      if (not field) {
+        continue;
+      }
+      auto selected = active & field->present;
+      auto child_paths = replace_all ? paths : update_paths(paths, name, index);
+      field->data = replace_data(std::move(field->data), selected, child_paths,
+                                 index + 1, what, with);
+      input = std::move(input).with_field_overwrite(name, std::move(*field));
+    }
+    return input;
+  }
+
+  ReplaceArgs args_;
+  Option<nova::Evaluator> what_;
+  Option<nova::Evaluator> with_;
+};
+
 struct replace : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -322,7 +435,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReplaceArgs, Replace>{};
+    auto d = Describer<ReplaceArgs, Replace, ReplaceNova>{};
     d.parallelizable();
     auto what = d.named("what", &ReplaceArgs::what);
     auto with = d.named("with", &ReplaceArgs::with);
