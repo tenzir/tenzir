@@ -17,6 +17,8 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/time.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 struct retention_policy {
@@ -69,12 +71,17 @@ struct retention_policy {
 
   auto should_be_persisted(const table_slice& slice) const -> bool {
     const auto& schema = slice.schema();
-    if (not schema.attribute("internal")) {
+    return should_be_persisted(schema.name(),
+                               schema.attribute("internal").has_value());
+  }
+
+  auto should_be_persisted(std::string_view name, bool internal) const -> bool {
+    if (not internal) {
       return true;
     }
     // Match a schema itself or any of its children, mirroring the type
     // matching of the compaction rules derived from this policy.
-    const auto matches = [name = schema.name()](std::string_view type) {
+    const auto matches = [name](std::string_view type) {
       return name == type
              or (name.size() > type.size() and name.starts_with(type)
                  and name[type.size()] == '.');
@@ -88,7 +95,7 @@ struct retention_policy {
     if (matches("tenzir.metrics.operator_profile")) {
       return operator_profile_metrics_period > duration::zero();
     }
-    if (schema.name().starts_with("tenzir.metrics.")) {
+    if (name.starts_with("tenzir.metrics.")) {
       return metrics_period > duration::zero();
     }
     return true;

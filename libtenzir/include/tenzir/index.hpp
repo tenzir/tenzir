@@ -14,6 +14,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/importer.hpp"
+#include "tenzir/nova/import_routing.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
@@ -24,8 +25,10 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
+#include <functional>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace tenzir {
@@ -50,6 +53,13 @@ struct active_partition_info {
   }
 };
 
+struct nova_active_partition_info {
+  nova_active_partition_actor actor = {};
+  size_t events = 0;
+  size_t bytes = 0;
+  uuid generation = {};
+};
+
 /// The state of the index actor.
 struct index_state {
   // -- constructor ------------------------------------------------------------
@@ -59,6 +69,22 @@ struct index_state {
   // -- inbound path -----------------------------------------------------------
 
   void handle_slice(table_slice slice);
+  auto handle_events(nova::Events events) -> caf::result<void>;
+
+  auto create_nova_active_partition(nova::ImportShapeKey const& key)
+    -> caf::expected<
+      std::unordered_map<nova::ImportShapeKey, nova_active_partition_info,
+                         nova::ImportShapeKeyHash>::iterator>;
+
+  void decommission_nova_active_partition(
+    nova::ImportShapeKey key,
+    std::function<void(caf::error const&)> completion);
+
+  void enforce_buffer_limit();
+  void release_nova_pressure();
+
+  void complete_publication(caf::error error);
+  void publish_or_defer(std::function<void()> action);
 
   // -- partition handling -----------------------------------------------------
 
@@ -82,9 +108,15 @@ struct index_state {
 
   void pin_recent_partition(const uuid& id);
 
+  void pin_recent_nova_partition(const uuid& id);
+
   void unpin_recent_partition(const uuid& id);
 
+  void unpin_recent_nova_partition(const uuid& id);
+
   void retire_partition(const uuid& id, caf::error reason);
+
+  void retire_nova_partition(const uuid& id, caf::error reason);
 
   void drain_retired_partitions(caf::error reason);
 
@@ -99,6 +131,33 @@ struct index_state {
 
   /// One active (read/write) partition per schema.
   std::unordered_map<type, active_partition_info> active_partitions = {};
+
+  std::unordered_map<nova::ImportShapeKey, nova_active_partition_info,
+                     nova::ImportShapeKeyHash>
+    nova_active_partitions = {};
+
+  struct nova_unpersisted_partition_info {
+    nova_active_partition_actor actor = {};
+    bool internal = false;
+    size_t bytes = 0;
+    size_t ref_count = 1;
+    bool visible_for_recent = true;
+    bool exit_sent = false;
+    caf::error exit_reason = caf::none;
+  };
+  std::unordered_map<uuid, nova_unpersisted_partition_info> nova_unpersisted
+    = {};
+  size_t buffered_nova_bytes = 0;
+  size_t max_buffered_nova_bytes = 0;
+  std::vector<caf::typed_response_promise<void>> nova_pressure_waiters = {};
+
+  size_t pending_publications = 0;
+  caf::error publication_error = caf::none;
+  std::vector<caf::typed_response_promise<void>> flush_waiters = {};
+  std::unordered_set<uuid> publication_barriers = {};
+  std::vector<std::pair<uuid, caf::typed_response_promise<void>>>
+    pending_publication_barriers = {};
+  std::vector<std::function<void()>> deferred_publications = {};
 
   /// Partitions that are currently in the process of persisting.
   // TODO: An alternative to keeping an explicit set of unpersisted partitions
@@ -177,7 +236,7 @@ index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
-      duration active_partition_timeout,
+      size_t max_buffered_nova_bytes, duration active_partition_timeout,
       const std::filesystem::path& catalog_dir, index_config index_config);
 
 } // namespace tenzir

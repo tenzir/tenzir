@@ -13,7 +13,10 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/nova/import_wire.hpp"
+#include "tenzir/nova_persist_result.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/recent_snapshot.hpp"
 #include "tenzir/secret_store.hpp"
 
 #include <caf/inspector_access.hpp>
@@ -248,10 +251,19 @@ struct importer_actor_traits {
     auto(atom::get, receiver_actor<table_slice>, bool internal, bool live,
          bool recent, bool eager)
       ->caf::result<std::vector<table_slice>>,
+    auto(atom::get, atom::snapshot, receiver_actor<table_slice>, bool internal,
+         bool live, bool recent, bool eager)
+      ->caf::result<recent_snapshot>,
+    // Local subscription for the columnar event path.
+    auto(atom::get, atom::internal, receiver_actor<nova::Events>, bool internal,
+         bool live, bool recent, bool eager)
+      ->caf::result<std::vector<nova::Events>>,
     // Push buffered slices downstream to make the data available.
     auto(atom::flush)->caf::result<void>,
     // Import a batch of data.
     auto(table_slice)->caf::result<void>,
+    auto(nova::ImportWireBatch)->caf::result<void>,
+    auto(atom::resume, uuid)->caf::result<void>,
     // Conform to the protocol of the STATUS CLIENT actor.
     auto(atom::status, status_verbosity, duration)->caf::result<record>>;
 };
@@ -263,11 +275,15 @@ using importer_actor = caf::typed_actor<importer_actor_traits>;
 /// lookups, transforms, erasure — belongs to the CATALOG.
 using index_actor = typed_actor_fwd<
   // Stores a table slice.
-  auto(table_slice)->caf::result<void>,
+  auto(table_slice)->caf::result<void>, auto(nova::Events)->caf::result<void>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
   // Returns all events from active and unpersisted partitions.
-  auto(atom::get, bool internal)->caf::result<std::vector<table_slice>>>
+  auto(atom::get, bool internal)->caf::result<std::vector<table_slice>>,
+  auto(atom::get, atom::internal, bool internal)
+    ->caf::result<std::vector<nova::Events>>,
+  auto(atom::pause, uuid)->caf::result<void>,
+  auto(atom::resume, uuid)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -322,6 +338,17 @@ using active_partition_actor = typed_actor_fwd<
   auto(atom::get)->caf::result<std::vector<table_slice>>>
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
+
+struct NovaPersistResult;
+
+/// One shape-grouped active generation. This protocol is local to a node;
+/// external importers use a serializable batch envelope.
+using nova_active_partition_actor
+  = typed_actor_fwd<auto(nova::Events, nova::storage::BitMap)->caf::result<void>,
+                    auto(atom::persist)->caf::result<NovaPersistResult>,
+                    auto(atom::get)->caf::result<std::vector<nova::Events>>,
+                    auto(atom::update, type)->caf::result<void>>::
+    extend_with<status_client_actor>::unwrap;
 
 /// The interface of a REST HANDLER actor.
 using rest_handler_actor = typed_actor_fwd<
@@ -481,10 +508,18 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
+  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::nova::Events>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
   TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
   TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
+  TENZIR_ADD_TYPE_ID((tenzir::nova_active_partition_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::nova::Events))
+  TENZIR_ADD_TYPE_ID((tenzir::nova::ImportWireBatch))
+  TENZIR_ADD_TYPE_ID((tenzir::nova::storage::BitMap))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::nova::Events>))
+  TENZIR_ADD_TYPE_ID((tenzir::NovaPersistResult))
+  TENZIR_ADD_TYPE_ID((tenzir::recent_snapshot))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 
@@ -500,6 +535,10 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transformer_result)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::Events)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::storage::BitMap)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<tenzir::nova::Events>)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaPersistResult)
 #undef tenzir_uuid_synopsis_map
 
 #undef TENZIR_ADD_TYPE_ID

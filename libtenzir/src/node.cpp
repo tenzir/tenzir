@@ -370,6 +370,11 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
                  const caf::settings& settings,
                  const filesystem_actor& filesystem,
                  const catalog_actor& catalog) -> index_actor {
+  auto const max_buffered_bytes
+    = get_or(settings, "tenzir.max-buffered-bytes", int64_t{1} << 30);
+  if (max_buffered_bytes <= 0) {
+    diagnostic::error("`tenzir.max-buffered-bytes` must be positive").throw_();
+  }
   auto index = [&] {
     return self->spawn<caf::detached>(
       tenzir::index, filesystem, catalog, self->state().dir / "index",
@@ -381,6 +386,10 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
              defaults::max_partition_size * 3),
       get_or(settings, "tenzir.max-partition-size",
              defaults::max_partition_size),
+      // Reserve up to 16 MiB for the importer's pre-flush Nova buffer.
+      static_cast<size_t>(
+        max_buffered_bytes
+        - std::min<int64_t>(int64_t{16} * 1024 * 1024, max_buffered_bytes / 2)),
       get_or(settings, "tenzir.active-partition-timeout",
              defaults::active_partition_timeout),
       self->state().dir / "index", parse_index_config(settings));
