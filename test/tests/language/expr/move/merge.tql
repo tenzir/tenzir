@@ -1,9 +1,5 @@
----
-error: true
----
-
 from {
   xs: [1, 2, 3],
   ys: [3, 1, 2],
 }
-zs = zip(move xs, move ys).map(x => [x.left, x.right].max())
+zs = zip(move xs, move ys).map(x => x.left if x.left > x.right else x.right)

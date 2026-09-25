@@ -1,0 +1,4 @@
+from {left: 42, right: [1]},
+  {left: null, right: [1]},
+  {left: [1], right: null}
+result = left.zip(right)

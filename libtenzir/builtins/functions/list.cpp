@@ -6,8 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/arithmetic.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/nova/type_system.hpp"
@@ -156,7 +158,101 @@ auto check_add_types(const type& list_element_type, const type& element_type,
   return emit_add_type_warning(classification, &list_expr, element_expr, ctx);
 }
 
-class prepend : public virtual function_plugin {
+struct ListArgument {
+  nova::Array<nova::List> data;
+  nova::storage::BitMap present;
+};
+
+auto invalid_list_rows(const nova::ValueArgument& arg, nova::EvalFrame frame)
+  -> nova::storage::BitMap {
+  using namespace nova;
+  auto const none = storage::BitMap{frame.length(), false};
+  return match(
+    arg.data,
+    [&](const Array<List>&) {
+      return none;
+    },
+    [&](const Array<Null>&) {
+      return none;
+    },
+    [&](const UnionArray& array) {
+      return frame.mask()
+        .and_not(array.alternative_mask<List>())
+        .and_not(array.alternative_mask<Null>());
+    },
+    [&]<data_type Tag>(const Array<Tag>&) {
+      return frame.mask();
+    });
+}
+
+auto resolve_list(const nova::ValueArgument& arg, nova::EvalFrame frame)
+  -> Option<ListArgument> {
+  using namespace nova;
+  auto const& requested = frame.mask();
+  return match(
+    arg.data,
+    [&](const Array<List>& list) -> Option<ListArgument> {
+      return ListArgument{list, requested};
+    },
+    [&](const Array<Null>&) -> Option<ListArgument> {
+      return None{};
+    },
+    [&](const UnionArray& array) -> Option<ListArgument> {
+      auto list = array.get_alternative<List>();
+      auto present = list ? requested & list->present
+                          : storage::BitMap{frame.length(), false};
+      auto invalid
+        = requested.and_not(present).and_not(array.alternative_mask<Null>());
+      if (invalid.any()) {
+        diagnostic::warning("expected `list`, got a different type")
+          .primary(arg.source)
+          .emit(frame);
+      }
+      if (not list) {
+        return None{};
+      }
+      return ListArgument{std::move(list->data), std::move(present)};
+    },
+    [&]<nova::data_type Tag>(const nova::Array<Tag>&) -> Option<ListArgument> {
+      diagnostic::warning("expected `list`, got `{}`",
+                          nova::Type<Tag>::static_name)
+        .primary(arg.source)
+        .emit(frame);
+      return None{};
+    });
+}
+
+struct PrependArgs {
+  nova::ValueArgument xs;
+  nova::ValueArgument x;
+};
+
+class PrependFunction final {
+public:
+  auto eval(PrependArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto list = resolve_list(args.xs, frame);
+    auto builder = ArrayBuilder<List>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        builder.skip();
+        continue;
+      }
+      auto result = builder.list();
+      append_row(result, args.x.data.get(i));
+      if (list and list->present.get(i)) {
+        for (auto element : list->data.get(i)) {
+          append_row(result, element);
+        }
+      }
+    }
+    return Array<Data>{builder.finish()};
+  }
+};
+
+class prepend : public virtual function_plugin,
+                public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "prepend";
@@ -166,6 +262,13 @@ public:
     return true;
   }
 
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrependArgs, PrependFunction>{};
+    d.positional("xs", &PrependArgs::xs, "list");
+    d.positional("x", &PrependArgs::x, "any");
+    return std::move(d).finish();
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list = ast::expression{};
@@ -192,7 +295,32 @@ public:
   }
 };
 
-class append : public virtual function_plugin {
+class AppendFunction final {
+public:
+  auto eval(PrependArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto list = resolve_list(args.xs, frame);
+    auto builder = ArrayBuilder<List>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        builder.skip();
+        continue;
+      }
+      auto result = builder.list();
+      if (list and list->present.get(i)) {
+        for (auto element : list->data.get(i)) {
+          append_row(result, element);
+        }
+      }
+      append_row(result, args.x.data.get(i));
+    }
+    return Array<Data>{builder.finish()};
+  }
+};
+
+class append : public virtual function_plugin,
+               public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "append";
@@ -202,6 +330,13 @@ public:
     return true;
   }
 
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrependArgs, AppendFunction>{};
+    d.positional("xs", &PrependArgs::xs, "list");
+    d.positional("x", &PrependArgs::x, "any");
+    return std::move(d).finish();
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list = ast::expression{};
@@ -228,7 +363,39 @@ public:
   }
 };
 
-class concatenate : public virtual function_plugin {
+struct ConcatenateArgs {
+  nova::ValueArgument xs;
+  nova::ValueArgument ys;
+};
+
+class ConcatenateFunction final {
+public:
+  auto eval(ConcatenateArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto left = resolve_list(args.xs, frame);
+    auto right = resolve_list(args.ys, frame);
+    auto builder = ArrayBuilder<List>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        builder.skip();
+        continue;
+      }
+      auto result = builder.list();
+      for (auto* list : {std::addressof(left), std::addressof(right)}) {
+        if (*list and (*list)->present.get(i)) {
+          for (auto element : (*list)->data.get(i)) {
+            append_row(result, element);
+          }
+        }
+      }
+    }
+    return Array<Data>{builder.finish()};
+  }
+};
+
+class concatenate : public virtual function_plugin,
+                    public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "concatenate";
@@ -236,6 +403,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ConcatenateArgs, ConcatenateFunction>{};
+    d.positional("xs", &ConcatenateArgs::xs, "list");
+    d.positional("ys", &ConcatenateArgs::ys, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -427,7 +601,47 @@ public:
   }
 };
 
-class remove : public virtual function_plugin {
+struct RemoveArgs {
+  nova::ValueArgument xs;
+  nova::ValueArgument x;
+};
+
+class RemoveFunction final {
+public:
+  auto eval(RemoveArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto invalid = invalid_list_rows(args.xs, frame);
+    auto list = resolve_list(args.xs, frame);
+    auto builder = ArrayBuilder<List>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        builder.skip();
+        continue;
+      }
+      if (not list or not list->present.get(i)) {
+        builder.skip();
+        continue;
+      }
+      auto result = builder.list();
+      auto element = args.x.data.get(i);
+      for (auto value : list->data.get(i)) {
+        if (not equal(value, element)) {
+          append_row(result, value);
+        }
+      }
+    }
+    auto present
+      = list ? list->present : storage::BitMap{frame.length(), false};
+    auto result
+      = Array<Data>{builder.finish()}.null_where(frame.mask().and_not(present));
+    return with_merged(MaskedArray<Array<Data>>{result, frame.mask()},
+                       MaskedArray<Array<Data>>{args.xs.data, invalid});
+  }
+};
+
+class remove : public virtual function_plugin,
+               public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "remove";
@@ -435,6 +649,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<RemoveArgs, RemoveFunction>{};
+    d.positional("xs", &RemoveArgs::xs, "list");
+    d.positional("x", &RemoveArgs::x, "any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -488,7 +709,77 @@ public:
   }
 };
 
-class zip final : public function_plugin {
+struct ZipArgs {
+  nova::ValueArgument left;
+  nova::ValueArgument right;
+};
+
+class ZipFunction final {
+public:
+  auto eval(ZipArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto invalid = invalid_list_rows(args.left, frame)
+                   | invalid_list_rows(args.right, frame);
+    auto left = resolve_list(args.left, frame);
+    auto right = resolve_list(args.right, frame);
+    auto builder = ArrayBuilder<List>{};
+    auto warn = false;
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        builder.skip();
+        continue;
+      }
+      if (invalid.get(i)) {
+        builder.skip();
+        continue;
+      }
+      auto const left_length
+        = left and left->present.get(i) ? left->data.get(i).length() : 0;
+      auto const right_length
+        = right and right->present.get(i) ? right->data.get(i).length() : 0;
+      if (left_length == 0 and right_length == 0
+          and not(left and left->present.get(i))
+          and not(right and right->present.get(i))) {
+        builder.skip();
+        continue;
+      }
+      auto result = builder.list();
+      warn = warn or left_length != right_length;
+      for (auto j = storage::Index{0}; j < std::max(left_length, right_length);
+           ++j) {
+        auto record = result.record();
+        if (j < left_length) {
+          append_row(record.field("left"), left->data.get(i).get(j));
+        } else {
+          record.field("left").null();
+        }
+        if (j < right_length) {
+          append_row(record.field("right"), right->data.get(i).get(j));
+        } else {
+          record.field("right").null();
+        }
+      }
+    }
+    if (warn) {
+      diagnostic::warning("lists have different lengths")
+        .note("filling missing values with `null`")
+        .primary(args.left.source)
+        .primary(args.right.source)
+        .emit(frame);
+    }
+    auto left_present
+      = left ? left->present : storage::BitMap{frame.length(), false};
+    auto right_present
+      = right ? right->present : storage::BitMap{frame.length(), false};
+    auto null
+      = frame.mask().and_not(left_present | right_present) | std::move(invalid);
+    return Array<Data>{builder.finish()}.null_where(std::move(null));
+  }
+};
+
+class zip final : public virtual function_plugin,
+                  public virtual nova::FunctionPlugin {
 public:
   struct arguments {
     ast::expression left;
@@ -501,6 +792,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ZipArgs, ZipFunction>{};
+    d.positional("left", &ZipArgs::left, "list");
+    d.positional("right", &ZipArgs::right, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -591,7 +889,98 @@ public:
   }
 };
 
-class deltas final : public function_plugin {
+struct DeltasArgs {
+  nova::ValueArgument xs;
+};
+
+class DeltasFunction final {
+public:
+  auto eval(DeltasArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto list = resolve_list(args.xs, frame);
+    auto lhs = ArrayBuilder<Data>{};
+    auto rhs = ArrayBuilder<Data>{};
+    auto pair_mask = storage::BitMap::Builder{};
+    auto spans
+      = storage::DataOwner<storage::Span[]>::make_uninitialized(frame.length());
+    auto warned_type = false;
+    auto invalid_rows = storage::BitMap::Mutable{frame.length()};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      auto const begin = lhs.length();
+      if (frame.mask().get(i) and list and list->present.get(i)) {
+        auto row = list->data.get(i);
+        auto supported = true;
+        auto invalid_type = std::string_view{};
+        for (auto value : row) {
+          match(value, [&]<data_type Tag>(RowView<Tag>) {
+            auto const is_supported
+              = std::same_as<Tag, Null> or std::same_as<Tag, Int>
+                or std::same_as<Tag, UInt> or std::same_as<Tag, Float>
+                or std::same_as<Tag, Duration> or std::same_as<Tag, Time>;
+            supported = supported and is_supported;
+            if (not is_supported) {
+              invalid_type = Type<Tag>::static_name;
+            }
+          });
+        }
+        if (not supported) {
+          if (not warned_type) {
+            diagnostic::warning("expected a list of numbers, durations, or "
+                                "times, but got a list of `{}`",
+                                invalid_type)
+              .primary(args.xs.source)
+              .emit(frame);
+            warned_type = true;
+          }
+          invalid_rows.set(i, true);
+        } else {
+          for (auto j = storage::Index{1}; j < row.length(); ++j) {
+            auto current = row.get(j);
+            auto previous = row.get(j - 1);
+            auto const current_is_null
+              = match(current, []<data_type Tag>(RowView<Tag>) {
+                  return std::same_as<Tag, Null>;
+                });
+            auto const previous_is_null
+              = match(previous, []<data_type Tag>(RowView<Tag>) {
+                  return std::same_as<Tag, Null>;
+                });
+            append_row(lhs, current);
+            append_row(rhs, previous);
+            pair_mask.emplace_back(not current_is_null
+                                   and not previous_is_null);
+          }
+        }
+      }
+      spans.emplace_back(begin, lhs.length());
+    }
+    TENZIR_ASSERT_EQ(lhs.length(), rhs.length());
+    TENZIR_ASSERT_EQ(lhs.length(), pair_mask.size());
+    auto const pair_count = lhs.length();
+    auto lhs_array = lhs.finish();
+    auto rhs_array = rhs.finish();
+    auto pairs = pair_mask.finish();
+    auto deltas = Array<Data>{Array<Null>{storage::NullStorage{pair_count}}};
+    if (pair_count > 0) {
+      auto null_pairs = storage::BitMap{pair_count, true}.and_not(pairs);
+      frame.detached(pairs, [&](EvalFrame nested) {
+        deltas = evaluate_subtraction(
+          nested, {std::move(lhs_array), std::move(rhs_array)}, args.xs.source);
+      });
+      deltas = std::move(deltas).null_where(null_pairs);
+    }
+    auto present
+      = list ? list->present : storage::BitMap{frame.length(), false};
+    auto null
+      = frame.mask().and_not(present) | std::move(invalid_rows).finish();
+    return Array<Data>{Array<List>{spans.finish(), std::move(deltas)}}
+      .null_where(std::move(null));
+  }
+};
+
+class deltas final : public virtual function_plugin,
+                     public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "deltas";
@@ -599,6 +988,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<DeltasArgs, DeltasFunction>{};
+    d.positional("xs", &DeltasArgs::xs, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

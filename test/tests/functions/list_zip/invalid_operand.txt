@@ -1,0 +1,48 @@
+warning: expected `list`, got `int`
+ --> tests/functions/list_zip/invalid_operand.tql:4:10
+  |
+4 | result = left.zip(right)
+  |          ~~~~
+  |
+
+warning: lists have different lengths
+ --> tests/functions/list_zip/invalid_operand.tql:4:10
+  |
+4 | result = left.zip(right)
+  |          ~~~~
+  ⋮
+4 | result = left.zip(right)
+  |                   ~~~~~
+  |
+  = note: filling missing values with `null`
+{
+  left: 42,
+  right: [
+    1,
+  ],
+  result: null,
+}
+{
+  left: null,
+  right: [
+    1,
+  ],
+  result: [
+    {
+      left: null,
+      right: 1,
+    },
+  ],
+}
+{
+  left: [
+    1,
+  ],
+  right: null,
+  result: [
+    {
+      left: 1,
+      right: null,
+    },
+  ],
+}

@@ -1,6 +1,7 @@
-error: function `zip` is not implemented for the nova model
- --> tests/language/expr/move/merge.tql:9:6
-  |
-9 | zs = zip(move xs, move ys).map(x => [x.left, x.right].max())
-  |      ^^^^^^^^^^^^^^^^^^^^^
-  |
+{
+  zs: [
+    3,
+    2,
+    3,
+  ],
+}

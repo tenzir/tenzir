@@ -1,0 +1,3 @@
+from {xs: [1, 1s, 2s, 3]},
+  {xs: [1s, 2024-01-01T00:00:00]}
+result = xs.deltas()

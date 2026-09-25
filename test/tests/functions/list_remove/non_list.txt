@@ -1,0 +1,35 @@
+warning: expected `list`, got `int`
+ --> tests/functions/list_remove/non_list.tql:5:10
+  |
+5 | result = xs.remove(1)
+  |          ~~
+  |
+
+warning: expected `list`, got `string`
+ --> tests/functions/list_remove/non_list.tql:5:10
+  |
+5 | result = xs.remove(1)
+  |          ~~
+  |
+{
+  xs: 42,
+  result: 42,
+}
+{
+  xs: [
+    1,
+    2,
+    1,
+  ],
+  result: [
+    2,
+  ],
+}
+{
+  xs: "keep",
+  result: "keep",
+}
+{
+  xs: null,
+  result: null,
+}

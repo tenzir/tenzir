@@ -1,6 +1,7 @@
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/nova/arithmetic.hpp"
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/comparison.hpp"
@@ -272,6 +273,62 @@ auto eval_else(const ast::binary_expr& x, EvalFrame frame) -> Array<Data> {
 
 } // namespace
 
+auto evaluate_subtraction(EvalFrame frame, std::array<Array<Data>, 2> args,
+                          location loc) -> Array<Data> {
+  auto warn_int_overflow = WarnOnce{};
+  auto warn_duration_overflow = WarnOnce{};
+  auto warn_time_overflow = WarnOnce{};
+  return apply_kernel<2>(
+    frame, "binary operator `-`", std::move(args), loc,
+    ::tenzir::detail::overload{
+      [loc, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh, T lhs,
+                                                  U rhs)
+        requires((std::same_as<T, Int> or std::same_as<T, UInt>
+                  or std::same_as<T, Float>)
+                 and (std::same_as<U, Int> or std::same_as<U, UInt>
+                      or std::same_as<U, Float>))
+      {
+        if constexpr (std::same_as<T, Float> or std::same_as<U, Float>) {
+          return Option{static_cast<Float>(lhs) - static_cast<Float>(rhs)};
+        } else {
+          auto result = checked_sub(lhs, rhs);
+          using ResultType = typename decltype(result)::value_type;
+          if (not result) {
+            warn_int_overflow(
+              dh, diagnostic::warning("integer overflow").primary(loc));
+            return Option<ResultType>{None{}};
+          }
+          return Option<ResultType>{*result};
+        }
+      },
+      [](diagnostic_handler&, Time lhs, Duration rhs) -> Option<Time> {
+        return lhs - rhs;
+      },
+      [loc, &warn_duration_overflow](diagnostic_handler& dh, Duration lhs,
+                                     Duration rhs) -> Option<Duration> {
+        auto result = checked_sub(lhs.count(), rhs.count());
+        if (not result) {
+          warn_duration_overflow(
+            dh,
+            diagnostic::warning("duration subtraction overflow").primary(loc));
+          return None{};
+        }
+        return Duration{*result};
+      },
+      [loc, &warn_time_overflow](diagnostic_handler& dh, Time lhs,
+                                 Time rhs) -> Option<Duration> {
+        auto result = checked_sub(lhs.time_since_epoch().count(),
+                                  rhs.time_since_epoch().count());
+        if (not result) {
+          warn_time_overflow(
+            dh, diagnostic::warning("time subtraction overflow").primary(loc));
+          return None{};
+        }
+        return Duration{*result};
+      },
+    });
+}
+
 auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
   -> Array<Data> {
   switch (x.op) {
@@ -321,61 +378,9 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
           },
         });
     }
-    case sub: {
-      auto warn_int_overflow = WarnOnce{};
-      auto warn_duration_overflow = WarnOnce{};
-      auto warn_time_overflow = WarnOnce{};
-      return apply_kernel<2>(
-        frame, "binary operator `-`", {x.left, x.right}, x.get_location(),
-        ::tenzir::detail::overload{
-          [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
-                                                     T lhs, U rhs)
-            requires((std::same_as<T, Int> or std::same_as<T, UInt>
-                      or std::same_as<T, Float>)
-                     and (std::same_as<U, Int> or std::same_as<U, UInt>
-                          or std::same_as<U, Float>))
-          {
-            if constexpr (std::same_as<T, Float> or std::same_as<U, Float>) {
-              return Option{static_cast<Float>(lhs) - static_cast<Float>(rhs)};
-            } else {
-              auto result = checked_sub(lhs, rhs);
-              using ResultType = typename decltype(result)::value_type;
-              if (not result) {
-                warn_int_overflow(
-                  dh, diagnostic::warning("integer overflow").primary(x));
-                return Option<ResultType>{None{}};
-              }
-              return Option<ResultType>{*result};
-            }
-          },
-          [](diagnostic_handler&, Time lhs, Duration rhs) -> Option<Time> {
-            return lhs - rhs;
-          },
-          [&x, &warn_duration_overflow](diagnostic_handler& dh, Duration lhs,
-                                        Duration rhs) -> Option<Duration> {
-            auto result = checked_sub(lhs.count(), rhs.count());
-            if (not result) {
-              warn_duration_overflow(
-                dh,
-                diagnostic::warning("duration subtraction overflow").primary(x));
-              return None{};
-            }
-            return Duration{*result};
-          },
-          [&x, &warn_time_overflow](diagnostic_handler& dh, Time lhs,
-                                    Time rhs) -> Option<Duration> {
-            auto result = checked_sub(lhs.time_since_epoch().count(),
-                                      rhs.time_since_epoch().count());
-            if (not result) {
-              warn_time_overflow(
-                dh,
-                diagnostic::warning("time subtraction overflow").primary(x));
-              return None{};
-            }
-            return Duration{*result};
-          },
-        });
-    }
+    case sub:
+      return evaluate_subtraction(
+        frame, {frame.eval(x.left), frame.eval(x.right)}, x.get_location());
     case mul: {
       auto warn_int_overflow = WarnOnce{};
       auto warn_duration_overflow = WarnOnce{};

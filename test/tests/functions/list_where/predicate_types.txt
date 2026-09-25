@@ -1,0 +1,31 @@
+warning: expected `bool`
+ --> tests/functions/list_where/predicate_types.tql:5:23
+  |
+5 | mixed = xs.where(x => true if x == 1 else "no")
+  |                       ~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  xs: [],
+  empty: [],
+  mixed: [],
+}
+{
+  xs: [
+    1,
+    2,
+  ],
+  empty: [],
+  mixed: [
+    1,
+  ],
+}
+{
+  xs: [
+    1,
+    2,
+  ],
+  empty: [],
+  mixed: [
+    1,
+  ],
+}

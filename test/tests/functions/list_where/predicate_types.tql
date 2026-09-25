@@ -1,0 +1,5 @@
+from {xs: []},
+  {xs: [1, 2]},
+  {xs: [1, 2]}
+empty = xs.where(x => null)
+mixed = xs.where(x => true if x == 1 else "no")

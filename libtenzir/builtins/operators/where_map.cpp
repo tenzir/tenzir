@@ -702,7 +702,93 @@ private:
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::Operator, where_ir>)
 
+namespace {
+
+struct ListWhereArgs {
+  nova::ValueArgument list;
+  nova::LambdaArgument predicate;
+};
+
+class ListWhereFunction final {
+public:
+  auto eval(ListWhereArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const& present = frame.mask();
+    auto list = args.list.data.get_alternative<List>();
+    auto null = args.list.data.get_alternative<Null>();
+    auto active = list ? list->present & present
+                       : storage::BitMap{present.length(), false};
+    auto invalid = present.and_not(active);
+    if (null) {
+      invalid = std::move(invalid).and_not(null->present);
+    }
+    if (invalid.any()) {
+      diagnostic::warning("expected `list`, got a different type")
+        .primary(args.list.source)
+        .emit(frame);
+    }
+    if (not list or not active.any()) {
+      return frame.null();
+    }
+    auto primary = list->data.to_primary();
+    auto const& storage = as<storage::ListStorage>(primary.storage());
+    auto predicates
+      = frame.narrow(active).eval_elements(args.predicate, storage);
+    auto evaluated = [&] {
+      if (predicates.length() == 0) {
+        return storage::BitMap{0, false};
+      }
+      auto result = storage::BitMap::Mutable{predicates.length()};
+      for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+        if (not active.get(i)) {
+          continue;
+        }
+        auto const& span = storage.spans()[i];
+        for (auto j = span.begin; j < span.end; ++j) {
+          result.set(j, true);
+        }
+      }
+      return std::move(result).finish();
+    }();
+    auto boolean = predicates.get_alternative<Bool>();
+    auto null_predicate = predicates.get_alternative<Null>();
+    auto boolean_present = boolean
+                             ? boolean->present
+                             : storage::BitMap{predicates.length(), false};
+    auto null_present = null_predicate
+                          ? null_predicate->present
+                          : storage::BitMap{predicates.length(), false};
+    if (evaluated.and_not(boolean_present).and_not(null_present).any()) {
+      diagnostic::warning("expected `bool`")
+        .primary(args.predicate.body())
+        .emit(frame);
+    }
+    auto kept = boolean ? evaluated & boolean_present
+                            & as<storage::BitMap>(boolean->data.storage())
+                        : storage::BitMap{predicates.length(), false};
+    auto builder = ArrayBuilder<List>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not active.get(i)) {
+        builder.skip();
+        continue;
+      }
+      auto result = builder.list();
+      auto const& span = storage.spans()[i];
+      for (auto j = span.begin; j < span.end; ++j) {
+        if (kept.get(j)) {
+          append_row(result, storage.values().get(j));
+        }
+      }
+    }
+    return Array<Data>{builder.finish()}.null_where(present.and_not(active));
+  }
+};
+
+} // namespace
+
 class where_plugin final : public virtual function_plugin,
+                           public virtual nova::FunctionPlugin,
                            public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
@@ -717,6 +803,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ListWhereArgs, ListWhereFunction>{};
+    d.positional("list", &ListWhereArgs::list, "list");
+    d.positional("predicate", &ListWhereArgs::predicate, "any => bool");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

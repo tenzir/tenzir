@@ -1,0 +1,5 @@
+from {xs: 42},
+  {xs: [1, 2, 1]},
+  {xs: "keep"},
+  {xs: null}
+result = xs.remove(1)
