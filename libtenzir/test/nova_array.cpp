@@ -16,8 +16,12 @@
 #include "tenzir/nova/arrow_export.hpp"
 #include "tenzir/nova/arrow_metadata.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitz.hpp"
 #include "tenzir/nova/drop_null_fields.hpp"
 #include "tenzir/nova/eval_util.hpp"
+#include "tenzir/nova/import_conversion.hpp"
+#include "tenzir/nova/import_routing.hpp"
+#include "tenzir/nova/import_wire.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova/storage.hpp"
@@ -3306,6 +3310,254 @@ auto check_export_error(tenzir::collecting_diagnostic_handler& dh,
 }
 
 } // namespace
+
+TEST("import routing resolves batch-local shapes and metadata") {
+  auto first = export_events(Record{{"x", Int{1}}});
+  first.meta = Events::Meta::make_empty(1, "events");
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, Record{{"unrelated", Int{0}}});
+  append_export_row(builder, Record{{"x", Int{2}}});
+  auto second = Events{builder.finish(), bitmap({false, true}),
+                       Events::Meta::make_empty(2, "events")};
+  auto a = group_import_shapes(first);
+  auto b = group_import_shapes(second);
+  REQUIRE(a);
+  REQUIRE(b);
+  REQUIRE_EQUAL(a.unwrap().size(), 1u);
+  REQUIRE_EQUAL(b.unwrap().size(), 1u);
+  CHECK(a.unwrap()[0].key == b.unwrap()[0].key);
+  CHECK(not b.unwrap()[0].mask.get(0));
+  CHECK(b.unwrap()[0].mask.get(1));
+  second.meta = Events::Meta::make_empty(2, "other");
+  auto renamed = group_import_shapes(second);
+  REQUIRE(renamed);
+  CHECK(a.unwrap()[0].key != renamed.unwrap()[0].key);
+  auto reordered = export_events(Record{{"y", Int{1}}, {"x", Int{2}}});
+  reordered.meta = Events::Meta::make_empty(1, "events");
+  auto other_shape = group_import_shapes(reordered);
+  REQUIRE(other_shape);
+  CHECK(a.unwrap()[0].key != other_shape.unwrap()[0].key);
+  auto missing_field = export_events(Record{{"x", Null{}}, {"y", Int{1}}});
+  missing_field.meta = Events::Meta::make_empty(1, "events");
+  auto with_field = group_import_shapes(missing_field);
+  REQUIRE(with_field);
+  CHECK(a.unwrap()[0].key != with_field.unwrap()[0].key);
+  auto internal = first;
+  internal.meta.internal = Array<Bool>{storage::BitMap{1, true}};
+  auto internal_group = group_import_shapes(internal);
+  REQUIRE(internal_group);
+  CHECK(a.unwrap()[0].key != internal_group.unwrap()[0].key);
+}
+
+TEST("import conversion refines nulls and splits concrete types") {
+  auto buffer = ImportConversionBuffer{"events", false};
+  auto add = [&](Record row) {
+    auto events = export_events(std::move(row));
+    events.meta = Events::Meta::make_empty(1, "events");
+    return buffer.add(events, events.mask);
+  };
+  REQUIRE(add(Record{{"x", Null{}}, {"y", Int{1}}}));
+  REQUIRE(add(Record{{"x", String{"a"}}, {"y", Null{}}}));
+  REQUIRE(add(Record{{"x", Int{2}}, {"y", Int{3}}}));
+  REQUIRE(add(Record{{"x", Null{}}, {"y", Null{}}}));
+  auto output = buffer.snapshot();
+  REQUIRE(output);
+  auto const& slices = output.unwrap();
+  REQUIRE_EQUAL(buffer.rows(), 4u);
+  REQUIRE_EQUAL(slices.size(), 4u);
+  CHECK_EQUAL(slices[0].schema(), slices[1].schema());
+  CHECK_EQUAL(slices[0].schema(), slices[2].schema());
+  CHECK(slices[0].schema() != slices[3].schema());
+  CHECK_EQUAL(slices[0].schema().name(), "events");
+  CHECK_EQUAL(export_values(slices),
+              (std::vector<tenzir::data>{
+                tenzir::record{{"x", caf::none}, {"y", Int{1}}},
+                tenzir::record{{"x", "a"}, {"y", caf::none}},
+                tenzir::record{{"x", caf::none}, {"y", caf::none}},
+                tenzir::record{{"x", Int{2}}, {"y", Int{3}}},
+              }));
+}
+
+TEST("import conversion rejects mixed lists without mutating candidates") {
+  auto buffer = ImportConversionBuffer{"events", false};
+  auto good = export_events(Record{{"xs", List{Int{1}}}});
+  good.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(buffer.add(good, good.mask));
+  auto bad = export_events(Record{{"xs", List{Int{1}, String{"x"}}}});
+  bad.meta = Events::Meta::make_empty(1, "events");
+  auto result = buffer.add(bad, bad.mask);
+  CHECK(not result);
+  CHECK_EQUAL(buffer.rows(), 1u);
+  auto output = buffer.snapshot();
+  REQUIRE(output);
+  CHECK_EQUAL(export_values(output.unwrap()),
+              (std::vector<tenzir::data>{
+                tenzir::record{{"xs", tenzir::list{Int{1}}}},
+              }));
+}
+
+TEST("import transport preserves selected values, order, and metadata") {
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, Record{{"ignored", String{"backing"}}});
+  append_export_row(builder, Record{{"b", List{Int{1}, Null{}, Int{2}}},
+                                    {"a", Record{{"present", Null{}}}}});
+  auto events = Events{builder.finish(), bitmap({false, true}),
+                       Events::Meta::make_empty(2, "events")};
+  events.meta.import_time = Array<Time>{
+    storage::ConstantStorage<Time>{2, tenzir::time{std::chrono::seconds{7}}}};
+  auto wire = to_import_wire(events);
+  REQUIRE(wire);
+  auto restored = from_import_wire(wire.unwrap());
+  REQUIRE(restored);
+  CHECK_EQUAL(restored.unwrap().length(), 2);
+  CHECK_EQUAL(restored.unwrap().active_count(), 1u);
+  CHECK(not restored.unwrap().mask.get(0));
+  CHECK_EQUAL(*restored.unwrap().meta.name.get(1), "events");
+  CHECK_EQUAL(*restored.unwrap().meta.import_time.get(1),
+              tenzir::time{std::chrono::seconds{7}});
+  CHECK_EQUAL(record_field_names(restored.unwrap().data.get(1)),
+              (std::vector<std::string>{"b", "a"}));
+  CHECK_GREATER(events.approx_bytes(), size_t{0});
+  CHECK_EQUAL(materialize(RowView<Data>{restored.unwrap().data.get(1)}),
+              (tenzir::data{tenzir::record{
+                {"b", tenzir::list{Int{1}, caf::none, Int{2}}},
+                {"a", tenzir::record{{"present", caf::none}}},
+              }}));
+}
+
+TEST("import transport rejects malformed and non-record Bitz payloads") {
+  CHECK(not from_import_wire(ImportWireBatch{{std::byte{0}}}));
+  auto payload
+    = bitz::encode(bitz::Batch{Array<Int>{storage::ConstantStorage<Int>{1, 42}},
+                               storage::BitMap{1, true},
+                               Events::Meta::make_empty(1, "events")});
+  REQUIRE(payload);
+  CHECK(not from_import_wire(ImportWireBatch{std::move(payload).unwrap()}));
+  auto sentinel = from_import_wire(ImportWireBatch{});
+  REQUIRE(sentinel);
+  CHECK_EQUAL(sentinel.unwrap().active_count(), 0u);
+}
+
+TEST("import conversion preserves per-row import timestamps") {
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, Record{{"x", Int{1}}});
+  append_export_row(builder, Record{{"x", Int{2}}});
+  auto events = Events{builder.finish(), storage::BitMap{2, true},
+                       Events::Meta::make_empty(2, "events")};
+  auto times = ArrayBuilder<Time>{};
+  times.data(tenzir::time{std::chrono::seconds{1}});
+  times.data(tenzir::time{std::chrono::seconds{2}});
+  events.meta.import_time = times.finish();
+  auto conversion = ImportConversionBuffer{"events", false};
+  REQUIRE(conversion.add(events, events.mask));
+  auto slices = conversion.snapshot();
+  REQUIRE(slices);
+  REQUIRE_EQUAL(slices.unwrap().size(), 2u);
+  CHECK_EQUAL(slices.unwrap()[0].import_time(),
+              tenzir::time{std::chrono::seconds{1}});
+  CHECK_EQUAL(slices.unwrap()[1].import_time(),
+              tenzir::time{std::chrono::seconds{2}});
+}
+
+TEST("import memory accounting charges backing behind sparse selections") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("payload").data(String(4096, 'x'));
+  builder.record().field("payload").data(String{"selected"});
+  auto events = Events{builder.finish(), bitmap({false, true}),
+                       Events::Meta::make_empty(2, "events")};
+  CHECK_GREATER(events.approx_bytes(), size_t{4096});
+}
+
+TEST("import conversion refines null parents and nested empty lists") {
+  auto conversion = ImportConversionBuffer{"events", false};
+  auto first = export_events(Record{{"parent", Null{}}, {"items", List{}}});
+  first.meta = Events::Meta::make_empty(1, "events");
+  auto second = export_events(Record{{"parent", Record{{"value", Int{7}}}},
+                                     {"items", List{Null{}, Int{2}}}});
+  second.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(first, first.mask));
+  REQUIRE(conversion.add(second, second.mask));
+  auto output = conversion.snapshot();
+  REQUIRE(output);
+  REQUIRE_EQUAL(output.unwrap().size(), 2u);
+  CHECK_EQUAL(output.unwrap()[0].schema(), output.unwrap()[1].schema());
+  CHECK_EQUAL(
+    export_values(output.unwrap()),
+    (std::vector<tenzir::data>{
+      tenzir::record{{"parent", caf::none}, {"items", tenzir::list{}}},
+      tenzir::record{
+        {"parent", tenzir::record{{"value", Int{7}}}},
+        {"items", tenzir::list{caf::none, Int{2}}},
+      },
+    }));
+}
+
+TEST("import conversion keeps signed and unsigned schemas separate") {
+  auto conversion = ImportConversionBuffer{"events", false};
+  auto signed_value = export_events(Record{{"value", Int{1}}});
+  signed_value.meta = Events::Meta::make_empty(1, "events");
+  auto unsigned_value = export_events(Record{{"value", UInt{1}}});
+  unsigned_value.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(signed_value, signed_value.mask));
+  REQUIRE(conversion.add(unsigned_value, unsigned_value.mask));
+  auto output = conversion.snapshot();
+  REQUIRE(output);
+  REQUIRE_EQUAL(output.unwrap().size(), 2u);
+  CHECK(output.unwrap()[0].schema() != output.unwrap()[1].schema());
+}
+
+TEST("import conversion seals unresolved fields as Arrow null") {
+  auto conversion = ImportConversionBuffer{"events", false};
+  auto events
+    = export_events(Record{{"unknown", Null{}}, {"items", List{Null{}}}});
+  events.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(events, events.mask));
+  auto output = conversion.snapshot();
+  REQUIRE(output);
+  REQUIRE_EQUAL(output.unwrap().size(), 1u);
+  CHECK_EQUAL(
+    output.unwrap()[0].schema(),
+    (tenzir::type{
+      "events",
+      tenzir::record_type{{"unknown", tenzir::null_type{}},
+                          {"items", tenzir::list_type{tenzir::null_type{}}}}}));
+  CHECK_EQUAL(export_values(output.unwrap()),
+              (std::vector<tenzir::data>{tenzir::record{
+                {"unknown", caf::none},
+                {"items", tenzir::list{caf::none}},
+              }}));
+}
+
+TEST("import conversion snapshots do not freeze inference") {
+  auto conversion = ImportConversionBuffer{"events", false};
+  auto unknown = export_events(Record{{"value", Null{}}});
+  unknown.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(unknown, unknown.mask));
+  auto before = conversion.snapshot();
+  REQUIRE(before);
+  CHECK(tenzir::is<tenzir::null_type>(
+    tenzir::as<tenzir::record_type>(before.unwrap()[0].schema()).field(0).type));
+  auto concrete = export_events(Record{{"value", String{"known"}}});
+  concrete.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(concrete, concrete.mask));
+  auto after = conversion.snapshot();
+  REQUIRE(after);
+  REQUIRE_EQUAL(after.unwrap().size(), 2u);
+  CHECK_EQUAL(after.unwrap()[0].schema(), after.unwrap()[1].schema());
+  CHECK(tenzir::is<tenzir::string_type>(
+    tenzir::as<tenzir::record_type>(after.unwrap()[0].schema()).field(0).type));
+}
+
+TEST("import conversion rejects incompatible record elements in a list") {
+  auto conversion = ImportConversionBuffer{"events", false};
+  auto bad = export_events(Record{{
+    "items",
+    List{Record{{"a", Int{1}}}, Record{{"b", Int{2}}}},
+  }});
+  bad.meta = Events::Meta::make_empty(1, "events");
+  CHECK(not conversion.add(bad, bad.mask));
+  CHECK_EQUAL(conversion.rows(), 0u);
+}
 
 TEST("ArrowExportBuilder refines null across batches and accepts later null") {
   auto exporter = ArrowExportBuilder{};

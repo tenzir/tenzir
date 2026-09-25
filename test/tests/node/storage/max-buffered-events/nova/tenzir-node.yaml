@@ -1,0 +1,3 @@
+tenzir:
+  max-buffered-events: 3
+  max-buffered-bytes: 1024

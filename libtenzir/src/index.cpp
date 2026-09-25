@@ -42,7 +42,6 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
-#include "tenzir/nova/import_conversion.hpp"
 #include "tenzir/nova/import_routing.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova_active_partition.hpp"
@@ -232,22 +231,9 @@ void index_state::handle_slice(table_slice x) {
 }
 
 auto index_state::handle_events(nova::Events events) -> caf::result<void> {
-  static constexpr auto max_actor_bytes = size_t{16} * 1024 * 1024;
   auto grouped = nova::group_import_shapes(events);
   if (not grouped) {
     return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
-  }
-  // Validate the complete input before any destination accepts a row.
-  for (auto const& group : grouped.unwrap()) {
-    if (group.key.fields.empty()) {
-      continue;
-    }
-    auto validation
-      = nova::ImportConversionBuffer{group.key.name, group.key.internal};
-    auto result = validation.add(events, group.mask);
-    if (not result) {
-      return caf::make_error(ec::type_clash, std::move(result).unwrap_err());
-    }
   }
   auto rp = self->make_response_promise<void>();
   auto const retained_bytes = events.approx_bytes();
@@ -308,8 +294,7 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
             }
             finish();
           });
-      if (it->second.events >= partition_capacity
-          or it->second.bytes >= max_actor_bytes) {
+      if (it->second.events >= partition_capacity) {
         decommission_nova_active_partition(group.key, {});
       }
     }

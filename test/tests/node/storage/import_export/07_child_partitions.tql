@@ -1,0 +1,5 @@
+partitions
+where schema == "test.events"
+select events
+sort events
+write_json

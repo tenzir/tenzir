@@ -15,6 +15,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/import_wire.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -119,15 +120,23 @@ public:
     } else {
       static_assert(std::same_as<Input, nova::Events>);
       write_bytes_counter_.add(input.approx_bytes());
-      wire.emplace(nova::to_import_wire(input));
-      write_events_counter_.add(wire->rows.size());
-      if (wire->rows.empty()) {
+      write_events_counter_.add(input.active_count());
+      if (input.active_count() == 0) {
         co_return;
       }
+      auto encoded = nova::to_import_wire(input);
+      if (not encoded) {
+        diagnostic::error("failed to encode import batch: {}",
+                          std::move(encoded).unwrap_err())
+          .primary(keyword_)
+          .emit(ctx.dh());
+        co_return;
+      }
+      wire.emplace(std::move(encoded).unwrap());
       auto names = std::unordered_map<std::string, uint64_t>{};
-      for (auto i = size_t{0}; i < wire->rows.size(); ++i) {
-        if (wire->internal[i] == 0) {
-          ++names[wire->names[i]];
+      for (auto i : nova::storage::true_bits(input.mask)) {
+        if (not *input.meta.internal.get(i)) {
+          ++names[std::string{*input.meta.name.get(i)}];
         }
       }
       for (auto const& [name, count] : names) {

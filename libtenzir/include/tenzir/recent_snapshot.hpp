@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "tenzir/nova/events.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -23,6 +24,11 @@ struct recent_snapshot {
     return f.object(x).fields(f.field("events", x.events),
                               f.field("barrier", x.barrier));
   }
+};
+
+struct NovaRecentSnapshot {
+  std::vector<nova::Events> events;
+  uuid barrier;
 };
 
 } // namespace tenzir

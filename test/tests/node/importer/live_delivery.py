@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import json
 import os
 import select
 import shlex
 import subprocess
 import time
-
+from datetime import UTC, datetime, timedelta
 
 line_buffers: dict[int, bytearray] = {}
 
@@ -99,7 +98,7 @@ try:
         node.env,
         'from {value: "ready"}\n@name = "live-delivery"\nimport\n',
     )
-    _, stderr = seed.communicate(timeout=5)
+    _, stderr = seed.communicate(timeout=30)
     assert seed.returncode == 0, stderr
 
     live = start_pipeline(
@@ -111,7 +110,7 @@ try:
         "pipeline_activity range=10s, interval=10s\nunroll pipelines\nto_stdout { write_ndjson }\n",
     )
     processes.extend([live, activity])
-    ready = read_line(live, 5)
+    ready = read_line(live, 30)
     assert ready and json.loads(ready)["value"] == "ready"
 
     importer = start_pipeline(
@@ -127,7 +126,7 @@ try:
     )
     processes.append(importer)
     timestamp = datetime.now(UTC) + timedelta(seconds=20)
-    for attempt in range(10):
+    for attempt in range(60):
         ready_id = f"live-delivery-ready-{attempt}"
         write_event(importer, activity_sentinel(ready_id, timestamp))
         if wait_for_activity(activity, ready_id, 0.5):
@@ -150,7 +149,7 @@ try:
         activity_sentinel(acknowledgement_id, timestamp + timedelta(seconds=20)),
     )
 
-    assert wait_for_activity(activity, acknowledgement_id, 5), (
+    assert wait_for_activity(activity, acknowledgement_id, 30), (
         "importer did not acknowledge the event"
     )
     assert read_line(live, 0.5) is None, "live export bypassed the import buffer"

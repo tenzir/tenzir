@@ -1,0 +1,1 @@
+ok: Nova child partitions rebuild

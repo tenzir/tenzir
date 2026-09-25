@@ -28,8 +28,11 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/import_conversion.hpp>
+#include <tenzir/nova/import_routing.hpp>
+#include <tenzir/nova/import_wire.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -140,6 +143,10 @@ public:
   Export& operator=(Export&&) = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if (args_.optimization.limit == uint64_t{0}) {
+      done_ = true;
+      co_return;
+    }
     read_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
@@ -190,7 +197,11 @@ public:
         if (legacy != trivially_true_expression()) {
           legacy_clauses.push_back(std::move(legacy));
         }
-        add_remainder(remainder_, std::move(remainder));
+        if constexpr (std::same_as<Output, nova::Events>) {
+          add_remainder(remainder_, filter);
+        } else {
+          add_remainder(remainder_, std::move(remainder));
+        }
       }
     }
     switch (args_.special_filter) {
@@ -228,10 +239,11 @@ public:
     auto mode
       = export_mode{args_.live ? args_.retro : true, args_.live, args_.internal,
                     args_.parallel, args_.high_priority};
+    mode.nova = std::same_as<Output, nova::Events>;
     // The bridge can only count events that pass the full filter. If part of
     // it still runs here, or Prometheus shaping changes the events, the limit
     // must stay local.
-    if (not remainder_ and not uses_prometheus_shape_) {
+    if (not mode.nova and not remainder_ and not uses_prometheus_shape_) {
       mode.limit = args_.optimization.limit;
     } else {
       local_limit_ = args_.optimization.limit;
@@ -253,6 +265,7 @@ public:
         fmt::format("failed to spawn export bridge: {}", result.error()));
     }
     bridge_ = std::move(*result);
+    bridge_is_local_ = bridge_->node() == ctx.actor_system().node();
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -261,7 +274,25 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    co_return co_await async_mail(atom::get_v).request(bridge_);
+    if constexpr (std::same_as<Output, nova::Events>) {
+      if (bridge_is_local_) {
+        co_return co_await async_mail(atom::get_v, atom::internal_v)
+          .request(bridge_);
+      }
+      auto wire = co_await async_mail(atom::get_v, atom::internal_v, true)
+                    .request(bridge_);
+      if (not wire) {
+        co_return caf::expected<nova::Events>{wire.error()};
+      }
+      auto events = nova::from_import_wire(*wire);
+      if (not events) {
+        co_return caf::expected<nova::Events>{
+          caf::make_error(ec::type_clash, std::move(events).unwrap_err())};
+      }
+      co_return caf::expected<nova::Events>{std::move(events).unwrap()};
+    } else {
+      co_return co_await async_mail(atom::get_v).request(bridge_);
+    }
   }
 
   auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
@@ -269,6 +300,24 @@ public:
     // Drain any buffered diagnostics from the bridge
     while (auto diag = diag_queue_->try_dequeue()) {
       ctx.dh().emit(std::move(*diag));
+    }
+    if constexpr (std::same_as<Output, nova::Events>) {
+      auto expected = std::move(result).as<caf::expected<nova::Events>>();
+      if (not expected) {
+        if (not stopping_) {
+          diagnostic::error(expected.error())
+            .note("from export-bridge")
+            .emit(ctx);
+        }
+        done_ = true;
+        co_return;
+      }
+      if (expected->active_count() == 0) {
+        done_ = true;
+        co_return;
+      }
+      co_await emit_events(std::move(*expected), push, ctx);
+      co_return;
     }
     auto expected = std::move(result).as<caf::expected<table_slice>>();
     if (not expected) {
@@ -341,6 +390,108 @@ public:
   }
 
 private:
+  auto emit_events(nova::Events events, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> {
+    if (local_limit_ and *local_limit_ == 0) {
+      done_ = true;
+      co_return;
+    }
+    if (args_.special_filter != export_special_filter::none) {
+      auto keep = nova::storage::BitMap::Mutable{events.length()};
+      for (auto row : nova::storage::true_bits(events.mask)) {
+        auto name = *events.meta.name.get(row);
+        auto selected = *events.meta.internal.get(row) == args_.internal;
+        if (args_.special_filter == export_special_filter::diagnostics) {
+          selected = selected and name == "tenzir.diagnostic";
+        } else if (args_.special_filter == export_special_filter::metrics) {
+          selected
+            = selected
+              and (args_.metrics_name ? name
+                                          == fmt::format("tenzir.metrics.{}",
+                                                         *args_.metrics_name)
+                                      : name.starts_with("tenzir.metrics."));
+        }
+        keep.set(row, selected);
+      }
+      events.mask = std::move(keep).finish();
+    }
+    if (uses_prometheus_shape_) {
+      // The existing Prometheus formatter consumes Arrow; raw exports do not.
+      auto groups = nova::group_import_shapes(events);
+      if (not groups) {
+        diagnostic::error("{}", std::move(groups).unwrap_err()).emit(ctx);
+        co_return;
+      }
+      for (auto const& group : groups.unwrap()) {
+        auto shaper = prometheus_shapers_.find(group.key.name);
+        if (shaper == prometheus_shapers_.end()) {
+          if (warned_unsupported_prometheus_schemas_.insert(group.key.name)
+                .second) {
+            diagnostic::warning("omitting metrics with unsupported Prometheus "
+                                "shape schema `{}`",
+                                group.key.name)
+              .emit(ctx);
+          }
+          continue;
+        }
+        auto conversion
+          = nova::ImportConversionBuffer{group.key.name, group.key.internal};
+        auto added = conversion.add(events, group.mask);
+        if (not added) {
+          diagnostic::error("{}", std::move(added).unwrap_err()).emit(ctx);
+          co_return;
+        }
+        auto slices = conversion.snapshot();
+        if (not slices) {
+          diagnostic::error("{}", std::move(slices).unwrap_err()).emit(ctx);
+          co_return;
+        }
+        for (auto const& slice : slices.unwrap()) {
+          for (auto&& output : shaper->second.shape(slice)) {
+            co_await emit_slice(std::move(output), push, ctx);
+          }
+        }
+      }
+      co_return;
+    }
+    if (evaluator_) {
+      auto result = evaluator_->eval(events, nova::EvalCtx{ctx.dh()});
+      auto predicate = result.get_alternative<nova::Bool>();
+      if (not predicate) {
+        co_return;
+      }
+      events.mask = events.mask & predicate->present
+                    & as<nova::storage::BitMap>(predicate->data.storage());
+    }
+    if (local_limit_
+        and static_cast<uint64_t>(events.active_count()) > *local_limit_) {
+      events.mask = events.mask.keep_first(
+        static_cast<nova::storage::Index>(*local_limit_));
+    }
+    auto rows = events.active_count();
+    if (rows == 0) {
+      co_return;
+    }
+    if (not args_.internal) {
+      for (auto row : nova::storage::true_bits(events.mask)) {
+        export_metrics_.emit(
+          {{"schema", std::string{*events.meta.name.get(row)}},
+           {"schema_id", ""},
+           {"events", uint64_t{static_cast<uint64_t>(rows)}},
+           {"queued_events", uint64_t{0}}});
+        break;
+      }
+    }
+    read_events_counter_.add(rows);
+    if (local_limit_) {
+      *local_limit_ -= rows;
+      if (*local_limit_ == 0) {
+        done_ = true;
+      }
+    }
+    co_await push(std::move(events));
+  }
+
   auto emit_slice(table_slice slice, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
     if (local_limit_ and *local_limit_ == 0) {
@@ -409,6 +560,7 @@ private:
   ExportArgs args_;
   bool uses_prometheus_shape_ = false;
   export_bridge_actor bridge_;
+  bool bridge_is_local_ = false;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   Option<ast::expression> remainder_ = None{};
   Option<uint64_t> local_limit_ = None{};

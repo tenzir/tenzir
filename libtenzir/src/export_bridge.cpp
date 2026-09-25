@@ -12,6 +12,8 @@
 #include <tenzir/export_bridge.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/modules.hpp>
+#include <tenzir/nova/import_conversion.hpp>
+#include <tenzir/nova/import_wire.hpp>
 #include <tenzir/partition_paths.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/passive_partition.hpp>
@@ -47,6 +49,7 @@ struct bridge_state {
   size_t open_partitions = {};
   std::queue<std::pair<partition_info, query_context>> queued_partitions = {};
   Option<std::vector<table_slice>> unpersisted_events = None{};
+  std::vector<nova::Events> unpersisted_nova_events;
 
   filesystem_actor filesystem = {};
 
@@ -71,6 +74,10 @@ struct bridge_state {
 
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> buffer;
   caf::typed_response_promise<table_slice> buffer_rp;
+  std::deque<std::pair<nova::Events, caf::typed_response_promise<void>>>
+    nova_buffer;
+  caf::typed_response_promise<nova::Events> nova_buffer_rp;
+  caf::typed_response_promise<nova::ImportWireBatch> wire_buffer_rp;
 
   auto bind_expr(const type& schema, const expression& expr)
     -> const expression* {
@@ -87,11 +94,84 @@ struct bridge_state {
 
   auto is_done() const -> bool {
     if (mode.limit == uint64_t{0}) {
-      return buffer.empty();
+      return buffer.empty() and nova_buffer.empty();
     }
-    return not mode.live and buffer.empty() and inflight_partitions == 0
-           and open_partitions == 0 and checked_candidates
-           and queued_partitions.empty() and not unpersisted_events;
+    return not mode.live and buffer.empty() and nova_buffer.empty()
+           and inflight_partitions == 0 and open_partitions == 0
+           and checked_candidates and queued_partitions.empty()
+           and not unpersisted_events;
+  }
+
+  auto finish_pending() -> void {
+    if (not is_done()) {
+      return;
+    }
+    if (buffer_rp.pending()) {
+      buffer_rp.deliver(table_slice{});
+    }
+    if (nova_buffer_rp.pending()) {
+      nova_buffer_rp.deliver(nova::Events{});
+    }
+    if (wire_buffer_rp.pending()) {
+      wire_buffer_rp.deliver(nova::ImportWireBatch{});
+    }
+  }
+
+  auto deliver_events(nova::Events events) -> void {
+    if (nova_buffer_rp.pending()) {
+      nova_buffer_rp.deliver(std::move(events));
+    } else {
+      TENZIR_ASSERT(wire_buffer_rp.pending());
+      auto encoded = nova::to_import_wire(events);
+      if (not encoded) {
+        wire_buffer_rp.deliver(
+          caf::make_error(ec::type_clash, std::move(encoded).unwrap_err()));
+        return;
+      }
+      wire_buffer_rp.deliver(std::move(encoded).unwrap());
+    }
+  }
+
+  auto add_events(nova::Events events, event_source source,
+                  caf::typed_response_promise<void> rp) -> void {
+    if (events.active_count() == 0
+        or (source == event_source::live and not mode.live)) {
+      if (rp.pending()) {
+        rp.deliver();
+      }
+      return;
+    }
+    if (source == event_source::live
+        and num_queued_total
+              >= (mode.parallel + 1) * defaults::max_partition_size) {
+      diagnostic::warning("export failed to keep up and dropped events")
+        .emit(*diagnostics_handler);
+      if (rp.pending()) {
+        rp.deliver();
+      }
+      return;
+    }
+    if (nova_buffer_rp.pending() or wire_buffer_rp.pending()) {
+      TENZIR_ASSERT(nova_buffer.empty());
+      deliver_events(std::move(events));
+      if (rp.pending()) {
+        rp.deliver();
+      }
+      return;
+    }
+    num_queued_total += events.active_count();
+    nova_buffer.emplace_back(std::move(events), std::move(rp));
+  }
+
+  auto pop_events() -> nova::Events {
+    auto [events, rp] = std::move(nova_buffer.front());
+    nova_buffer.pop_front();
+    num_queued_total -= events.active_count();
+    try_pop_partition();
+    if (rp.pending()) {
+      rp.deliver();
+    }
+    return events;
   }
 
   /// Hands one partition back to the catalog, now that we are done with it.
@@ -150,9 +230,7 @@ struct bridge_state {
         --open_partitions;
       }
       release_candidates();
-      if (buffer_rp.pending() and is_done()) {
-        buffer_rp.deliver(table_slice{});
-      }
+      finish_pending();
       return;
     }
     // Now, open one partition.
@@ -202,6 +280,20 @@ struct bridge_state {
 
   auto add_events(table_slice slice, event_source source,
                   caf::typed_response_promise<void> rp) -> void {
+    if (mode.nova) {
+      auto events = nova::import_table_slice(slice);
+      if (not events) {
+        auto error
+          = diagnostic::error("{}", std::move(events).unwrap_err()).to_error();
+        if (rp.pending()) {
+          rp.deliver(error);
+        }
+        self->quit(std::move(error));
+        return;
+      }
+      add_events(std::move(events).unwrap(), source, std::move(rp));
+      return;
+    }
     if (slice.rows() == 0 or mode.limit == uint64_t{0}) {
       if (rp.pending()) {
         rp.deliver();
@@ -280,6 +372,17 @@ struct bridge_state {
     for (auto& [_, rp] : buffer) {
       rp.deliver();
     }
+    if (nova_buffer_rp.pending()) {
+      nova_buffer_rp.deliver(caf::none);
+    }
+    if (wire_buffer_rp.pending()) {
+      wire_buffer_rp.deliver(caf::none);
+    }
+    for (auto& [_, rp] : nova_buffer) {
+      if (rp.pending()) {
+        rp.deliver();
+      }
+    }
   }
 };
 
@@ -321,7 +424,48 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
                  .to_error());
   };
   auto receiver = caf::actor_cast<receiver_actor<table_slice>>(self);
-  if (mode.retro) {
+  if (mode.nova) {
+    auto receiver = caf::actor_cast<receiver_actor<nova::Events>>(self);
+    if (mode.retro) {
+      auto subscribe = [&](auto mailer) {
+        std::move(mailer)
+          .request(importer, caf::infinite)
+          .await(
+            [self, start_lookup](NovaRecentSnapshot snapshot) {
+              self->state().importer_barrier = snapshot.barrier;
+              self->state().unpersisted_nova_events
+                = std::move(snapshot.events);
+              (*start_lookup)();
+            },
+            on_subscribe_error);
+      };
+      if (mode.high_priority) {
+        subscribe(self
+                    ->mail(atom::get_v, atom::snapshot_v, receiver,
+                           mode.internal, mode.live, true, mode.eager)
+                    .urgent());
+      } else {
+        subscribe(self->mail(atom::get_v, atom::snapshot_v, receiver,
+                             mode.internal, mode.live, true, mode.eager));
+      }
+    } else {
+      self->state().unpersisted_events.reset();
+      auto subscribe = [&](auto mailer) {
+        std::move(mailer)
+          .request(importer, caf::infinite)
+          .await([](std::vector<nova::Events>) {}, on_subscribe_error);
+      };
+      if (mode.high_priority) {
+        subscribe(self
+                    ->mail(atom::get_v, atom::internal_v, receiver,
+                           mode.internal, mode.live, false, mode.eager)
+                    .urgent());
+      } else {
+        subscribe(self->mail(atom::get_v, atom::internal_v, receiver,
+                             mode.internal, mode.live, false, mode.eager));
+      }
+    }
+  } else if (mode.retro) {
     auto subscribe = [&](auto mailer) {
       std::move(mailer)
         .request(importer, caf::infinite)
@@ -400,12 +544,15 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
                                    caf::typed_response_promise<void>{});
         }
         self->state().unpersisted_events.reset();
+        for (auto& events : self->state().unpersisted_nova_events) {
+          self->state().add_events(std::move(events), event_source::unpersisted,
+                                   caf::typed_response_promise<void>{});
+        }
+        self->state().unpersisted_nova_events.clear();
         self->state().release_candidates();
         // In case we get zero partitions back from the catalog we need to
         // already signal that we're done here.
-        if (self->state().buffer_rp.pending() and self->state().is_done()) {
-          self->state().buffer_rp.deliver(table_slice{});
-        }
+        self->state().finish_pending();
       };
       auto on_candidates_error = [self](const caf::error& err) {
         self->state().release_importer_barrier();
@@ -427,6 +574,46 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
     };
   }
   return {
+    [self](nova::Events& events) -> caf::result<void> {
+      TENZIR_ASSERT(self->state().mode.nova);
+      auto rp = self->make_response_promise<void>();
+      self->state().add_events(std::move(events), event_source::live, rp);
+      return rp;
+    },
+    [self](atom::get, atom::internal) -> caf::result<nova::Events> {
+      TENZIR_ASSERT(self->state().mode.nova);
+      TENZIR_ASSERT(not self->state().nova_buffer_rp.pending()
+                    and not self->state().wire_buffer_rp.pending());
+      if (self->state().is_done()) {
+        return nova::Events{};
+      }
+      if (not self->state().nova_buffer.empty()) {
+        return self->state().pop_events();
+      }
+      self->state().nova_buffer_rp
+        = self->make_response_promise<nova::Events>();
+      return self->state().nova_buffer_rp;
+    },
+    [self](atom::get, atom::internal,
+           bool) -> caf::result<nova::ImportWireBatch> {
+      TENZIR_ASSERT(self->state().mode.nova);
+      TENZIR_ASSERT(not self->state().nova_buffer_rp.pending()
+                    and not self->state().wire_buffer_rp.pending());
+      if (self->state().is_done()) {
+        return nova::ImportWireBatch{};
+      }
+      if (not self->state().nova_buffer.empty()) {
+        auto encoded = nova::to_import_wire(self->state().pop_events());
+        if (not encoded) {
+          return caf::make_error(ec::type_clash,
+                                 std::move(encoded).unwrap_err());
+        }
+        return std::move(encoded).unwrap();
+      }
+      self->state().wire_buffer_rp
+        = self->make_response_promise<nova::ImportWireBatch>();
+      return self->state().wire_buffer_rp;
+    },
     [self](table_slice& slice) -> caf::result<void> {
       TENZIR_ASSERT(self->current_sender());
       // Calling `current_sender()` after `make_response_promise` is broken in

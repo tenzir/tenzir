@@ -1,0 +1,4 @@
+partitions
+where schema == "buffered.nova"
+summarize count=count()
+write_ndjson

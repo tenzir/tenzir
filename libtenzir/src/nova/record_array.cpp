@@ -537,7 +537,10 @@ auto Array<Record>::empty_where(storage::BitMap mask) && -> Array {
 
 auto Array<Record>::make_empty(storage::Index length) -> Array {
   auto shape_indices
-    = storage::SparseStorage<storage::Index>::Mutable{length}.finish();
+    = length == 0
+        ? storage::SparseStorage<
+            storage::Index>{storage::DataOwner<storage::Index[]>{}}
+        : storage::SparseStorage<storage::Index>::Mutable{length}.finish();
   return Array{std::move(shape_indices), ShapeTable{}, Names{}, MaskedArrays{}};
 }
 

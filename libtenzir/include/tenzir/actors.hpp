@@ -258,6 +258,9 @@ struct importer_actor_traits {
     auto(atom::get, atom::internal, receiver_actor<nova::Events>, bool internal,
          bool live, bool recent, bool eager)
       ->caf::result<std::vector<nova::Events>>,
+    auto(atom::get, atom::snapshot, receiver_actor<nova::Events>, bool internal,
+         bool live, bool recent, bool eager)
+      ->caf::result<NovaRecentSnapshot>,
     // Push buffered slices downstream to make the data available.
     auto(atom::flush)->caf::result<void>,
     // Import a batch of data.
@@ -378,6 +381,7 @@ struct export_mode {
   uint64_t parallel = 3;
   bool high_priority = false;
   bool eager = false;
+  bool nova = false;
   /// Stop after this many events that pass the filter. Pushed down from `head`.
   Option<uint64_t> limit = None{};
 
@@ -400,7 +404,7 @@ struct export_mode {
       f.field("retro", x.retro), f.field("live", x.live),
       f.field("internal", x.internal), f.field("parallel", x.parallel),
       f.field("high_priority", x.high_priority), f.field("eager", x.eager),
-      f.field("limit", x.limit));
+      f.field("limit", x.limit), f.field("nova", x.nova));
   }
 };
 
@@ -409,6 +413,10 @@ struct export_bridge_actor_traits {
   using signatures = caf::type_list<
     // Returns when a new table slice is available.
     auto(atom::get)->caf::result<table_slice>,
+    auto(atom::get, atom::internal)->caf::result<nova::Events>,
+    // Serializable delivery for clients in another actor system.
+    auto(atom::get, atom::internal, bool)->caf::result<nova::ImportWireBatch>,
+    auto(nova::Events)->caf::result<void>,
     // Insert a new table slice.
     auto(table_slice slice)->caf::result<void>>;
 };
@@ -520,6 +528,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::nova::Events>))
   TENZIR_ADD_TYPE_ID((tenzir::NovaPersistResult))
   TENZIR_ADD_TYPE_ID((tenzir::recent_snapshot))
+  TENZIR_ADD_TYPE_ID((tenzir::NovaRecentSnapshot))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 
@@ -539,6 +548,7 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::Events)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::storage::BitMap)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<tenzir::nova::Events>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaPersistResult)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaRecentSnapshot)
 #undef tenzir_uuid_synopsis_map
 
 #undef TENZIR_ADD_TYPE_ID

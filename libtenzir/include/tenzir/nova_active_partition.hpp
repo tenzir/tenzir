@@ -35,7 +35,7 @@ struct nova_active_partition_state {
   caf::settings index_opts;
   index_config synopsis_opts;
   store_actor_plugin const* store_plugin = nullptr;
-  std::shared_ptr<taxonomies> taxonomies;
+  std::shared_ptr<tenzir::taxonomies> taxonomies;
   bool persisting = false;
 };
 

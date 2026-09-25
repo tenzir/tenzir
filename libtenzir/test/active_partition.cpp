@@ -9,6 +9,10 @@
 #include "tenzir/active_partition.hpp"
 
 #include "tenzir/error.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova_active_partition.hpp"
 #include "tenzir/plugin/store.hpp"
 #include "tenzir/resource.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -110,4 +114,154 @@ TEST("persistence reports only successfully written synopsis bytes") {
     f.inject_exit(fs);
     f.inject_exit(client);
   }
+}
+
+TEST("shape-grouped partition persists independent typed outputs") {
+  auto f = caf::test::fixture::deterministic{};
+  auto written = std::vector<table_slice>{};
+  auto fs = f.sys.spawn(
+    [](filesystem_actor::pointer) -> filesystem_actor::behavior_type {
+      return {caf::partial_behavior_init,
+              [](atom::write, std::filesystem::path const&,
+                 chunk_ptr const&) -> atom::ok {
+                return atom::ok_v;
+              }};
+    });
+  auto plugin = test_store{};
+  plugin.builder = f.sys.spawn([&]() -> store_builder_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [&](table_slice slice) {
+              written.push_back(std::move(slice));
+            },
+            [](atom::persist) -> resource {
+              return {.url = "file://test.feather", .size = 512};
+            }};
+  });
+  auto actor
+    = f.sys.spawn(nova_active_partition, std::string{"test"}, false,
+                  partition_paths::relative(), fs, caf::settings{},
+                  index_config{}, &plugin, std::make_shared<taxonomies>());
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  builder.record().field("x").data(int64_t{1});
+  builder.record().field("x").data(std::string_view{"two"});
+  auto events = nova::Events{builder.finish(), nova::storage::BitMap{2, true},
+                             nova::Events::Meta::make_empty(2, "test")};
+  auto result = Option<NovaPersistResult>{};
+  auto snapshot = Option<std::vector<nova::Events>>{};
+  auto client = f.sys.spawn([&](caf::event_based_actor* self) {
+    self->mail(events, events.mask).send(actor);
+    self->mail(atom::get_v)
+      .request(actor, caf::infinite)
+      .then(
+        [&, self](std::vector<nova::Events> batches) {
+          CHECK(written.empty());
+          snapshot.emplace(std::move(batches));
+          self->mail(atom::persist_v)
+            .request(actor, caf::infinite)
+            .then(
+              [&](NovaPersistResult persisted) {
+                result.emplace(std::move(persisted));
+              },
+              [](caf::error const& error) {
+                FAIL("partition persistence failed: {}", error);
+              });
+        },
+        [](caf::error const& error) {
+          FAIL("partition snapshot failed: {}", error);
+        });
+    return caf::behavior{};
+  });
+  f.dispatch_messages();
+  REQUIRE(result.is_some());
+  REQUIRE(snapshot.is_some());
+  REQUIRE_EQUAL(snapshot->size(), 2u);
+  auto seen = size_t{0};
+  for (auto const& batch : *snapshot) {
+    CHECK_EQUAL(batch.length(), events.length());
+    for (auto row : nova::storage::true_bits(batch.mask)) {
+      CHECK(nova::materialize(batch.data.get(row))
+            == nova::materialize(events.data.get(row)));
+      ++seen;
+    }
+  }
+  CHECK_EQUAL(seen, 2u);
+  REQUIRE_EQUAL(result->outputs.size(), 2u);
+  CHECK(result->outputs[0].uuid != result->outputs[1].uuid);
+  for (auto const& output : result->outputs) {
+    CHECK(not output.failure.valid());
+    CHECK_EQUAL(output.synopsis->events, 1u);
+  }
+  REQUIRE_EQUAL(written.size(), 2u);
+  CHECK(written[0].schema() != written[1].schema());
+  f.inject_exit(actor);
+  f.inject_exit(plugin.builder);
+  f.inject_exit(fs);
+  f.inject_exit(client);
+}
+
+TEST("shape-grouped partition reports a failed child without losing siblings") {
+  auto f = caf::test::fixture::deterministic{};
+  auto fs = f.sys.spawn(
+    [](filesystem_actor::pointer) -> filesystem_actor::behavior_type {
+      return {caf::partial_behavior_init,
+              [](atom::write, std::filesystem::path const&,
+                 chunk_ptr const&) -> atom::ok {
+                return atom::ok_v;
+              }};
+    });
+  auto persist_count = size_t{0};
+  auto plugin = test_store{};
+  plugin.builder = f.sys.spawn([&]() -> store_builder_actor::behavior_type {
+    return {caf::partial_behavior_init, [](table_slice) {},
+            [&](atom::persist) -> caf::result<resource> {
+              if (++persist_count == 1) {
+                return caf::make_error(ec::filesystem_error,
+                                       "injected store failure");
+              }
+              return resource{.url = "file://test.feather", .size = 512};
+            }};
+  });
+  auto actor
+    = f.sys.spawn(nova_active_partition, std::string{"test"}, false,
+                  partition_paths::relative(), fs, caf::settings{},
+                  index_config{}, &plugin, std::make_shared<taxonomies>());
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  builder.record().field("x").data(int64_t{1});
+  builder.record().field("x").data(std::string_view{"two"});
+  auto events = nova::Events{builder.finish(), nova::storage::BitMap{2, true},
+                             nova::Events::Meta::make_empty(2, "test")};
+  auto result = Option<NovaPersistResult>{};
+  auto client = f.sys.spawn([&](caf::event_based_actor* self) {
+    self->mail(events, events.mask).send(actor);
+    self->mail(atom::persist_v)
+      .request(actor, caf::infinite)
+      .then(
+        [&](NovaPersistResult persisted) {
+          result.emplace(std::move(persisted));
+        },
+        [](caf::error const& error) {
+          FAIL("partition persistence failed: {}", error);
+        });
+    return caf::behavior{};
+  });
+  f.dispatch_messages();
+  REQUIRE(result.is_some());
+  REQUIRE_EQUAL(result->outputs.size(), 2u);
+  auto successes = size_t{0};
+  auto failures = size_t{0};
+  for (auto const& output : result->outputs) {
+    if (output.failure.valid()) {
+      ++failures;
+    } else {
+      ++successes;
+      CHECK_EQUAL(output.synopsis->events, 1u);
+    }
+  }
+  CHECK_EQUAL(successes, 1u);
+  CHECK_EQUAL(failures, 1u);
+  CHECK_EQUAL(persist_count, 2u);
+  f.inject_exit(actor);
+  f.inject_exit(plugin.builder);
+  f.inject_exit(fs);
+  f.inject_exit(client);
 }
