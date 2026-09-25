@@ -1,3 +1,6 @@
+---
+error: true
+---
 from {seed: 0}
 repeat 65537
 enumerate n

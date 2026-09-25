@@ -14,6 +14,9 @@
 #include <tenzir/collect.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -28,6 +31,8 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <span>
+#include <type_traits>
 
 namespace tenzir::plugins::unroll {
 
@@ -387,6 +392,228 @@ private:
   UnrollArgs args_;
 };
 
+auto approximate_row_bytes(nova::RowView<nova::Data> row) -> uint64_t {
+  return match(row, []<nova::data_type Tag>(nova::RowView<Tag> view) {
+    if constexpr (std::same_as<Tag, nova::String>
+                  or std::same_as<Tag, nova::Blob>) {
+      return detail::narrow<uint64_t>((*view).size());
+    } else if constexpr (std::same_as<Tag, nova::List>) {
+      auto result = uint64_t{};
+      for (auto element : view) {
+        result = add_saturated(result, approximate_row_bytes(element), 1);
+      }
+      return result;
+    } else if constexpr (std::same_as<Tag, nova::Record>) {
+      auto result = uint64_t{};
+      for (auto [name, value] : view) {
+        result = add_saturated(result, name.size(), 1);
+        result = add_saturated(result, approximate_row_bytes(value), 1);
+      }
+      return result;
+    } else {
+      return uint64_t{sizeof(*view)};
+    }
+  });
+}
+
+auto append_unrolled_record(
+  nova::ArrayBuilder<nova::Record>::RecordBuilder destination,
+  nova::RowView<nova::Record> source,
+  std::span<ast::field_path::segment const> path,
+  nova::RowView<nova::Data> replacement) -> void {
+  TENZIR_ASSERT(not path.empty());
+  for (auto [name, value] : source) {
+    if (name != path.front().id.name) {
+      nova::append_row(destination.field(name), value);
+      continue;
+    }
+    if (path.size() == 1) {
+      nova::append_row(destination.field(name), replacement);
+      continue;
+    }
+    match(value, [&](auto view) {
+      using T = std::remove_cvref_t<decltype(view)>;
+      if constexpr (std::same_as<T, nova::RowView<nova::Record>>) {
+        append_unrolled_record(destination.field(name).record(), view,
+                               path.subspan(1), replacement);
+      } else {
+        nova::append_row(destination.field(name), value);
+      }
+    });
+  }
+}
+
+auto append_unrolled_record_field(
+  nova::ArrayBuilder<nova::Record>::RecordBuilder destination,
+  nova::RowView<nova::Record> source,
+  std::span<ast::field_path::segment const> path, std::string_view name,
+  nova::RowView<nova::Data> value) -> void {
+  if (path.empty()) {
+    nova::append_row(destination.field(name), value);
+    return;
+  }
+  for (auto [field_name, field_value] : source) {
+    if (field_name != path.front().id.name) {
+      nova::append_row(destination.field(field_name), field_value);
+      continue;
+    }
+    if (path.size() == 1) {
+      nova::append_row(destination.field(field_name).record().field(name),
+                       value);
+      continue;
+    }
+    match(field_value, [&](auto view) {
+      using T = std::remove_cvref_t<decltype(view)>;
+      if constexpr (std::same_as<T, nova::RowView<nova::Record>>) {
+        append_unrolled_record_field(destination.field(field_name).record(),
+                                     view, path.subspan(1), name, value);
+      } else {
+        nova::append_row(destination.field(field_name), field_value);
+      }
+    });
+  }
+}
+
+class UnrollNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit UnrollNova(UnrollArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto data = nova::ArrayBuilder<nova::Record>{};
+    auto names = nova::ArrayBuilder<nova::String>{};
+    auto import_times = nova::ArrayBuilder<nova::Time>{};
+    auto internals = nova::ArrayBuilder<nova::Bool>{};
+    auto path = args_.field.path();
+    auto builder_bytes = uint64_t{};
+    auto wrong_type = Option<std::string_view>{};
+    auto missing_field = Option<ast::field_path::segment const&>{};
+    auto non_record_type = Option<std::string_view>{};
+    const auto flush = [&]() -> Task<void> {
+      if (data.length() == 0) {
+        co_return;
+      }
+      auto length = data.length();
+      co_await push(
+        nova::Events{data.finish(), nova::storage::BitMap{length, true},
+                     nova::Events::Meta{names.finish(), import_times.finish(),
+                                        internals.finish()}});
+      data = nova::ArrayBuilder<nova::Record>{};
+      names = nova::ArrayBuilder<nova::String>{};
+      import_times = nova::ArrayBuilder<nova::Time>{};
+      internals = nova::ArrayBuilder<nova::Bool>{};
+      builder_bytes = 0;
+    };
+    const auto append_meta = [&](nova::storage::Index row) {
+      names.data(*input.meta.name.get(row));
+      import_times.data(*input.meta.import_time.get(row));
+      internals.data(*input.meta.internal.get(row));
+    };
+    const auto flush_before = [&](uint64_t row_bytes) -> Task<void> {
+      if (data.length() > 0
+          and (builder_bytes >= max_unroll_slice_bytes
+               or row_bytes > max_unroll_slice_bytes - builder_bytes)) {
+        co_await flush();
+      }
+    };
+    const auto append
+      = [&](nova::RowView<nova::Record> source, nova::storage::Index row,
+            nova::RowView<nova::Data> replacement,
+            uint64_t row_bytes) -> Task<void> {
+      co_await flush_before(row_bytes);
+      append_unrolled_record(data.record(), source, path, replacement);
+      append_meta(row);
+      builder_bytes = add_saturated(builder_bytes, row_bytes, 1);
+      if (data.length() >= max_unroll_slice_rows
+          or builder_bytes >= max_unroll_slice_bytes) {
+        co_await flush();
+      }
+    };
+    const auto append_field
+      = [&](nova::RowView<nova::Record> source, nova::storage::Index row,
+            std::string_view name, nova::RowView<nova::Data> value,
+            uint64_t row_bytes) -> Task<void> {
+      co_await flush_before(row_bytes);
+      append_unrolled_record_field(data.record(), source, path, name, value);
+      append_meta(row);
+      builder_bytes = add_saturated(builder_bytes, row_bytes, 1);
+      if (data.length() >= max_unroll_slice_rows
+          or builder_bytes >= max_unroll_slice_bytes) {
+        co_await flush();
+      }
+    };
+    for (auto row = nova::storage::Index{0}; row < input.length(); ++row) {
+      if (not input.mask.get(row)) {
+        continue;
+      }
+      auto source = input.data.get(row);
+      auto target = Option<nova::RowView<nova::Data>>{};
+      if (path.empty()) {
+        target.emplace(source);
+      } else {
+        auto lookup = nova::lookup_field_path(source, path);
+        target = std::move(lookup.value);
+        if (not target) {
+          auto const& failed = path[lookup.matched_segments];
+          if (lookup.non_record_type or not failed.has_question_mark) {
+            missing_field.emplace(failed);
+            non_record_type = lookup.non_record_type;
+          }
+        }
+      }
+      if (not target) {
+        continue;
+      }
+      auto row_bytes = approximate_row_bytes(nova::RowView<nova::Data>{source});
+      row_bytes = add_saturated(
+        row_bytes, detail::narrow<uint64_t>((*input.meta.name.get(row)).size()),
+        1);
+      row_bytes = add_saturated(row_bytes, sizeof(nova::Time), 1);
+      row_bytes = add_saturated(row_bytes, sizeof(nova::Bool), 1);
+      row_bytes = std::max(row_bytes, uint64_t{1});
+      co_await match(*target, [&](auto view) -> Task<void> {
+        using T = std::remove_cvref_t<decltype(view)>;
+        if constexpr (std::same_as<T, nova::RowView<nova::List>>) {
+          for (auto element : view) {
+            co_await append(source, row, element, row_bytes);
+          }
+        } else if constexpr (std::same_as<T, nova::RowView<nova::Record>>) {
+          for (auto [name, value] : view) {
+            co_await append_field(source, row, name, value, row_bytes);
+          }
+        } else if constexpr (not std::same_as<T, nova::RowView<nova::Null>>) {
+          wrong_type = []<nova::data_type Tag>(nova::RowView<Tag>) {
+            return nova::Type<Tag>::static_name;
+          }(view);
+        }
+      });
+    }
+    if (missing_field) {
+      if (non_record_type) {
+        diagnostic::warning("type `{}` has no field `{}`", *non_record_type,
+                            missing_field->id.name)
+          .primary(missing_field->id)
+          .emit(ctx);
+      } else {
+        diagnostic::warning("field `{}` not found", missing_field->id.name)
+          .primary(missing_field->id)
+          .emit(ctx);
+      }
+    }
+    if (wrong_type) {
+      diagnostic::warning("expected `list` or `record`, but got `{}`",
+                          *wrong_type)
+        .primary(args_.field)
+        .emit(ctx);
+    }
+    co_await flush();
+  }
+
+private:
+  UnrollArgs args_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -394,7 +621,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<UnrollArgs, Unroll>{};
+    auto d = Describer<UnrollArgs, Unroll, UnrollNova>{};
     d.parallelizable();
     d.positional("field", &UnrollArgs::field);
     d.optimization(&UnrollArgs::optimization);

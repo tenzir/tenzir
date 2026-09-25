@@ -1,0 +1,6 @@
+warning: field `b` not found
+ --> tests/operators/unroll/optional_parent_missing_child.tql:2:11
+  |
+2 | unroll a?.b
+  |           ~
+  |

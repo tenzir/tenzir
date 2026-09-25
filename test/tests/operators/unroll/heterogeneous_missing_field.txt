@@ -1,0 +1,11 @@
+warning: field `a` not found
+ --> tests/operators/unroll/heterogeneous_missing_field.tql:3:10
+  |
+3 | unroll x.a
+  |          ~
+  |
+{
+  x: {
+    a: 1,
+  },
+}

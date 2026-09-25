@@ -2621,6 +2621,29 @@ TEST("consuming list values detaches physical backing") {
   CHECK(equal(values.get(0), source.get(0).get(0)));
 }
 
+TEST("field-path lookup reads nested record rows") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("nested").record().field("value").data(
+    std::int64_t{42});
+  builder.record().field("nested").data(std::int64_t{7});
+  auto records = builder.finish();
+  auto value = lookup_field_path(records.get(0),
+                                 make_field_path({"nested", "value"}).path());
+  REQUIRE(value.value);
+  CHECK_EQUAL(as_int(*value.value), 42);
+  CHECK_EQUAL(value.matched_segments, 2u);
+  auto missing
+    = lookup_field_path(records.get(0), make_field_path({"missing"}).path());
+  CHECK(not missing.value);
+  CHECK_EQUAL(missing.matched_segments, 0u);
+  CHECK(not missing.non_record_type);
+  auto scalar = lookup_field_path(records.get(1),
+                                  make_field_path({"nested", "value"}).path());
+  CHECK(not scalar.value);
+  CHECK_EQUAL(scalar.matched_segments, 1u);
+  CHECK_EQUAL(*scalar.non_record_type, "int");
+}
+
 namespace {
 
 /// A three-row record whose field `nested` is a union: `{a: 1}`, `7`, `{a: 2}`.

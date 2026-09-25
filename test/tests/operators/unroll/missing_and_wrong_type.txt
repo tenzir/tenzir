@@ -1,0 +1,13 @@
+warning: field `x` not found
+ --> tests/operators/unroll/missing_and_wrong_type.tql:3:11
+  |
+3 | unroll xs.x
+  |           ~
+  |
+
+warning: expected `list` or `record`, but got `string`
+ --> tests/operators/unroll/missing_and_wrong_type.tql:3:8
+  |
+3 | unroll xs.x
+  |        ~~~~
+  |

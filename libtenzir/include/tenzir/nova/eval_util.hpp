@@ -8,14 +8,28 @@
 
 #pragma once
 
-#include "tenzir/nova/array_base.hpp"
+#include "tenzir/nova/array.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <span>
+#include <string_view>
 
 namespace tenzir::nova {
+
+struct FieldPathLookup {
+  Option<RowView<Data>> value;
+  std::size_t matched_segments;
+  Option<std::string_view> non_record_type;
+};
+
+/// Looks up an exact field path in a record row. `matched_segments` identifies
+/// the first unmatched path segment when `value` is none.
+auto lookup_field_path(RowView<Record> record,
+                       std::span<ast::field_path::segment const> path)
+  -> FieldPathLookup;
 
 /// Assigns a nested field, inserting new fields at `position` and retaining
 /// existing field positions. Warns when an active scalar parent is replaced.

@@ -1,0 +1,2 @@
+from {a: {c: 1}}
+unroll a?.b

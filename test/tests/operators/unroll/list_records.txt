@@ -1,0 +1,14 @@
+{
+  alerts: {
+    signature: "one",
+    severity: 1,
+  },
+  sensor: "suricata",
+}
+{
+  alerts: {
+    signature: "two",
+    severity: 2,
+  },
+  sensor: "suricata",
+}

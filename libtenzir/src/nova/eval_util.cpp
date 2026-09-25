@@ -27,6 +27,34 @@
 
 namespace tenzir::nova {
 
+auto lookup_field_path(RowView<Record> record,
+                       std::span<ast::field_path::segment const> path)
+  -> FieldPathLookup {
+  TENZIR_ASSERT(not path.empty());
+  for (auto [name, value] : record) {
+    if (name != path.front().id.name) {
+      continue;
+    }
+    if (path.size() == 1) {
+      return {.value = value, .matched_segments = 1, .non_record_type = None{}};
+    }
+    return match(value, [&](auto view) -> FieldPathLookup {
+      using T = std::remove_cvref_t<decltype(view)>;
+      if constexpr (std::same_as<T, RowView<Record>>) {
+        auto result = lookup_field_path(view, path.subspan(1));
+        result.matched_segments += 1;
+        return result;
+      }
+      return {.value = None{},
+              .matched_segments = 1,
+              .non_record_type = []<data_type Tag>(RowView<Tag>) {
+                return Type<Tag>::static_name;
+              }(view)};
+    });
+  }
+  return {.value = None{}, .matched_segments = 0, .non_record_type = None{}};
+}
+
 auto NullFieldSelection::apply(Array<Record>& record,
                                storage::BitMap const& active) const -> bool {
   if (not active.any()) {

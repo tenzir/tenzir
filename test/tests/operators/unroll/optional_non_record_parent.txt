@@ -1,0 +1,6 @@
+warning: type `int` has no field `b`
+ --> tests/operators/unroll/optional_non_record_parent.tql:2:10
+  |
+2 | unroll a.b?
+  |          ~
+  |

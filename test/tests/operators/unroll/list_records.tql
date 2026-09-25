@@ -1,0 +1,2 @@
+from {alerts: [{signature: "one", severity: 1}, {signature: "two", severity: 2}], sensor: "suricata"}
+unroll alerts
