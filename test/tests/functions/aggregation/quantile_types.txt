@@ -1,0 +1,40 @@
+{
+  median: 2.0,
+  low: 1.0,
+  high: 3.0,
+}
+{
+  median: 2s,
+  low: 1s,
+  high: 3s,
+}
+{
+  median: null,
+  low: null,
+  high: null,
+}
+{
+  median: null,
+  low: null,
+  high: null,
+}
+{
+  median: null,
+  low: null,
+  high: null,
+}
+{
+  median: null,
+  low: null,
+  high: null,
+}
+{
+  median: 4.0,
+  low: 4.0,
+  high: 6.0,
+}
+{
+  median: 106751.99116730064d,
+  low: 106751.99116730064d,
+  high: 106751.99116730064d,
+}

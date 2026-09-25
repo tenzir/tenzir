@@ -1,0 +1,18 @@
+{
+  key: "a",
+  count: 3,
+  nulls: 0,
+  cardinality: 3,
+  p50: 3.0,
+  q: 5.0,
+  m: 3.0,
+}
+{
+  key: "b",
+  count: 2,
+  nulls: 1,
+  cardinality: 2,
+  p50: 10.0,
+  q: 20.0,
+  m: 10.0,
+}

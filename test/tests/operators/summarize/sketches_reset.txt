@@ -1,0 +1,30 @@
+{
+  count: 2,
+  nulls: 0,
+  precision: 10,
+  cardinality: 2,
+  compression: 20,
+  p50: 1.0,
+  q: 3.0,
+  m: 1.0,
+}
+{
+  count: 2,
+  nulls: 0,
+  precision: 10,
+  cardinality: 2,
+  compression: 20,
+  p50: 10.0,
+  q: 20.0,
+  m: 10.0,
+}
+{
+  count: 0,
+  nulls: 1,
+  precision: 10,
+  cardinality: 0,
+  compression: 20,
+  p50: null,
+  q: null,
+  m: null,
+}

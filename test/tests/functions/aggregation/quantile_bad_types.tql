@@ -1,0 +1,2 @@
+from {xs: [1, 1s]}, {xs: [1, "bad"]}, {xs: [true]}, {xs: 42}, {xs: [5, 7]}
+select result=median(xs)

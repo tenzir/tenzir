@@ -1,0 +1,7 @@
+from {xs: [1, 2.0, uint(3), null]},
+  {xs: [1s, 2s, 3s, null]},
+  {xs: []}, {xs: [null, null]}, {xs: null},
+  {xs: ["nan".float(), "inf".float(), "-inf".float()]},
+  {xs: ["nan".float(), 4, "inf".float(), 6]},
+  {xs: [nanoseconds(9223372036854775807)]}
+select median=median(xs), low=quantile(xs, q=0.0), high=quantile(xs, q=1.0)

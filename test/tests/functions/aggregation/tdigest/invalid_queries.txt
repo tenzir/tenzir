@@ -1,0 +1,55 @@
+warning: expected a finite quantile in [0.0, 1.0]
+ --> tests/functions/aggregation/tdigest/invalid_queries.tql:4:37
+  |
+4 | select quantile=tdigest_quantile(m, q), cdf=tdigest_cdf(m, q)
+  |                                     ~
+  |
+
+warning: expected a finite query value
+ --> tests/functions/aggregation/tdigest/invalid_queries.tql:4:60
+  |
+4 | select quantile=tdigest_quantile(m, q), cdf=tdigest_cdf(m, q)
+  |                                                            ~
+  |
+
+warning: expected `number`
+ --> tests/functions/aggregation/tdigest/invalid_queries.tql:4:37
+  |
+4 | select quantile=tdigest_quantile(m, q), cdf=tdigest_cdf(m, q)
+  |                                     ~
+  |
+
+warning: expected `number`
+ --> tests/functions/aggregation/tdigest/invalid_queries.tql:4:60
+  |
+4 | select quantile=tdigest_quantile(m, q), cdf=tdigest_cdf(m, q)
+  |                                                            ~
+  |
+{
+  quantile: null,
+  cdf: 0.0,
+}
+{
+  quantile: null,
+  cdf: 0.5,
+}
+{
+  quantile: null,
+  cdf: null,
+}
+{
+  quantile: null,
+  cdf: null,
+}
+{
+  quantile: null,
+  cdf: null,
+}
+{
+  quantile: 1.0,
+  cdf: 0.0,
+}
+{
+  quantile: null,
+  cdf: null,
+}

@@ -1,0 +1,8 @@
+error: expected delta to fit in a uint32
+ --> tests/functions/aggregation/quantile_invalid_delta.tql:6:36
+  |
+6 | select result=quantile([1], _delta=-1)
+  |                                    ^^
+  |
+  = usage: quantile(x:number|duration, [q=number])
+  = docs: https://tenzir.com/docs/reference/functions/quantile

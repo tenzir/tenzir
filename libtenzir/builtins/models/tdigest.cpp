@@ -14,6 +14,8 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/model.hpp>
+#include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
@@ -34,6 +36,7 @@
 #include <vector>
 
 #include "model_helpers.hpp"
+#include "sketch_helpers.hpp"
 
 namespace tenzir::plugins::tdigest {
 
@@ -451,7 +454,192 @@ private:
   bool warned_failure_ = false;
 };
 
-class plugin final : public aggregation_plugin, public model_distance_plugin {
+auto make_nova_record(model const& m) -> nova::Data {
+  auto const state = m.digest.save();
+  auto centroids = nova::List{};
+  centroids.reserve(state.means.size());
+  for (auto i = size_t{0}; i < state.means.size(); ++i) {
+    centroids.emplace_back(nova::Record{
+      {"mean", state.means[i]},
+      {"weight", state.weights[i]},
+    });
+  }
+  return nova::Record{
+    {"model", std::string{model_name}},
+    {"version", model_version},
+    {"input_count", m.input_count},
+    {"count", m.count},
+    {"null_count", m.null_count},
+    {"compression", uint64_t{m.compression}},
+    {"non_finite_count", m.non_finite_count},
+    {"min", m.count > 0 ? nova::Data{state.min} : nova::Data{}},
+    {"max", m.count > 0 ? nova::Data{state.max} : nova::Data{}},
+    {"centroids", std::move(centroids)},
+  };
+}
+
+struct TdigestArgs {
+  nova::ValueArgument x;
+  located<uint64_t> compression{100, location::unknown};
+};
+
+class Tdigest {
+public:
+  explicit Tdigest(uint32_t compression) : model_{compression} {
+  }
+
+  template <class Tag>
+  auto add(nova::RowView<Tag> value, location source, diagnostic_handler& dh,
+           nova::WarnOnce& warned_type) -> void {
+    if (failed_) {
+      return;
+    }
+    auto next = checked_add(model_.input_count, uint64_t{1});
+    if (not next) {
+      failed_ = true;
+      diagnostic::warning("`tdigest` failed: `input_count` overflow")
+        .primary(source)
+        .emit(dh);
+      return;
+    }
+    model_.input_count = *next;
+    if constexpr (std::same_as<Tag, nova::Null>) {
+      ++model_.null_count;
+    } else if constexpr (concepts::one_of<Tag, nova::Int, nova::UInt,
+                                          nova::Float>) {
+      auto x = static_cast<double>(*value);
+      if (std::isfinite(x)) {
+        ++model_.count;
+        model_.digest.add(x);
+      } else {
+        ++model_.non_finite_count;
+      }
+    } else {
+      warned_type(dh, diagnostic::warning("expected `int`, `uint`, or `float`, "
+                                          "got `{}`; skipping these values",
+                                          nova::Type<Tag>::static_name)
+                        .primary(source));
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return failed_ ? nova::Data{} : make_nova_record(model_);
+  }
+
+private:
+  model model_;
+  bool failed_ = false;
+};
+
+class TdigestFunction {
+public:
+  static auto eval(TdigestArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto warned_type = nova::WarnOnce{};
+    return nova::aggregate_lists(
+      args.x, frame, [&](auto const& elements, auto& builder) {
+        auto digest = Tdigest{static_cast<uint32_t>(args.compression.inner)};
+        elements.for_each([&](auto value) {
+          digest.add(value, args.x.source, frame, warned_type);
+        });
+        nova::append_data(builder, digest.get());
+      });
+  }
+
+  auto update(TdigestArgs const& args, nova::EvalFrame frame) -> void {
+    if (not digest_) {
+      digest_.emplace(static_cast<uint32_t>(args.compression.inner));
+    }
+    sketch::visit(args.x.data, frame.mask(), [&](auto value) {
+      digest_->add(value, args.x.source, frame, warned_type_);
+    });
+  }
+
+  auto get() const -> nova::Data {
+    return digest_ ? digest_->get() : nova::Data{};
+  }
+
+  auto reset() -> void {
+    // Deduplicate type warnings over the accumulator's lifetime, not per window.
+    digest_ = None{};
+  }
+
+private:
+  Option<Tdigest> digest_;
+  nova::WarnOnce warned_type_;
+};
+
+// Read the persisted record directly, without converting through Arrow or
+// assuming that its numeric fields kept their physical types after JSON.
+auto read_digest(nova::RowView<nova::Record> record)
+  -> Option<detail::tdigest> {
+  auto name = sketch::field<nova::String>(record, "model");
+  auto version = sketch::unsigned_value(sketch::field(record, "version"));
+  auto compression
+    = sketch::unsigned_value(sketch::field(record, "compression"));
+  auto input_count
+    = sketch::unsigned_value(sketch::field(record, "input_count"));
+  auto count = sketch::unsigned_value(sketch::field(record, "count"));
+  auto null_count = sketch::unsigned_value(sketch::field(record, "null_count"));
+  auto non_finite_count
+    = sketch::unsigned_value(sketch::field(record, "non_finite_count"));
+  auto min = sketch::number(sketch::field(record, "min"));
+  auto max = sketch::number(sketch::field(record, "max"));
+  auto centroids = sketch::field<nova::List>(record, "centroids");
+  if (not name or **name != model_name or not version
+      or *version != model_version or not compression
+      or *compression < min_compression or *compression > max_compression
+      or not input_count or not count or *count == 0 or not null_count
+      or not non_finite_count or not min or not max or not centroids
+      or static_cast<uint64_t>(centroids->length()) > *compression) {
+    return None{};
+  }
+  auto classified = checked_add(*count, *null_count);
+  if (not classified) {
+    return None{};
+  }
+  classified = checked_add(*classified, *non_finite_count);
+  if (not classified or *classified > *input_count) {
+    return None{};
+  }
+  auto state = detail::tdigest_state{
+    .means = {}, .weights = {}, .min = *min, .max = *max};
+  auto total_weight = uint64_t{0};
+  for (auto entry : *centroids) {
+    auto centroid = try_as<nova::RowView<nova::Record>>(entry);
+    if (not centroid) {
+      return None{};
+    }
+    auto mean = sketch::number(sketch::field(*centroid, "mean"));
+    auto weight = sketch::number(sketch::field(*centroid, "weight"));
+    if (not mean or not weight) {
+      return None{};
+    }
+    auto integral_weight = checked_weight(*weight);
+    if (not integral_weight) {
+      return None{};
+    }
+    auto next = checked_add(total_weight, *integral_weight);
+    if (not next) {
+      return None{};
+    }
+    total_weight = *next;
+    state.means.push_back(*mean);
+    state.weights.push_back(*weight);
+  }
+  if (total_weight != *count) {
+    return None{};
+  }
+  auto digest = detail::tdigest{static_cast<uint32_t>(*compression)};
+  if (not digest.restore(state)) {
+    return None{};
+  }
+  return digest;
+}
+
+class plugin final : public aggregation_plugin,
+                     public nova::AggregationPlugin,
+                     public model_distance_plugin {
 public:
   auto name() const -> std::string override {
     return std::string{model_name};
@@ -459,6 +647,25 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<TdigestArgs, TdigestFunction>{};
+    d.positional("x", &TdigestArgs::x, "number");
+    d.named_optional("compression", &TdigestArgs::compression);
+    d.validate(
+      [](TdigestArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        if (args.compression.inner < min_compression
+            or args.compression.inner > max_compression) {
+          diagnostic::error("`compression` must be in [{}, {}]",
+                            min_compression, max_compression)
+            .primary(args.compression)
+            .emit(dh);
+          return failure::promise();
+        }
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto model_version() const -> uint64_t override {
@@ -534,9 +741,75 @@ public:
 
 enum class unary_operation { quantile, cdf };
 
+struct QueryArgs {
+  nova::ValueArgument model;
+  nova::ValueArgument value;
+  location call;
+};
+
 template <unary_operation Operation>
-class unary_function final : public function_plugin {
+class QueryFunction {
 public:
+  auto eval(QueryArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto warned_value = nova::WarnOnce{};
+    auto warned_type = nova::WarnOnce{};
+    return nova::apply_kernel<2>(
+      frame,
+      Operation == unary_operation::quantile ? "tdigest_quantile"
+                                             : "tdigest_cdf",
+      {args.model, args.value}, args.call,
+      [&](diagnostic_handler& dh, auto model,
+          auto value) -> Option<nova::Float> {
+        using Value = decltype(value);
+        if constexpr (std::same_as<Value, nova::Null>) {
+          return None{};
+        } else if constexpr (not concepts::one_of<Value, nova::Int, nova::UInt,
+                                                  nova::Float>) {
+          warned_type(dh, diagnostic::warning("expected `number`")
+                            .primary(args.value.source));
+          return None{};
+        } else if constexpr (std::same_as<decltype(model),
+                                          nova::RowView<nova::Record>>) {
+          auto digest = read_digest(model);
+          if (not digest) {
+            return None{};
+          }
+          auto x = static_cast<double>(value);
+          if (not std::isfinite(x)
+              or (Operation == unary_operation::quantile
+                  and (x < 0.0 or x > 1.0))) {
+            warned_value(dh, diagnostic::warning(
+                               Operation == unary_operation::quantile
+                                 ? "expected a finite quantile in [0.0, 1.0]"
+                                 : "expected a finite query value")
+                               .primary(args.value.source));
+            return None{};
+          }
+          if constexpr (Operation == unary_operation::quantile) {
+            return digest->quantile(x);
+          } else {
+            return digest->cdf(x);
+          }
+        } else {
+          return None{};
+        }
+      });
+  }
+};
+
+template <unary_operation Operation>
+class unary_function final : public nova::FunctionPlugin {
+public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<QueryArgs, QueryFunction<Operation>>{};
+    d.positional("model", &QueryArgs::model, "record");
+    d.positional(Operation == unary_operation::quantile ? "q" : "x",
+                 &QueryArgs::value, "number");
+    d.call_location(&QueryArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     if constexpr (Operation == unary_operation::quantile) {
       return "tdigest_quantile";

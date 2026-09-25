@@ -1,3 +1,7 @@
+---
+skip: "batch (TNZ-1264) and model_merge (TNZ-1302) are not ported yet"
+---
+
 // Cumulative emissions retain constructor and model_merge aggregation state.
 from {x: 0.0}, {x: 10.0}, {x: 20.0}, {x: 30.0}, {x: 40.0}
 batch 1

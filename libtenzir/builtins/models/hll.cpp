@@ -14,6 +14,8 @@
 #include <tenzir/hash/xxhash.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/model.hpp>
+#include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -31,6 +33,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "sketch_helpers.hpp"
 
 namespace tenzir::plugins::hll {
 
@@ -358,7 +362,205 @@ private:
   model state_;
 };
 
-class plugin final : public aggregation_plugin, public model_plugin {
+// Keep the persisted hash contract independent of the column representation.
+// In particular, numeric type tags and record field order remain significant.
+template <class Tag>
+auto append_hash(xxh3_64& hash, nova::RowView<Tag> value) -> void {
+  if constexpr (std::same_as<Tag, nova::List>) {
+    hash_append(hash, list_type::type_index);
+    auto size = int64_t{0};
+    for (auto element : value) {
+      match(element, [&](auto typed) {
+        append_hash(hash, typed);
+      });
+      ++size;
+    }
+    hash_append(hash, size);
+  } else if constexpr (std::same_as<Tag, nova::Record>) {
+    hash_append(hash, record_type::type_index);
+    auto size = size_t{0};
+    for (auto [name, field] : value) {
+      hash_append(hash, name);
+      match(field, [&](auto typed) {
+        append_hash(hash, typed);
+      });
+      ++size;
+    }
+    hash_append(hash, size);
+  } else if constexpr (std::same_as<Tag, nova::Null>) {
+    hash_append(hash, data_view3{caf::none});
+  } else {
+    hash_append(hash, data_view3{*value});
+  }
+}
+
+auto make_nova_record(model const& value) -> nova::Data {
+  auto registers = nova::List{};
+  registers.reserve(value.registers.size());
+  for (auto rank : value.registers) {
+    registers.emplace_back(uint64_t{rank});
+  }
+  return nova::Record{
+    {"model", std::string{model_name}},
+    {"version", schema_version},
+    {"input_count", value.input_count},
+    {"count", value.count},
+    {"null_count", value.null_count},
+    {"precision", uint64_t{value.precision}},
+    {"hash", std::string{hash_contract}},
+    {"registers", std::move(registers)},
+  };
+}
+
+struct HllArgs {
+  nova::ValueArgument x;
+  located<uint64_t> precision{default_precision, location::unknown};
+};
+
+class Hll {
+public:
+  explicit Hll(uint8_t precision)
+    : state_{.precision = precision,
+             .registers = std::vector<uint8_t>(register_count(precision), 0)} {
+  }
+
+  template <class Tag>
+  auto add(nova::RowView<Tag> value, location source, diagnostic_handler& dh)
+    -> void {
+    auto next = checked_add(state_.input_count, uint64_t{1});
+    if (not next) {
+      if (not warned_overflow_) {
+        warned_overflow_ = true;
+        diagnostic::warning(
+          "`hll` input counter overflow; skipping values that "
+          "cannot be counted")
+          .primary(source)
+          .emit(dh);
+      }
+      return;
+    }
+    state_.input_count = *next;
+    if constexpr (std::same_as<Tag, nova::Null>) {
+      ++state_.null_count;
+    } else {
+      ++state_.count;
+      auto hash = xxh3_64{};
+      append_hash(hash, value);
+      add_hash(state_.registers, state_.precision, hash.finish());
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return make_nova_record(state_);
+  }
+
+private:
+  model state_;
+  bool warned_overflow_ = false;
+};
+
+class HllFunction {
+public:
+  static auto eval(HllArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::aggregate_lists(
+      args.x, frame, [&](auto const& elements, auto& builder) {
+        auto sketch = Hll{static_cast<uint8_t>(args.precision.inner)};
+        elements.for_each([&](auto value) {
+          sketch.add(value, args.x.source, frame);
+        });
+        nova::append_data(builder, sketch.get());
+      });
+  }
+
+  auto update(HllArgs const& args, nova::EvalFrame frame) -> void {
+    if (not sketch_) {
+      sketch_.emplace(static_cast<uint8_t>(args.precision.inner));
+    }
+    sketch::visit(args.x.data, frame.mask(), [&](auto value) {
+      sketch_->add(value, args.x.source, frame);
+    });
+  }
+
+  auto get() const -> nova::Data {
+    return sketch_ ? sketch_->get() : nova::Data{};
+  }
+
+  auto reset() -> void {
+    sketch_ = None{};
+  }
+
+private:
+  Option<Hll> sketch_;
+};
+
+struct CardinalityArgs {
+  nova::ValueArgument model;
+  location call;
+};
+
+class CardinalityFunction {
+public:
+  auto eval(CardinalityArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(
+      frame, "hll_cardinality", {args.model}, args.call,
+      [](diagnostic_handler&, auto value) -> Option<nova::UInt> {
+        if constexpr (std::same_as<decltype(value),
+                                   nova::RowView<nova::Record>>) {
+          auto name = sketch::field<nova::String>(value, "model");
+          auto hash = sketch::field<nova::String>(value, "hash");
+          auto version
+            = sketch::unsigned_value(sketch::field(value, "version"));
+          auto precision
+            = sketch::unsigned_value(sketch::field(value, "precision"));
+          auto count = sketch::unsigned_value(sketch::field(value, "count"));
+          auto null_count
+            = sketch::unsigned_value(sketch::field(value, "null_count"));
+          auto input_count
+            = sketch::unsigned_value(sketch::field(value, "input_count"));
+          auto registers = sketch::field<nova::List>(value, "registers");
+          if (not name or **name != model_name or not hash
+              or **hash != hash_contract or not version
+              or *version != schema_version or not precision
+              or *precision < min_precision or *precision > max_precision
+              or not count or not null_count or not input_count
+              or not registers) {
+            return None{};
+          }
+          auto total = checked_add(*count, *null_count);
+          if (not total or *total != *input_count
+              or static_cast<size_t>(registers->length())
+                   != register_count(static_cast<uint8_t>(*precision))) {
+            return None{};
+          }
+          auto nonzero = size_t{0};
+          for (auto rank : *registers) {
+            auto parsed = sketch::unsigned_value(rank);
+            if (not parsed
+                or *parsed > maximum_rank(static_cast<uint8_t>(*precision))) {
+              return None{};
+            }
+            nonzero += *parsed != 0;
+          }
+          if ((*count == 0) != (nonzero == 0)) {
+            return None{};
+          }
+          return estimate_cardinality(
+            registers->length(), *count, [&](size_t i) {
+              return *sketch::unsigned_value(
+                registers->get(static_cast<nova::storage::Index>(i)));
+            });
+        } else {
+          return None{};
+        }
+      });
+  }
+};
+
+class plugin final : public aggregation_plugin,
+                     public nova::AggregationPlugin,
+                     public model_plugin {
 public:
   auto name() const -> std::string override {
     return std::string{model_name};
@@ -366,6 +568,24 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<HllArgs, HllFunction>{};
+    d.positional("x", &HllArgs::x, "any");
+    d.named_optional("precision", &HllArgs::precision);
+    d.validate([](HllArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+      if (args.precision.inner < min_precision
+          or args.precision.inner > max_precision) {
+        diagnostic::error("`precision` must be in [{}, {}]", min_precision,
+                          max_precision)
+          .primary(args.precision)
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto model_version() const -> uint64_t override {
@@ -410,8 +630,15 @@ public:
   }
 };
 
-class cardinality final : public function_plugin {
+class cardinality final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<CardinalityArgs, CardinalityFunction>{};
+    d.positional("model", &CardinalityArgs::model, "record");
+    d.call_location(&CardinalityArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "hll_cardinality";
   }

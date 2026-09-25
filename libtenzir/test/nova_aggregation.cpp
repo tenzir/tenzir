@@ -13,6 +13,8 @@
 /// test; `count_if` covers aggregations that evaluate a lambda per batch.
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/hash/hash.hpp"
+#include "tenzir/hash/xxhash.hpp"
 #include "tenzir/nova/aggregation.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -20,16 +22,22 @@
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
+#include "tenzir/view3.hpp"
 
+#include <algorithm>
+#include <bit>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -85,7 +93,14 @@ auto bitmap(std::vector<bool> bits) -> storage::BitMap {
 template <class... Ts>
 auto events_of(Ts... values) -> Events {
   auto builder = ArrayBuilder<Record>{};
-  (builder.record().field("x").data(values), ...);
+  auto append = [&](auto value) {
+    if constexpr (std::same_as<decltype(value), Null>) {
+      builder.record().field("x").null();
+    } else {
+      builder.record().field("x").data(value);
+    }
+  };
+  (append(values), ...);
   return make_events(builder.finish());
 }
 
@@ -415,4 +430,256 @@ TEST("count_if evaluates its predicate once per batch across groups") {
     CHECK_EQUAL(get_as<Int>(b->get()), Option{Int{0}});
     CHECK_EQUAL(std::move(dh).collect().size(), 1u);
   }
+}
+
+TEST("sketch aggregations honor masks, accumulate across batches, and reset") {
+  for (auto name : {"hll", "tdigest", "quantile", "median"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto reg = global_registry();
+    auto aggregate = AggregationInstance::make(call(name, {root_field("x")}),
+                                               InstantiateCtx{dh, *reg});
+    REQUIRE(aggregate);
+    CHECK(is_null((*aggregate)->get()));
+    auto events = events_of(Int{1}, std::string_view{"masked out"}, Int{3});
+    events.mask = bitmap({true, false, true});
+    (*aggregate)->update(events, EvalCtx{dh});
+    // Reading the sketch may flush buffered input, but must allow more updates.
+    std::ignore = (*aggregate)->get();
+    (*aggregate)->update(events_of(Float{5.0}, Null{}), EvalCtx{dh});
+    auto result = (*aggregate)->get();
+    if (auto record = try_as<Record>(result)) {
+      CHECK_EQUAL(get_as<UInt>(record->at("count")), Option{UInt{3}});
+      CHECK_EQUAL(get_as<UInt>(record->at("null_count")), Option{UInt{1}});
+    } else {
+      CHECK_EQUAL(get_as<Float>(result), Option{Float{3.0}});
+    }
+    (*aggregate)->reset();
+    CHECK(is_null((*aggregate)->get()));
+    (*aggregate)->update(events_of(Int{9}), EvalCtx{dh});
+    result = (*aggregate)->get();
+    if (auto record = try_as<Record>(result)) {
+      CHECK_EQUAL(get_as<UInt>(record->at("count")), Option{UInt{1}});
+      CHECK_EQUAL(get_as<UInt>(record->at("null_count")), Option{UInt{0}});
+    } else {
+      CHECK_EQUAL(get_as<Float>(result), Option{Float{9.0}});
+    }
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("sketch list kernels handle constants and masked invalid rows") {
+  for (auto name : {"hll", "tdigest", "quantile", "median"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto input = events_of(Int{0}, Int{1}, Int{2});
+    input.data = input.data.with_field_overwrite(
+      "xs", {repeat(Data{List{Int{1}, Int{2}, Int{3}, Null{}}}, 3),
+             storage::BitMap{3, true}});
+    auto result = eval(call(name, {root_field("xs")}), input,
+                       bitmap({true, false, true}), dh);
+    for (auto row : {0, 2}) {
+      auto value = to_data(result.get(row));
+      if (auto record = try_as<Record>(value)) {
+        CHECK_EQUAL(get_as<UInt>(record->at("count")), Option{UInt{3}});
+        CHECK_EQUAL(get_as<UInt>(record->at("null_count")), Option{UInt{1}});
+      } else {
+        CHECK_EQUAL(get_as<Float>(value), Option{Float{2.0}});
+      }
+    }
+    auto builder = ArrayBuilder<Record>{};
+    builder.record().field("xs").list().data(Int{7});
+    builder.record().field("xs").data(std::string_view{"masked out"});
+    builder.record().field("xs").null();
+    result = eval(call(name, {root_field("xs")}), make_events(builder.finish()),
+                  bitmap({true, false, true}), dh);
+    CHECK(is_null_at(result, 2));
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("HLL registers retain the persisted type-sensitive hash contract") {
+  auto values = List{
+    Int{42},
+    UInt{42},
+    Float{42},
+    std::string{"42"},
+    true,
+    Duration{42},
+    Time{Duration{42}},
+    Blob{std::byte{42}},
+    List{Int{1}, Null{}, std::string{"x"}},
+    Record{{"a", Int{1}}, {"b", List{true, Null{}}}},
+  };
+  auto expected = std::vector<uint8_t>(size_t{1} << 14, 0);
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& value : values) {
+    auto field = builder.record().field("x");
+    append_data(field, value);
+    auto owned = materialize(RowView<Data>{value});
+    // Hash through the persisted data contract, not through another executor.
+    auto digest = tenzir::hash<xxh3_64>(make_view(owned));
+    auto index = digest >> (64 - 14);
+    auto rank
+      = static_cast<uint8_t>(std::min(std::countl_zero(digest << 14) + 1, 51));
+    expected[index] = std::max(expected[index], rank);
+  }
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto aggregate = AggregationInstance::make(call("hll", {root_field("x")}),
+                                             InstantiateCtx{dh, *reg});
+  REQUIRE(aggregate);
+  (*aggregate)->update(make_events(builder.finish()), EvalCtx{dh});
+  auto value = (*aggregate)->get();
+  auto const& registers = as<List>(as<Record>(value).at("registers"));
+  REQUIRE_EQUAL(registers.size(), expected.size());
+  for (auto i = size_t{0}; i < expected.size(); ++i) {
+    CHECK_EQUAL(get_as<UInt>(registers[i]), Option{UInt{expected[i]}});
+  }
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("quantile narrows duration limits without overflowing") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto aggregate = AggregationInstance::make(
+    call("quantile", {root_field("x")}), InstantiateCtx{dh, *reg});
+  REQUIRE(aggregate);
+  for (auto count : {std::numeric_limits<Duration::rep>::min(),
+                     std::numeric_limits<Duration::rep>::max()}) {
+    (*aggregate)->reset();
+    (*aggregate)->update(events_of(Duration{count}), EvalCtx{dh});
+    CHECK_EQUAL(get_as<Duration>((*aggregate)->get()), Option{Duration{count}});
+  }
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("quantile and median list warnings are scoped to an evaluation") {
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& values : {
+         List{true},
+         List{std::string{"bad"}},
+         List{std::string{"also bad"}},
+         List{Int{1}, Duration{1}},
+         List{Int{2}, Duration{2}},
+         List{Int{7}},
+         List{Duration{9}},
+         List{},
+       }) {
+    auto field = builder.record().field("xs");
+    append_data(field, Data{values});
+  }
+  builder.record().field("xs").null();
+  auto events = make_events(builder.finish());
+  events.mask = bitmap({false, true, true, true, true, true, true, true, true});
+  for (auto name : {"quantile", "median"}) {
+    auto prepare_dh = collecting_diagnostic_handler{};
+    auto reg = global_registry();
+    auto evaluator = Evaluator::make(call(name, {root_field("xs")}),
+                                     InstantiateCtx{prepare_dh, *reg});
+    REQUIRE(evaluator);
+    CHECK(std::move(prepare_dh).collect().empty());
+    // Deduplication spans list rows, but not subsequent evaluations.
+    for (auto batch = 0; batch < 2; ++batch) {
+      auto dh = collecting_diagnostic_handler{};
+      auto result = evaluator->eval(events, EvalCtx{dh});
+      for (auto row : {1, 2, 3, 4, 7, 8}) {
+        CHECK(is_null_at(result, row));
+      }
+      // Failed rows must not poison later rows or fix their numeric kind.
+      CHECK_EQUAL(get_as<Float>(to_data(result.get(5))), Option{Float{7.0}});
+      CHECK_EQUAL(get_as<Duration>(to_data(result.get(6))),
+                  Option{Duration{9}});
+      auto diagnostics = std::move(dh).collect();
+      REQUIRE_EQUAL(diagnostics.size(), size_t{2});
+      CHECK_EQUAL(diagnostics[0].message, "expected `int`, `uint`, `float` or "
+                                          "`duration`, got `string`");
+      CHECK_EQUAL(diagnostics[1].message,
+                  "got incompatible types `number` and `duration`");
+    }
+  }
+}
+
+TEST("t-digest aggregation type warnings survive resets") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto aggregate = AggregationInstance::make(call("tdigest", {root_field("x")}),
+                                             InstantiateCtx{dh, *reg});
+  REQUIRE(aggregate);
+  for (auto value : {Int{1}, Int{2}, Int{3}}) {
+    (*aggregate)->update(events_of(std::string_view{"bad"}, value), EvalCtx{dh});
+    (*aggregate)
+      ->update(events_of(std::string_view{"bad"}, Null{}), EvalCtx{dh});
+    auto result = (*aggregate)->get();
+    auto const& model = as<Record>(result);
+    CHECK_EQUAL(get_as<UInt>(model.at("input_count")), Option{UInt{4}});
+    CHECK_EQUAL(get_as<UInt>(model.at("count")), Option{UInt{1}});
+    CHECK_EQUAL(get_as<UInt>(model.at("null_count")), Option{UInt{1}});
+    CHECK_EQUAL(get_as<Float>(model.at("min")),
+                Option{static_cast<Float>(value)});
+    CHECK_EQUAL(get_as<Float>(model.at("max")),
+                Option{static_cast<Float>(value)});
+    (*aggregate)->reset();
+    CHECK(is_null((*aggregate)->get()));
+  }
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+  CHECK_EQUAL(diagnostics[0].message,
+              "expected `int`, `uint`, or `float`, got `string`; "
+              "skipping these values");
+}
+
+TEST("t-digest list type warnings are scoped to an evaluation") {
+  auto builder = ArrayBuilder<Record>{};
+  for (auto value : {Int{7}, Int{9}}) {
+    auto list = builder.record().field("xs").list();
+    list.data(std::string_view{"bad"});
+    list.data(value);
+  }
+  auto events = make_events(builder.finish());
+  auto prepare_dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto evaluator = Evaluator::make(call("tdigest", {root_field("xs")}),
+                                   InstantiateCtx{prepare_dh, *reg});
+  REQUIRE(evaluator);
+  CHECK(std::move(prepare_dh).collect().empty());
+  // Reusing a call site must not suppress warnings in subsequent evaluations.
+  for (auto batch = 0; batch < 2; ++batch) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = evaluator->eval(events, EvalCtx{dh});
+    for (auto row = 0; row < 2; ++row) {
+      auto value = to_data(result.get(row));
+      auto const& model = as<Record>(value);
+      CHECK_EQUAL(get_as<UInt>(model.at("input_count")), Option{UInt{2}});
+      CHECK_EQUAL(get_as<UInt>(model.at("count")), Option{UInt{1}});
+      CHECK_EQUAL(get_as<Float>(model.at("min")), Option{Float{7.0 + row * 2}});
+      CHECK_EQUAL(get_as<Float>(model.at("max")), Option{Float{7.0 + row * 2}});
+    }
+    auto diagnostics = std::move(dh).collect();
+    REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+    CHECK_EQUAL(diagnostics[0].message,
+                "expected `int`, `uint`, or `float`, got `string`; "
+                "skipping these values");
+  }
+}
+
+TEST("t-digest accessors propagate null and ignore inactive invalid queries") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto aggregate = AggregationInstance::make(call("tdigest", {root_field("x")}),
+                                             InstantiateCtx{dh, *reg});
+  REQUIRE(aggregate);
+  (*aggregate)->update(events_of(Int{1}, Int{2}, Int{3}), EvalCtx{dh});
+  auto input = events_of(Float{0.5}, std::string_view{"masked out"}, Null{});
+  input.data = input.data.with_field_overwrite(
+    "model", {repeat((*aggregate)->get(), 3), storage::BitMap{3, true}});
+  for (auto name : {"tdigest_quantile", "tdigest_cdf"}) {
+    auto result = eval(call(name, {root_field("model"), root_field("x")}),
+                       input, bitmap({true, false, true}), dh);
+    auto floats = result.get_alternative<Float>();
+    REQUIRE(floats);
+    REQUIRE(floats->present.get(0));
+    CHECK_EQUAL(*floats->data.get(0),
+                std::string_view{name} == "tdigest_quantile" ? 2.0 : 0.0);
+    CHECK(is_null_at(result, 2));
+  }
+  CHECK(std::move(dh).collect().empty());
 }

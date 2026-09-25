@@ -3,7 +3,7 @@ from {}
 one = hll([1], precision=10)
 duplicates = hll([1, 1, 1, 2, 2, int(null)], precision=10)
 all_null = hll([int(null)], precision=10)
-empty = hll([1].where(x => false), precision=10)
+empty = hll([], precision=10)
 null_list = hll(null, precision=10)
 // An estimate cannot exceed the exact number of accepted observations.
 base = hll([], precision=4)

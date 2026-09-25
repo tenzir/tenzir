@@ -3,4 +3,4 @@ error: true
 ---
 
 from []
-summarize result=quantile(x)
+summarize result=frequency_table(x)

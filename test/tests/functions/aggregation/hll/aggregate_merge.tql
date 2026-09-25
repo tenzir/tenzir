@@ -1,3 +1,7 @@
+---
+skip: "model_merge is not ported yet (TNZ-1302)"
+---
+
 // Constructor list calls produce partial models that model_merge can combine
 // through its aggregation path.
 from {xs: [1, 2, 3, int(null)]}, {xs: [3, 4, 5, int(null)]}

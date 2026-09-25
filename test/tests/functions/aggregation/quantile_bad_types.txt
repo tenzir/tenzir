@@ -1,0 +1,42 @@
+warning: got incompatible types `number` and `duration`
+ --> tests/functions/aggregation/quantile_bad_types.tql:2:22
+  |
+2 | select result=median(xs)
+  |                      ~~
+  |
+
+warning: expected `int`, `uint`, `float` or `duration`, got `string`
+ --> tests/functions/aggregation/quantile_bad_types.tql:2:22
+  |
+2 | select result=median(xs)
+  |                      ~~
+  |
+
+warning: expected `int`, `uint`, `float` or `duration`, got `bool`
+ --> tests/functions/aggregation/quantile_bad_types.tql:2:22
+  |
+2 | select result=median(xs)
+  |                      ~~
+  |
+
+warning: expected `list`, got a different type
+ --> tests/functions/aggregation/quantile_bad_types.tql:2:22
+  |
+2 | select result=median(xs)
+  |                      ~~
+  |
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: 5.0,
+}

@@ -1,0 +1,8 @@
+// Persisted models survive JSON's loss of signedness and retain their payloads.
+from {x: 1}, {x: 3}, {x: 5}, {x: null}
+summarize h=hll(x, precision=4), t=tdigest(x, compression=20)
+write_json
+read_json
+select cardinality=hll_cardinality(h), p0=tdigest_quantile(t, 0),
+  p50=tdigest_quantile(t, 0.5), p100=tdigest_quantile(t, 1),
+  cdf=tdigest_cdf(t, 3), nulls=t.null_count

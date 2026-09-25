@@ -1,0 +1,4 @@
+from {q: -1}, {q: 2.0}, {q: "nan".float()}, {q: "inf".float()},
+  {q: null}, {q: 0.5}, {q: "wrong"}
+m = tdigest([1, 3], compression=20)
+select quantile=tdigest_quantile(m, q), cdf=tdigest_cdf(m, q)

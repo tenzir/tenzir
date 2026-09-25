@@ -1,0 +1,8 @@
+from {key: "a", x: 1}, {key: "b", x: 10}, {key: "a", x: 3.0},
+  {key: "b", x: uint(20)}, {key: "a", x: 1}, {key: "b", x: null},
+  {key: "discard", x: "bad"}
+where key != "discard"
+summarize key, h=hll(x, precision=10), t=tdigest(x, compression=20),
+  q=quantile(x, q=1.0), m=median(x), options={emit: 1, mode: "cumulative"}
+select key, count=h.count, nulls=h.null_count, cardinality=hll_cardinality(h),
+  p50=tdigest_quantile(t, 0.5), cdf=tdigest_cdf(t, 10), q, m

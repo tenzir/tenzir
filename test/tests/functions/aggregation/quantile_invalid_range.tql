@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+summarize result=quantile(x, q=1.1)

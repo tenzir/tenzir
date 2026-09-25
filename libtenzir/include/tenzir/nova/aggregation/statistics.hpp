@@ -8,10 +8,12 @@
 
 #pragma once
 
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/nova/aggregation.hpp>
 
 #include <cmath>
 #include <concepts>
+#include <utility>
 
 namespace tenzir::plugins::nova_statistics {
 
@@ -175,6 +177,23 @@ inline auto make_result(NumericKind const& kind, Option<double> value)
   TENZIR_UNREACHABLE();
 }
 
+/// Deduplicates identical type diagnostics across rows of one list evaluation.
+class ListDiagnostics final : public diagnostic_handler {
+public:
+  explicit ListDiagnostics(diagnostic_handler& inner) : inner_{inner} {
+  }
+
+  auto emit(diagnostic diag) -> void override {
+    if (seen_.insert(diag)) {
+      inner_.emit(std::move(diag));
+    }
+  }
+
+private:
+  diagnostic_handler& inner_;
+  diagnostic_deduplicator seen_;
+};
+
 /// The list kernel of a statistic whose accumulator `Stat` provides
 /// `add(double)` and `get(NumericKind const&) -> Data`, with `NumericKind`
 /// built from `allow_duration`. For statistics whose list call and
@@ -182,12 +201,13 @@ inline auto make_result(NumericKind const& kind, Option<double> value)
 template <class Stat, class Make>
 auto eval_statistic(nova::ValueArgument const& x, nova::EvalFrame const& frame,
                     bool allow_duration, Make make) -> nova::Array<nova::Data> {
+  auto dh = ListDiagnostics{frame};
   return nova::aggregate_lists(x, frame,
                                [&](nova::ListElements const& elements,
                                    nova::ArrayBuilder<nova::Data>& builder) {
                                  auto kind = NumericKind{allow_duration};
                                  Stat stat = make();
-                                 kind.visit(elements, x.source, frame,
+                                 kind.visit(elements, x.source, dh,
                                             [&](auto value) {
                                               stat.add(value);
                                             });

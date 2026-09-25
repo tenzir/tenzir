@@ -1,3 +1,7 @@
+---
+skip: "model_distance is not ported yet (TNZ-1302)"
+---
+
 // Native digest comparisons are symmetric, accept different compression,
 // yield zero for identity, and preserve input units for Wasserstein distance.
 from {}

@@ -1,0 +1,5 @@
+from {xs: ["one", "two"]}, {xs: ["three"]},
+  {xs: ["four", 7, null]}, {xs: [9, "five"]}
+m = tdigest(xs, compression=20)
+select input_count=m.input_count, count=m.count, null_count=m.null_count,
+  min=m.min, max=m.max

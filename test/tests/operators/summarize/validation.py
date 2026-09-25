@@ -44,8 +44,10 @@ for pipeline, error in (
     assert not result.stdout, result.stdout
 
 # Representation support is checked by type inference, before plan construction.
-result = compile_pipeline("from []\nsummarize result=quantile(x)", "--dump-opt-ir")
+result = compile_pipeline(
+    "from []\nsummarize result=frequency_table(x)", "--dump-opt-ir"
+)
 assert result.returncode != 0, result.stdout
-assert "`quantile` does not support `--nova` yet" in result.stderr, result.stderr
+assert "`frequency_table` does not support `--nova` yet" in result.stderr, result.stderr
 
 print("aggregation planning and validation: ok")

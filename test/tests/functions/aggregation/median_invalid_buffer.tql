@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+select result=median([1], _buffer_size=4294967296)

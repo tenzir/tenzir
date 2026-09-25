@@ -1,0 +1,12 @@
+from {}
+m = hll([1, 2], precision=4)
+select valid=hll_cardinality(m), missing=hll_cardinality({foo: 1}),
+  null_model=hll_cardinality(null), wrong_type=hll_cardinality(42),
+  wrong_model=hll_cardinality({...m, model: "tdigest"}),
+  version=hll_cardinality({...m, version: 2}),
+  hash=hll_cardinality({...m, hash: "other"}),
+  precision=hll_cardinality({...m, precision: 64}),
+  short=hll_cardinality({...m, registers: [0]}),
+  null_ranks=hll_cardinality({...m, registers: [null]}),
+  counts=hll_cardinality({...m, input_count: 0}),
+  bad_rank=hll_cardinality({...m, registers: [99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]})

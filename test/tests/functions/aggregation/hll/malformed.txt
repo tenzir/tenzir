@@ -1,0 +1,14 @@
+{
+  valid: 2,
+  missing: null,
+  null_model: null,
+  wrong_type: null,
+  wrong_model: null,
+  version: null,
+  hash: null,
+  precision: null,
+  short: null,
+  null_ranks: null,
+  counts: null,
+  bad_rank: null,
+}

@@ -4,3 +4,5 @@ error: `compression` must be in [10, 10000]
 7 | m = tdigest([1.0], compression=9)
   |                                ^
   |
+  = usage: tdigest(x:number, [compression=int])
+  = docs: https://tenzir.com/docs/reference/functions/tdigest

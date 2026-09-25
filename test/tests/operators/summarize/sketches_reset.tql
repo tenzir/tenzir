@@ -1,0 +1,6 @@
+from {x: 1}, {x: 3}, {x: 10}, {x: 20}, {x: null}
+summarize h=hll(x, precision=10), t=tdigest(x, compression=20),
+  q=quantile(x, q=1.0), m=median(x), options={emit: 2, mode: "reset"}
+select count=h.count, nulls=h.null_count, precision=h.precision,
+  cardinality=hll_cardinality(h), compression=t.compression,
+  p50=tdigest_quantile(t, 0.5), q, m

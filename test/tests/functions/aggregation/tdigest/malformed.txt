@@ -1,0 +1,15 @@
+{
+  valid: 1.0,
+  missing: null,
+  null_model: null,
+  wrong_type: null,
+  wrong_model: null,
+  version: null,
+  compression: null,
+  min: null,
+  counts: null,
+  null_centroid: null,
+  missing_weight: null,
+  negative_weight: null,
+  bad_mean: null,
+}

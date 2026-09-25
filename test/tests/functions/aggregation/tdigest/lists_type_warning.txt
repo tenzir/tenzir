@@ -1,0 +1,34 @@
+warning: expected `int`, `uint`, or `float`, got `string`; skipping these values
+ --> tests/functions/aggregation/tdigest/lists_type_warning.tql:3:13
+  |
+3 | m = tdigest(xs, compression=20)
+  |             ~~
+  |
+{
+  input_count: 2,
+  count: 0,
+  null_count: 0,
+  min: null,
+  max: null,
+}
+{
+  input_count: 1,
+  count: 0,
+  null_count: 0,
+  min: null,
+  max: null,
+}
+{
+  input_count: 3,
+  count: 1,
+  null_count: 1,
+  min: 7.0,
+  max: 7.0,
+}
+{
+  input_count: 2,
+  count: 1,
+  null_count: 0,
+  min: 9.0,
+  max: 9.0,
+}

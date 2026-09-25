@@ -1,0 +1,60 @@
+{
+  key: "a",
+  count: 1,
+  nulls: 0,
+  cardinality: 1,
+  p50: 1.0,
+  cdf: 1.0,
+  q: 1.0,
+  m: 1.0,
+}
+{
+  key: "b",
+  count: 1,
+  nulls: 0,
+  cardinality: 1,
+  p50: 10.0,
+  cdf: 0.5,
+  q: 10.0,
+  m: 10.0,
+}
+{
+  key: "a",
+  count: 2,
+  nulls: 0,
+  cardinality: 2,
+  p50: 1.0,
+  cdf: 1.0,
+  q: 3.0,
+  m: 1.0,
+}
+{
+  key: "b",
+  count: 2,
+  nulls: 0,
+  cardinality: 2,
+  p50: 10.0,
+  cdf: 0.25,
+  q: 20.0,
+  m: 10.0,
+}
+{
+  key: "a",
+  count: 3,
+  nulls: 0,
+  cardinality: 2,
+  p50: 1.0,
+  cdf: 1.0,
+  q: 3.0,
+  m: 1.0,
+}
+{
+  key: "b",
+  count: 2,
+  nulls: 1,
+  cardinality: 2,
+  p50: 10.0,
+  cdf: 0.25,
+  q: 20.0,
+  m: 10.0,
+}

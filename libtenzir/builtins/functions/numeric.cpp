@@ -15,6 +15,7 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/aggregation/statistics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -612,10 +613,133 @@ private:
   detail::tdigest digest_;
 };
 
-class quantile final : public aggregation_plugin {
+struct QuantileArgs {
+  nova::ValueArgument x;
+  located<double> q{0.5, location::unknown};
+  located<int64_t> delta{100, location::unknown};
+  located<int64_t> buffer_size{500, location::unknown};
+};
+
+class Quantile {
+public:
+  explicit Quantile(QuantileArgs const& args)
+    : q_{args.q.inner},
+      digest_{static_cast<uint32_t>(args.delta.inner),
+              static_cast<uint32_t>(args.buffer_size.inner)} {
+  }
+
+  template <class T>
+  auto add(T value) -> void {
+    digest_.finite_add(nova_statistics::to_double(value));
+  }
+
+  auto get(nova_statistics::NumericKind const& kind) const -> nova::Data {
+    using enum nova_statistics::NumericKind::Kind;
+    if (kind.kind() == none or kind.kind() == failed or digest_.is_empty()) {
+      return nova::Data{};
+    }
+    auto value = digest_.quantile(q_);
+    if (kind.kind() == duration) {
+      // The floating-point sketch can round the largest duration up to 2^63.
+      // Clamp before narrowing to avoid an out-of-range floating conversion.
+      constexpr auto min = std::numeric_limits<nova::Duration::rep>::min();
+      constexpr auto max = std::numeric_limits<nova::Duration::rep>::max();
+      if (value <= static_cast<double>(min)) {
+        return nova::Data{nova::Duration{min}};
+      }
+      if (value >= static_cast<double>(max)) {
+        return nova::Data{nova::Duration{max}};
+      }
+      return nova::Data{
+        nova::Duration{static_cast<nova::Duration::rep>(value)}};
+    }
+    return nova::Data{value};
+  }
+
+  auto reset() -> void {
+    digest_.reset();
+  }
+
+private:
+  double q_;
+  detail::tdigest digest_;
+};
+
+class QuantileFunction {
+public:
+  static auto eval(QuantileArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova_statistics::eval_statistic<Quantile>(args.x, frame, true, [&] {
+      return Quantile{args};
+    });
+  }
+
+  auto update(QuantileArgs const& args, nova::EvalFrame frame) -> void {
+    if (not quantile_) {
+      quantile_.emplace(args);
+    }
+    kind_.visit(args.x.data, frame.mask(), args.x.source, frame,
+                [&](auto value) {
+                  quantile_->add(value);
+                });
+  }
+
+  auto get() const -> nova::Data {
+    return quantile_ ? quantile_->get(kind_) : nova::Data{};
+  }
+
+  auto reset() -> void {
+    kind_ = nova_statistics::NumericKind{};
+    if (quantile_) {
+      quantile_->reset();
+    }
+  }
+
+private:
+  nova_statistics::NumericKind kind_;
+  Option<Quantile> quantile_;
+};
+
+auto describe_quantile(bool median) -> nova::AggregationDescription {
+  auto d = nova::AggregationDescriber<QuantileArgs, QuantileFunction>{};
+  d.positional(median ? "value" : "x", &QuantileArgs::x, "number|duration");
+  if (not median) {
+    d.named_optional("q", &QuantileArgs::q);
+  }
+  d.named_optional("_delta", &QuantileArgs::delta);
+  d.named_optional("_buffer_size", &QuantileArgs::buffer_size);
+  d.validate(
+    [](QuantileArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+      if (not std::isfinite(args.q.inner) or args.q.inner < 0.0
+          or args.q.inner > 1.0) {
+        diagnostic::error("expected quantile to be in [0.0, 1.0]")
+          .primary(args.q)
+          .emit(dh);
+        return failure::promise();
+      }
+      for (auto [name, arg] : {std::pair{"delta", args.delta},
+                               std::pair{"buffer size", args.buffer_size}}) {
+        if (arg.inner < 0 or arg.inner > std::numeric_limits<uint32_t>::max()) {
+          diagnostic::error("expected {} to fit in a uint32", name)
+            .primary(arg)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+      return {};
+    });
+  return std::move(d).finish();
+}
+
+class quantile final : public aggregation_plugin,
+                       public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "quantile";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    return describe_quantile(false);
   }
 
   auto is_deterministic() const -> bool final {
@@ -679,10 +803,14 @@ public:
   }
 };
 
-class median final : public aggregation_plugin {
+class median final : public aggregation_plugin, public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "median";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    return describe_quantile(true);
   }
 
   auto is_deterministic() const -> bool final {

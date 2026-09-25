@@ -4,3 +4,5 @@ error: `precision` must be in [4, 18]
 7 | model = hll([1], precision=3)
   |                            ^
   |
+  = usage: hll(x:any, [precision=int])
+  = docs: https://tenzir.com/docs/reference/functions/hll

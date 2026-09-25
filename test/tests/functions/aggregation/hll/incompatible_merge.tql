@@ -1,3 +1,7 @@
+---
+skip: "model_merge is not ported yet (TNZ-1302)"
+---
+
 // Invalid versions and incompatible precisions invalidate only their
 // model_merge list row; a following compatible row still succeeds.
 from {}

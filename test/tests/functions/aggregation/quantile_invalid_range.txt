@@ -1,0 +1,8 @@
+error: expected quantile to be in [0.0, 1.0]
+ --> tests/functions/aggregation/quantile_invalid_range.tql:6:32
+  |
+6 | summarize result=quantile(x, q=1.1)
+  |                                ^^^
+  |
+  = usage: quantile(x:number|duration, [q=number])
+  = docs: https://tenzir.com/docs/reference/functions/quantile

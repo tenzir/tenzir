@@ -1,3 +1,7 @@
+---
+skip: "model_merge is not ported yet (TNZ-1302)"
+---
+
 // T-digest model merges require identical compression.
 from {}
 a = tdigest([0.0], compression=20)

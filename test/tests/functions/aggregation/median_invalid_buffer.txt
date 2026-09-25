@@ -1,0 +1,8 @@
+error: expected buffer size to fit in a uint32
+ --> tests/functions/aggregation/median_invalid_buffer.tql:6:40
+  |
+6 | select result=median([1], _buffer_size=4294967296)
+  |                                        ^^^^^^^^^^
+  |
+  = usage: median(value:number|duration)
+  = docs: https://tenzir.com/docs/reference/functions/median

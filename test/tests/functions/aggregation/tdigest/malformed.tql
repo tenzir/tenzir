@@ -1,0 +1,13 @@
+from {}
+m = tdigest([1, 2], compression=20)
+select valid=tdigest_quantile(m, 0.5), missing=tdigest_quantile({foo: 1}, 0.5),
+  null_model=tdigest_cdf(null, 1), wrong_type=tdigest_cdf("bad", 1),
+  wrong_model=tdigest_quantile({...m, model: "hll"}, 0.5),
+  version=tdigest_quantile({...m, version: 2}, 0.5),
+  compression=tdigest_quantile({...m, compression: 4294967296}, 0.5),
+  min=tdigest_cdf({...m, min: null}, 1),
+  counts=tdigest_cdf({...m, count: 99}, 1),
+  null_centroid=tdigest_cdf({...m, centroids: [null]}, 1),
+  missing_weight=tdigest_cdf({...m, centroids: [{mean: 1.5}]}, 1),
+  negative_weight=tdigest_cdf({...m, centroids: [{mean: 1.5, weight: -1}]}, 1),
+  bad_mean=tdigest_cdf({...m, centroids: [{mean: "nan".float(), weight: 2}]}, 1)

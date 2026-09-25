@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+select result=quantile([1], q="nan".float())
