@@ -79,9 +79,6 @@ private:
 /// The element rows belonging to the rows of `shape` selected by `mask`.
 auto expand_mask(storage::BitMap const& mask, storage::ListStorage const& shape)
   -> storage::BitMap {
-  if (shape.values().length() == 0) {
-    return storage::BitMap{0, false};
-  }
   if (auto constant = mask.as_constant()) {
     return storage::BitMap{shape.values().length(), *constant};
   }
@@ -215,8 +212,23 @@ auto EvalFrame::eval(LambdaArgument const& lambda,
 auto EvalFrame::eval_elements(LambdaArgument const& lambda,
                               storage::ListStorage const& list) const
   -> Array<Data> {
+  return eval_selected_elements(lambda, list, expand_mask(mask(), list));
+}
+
+auto EvalFrame::eval_elements(LambdaArgument const& lambda,
+                              storage::ListStorage const& list,
+                              storage::BitMap const& elements) const
+  -> Array<Data> {
+  TENZIR_ASSERT_EQ(elements.length(), list.values().length());
+  return eval_selected_elements(lambda, list,
+                                expand_mask(mask(), list) & elements);
+}
+
+auto EvalFrame::eval_selected_elements(LambdaArgument const& lambda,
+                                       storage::ListStorage const& list,
+                                       storage::BitMap elements) const
+  -> Array<Data> {
   TENZIR_ASSERT(lambda);
-  auto elements = expand_mask(mask(), list);
   auto subject = MaskedArray<Array<Data>>{list.values(), elements};
   // Element space, not row space: the result has one row per list element,
   // so it is sized by `list.values()`, never by this frame's length.

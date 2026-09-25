@@ -4,3 +4,5 @@ error: expected `method` to be `moment` or `bowley`, got `pearson`
 6 | summarize skew=skewness(x, method="pearson")
   |                                   ^^^^^^^^^
   |
+  = usage: skewness(x:number|duration, [method=string])
+  = docs: https://tenzir.com/docs/reference/functions/skewness

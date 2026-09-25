@@ -16,9 +16,17 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/hash/hash.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/multi_series.hpp>
+#include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/union_array.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
@@ -41,6 +49,7 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <limits>
 #include <numeric>
 #include <ranges>
 #include <span>
@@ -755,25 +764,26 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
       }
     }
   };
-  auto add_aggregate = [&](Option<ast::field_path> dest,
-                           ast::function_call call) {
-    auto* fn = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(call));
-    if (not fn) {
-      diagnostic::error("function does not support aggregations")
-        .primary(call.fn)
-        .hint("if you want to group by this, use assignment before")
-        .docs("https://tenzir.com/docs/operators/summarize")
-        .emit(ctx);
-      failed = true;
-      return;
-    }
-    // Argument validation via make_aggregation is intentionally deferred:
-    // args may contain unresolved let-bindings when called from compile().
-    // SummarizeIr validates them after substituting let bindings.
-    auto index = detail::narrow<int64_t>(config.aggregates.size());
-    config.indices.push_back(index);
-    config.aggregates.emplace_back(std::move(dest), std::move(call));
-  };
+  auto add_aggregate
+    = [&](Option<ast::field_path> dest, ast::function_call call) {
+        auto const& fn = ctx.reg().get(call);
+        if (not dynamic_cast<aggregation_plugin const*>(&fn)
+            and not dynamic_cast<nova::AggregationPlugin const*>(&fn)) {
+          diagnostic::error("function does not support aggregations")
+            .primary(call.fn)
+            .hint("if you want to group by this, use assignment before")
+            .docs("https://tenzir.com/docs/operators/summarize")
+            .emit(ctx);
+          failed = true;
+          return;
+        }
+        // Argument validation via make_aggregation is intentionally deferred:
+        // args may contain unresolved let-bindings when called from compile().
+        // SummarizeIr validates them after substituting let bindings.
+        auto index = detail::narrow<int64_t>(config.aggregates.size());
+        config.indices.push_back(index);
+        config.aggregates.emplace_back(std::move(dest), std::move(call));
+      };
   auto add_group = [&](Option<ast::field_path> dest, ast::field_path expr) {
     auto index = -detail::narrow<int64_t>(config.groups.size()) - 1;
     config.indices.push_back(index);
@@ -842,21 +852,6 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
     return failure::promise();
   }
   return config;
-}
-
-/// Validates each aggregate's arguments by calling make_aggregation with the
-/// fully-resolved function-call AST. Must be called after all let-binding
-/// references have been substituted so that const_eval inside the argument
-/// parsers can evaluate every argument to a concrete value.
-auto validate_aggregates(Config const& config, session ctx)
-  -> failure_or<void> {
-  for (auto const& aggr : config.aggregates) {
-    auto const* fn
-      = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(aggr.call));
-    TENZIR_ASSERT(fn); // already verified as aggregation_plugin in build_config
-    TRY(fn->make_aggregation(function_invocation{aggr.call}, ctx));
-  }
-  return {};
 }
 
 /// The smallest accepted timer interval. The timer catch-up loop in
@@ -1298,6 +1293,713 @@ private:
   mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
 };
 
+// ---------------------------------------------------------------------------
+// Nova implementation
+// ---------------------------------------------------------------------------
+
+/// A materialized group key.
+struct NovaGroupKey : std::vector<nova::Data> {
+  using vector::vector;
+};
+
+/// A group key that borrows one row of the evaluated group columns.
+struct NovaGroupKeyView : std::vector<nova::RowView<nova::Data>> {
+  using vector::vector;
+};
+
+auto materialize(NovaGroupKeyView const& views) -> NovaGroupKey {
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  auto result = NovaGroupKey{};
+  result.reserve(views.size());
+  for (auto const& view : views) {
+    nova::append_row(builder, view);
+    result.push_back(builder.take_last());
+  }
+  return result;
+}
+
+template <class Key>
+concept nova_group_key = concepts::one_of<Key, NovaGroupKey, NovaGroupKeyView>;
+
+struct NovaGroupKeyHash {
+  using is_transparent = void;
+
+  /// Combines the value hashes like `nova::hash_rows`, so that hashes of
+  /// whole key columns can be used for lookups.
+  template <nova_group_key Key>
+  auto operator()(Key const& key) const noexcept -> uint64_t {
+    auto result = uint64_t{0};
+    for (auto const& value : key) {
+      result = tenzir::hash(result, static_cast<uint64_t>(nova::hash(
+                                      nova::RowView<nova::Data>{value})));
+    }
+    return result;
+  }
+};
+
+struct NovaGroupKeyEqual {
+  using is_transparent = void;
+
+  template <nova_group_key Lhs, nova_group_key Rhs>
+  auto operator()(Lhs const& lhs, Rhs const& rhs) const -> bool {
+    return std::ranges::equal(lhs, rhs, [](auto const& x, auto const& y) {
+      return nova::equivalent(nova::RowView<nova::Data>{x},
+                              nova::RowView<nova::Data>{y});
+    });
+  }
+};
+
+/// The aggregation states of one group.
+struct NovaBucket {
+  NovaGroupKey key;
+  std::vector<Box<nova::AggregationState>> states;
+  /// The aggregates for final event replay, populated once the input ended.
+  Option<std::vector<nova::Data>> final_values;
+};
+
+/// Writes `value` into `root` at the path described by `sel`.
+auto emplace_value(nova::Record& root, ast::field_path const& sel,
+                   nova::Data value) -> void {
+  if (sel.path().empty()) {
+    // As in the legacy implementation, only a record can replace `this`.
+    if (auto* record = std::get_if<nova::Record>(&value)) {
+      root = std::move(*record);
+    }
+    return;
+  }
+  auto* current = &root;
+  for (auto const& segment : sel.path()) {
+    auto& field = (*current)[segment.id.name];
+    if (&segment == &sel.path().back()) {
+      field = std::move(value);
+      return;
+    }
+    current = std::get_if<nova::Record>(&field);
+    if (not current) {
+      field = nova::Record{};
+      current = std::get_if<nova::Record>(&field);
+    }
+  }
+}
+
+/// Assigns `column` to `dest` in the active rows of `events`. `source` is
+/// where the aggregate was called, for diagnostics.
+auto assign_column(ast::field_path const& dest, nova::Array<nova::Data> column,
+                   location source, nova::Events events, diagnostic_handler& dh)
+  -> nova::Events {
+  auto value = nova::MaskedArray<nova::Array<nova::Data>>{std::move(column),
+                                                          events.mask};
+  if (dest.path().empty()) {
+    // Like `set this = ...`: rows whose aggregate is not a record become
+    // empty records.
+    events.data
+      = nova::records_or_empty(std::move(value), events.length(), source, dh);
+    return events;
+  }
+  events.data = nova::assign_nested_field(std::move(events.data), dest.path(),
+                                          std::move(value), dh);
+  return events;
+}
+
+class NovaAggregationState {
+public:
+  NovaAggregationState(Config config, std::vector<nova::Evaluator> groups,
+                       std::vector<Box<nova::Aggregation>> aggregations)
+    : config_{std::move(config)},
+      groups_{std::move(groups)},
+      aggregations_{std::move(aggregations)} {
+    TENZIR_ASSERT(groups_.size() == config_.groups.size());
+    TENZIR_ASSERT(aggregations_.size() == config_.aggregates.size());
+  }
+
+  auto config() const -> Config const& {
+    return config_;
+  }
+
+  auto saw_input() const noexcept -> bool {
+    return saw_input_;
+  }
+
+  /// Folds the active rows of `events` into their groups.
+  auto add(nova::Events const& events, diagnostic_handler& dh) -> void {
+    saw_input_ = true;
+    if (not events.mask.any()) {
+      return;
+    }
+    auto ctx = nova::EvalCtx{dh};
+    if (config_.groups.empty()) {
+      auto& bucket = bucket_for(NovaGroupKeyView{});
+      for (auto [aggregation, state] :
+           std::views::zip(aggregations_, bucket.states)) {
+        aggregation->update(events, *state, ctx);
+      }
+      return;
+    }
+    auto const columns = eval_groups(events, ctx);
+    auto const active = static_cast<size_t>(events.mask.true_count());
+    // Hash every key column once, instead of hashing each row's key through
+    // the erased value during the lookup.
+    auto hashes = std::vector<uint64_t>(active, 0);
+    for (auto const& column : columns) {
+      nova::hash_rows(column, events.mask, hashes);
+    }
+    // Assign every active row to its group, recording the groups in the order
+    // in which the batch first mentions them. That order determines the order
+    // in which new groups are emitted.
+    auto touched = std::vector<size_t>{};
+    auto row_slots = std::vector<size_t>{};
+    row_slots.reserve(active);
+    auto key = NovaGroupKeyView{};
+    key.reserve(columns.size());
+    auto previous = Option<size_t>{};
+    auto previous_hash = uint64_t{0};
+    auto i = size_t{0};
+    for (auto row : nova::storage::true_bits(events.mask)) {
+      auto const hash = hashes[i++];
+      key.clear();
+      for (auto const& column : columns) {
+        key.push_back(column.get(row));
+      }
+      // Comparing against the previous row's key avoids the lookup for inputs
+      // that are clustered by key.
+      auto const index
+        = previous and hash == previous_hash
+              and NovaGroupKeyEqual{}(key, buckets_[*previous].key)
+            ? *previous
+            : bucket_index(key, hash);
+      previous = index;
+      previous_hash = hash;
+      slots_.resize(buckets_.size(), no_slot);
+      if (slots_[index] == no_slot) {
+        slots_[index] = touched.size();
+        touched.push_back(index);
+      }
+      row_slots.push_back(slots_[index]);
+    }
+    for (auto index : touched) {
+      slots_[index] = no_slot;
+    }
+    // A batch that belongs to one group folds all of its active rows at once.
+    if (touched.size() == 1) {
+      auto& bucket = buckets_[touched.front()];
+      for (auto [aggregation, state] :
+           std::views::zip(aggregations_, bucket.states)) {
+        aggregation->update(events, *state, ctx);
+      }
+      return;
+    }
+    // Sort the rows by group into one flat buffer, with a counting sort that
+    // is stable: rows keep their relative order within a group, which
+    // order-sensitive aggregations such as `first` and `collect` observe.
+    auto offsets = std::vector<size_t>(touched.size() + 1, 0);
+    for (auto slot : row_slots) {
+      ++offsets[slot + 1];
+    }
+    std::partial_sum(offsets.begin(), offsets.end(), offsets.begin());
+    auto sorted = std::vector<nova::storage::Index>(active);
+    auto cursors = offsets;
+    i = 0;
+    for (auto row : nova::storage::true_bits(events.mask)) {
+      sorted[cursors[row_slots[i++]]++] = row;
+    }
+    auto groups = std::vector<nova::AggregationGroup>{};
+    groups.reserve(touched.size());
+    for (auto a = size_t{0}; a < aggregations_.size(); ++a) {
+      groups.clear();
+      for (auto slot = size_t{0}; slot < touched.size(); ++slot) {
+        groups.push_back({
+          *buckets_[touched[slot]].states[a],
+          std::span{sorted}.subspan(offsets[slot],
+                                    offsets[slot + 1] - offsets[slot]),
+        });
+      }
+      aggregations_[a]->update(events, groups, ctx);
+    }
+  }
+
+  /// Emits one output row per active input row, carrying the aggregates of
+  /// that row's group after folding it in.
+  auto add_events(nova::Events const& events, diagnostic_handler& dh)
+    -> nova::Events {
+    saw_input_ = true;
+    if (config_.aggregates.empty() or not events.mask.any()) {
+      return events;
+    }
+    auto ctx = nova::EvalCtx{dh};
+    auto builders
+      = std::vector<nova::ArrayBuilder<nova::Data>>(config_.aggregates.size());
+    auto const append
+      = [&](nova::storage::Index row, NovaBucket& bucket, bool reset) {
+          auto single = nova::subslice(events, row, row + 1);
+          for (auto [aggregation, state, builder] :
+               std::views::zip(aggregations_, bucket.states, builders)) {
+            aggregation->update(single, *state, ctx);
+            builder.skip_n(row - builder.length());
+            nova::append_data(builder, state->get());
+            if (reset) {
+              state->reset();
+            }
+          }
+        };
+    if (config_.mode == Mode::reset) {
+      // Per-event reset never carries state across rows, so group keys are
+      // irrelevant: reuse one scratch bucket and reset it after every row.
+      if (not scratch_) {
+        scratch_ = make_bucket(NovaGroupKey{});
+      }
+      for (auto row : nova::storage::true_bits(events.mask)) {
+        append(row, *scratch_, true);
+      }
+    } else {
+      TENZIR_ASSERT(config_.mode == Mode::cumulative);
+      auto const columns = eval_groups(events, ctx);
+      auto key = NovaGroupKeyView{};
+      key.reserve(columns.size());
+      for (auto row : nova::storage::true_bits(events.mask)) {
+        key.clear();
+        for (auto const& column : columns) {
+          key.push_back(column.get(row));
+        }
+        append(row, buckets_[bucket_index(key)], false);
+      }
+    }
+    return assign_aggregates(events, std::move(builders), dh);
+  }
+
+  /// Adds the current aggregates of each active row's group to `events`.
+  /// Every group must already exist.
+  auto enrich(nova::Events const& events, diagnostic_handler& dh)
+    -> nova::Events {
+    if (config_.aggregates.empty() or not events.mask.any()) {
+      return events;
+    }
+    auto ctx = nova::EvalCtx{dh};
+    auto const columns = eval_groups(events, ctx);
+    auto builders
+      = std::vector<nova::ArrayBuilder<nova::Data>>(config_.aggregates.size());
+    auto key = NovaGroupKeyView{};
+    key.reserve(columns.size());
+    for (auto row : nova::storage::true_bits(events.mask)) {
+      key.clear();
+      for (auto const& column : columns) {
+        key.push_back(column.get(row));
+      }
+      auto it = index_.find(key);
+      TENZIR_ASSERT(it != index_.end());
+      auto const& bucket = buckets_[it->second];
+      for (auto i = size_t{0}; i < builders.size(); ++i) {
+        builders[i].skip_n(row - builders[i].length());
+        if (config_.output == Output::events) {
+          TENZIR_ASSERT(bucket.final_values);
+          nova::append_data(builders[i], (*bucket.final_values)[i]);
+        } else {
+          nova::append_data(builders[i], bucket.states[i]->get());
+        }
+      }
+    }
+    return assign_aggregates(events, std::move(builders), dh);
+  }
+
+  auto cache_final_values() -> void {
+    TENZIR_ASSERT(config_.output == Output::events);
+    for (auto& bucket : buckets_) {
+      TENZIR_ASSERT(not bucket.final_values);
+      auto values = std::vector<nova::Data>{};
+      values.reserve(bucket.states.size());
+      for (auto const& state : bucket.states) {
+        values.push_back(state->get());
+      }
+      bucket.final_values = std::move(values);
+    }
+  }
+
+  auto reset() -> void {
+    buckets_.clear();
+    index_.clear();
+    slots_.clear();
+    saw_input_ = false;
+  }
+
+  auto flush() -> Option<nova::Events> {
+    if (not saw_input_) {
+      return None{};
+    }
+    auto result = finish();
+    if (config_.mode == Mode::reset) {
+      reset();
+    }
+    return result;
+  }
+
+  /// One output row per group, in first-seen order.
+  auto finish() const -> Option<nova::Events> {
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    // Without groups and without input there is no bucket yet. A fresh one
+    // makes `from [] | summarize count()` return a count of zero.
+    if (config_.groups.empty() and buckets_.empty()) {
+      append_group(builder, make_bucket(NovaGroupKey{}));
+    }
+    for (auto const& bucket : buckets_) {
+      append_group(builder, bucket);
+    }
+    auto const length = builder.length();
+    if (length == 0) {
+      return None{};
+    }
+    return nova::Events{
+      builder.finish(),
+      nova::storage::BitMap{length, true},
+      nova::Events::Meta::make_empty(length, "tenzir.summarize"),
+    };
+  }
+
+private:
+  static constexpr auto no_slot = std::numeric_limits<size_t>::max();
+
+  auto eval_groups(nova::Events const& events, nova::EvalCtx ctx)
+    -> std::vector<nova::Array<nova::Data>> {
+    auto result = std::vector<nova::Array<nova::Data>>{};
+    result.reserve(groups_.size());
+    for (auto& group : groups_) {
+      result.push_back(group.eval(events, ctx));
+    }
+    return result;
+  }
+
+  auto make_bucket(NovaGroupKey key) const -> NovaBucket {
+    auto bucket = NovaBucket{std::move(key), {}, None{}};
+    bucket.states.reserve(aggregations_.size());
+    for (auto const& aggregation : aggregations_) {
+      bucket.states.push_back(aggregation->make_state());
+    }
+    return bucket;
+  }
+
+  /// The index of the bucket for `key`, creating it if necessary.
+  auto bucket_index(NovaGroupKeyView const& key) -> size_t {
+    return bucket_index(key, NovaGroupKeyHash{}(key));
+  }
+
+  /// As above, for a key whose `NovaGroupKeyHash` is already known.
+  auto bucket_index(NovaGroupKeyView const& key, uint64_t hash) -> size_t {
+    auto it = index_.find(key, hash);
+    if (it != index_.end()) {
+      return it->second;
+    }
+    auto const index = buckets_.size();
+    auto materialized = materialize(key);
+    index_.emplace(materialized, index);
+    buckets_.push_back(make_bucket(std::move(materialized)));
+    return index;
+  }
+
+  auto bucket_for(NovaGroupKeyView const& key) -> NovaBucket& {
+    return buckets_[bucket_index(key)];
+  }
+
+  auto assign_aggregates(nova::Events events,
+                         std::vector<nova::ArrayBuilder<nova::Data>> builders,
+                         diagnostic_handler& dh) const -> nova::Events {
+    auto const length = events.length();
+    for (auto [aggregate, builder] :
+         std::views::zip(config_.aggregates, builders)) {
+      builder.skip_n(length - builder.length());
+      events
+        = assign_column(aggregate_destination(aggregate), builder.finish(),
+                        aggregate.call.get_location(), std::move(events), dh);
+    }
+    return events;
+  }
+
+  auto append_group(nova::ArrayBuilder<nova::Record>& builder,
+                    NovaBucket const& bucket) const -> void {
+    auto result = nova::Record{};
+    for (auto index : config_.indices) {
+      if (index >= 0) {
+        auto const& aggregate = config_.aggregates[index];
+        auto value = bucket.final_values ? (*bucket.final_values)[index]
+                                         : bucket.states[index]->get();
+        if (aggregate.dest) {
+          emplace_value(result, *aggregate.dest, std::move(value));
+        } else {
+          result[aggregate_name(aggregate)] = std::move(value);
+        }
+      } else {
+        auto const group_index = static_cast<size_t>(-index - 1);
+        auto const& group = config_.groups[group_index];
+        emplace_value(result, group.dest ? *group.dest : group.expr,
+                      bucket.key[group_index]);
+      }
+    }
+    auto record = builder.record();
+    for (auto const& [name, value] : result) {
+      nova::append_data(record.field(name), value);
+    }
+  }
+
+  Config config_;
+  /// The evaluators of the group-by keys, in the order of `config_.groups`.
+  std::vector<nova::Evaluator> groups_;
+  /// The prepared aggregations, in the order of `config_.aggregates`. Every
+  /// bucket holds one state for each.
+  std::vector<Box<nova::Aggregation>> aggregations_;
+  /// The groups in first-seen order.
+  std::vector<NovaBucket> buckets_;
+  tsl::robin_map<NovaGroupKey, size_t, NovaGroupKeyHash, NovaGroupKeyEqual>
+    index_;
+  /// Per bucket, its slot among the groups of the batch being added, or
+  /// `no_slot`. Kept across batches to avoid reallocating it.
+  std::vector<size_t> slots_;
+  /// The bucket for per-event emission in reset mode.
+  Option<NovaBucket> scratch_;
+  bool saw_input_ = false;
+};
+
+class SummarizeNova final : public Operator<nova::Events, nova::Events> {
+public:
+  SummarizeNova(Config config, location self)
+    : config_{std::move(config)}, self_{self} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    // TODO: Support checkpointing once nova aggregation states can be
+    // serialized.
+    if (ctx.checkpoint_settings()) {
+      done_ = true;
+      diagnostic::error(
+        "`summarize` does not support checkpointing with `--nova` yet")
+        .primary(self_)
+        .emit(ctx);
+      co_return;
+    }
+    auto ictx = nova::InstantiateCtx{ctx.dh(), ctx.reg()};
+    auto groups = std::vector<nova::Evaluator>{};
+    groups.reserve(config_.groups.size());
+    for (auto const& group : config_.groups) {
+      auto evaluator = nova::Evaluator::make(group.expr.inner(), ictx);
+      if (not evaluator) {
+        done_ = true;
+        co_return;
+      }
+      groups.push_back(std::move(*evaluator));
+    }
+    auto aggregations = std::vector<Box<nova::Aggregation>>{};
+    aggregations.reserve(config_.aggregates.size());
+    for (auto const& aggregate : config_.aggregates) {
+      auto aggregation
+        = nova::Aggregation::make(ast::expression{aggregate.call}, ictx);
+      if (not aggregation) {
+        done_ = true;
+        co_return;
+      }
+      aggregations.push_back(std::move(*aggregation));
+    }
+    state_.emplace(config_, std::move(groups), std::move(aggregations));
+    if (config_.emission == Emission::timer) {
+      TENZIR_ASSERT(config_.emit_interval);
+      auto emit_interval = *config_.emit_interval;
+      ctx.spawn_task([emit_interval, frontier_queue = frontier_queue_,
+                      tick_queue = tick_queue_]() mutable -> Task<void> {
+        auto next_flush = co_await frontier_queue->dequeue();
+        while (true) {
+          while (auto frontier = frontier_queue->try_dequeue()) {
+            next_flush = std::max(next_flush, *frontier);
+          }
+          co_await sleep_until(next_flush);
+          co_await tick_queue->enqueue(TimerTick{next_flush});
+          next_flush = detail::saturating_add(next_flush, emit_interval);
+        }
+      });
+    }
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (done_ or not input.mask.any()) {
+      co_return;
+    }
+    if (config_.output == Output::events) {
+      if (not config_.aggregates.empty()) {
+        state_->add(input, ctx.dh());
+      }
+      buffered_bytes_ = detail::saturating_add(
+        buffered_bytes_, static_cast<uint64_t>(input.approx_bytes()));
+      buffered_.push_back(std::move(input));
+      warn_about_buffering(ctx);
+      co_return;
+    }
+    if (config_.emission == Emission::event) {
+      auto const emit_every = config_.emit_every;
+      TENZIR_ASSERT(emit_every > 0);
+      if (emit_every == 1) {
+        co_await push(state_->add_events(input, ctx.dh()));
+        co_return;
+      }
+      // Batches are counted in active rows, which need not be contiguous.
+      auto remaining = input.mask;
+      while (remaining.any()) {
+        auto batch = input;
+        batch.mask = remaining.keep_first(emit_every - events_since_emit_);
+        remaining = std::move(remaining).and_not(batch.mask);
+        if (not config_.aggregates.empty()) {
+          state_->add(batch, ctx.dh());
+        }
+        events_since_emit_ += batch.mask.true_count();
+        auto last = nova::storage::Index{0};
+        nova::storage::for_each_true(batch.mask, [&](auto row) {
+          last = row;
+        });
+        pending_event_ = nova::subslice(input, last, last + 1);
+        if (events_since_emit_ == emit_every) {
+          co_await push(state_->enrich(*pending_event_, ctx.dh()));
+          if (config_.mode == Mode::reset) {
+            state_->reset();
+          }
+          events_since_emit_ = 0;
+          pending_event_ = None{};
+        }
+      }
+      co_return;
+    }
+    if (config_.emission == Emission::timer) {
+      co_await flush_until(steady_clock::now(), push);
+      if (not next_flush_) {
+        arm_timer(*config_.emit_interval);
+      }
+    }
+    state_->add(input, ctx.dh());
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (done_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (config_.output == Output::events) {
+      state_->cache_final_values();
+      for (auto const& events : buffered_) {
+        co_await push(state_->enrich(events, ctx.dh()));
+      }
+      co_return FinalizeBehavior::done;
+    }
+    if (config_.emission == Emission::event) {
+      if (pending_event_) {
+        co_await push(state_->enrich(*pending_event_, ctx.dh()));
+      }
+      co_return FinalizeBehavior::done;
+    }
+    // An empty input still produces the neutral aggregate result. Suppress
+    // finalization only when an active reset timer already flushed all pending
+    // rows, which avoids adding a synthetic empty interval at end-of-input.
+    if (config_.emission == Emission::timer and not state_->saw_input()
+        and next_flush_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (auto output = state_->finish()) {
+      co_await push(std::move(*output));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (config_.emission != Emission::timer) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return co_await tick_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto* tick = result.try_as<TimerTick>();
+    TENZIR_ASSERT(tick);
+    co_await flush_until(tick->deadline, push);
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // `start` rejects checkpointing, so there is never a snapshot to take.
+  }
+
+private:
+  struct TimerTick {
+    steady_clock::time_point deadline;
+  };
+
+  using FrontierQueue = BoundedQueue<steady_clock::time_point>;
+  using TickQueue = folly::coro::BoundedQueue<TimerTick>;
+
+  auto publish_frontier(steady_clock::time_point frontier) -> void {
+    // Drop a stale pending frontier, then publish the new one; see the legacy
+    // implementation for why racing with the timer task is harmless.
+    while (not frontier_queue_->try_enqueue(frontier)) {
+      std::ignore = frontier_queue_->try_dequeue();
+    }
+  }
+
+  auto arm_timer(duration delay) -> void {
+    TENZIR_ASSERT(not next_flush_);
+    next_flush_ = detail::saturating_add(steady_clock::now(), delay);
+    publish_frontier(*next_flush_);
+  }
+
+  auto warn_about_buffering(OpCtx& ctx) -> void {
+    using namespace si_literals;
+    static constexpr auto warning_threshold = uint64_t{512_Mi};
+    if (warned_about_buffering_ or buffered_bytes_ < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`summarize` buffered approximately {} MiB with "
+                        "`output: \"events\"`",
+                        buffered_bytes_ / 1_Mi)
+      .note("event output starts only after the finite input ends")
+      .hint("use `window` or reduce the input population to bound memory use")
+      .emit(ctx);
+    warned_about_buffering_ = true;
+  }
+
+  auto flush_until(steady_clock::time_point deadline, Push<nova::Events>& push)
+    -> Task<void> {
+    if (not next_flush_) {
+      co_return;
+    }
+    auto frontier_changed = false;
+    TENZIR_ASSERT(config_.emit_interval);
+    // One summary per elapsed interval; `min_emit_interval` bounds the work
+    // per unit of stalled time.
+    while (*next_flush_ <= deadline) {
+      frontier_changed = true;
+      if (auto output = state_->flush()) {
+        co_await push(std::move(*output));
+      }
+      *next_flush_
+        = detail::saturating_add(*next_flush_, *config_.emit_interval);
+    }
+    if (frontier_changed) {
+      publish_frontier(*next_flush_);
+    }
+  }
+
+  Config config_;
+  location self_;
+  Option<NovaAggregationState> state_;
+  bool done_ = false;
+  int64_t events_since_emit_ = 0;
+  Option<nova::Events> pending_event_;
+  std::vector<nova::Events> buffered_;
+  uint64_t buffered_bytes_ = 0;
+  bool warned_about_buffering_ = false;
+  Option<steady_clock::time_point> next_flush_;
+  Arc<FrontierQueue> frontier_queue_{std::in_place, 1};
+  mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
+};
+
 class SummarizeIr final : public ir::Operator {
 public:
   SummarizeIr() = default;
@@ -1332,30 +2034,72 @@ public:
     if (config_.legacy_frequency_expr) {
       TRY(config_.legacy_frequency_expr->substitute(ctx));
     }
-    // Validate aggregation arguments and evaluate options only when
-    // instantiating, i.e., when all let-bindings are guaranteed to be
-    // resolved.  Both make_aggregation (for aggregates) and const_eval (for
-    // option values) require fully-resolved expressions to succeed.
+    // Constant options require fully-resolved let bindings. Aggregation
+    // arguments are validated during planning, once the input is known.
     if (instantiate) {
       auto provider = session_provider::make(ctx);
-      TRY(validate_aggregates(config_, provider.as_session()));
       TRY(evaluate_options(config_, provider.as_session()));
     }
     return {};
   }
 
   auto spawn(element_type_tag input) const -> AnyOperator override {
+    if (input.is<nova::Events>()) {
+      return SummarizeNova{config_, self_}.with_name("summarize");
+    }
     TENZIR_ASSERT(input.is<table_slice>());
     return Summarize{config_}.with_name("summarize");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
-    if (input.is_not<table_slice>()) {
+    if (input.is_not<nova::Events>() and input.is_not<table_slice>()) {
       diagnostic::error("operator expects events").primary(self_).emit(dh);
       return failure::promise();
     }
-    return tag_v<table_slice>;
+    auto const reg = global_registry();
+    for (auto const& aggregate : config_.aggregates) {
+      auto const& fn = reg->get(aggregate.call);
+      if (input.is<nova::Events>()) {
+        if (not dynamic_cast<nova::AggregationPlugin const*>(&fn)) {
+          diagnostic::error("`{}` does not support `--nova` yet",
+                            fn.function_name())
+            .primary(aggregate.call)
+            .emit(dh);
+          return failure::promise();
+        }
+      } else if (not dynamic_cast<aggregation_plugin const*>(&fn)) {
+        diagnostic::error("`{}` requires `--nova`", fn.function_name())
+          .primary(aggregate.call)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    return input;
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    auto input_type
+      = input.empty() ? element_type_tag{tag_v<void>} : input.front().type;
+    TRY(infer_type(input_type, dh));
+    // Type inference also probes uninstantiated pipelines. Planning happens
+    // after substitution, so constant arguments can be validated here without
+    // requiring lifecycle state in the operator.
+    auto provider = session_provider::make(dh);
+    auto ctx = provider.as_session();
+    for (auto const& aggregate : config_.aggregates) {
+      if (input_type.is<nova::Events>()) {
+        TRY(nova::Aggregation::make(ast::expression{aggregate.call},
+                                    nova::InstantiateCtx{ctx.dh(), ctx.reg()}));
+      } else {
+        auto const* legacy = dynamic_cast<aggregation_plugin const*>(
+          &ctx.reg().get(aggregate.call));
+        TENZIR_ASSERT(legacy);
+        TRY(legacy->make_aggregation(function_invocation{aggregate.call}, ctx));
+      }
+    }
+    return std::move(*this).ir::Operator::plan(builder, std::move(input), dh);
   }
 
   auto parallelizable() const -> bool override {

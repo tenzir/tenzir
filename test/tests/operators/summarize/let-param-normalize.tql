@@ -1,0 +1,3 @@
+let $normalize = true
+from {x: 1}, {x: 2}
+summarize result=entropy(x, normalize=$normalize)

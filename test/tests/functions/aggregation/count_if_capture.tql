@@ -1,0 +1,6 @@
+// The `count_if` predicate can capture fields of the enclosing event, both in
+// `summarize` and in a list call. Nulls never reach the predicate.
+from {k: "a", x: 1, t: 0}, {k: "a", x: 5, t: 2}, {k: "a", x: null, t: 2},
+  {k: "b", x: 3, t: 4}
+summarize k, above=count_if(x, v => v > t), xs=collect(x)
+above_one = xs.count_if(v => v > 1)

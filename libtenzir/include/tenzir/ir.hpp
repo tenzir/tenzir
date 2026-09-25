@@ -127,8 +127,10 @@ public:
 
   /// Return the output type of this operator for a given input type.
   ///
-  /// The operator is responsible to report any type mismatches. This is only
-  /// called after instantiation, so the output type is always determinable.
+  /// The operator is responsible to report any type mismatches. This can also
+  /// be called before instantiation to probe input and output types. Defer
+  /// validation that requires resolved argument values until instantiation or
+  /// planning.
   virtual auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag>
     = 0;

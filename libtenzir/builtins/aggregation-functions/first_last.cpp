@@ -10,6 +10,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -100,12 +101,88 @@ private:
   data result_ = {};
 };
 
+struct FirstLastArgs {
+  nova::ValueArgument x;
+};
+
+auto is_null(nova::RowView<nova::Data> const& value) -> bool {
+  return match(value, []<class Tag>(nova::RowView<Tag> const&) {
+    return std::same_as<Tag, nova::Null>;
+  });
+}
+
+/// The nova `first` and `last`: the first or last value that is not `null`.
 template <mode Mode>
-class plugin : public virtual aggregation_plugin {
+class FirstLastFunction final {
+public:
+  static auto eval(FirstLastArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::aggregate_lists(
+      args.x, frame,
+      [](nova::ListElements const& elements,
+         nova::ArrayBuilder<nova::Data>& builder) {
+        auto found = Option<nova::storage::Index>{};
+        for (auto i = elements.begin; i < elements.end; ++i) {
+          if (not is_null(elements.values.get(i))) {
+            found = i;
+            if constexpr (Mode == mode::first) {
+              break;
+            }
+          }
+        }
+        if (found) {
+          nova::append_row(builder, elements.values.get(*found));
+        } else {
+          builder.null();
+        }
+      });
+  }
+
+  auto update(FirstLastArgs const& args, nova::EvalFrame frame) -> void {
+    if (Mode == mode::first and result_) {
+      return;
+    }
+    auto found = Option<nova::storage::Index>{};
+    for (auto row : nova::storage::true_bits(frame.mask())) {
+      if (not is_null(args.x.data.get(row))) {
+        found = row;
+        if constexpr (Mode == mode::first) {
+          break;
+        }
+      }
+    }
+    // Materialize only the winner of the batch, not every candidate.
+    if (found) {
+      result_ = nova::to_data(args.x.data.get(*found));
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return result_ ? *result_ : nova::Data{};
+  }
+
+  auto reset() -> void {
+    result_ = None{};
+  }
+
+private:
+  Option<nova::Data> result_;
+};
+
+template <mode Mode>
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return Mode == mode::first ? "first" : "last";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d
+      = nova::AggregationDescriber<FirstLastArgs, FirstLastFunction<Mode>>{};
+    d.positional("x", &FirstLastArgs::x, "any");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

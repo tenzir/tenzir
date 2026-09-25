@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from []
+summarize result=quantile(x)

@@ -1,0 +1,16 @@
+warning: `once` received more than one event
+ --> tests/functions/aggregation/list_once.tql:3:13
+  |
+3 | select once=xs.once()
+  |             ~~
+  |
+  = hint: use an aggregation function to aggregate multiple values
+{
+  once: 42,
+}
+{
+  once: 1,
+}
+{
+  once: null,
+}

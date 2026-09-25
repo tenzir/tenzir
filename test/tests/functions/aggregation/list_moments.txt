@@ -1,0 +1,24 @@
+{
+  count: 2,
+  mean: 2.0,
+  stddev: 1.0,
+  sum: 4,
+}
+{
+  count: 2,
+  mean: 2s,
+  stddev: 1s,
+  sum: 4s,
+}
+{
+  count: 0,
+  mean: null,
+  stddev: null,
+  sum: null,
+}
+{
+  count: null,
+  mean: null,
+  stddev: null,
+  sum: null,
+}

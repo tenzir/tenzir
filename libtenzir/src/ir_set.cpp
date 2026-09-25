@@ -392,36 +392,6 @@ private:
   std::vector<ResolvedAssignment> dynamic_assignments_;
 };
 
-/// Extracts the `Array<Record>` alternative from `value`, falling back to an
-/// empty record of `length` rows if it isn't record-typed.
-auto extract_record_or_empty(nova::MaskedArray<nova::Array<nova::Data>> value,
-                             nova::storage::Index length, location rhs,
-                             diagnostic_handler& dh)
-  -> nova::Array<nova::Record> {
-  if (auto record = value.data.try_as<nova::Record>()) {
-    return std::move(*record);
-  }
-  auto result = nova::Array<nova::Record>::make_empty(length);
-  if (auto* u = try_as<nova::UnionArray>(value.data)) {
-    auto alt = u->get_alternative<nova::Record>();
-    if (alt) {
-      // The alternative spans every row, but only the rows in `present` are
-      // actually records; the others must become empty records here.
-      result = std::move(alt->data).empty_where(alt->present.make_inverted());
-    }
-    if (value.present.and_not(u->alternative_mask<nova::Record>())
-          .and_not(u->alternative_mask<nova::Null>())
-          .any()) {
-      diagnostic::warning("expected `record`").primary(rhs).emit(dh);
-    }
-    return result;
-  }
-  if (not value.data.try_as<nova::Null>()) {
-    diagnostic::warning("expected `record`").primary(rhs).emit(dh);
-  }
-  return result;
-}
-
 /// Returns the type name of the first row in `rows`, for diagnostics.
 auto first_kind(nova::Array<nova::Data> const& values,
                 nova::storage::BitMap const& rows) -> std::string_view {
@@ -626,8 +596,8 @@ public:
       }
       auto path = as<ast::field_path>(field.target).path();
       if (path.empty()) {
-        data = extract_record_or_empty(std::move(value), data.length(),
-                                       field.rhs_location, ctx.dh());
+        data = nova::records_or_empty(std::move(value), data.length(),
+                                      field.rhs_location, ctx.dh());
         continue;
       }
       data = nova::assign_nested_field(std::move(data), path, std::move(value),

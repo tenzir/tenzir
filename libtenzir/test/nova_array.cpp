@@ -8,6 +8,7 @@
 
 #include "tenzir/allocator.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/hash/hash.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -2333,6 +2334,63 @@ TEST("nova NaNs compare unequal") {
   auto rhs = ArrayBuilder<Data>{};
   rhs.data(-std::numeric_limits<double>::quiet_NaN());
   CHECK(not equal(lhs.finish().get(0), rhs.finish().get(0)));
+}
+
+TEST("nova NaNs are equivalent and hash alike") {
+  auto lhs = ArrayBuilder<Data>{};
+  lhs.data(std::numeric_limits<double>::quiet_NaN());
+  lhs.list().data(std::numeric_limits<double>::quiet_NaN());
+  lhs.record().field("a").data(std::numeric_limits<double>::quiet_NaN());
+  auto rhs = ArrayBuilder<Data>{};
+  rhs.data(-std::numeric_limits<double>::quiet_NaN());
+  rhs.list().data(-std::numeric_limits<double>::quiet_NaN());
+  rhs.record().field("a").data(-std::numeric_limits<double>::quiet_NaN());
+  auto const l = lhs.finish();
+  auto const r = rhs.finish();
+  for (auto i = storage::Index{0}; i < l.length(); ++i) {
+    CHECK(not equal(l.get(i), r.get(i)));
+    CHECK(equivalent(l.get(i), r.get(i)));
+    CHECK(equivalent(l.get(i), l.get(i)));
+    CHECK_EQUAL(hash(l.get(i)), hash(r.get(i)));
+  }
+  // Otherwise, `equivalent` agrees with `equal`.
+  auto other = ArrayBuilder<Data>{};
+  other.data(int64_t{1});
+  other.data(1.0);
+  other.data(std::numeric_limits<double>::quiet_NaN());
+  auto const o = other.finish();
+  CHECK(equivalent(o.get(0), o.get(1)));
+  CHECK(not equivalent(o.get(0), o.get(2)));
+}
+
+TEST("hash_rows combines per-row hashes of the selected rows") {
+  // A typed column and a union column, with an unselected row in between.
+  auto ints = ArrayBuilder<Data>{};
+  ints.data(int64_t{1});
+  ints.data(int64_t{2});
+  ints.data(int64_t{3});
+  auto mixed = ArrayBuilder<Data>{};
+  mixed.data(std::string_view{"a"});
+  mixed.data(2.0);
+  mixed.null();
+  auto const first = ints.finish();
+  auto const second = mixed.finish();
+  auto builder = storage::BitMap::Builder{};
+  builder.emplace_back(true);
+  builder.emplace_back(false);
+  builder.emplace_back(true);
+  auto const rows = std::move(builder).finish();
+  auto hashes = std::vector<uint64_t>(2, 0);
+  hash_rows(first, rows, hashes);
+  hash_rows(second, rows, hashes);
+  auto i = size_t{0};
+  for (auto row : {storage::Index{0}, storage::Index{2}}) {
+    auto expected
+      = tenzir::hash(uint64_t{0}, static_cast<uint64_t>(hash(first.get(row))));
+    expected
+      = tenzir::hash(expected, static_cast<uint64_t>(hash(second.get(row))));
+    CHECK_EQUAL(hashes[i++], expected);
+  }
 }
 
 TEST("empty structured constants and zero row field lookup") {

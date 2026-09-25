@@ -13,9 +13,9 @@
   count: 8,
   count_distinct: 4,
   distinct: [
-    3,
     1,
     2,
+    3,
     4,
   ],
 }

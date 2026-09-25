@@ -1,0 +1,8 @@
+// Assigning an aggregate to `this` in event output replaces each event with
+// its group's record; groups whose aggregate is not a record yield empty
+// records with a warning. `read_json` puts all rows into one batch, so the
+// aggregate column holds records and scalars at once.
+from_file f"{env("TENZIR_INPUTS")}/json/record-or-scalar.ndjson" {
+  read_json
+}
+summarize k, this=first(x), options={output: "events"}

@@ -39,6 +39,12 @@ auto assign_nested_field(Array<Record> record,
                          FieldPosition position = FieldPosition::back)
   -> Array<Record>;
 
+/// The value of a `this = <expr>` assignment: the records of `value`, with an
+/// empty record in every other row. Warns about present rows that are neither
+/// records nor `null`, like the legacy assignment to `this`.
+auto records_or_empty(MaskedArray<Array<Data>> value, storage::Index length,
+                      location rhs, diagnostic_handler& dh) -> Array<Record>;
+
 /// A nested-field-drop specification mirroring the shape of
 /// `assign_nested_field`'s path recursion, but for removal instead of writing.
 class DropTree {

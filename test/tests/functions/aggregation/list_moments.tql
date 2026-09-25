@@ -1,0 +1,4 @@
+// The list kernels of the moment aggregations for numbers and durations. The
+// inputs have exact results, so they do not depend on floating-point rounding.
+from {xs: [1, null, 3]}, {xs: [1s, 3s]}, {xs: []}, {xs: null}
+select count=xs.count(), mean=xs.mean(), stddev=xs.stddev(), sum=xs.sum()

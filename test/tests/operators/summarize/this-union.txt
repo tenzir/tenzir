@@ -1,0 +1,13 @@
+warning: expected `record`
+ --> tests/operators/summarize/this-union.tql:8:19
+  |
+8 | summarize k, this=first(x), options={output: "events"}
+  |                   ~~~~~~~~
+  |
+{
+  y: 1,
+}
+{}
+{
+  y: 1,
+}

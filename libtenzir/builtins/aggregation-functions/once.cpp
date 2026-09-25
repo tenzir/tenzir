@@ -10,6 +10,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -87,11 +88,72 @@ private:
   data result_;
 };
 
-class plugin : public virtual aggregation_plugin {
+struct OnceArgs {
+  nova::ValueArgument x;
+};
+
+auto warn_more_than_once(location source, diagnostic_handler& dh) -> void {
+  diagnostic::warning("`once` received more than one event")
+    .primary(source)
+    .hint("use an aggregation function to aggregate multiple values")
+    .emit(dh);
+}
+
+/// The nova `once`: the value of the only event, warning if there are more.
+class OnceFunction final {
+public:
+  static auto eval(OnceArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::aggregate_lists(
+      args.x, frame,
+      [&](nova::ListElements const& elements,
+          nova::ArrayBuilder<nova::Data>& builder) {
+        if (elements.empty()) {
+          builder.null();
+          return;
+        }
+        if (elements.size() > 1) {
+          warn_more_than_once(args.x.source, frame);
+        }
+        nova::append_row(builder, elements.values.get(elements.begin));
+      });
+  }
+
+  auto update(OnceArgs const& args, nova::EvalFrame frame) -> void {
+    if (result_ or frame.mask().true_count() > 1) {
+      warn_more_than_once(args.x.source, frame);
+    }
+    if (result_) {
+      return;
+    }
+    auto const first = *nova::storage::true_bits(frame.mask()).begin();
+    result_ = nova::to_data(args.x.data.get(first));
+  }
+
+  auto get() const -> nova::Data {
+    return result_ ? *result_ : nova::Data{};
+  }
+
+  auto reset() -> void {
+    result_ = None{};
+  }
+
+private:
+  Option<nova::Data> result_;
+};
+
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "once";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<OnceArgs, OnceFunction>{};
+    d.positional("x", &OnceArgs::x, "any");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

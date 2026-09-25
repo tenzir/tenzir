@@ -558,16 +558,21 @@ inline auto BitMap::Builder::finish() -> BitMap {
   return BitMap{length_, data_builder.finish(), true_count_};
 }
 
-inline BitMap::Mutable::Mutable(Index length)
-  : data_{DataOwner<Word[]>::make_value(
-      (length + word_bits - Index{1}) / word_bits, Word{0})},
-    length_{length} {
+inline BitMap::Mutable::Mutable(Index length) : length_{length} {
+  // An empty bitmap has no words, and allocations must not be empty. Without
+  // storage, `finish` yields an empty constant bitmap.
+  if (word_length() > 0) {
+    data_ = DataOwner<Word[]>::make_value(word_length(), Word{0});
+  }
 }
 
 inline BitMap::Mutable::Mutable(BitMap bitmap)
   : length_{bitmap.length_}, true_count_{bitmap.true_count_} {
   if (bitmap.has_storage()) {
     data_ = std::move(bitmap.data_).as_unique();
+    return;
+  }
+  if (word_length() == 0) {
     return;
   }
   data_ = DataOwner<Word[]>::make_value(word_length(),

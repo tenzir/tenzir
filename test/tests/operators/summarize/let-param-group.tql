@@ -1,0 +1,4 @@
+from {x: 1, normalize: true}, {x: 2, normalize: true}
+group normalize {
+  summarize result=entropy(x, normalize=$group)
+}

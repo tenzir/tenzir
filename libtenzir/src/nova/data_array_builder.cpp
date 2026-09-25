@@ -90,6 +90,12 @@ auto append_row(ArrayBuilder<Data>& builder, const RowView<Data>& row) -> void {
   append_row_impl(builder, row);
 }
 
+auto to_data(const RowView<Data>& row) -> Data {
+  auto builder = ArrayBuilder<Data>{};
+  append_row(builder, row);
+  return builder.take_last();
+}
+
 auto append_row(ArrayBuilder<List>::ListBuilder& builder,
                 const RowView<Data>& row) -> void {
   append_row_impl(builder, row);

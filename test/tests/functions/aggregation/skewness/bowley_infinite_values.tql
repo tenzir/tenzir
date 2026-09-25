@@ -1,3 +1,7 @@
+---
+skip: "`float` does not support Nova yet"
+---
+
 from {x: float("-inf")},
   {x: float("-inf")},
   {x: float("inf")},

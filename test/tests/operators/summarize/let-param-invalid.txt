@@ -1,0 +1,8 @@
+error: expected argument of type `bool`, but got `int64`
+ --> tests/operators/summarize/let-param-invalid.tql:7:39
+  |
+7 | summarize result=entropy(x, normalize=$normalize)
+  |                                       ^^^^^^^^^^
+  |
+  = usage: entropy(x:any, [normalize=bool])
+  = docs: https://tenzir.com/docs/reference/functions/entropy

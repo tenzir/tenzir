@@ -1,6 +1,5 @@
-error: operator expects events
- --> tests/operators/unroll/large_list_splits.tql:7:1
-  |
-7 | summarize xs=distinct(n)
-  | ^^^^^^^^^
-  |
+{
+  rows: 65537,
+  split_batches: true,
+  bounded_batches: true,
+}

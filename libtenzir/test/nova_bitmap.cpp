@@ -580,3 +580,18 @@ TEST("bitmap keep_first respects copy-on-write and reuses unique storage") {
   CHECK_EQUAL(reused.data().data(), unique_data);
   CHECK_EQUAL(to_vector(reused), to_vector(result));
 }
+
+TEST("bitmap mutable handles an empty bitmap") {
+  auto from_length = BitMap::Mutable{Index{0}};
+  from_length |= BitMap{Index{0}, true};
+  from_length.copy_from(BitMap{Index{0}, false});
+  auto result = std::move(from_length).finish();
+  CHECK_EQUAL(result.length(), Index{0});
+  CHECK_EQUAL(result.true_count(), Index{0});
+  CHECK(not result.any());
+  for (auto value : {false, true}) {
+    auto copy = std::move(BitMap::Mutable{BitMap{Index{0}, value}}).finish();
+    CHECK_EQUAL(copy.length(), Index{0});
+    CHECK_EQUAL(copy.true_count(), Index{0});
+  }
+}

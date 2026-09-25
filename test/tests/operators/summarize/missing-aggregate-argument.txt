@@ -1,0 +1,8 @@
+error: expected exactly 1 positional argument
+ --> tests/operators/summarize/missing-aggregate-argument.tql:6:18
+  |
+6 | summarize result=sum()
+  |                  ^^^^^
+  |
+  = usage: sum(x:number|duration)
+  = docs: https://tenzir.com/docs/reference/functions/sum

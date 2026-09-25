@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/nova/aggregation/value_counts.hpp>
 #include <tenzir/plugin/register.hpp>
 
 #include <cmath>
@@ -45,10 +46,78 @@ private:
   bool const normalize_;
 };
 
-class entropy_plugin final : public virtual aggregation_plugin {
+using nova_value_counts::ValueCounts;
+
+struct EntropyArgs {
+  nova::ValueArgument x;
+  bool normalize = false;
+};
+
+auto entropy_of(ValueCounts const& counts, bool normalize) -> nova::Data {
+  if (counts.size() <= 1) {
+    return nova::Data{0.0};
+  }
+  auto const total = std::accumulate(counts.counts().begin(),
+                                     counts.counts().end(), int64_t{0});
+  auto result = 0.0;
+  for (auto const count : counts.counts()) {
+    auto const probability
+      = static_cast<double>(count) / static_cast<double>(total);
+    if (probability > 0.0) {
+      result -= probability * std::log(probability);
+    }
+  }
+  if (normalize) {
+    result /= std::log(static_cast<double>(counts.size()));
+  }
+  return nova::Data{result};
+}
+
+class EntropyFunction final {
+public:
+  static auto eval(EntropyArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::aggregate_lists(
+      args.x, frame,
+      [&](nova::ListElements const& elements,
+          nova::ArrayBuilder<nova::Data>& builder) {
+        auto counts = ValueCounts{};
+        counts.add(elements);
+        nova::append_data(builder, entropy_of(counts, args.normalize));
+      });
+  }
+
+  auto update(EntropyArgs const& args, nova::EvalFrame frame) -> void {
+    normalize_ = args.normalize;
+    counts_.add(args.x.data, frame.mask());
+  }
+
+  auto get() const -> nova::Data {
+    return entropy_of(counts_, normalize_);
+  }
+
+  auto reset() -> void {
+    counts_ = {};
+  }
+
+private:
+  ValueCounts counts_;
+  /// A constant argument, remembered from the first update for `get`.
+  bool normalize_ = false;
+};
+
+class entropy_plugin final : public virtual aggregation_plugin,
+                             public virtual nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "entropy";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<EntropyArgs, EntropyFunction>{};
+    d.positional("x", &EntropyArgs::x, "any");
+    d.named("normalize", &EntropyArgs::normalize);
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

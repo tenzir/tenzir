@@ -395,22 +395,35 @@ Aggregations derive from `nova::AggregationPlugin`, a `function_plugin` with
 its own `describe() -> AggregationDescription`, not a `FunctionPlugin`. The
 arguments are registered exactly like a function's, through
 `AggregationDescriber<Args, Impl>`, whose `finish()` also records how to build
-the instance. The implementation is stateful, so it does not fit the shared,
-immutable kernel: it is any default constructible class with
-`update(Args const&, EvalFrame) -> void`, `get() const -> Data`, and
-`reset() -> void`, checked by `nova::AggregationImpl`. `update` folds the
-argument values at `frame.mask()` into the state, `get` reads the aggregate
-(`Null` before the first `update`), and `reset` starts over without forgetting
-anything derived from constants.
+the aggregation. `Impl` provides two separate implementations:
+
+- The accumulator, for `summarize` and friends: `update(Args const&,
+  EvalFrame) -> void`, `get() const -> Data`, and `reset() -> void`, checked
+  by `nova::AggregationImpl`. `update` folds the argument values at
+  `frame.mask()` into the state, `get` reads the aggregate (`Null` before the
+  first `update`), and `reset` starts over without forgetting anything
+  derived from constants.
+- The function kernel, for calls in expression position such as `xs.sum()`:
+  `static auto eval(Args const&, EvalFrame) -> Array<Data>`, checked by
+  `nova::AggregationFunctionImpl`. It must be static: the kernel is shared by
+  every call site while each group owns its accumulator, so it must not be
+  able to observe one. `aggregate_lists(subject, frame, f)` resolves the list
+  rows, warns on other types, propagates `null`, and handles constant lists;
+  `f(ListElements, ArrayBuilder<Data>&)` appends one row per list, and
+  `ListElements::for_each` visits the elements as typed `RowView`s.
+
+Do not derive one implementation from the other. Share helpers where the
+semantics coincide, such as `Summation` for `sum`.
 
 ```cpp
 struct SumArgs {
   nova::ValueArgument x;
 };
 
-class SumFunction final
-  : public nova::ListFallback<SumFunction, SumArgs, &SumArgs::x> {
+class SumFunction final {
 public:
+  static auto eval(SumArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data>;
   auto update(SumArgs const& args, nova::EvalFrame frame) -> void;
   auto get() const -> nova::Data;
   auto reset() -> void;
@@ -427,25 +440,14 @@ class plugin : public virtual aggregation_plugin,
 };
 ```
 
-`AggregationInstance::make(expr, ctx)` is the evaluator for one aggregation
-call: it fails unless `expr` is a call to an `AggregationPlugin`, prepares the
-expression like `Evaluator::make`, and owns the implementation together with
-it. Operators feed it batches with `update(events, ctx)`, which evaluates the
-arguments for the active rows and hands them to the implementation, and read
-the aggregate with `get()`. Only one erasure is involved: `AggregationInstance`
-is the abstract type, and the class behind it holds the implementation and the
-`Evaluator` directly.
-
-An aggregation in expression position, such as `xs.sum()`, is a regular
-function over list rows. `CallSitePreparer` first looks for a `FunctionPlugin`
-and then for an `AggregationPlugin`, whose description carries the fallback
-kernel: `ListFallback<Derived, Args, Subject>` supplies the `eval` that
-`FunctionImpl` expects. It is not an aggregation itself; for every list row of
-the `Subject` argument it updates a fresh `Derived` with the row's elements,
-reads it, and resets it. A `null` subject propagates silently, an empty list
-yields the initial aggregate, and any other type warns and yields `null`. The
-elements reach `update` through `EvalFrame::detached(mask, f)`, which runs `f`
-with a frame over the list's flat values: a run over a synthesized field-less
-input of that length, sharing the evaluator and context. The subject's
-`ValueArgument` is replaced by the values column, so an implementation only
-ever reads its `Args` at `frame.mask()`.
+`Aggregation::make(expr, ctx)` prepares one aggregation call: it fails unless
+`expr` is a call to an `AggregationPlugin`, and prepares the expression like
+`Evaluator::make`. The result is shared by any number of `AggregationState`s
+from `make_state()`, one per group. `update(events, groups, ctx)` evaluates the
+arguments once for `events.mask` and then folds each `AggregationGroup`, a
+state plus its ascending active rows, through a narrowed frame over one reused
+mask buffer. Grouping is thus the operator's concern, while argument
+evaluation happens once per batch regardless of the number of groups.
+`nova::hash_rows` hashes whole key columns consistently with `nova::hash`,
+for grouping and routing. `AggregationInstance` pairs an
+`Aggregation` with a single state for callers that do not group.

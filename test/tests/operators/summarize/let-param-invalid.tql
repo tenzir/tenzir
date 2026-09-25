@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+let $normalize = 42
+from []
+summarize result=entropy(x, normalize=$normalize)

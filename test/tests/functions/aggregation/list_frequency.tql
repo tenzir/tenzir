@@ -1,0 +1,6 @@
+// The list kernels of the collection and frequency aggregations keep element
+// types and report distinct values in first-seen order.
+from {xs: ["b", 1, "a", 1, null, "b", 1]}, {xs: []}, {xs: null}
+select collect=xs.collect(), distinct=xs.distinct(),
+  count_distinct=xs.count_distinct(), value_counts=xs.value_counts(),
+  mode=xs.mode()

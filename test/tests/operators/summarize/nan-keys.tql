@@ -1,0 +1,8 @@
+// NaN keys, also nested ones and NaNs with a different sign, form a single
+// group that event output can find again. NaNs print as `null`; the real
+// `null` key is the group of `x: 4`.
+from_file f"{env("TENZIR_INPUTS")}/parquet/nan-keys.parquet" {
+  read_parquet
+}
+summarize g, gs, xs=collect(x), options={output: "events"}
+select x, xs

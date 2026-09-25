@@ -1,0 +1,9 @@
+// The list kernels of the boolean and selection aggregations, including
+// nulls, empty lists, a null subject, and a type error per family.
+from {bs: [true, null, true], xs: [3, 1.5, null, 2]},
+  {bs: [false, null], xs: [2024-01-01, 2023-06-01]},
+  {bs: [], xs: []},
+  {bs: null, xs: null},
+  {bs: [1], xs: ["a"]}
+select all=bs.all(), any=bs.any(), first=xs.first(), last=xs.last(),
+  min=xs.min(), max=xs.max()

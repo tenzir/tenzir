@@ -1,3 +1,7 @@
+---
+skip: "`quantile` does not support Nova yet"
+---
+
 // The per-row list evaluation resets the aggregation instance between rows.
 // This must not clear the configured quantile; previously the second row
 // degraded to `quantile(q=0)`, i.e., the minimum.

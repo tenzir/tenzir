@@ -131,7 +131,7 @@ private:
 
 class CollectRecordFunction {
 public:
-  auto eval(CollectRecordArgs const& args, EvalFrame frame) const
+  static auto eval(CollectRecordArgs const& args, EvalFrame frame)
     -> Array<Data> {
     // Resolve the list alternatives and validate types once per batch.
     auto entries = args.entries.data.get_alternative<List>();

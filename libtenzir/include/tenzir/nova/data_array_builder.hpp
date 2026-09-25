@@ -155,4 +155,7 @@ auto append_data(ArrayBuilder<List>::ListBuilder& builder, const Data& value)
   -> void;
 auto append_data(FieldBuilder builder, const Data& value) -> void;
 
+/// Materializes a row into an owning value, recursing into records and lists.
+auto to_data(const RowView<Data>& row) -> Data;
+
 } // namespace tenzir::nova

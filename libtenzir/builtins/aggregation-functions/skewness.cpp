@@ -9,6 +9,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/statistics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -38,6 +39,78 @@ auto quantile_sorted(std::vector<double> const& xs, double q) -> double {
   // std::lerp interpolates without overflowing for mixed-sign samples near
   // the float64 limit, where `xs[lo + 1] - xs[lo]` would be infinite.
   return std::lerp(xs[lo], xs[lo + 1], h - static_cast<double>(lo));
+}
+
+/// The streaming state of the moment method: Welford-style updates of the
+/// second and third central moments, numerically stable unlike accumulating
+/// E[x²] and E[x³].
+struct Moments {
+  size_t count = 0;
+  double mean = 0.0;
+  double m2 = 0.0;
+  double m3 = 0.0;
+
+  auto add(double x) -> void {
+    count += 1;
+    auto const n = static_cast<double>(count);
+    auto const delta = x - mean;
+    auto const delta_n = delta / n;
+    auto const term1 = delta * delta_n * (n - 1);
+    mean += delta_n;
+    m3 += term1 * delta_n * (n - 2) - 3 * delta_n * m2;
+    m2 += term1;
+  }
+
+  auto skewness() const -> Option<double> {
+    if (count == 0) {
+      return None{};
+    }
+    // Zero dispersion means no asymmetry. Returning 0.0 instead of the 0/0
+    // NaN keeps perfectly regular inputs (e.g. beacon intervals) inside
+    // predicates like `abs(skew) <= threshold`.
+    if (m2 <= 0.0) {
+      return 0.0;
+    }
+    auto const n = static_cast<double>(count);
+    return std::sqrt(n) * m3 / std::pow(m2, 1.5);
+  }
+};
+
+/// Computes the Bowley skewness of `values`.
+auto bowley_skewness(std::vector<double> values) -> Option<double> {
+  if (values.empty()) {
+    return None{};
+  }
+  std::sort(values.begin(), values.end());
+  auto const q1 = quantile_sorted(values, 0.25);
+  auto const q2 = quantile_sorted(values, 0.5);
+  auto const q3 = quantile_sorted(values, 0.75);
+  if (not std::isfinite(q1) or not std::isfinite(q2) or not std::isfinite(q3)) {
+    return None{};
+  }
+  // A degenerate interquartile range means zero dispersion, so there is no
+  // asymmetry; see the note in `Moments::skewness`.
+  if (q3 == q1) {
+    return 0.0;
+  }
+  auto skew_from_gaps = [](double upper, double lower) {
+    auto const scale = std::max(upper, lower);
+    TENZIR_ASSERT(scale > 0.0);
+    upper /= scale;
+    lower /= scale;
+    return (upper - lower) / (upper + lower);
+  };
+  // Preserve close quartile gaps when direct subtraction is finite. Scaling
+  // the gaps still keeps their sum from overflowing.
+  auto const upper = q3 - q2;
+  auto const lower = q2 - q1;
+  if (std::isfinite(upper) and std::isfinite(lower)) {
+    return skew_from_gaps(upper, lower);
+  }
+  // If a direct gap overflows, use scale invariance to bring the quartiles
+  // into range before subtracting them.
+  auto const scale = std::max({std::abs(q1), std::abs(q2), std::abs(q3)});
+  return skew_from_gaps(q3 / scale - q2 / scale, q2 / scale - q1 / scale);
 }
 
 class skewness_instance final : public aggregation_instance {
@@ -194,16 +267,12 @@ private:
   auto add(double x) -> void {
     switch (method_) {
       case method::moment: {
-        // Welford-style streaming update of the second and third central
-        // moments; numerically stable, unlike accumulating E[x²] and E[x³].
-        count_ += 1;
-        auto const n = static_cast<double>(count_);
-        auto const delta = x - mean_;
-        auto const delta_n = delta / n;
-        auto const term1 = delta * delta_n * (n - 1);
-        mean_ += delta_n;
-        m3_ += term1 * delta_n * (n - 2) - 3 * delta_n * m2_;
-        m2_ += term1;
+        auto moments = Moments{count_, mean_, m2_, m3_};
+        moments.add(x);
+        count_ = moments.count;
+        mean_ = moments.mean;
+        m2_ = moments.m2;
+        m3_ = moments.m3;
         return;
       }
       case method::bowley:
@@ -214,55 +283,13 @@ private:
   }
 
   auto get_moment() const -> data {
-    if (count_ == 0) {
-      return data{};
-    }
-    // Zero dispersion means no asymmetry. Returning 0.0 instead of the 0/0
-    // NaN keeps perfectly regular inputs (e.g. beacon intervals) inside
-    // predicates like `abs(skew) <= threshold`.
-    if (m2_ <= 0.0) {
-      return 0.0;
-    }
-    auto const n = static_cast<double>(count_);
-    return std::sqrt(n) * m3_ / std::pow(m2_, 1.5);
+    auto result = Moments{count_, mean_, m2_, m3_}.skewness();
+    return result ? data{*result} : data{};
   }
 
   auto get_bowley() const -> data {
-    if (values_.empty()) {
-      return data{};
-    }
-    auto sorted = values_;
-    std::sort(sorted.begin(), sorted.end());
-    auto const q1 = quantile_sorted(sorted, 0.25);
-    auto const q2 = quantile_sorted(sorted, 0.5);
-    auto const q3 = quantile_sorted(sorted, 0.75);
-    if (not std::isfinite(q1) or not std::isfinite(q2)
-        or not std::isfinite(q3)) {
-      return data{};
-    }
-    // A degenerate interquartile range means zero dispersion, so there is no
-    // asymmetry; see the note in `get_moment`.
-    if (q3 == q1) {
-      return 0.0;
-    }
-    auto skew_from_gaps = [](double upper, double lower) {
-      auto const scale = std::max(upper, lower);
-      TENZIR_ASSERT(scale > 0.0);
-      upper /= scale;
-      lower /= scale;
-      return (upper - lower) / (upper + lower);
-    };
-    // Preserve close quartile gaps when direct subtraction is finite. Scaling
-    // the gaps still keeps their sum from overflowing.
-    auto const upper = q3 - q2;
-    auto const lower = q2 - q1;
-    if (std::isfinite(upper) and std::isfinite(lower)) {
-      return skew_from_gaps(upper, lower);
-    }
-    // If a direct gap overflows, use scale invariance to bring the quartiles
-    // into range before subtracting them.
-    auto const scale = std::max({std::abs(q1), std::abs(q2), std::abs(q3)});
-    return skew_from_gaps(q3 / scale - q2 / scale, q2 / scale - q1 / scale);
+    auto result = bowley_skewness(values_);
+    return result ? data{*result} : data{};
   }
 
   ast::expression expr_;
@@ -277,10 +304,112 @@ private:
   enum class state { none, failed, dur, numeric } state_{state::none};
 };
 
-class plugin final : public aggregation_plugin {
+struct SkewnessArgs {
+  nova::ValueArgument x;
+  Option<located<std::string>> method_name;
+  /// Derived from `method_name` in `validate`.
+  method kind = method::moment;
+};
+
+/// The skewness state of one aggregate, shared by the accumulator and the
+/// list kernel. The result is a `float` also for durations.
+class Skewness {
+public:
+  explicit Skewness(method kind = method::moment) : kind_{kind} {
+  }
+
+  template <class T>
+  auto add(T value) -> void {
+    auto const x = nova_statistics::to_double(value);
+    switch (kind_) {
+      case method::moment:
+        moments_.add(x);
+        return;
+      case method::bowley:
+        values_.push_back(x);
+        return;
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto get(nova_statistics::NumericKind const& kind) const -> nova::Data {
+    using enum nova_statistics::NumericKind::Kind;
+    if (kind.kind() == none or kind.kind() == failed) {
+      return nova::Data{};
+    }
+    auto const result = kind_ == method::moment ? moments_.skewness()
+                                                : bowley_skewness(values_);
+    return result ? nova::Data{*result} : nova::Data{};
+  }
+
+private:
+  method kind_;
+  Moments moments_;
+  std::vector<double> values_;
+};
+
+class SkewnessFunction final {
+public:
+  static auto eval(SkewnessArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova_statistics::eval_statistic<Skewness>(args.x, frame, true, [&] {
+      return Skewness{args.kind};
+    });
+  }
+
+  auto update(SkewnessArgs const& args, nova::EvalFrame frame) -> void {
+    if (not skewness_) {
+      skewness_.emplace(args.kind);
+    }
+    kind_.visit(args.x.data, frame.mask(), args.x.source, frame,
+                [&](auto value) {
+                  skewness_->add(value);
+                });
+  }
+
+  auto get() const -> nova::Data {
+    return skewness_ ? skewness_->get(kind_) : nova::Data{};
+  }
+
+  auto reset() -> void {
+    kind_ = nova_statistics::NumericKind{};
+    skewness_ = None{};
+  }
+
+private:
+  nova_statistics::NumericKind kind_;
+  /// Created on the first update, which knows the method.
+  Option<Skewness> skewness_;
+};
+
+class plugin final : public aggregation_plugin, public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "skewness";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<SkewnessArgs, SkewnessFunction>{};
+    d.positional("x", &SkewnessArgs::x, "number|duration");
+    d.named("method", &SkewnessArgs::method_name);
+    d.validate(
+      [](SkewnessArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        if (not args.method_name or args.method_name->inner == "moment") {
+          args.kind = method::moment;
+          return {};
+        }
+        if (args.method_name->inner == "bowley") {
+          args.kind = method::bowley;
+          return {};
+        }
+        diagnostic::error("expected `method` to be `moment` or `bowley`, got "
+                          "`{}`",
+                          args.method_name->inner)
+          .primary(*args.method_name)
+          .emit(dh);
+        return failure::promise();
+      });
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

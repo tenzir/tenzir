@@ -10,6 +10,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -214,12 +215,173 @@ private:
   Option<result_t> result_ = None{};
 };
 
+struct MinMaxArgs {
+  nova::ValueArgument x;
+};
+
+/// The running nova `min` or `max`. Numbers compare across `int`, `uint`,
+/// and `float`, where a `float` on either side makes the result a `float`;
+/// `duration`s and `time`s only compare among themselves. Nulls are skipped.
+/// A type error warns and poisons the result, which then stays `null`.
 template <mode Mode>
-class plugin : public virtual aggregation_plugin {
+class Extremum {
+public:
+  template <class Tag>
+  auto add(nova::RowView<Tag> view, location source, diagnostic_handler& dh)
+    -> void {
+    using namespace nova;
+    if (poisoned()) {
+      return;
+    }
+    if constexpr (std::same_as<Tag, Null>) {
+      // Nulls neither contribute nor fix the type.
+    } else if constexpr (concepts::one_of<Tag, Int, UInt, Float, Duration,
+                                          Time>) {
+      auto const value = Tag{*view};
+      if (not result_) {
+        result_ = Value{value};
+        type_name_ = Type<Tag>::static_name;
+        return;
+      }
+      auto const incompatible = [&] {
+        diagnostic::warning("got incompatible types `{}` and `{}`", type_name_,
+                            Type<Tag>::static_name)
+          .primary(source)
+          .emit(dh);
+        return Value{Null{}};
+      };
+      // The two lambdas below are split by the value's kind so that each body
+      // only contains expressions that are valid for it.
+      if constexpr (concepts::one_of<Tag, Int, UInt, Float>) {
+        result_ = result_->match([&]<class Acc>(Acc acc) -> Value {
+          if constexpr (not concepts::one_of<Acc, Int, UInt, Float>) {
+            return incompatible();
+          } else if constexpr (std::floating_point<Acc>
+                               or std::floating_point<Tag>) {
+            auto const lhs = static_cast<Float>(acc);
+            auto const rhs = static_cast<Float>(value);
+            return Mode == mode::min ? std::min(lhs, rhs) : std::max(lhs, rhs);
+          } else {
+            auto const replace = Mode == mode::min
+                                   ? std::cmp_less(value, acc)
+                                   : std::cmp_greater(value, acc);
+            return replace ? Value{value} : Value{acc};
+          }
+        });
+      } else {
+        result_ = result_->match([&]<class Acc>(Acc acc) -> Value {
+          if constexpr (std::same_as<Acc, Tag>) {
+            return Mode == mode::min ? std::min(acc, value)
+                                     : std::max(acc, value);
+          } else {
+            return incompatible();
+          }
+        });
+      }
+    } else {
+      diagnostic::warning("expected `int`, `uint`, `float`, `duration`, or "
+                          "`time`, got `{}`",
+                          Type<Tag>::static_name)
+        .primary(source)
+        .emit(dh);
+      result_ = Null{};
+    }
+  }
+
+  auto poisoned() const -> bool {
+    return result_ and std::holds_alternative<nova::Null>(*result_);
+  }
+
+  auto get() const -> nova::Data {
+    if (not result_) {
+      return nova::Data{};
+    }
+    return result_->match([](auto value) {
+      return nova::Data{value};
+    });
+  }
+
+private:
+  using Value = variant<nova::Null, nova::Int, nova::UInt, nova::Float,
+                        nova::Duration, nova::Time>;
+
+  /// `None` before the first value, `Null` once poisoned.
+  Option<Value> result_;
+  /// The type of the first value, for the incompatible-types warning.
+  std::string_view type_name_;
+};
+
+template <mode Mode>
+class MinMaxFunction final {
+public:
+  static auto eval(MinMaxArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::aggregate_lists(args.x, frame,
+                                 [&](nova::ListElements const& elements,
+                                     nova::ArrayBuilder<nova::Data>& builder) {
+                                   auto extremum = Extremum<Mode>{};
+                                   elements.for_each([&](auto value) {
+                                     extremum.add(value, args.x.source, frame);
+                                   });
+                                   nova::append_data(builder, extremum.get());
+                                 });
+  }
+
+  auto update(MinMaxArgs const& args, nova::EvalFrame frame) -> void {
+    using namespace nova;
+    auto const add = [&]<data_type Tag>(Array<Tag> const& array,
+                                        storage::BitMap const& rows) {
+      if constexpr (not std::same_as<Tag, Null>) {
+        for (auto row : storage::true_bits(rows)) {
+          extremum_.add(array.get(row), args.x.source, frame);
+          if (extremum_.poisoned()) {
+            return;
+          }
+        }
+      }
+    };
+    match(
+      args.x.data,
+      [&]<data_type Tag>(Array<Tag> const& array) {
+        add(array, frame.mask());
+      },
+      [&](UnionArray const& u) {
+        for (auto const& field : u.fields()) {
+          auto const rows = frame.mask() & field.present;
+          if (rows.any() and not extremum_.poisoned()) {
+            match(field.data, [&]<data_type Tag>(Array<Tag> const& array) {
+              add(array, rows);
+            });
+          }
+        }
+      });
+  }
+
+  auto get() const -> nova::Data {
+    return extremum_.get();
+  }
+
+  auto reset() -> void {
+    extremum_ = {};
+  }
+
+private:
+  Extremum<Mode> extremum_;
+};
+
+template <mode Mode>
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return Mode == mode::min ? "min" : "max";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<MinMaxArgs, MinMaxFunction<Mode>>{};
+    d.positional("x", &MinMaxArgs::x, "number|duration|time");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

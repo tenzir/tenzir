@@ -323,4 +323,30 @@ auto DropTree::apply(Array<Record> record, storage::BitMap mask) const
   return record;
 }
 
+auto records_or_empty(MaskedArray<Array<Data>> value, storage::Index length,
+                      location rhs, diagnostic_handler& dh) -> Array<Record> {
+  if (auto record = value.data.try_as<Record>()) {
+    return std::move(*record);
+  }
+  auto result = Array<Record>::make_empty(length);
+  if (auto* u = try_as<UnionArray>(value.data)) {
+    auto alt = u->get_alternative<Record>();
+    if (alt) {
+      // The alternative spans every row, but only the rows in `present` are
+      // actually records; the others must become empty records here.
+      result = std::move(alt->data).empty_where(alt->present.make_inverted());
+    }
+    if (value.present.and_not(u->alternative_mask<Record>())
+          .and_not(u->alternative_mask<Null>())
+          .any()) {
+      diagnostic::warning("expected `record`").primary(rhs).emit(dh);
+    }
+    return result;
+  }
+  if (not value.data.try_as<Null>()) {
+    diagnostic::warning("expected `record`").primary(rhs).emit(dh);
+  }
+  return result;
+}
+
 } // namespace tenzir::nova

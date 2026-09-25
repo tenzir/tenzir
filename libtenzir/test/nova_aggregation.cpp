@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// Tests for nova aggregations: `AggregationInstance` as the stateful
-/// evaluator of an aggregation call, and `ListFallback` as the way an
-/// aggregation serves as a regular function over list rows. `sum` is the
-/// implementation under test.
+/// evaluator of an aggregation call, `Aggregation` with one state per group,
+/// and the static function kernel through which an aggregation serves as a
+/// regular function over list rows. `sum` is the implementation under test.
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/aggregation.hpp"
@@ -310,4 +310,36 @@ TEST("sum as a function on a non-list column warns and is null") {
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), size_t{1});
   CHECK_EQUAL(diags[0].message, "expected `list`, got a different type");
+}
+
+TEST("Aggregation folds each group's rows into its own state") {
+  auto dh = collecting_diagnostic_handler{};
+  auto const reg = global_registry();
+  auto aggregation = Aggregation::make(call("sum", {root_field("x")}),
+                                       InstantiateCtx{dh, *reg});
+  REQUIRE(aggregation);
+  auto a = (*aggregation)->make_state();
+  auto b = (*aggregation)->make_state();
+  auto empty = (*aggregation)->make_state();
+  auto events = events_of(Int{1}, Int{10}, Int{2}, Int{20}, Int{100});
+  // The last row is inactive, so it must reach no group.
+  events.mask = bitmap({true, true, true, true, false});
+  auto const a_rows = std::vector<storage::Index>{0, 2};
+  auto const b_rows = std::vector<storage::Index>{1, 3};
+  auto const groups = std::vector<AggregationGroup>{
+    {*a, a_rows},
+    {*b, b_rows},
+    {*empty, {}},
+  };
+  (*aggregation)->update(events, groups, EvalCtx{dh});
+  CHECK_EQUAL(get_as<Int>(a->get()), Option{Int{3}});
+  CHECK_EQUAL(get_as<Int>(b->get()), Option{Int{30}});
+  CHECK(is_null(empty->get()));
+  // States accumulate across batches and reset independently.
+  (*aggregation)->update(events_of(Int{5}), *a, EvalCtx{dh});
+  CHECK_EQUAL(get_as<Int>(a->get()), Option{Int{8}});
+  a->reset();
+  CHECK(is_null(a->get()));
+  CHECK_EQUAL(get_as<Int>(b->get()), Option{Int{30}});
+  CHECK(std::move(dh).collect().empty());
 }

@@ -14,6 +14,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -209,10 +210,188 @@ private:
   int64_t count_ = 0;
 };
 
-class count final : public aggregation_plugin {
+/// The rows of `mask` at which `x` is not `null`.
+auto non_null_rows(nova::Array<nova::Data> const& x,
+                   nova::storage::BitMap const& mask) -> nova::storage::BitMap {
+  if (auto nulls = x.get_alternative<nova::Null>()) {
+    return mask.and_not(nulls->present);
+  }
+  return mask;
+}
+
+struct CountArgs {
+  Option<nova::ValueArgument> x;
+  location call;
+};
+
+/// The nova `count`: the number of events, or of non-null values of `x`.
+class CountFunction final {
+public:
+  static auto eval(CountArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    if (not args.x) {
+      diagnostic::error("aggregation functions need at least one list "
+                        "argument to be called as regular functions")
+        .primary(args.call)
+        .hint("use with `summarize` to aggregate over multiple events instead")
+        .emit(frame);
+      return frame.null();
+    }
+    return nova::aggregate_lists(
+      *args.x, frame,
+      [](nova::ListElements const& elements,
+         nova::ArrayBuilder<nova::Data>& builder) {
+        auto count = nova::Int{0};
+        elements.for_each([&]<class Tag>(nova::RowView<Tag> const&) {
+          if constexpr (not std::same_as<Tag, nova::Null>) {
+            ++count;
+          }
+        });
+        nova::append_data(builder, nova::Data{count});
+      });
+  }
+
+  auto update(CountArgs const& args, nova::EvalFrame frame) -> void {
+    count_ += args.x ? non_null_rows(args.x->data, frame.mask()).true_count()
+                     : frame.mask().true_count();
+  }
+
+  auto get() const -> nova::Data {
+    return nova::Data{count_};
+  }
+
+  auto reset() -> void {
+    count_ = 0;
+  }
+
+private:
+  nova::Int count_ = 0;
+};
+
+struct CountIfArgs {
+  nova::ValueArgument x;
+  nova::LambdaArgument predicate;
+};
+
+auto warn_non_bool(nova::LambdaArgument const& predicate,
+                   diagnostic_handler& dh) -> void {
+  diagnostic::warning("expected `bool`").primary(predicate.body()).emit(dh);
+}
+
+/// The nova `count_if`: the number of non-null values of `x` for which the
+/// predicate is `true`. The predicate is not evaluated for nulls.
+class CountIfFunction final {
+public:
+  static auto eval(CountIfArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const& mask = frame.mask();
+    auto lists = args.x.data.get_alternative<List>();
+    auto list_rows
+      = lists ? mask & lists->present : storage::BitMap{frame.length(), false};
+    auto bad = non_null_rows(args.x.data, mask).and_not(list_rows);
+    if (bad.any()) {
+      diagnostic::warning("expected `list`, got a different type")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    if (not lists or not list_rows.any()) {
+      return frame.null();
+    }
+    // The predicate runs once over the elements of all lists, which the
+    // counts per row then read back.
+    auto const primary = lists->data.to_primary();
+    auto const& storage = as<storage::ListStorage>(primary.storage());
+    // Null elements are neither counted nor shown to the predicate.
+    auto const element_nulls = storage.values().get_alternative<Null>();
+    auto const rows = frame.narrow(list_rows);
+    auto const results
+      = element_nulls
+          ? rows.eval_elements(
+              args.predicate, storage,
+              storage::BitMap{storage.values().length(), true}.and_not(
+                element_nulls->present))
+          : rows.eval_elements(args.predicate, storage);
+    auto const bools = results.get_alternative<Bool>();
+    auto const result_nulls = results.get_alternative<Null>();
+    auto const* bits
+      = bools ? &as<storage::BitMap>(bools->data.storage()) : nullptr;
+    auto non_bool = false;
+    auto builder = ArrayBuilder<Data>{};
+    for (auto row : storage::true_bits(mask)) {
+      builder.skip_n(row - builder.length());
+      if (not list_rows.get(row)) {
+        builder.null();
+        continue;
+      }
+      auto count = Int{0};
+      auto const [begin, end] = storage.spans()[row];
+      for (auto i = begin; i < end; ++i) {
+        if (element_nulls and element_nulls->present.get(i)) {
+          continue;
+        }
+        if (bools and bools->present.get(i)) {
+          count += bits->get(i) ? 1 : 0;
+        } else if (not result_nulls or not result_nulls->present.get(i)) {
+          non_bool = true;
+        }
+      }
+      append_data(builder, Data{count});
+    }
+    builder.skip_n(frame.length() - builder.length());
+    if (non_bool) {
+      warn_non_bool(args.predicate, frame);
+    }
+    return builder.finish();
+  }
+
+  auto update(CountIfArgs const& args, nova::EvalFrame frame) -> void {
+    using namespace nova;
+    auto const rows = non_null_rows(args.x.data, frame.mask());
+    if (not rows.any()) {
+      return;
+    }
+    TENZIR_ASSERT(frame.input());
+    auto const result
+      = frame.eval(args.predicate, MaskedArray<Array<Data>>{args.x.data, rows},
+                   *frame.input());
+    auto non_bool = rows;
+    if (auto bools = result.get_alternative<Bool>()) {
+      auto const& bits = as<storage::BitMap>(bools->data.storage());
+      count_ += (rows & bools->present & bits).true_count();
+      non_bool = std::move(non_bool).and_not(bools->present);
+    }
+    if (auto nulls = result.get_alternative<Null>()) {
+      non_bool = std::move(non_bool).and_not(nulls->present);
+    }
+    if (non_bool.any()) {
+      warn_non_bool(args.predicate, frame);
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return nova::Data{count_};
+  }
+
+  auto reset() -> void {
+    count_ = 0;
+  }
+
+private:
+  nova::Int count_ = 0;
+};
+
+class count final : public aggregation_plugin, public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "count";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<CountArgs, CountFunction>{};
+    d.optional_positional("x", &CountArgs::x, "any");
+    d.call_location(&CountArgs::call);
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool final {
@@ -229,10 +408,18 @@ public:
   }
 };
 
-class count_if final : public aggregation_plugin {
+class count_if final : public aggregation_plugin,
+                       public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "count_if";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<CountIfArgs, CountIfFunction>{};
+    d.positional("x", &CountIfArgs::x, "any");
+    d.positional("predicate", &CountIfArgs::predicate, "any -> bool");
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool final {

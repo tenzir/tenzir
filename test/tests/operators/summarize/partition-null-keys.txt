@@ -1,11 +1,17 @@
-warning: field `g` not found
+warning: event does not have field
  --> tests/operators/summarize/partition-null-keys.tql:4:11
   |
 4 | summarize g, all=collect(x), total=sum(x)
   |           ~
   |
-  = hint: did you mean `x`?
-  = hint: append `?` to suppress this warning
+{
+  g: "a",
+  all: [
+    1,
+    4,
+  ],
+  total: 5,
+}
 {
   g: null,
   all: [
@@ -15,12 +21,4 @@ warning: field `g` not found
     6,
   ],
   total: 16,
-}
-{
-  g: "a",
-  all: [
-    1,
-    4,
-  ],
-  total: 5,
 }

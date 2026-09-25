@@ -47,12 +47,12 @@ public:
   /// bundle.
   using Kernel = auto (*)(Any const& args, EvalFrame frame) -> Array<Data>;
 
-  /// Builds the `AggregationInstance` of an aggregation call once the
-  /// expression it is the root of has been prepared into `evaluator`. Like
-  /// `Kernel`, one function per implementation type. Null for functions.
+  /// Builds the `Aggregation` of an aggregation call once the expression it
+  /// is the root of has been prepared into `evaluator`. Like `Kernel`, one
+  /// function per implementation type. Null for functions.
   using AggregationFactory
     = auto (*)(Evaluator evaluator, ast::function_call const& root)
-      -> Box<AggregationInstance>;
+      -> Box<Aggregation>;
 
   CallSite(Any args, std::vector<ValueSlot> slots, Kernel kernel)
     : args_{std::move(args)}, slots_{std::move(slots)}, kernel_{kernel} {
@@ -143,7 +143,7 @@ private:
   friend class nova::Evaluator;
   friend class nova::EvalFrame;
   template <class Args, class Impl>
-  friend class AggregationInstanceImpl;
+  friend class PreparedAggregation;
 
   EvalRun(Evaluator& evaluator, Events const* input, EvalCtx ctx);
 

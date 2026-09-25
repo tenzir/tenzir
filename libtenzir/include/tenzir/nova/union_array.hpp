@@ -18,6 +18,8 @@
 #include "tenzir/option.hpp"
 #include "tenzir/variant_traits.hpp"
 
+#include <cstdint>
+#include <span>
 #include <type_traits>
 
 namespace tenzir::nova {
@@ -258,8 +260,21 @@ auto repeat(Data const& value, storage::Index length) -> Array<Data>;
 
 auto equal(const RowView<Data>& lhs, const RowView<Data>& rhs) -> bool;
 
-/// Hashes a row consistently with `equal`.
+/// Like `equal`, but reflexive: NaNs are equivalent to each other, also when
+/// nested in lists or records. Use it wherever values act as keys, such as
+/// group keys and distinct values, where a key must find itself again.
+auto equivalent(const RowView<Data>& lhs, const RowView<Data>& rhs) -> bool;
+
+/// Hashes a row consistently with both `equal` and `equivalent`.
 auto hash(const RowView<Data>& row) noexcept -> std::size_t;
+
+/// Combines the hash of every selected row of `column` into `hashes`, which
+/// holds one entry per row of `rows`, in order: `hashes[i] = tenzir::hash(
+/// hashes[i], uint64_t{hash(row)})`. Call it once per column to hash a
+/// composite key, starting from zeros. Unlike calling `hash` per row, it
+/// matches the column's type once, except for unions.
+auto hash_rows(Array<Data> const& column, storage::BitMap const& rows,
+               std::span<uint64_t> hashes) -> void;
 
 template <class Alternatives, std::size_t I, class Qualifier>
 struct UnionArrayAlternativeResult {

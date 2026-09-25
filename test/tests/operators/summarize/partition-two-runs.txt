@@ -1,15 +1,4 @@
 {
-  g: "b",
-  first: 2,
-  last: 7,
-  all: [
-    2,
-    3,
-    7,
-  ],
-  total: 12,
-}
-{
   g: "a",
   first: 1,
   last: 5,
@@ -19,6 +8,17 @@
     5,
   ],
   total: 10,
+}
+{
+  g: "b",
+  first: 2,
+  last: 7,
+  all: [
+    2,
+    3,
+    7,
+  ],
+  total: 12,
 }
 {
   g: "c",

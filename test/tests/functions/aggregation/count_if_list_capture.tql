@@ -1,0 +1,4 @@
+// A `count_if` list call whose predicate captures a field still skips null
+// elements without evaluating the predicate for them, so there is no warning.
+from {xs: [1, null, 5], t: 2}, {xs: [null], t: 0}, {xs: [], t: 0}
+select above=xs.count_if(v => v > t)

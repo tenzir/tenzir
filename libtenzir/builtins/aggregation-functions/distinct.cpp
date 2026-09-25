@@ -11,6 +11,7 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/hash/hash.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/value_counts.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -147,10 +148,40 @@ private:
   bool count_only_ = false;
 };
 
-class distinct_plugin : public virtual aggregation_plugin {
+using nova_value_counts::ValueArgs;
+using nova_value_counts::ValueCounts;
+using nova_value_counts::ValueCountsFunction;
+
+/// The distinct values in first-seen order.
+struct GetDistinct {
+  auto operator()(ValueCounts const& counts) const -> nova::Data {
+    auto result = nova::List{};
+    result.reserve(counts.size());
+    for (auto const* value : counts.values()) {
+      result.push_back(*value);
+    }
+    return nova::Data{std::move(result)};
+  }
+};
+
+struct GetCountDistinct {
+  auto operator()(ValueCounts const& counts) const -> nova::Data {
+    return nova::Data{detail::narrow<nova::Int>(counts.size())};
+  }
+};
+
+class distinct_plugin : public virtual aggregation_plugin,
+                        public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return "distinct";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<ValueArgs,
+                                        ValueCountsFunction<GetDistinct>>{};
+    d.positional("x", &ValueArgs::x, "any");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;
@@ -166,10 +197,19 @@ class distinct_plugin : public virtual aggregation_plugin {
   }
 };
 
-class count_distinct_plugin : public virtual aggregation_plugin {
+class count_distinct_plugin : public virtual aggregation_plugin,
+                              public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return "count_distinct";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d
+      = nova::AggregationDescriber<ValueArgs,
+                                   ValueCountsFunction<GetCountDistinct>>{};
+    d.positional("x", &ValueArgs::x, "any");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

@@ -18,8 +18,8 @@
 
 namespace tenzir::nova {
 
-auto AggregationInstance::make(ast::expression expr, InstantiateCtx ctx)
-  -> failure_or<Box<AggregationInstance>> {
+auto Aggregation::make(ast::expression expr, InstantiateCtx ctx)
+  -> failure_or<Box<Aggregation>> {
   auto const* call = try_as<ast::function_call>(&expr);
   if (not call) {
     diagnostic::error("expected an aggregation function")
@@ -42,6 +42,12 @@ auto AggregationInstance::make(ast::expression expr, InstantiateCtx ctx)
   auto factory = evaluator.call_site(*call).aggregation();
   TENZIR_ASSERT(factory, "aggregation plugin did not use AggregationDescriber");
   return factory(std::move(evaluator), *call);
+}
+
+auto AggregationInstance::make(ast::expression expr, InstantiateCtx ctx)
+  -> failure_or<Box<AggregationInstance>> {
+  TRY(auto aggregation, Aggregation::make(std::move(expr), ctx));
+  return AggregationInstance{std::move(aggregation)};
 }
 
 auto AggregationDescription::instantiate(std::string_view name,

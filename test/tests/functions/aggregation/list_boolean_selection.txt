@@ -1,0 +1,67 @@
+warning: expected `bool`, got `int`
+ --> tests/functions/aggregation/list_boolean_selection.tql:8:12
+  |
+8 | select all=bs.all(), any=bs.any(), first=xs.first(), last=xs.last(),
+  |            ~~
+  |
+
+warning: expected `bool`, got `int`
+ --> tests/functions/aggregation/list_boolean_selection.tql:8:26
+  |
+8 | select all=bs.all(), any=bs.any(), first=xs.first(), last=xs.last(),
+  |                          ~~
+  |
+
+warning: expected `int`, `uint`, `float`, `duration`, or `time`, got `string`
+ --> tests/functions/aggregation/list_boolean_selection.tql:9:7
+  |
+9 |   min=xs.min(), max=xs.max()
+  |       ~~
+  |
+
+warning: expected `int`, `uint`, `float`, `duration`, or `time`, got `string`
+ --> tests/functions/aggregation/list_boolean_selection.tql:9:21
+  |
+9 |   min=xs.min(), max=xs.max()
+  |                     ~~
+  |
+{
+  all: null,
+  any: true,
+  first: 3,
+  last: 2,
+  min: 1.5,
+  max: 3.0,
+}
+{
+  all: false,
+  any: null,
+  first: 2024-01-01T00:00:00Z,
+  last: 2023-06-01T00:00:00Z,
+  min: 2023-06-01T00:00:00Z,
+  max: 2024-01-01T00:00:00Z,
+}
+{
+  all: true,
+  any: false,
+  first: null,
+  last: null,
+  min: null,
+  max: null,
+}
+{
+  all: null,
+  any: null,
+  first: null,
+  last: null,
+  min: null,
+  max: null,
+}
+{
+  all: null,
+  any: null,
+  first: "a",
+  last: "a",
+  min: null,
+  max: null,
+}

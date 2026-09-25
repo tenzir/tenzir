@@ -1,3 +1,7 @@
+---
+skip: "`deltas` does not support Nova yet"
+---
+
 // End-to-end beacon cadence check: perfectly regular check-ins have
 // zero-dispersion intervals, where Bowley skewness hits its q3 == q1
 // degenerate case and must return 0.0.

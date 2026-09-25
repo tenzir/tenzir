@@ -9,6 +9,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/statistics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -303,10 +304,102 @@ private:
   enum class state { none, failed, dur, numeric } state_{state::none};
 };
 
-class plugin final : public aggregation_plugin {
+struct MadArgs {
+  nova::ValueArgument x;
+};
+
+/// The buffered values of one `mad`, shared by the accumulator and the list
+/// kernel. Integers and durations are kept exact; any `float` makes the
+/// computation floating-point, as in the legacy implementation.
+class MadValues {
+public:
+  template <class T>
+  auto add(T value) -> void {
+    if constexpr (std::same_as<T, nova::Float>) {
+      floats_.push_back(value);
+    } else if constexpr (std::same_as<T, nova::Duration>) {
+      integers_.push_back(static_cast<WideInt>(value.count()));
+    } else {
+      integers_.push_back(static_cast<WideInt>(value));
+    }
+  }
+
+  auto get(nova_statistics::NumericKind const& kind) const -> nova::Data {
+    using enum nova_statistics::NumericKind::Kind;
+    if (kind.kind() == none or kind.kind() == failed
+        or (integers_.empty() and floats_.empty())) {
+      return nova::Data{};
+    }
+    if (kind.kind() == duration) {
+      auto const result = compute_integral_mad(integers_);
+      // Compare the exact rational result before narrowing it to the integral
+      // duration representation.
+      constexpr auto limit = static_cast<WideUint>(
+        std::numeric_limits<nova::Duration::rep>::max());
+      if (result.numerator > limit * result.denominator) {
+        return nova::Data{};
+      }
+      return nova::Data{nova::Duration{static_cast<nova::Duration::rep>(
+        result.numerator / result.denominator)}};
+    }
+    if (not floats_.empty()) {
+      auto values = floats_;
+      values.reserve(floats_.size() + integers_.size());
+      for (auto const x : integers_) {
+        values.push_back(static_cast<double>(x));
+      }
+      return nova::Data{compute_floating_mad(std::move(values))};
+    }
+    auto const result = compute_integral_mad(integers_);
+    return nova::Data{static_cast<double>(result.numerator)
+                      / static_cast<double>(result.denominator)};
+  }
+
+private:
+  std::vector<WideInt> integers_;
+  std::vector<double> floats_;
+};
+
+class MadFunction final {
+public:
+  static auto eval(MadArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova_statistics::eval_statistic<MadValues>(args.x, frame, true, [] {
+      return MadValues{};
+    });
+  }
+
+  auto update(MadArgs const& args, nova::EvalFrame frame) -> void {
+    kind_.visit(args.x.data, frame.mask(), args.x.source, frame,
+                [&](auto value) {
+                  values_.add(value);
+                });
+  }
+
+  auto get() const -> nova::Data {
+    return values_.get(kind_);
+  }
+
+  auto reset() -> void {
+    kind_ = nova_statistics::NumericKind{};
+    values_ = {};
+  }
+
+private:
+  nova_statistics::NumericKind kind_;
+  MadValues values_;
+};
+
+class plugin final : public aggregation_plugin, public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "mad";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<MadArgs, MadFunction>{};
+    d.positional("x", &MadArgs::x, "number|duration");
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

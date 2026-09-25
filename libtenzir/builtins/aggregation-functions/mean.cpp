@@ -9,6 +9,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/statistics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -153,10 +154,71 @@ private:
   size_t count_{};
 };
 
-class plugin : public virtual aggregation_plugin {
+struct MeanArgs {
+  nova::ValueArgument x;
+};
+
+/// The running mean, shared by the accumulator and the list kernel.
+class Mean {
+public:
+  template <class T>
+  auto add(T value) -> void {
+    count_ += 1;
+    mean_ += (nova_statistics::to_double(value) - mean_)
+             / static_cast<double>(count_);
+  }
+
+  auto get(nova_statistics::NumericKind const& kind) const -> nova::Data {
+    return nova_statistics::make_result(kind,
+                                        count_ == 0 ? None{} : Option{mean_});
+  }
+
+private:
+  double mean_ = 0.0;
+  size_t count_ = 0;
+};
+
+class MeanFunction final {
+public:
+  static auto eval(MeanArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova_statistics::eval_statistic<Mean>(args.x, frame, true, [] {
+      return Mean{};
+    });
+  }
+
+  auto update(MeanArgs const& args, nova::EvalFrame frame) -> void {
+    kind_.visit(args.x.data, frame.mask(), args.x.source, frame,
+                [&](auto value) {
+                  mean_.add(value);
+                });
+  }
+
+  auto get() const -> nova::Data {
+    return mean_.get(kind_);
+  }
+
+  auto reset() -> void {
+    kind_ = nova_statistics::NumericKind{};
+    mean_ = {};
+  }
+
+private:
+  nova_statistics::NumericKind kind_;
+  Mean mean_;
+};
+
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return "mean";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<MeanArgs, MeanFunction>{};
+    d.positional("x", &MeanArgs::x, "number|duration");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

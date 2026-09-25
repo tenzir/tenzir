@@ -9,6 +9,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/value_counts.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -97,10 +98,61 @@ private:
   list result_;
 };
 
-class plugin : public virtual aggregation_plugin {
+struct CollectArgs {
+  nova::ValueArgument x;
+};
+
+/// The nova `collect`: the non-null values in order.
+class CollectFunction final {
+public:
+  static auto eval(CollectArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::aggregate_lists(
+      args.x, frame,
+      [](nova::ListElements const& elements,
+         nova::ArrayBuilder<nova::Data>& builder) {
+        auto list = builder.list();
+        for (auto i = elements.begin; i < elements.end; ++i) {
+          auto const value = elements.values.get(i);
+          if (not nova_value_counts::is_null(value)) {
+            nova::append_row(list, value);
+          }
+        }
+      });
+  }
+
+  auto update(CollectArgs const& args, nova::EvalFrame frame) -> void {
+    for (auto row : nova::storage::true_bits(frame.mask())) {
+      auto const value = args.x.data.get(row);
+      if (not nova_value_counts::is_null(value)) {
+        result_.push_back(nova::to_data(value));
+      }
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return nova::Data{result_};
+  }
+
+  auto reset() -> void {
+    result_ = {};
+  }
+
+private:
+  nova::List result_;
+};
+
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return "collect";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<CollectArgs, CollectFunction>{};
+    d.positional("x", &CollectArgs::x, "any");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

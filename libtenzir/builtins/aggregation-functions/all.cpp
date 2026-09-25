@@ -9,6 +9,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/all_any.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -113,10 +114,18 @@ private:
   enum class state : int8_t { none, failed, nulled } state_{state::none};
 };
 
-class plugin final : public virtual aggregation_plugin {
+class plugin final : public virtual aggregation_plugin,
+                     public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return "all";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    using namespace nova_all_any;
+    auto d = nova::AggregationDescriber<AllAnyArgs, AllAnyFunction<true>>{};
+    d.positional("x", &AllAnyArgs::x, "bool");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;

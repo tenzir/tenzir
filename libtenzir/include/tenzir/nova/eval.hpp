@@ -29,7 +29,7 @@ namespace tenzir::nova {
 struct Events;
 class Evaluator;
 class LambdaArgument;
-class AggregationInstance;
+class Aggregation;
 
 namespace _ {
 
@@ -37,7 +37,7 @@ class CallSite;
 class EvalRun;
 
 template <class Args, class Impl>
-class AggregationInstanceImpl;
+class PreparedAggregation;
 
 } // namespace _
 
@@ -150,6 +150,13 @@ public:
   auto eval_elements(LambdaArgument const& lambda,
                      storage::ListStorage const& list) const -> Array<Data>;
 
+  /// Like above, but only for the elements that are also in `elements`, which
+  /// is sized like `list.values()`. The other elements hold unspecified
+  /// values. For skipping elements the body must not see, such as nulls.
+  auto
+  eval_elements(LambdaArgument const& lambda, storage::ListStorage const& list,
+                storage::BitMap const& elements) const -> Array<Data>;
+
   /// An all-null result for `mask()`. Not `&&`-qualified: it only reads the
   /// frame's length, so a frame can hand out several.
   auto null() const -> Array<Data>;
@@ -171,7 +178,7 @@ private:
   friend class _::EvalRun;
   friend class Evaluator;
   template <class Args, class Impl>
-  friend class _::AggregationInstanceImpl;
+  friend class _::PreparedAggregation;
 
   EvalFrame(_::EvalRun& run, storage::BitMap mask)
     : run_{std::addressof(run)}, mask_{std::move(mask)} {
@@ -179,6 +186,12 @@ private:
 
   auto detached_impl(storage::BitMap mask, void* ctx,
                      void (*f)(void*, EvalFrame)) const -> void;
+
+  /// `eval_elements` for exactly the elements of `elements`, which must
+  /// belong to the rows of `mask()`.
+  auto eval_selected_elements(LambdaArgument const& lambda,
+                              storage::ListStorage const& list,
+                              storage::BitMap elements) const -> Array<Data>;
 
   _::EvalRun* run_;
   storage::BitMap mask_;
@@ -214,9 +227,9 @@ public:
 
 private:
   friend class _::EvalRun;
-  friend class AggregationInstance;
+  friend class Aggregation;
   template <class Args, class Impl>
-  friend class _::AggregationInstanceImpl;
+  friend class _::PreparedAggregation;
 
   explicit Evaluator(ast::expression expression);
   auto prepare(ast::expression& expression, InstantiateCtx ctx)

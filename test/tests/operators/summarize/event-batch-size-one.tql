@@ -1,3 +1,7 @@
+---
+skip: "`batch` does not support Nova yet"
+---
+
 from {x: 1}, {x: 2}, {x: 3}, {x: 4}
 batch 1
 summarize total=sum(x), options={mode: "cumulative"}

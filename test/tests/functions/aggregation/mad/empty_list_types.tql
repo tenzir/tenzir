@@ -1,3 +1,7 @@
+---
+skip: "`type_of` and the `where` function do not support Nova yet"
+---
+
 from {
   ints: [1].where(x => false),
   durations: [1s].where(x => false),

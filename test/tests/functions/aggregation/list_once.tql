@@ -1,0 +1,3 @@
+// `once` over a list takes the only element and warns if there are more.
+from {xs: [42]}, {xs: [1, 2]}, {xs: []}
+select once=xs.once()

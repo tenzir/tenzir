@@ -1,0 +1,45 @@
+{
+  collect: [
+    "b",
+    1,
+    "a",
+    1,
+    "b",
+    1,
+  ],
+  distinct: [
+    "b",
+    1,
+    "a",
+  ],
+  count_distinct: 3,
+  value_counts: [
+    {
+      value: 1,
+      count: 3,
+    },
+    {
+      value: "a",
+      count: 1,
+    },
+    {
+      value: "b",
+      count: 2,
+    },
+  ],
+  mode: 1,
+}
+{
+  collect: [],
+  distinct: [],
+  count_distinct: 0,
+  value_counts: [],
+  mode: null,
+}
+{
+  collect: null,
+  distinct: null,
+  count_distinct: null,
+  value_counts: null,
+  mode: null,
+}

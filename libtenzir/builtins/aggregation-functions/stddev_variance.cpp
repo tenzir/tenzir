@@ -9,6 +9,7 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/aggregation/statistics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -190,11 +191,87 @@ private:
   ast::expression expr_;
 };
 
+struct StddevVarianceArgs {
+  nova::ValueArgument x;
+};
+
+/// The running mean and mean of squares, shared by the accumulator and the
+/// list kernel. Only `stddev` accepts durations.
 template <mode Mode>
-class plugin : public virtual aggregation_plugin {
+class Dispersion {
+public:
+  template <class T>
+  auto add(T value) -> void {
+    auto const x = nova_statistics::to_double(value);
+    count_ += 1;
+    auto const n = static_cast<double>(count_);
+    mean_ += (x - mean_) / n;
+    mean_squared_ += ((x * x) - mean_squared_) / n;
+  }
+
+  auto get(nova_statistics::NumericKind const& kind) const -> nova::Data {
+    if (count_ == 0) {
+      return nova::Data{};
+    }
+    auto const variance = mean_squared_ - (mean_ * mean_);
+    return nova_statistics::make_result(
+      kind, Mode == mode::stddev ? std::sqrt(variance) : variance);
+  }
+
+private:
+  double mean_ = 0.0;
+  double mean_squared_ = 0.0;
+  size_t count_ = 0;
+};
+
+template <mode Mode>
+class StddevVarianceFunction final {
+public:
+  static constexpr auto allow_duration = Mode == mode::stddev;
+
+  static auto eval(StddevVarianceArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova_statistics::eval_statistic<Dispersion<Mode>>(
+      args.x, frame, allow_duration, [] {
+        return Dispersion<Mode>{};
+      });
+  }
+
+  auto update(StddevVarianceArgs const& args, nova::EvalFrame frame) -> void {
+    kind_.visit(args.x.data, frame.mask(), args.x.source, frame,
+                [&](auto value) {
+                  dispersion_.add(value);
+                });
+  }
+
+  auto get() const -> nova::Data {
+    return dispersion_.get(kind_);
+  }
+
+  auto reset() -> void {
+    kind_ = nova_statistics::NumericKind{allow_duration};
+    dispersion_ = {};
+  }
+
+private:
+  nova_statistics::NumericKind kind_{allow_duration};
+  Dispersion<Mode> dispersion_;
+};
+
+template <mode Mode>
+class plugin : public virtual aggregation_plugin,
+               public virtual nova::AggregationPlugin {
   auto name() const -> std::string override {
     return Mode == mode::stddev ? "stddev" : "variance";
   };
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<StddevVarianceArgs,
+                                        StddevVarianceFunction<Mode>>{};
+    d.positional("x", &StddevVarianceArgs::x,
+                 Mode == mode::stddev ? "number|duration" : "number");
+    return std::move(d).finish();
+  }
 
   auto is_deterministic() const -> bool override {
     return true;
