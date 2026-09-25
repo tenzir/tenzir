@@ -17,6 +17,9 @@
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/nova/array.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -171,6 +174,41 @@ auto print_node(auto& out, const View& value) -> void {
   }
 };
 
+auto print_event_node(YAML::Emitter& out,
+                      nova::RowView<nova::Data> const& value) -> void {
+  match(value, [&]<class Tag>(nova::RowView<Tag> const& value) {
+    if constexpr (std::same_as<Tag, nova::Null>) {
+      out << YAML::Null;
+    } else if constexpr (std::same_as<Tag, nova::Bool>) {
+      out << (*value ? "true" : "false");
+    } else if constexpr (detail::is_any_v<Tag, nova::Int, nova::UInt>) {
+      out << *value;
+    } else if constexpr (std::same_as<Tag, nova::String>) {
+      out << std::string{*value};
+    } else if constexpr (std::same_as<Tag, nova::Blob>) {
+      out << detail::base64::encode(*value);
+    } else if constexpr (detail::is_any_v<Tag, nova::Float, nova::Duration,
+                                          nova::Time, nova::Ip, nova::Subnet>) {
+      out << fmt::to_string(data{*value});
+    } else if constexpr (std::same_as<Tag, nova::List>) {
+      out << YAML::BeginSeq;
+      for (auto element : value) {
+        print_event_node(out, element);
+      }
+      out << YAML::EndSeq;
+    } else if constexpr (std::same_as<Tag, nova::Record>) {
+      out << YAML::BeginMap;
+      for (auto [key, element] : value) {
+        out << YAML::Key << std::string{key} << YAML::Value;
+        print_event_node(out, element);
+      }
+      out << YAML::EndMap;
+    } else {
+      static_assert(detail::always_false_v<Tag>, "missing overload");
+    }
+  });
+}
+
 template <class View>
 auto print_document(YAML::Emitter& out, const View& row) -> void {
   out << YAML::BeginDoc;
@@ -198,6 +236,35 @@ auto render_yaml(table_slice slice, diagnostic_handler& diag) -> chunk_ptr {
   // If the output failed, then we either failed to allocate memory or had a
   // mismatch between BeginSeq and EndSeq or BeginMap and EndMap; all of these
   // we cannot recover from.
+  if (not out->good()) {
+    diagnostic::error("failed to format YAML document").emit(diag);
+    return {};
+  }
+  const auto* data = reinterpret_cast<const std::byte*>(out->c_str());
+  auto size = out->size();
+  auto meta = chunk_metadata{.content_type = "application/x-yaml"};
+  return chunk::make(
+    data, size,
+    [emitter = std::move(out)]() noexcept {
+      static_cast<void>(emitter);
+    },
+    std::move(meta));
+}
+
+auto render_yaml(nova::Events const& events, diagnostic_handler& diag)
+  -> chunk_ptr {
+  if (not events.mask.any()) {
+    return {};
+  }
+  auto out = std::make_unique<YAML::Emitter>();
+  out->SetOutputCharset(YAML::EscapeNonAscii);
+  out->SetNullFormat(YAML::LowerNull);
+  out->SetIndent(2);
+  for (auto row : nova::storage::true_bits(events.mask)) {
+    *out << YAML::BeginDoc;
+    print_event_node(*out, events.data.get(row));
+    *out << YAML::EndDoc;
+  }
   if (not out->good()) {
     diagnostic::error("failed to format YAML document").emit(diag);
     return {};
@@ -509,6 +576,20 @@ public:
   }
 };
 
+class WriteYamlEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteYamlEvents(WriteYamlArgs args) {
+    TENZIR_UNUSED(args);
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (auto chunk = render_yaml(input, ctx.dh())) {
+      co_await push(std::move(chunk));
+    }
+  }
+};
+
 class write_yaml final : public virtual operator_factory_plugin,
                          public virtual OperatorPlugin {
 public:
@@ -517,7 +598,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteYamlArgs, WriteYaml>{};
+    auto d = Describer<WriteYamlArgs, WriteYaml, WriteYamlEvents>{};
     return d.without_optimize();
   }
 
