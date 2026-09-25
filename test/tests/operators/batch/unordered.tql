@@ -1,10 +1,7 @@
-from_file f"{env("TENZIR_INPUTS")}/pcap/suricata/eve.json.gz" {
-  decompress_gzip
-  read_suricata
-}
-repeat 10
+from {kind: "alert", id: 1}, {kind: "flow", id: 2}, {kind: "alert", id: 3}
+repeat 3
 unordered {
-  batch
+  batch 4
 }
 measure
 drop timestamp

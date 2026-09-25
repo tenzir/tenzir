@@ -14,6 +14,10 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/data_array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -164,6 +168,122 @@ private:
   mutable std::unique_ptr<Notify> buffer_ready_ = std::make_unique<Notify>();
 };
 
+class BatchEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit BatchEvents(BatchArgs args)
+    : limit_{args.limit}, timeout_{args.timeout} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      if (buffer_.length() == 0) {
+        start_time_ = std::chrono::steady_clock::now();
+      }
+      buffer_.append(input, row);
+      if (static_cast<uint64_t>(buffer_.length()) == limit_) {
+        co_await flush(push);
+      }
+    }
+    update_next_timeout();
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (not next_timeout_) {
+      co_await buffer_ready_->wait();
+    }
+    if (next_timeout_) {
+      co_await sleep_until(*next_timeout_);
+    }
+    co_return {};
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    if (next_timeout_ and std::chrono::steady_clock::now() >= *next_timeout_) {
+      co_await flush(push);
+    }
+    update_next_timeout();
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  struct EventsBuilder {
+    auto append(nova::Events const& input, nova::storage::Index row) -> void {
+      auto output = data.record();
+      for (auto [name, value] : input.data.get(row)) {
+        nova::append_row(output.field(name), value);
+      }
+      names.data(*input.meta.name.get(row));
+      import_times.data(*input.meta.import_time.get(row));
+      internal.data(*input.meta.internal.get(row));
+    }
+
+    auto length() const -> nova::storage::Index {
+      return data.length();
+    }
+
+    auto finish() && -> nova::Events {
+      auto result = data.finish();
+      auto mask = nova::storage::BitMap{result.length(), true};
+      return {
+        std::move(result),
+        std::move(mask),
+        {
+          .name = names.finish(),
+          .import_time = import_times.finish(),
+          .internal = internal.finish(),
+        },
+      };
+    }
+
+    nova::ArrayBuilder<nova::Record> data;
+    nova::ArrayBuilder<nova::String> names;
+    nova::ArrayBuilder<nova::Time> import_times;
+    nova::ArrayBuilder<nova::Bool> internal;
+  };
+
+  auto update_next_timeout() -> void {
+    auto const was_null = next_timeout_.is_none();
+    next_timeout_ = buffer_.length() > 0
+                      ? Option{start_time_ + timeout_}
+                      : Option<std::chrono::steady_clock::time_point>{None{}};
+    if (was_null and next_timeout_) {
+      buffer_ready_->notify_one();
+    }
+  }
+
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    if (buffer_.length() == 0) {
+      co_return;
+    }
+    co_await push(std::exchange(buffer_, EventsBuilder{}).finish());
+    next_timeout_ = None{};
+  }
+
+  uint64_t limit_;
+  duration timeout_;
+  EventsBuilder buffer_;
+  std::chrono::steady_clock::time_point start_time_;
+  mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
+  mutable std::unique_ptr<Notify> buffer_ready_ = std::make_unique<Notify>();
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -171,7 +291,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<BatchArgs, Batch>{};
+    auto d = Describer<BatchArgs, Batch, BatchEvents>{};
     auto limit = d.optional_positional("limit", &BatchArgs::limit);
     auto timeout = d.named_optional("timeout", &BatchArgs::timeout);
     d.optimization(&BatchArgs::optimization);

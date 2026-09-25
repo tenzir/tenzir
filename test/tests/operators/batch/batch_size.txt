@@ -6,7 +6,3 @@
   events: 1,
   selected: 1,
 }
-{
-  events: 1,
-  selected: 1,
-}
