@@ -1,0 +1,5 @@
+export
+repeat 3
+where x == 1
+select y
+head 2

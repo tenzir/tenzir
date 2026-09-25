@@ -1,0 +1,4 @@
+export
+deduplicate a, count_field=b.count
+where b.count == 0 and b.other == 1
+select d

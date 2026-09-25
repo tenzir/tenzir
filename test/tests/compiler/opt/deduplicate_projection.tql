@@ -1,0 +1,4 @@
+export
+deduplicate a, b.c
+select d
+head 2

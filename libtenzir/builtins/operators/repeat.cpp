@@ -182,8 +182,25 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<RepeatArgs, Repeat<table_slice>, Repeat<nova::Events>>{};
-    d.optional_positional("count", &RepeatArgs::count);
-    return d.invariant_order_filter();
+    auto count = d.optional_positional("count", &RepeatArgs::count);
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // `repeat` emits its input unchanged and then replays it, so every
+        // predicate commutes with it and the projection passes through. The
+        // first N outputs are the first N inputs whenever the input has at
+        // least N events, so a downstream limit also passes through. A count
+        // of zero emits nothing and needs no input.
+        auto limit = req.limit;
+        if (auto value = ctx.get(count); value and *value == 0) {
+          limit = 0;
+        }
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(req.filter),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

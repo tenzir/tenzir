@@ -689,7 +689,57 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // Which events survive depends on their position and on every event
+        // with the same key, so `deduplicate` needs ordered input and keeps
+        // all predicates and limits behind it. Even a predicate on the key
+        // alone may observe metadata, randomness, or diagnostics that differ
+        // between the duplicates it would then see. Upstream must produce the
+        // fields downstream reads plus the keys. Without explicit keys, the
+        // whole event is the key.
+        auto projection = std::move(req.projection);
+        // The count field is assigned on every emitted event, so neither
+        // downstream operators nor the predicates kept behind us observe its
+        // upstream value.
+        auto produced = std::vector<ast::field_path>{};
+        if (ctx.get_location(count_field)) {
+          if (auto path = ctx.get(count_field)) {
+            if (projection) {
+              std::erase_if(*projection, [&](const ast::field_path& other) {
+                return ir::is_field_path_prefix(*path, other);
+              });
+              // A nested assignment observes its existing parent and warns
+              // when a scalar must be replaced by an implicit record. Retain
+              // the target so projection cannot hide that diagnostic.
+              if (path->path().size() > 1) {
+                ir::add_to_projection(projection, *path);
+              }
+            }
+            produced.push_back(std::move(*path));
+          } else {
+            projection = None{};
+          }
+        }
+        // Keys read the input before the count field is assigned.
+        auto key_values = ctx.get_all(keys);
+        if (key_values.empty()) {
+          projection = None{};
+        }
+        for (const auto& key : key_values) {
+          if (not key) {
+            projection = None{};
+            break;
+          }
+          ir::add_refs_to_projection(projection, *key);
+        }
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(projection),
+          .produced = std::move(produced),
+        };
+      });
   }
 };
 

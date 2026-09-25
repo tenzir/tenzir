@@ -1,0 +1,3 @@
+export
+deduplicate a, count_field=count
+select count, d

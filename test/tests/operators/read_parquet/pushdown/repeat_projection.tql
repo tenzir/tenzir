@@ -1,0 +1,8 @@
+// `repeat` forwards the projection, so the corrupted unselected column is never
+// decoded. The limit exceeds the input, so the replay starts.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+repeat 2
+select id
+head 11

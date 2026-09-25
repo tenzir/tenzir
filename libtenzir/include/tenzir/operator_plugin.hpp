@@ -208,8 +208,12 @@ struct Optimization {
   Option<uint64_t> limit_upstream = {};
   /// Projection that should be pushed into upstream. See
   /// `ir::OptimizeRequest::projection` for the semantics. The references of
-  /// `filter_self` are added automatically.
+  /// `filter_self` are added automatically, except those within `produced`.
   Option<ir::OptimizeProjection> projection_upstream = {};
+  /// Fields that the operator assigns on every output event, so upstream never
+  /// needs to produce them for `filter_self`. The operator must still retain
+  /// whatever it reads itself, such as the parent of a nested assignment.
+  std::vector<ast::field_path> produced = {};
 };
 
 using Optimizer

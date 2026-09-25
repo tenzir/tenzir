@@ -1,0 +1,155 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `d` @ [1]:54..55 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `d` @ [1]:54..55 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `a` @ [1]:19..20 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `a` @ [1]:19..20 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "deduplicate",
+       store: {
+         op: {
+           path: [
+             `deduplicate` @ [1]:7..18 from 0
+           ],
+           ref: std::deduplicate/op
+         },
+         args: [
+           expression root_field {
+             id: `a` @ [1]:19..20 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           {
+             index: 5,
+             value: field_path {
+               expr: root_field {
+                 id: `count` @ [1]:34..39 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `count` @ [1]:34..39 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `count` @ [1]:47..52 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `count` @ [1]:47..52 from 0,
+             has_question_mark: false
+           },
+           location: [1]:47..52 from 0
+         },
+         {
+           left: root_field {
+             id: `d` @ [1]:54..55 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `d` @ [1]:54..55 from 0,
+             has_question_mark: false
+           },
+           location: [1]:54..55 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:55..55 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

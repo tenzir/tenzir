@@ -1,0 +1,8 @@
+// `repeat` forwards the downstream limit, so the corrupted second row group is
+// never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-lookahead" {
+  read_parquet
+}
+repeat 2
+select id
+head 3

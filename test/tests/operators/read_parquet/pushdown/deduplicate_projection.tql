@@ -1,0 +1,7 @@
+// `deduplicate` forwards the projection plus its key, so the corrupted
+// unselected column is never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+deduplicate nested.sibling, limit=2
+select id

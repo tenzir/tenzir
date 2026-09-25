@@ -1,0 +1,8 @@
+// A filter and limit pushed through `repeat` still replay the matching events.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_parquet
+}
+repeat 2
+where id >= 7
+select id
+head 3

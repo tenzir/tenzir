@@ -841,9 +841,27 @@ public:
                                    .projection = std::move(req.projection),
                                  });
     // A projection pushed upstream must cover the references of the predicates
-    // kept behind this operator, because those run on upstream's fields.
+    // kept behind this operator, because those run on upstream's fields. Fields
+    // that the operator produces itself are exempt.
     for (const auto& expr : optimization.filter_self) {
-      ir::add_refs_to_projection(optimization.projection_upstream, expr);
+      auto& projection = optimization.projection_upstream;
+      if (not projection) {
+        break;
+      }
+      auto refs = ast::collect_refs(expr);
+      if (not refs) {
+        projection = None{};
+        break;
+      }
+      for (const auto& path : refs->field_paths) {
+        auto produced = std::ranges::any_of(
+          optimization.produced, [&](const ast::field_path& field) {
+            return ir::is_field_path_prefix(field, path);
+          });
+        if (not produced) {
+          ir::add_to_projection(projection, path);
+        }
+      }
     }
     auto replacement = std::vector<Box<Operator>>{};
     // construct replacement
