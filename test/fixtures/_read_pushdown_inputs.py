@@ -1,10 +1,10 @@
 """Generate columnar inputs for reader pushdown tests.
 
 READ_PUSHDOWN_ROOT contains input, clean, and corrupt-unused files. Parquet
-also provides a copy of the input whose nested sibling field is corrupt, and a
-wide file whose size dwarfs the reader's footer read, plus a gzipped copy, so
-that tests can tell a random-access scan from a whole-file read by the bytes it
-fetches. IPC formats also provide a store envelope; IPC
+also provides a copy of the input whose nested sibling field is corrupt, a file
+whose columns hold one value per row group, and a wide file whose size dwarfs
+the reader's footer read, plus a gzipped copy, so that tests can tell a
+random-access scan from a whole-file read by the bytes it fetches. IPC formats also provide a store envelope; IPC
 streams additionally provide concatenated schemas and trailing corruption. The
 fixture only generates inputs: TQL tests and their baselines check reader
 behavior.
@@ -96,6 +96,18 @@ def _setup_inputs(root: Path, format: str) -> None:
         damaged = bytearray(corrupted.read_bytes())
         damaged[sibling.data_page_offset] = 0
         corrupted.write_bytes(damaged)
+        # Columns with one value per row group, which readers may keep as
+        # dictionaries, next to ones whose nulls or values vary.
+        constants = pa.table(
+            {
+                "id": pa.array(range(9), pa.int64()),
+                "group": pa.array(["a"] * 3 + ["b"] * 3 + ["c"] * 3),
+                "gaps": pa.array(["x", None, "x", "x", "x", "x", None, None, None]),
+                "bytes": pa.array([b"\x00"] * 9, pa.binary()),
+                "category": pa.array(["same"] * 9).dictionary_encode(),
+            }
+        )
+        pq.write_table(constants, root / "constants", row_group_size=3)
         pq.write_table(
             table.select(["unused"]), root / "unsupported-only", row_group_size=3
         )

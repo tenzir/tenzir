@@ -14,6 +14,7 @@
 #include <parquet/arrow/schema.h>
 #include <parquet/metadata.h>
 #include <parquet/properties.h>
+#include <parquet/statistics.h>
 
 #include <algorithm>
 #include <numeric>
@@ -99,6 +100,22 @@ auto select_columns(::parquet::FileMetaData const& metadata,
   auto duplicates = std::ranges::unique(columns);
   columns.erase(duplicates.begin(), duplicates.end());
   return columns;
+}
+
+auto is_constant_chunk(::parquet::RowGroupMetaData const& row_group, int column)
+  -> bool {
+  auto chunk = row_group.ColumnChunk(column);
+  // Arrow keeps only byte arrays as dictionaries.
+  if (chunk->type() != ::parquet::Type::BYTE_ARRAY
+      or not chunk->has_dictionary_page() or not chunk->is_stats_set()) {
+    return false;
+  }
+  // Equal bounds imply a single value under any ordering, so the column order
+  // does not matter here.
+  auto stats = chunk->statistics();
+  return stats and stats->HasMinMax() and stats->HasNullCount()
+         and stats->null_count() == 0
+         and stats->EncodeMin() == stats->EncodeMax();
 }
 
 } // namespace tenzir::plugins::parquet

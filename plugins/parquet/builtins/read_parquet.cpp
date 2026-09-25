@@ -273,25 +273,21 @@ public:
     // The input already is an in-memory buffer. Pre-buffering would coalesce
     // and copy the selected column chunks a second time without any I/O win.
     arrow_reader_properties.set_pre_buffer(false);
-    std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
+    auto corrupted
+      = [&](::parquet::ParquetInvalidOrCorruptedFileException const& err) {
+          diagnostic::error("invalid or corrupted parquet file: {}", err.what())
+            .emit(ctx);
+        };
+    // The decoder's properties depend on the metadata, so read it first.
+    std::unique_ptr<::parquet::ParquetFileReader> input_buffer;
     try {
-      auto input_buffer = ::parquet::ParquetFileReader::Open(
+      input_buffer = ::parquet::ParquetFileReader::Open(
         std::move(input_file), parquet_reader_properties);
-      auto out_buffer_result = ::parquet::arrow::FileReader::Make(
-        arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
-      if (not out_buffer_result.ok()) {
-        diagnostic::error(
-          "{}", out_buffer_result.status().ToStringWithoutContextLines())
-          .emit(ctx);
-        co_return FinalizeBehavior::done;
-      }
-      out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
     } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
-      diagnostic::error("invalid or corrupted parquet file: {}", err.what())
-        .emit(ctx);
+      corrupted(err);
       co_return FinalizeBehavior::done;
     }
-    auto metadata = out_buffer->parquet_reader()->metadata();
+    auto metadata = input_buffer->metadata();
     auto columns = select_columns(*metadata, projection_);
     // Zero-column batches preserve cardinality without decoding unrequested
     // columns, which may contain unsupported types or corrupt data.
@@ -307,6 +303,35 @@ public:
       if (filter_.empty() and remaining_ and available >= *remaining_) {
         break;
       }
+    }
+    // One decoder reads all row groups, so a column stays a dictionary only if
+    // it holds a single value in each of them. Every row group brings its own
+    // dictionary, and Arrow cannot assemble a column inside records or lists
+    // from several of them.
+    for (auto column : columns) {
+      auto const* root = metadata->schema()->GetColumnRoot(column);
+      auto flat = root->is_primitive() and not root->is_repeated();
+      if ((flat or row_groups.size() == 1)
+          and std::ranges::all_of(row_groups, [&](int group) {
+                return is_constant_chunk(*metadata->RowGroup(group), column);
+              })) {
+        arrow_reader_properties.set_read_dictionary(column, true);
+      }
+    }
+    std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
+    try {
+      auto out_buffer_result = ::parquet::arrow::FileReader::Make(
+        arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
+      if (not out_buffer_result.ok()) {
+        diagnostic::error(
+          "{}", out_buffer_result.status().ToStringWithoutContextLines())
+          .emit(ctx);
+        co_return FinalizeBehavior::done;
+      }
+      out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
+    } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
+      corrupted(err);
+      co_return FinalizeBehavior::done;
     }
     if (row_groups.empty()) {
       co_return FinalizeBehavior::done;
@@ -627,7 +652,13 @@ private:
           // The lazy default defers fetching until the first read.
           arrow_properties.set_cache_options(
             arrow::io::CacheOptions::Defaults());
-          auto rows = metadata->RowGroup(group)->num_rows();
+          auto row_group = metadata->RowGroup(group);
+          for (auto column : columns) {
+            if (is_constant_chunk(*row_group, column)) {
+              arrow_properties.set_read_dictionary(column, true);
+            }
+          }
+          auto rows = row_group->num_rows();
           auto parquet
             = ::parquet::ParquetFileReader::Open(file, properties, metadata);
           ARROW_ASSIGN_OR_RAISE(

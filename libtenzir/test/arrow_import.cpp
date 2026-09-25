@@ -131,6 +131,79 @@ TEST("Arrow dictionaries import their values rather than their indices") {
   CHECK_EQUAL(nova::materialize(result.get(2)), data{"first"});
 }
 
+namespace {
+
+auto make_dictionary(std::vector<Option<int32_t>> const& indices,
+                     std::shared_ptr<arrow::Array> values)
+  -> std::shared_ptr<arrow::Array> {
+  auto builder = arrow::Int32Builder{};
+  for (auto index : indices) {
+    REQUIRE((index ? builder.Append(*index) : builder.AppendNull()).ok());
+  }
+  return arrow::DictionaryArray::FromArrays(builder.Finish().ValueOrDie(),
+                                            std::move(values))
+    .ValueOrDie();
+}
+
+auto make_strings(std::vector<Option<std::string>> const& values)
+  -> std::shared_ptr<arrow::Array> {
+  auto builder = arrow::StringBuilder{};
+  for (auto const& value : values) {
+    REQUIRE((value ? builder.Append(*value) : builder.AppendNull()).ok());
+  }
+  return builder.Finish().ValueOrDie();
+}
+
+template <class Tag>
+auto is_constant(nova::Array<nova::Data> const& array) -> bool {
+  auto values = array.get_alternative<Tag>();
+  REQUIRE(values);
+  using Constant
+    = nova::storage::ConstantStorage<Tag, typename nova::Type<Tag>::ViewType>;
+  return is<Constant>(values->data.storage());
+}
+
+} // namespace
+
+TEST("Arrow dictionaries whose rows name one value import as constants") {
+  auto result = import(*make_dictionary({0, 0, 0}, make_strings({"only"})));
+  CHECK(is_constant<nova::String>(result));
+  CHECK_EQUAL(result.length(), 3);
+  CHECK_EQUAL(nova::materialize(result.get(2)), data{"only"});
+  // Rows may all name one of several values, also within a slice.
+  auto input
+    = make_dictionary({0, 1, 1, 1}, make_strings({"a", "b"}))->Slice(1);
+  result = import(*input);
+  CHECK(is_constant<nova::String>(result));
+  CHECK_EQUAL(result.length(), 3);
+  CHECK_EQUAL(nova::materialize(result.get(0)), data{"b"});
+  auto bytes = arrow::BinaryBuilder{};
+  REQUIRE(bytes.Append(std::string_view{"\x01\x02"}).ok());
+  result = import(*make_dictionary({0, 0}, bytes.Finish().ValueOrDie()));
+  CHECK(is_constant<nova::Blob>(result));
+  auto expected = blob{};
+  expected.push_back(std::byte{1});
+  expected.push_back(std::byte{2});
+  CHECK_EQUAL(nova::materialize(result.get(1)), data{expected});
+}
+
+TEST("Arrow dictionaries with nulls or several values import per row") {
+  auto result = import(*make_dictionary({0, 1}, make_strings({"a", "b"})));
+  CHECK(not is_constant<nova::String>(result));
+  CHECK_EQUAL(nova::materialize(result.get(0)), data{"a"});
+  CHECK_EQUAL(nova::materialize(result.get(1)), data{"b"});
+  result = import(*make_dictionary({0, None{}, 0}, make_strings({"a"})));
+  CHECK_EQUAL(nova::materialize(result.get(0)), data{"a"});
+  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
+  CHECK_EQUAL(nova::materialize(result.get(2)), data{"a"});
+  // A null value is not a constant of its type.
+  result = import(*make_dictionary({0, 0}, make_strings({None{}})));
+  CHECK_EQUAL(nova::materialize(result.get(0)), data{});
+  CHECK_EQUAL(nova::materialize(result.get(1)), data{});
+  result = import(*make_dictionary({}, make_strings({"a"})));
+  CHECK_EQUAL(result.length(), 0);
+}
+
 TEST("Arrow numeric imports preserve physical widths and own their buffers") {
   auto check = []<class ArrowType, class Tag>() {
     using Value = typename ArrowType::c_type;

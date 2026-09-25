@@ -15,6 +15,7 @@
 
 namespace parquet {
 class FileMetaData;
+class RowGroupMetaData;
 } // namespace parquet
 
 namespace tenzir::plugins::parquet {
@@ -30,5 +31,15 @@ namespace tenzir::plugins::parquet {
 auto select_columns(::parquet::FileMetaData const& metadata,
                     Option<ir::OptimizeProjection> const& projection)
   -> std::vector<int>;
+
+/// Whether the chunk of a leaf column in a row group is dictionary-encoded and
+/// holds a single valid value, going by its statistics.
+///
+/// Reading such a chunk as a dictionary lets the import create a constant
+/// instead of one copy of the value per row. The import checks that the rows
+/// really share one value, so statistics that only look constant, such as
+/// truncated bounds, merely cost that check.
+auto is_constant_chunk(::parquet::RowGroupMetaData const& row_group, int column)
+  -> bool;
 
 } // namespace tenzir::plugins::parquet

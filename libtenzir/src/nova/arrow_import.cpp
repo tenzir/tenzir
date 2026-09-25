@@ -6,6 +6,8 @@
 
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/union_array.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/compute/cast.h>
@@ -212,6 +214,42 @@ auto import_bytes(ArrowArray const& input, ArrowBuffers& buffers)
   }
   return Array<Data>{Array<Tag>{typename Type<Tag>::PrimaryPhysicalStorage{
     std::move(data), copy_spans(input)}}};
+}
+
+/// The value that every row of a dictionary refers to, if they all refer to
+/// the same valid string or blob. Readers keep columns as dictionaries where
+/// they expect a single value, which then becomes a constant instead of one
+/// copy per row.
+auto constant_value(arrow::DictionaryArray const& input) -> Option<Data> {
+  if (input.length() == 0 or input.null_count() != 0) {
+    return None{};
+  }
+  auto const& dictionary = *input.dictionary();
+  auto index = input.GetValueIndex(0);
+  // Indices are in bounds, so all rows name the only value of a dictionary
+  // that has one.
+  if (dictionary.length() != 1) {
+    for (auto i = int64_t{1}; i < input.length(); ++i) {
+      if (input.GetValueIndex(i) != index) {
+        return None{};
+      }
+    }
+  }
+  if (dictionary.IsNull(index)) {
+    return None{};
+  }
+  switch (dictionary.type_id()) {
+    case arrow::Type::STRING:
+      return Data{String{as<arrow::StringArray>(dictionary).GetView(index)}};
+    case arrow::Type::BINARY: {
+      auto view = as<arrow::BinaryArray>(dictionary).GetView(index);
+      auto const* bytes = reinterpret_cast<std::byte const*>(view.data());
+      return Data{Blob{bytes, bytes + view.size()}};
+    }
+    default:
+      // TODO: Other value types, which Parquet readers do not produce.
+      return None{};
+  }
 }
 
 auto import_ips(ip_type::array_type const& input, ArrowBuffers& buffers)
@@ -437,6 +475,9 @@ struct ArrowImporter {
         return import(*enums->storage(), buffers);
       }
     } else if constexpr (std::same_as<ArrowType, arrow::DictionaryType>) {
+      if (auto value = constant_value(input)) {
+        return repeat(*value, length);
+      }
       ARROW_ASSIGN_OR_RAISE(
         auto decoded, arrow::compute::Cast(input, input.dictionary()->type()));
       return import_owned(std::move(decoded));

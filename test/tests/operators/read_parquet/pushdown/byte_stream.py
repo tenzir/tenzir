@@ -60,6 +60,8 @@ def main():
         (root / "input", "select id\nhead 0", "read_parquet", 0),
         (root / "corrupt-unused", "select id\nhead 2", "read_parquet", 2),
         (root / "corrupt-nested", "select nested.x\nhead 2", "read_parquet", 2),
+        (root / "constants", "", "read_parquet", 9),
+        (root / "constants", 'where group == "b"\nselect id', "read_parquet", 3),
         (root / "input", "select\nhead 4", "read_parquet", 4),
         (root / "corrupt-unused", "select\nhead 4", "read_parquet", 4),
         (root / "unsupported-only", "select\nhead 4", "read_parquet", 4),
@@ -95,6 +97,17 @@ def main():
             assert expected == [{"id": 4}, {"id": 5}]
         if path == root / "corrupt-unused" and count == 2:
             assert expected == [{"id": 0}, {"id": 1}]
+        if path == root / "constants" and not tail:
+            columns = {name: [row[name] for row in expected] for name in expected[0]}
+            assert columns == {
+                "id": list(range(9)),
+                "group": ["a"] * 3 + ["b"] * 3 + ["c"] * 3,
+                "gaps": ["x", None, "x", "x", "x", "x", None, None, None],
+                "bytes": ["AA=="] * 9,
+                "category": ["same"] * 9,
+            }, columns
+        if path == root / "constants" and tail:
+            assert expected == [{"id": 3}, {"id": 4}, {"id": 5}]
         if path == root / "corrupt-nested":
             assert expected == [{"nested": {"x": 50}}, {"nested": {"x": 51}}]
         if tail == "select\nhead 4":

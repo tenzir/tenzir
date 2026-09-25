@@ -16,6 +16,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file_handle.hpp>
 #include <tenzir/forwarding_file.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -984,6 +985,49 @@ TEST("extension types stored like records are read whole") {
   // The import rejects the unknown type, but only after reading the chunks.
   auto result = run_projection(buffer, projection_of("value.x"));
   CHECK_EQUAL(read_columns(result, buffer), (std::vector{0, 1}));
+}
+
+/// Whether the string field `name` of `events` is a constant.
+auto is_constant_string(nova::Events const& events, std::string_view name)
+  -> bool {
+  auto field = events.data.field(name);
+  REQUIRE(field);
+  auto strings = field->data.get_alternative<nova::String>();
+  REQUIRE(strings);
+  return is<nova::storage::ConstantStorage<std::string, std::string_view>>(
+    strings->data.storage());
+}
+
+TEST("chunks with a single value import as constants") {
+  // Two row groups of a constant `group` each, and a `mixed` that varies.
+  auto groups = arrow::StringBuilder{};
+  auto mixed = arrow::StringBuilder{};
+  for (auto i = int64_t{0}; i < 2 * rows_per_group; ++i) {
+    REQUIRE(groups.Append(i < rows_per_group ? "first" : "second").ok());
+    REQUIRE(mixed.Append(std::to_string(i % 3)).ok());
+  }
+  auto table = arrow::Table::Make(
+    arrow::schema({arrow::field("group", arrow::utf8()),
+                   arrow::field("mixed", arrow::utf8())}),
+    {groups.Finish().ValueOrDie(), mixed.Finish().ValueOrDie()});
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  // The default properties encode both columns as dictionaries.
+  REQUIRE(::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
+                                       sink, rows_per_group)
+            .ok());
+  auto result = run(sink->Finish().ValueOrDie(),
+                    {.filter = {}, .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  REQUIRE_EQUAL(result.events.size(), size_t{2});
+  auto index = size_t{0};
+  for (auto const& events : result.events) {
+    CHECK(is_constant_string(events, "group"));
+    CHECK(not is_constant_string(events, "mixed"));
+    auto group = events.data.field("group")->data.get(0);
+    CHECK_EQUAL(nova::materialize(group),
+                data{index == 0 ? "first" : "second"});
+    ++index;
+  }
 }
 
 TEST("orderings that warn at runtime read every row group") {
