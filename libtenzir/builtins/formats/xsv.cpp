@@ -18,6 +18,9 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/read_detection.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -718,6 +721,263 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
 
 // ── WriteXsv ────────────────────────────────────────────────────────────────
 
+class WriteXsvEvents final : public Operator<nova::Events, chunk_ptr> {
+public:
+  explicit WriteXsvEvents(WriteXsvArgs args) : args_{std::move(args)} {
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("header", header_);
+    serde("record_paths", record_paths_);
+    serde("failed", failed_);
+    serde("warned_records_in_lists", warned_records_in_lists_);
+  }
+
+  auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    auto metadata = chunk_metadata{.content_type = content_type()};
+    auto printer = xsv_printer_impl{
+      args_.field_separator.inner,
+      args_.list_separator.inner,
+      args_.null_value.inner,
+    };
+    auto buffer = std::vector<char>{};
+    auto out = std::back_inserter(buffer);
+    if (not header_ and input.mask.any()) {
+      auto const first = *nova::storage::true_bits(input.mask).begin();
+      auto header = std::vector<std::string>{};
+      auto record_paths = std::vector<std::string>{};
+      collect_header(input.data, input.mask, first, "", header, record_paths);
+      header_ = std::move(header);
+      record_paths_ = std::move(record_paths);
+      if (not args_.no_header) {
+        print_header(out, *header_, printer);
+        out = fmt::format_to(out, "\n");
+      }
+    }
+    for (auto index : nova::storage::true_bits(input.mask)) {
+      auto fields
+        = std::vector<std::pair<std::string, nova::RowView<nova::Data>>>{};
+      flatten(input.data.get(index), "", header_, record_paths_, fields);
+      if (not args_.no_header and header_) {
+        auto names = std::vector<std::string>{};
+        names.reserve(fields.size());
+        for (auto const& [name, _] : fields) {
+          names.push_back(name);
+        }
+        if (*header_ != names) {
+          diagnostic::error("multiple record shapes are not supported when "
+                            "header is enabled")
+            .emit(ctx);
+          failed_ = true;
+          co_return;
+        }
+      }
+      auto first = true;
+      for (auto const& [_, value] : fields) {
+        if (not first) {
+          out = fmt::format_to(out, "{}", args_.field_separator.inner);
+        } else {
+          first = false;
+        }
+        print_value(out, value, printer, ctx.dh());
+      }
+      out = fmt::format_to(out, "\n");
+    }
+    if (not buffer.empty()) {
+      co_await push(chunk::make(std::move(buffer), std::move(metadata)));
+    }
+  }
+
+private:
+  template <class Iterator>
+  static auto print_header(Iterator& out, std::vector<std::string> const& names,
+                           xsv_printer_impl const& printer) -> void {
+    auto first = true;
+    for (auto const& name : names) {
+      if (not first) {
+        out = fmt::format_to(out, "{}", printer.sep);
+      } else {
+        first = false;
+      }
+      print_scalar(out, std::string_view{name}, printer);
+    }
+  }
+
+  static auto
+  collect_header(nova::Array<nova::Record> const& records,
+                 nova::storage::BitMap const& active,
+                 nova::storage::Index baseline, std::string_view prefix,
+                 std::vector<std::string>& out,
+                 std::vector<std::string>& record_paths) -> void {
+    for (auto [name, value] : records.get(baseline)) {
+      auto path = fmt::format("{}{}", prefix, name);
+      auto field = records.field(name);
+      TENZIR_ASSERT(field);
+      auto nested = field->data.get_alternative<nova::Record>();
+      auto nested_active = nested
+                             ? active & field->present & nested->present
+                             : nova::storage::BitMap{active.length(), false};
+      match(value, [&]<class T>(nova::RowView<T>) {
+        if constexpr (std::same_as<T, nova::Record>) {
+          TENZIR_ASSERT(nested);
+          record_paths.push_back(path);
+          collect_header(nested->data, nested_active, baseline,
+                         fmt::format("{}.", path), out, record_paths);
+        } else if constexpr (std::same_as<T, nova::Null>) {
+          if (nested_active.any()) {
+            auto const first = *nova::storage::true_bits(nested_active).begin();
+            record_paths.push_back(path);
+            collect_header(nested->data, nested_active, first,
+                           fmt::format("{}.", path), out, record_paths);
+          } else {
+            out.push_back(std::move(path));
+          }
+        } else {
+          out.push_back(std::move(path));
+        }
+      });
+    }
+  }
+
+  static auto
+  flatten(nova::RowView<nova::Record> record, std::string_view prefix,
+          Option<std::vector<std::string>> const& header,
+          Option<std::vector<std::string>> const& record_paths,
+          std::vector<std::pair<std::string, nova::RowView<nova::Data>>>& out)
+    -> void {
+    for (auto [name, value] : record) {
+      auto path = fmt::format("{}{}", prefix, name);
+      match(value, [&]<class T>(nova::RowView<T> nested) {
+        if constexpr (std::same_as<T, nova::Record>) {
+          flatten(nested, fmt::format("{}.", path), header, record_paths, out);
+        } else if constexpr (std::same_as<T, nova::Null>) {
+          auto expanded = false;
+          if (header) {
+            auto const descendant_prefix = fmt::format("{}.", path);
+            for (auto const& column : *header) {
+              if (column.starts_with(descendant_prefix)) {
+                out.emplace_back(column, value);
+                expanded = true;
+              }
+            }
+          }
+          auto const known_record
+            = record_paths
+              and std::ranges::find(*record_paths, path) != record_paths->end();
+          if (not expanded and not known_record) {
+            out.emplace_back(std::move(path), value);
+          }
+        } else {
+          out.emplace_back(std::move(path), value);
+        }
+      });
+    }
+  }
+
+  template <class Iterator>
+  auto print_value(Iterator& out, nova::RowView<nova::Data> value,
+                   xsv_printer_impl const& printer, diagnostic_handler& dh)
+    -> void {
+    match(value, [&]<class T>(nova::RowView<T> x) {
+      if constexpr (std::same_as<T, nova::Null>) {
+        if (not printer.null.empty()) {
+          out = std::copy(printer.null.begin(), printer.null.end(), out);
+        }
+      } else if constexpr (std::same_as<T, nova::List>) {
+        auto first = true;
+        for (auto element : x) {
+          if (not first) {
+            out = fmt::format_to(out, "{}", printer.list_sep);
+          } else {
+            first = false;
+          }
+          print_value(out, element, printer, dh);
+        }
+      } else if constexpr (std::same_as<T, nova::Record>) {
+        print_scalar(out, std::string_view{"{..}"}, printer);
+        if (not warned_records_in_lists_) {
+          diagnostic::warning("records in lists cannot be written to CSV")
+            .emit(dh);
+          warned_records_in_lists_ = true;
+        }
+      } else if constexpr (std::same_as<T, nova::Blob>) {
+        print_scalar(out, detail::base64::encode(*x), printer);
+      } else {
+        print_scalar(out, *x, printer);
+      }
+    });
+  }
+
+  template <class Iterator, class T>
+  static auto
+  print_scalar(Iterator& out, T const& value, xsv_printer_impl const& printer)
+    -> void {
+    auto formatted = std::string{};
+    if constexpr (std::same_as<T, std::int64_t>) {
+      formatted = std::to_string(value);
+    } else if constexpr (std::same_as<T, std::string_view>) {
+      formatted = value;
+    } else {
+      formatted = fmt::format("{}", data_view{value});
+    }
+    auto needs_quoting = formatted.find(printer.sep) != formatted.npos;
+    needs_quoting |= formatted.find(printer.list_sep) != formatted.npos;
+    needs_quoting |= formatted == printer.null;
+    constexpr static auto escaper = [](auto& f, auto out) {
+      switch (*f) {
+        default:
+          *out++ = *f++;
+          return;
+        case '\\':
+          *out++ = '\\';
+          *out++ = '\\';
+          break;
+        case '"':
+          *out++ = '\\';
+          *out++ = '"';
+          break;
+        case '\n':
+          *out++ = '\\';
+          *out++ = 'n';
+          break;
+        case '\r':
+          *out++ = '\\';
+          *out++ = 'r';
+          break;
+      }
+      ++f;
+    };
+    constexpr static auto p = printers::escape(escaper);
+    if (needs_quoting) {
+      *out++ = '"';
+    }
+    TENZIR_ASSERT(p.print(out, formatted));
+    if (needs_quoting) {
+      *out++ = '"';
+    }
+  }
+
+  auto content_type() const -> std::string {
+    if (args_.field_separator.inner == ",") {
+      return "text/csv";
+    }
+    if (args_.field_separator.inner == "\t") {
+      return "text/tab-separated-values";
+    }
+    return "text/plain";
+  }
+
+  WriteXsvArgs args_;
+  Option<std::vector<std::string>> header_;
+  Option<std::vector<std::string>> record_paths_;
+  bool failed_ = false;
+  bool warned_records_in_lists_ = false;
+};
+
 class WriteXsv final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteXsv(WriteXsvArgs args) : args_{std::move(args)} {
@@ -1198,7 +1458,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteXsvArgs, WriteXsv>{};
+    auto d = Describer<WriteXsvArgs, WriteXsv, WriteXsvEvents>{};
     auto field_sep = d.named("field_separator", &WriteXsvArgs::field_separator);
     auto list_sep = d.named("list_separator", &WriteXsvArgs::list_separator);
     auto null_val = d.named("null_value", &WriteXsvArgs::null_value);
@@ -1231,7 +1491,7 @@ public:
 
   auto describe() const -> Description override {
     // Pre-fill separator defaults; field_separator is fixed and not exposed.
-    auto d = Describer<WriteXsvArgs, WriteXsv>{WriteXsvArgs{
+    auto d = Describer<WriteXsvArgs, WriteXsv, WriteXsvEvents>{WriteXsvArgs{
       .field_separator = {std::string{Sep}, location::unknown},
       .list_separator = {std::string{ListSep}, location::unknown},
       .null_value = {std::string{Null}, location::unknown},

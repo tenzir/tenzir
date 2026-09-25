@@ -1,0 +1,2 @@
+from {x: "hello", y: [1, 2]}
+to_stdout { write_tsv }

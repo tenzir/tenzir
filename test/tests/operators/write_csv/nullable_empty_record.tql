@@ -1,0 +1,4 @@
+from {a: {}, x: 1}, {a: null, x: 2}
+write_json
+read_json
+to_stdout { write_csv }

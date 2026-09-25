@@ -1,0 +1,2 @@
+from {a: {b: 1}, x: 1}, {a: null, x: 2}
+to_stdout { write_csv }

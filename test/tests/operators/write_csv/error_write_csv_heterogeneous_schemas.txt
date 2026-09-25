@@ -1,2 +1,1 @@
-error: multiple schemas are not supported when header is enabled
-  = note: got schema `tenzir.unknown` after schema `tenzir.unknown`
+error: multiple record shapes are not supported when header is enabled
