@@ -35,6 +35,7 @@ struct bridge_state {
   export_bridge_actor::pointer self = {};
 
   caf::actor_addr importer_address = {};
+  uuid importer_barrier = {};
   tenzir::taxonomies taxonomies = {};
   expression expr = {};
   std::unordered_map<type, caf::expected<expression>> bound_exprs = {};
@@ -114,6 +115,18 @@ struct bridge_state {
       = self->system().registry().get<catalog_actor>("tenzir.catalog");
     TENZIR_ASSERT(catalog);
     self->mail(atom::release_v, std::exchange(lease, {})).send(catalog);
+  }
+
+  auto release_importer_barrier() -> void {
+    if (importer_barrier == uuid{}) {
+      return;
+    }
+    auto importer
+      = self->system().registry().get<importer_actor>("tenzir.importer");
+    if (importer) {
+      self->mail(atom::resume_v, std::exchange(importer_barrier, {}))
+        .send(importer);
+    }
   }
 
   auto try_pop_partition() -> void {
@@ -294,115 +307,124 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
   TENZIR_ASSERT(importer);
   self->state().importer_address = importer->address();
   self->state().unpersisted_events.emplace();
-  auto on_subscribed
-    = [self, mode](std::vector<table_slice>& unpersisted_events) {
-        TENZIR_DEBUG("{} subscribed to importer", *self);
-        if (mode.retro) {
-          TENZIR_ASSERT(self->state().unpersisted_events);
-          TENZIR_ASSERT(self->state().unpersisted_events->empty());
-          *self->state().unpersisted_events = std::move(unpersisted_events);
-        }
-      };
+  auto start_lookup = std::make_shared<std::function<void()>>();
+  auto on_subscribed = [self, start_lookup](recent_snapshot snapshot) {
+    TENZIR_DEBUG("{} subscribed to importer", *self);
+    TENZIR_ASSERT(self->state().unpersisted_events);
+    self->state().importer_barrier = snapshot.barrier;
+    *self->state().unpersisted_events = std::move(snapshot.events);
+    (*start_lookup)();
+  };
   auto on_subscribe_error = [self](const caf::error& err) {
     self->quit(diagnostic::error(err)
                  .note("{} failed to subscribe to importer", *self)
                  .to_error());
   };
-  auto subscribe = [&](auto mailer) {
-    std::move(mailer)
-      .request(importer, caf::infinite)
-      .await(std::move(on_subscribed), std::move(on_subscribe_error));
-  };
-  if (self->state().mode.high_priority) {
-    subscribe(self
-                ->mail(atom::get_v,
-                       caf::actor_cast<receiver_actor<table_slice>>(self),
-                       self->state().mode.internal,
-                       /*live=*/self->state().mode.live,
-                       /*recent=*/self->state().mode.retro,
-                       /*eager=*/self->state().mode.eager)
-                .urgent());
-  } else {
-    subscribe(self->mail(atom::get_v,
-                         caf::actor_cast<receiver_actor<table_slice>>(self),
-                         self->state().mode.internal,
-                         /*live=*/self->state().mode.live,
-                         /*recent=*/self->state().mode.retro,
-                         /*eager=*/self->state().mode.eager));
-  }
-  // If we're retro, then we can query the catalog immediately.
+  auto receiver = caf::actor_cast<receiver_actor<table_slice>>(self);
   if (mode.retro) {
-    const auto catalog
-      = self->system().registry().get<catalog_actor>("tenzir.catalog");
-    TENZIR_ASSERT(catalog);
-    auto query_context
-      = tenzir::query_context::make_extract("export", self, self->state().expr);
-    query_context.id = uuid::random();
-    self->state().lease = query_context.id;
-    TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
-                 "expression {}",
-                 query_context.id, self->state().expr);
-    auto on_candidates = [self, query_context](catalog_lookup_result& result) {
-      self->state().checked_candidates = true;
-      auto max_import_time = time::min();
-      for (auto& [type, info] : result.candidate_infos) {
-        if (info.partition_infos.empty()) {
-          continue;
-        }
-        const auto* bound_expr = self->state().bind_expr(type, info.exp);
-        if (not bound_expr) {
-          // Failing to bind is not an error, but these candidates will never
-          // be read. Unrelated queued schemas must not keep their files pinned.
-          for (const auto& partition : info.partition_infos) {
-            self->state().release_candidate(partition.uuid);
+    auto subscribe = [&](auto mailer) {
+      std::move(mailer)
+        .request(importer, caf::infinite)
+        .await(on_subscribed, on_subscribe_error);
+    };
+    if (mode.high_priority) {
+      subscribe(self
+                  ->mail(atom::get_v, atom::snapshot_v, receiver, mode.internal,
+                         mode.live, true, mode.eager)
+                  .urgent());
+    } else {
+      subscribe(self->mail(atom::get_v, atom::snapshot_v, receiver,
+                           mode.internal, mode.live, true, mode.eager));
+    }
+  } else {
+    auto subscribe = [&](auto mailer) {
+      std::move(mailer)
+        .request(importer, caf::infinite)
+        .await([](std::vector<table_slice>) {}, on_subscribe_error);
+    };
+    if (mode.high_priority) {
+      subscribe(self
+                  ->mail(atom::get_v, receiver, mode.internal, mode.live, false,
+                         mode.eager)
+                  .urgent());
+    } else {
+      subscribe(self->mail(atom::get_v, receiver, mode.internal, mode.live,
+                           false, mode.eager));
+    }
+  }
+  if (mode.retro) {
+    *start_lookup = [self] {
+      const auto catalog
+        = self->system().registry().get<catalog_actor>("tenzir.catalog");
+      TENZIR_ASSERT(catalog);
+      auto query_context = tenzir::query_context::make_extract(
+        "export", self, self->state().expr);
+      query_context.id = uuid::random();
+      self->state().lease = query_context.id;
+      TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
+                   "expression {}",
+                   query_context.id, self->state().expr);
+      auto on_candidates = [self,
+                            query_context](catalog_lookup_result& result) {
+        self->state().release_importer_barrier();
+        self->state().checked_candidates = true;
+        for (auto& [type, info] : result.candidate_infos) {
+          if (info.partition_infos.empty()) {
+            continue;
           }
-          continue;
+          const auto* bound_expr = self->state().bind_expr(type, info.exp);
+          if (not bound_expr) {
+            // Failing to bind is not an error, but these candidates will never
+            // be read. Unrelated queued schemas must not keep their files pinned.
+            for (const auto& partition : info.partition_infos) {
+              self->state().release_candidate(partition.uuid);
+            }
+            continue;
+          }
+          auto ctx = query_context;
+          ctx.expr = *bound_expr;
+          for (auto& partition_info : info.partition_infos) {
+            self->state().queued_partitions.emplace(std::move(partition_info),
+                                                    ctx);
+          }
+          while (self->state().open_partitions < self->state().mode.parallel) {
+            ++self->state().open_partitions;
+            detail::weak_run_delayed(self, duration::zero(), [self] {
+              self->state().pop_partition();
+            });
+          }
         }
-        auto ctx = query_context;
-        ctx.expr = *bound_expr;
-        for (auto& partition_info : info.partition_infos) {
-          max_import_time
-            = std::max(max_import_time, partition_info.max_import_time);
-          self->state().queued_partitions.emplace(std::move(partition_info),
-                                                  ctx);
-        }
-        while (self->state().open_partitions < self->state().mode.parallel) {
-          ++self->state().open_partitions;
-          detail::weak_run_delayed(self, duration::zero(), [self] {
-            self->state().pop_partition();
-          });
-        }
-      }
-      TENZIR_ASSERT(self->state().unpersisted_events);
-      for (auto& slice : *self->state().unpersisted_events) {
-        if (slice.import_time() > max_import_time) {
+        TENZIR_ASSERT(self->state().unpersisted_events);
+        for (auto& slice : *self->state().unpersisted_events) {
           self->state().add_events(std::move(slice), event_source::unpersisted,
                                    caf::typed_response_promise<void>{});
         }
+        self->state().unpersisted_events.reset();
+        self->state().release_candidates();
+        // In case we get zero partitions back from the catalog we need to
+        // already signal that we're done here.
+        if (self->state().buffer_rp.pending() and self->state().is_done()) {
+          self->state().buffer_rp.deliver(table_slice{});
+        }
+      };
+      auto on_candidates_error = [self](const caf::error& err) {
+        self->state().release_importer_barrier();
+        self->quit(
+          diagnostic::error(err)
+            .note("{} failed to retrieve candidates from catalog", *self)
+            .to_error());
+      };
+      auto lookup = [&](auto mailer) {
+        std::move(mailer)
+          .request(catalog, caf::infinite)
+          .then(std::move(on_candidates), std::move(on_candidates_error));
+      };
+      if (self->state().mode.high_priority) {
+        lookup(self->mail(atom::candidates_v, query_context).urgent());
+      } else {
+        lookup(self->mail(atom::candidates_v, query_context));
       }
-      self->state().unpersisted_events.reset();
-      self->state().release_candidates();
-      // In case we get zero partitions back from the catalog we need to
-      // already signal that we're done here.
-      if (self->state().buffer_rp.pending() and self->state().is_done()) {
-        self->state().buffer_rp.deliver(table_slice{});
-      }
     };
-    auto on_candidates_error = [self](const caf::error& err) {
-      self->quit(diagnostic::error(err)
-                   .note("{} failed to retrieve candidates from catalog", *self)
-                   .to_error());
-    };
-    auto lookup = [&](auto mailer) {
-      std::move(mailer)
-        .request(catalog, caf::infinite)
-        .then(std::move(on_candidates), std::move(on_candidates_error));
-    };
-    if (self->state().mode.high_priority) {
-      lookup(self->mail(atom::candidates_v, query_context).urgent());
-    } else {
-      lookup(self->mail(atom::candidates_v, query_context));
-    }
   }
   return {
     [self](table_slice& slice) -> caf::result<void> {

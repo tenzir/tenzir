@@ -28,6 +28,9 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/import_conversion.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/passive_partition.hpp>
@@ -123,7 +126,8 @@ auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
   };
 }
 
-class Export final : public Operator<void, table_slice> {
+template <class Output>
+class Export final : public Operator<void, Output> {
 public:
   explicit Export(ExportArgs args)
     : args_{std::move(args)},
@@ -229,6 +233,18 @@ public:
     // must stay local.
     if (not remainder_ and not uses_prometheus_shape_) {
       mode.limit = args_.optimization.limit;
+    } else {
+      local_limit_ = args_.optimization.limit;
+    }
+    if constexpr (std::same_as<Output, nova::Events>) {
+      if (remainder_) {
+        auto evaluator = nova::Evaluator::make(
+          *remainder_, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+        if (not evaluator) {
+          co_return;
+        }
+        evaluator_.emplace(std::move(*evaluator));
+      }
     }
     auto result
       = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(*node);
@@ -248,7 +264,7 @@ public:
     co_return co_await async_mail(atom::get_v).request(bridge_);
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     // Drain any buffered diagnostics from the bridge
     while (auto diag = diag_queue_->try_dequeue()) {
@@ -282,56 +298,11 @@ public:
         co_return;
       }
       for (auto&& output : shaper->second.shape(*expected)) {
-        if (remainder_) {
-          output = filter2(output, *remainder_, ctx, false);
-        }
-        if (output.rows() > 0) {
-          auto const rows = output.rows();
-          auto const schema = output.schema();
-          co_await push(std::move(output));
-          read_events_counter_.add(rows);
-          if (not args_.internal) {
-            export_metrics_.emit({
-              {"schema", std::string{schema.name()}},
-              {"schema_id", schema.make_fingerprint()},
-              {"events", uint64_t{rows}},
-              {"queued_events", uint64_t{0}},
-            });
-          }
-        }
+        co_await emit_slice(std::move(output), push, ctx);
       }
       co_return;
     }
-    if (not remainder_) {
-      auto const rows = expected->rows();
-      auto const schema = expected->schema();
-      co_await push(std::move(*expected));
-      read_events_counter_.add(rows);
-      if (not args_.internal) {
-        export_metrics_.emit({
-          {"schema", std::string{schema.name()}},
-          {"schema_id", schema.make_fingerprint()},
-          {"events", uint64_t{rows}},
-          {"queued_events", uint64_t{0}},
-        });
-      }
-      co_return;
-    }
-    auto output = filter2(*expected, *remainder_, ctx, false);
-    if (output.rows() > 0) {
-      auto const rows = output.rows();
-      auto const schema = output.schema();
-      co_await push(std::move(output));
-      read_events_counter_.add(rows);
-      if (not args_.internal) {
-        export_metrics_.emit({
-          {"schema", std::string{schema.name()}},
-          {"schema_id", schema.make_fingerprint()},
-          {"events", uint64_t{rows}},
-          {"queued_events", uint64_t{0}},
-        });
-      }
-    }
+    co_await emit_slice(std::move(*expected), push, ctx);
   }
 
   auto state() -> OperatorState override {
@@ -370,11 +341,78 @@ public:
   }
 
 private:
+  auto emit_slice(table_slice slice, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> {
+    if (local_limit_ and *local_limit_ == 0) {
+      done_ = true;
+      co_return;
+    }
+    auto const schema = slice.schema();
+    auto rows = uint64_t{0};
+    if constexpr (std::same_as<Output, table_slice>) {
+      if (remainder_) {
+        slice = filter2(slice, *remainder_, ctx, false);
+      }
+      if (local_limit_) {
+        slice = head(std::move(slice), *local_limit_);
+      }
+      rows = slice.rows();
+      if (rows > 0) {
+        co_await push(std::move(slice));
+      }
+    } else {
+      static_assert(std::same_as<Output, nova::Events>);
+      auto imported = nova::import_table_slice(slice);
+      if (not imported) {
+        diagnostic::error("{}", std::move(imported).unwrap_err())
+          .note("failed to convert exported events")
+          .emit(ctx);
+        co_return;
+      }
+      auto events = std::move(imported).unwrap();
+      if (evaluator_) {
+        auto result = evaluator_->eval(events, nova::EvalCtx{ctx.dh()});
+        auto predicate = result.get_alternative<nova::Bool>();
+        if (not predicate) {
+          co_return;
+        }
+        events.mask = events.mask & predicate->present
+                      & as<nova::storage::BitMap>(predicate->data.storage());
+      }
+      if (local_limit_
+          and static_cast<uint64_t>(events.active_count()) > *local_limit_) {
+        events.mask = events.mask.keep_first(
+          static_cast<nova::storage::Index>(*local_limit_));
+      }
+      rows = events.active_count();
+      if (rows > 0) {
+        co_await push(std::move(events));
+      }
+    }
+    read_events_counter_.add(rows);
+    if (local_limit_) {
+      *local_limit_ -= rows;
+      if (*local_limit_ == 0) {
+        done_ = true;
+      }
+    }
+    if (rows > 0 and not args_.internal) {
+      export_metrics_.emit({
+        {"schema", std::string{schema.name()}},
+        {"schema_id", schema.make_fingerprint()},
+        {"events", rows},
+        {"queued_events", uint64_t{0}},
+      });
+    }
+  }
+
   ExportArgs args_;
   bool uses_prometheus_shape_ = false;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   Option<ast::expression> remainder_ = None{};
+  Option<uint64_t> local_limit_ = None{};
+  Option<nova::Evaluator> evaluator_ = None{};
   prometheus_shaper_map prometheus_shapers_ = {};
   detail::heterogeneous_string_hashset warned_unsupported_prometheus_schemas_;
   MetricsCounter read_events_counter_;
@@ -390,11 +428,27 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ExportArgs, Export>{ExportArgs{
+    auto d = Describer<ExportArgs>{ExportArgs{
       .optimization = {},
       .special_filter = export_special_filter::none,
       .metrics_name = {},
     }};
+    d.spawner([]<class Input>(DescribeCtx&)
+                -> failure_or<Option<SpawnWith<ExportArgs, Input>>> {
+      if constexpr (std::same_as<Input, void>) {
+        if (nova_enabled()) {
+          return SpawnWith<ExportArgs, Input>{
+            [](ExportArgs args) -> Box<Operator<void, nova::Events>> {
+              return Export<nova::Events>{std::move(args)};
+            }};
+        }
+        return SpawnWith<ExportArgs, Input>{
+          [](ExportArgs args) -> Box<Operator<void, table_slice>> {
+            return Export<table_slice>{std::move(args)};
+          }};
+      }
+      return {};
+    });
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
     d.named("internal", &ExportArgs::internal);
@@ -421,7 +475,7 @@ public:
   };
 
   auto describe() const -> Description override {
-    auto d = Describer<ExportArgs, Export>{ExportArgs{
+    auto d = Describer<ExportArgs, Export<table_slice>>{ExportArgs{
       .internal = true,
       .optimization = {},
       .special_filter = export_special_filter::diagnostics,
@@ -452,7 +506,7 @@ public:
   };
 
   auto describe() const -> Description override {
-    auto d = Describer<ExportArgs, Export>{ExportArgs{
+    auto d = Describer<ExportArgs, Export<table_slice>>{ExportArgs{
       .internal = true,
       .optimization = {},
       .special_filter = export_special_filter::metrics,
