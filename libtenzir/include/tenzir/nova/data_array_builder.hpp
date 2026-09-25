@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/nova/list_array_builder.hpp"
 #include "tenzir/nova/masked_array_builder.hpp"
 #include "tenzir/nova/union_array.hpp"
@@ -157,5 +159,15 @@ auto append_data(FieldBuilder builder, const Data& value) -> void;
 
 /// Materializes a row into an owning value, recursing into records and lists.
 auto to_data(const RowView<Data>& row) -> Data;
+
+/// Appends a legacy `tenzir::data` value, recursing into records and lists.
+/// Alternatives without a counterpart here (`pattern`, `enumeration`,
+/// `map`, `secret`) warn through `dh` and append a null.
+auto append_legacy_data(ArrayBuilder<Data>& builder, const data& value,
+                        diagnostic_handler& dh) -> void;
+auto append_legacy_data(ArrayBuilder<List>::ListBuilder& builder,
+                        const data& value, diagnostic_handler& dh) -> void;
+auto append_legacy_data(FieldBuilder builder, const data& value,
+                        diagnostic_handler& dh) -> void;
 
 } // namespace tenzir::nova

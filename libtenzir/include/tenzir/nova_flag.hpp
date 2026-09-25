@@ -10,10 +10,12 @@
 
 namespace tenzir {
 
-/// Whether `--nova` was passed on the command line: operators with multiple
-/// implementations that share the same input type but differ in whether they
-/// produce `nova::Events` should prefer the `nova::Events` alternative. Set
-/// once at startup before any pipeline is compiled.
+/// Whether the `tenzir.nova` option is set, on the command line or in the
+/// configuration: operators with multiple implementations that share the same
+/// input type but differ in whether they produce `nova::Events` should prefer
+/// the `nova::Events` alternative. Set once at startup, by both `tenzir exec`
+/// and `tenzir-node`, before any pipeline is compiled, so that node
+/// components can consult it too.
 auto nova_enabled() -> bool;
 
 /// Sets the `--nova` flag. Must be called before any pipeline is compiled;

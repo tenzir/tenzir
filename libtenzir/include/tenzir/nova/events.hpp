@@ -32,9 +32,14 @@ struct Events {
                                                   = "tenzir.unknown") -> Meta;
   };
 
-  Array<Record> data;
-  storage::BitMap mask;
-  Meta meta;
+  /// An empty batch. Exists only because CAF's type registry
+  /// default-constructs every registered type; prefer the constructor below.
+  Events() = default;
+  Events(Array<Record> data, storage::BitMap mask, Meta meta);
+
+  Array<Record> data = Array<Record>::make_empty(0);
+  storage::BitMap mask = storage::BitMap{0, false};
+  Meta meta = Meta::make_empty(0);
 
   /// The physical number of rows in `data` and `mask`.
   auto length() const noexcept -> storage::Index {

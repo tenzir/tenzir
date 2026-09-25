@@ -1,6 +1,8 @@
 #include "tenzir/nova/data_array_builder.hpp"
 
+#include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 
 #include <algorithm>
 #include <string_view>
@@ -277,5 +279,84 @@ template auto FieldBuilder::data(ip) -> void;
 template auto FieldBuilder::data(subnet) -> void;
 template auto FieldBuilder::data<time>(time) -> void;
 template auto FieldBuilder::data(duration) -> void;
+
+namespace {
+
+/// The shared body behind the `append_legacy_data` overloads. `Builder` is an
+/// `ArrayBuilder<Data>`, an `ArrayBuilder<List>::ListBuilder` or a
+/// `FieldBuilder`; the recursion goes back through the overloads so that each
+/// nesting level picks the right one.
+template <class Builder>
+auto append_legacy_data_into(Builder& builder, const data& value,
+                             diagnostic_handler& dh) -> void {
+  match(
+    value,
+    [&](caf::none_t) {
+      builder.null();
+    },
+    [&](const record& x) {
+      auto row = builder.record();
+      for (const auto& [name, field] : x) {
+        append_legacy_data(row.field(name), field, dh);
+      }
+    },
+    [&](const list& x) {
+      auto elements = builder.list();
+      for (const auto& element : x) {
+        append_legacy_data(elements, element, dh);
+      }
+    },
+    [&](const std::string& x) {
+      builder.data(std::string_view{x});
+    },
+    [&](const blob& x) {
+      builder.data(blob_view{x});
+    },
+    [&](bool x) {
+      builder.data(x);
+    },
+    [&](int64_t x) {
+      builder.data(x);
+    },
+    [&](uint64_t x) {
+      builder.data(x);
+    },
+    [&](double x) {
+      builder.data(x);
+    },
+    [&](duration x) {
+      builder.data(x);
+    },
+    [&](time x) {
+      builder.data(x);
+    },
+    [&](ip x) {
+      builder.data(x);
+    },
+    [&](subnet x) {
+      builder.data(x);
+    },
+    [&](const auto&) {
+      diagnostic::warning("this value type is not supported yet").emit(dh);
+      builder.null();
+    });
+}
+
+} // namespace
+
+auto append_legacy_data(ArrayBuilder<Data>& builder, const data& value,
+                        diagnostic_handler& dh) -> void {
+  append_legacy_data_into(builder, value, dh);
+}
+
+auto append_legacy_data(ArrayBuilder<List>::ListBuilder& builder,
+                        const data& value, diagnostic_handler& dh) -> void {
+  append_legacy_data_into(builder, value, dh);
+}
+
+auto append_legacy_data(FieldBuilder builder, const data& value,
+                        diagnostic_handler& dh) -> void {
+  append_legacy_data_into(builder, value, dh);
+}
 
 } // namespace tenzir::nova

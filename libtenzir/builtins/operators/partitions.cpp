@@ -13,6 +13,7 @@
 #include <tenzir/double_synopsis.hpp>
 #include <tenzir/duration_synopsis.hpp>
 #include <tenzir/int64_synopsis.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/pipeline.hpp>
@@ -96,6 +97,74 @@ private:
   bool done_ = false;
 };
 
+class PartitionsNova final : public Operator<void, nova::Events> {
+public:
+  explicit PartitionsNova(PartitionsArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (not node_is_in_process(ctx.actor_system())) {
+      diagnostic::error(
+        "`partitions` is only available in node pipelines under `--nova`")
+        .primary(args_.operator_location)
+        .note("event batches cannot cross a process boundary yet")
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    auto catalog_result = co_await fetch_actor_from_node<catalog_actor>(
+      "catalog", args_.operator_location, ctx.actor_system(), ctx);
+    if (not catalog_result) {
+      done_ = true;
+      co_return;
+    }
+    catalog_ = std::move(*catalog_result);
+    if (args_.predicate) {
+      auto [legacy, _] = split_legacy_expression(*args_.predicate);
+      filter_ = std::move(legacy);
+    }
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    TENZIR_ASSERT(not done_);
+    co_return co_await async_mail(atom::get_v, atom::nova_v,
+                                  std::string{"partitions"}, filter_)
+      .request(catalog_);
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    done_ = true;
+    auto& events_result = result.as<caf::expected<std::vector<nova::Events>>>();
+    if (not events_result) {
+      diagnostic::error(events_result.error())
+        .primary(args_.operator_location)
+        .note("failed to perform catalog lookup")
+        .emit(ctx);
+      co_return;
+    }
+    for (auto&& events : *events_result) {
+      co_await push(std::move(events));
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+private:
+  PartitionsArgs args_;
+  catalog_actor catalog_ = {};
+  expression filter_ = trivially_true_expression();
+  bool done_ = false;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -103,7 +172,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<PartitionsArgs, Partitions>{};
+    auto d = Describer<PartitionsArgs, Partitions, PartitionsNova>{};
     auto predicate
       = d.positional("predicate", &PartitionsArgs::predicate, "bool");
     d.operator_location(&PartitionsArgs::operator_location);

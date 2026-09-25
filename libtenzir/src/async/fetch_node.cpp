@@ -17,6 +17,13 @@
 
 namespace tenzir {
 
+auto node_is_in_process(caf::actor_system& sys) -> bool {
+  // The registry may hold a proxy for a remote node, so its presence alone
+  // would also accept client processes.
+  const auto node = sys.registry().get<node_actor>("tenzir.node");
+  return node and node->node() == sys.node();
+}
+
 auto fetch_node(caf::actor_system& sys, diagnostic_handler& dh)
   -> Task<failure_or<node_actor>> {
   // Fast path: check local registry for existing node.
