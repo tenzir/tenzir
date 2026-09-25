@@ -24,6 +24,12 @@ auto read_projection(Option<ir::OptimizeProjection> projection,
                      ir::OptimizeFilter const& filter)
   -> Option<std::vector<std::string>>;
 
+/// Like `read_projection`, but keeps complete field paths, for readers that
+/// can decode the fields of records selectively.
+auto read_projection_paths(Option<ir::OptimizeProjection> projection,
+                           ir::OptimizeFilter const& filter)
+  -> Option<ir::OptimizeProjection>;
+
 /// Apply pushed-down filter predicates and then the remaining row limit.
 /// The limit counts only events that survive every predicate, and `remaining`
 /// is decremented by the number of rows returned.

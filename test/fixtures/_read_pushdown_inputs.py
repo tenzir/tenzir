@@ -1,9 +1,10 @@
 """Generate columnar inputs for reader pushdown tests.
 
 READ_PUSHDOWN_ROOT contains input, clean, and corrupt-unused files. Parquet
-also provides a wide file whose size dwarfs the reader's footer read, plus a
-gzipped copy, so that tests can tell a random-access scan from a whole-file
-read by the bytes it fetches. IPC formats also provide a store envelope; IPC
+also provides a copy of the input whose nested sibling field is corrupt, and a
+wide file whose size dwarfs the reader's footer read, plus a gzipped copy, so
+that tests can tell a random-access scan from a whole-file read by the bytes it
+fetches. IPC formats also provide a store envelope; IPC
 streams additionally provide concatenated schemas and trailing corruption. The
 fixture only generates inputs: TQL tests and their baselines check reader
 behavior.
@@ -82,6 +83,19 @@ def _setup_inputs(root: Path, format: str) -> None:
     corrupted.write_bytes(damaged)
 
     if format == "parquet":
+        # Damage only `nested.sibling`, so that reading `nested.x` succeeds only
+        # if the reader decodes the fields of a struct selectively.
+        corrupted = root / "corrupt-nested"
+        pq.write_table(table, corrupted, row_group_size=3)
+        metadata = pq.read_metadata(corrupted).row_group(0)
+        (sibling,) = (
+            metadata.column(i)
+            for i in range(metadata.num_columns)
+            if metadata.column(i).path_in_schema == "nested.sibling"
+        )
+        damaged = bytearray(corrupted.read_bytes())
+        damaged[sibling.data_page_offset] = 0
+        corrupted.write_bytes(damaged)
         pq.write_table(
             table.select(["unused"]), root / "unsupported-only", row_group_size=3
         )

@@ -109,6 +109,21 @@ TEST("reader projection conservatively handles whole events and functions") {
   CHECK(not read_projection({}, {}));
 }
 
+TEST("path-preserving reader projection keeps nested paths and filter "
+     "fields") {
+  auto filter = ir::OptimizeFilter{};
+  filter.push_back(expression_from("nested.y >= 4"));
+  auto result = read_projection_paths(projection_from("nested.x"), filter);
+  CHECK_EQUAL(projection_paths(result), (std::vector<std::vector<std::string>>{
+                                          {"nested", "x"}, {"nested", "y"}}));
+  // As for top-level columns, functions and whole events keep everything.
+  filter.clear();
+  filter.push_back(expression_from("string(id) == \"4\""));
+  CHECK(not read_projection_paths(projection_from("id"), filter));
+  CHECK(not read_projection_paths(projection_from("this"), {}));
+  CHECK(not read_projection_paths({}, {}));
+}
+
 TEST("reader limit counts matching rows across batches") {
   auto filter = ir::OptimizeFilter{};
   filter.push_back(expression_from("id >= 4"));

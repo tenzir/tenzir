@@ -59,6 +59,7 @@ def main():
         (root / "input", "where nested.x >= 100\nselect id", "read_parquet", 0),
         (root / "input", "select id\nhead 0", "read_parquet", 0),
         (root / "corrupt-unused", "select id\nhead 2", "read_parquet", 2),
+        (root / "corrupt-nested", "select nested.x\nhead 2", "read_parquet", 2),
         (root / "input", "select\nhead 4", "read_parquet", 4),
         (root / "corrupt-unused", "select\nhead 4", "read_parquet", 4),
         (root / "unsupported-only", "select\nhead 4", "read_parquet", 4),
@@ -94,6 +95,8 @@ def main():
             assert expected == [{"id": 4}, {"id": 5}]
         if path == root / "corrupt-unused" and count == 2:
             assert expected == [{"id": 0}, {"id": 1}]
+        if path == root / "corrupt-nested":
+            assert expected == [{"nested": {"x": 50}}, {"nested": {"x": 51}}]
         if tail == "select\nhead 4":
             assert expected == [{}] * 4
         if path.name in {"batches", "single-group"} and not tail:
@@ -155,6 +158,7 @@ def main():
     failures = [
         (root / "corrupt-lookahead", "where id >= 8192\nselect id\nhead 1"),
         (root / "corrupt-unused", "head 1"),
+        (root / "corrupt-nested", "select nested\nhead 1"),
         (tmp / "empty", ""),
         (tmp / "not-parquet", ""),
     ]

@@ -1,0 +1,7 @@
+// Physical projection must skip decoding the corrupted sibling of a nested
+// field.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-nested" {
+  read_parquet
+}
+select nested.x
+head 2

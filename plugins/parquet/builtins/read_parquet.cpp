@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "parquet/column_selection.hpp"
 #include "parquet/row_group_pruning.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/option.hpp"
@@ -172,8 +173,8 @@ protected:
                                               args.decimal_format->inner)
                                               .value_or(decimal_format::string)
                                           : decimal_format::string},
-      projection_{
-        read_projection(std::move(args.optimization.projection), filter_)} {
+      projection_{read_projection_paths(std::move(args.optimization.projection),
+                                        filter_)} {
   }
 
   /// Prepares the pushed-down filters, once per reader.
@@ -219,7 +220,8 @@ protected:
   ir::OptimizeFilter filter_;
   Option<uint64_t> remaining_;
   decimal_format decimal_format_ = decimal_format::string;
-  Option<std::vector<std::string>> projection_;
+  /// The fields to read, including those that the filter needs.
+  Option<ir::OptimizeProjection> projection_;
   std::vector<nova::Evaluator> filters_;
 };
 
@@ -290,14 +292,7 @@ public:
       co_return FinalizeBehavior::done;
     }
     auto metadata = out_buffer->parquet_reader()->metadata();
-    auto columns = std::vector<int>{};
-    for (auto i = 0; i < metadata->num_columns(); ++i) {
-      auto const& name = metadata->schema()->GetColumnRoot(i)->name();
-      if (not projection_
-          or std::ranges::find(*projection_, name) != projection_->end()) {
-        columns.push_back(i);
-      }
-    }
+    auto columns = select_columns(*metadata, projection_);
     // Zero-column batches preserve cardinality without decoding unrequested
     // columns, which may contain unsupported types or corrupt data.
     auto selected = select_row_groups(filter_, *metadata);
@@ -467,13 +462,7 @@ public:
     }
     scan_file_ = std::move(file);
     scan_metadata_ = std::move(*metadata);
-    for (auto i = 0; i < scan_metadata_->num_columns(); ++i) {
-      auto const& name = scan_metadata_->schema()->GetColumnRoot(i)->name();
-      if (not projection_
-          or std::ranges::find(*projection_, name) != projection_->end()) {
-        scan_columns_.push_back(i);
-      }
-    }
+    scan_columns_ = select_columns(*scan_metadata_, projection_);
     // Every row group starts at the rows of the ones before, which positions
     // count even if they are skipped.
     auto start = uint64_t{0};

@@ -1,4 +1,4 @@
-// Read the top-level struct; select removes its unrequested sibling.
+// Decode only the requested field of a struct, not its sibling.
 from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
   read_parquet
 }

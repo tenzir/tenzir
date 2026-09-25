@@ -1,0 +1,6 @@
+// A missing nested field must keep its parent record and report the field.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+select nested.absent
+head 1

@@ -24,6 +24,7 @@
 #include <tenzir/tql2/parser.hpp>
 
 #include <arrow/api.h>
+#include <arrow/extension_type.h>
 #include <arrow/io/memory.h>
 #include <arrow/util/future.h>
 #include <caf/binary_deserializer.hpp>
@@ -33,6 +34,7 @@
 #include <parquet/file_reader.h>
 
 #include <functional>
+#include <initializer_list>
 #include <mutex>
 
 using namespace tenzir;
@@ -235,16 +237,23 @@ auto compile(std::string_view text, ir::OptimizeRequest request, base_ctx ctx)
   return std::move(*instantiated).optimize(std::move(request), {}).replacement;
 }
 
-auto projection_of(std::string_view field) -> Option<ir::OptimizeProjection> {
+auto projection_of(std::initializer_list<std::string_view> fields)
+  -> Option<ir::OptimizeProjection> {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto s = session{provider};
-  auto expr
-    = parse_expression_with_location_override(field, location::unknown, s);
-  REQUIRE(expr);
   auto result = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
-  ir::add_to_projection(result, *ast::field_path::try_from(*expr));
+  for (auto field : fields) {
+    auto expr
+      = parse_expression_with_location_override(field, location::unknown, s);
+    REQUIRE(expr);
+    ir::add_to_projection(result, *ast::field_path::try_from(*expr));
+  }
   return result;
+}
+
+auto projection_of(std::string_view field) -> Option<ir::OptimizeProjection> {
+  return projection_of({field});
 }
 
 /// The identity of the file in the operator's checkpoint.
@@ -823,6 +832,158 @@ auto write_column(std::string name, std::shared_ptr<arrow::Array> array,
             ::parquet::default_writer_properties(), arrow_properties.build())
             .ok());
   return sink->Finish().ValueOrDie();
+}
+
+/// Writes `columns` in row groups of `rows_per_group` rows, embedding the
+/// Arrow schema.
+auto write_table(std::vector<std::shared_ptr<arrow::Field>> fields,
+                 std::vector<std::shared_ptr<arrow::Array>> columns)
+  -> std::shared_ptr<arrow::Buffer> {
+  auto table = arrow::Table::Make(arrow::schema(std::move(fields)), columns);
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto properties = ::parquet::WriterProperties::Builder{}
+                      .compression(::parquet::Compression::UNCOMPRESSED)
+                      ->disable_dictionary()
+                      ->build();
+  REQUIRE(::parquet::arrow::WriteTable(
+            *table, arrow::default_memory_pool(), sink, rows_per_group,
+            properties,
+            ::parquet::ArrowWriterProperties::Builder{}.store_schema()->build())
+            .ok());
+  return sink->Finish().ValueOrDie();
+}
+
+/// A record of a narrow `x` and a fat `payload`, in several row groups.
+auto make_record() -> std::shared_ptr<arrow::Array> {
+  auto xs = arrow::Int64Builder{};
+  auto payloads = arrow::StringBuilder{};
+  for (auto i = int64_t{0}; i < row_groups * rows_per_group; ++i) {
+    REQUIRE(xs.Append(i).ok());
+    auto payload = std::to_string(i);
+    payload.resize(payload_size, static_cast<char>('a' + i % 26));
+    REQUIRE(payloads.Append(payload).ok());
+  }
+  return arrow::StructArray::Make({xs.Finish().ValueOrDie(),
+                                   payloads.Finish().ValueOrDie()},
+                                  std::vector<std::string>{"x", "payload"})
+    .ValueOrDie();
+}
+
+/// The leaf columns whose chunks a read fetched data from in any row group.
+auto read_columns(Run const& result,
+                  std::shared_ptr<arrow::Buffer> const& buffer)
+  -> std::vector<int> {
+  auto metadata = ::parquet::ReadMetaData(
+    std::make_shared<arrow::io::BufferReader>(buffer));
+  auto reads = data_reads(result.file->reads());
+  auto columns = std::vector<int>{};
+  for (auto column = 0; column < metadata->num_columns(); ++column) {
+    for (auto group = 0; group < metadata->num_row_groups(); ++group) {
+      if (touches(reads, column_chunk(*metadata, group, column))) {
+        columns.push_back(column);
+        break;
+      }
+    }
+  }
+  return columns;
+}
+
+/// Reads `buffer` with the given projection and optional filter.
+auto run_projection(std::shared_ptr<arrow::Buffer> const& buffer,
+                    Option<ir::OptimizeProjection> projection,
+                    ir::OptimizeFilter filter = {}) -> Run {
+  return run(buffer, {.filter = std::move(filter),
+                      .order = EventOrder::ordered,
+                      .projection = std::move(projection)});
+}
+
+TEST("a nested projection reads only the selected fields of a record") {
+  auto record = make_record();
+  auto buffer = write_table({arrow::field("nested", record->type())}, {record});
+  auto result = run_projection(buffer, projection_of("nested.x"));
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{row_groups * rows_per_group});
+  CHECK_EQUAL(read_columns(result, buffer), (std::vector{0}));
+  // Selecting the record selects all of its fields.
+  result = run_projection(buffer, projection_of("nested"));
+  CHECK_EQUAL(read_columns(result, buffer), (std::vector{0, 1}));
+  // So does a field that the record lacks, which then reports it downstream.
+  result = run_projection(buffer, projection_of("nested.absent"));
+  CHECK_EQUAL(read_columns(result, buffer), (std::vector{0, 1}));
+  // A field that the file lacks selects nothing.
+  result = run_projection(buffer, projection_of("absent"));
+  CHECK_EQUAL(total_rows(result.events), uint64_t{row_groups * rows_per_group});
+  CHECK(read_columns(result, buffer).empty());
+}
+
+TEST("a nested projection keeps the fields that the filter needs") {
+  auto record = make_record();
+  auto buffer = write_table({arrow::field("nested", record->type())}, {record});
+  auto result = run_projection(buffer, projection_of("nested.x"),
+                               {id_filter("nested.payload != \"\"")});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{row_groups * rows_per_group});
+  CHECK_EQUAL(read_columns(result, buffer), (std::vector{0, 1}));
+}
+
+TEST("records inside lists are read whole") {
+  auto record = make_record();
+  auto offsets = arrow::Int32Builder{};
+  for (auto i = int32_t{0}; i <= row_groups * rows_per_group; ++i) {
+    REQUIRE(offsets.Append(i).ok());
+  }
+  auto records
+    = arrow::ListArray::FromArrays(*offsets.Finish().ValueOrDie(), *record)
+        .ValueOrDie();
+  auto buffer
+    = write_table({arrow::field("records", records->type())}, {records});
+  auto result = run_projection(buffer, projection_of("records.x"));
+  CHECK_EQUAL(read_columns(result, buffer), (std::vector{0, 1}));
+}
+
+/// An extension type that is stored like a record, as Tenzir stores subnets.
+class RecordLike final : public arrow::ExtensionType {
+public:
+  explicit RecordLike(std::shared_ptr<arrow::DataType> storage)
+    : ExtensionType{std::move(storage)} {
+  }
+
+  auto extension_name() const -> std::string override {
+    return "tenzir.test.record_like";
+  }
+
+  auto ExtensionEquals(ExtensionType const& other) const -> bool override {
+    return other.extension_name() == extension_name();
+  }
+
+  auto MakeArray(std::shared_ptr<arrow::ArrayData> data) const
+    -> std::shared_ptr<arrow::Array> override {
+    return std::make_shared<arrow::ExtensionArray>(std::move(data));
+  }
+
+  auto Deserialize(std::shared_ptr<arrow::DataType> storage,
+                   std::string const&) const
+    -> arrow::Result<std::shared_ptr<arrow::DataType>> override {
+    return std::make_shared<RecordLike>(std::move(storage));
+  }
+
+  auto Serialize() const -> std::string override {
+    return {};
+  }
+};
+
+TEST("extension types stored like records are read whole") {
+  auto record = make_record();
+  auto type = std::make_shared<RecordLike>(record->type());
+  if (not arrow::GetExtensionType(type->extension_name())) {
+    REQUIRE(arrow::RegisterExtensionType(type).ok());
+  }
+  auto array = std::static_pointer_cast<arrow::Array>(
+    std::make_shared<arrow::ExtensionArray>(type, record));
+  auto buffer = write_table({arrow::field("value", type)}, {array});
+  // The import rejects the unknown type, but only after reading the chunks.
+  auto result = run_projection(buffer, projection_of("value.x"));
+  CHECK_EQUAL(read_columns(result, buffer), (std::vector{0, 1}));
 }
 
 TEST("orderings that warn at runtime read every row group") {

@@ -1,0 +1,14 @@
+warning: record does not have field
+ --> tests/operators/read_parquet/pushdown/missing_nested_projection.tql:5:8
+  |
+5 | select nested.absent
+  |        ~~~~~~
+  ⋮
+5 | select nested.absent
+  |               ------ field does not exist
+  |
+{
+  nested: {
+    absent: null,
+  },
+}

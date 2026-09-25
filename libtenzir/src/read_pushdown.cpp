@@ -56,6 +56,26 @@ auto read_projection(Option<ir::OptimizeProjection> projection,
   return result;
 }
 
+auto read_projection_paths(Option<ir::OptimizeProjection> projection,
+                           ir::OptimizeFilter const& filter)
+  -> Option<ir::OptimizeProjection> {
+  for (auto const& expr : filter) {
+    auto visitor = ReadProjectionVisitor{};
+    auto copy = expr;
+    visitor.visit(copy);
+    if (visitor.full_schema) {
+      return {};
+    }
+    ir::add_refs_to_projection(projection, expr);
+  }
+  if (projection and std::ranges::any_of(*projection, [](auto const& field) {
+        return field.path().empty();
+      })) {
+    return {};
+  }
+  return projection;
+}
+
 auto apply_read_pushdown(table_slice slice, ir::OptimizeFilter const& filter,
                          Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> table_slice {

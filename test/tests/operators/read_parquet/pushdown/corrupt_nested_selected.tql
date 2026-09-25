@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// The same input must fail when the record with the corrupted field is
+// requested.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-nested" {
+  read_parquet
+}
+select nested
+head 1
