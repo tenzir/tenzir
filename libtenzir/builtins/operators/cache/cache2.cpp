@@ -11,6 +11,7 @@
 #include <tenzir/actors.hpp>
 #include <tenzir/arc.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/fetch_node.hpp>
 #include <tenzir/async/oneshot.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -464,15 +465,8 @@ private:
 // A process hosts exactly one node, and all of its pipelines share this store.
 auto manager = Arc<Manager>{std::in_place};
 
-// The registry may contain a proxy for a remote node, so checking only whether
-// a node is registered would also accept client processes.
-auto is_node_process(caf::actor_system& system) -> bool {
-  const auto node = system.registry().get<node_actor>("tenzir.node");
-  return node and node->node() == system.node();
-}
-
 auto reject_client_process(OpCtx& ctx) -> bool {
-  if (is_node_process(ctx.actor_system())) {
+  if (node_is_in_process(ctx.actor_system())) {
     return false;
   }
   diagnostic::error("`cache` is only available in node pipelines")

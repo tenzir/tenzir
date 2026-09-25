@@ -29,6 +29,9 @@
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/record_array_builder.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
@@ -296,6 +299,146 @@ auto build_partition_slices(const std::vector<partition_synopsis_pair>& synopses
     add_resource("sketches", synopsis.synopsis->sketches_file);
   }
   return builder.finish_as_table_slice("tenzir.partition");
+}
+
+/// Wraps a finished record array as a single batch of events, with every row
+/// active and the given schema name. Callers skip this when the builder is
+/// empty: a zero-row batch still carries a shape, and a downstream `where`
+/// would warn about the fields it does not have, where the table slice path
+/// yields no batch at all.
+auto finish_events(nova::ArrayBuilder<nova::Record>& builder,
+                   std::string_view name) -> nova::Events {
+  auto data = builder.finish();
+  const auto length = data.length();
+  return nova::Events{
+    std::move(data),
+    nova::storage::BitMap{length, true},
+    nova::Events::Meta::make_empty(length, name),
+  };
+}
+
+auto add_field_events(nova::ArrayBuilder<nova::Record>& builder, const type& t)
+  -> void {
+  const auto schema_name = t.name();
+  const auto schema_id = t.make_fingerprint();
+  for (const auto& ctx : traverse(t)) {
+    auto row = builder.record();
+    row.field("schema").data(std::string_view{schema_name});
+    row.field("schema_id").data(std::string_view{schema_id});
+    row.field("field").data(std::string_view{ctx.field.name});
+    auto path = row.field("path").list();
+    for (const auto& part : ctx.field.path) {
+      path.data(std::string_view{part});
+    }
+    auto index = row.field("index").list();
+    for (auto i : ctx.field.index) {
+      index.data(static_cast<uint64_t>(i));
+    }
+    auto type = row.field("type").record();
+    const auto kind = to_string(ctx.type.kind);
+    type.field("kind").data(std::string_view{kind});
+    type.field("category").data(std::string_view{ctx.type.category});
+    type.field("lists").data(static_cast<uint64_t>(ctx.type.lists));
+    type.field("name").data(std::string_view{ctx.type.name});
+    auto attrs = type.field("attributes").list();
+    for (const auto& [key, value] : ctx.type.attributes) {
+      auto attr = attrs.record();
+      attr.field("key").data(std::string_view{key});
+      attr.field("value").data(std::string_view{value});
+    }
+  }
+}
+
+auto build_field_events(const std::vector<partition_synopsis_pair>& synopses)
+  -> std::vector<nova::Events> {
+  auto fields = std::set<type>{};
+  for (const auto& synopsis : synopses) {
+    fields.insert(synopsis.synopsis->schema);
+  }
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (const auto& schema : fields) {
+    add_field_events(builder, schema);
+  }
+  if (builder.length() == 0) {
+    return {};
+  }
+  return {finish_events(builder, "tenzir.field")};
+}
+
+auto build_schema_events(const std::vector<partition_synopsis_pair>& synopses,
+                         diagnostic_handler& dh) -> std::vector<nova::Events> {
+  auto schemas = std::unordered_set<type>{};
+  for (const auto& [id, synopsis] : synopses) {
+    TENZIR_UNUSED(id);
+    TENZIR_ASSERT(synopsis);
+    TENZIR_ASSERT(synopsis->schema);
+    schemas.insert(synopsis->schema);
+  }
+  auto result = std::vector<nova::Events>{};
+  result.reserve(schemas.size());
+  for (const auto& schema : schemas) {
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto row = builder.record();
+    const auto definition = schema.to_definition();
+    for (const auto& [name, value] : definition) {
+      nova::append_legacy_data(row.field(name), value, dh);
+    }
+    result.push_back(finish_events(
+      builder, fmt::format("tenzir.schema.{}", schema.make_fingerprint())));
+  }
+  return result;
+}
+
+auto build_partition_events(const std::vector<partition_synopsis_pair>& synopses)
+  -> std::vector<nova::Events> {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (const auto& synopsis : synopses) {
+    auto event = builder.record();
+    const auto uuid_string = fmt::to_string(synopsis.uuid);
+    event.field("uuid").data(std::string_view{uuid_string});
+    event.field("memusage").data(synopsis.synopsis->memusage());
+    event.field("diskusage")
+      .data(synopsis.synopsis->store_file.size
+            + synopsis.synopsis->indexes_file.size
+            + synopsis.synopsis->sketches_file.size);
+    event.field("events").data(synopsis.synopsis->events);
+    event.field("approx_bytes").data(synopsis.synopsis->approx_bytes);
+    event.field("min_import_time").data(synopsis.synopsis->min_import_time);
+    event.field("max_import_time").data(synopsis.synopsis->max_import_time);
+    event.field("version").data(synopsis.synopsis->version);
+    const auto schema_name = synopsis.synopsis->schema.name();
+    event.field("schema").data(std::string_view{schema_name});
+    const auto schema_id = synopsis.synopsis->schema.make_fingerprint();
+    event.field("schema_id").data(std::string_view{schema_id});
+    event.field("internal")
+      .data(synopsis.synopsis->schema.attribute("internal").has_value());
+    auto add_resource = [&](std::string_view key, const resource& value) {
+      auto x = event.field(key).record();
+      x.field("url").data(std::string_view{value.url});
+      x.field("size").data(value.size);
+    };
+    add_resource("store", synopsis.synopsis->store_file);
+    add_resource("indexes", synopsis.synopsis->indexes_file);
+    add_resource("sketches", synopsis.synopsis->sketches_file);
+  }
+  if (builder.length() == 0) {
+    return {};
+  }
+  return {finish_events(builder, "tenzir.partition")};
+}
+
+auto build_catalog_events(catalog_slice_selector selector,
+                          const std::vector<partition_synopsis_pair>& synopses,
+                          diagnostic_handler& dh) -> std::vector<nova::Events> {
+  switch (selector) {
+    case catalog_slice_selector::fields:
+      return build_field_events(synopses);
+    case catalog_slice_selector::schemas:
+      return build_schema_events(synopses, dh);
+    case catalog_slice_selector::partitions:
+      return build_partition_events(synopses);
+  }
+  TENZIR_UNREACHABLE();
 }
 
 auto build_catalog_slices(catalog_slice_selector selector,
@@ -1671,6 +1814,42 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         return synopses.error();
       }
       return build_catalog_slices(*parsed, *synopses);
+    },
+    [self](atom::get, atom::nova, const std::string& selector)
+      -> caf::result<std::vector<nova::Events>> {
+      const auto parsed = from_string<catalog_slice_selector>(selector);
+      if (not parsed) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("unsupported catalog get selector: "
+                                           "{}",
+                                           selector));
+      }
+      // `to_definition` only yields types the conversion supports, so nothing
+      // reaches the handler's warning path.
+      auto dh = null_diagnostic_handler{};
+      return build_catalog_events(*parsed, collect_synopses(self->state()), dh);
+    },
+    [self](atom::get, atom::nova, const std::string& selector,
+           const expression& filter) -> caf::result<std::vector<nova::Events>> {
+      const auto parsed = from_string<catalog_slice_selector>(selector);
+      if (not parsed) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("unsupported catalog get selector: "
+                                           "{}",
+                                           selector));
+      }
+      if (*parsed != catalog_slice_selector::partitions) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("filtered catalog get is only "
+                                           "supported for partitions, got {}",
+                                           selector));
+      }
+      const auto synopses = collect_synopses(self->state(), filter);
+      if (not synopses) {
+        return synopses.error();
+      }
+      auto dh = null_diagnostic_handler{};
+      return build_catalog_events(*parsed, *synopses, dh);
     },
     [self](atom::erase, uuid partition) -> caf::result<atom::done> {
       return self->state().erase_from_disk(partition);

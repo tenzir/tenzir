@@ -172,6 +172,12 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
   auto(atom::get, std::string)->caf::result<std::vector<table_slice>>,
   auto(atom::get, std::string, expression)->caf::result<std::vector<table_slice>>,
+  // The same, in the new data model. Those events have no inspector yet,
+  // so these only work for callers inside the node's own process.
+  auto(atom::get, atom::nova, std::string)
+    ->caf::result<std::vector<nova::Events>>,
+  auto(atom::get, atom::nova, std::string, expression)
+    ->caf::result<std::vector<nova::Events>>,
   // Erase a single partition: remove it from the catalog and delete its
   // on-disk files (synopsis, dense indexes, and store).
   auto(atom::erase, uuid)->caf::result<atom::done>,

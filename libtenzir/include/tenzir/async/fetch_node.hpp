@@ -16,6 +16,11 @@
 namespace tenzir {
 
 /// Connects to the node, caching the result process-wide.
+/// Whether this process hosts the node itself, rather than a proxy for a
+/// remote one. Messages to a node component then stay in-process, which
+/// callers exchanging types without a CAF inspector depend on.
+auto node_is_in_process(caf::actor_system& sys) -> bool;
+
 auto fetch_node(caf::actor_system& sys, diagnostic_handler& dh)
   -> Task<failure_or<node_actor>>;
 

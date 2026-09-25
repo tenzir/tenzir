@@ -15,12 +15,6 @@
 
 namespace tenzir::nova {
 
-Events::Events()
-  : data{Array<Record>::make_empty(0)},
-    mask{storage::BitMap{0, false}},
-    meta{Meta::make_empty(0)} {
-}
-
 Events::Events(Array<Record> data, storage::BitMap mask, Meta meta)
   : data{std::move(data)}, mask{std::move(mask)}, meta{std::move(meta)} {
 }
