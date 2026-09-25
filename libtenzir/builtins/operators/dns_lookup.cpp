@@ -17,6 +17,11 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
@@ -149,6 +154,46 @@ auto append_reverse_result(series_builder& builder,
   builder.record().field("hostname", resolved->hostname);
 }
 
+auto append_forward_result(nova::ArrayBuilder<nova::Data>& builder,
+                           const ForwardDnsResult& result) -> void {
+  if (result.is_err()) {
+    builder.null();
+    return;
+  }
+  const auto* resolved = try_as<ForwardDnsResolved>(&result.unwrap());
+  if (not resolved or resolved->answers.empty()) {
+    builder.null();
+    return;
+  }
+  auto answers = builder.list();
+  for (const auto& answer : resolved->answers) {
+    auto row = answers.record();
+    row.field("address").data(answer.address);
+    row.field("type").data(answer.type);
+    row.field("ttl").data(std::chrono::duration_cast<duration>(answer.ttl));
+  }
+}
+
+auto append_reverse_result(nova::ArrayBuilder<nova::Data>& builder,
+                           const ReverseDnsResult& result) -> void {
+  if (result.is_err()) {
+    builder.null();
+    return;
+  }
+  const auto* resolved = try_as<ReverseDnsResolved>(&result.unwrap());
+  if (not resolved or resolved->hostname.empty()) {
+    builder.null();
+    return;
+  }
+  builder.record().field("hostname").data(resolved->hostname);
+}
+
+auto type_name(nova::RowView<nova::Data> value) -> std::string_view {
+  return match(value, []<nova::data_type Tag>(nova::RowView<Tag>) {
+    return std::string_view{nova::Type<Tag>::static_name};
+  });
+}
+
 struct DnsLookupArgs {
   ast::expression field;
   ast::field_path result = default_result_field();
@@ -278,6 +323,93 @@ private:
   bool startup_failed_ = false;
 };
 
+class DnsLookupNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit DnsLookupNova(DnsLookupArgs args) : args_{std::move(args)} {
+    field_location_ = args_.field.get_location();
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto error = forward_dns_.startup_error();
+    if (not error) {
+      error = reverse_dns_.startup_error();
+    }
+    if (error) {
+      diagnostic::error("failed to initialize DNS resolver")
+        .primary(args_.operator_location, "reason: {}", error->error)
+        .emit(ctx);
+      co_return;
+    }
+    auto evaluator = nova::Evaluator::make(
+      std::move(args_.field), nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+    if (evaluator) {
+      evaluator_.emplace(std::move(*evaluator));
+    }
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not evaluator_) {
+      co_return;
+    }
+    auto fields = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto forward_results = std::vector<Option<Arc<ForwardDnsResult>>>{};
+    auto reverse_results = std::vector<Option<Arc<ReverseDnsResult>>>{};
+    forward_results.resize(detail::narrow<size_t>(input.length()));
+    reverse_results.resize(detail::narrow<size_t>(input.length()));
+    auto wrong_type = std::string_view{};
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      nova::storage::for_each_true(input.mask, [&](auto row) {
+        auto value = fields.get(row);
+        if (auto hostname = try_as<nova::RowView<nova::String>>(value)) {
+          scope.spawn(
+            [this, &forward_results, row,
+             hostname = std::string{**hostname}]() mutable -> Task<void> {
+              forward_results[row]
+                = co_await forward_dns_.resolve(std::move(hostname));
+            });
+        } else if (auto address = try_as<nova::RowView<nova::Ip>>(value)) {
+          scope.spawn([this, &reverse_results, row,
+                       address = **address]() mutable -> Task<void> {
+            reverse_results[row] = co_await reverse_dns_.resolve(address);
+          });
+        } else if (not is<nova::RowView<nova::Null>>(value)) {
+          wrong_type = type_name(value);
+        }
+      });
+      co_return;
+    });
+    if (not wrong_type.empty()) {
+      diagnostic::warning("expected `ip` or `string`")
+        .primary(field_location_, "got {}", wrong_type)
+        .emit(ctx.dh());
+    }
+    auto result = nova::ArrayBuilder<nova::Data>{};
+    nova::storage::for_each_true(input.mask, [&](auto row) {
+      result.skip_n(row - result.length());
+      if (forward_results[row]) {
+        append_forward_result(result, **forward_results[row]);
+      } else if (reverse_results[row]) {
+        append_reverse_result(result, **reverse_results[row]);
+      } else {
+        result.null();
+      }
+    });
+    result.skip_n(input.length() - result.length());
+    input.data
+      = nova::assign_nested_field(std::move(input.data), args_.result.path(),
+                                  {result.finish(), input.mask}, ctx.dh());
+    co_await push(std::move(input));
+  }
+
+private:
+  DnsLookupArgs args_;
+  Option<nova::Evaluator> evaluator_;
+  location field_location_ = location::unknown;
+  ForwardDnsResolver forward_dns_;
+  ReverseDnsResolver reverse_dns_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -285,7 +417,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<DnsLookupArgs, DnsLookup>{};
+    auto d = Describer<DnsLookupArgs, DnsLookup, DnsLookupNova>{};
     // Replicas resolve independent slices with private resolver caches. This
     // may duplicate requests between instances, but does not change results or
     // exceed a pipeline-wide request bound: lookups are already unconstrained.
