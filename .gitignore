@@ -20,6 +20,9 @@ justfile
 .mypy_cache/
 /CMakeUserPresets.json
 /build*/
+# Also match a symlink, for build trees kept outside the source tree: a
+# `path:` flake input copies everything here, build output included.
+/build
 /compile_commands.json
 /default.profraw
 /install/

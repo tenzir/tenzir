@@ -16,9 +16,9 @@ from pathlib import Path
 
 SCHEMA = "rebuild.undersized"
 
-# Import times come from the node's clock. Pick a fixed-offset zone that puts
-# the test in hour two of a four-hour bucket, leaving at least an hour before
-# the next boundary even when the test starts near the end of the hour.
+# Import times come from the node's clock. Pick a fixed-offset zone whose
+# local hour modulo four is two, leaving at least an hour before midnight
+# even when the test starts near the end of the hour.
 FIXED_OFFSET_TIMEZONES = ("Etc/GMT", "Etc/GMT-1", "Etc/GMT-2", "Etc/GMT-3")
 TEST_TIMEZONE = FIXED_OFFSET_TIMEZONES[(2 - datetime.now(UTC).hour) % 4]
 
@@ -195,6 +195,16 @@ try:
         result = tenzir.run(f'from {{index: {index}}}\n@name = "{SCHEMA}"\nimport\n')
         assert result.returncode == 0, f"import failed: {result.stderr.decode()}"
         node.stop()
+    node.memory_budget = "1"
+    node.start()
+    tenzir = Executor.from_env(node.env)
+    result = run_ctl(node, "rebuild", "--undersized", "--parallel=2")
+    assert result.returncode != 0, "zero per-batch budget reported success"
+    assert "no per-batch rebuild memory budget" in result.stderr, result.stderr
+    assert partition_count(tenzir) == 6
+    print("zero-per-batch-memory-rejected: ok")
+    node.stop()
+    node.memory_budget = "0"
     node.start()
     tenzir = Executor.from_env(node.env)
     assert partition_count(tenzir) == 6

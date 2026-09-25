@@ -13,14 +13,10 @@
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
 #include "tenzir/catalog.hpp"
-#include "tenzir/detail/lru_cache.hpp"
-#include "tenzir/detail/stable_set.hpp"
-#include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
-#include "tenzir/partition_transformer.hpp"
+#include "tenzir/partition_paths.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/query_queue.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/actor.hpp>
@@ -28,61 +24,11 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <memory>
 #include <queue>
 #include <unordered_map>
 #include <vector>
 
 namespace tenzir {
-
-// 7 Returns the store path for a given partition id.
-std::filesystem::path store_path_for_partition(const uuid& id);
-
-/// The transformer replaces the old partition with the new one or keeps it
-/// depending on the value of keep_original_partition.
-enum class keep_original_partition : bool {
-  yes = true,
-  no = false,
-};
-
-template <class Inspector>
-auto inspect(Inspector& f, keep_original_partition& x) {
-  return detail::inspect_enum(f, x);
-}
-
-// New partition creation listeners will be sent the initial state of the
-// whole database if they set this to 'yes'.
-enum class send_initial_dbstate : bool {
-  yes = true,
-  no = false,
-};
-
-template <class Inspector>
-auto inspect(Inspector& f, send_initial_dbstate& x) {
-  return detail::inspect_enum(f, x);
-}
-
-/// Extract a partition synopsis from the partition at `partition_path`
-/// and write it to `partition_synopsis_path`.
-//  TODO: Move into separate header.
-caf::error
-extract_partition_synopsis(const std::filesystem::path& partition_path,
-                           const std::filesystem::path& partition_synopsis_path,
-                           bool verify = false);
-
-/// Creates a partition transform marker that records the inputs and outputs
-/// of an in-progress partition transformation, so that an interrupted
-/// transformation can be finished on the next startup.
-tenzir::chunk_ptr
-create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
-              keep_original_partition keep);
-
-/// Flatbuffer integration. Note that this is only one-way, restoring
-/// the index state needs additional runtime information.
-// TODO: Pull out the persisted part of the state into a separate struct
-// that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// The state of the active partition.
 struct active_partition_info {
@@ -104,104 +50,11 @@ struct active_partition_info {
   }
 };
 
-struct ActivePartitionTransform {
-  std::shared_ptr<PartitionTransformProgress> progress = {};
-  std::vector<partition_info> input_partitions = {};
-  std::string origin = {};
-  time started_at = time::clock::now();
-};
-
-/// Loads partitions from disk by UUID.
-class partition_factory {
-public:
-  explicit partition_factory(index_state& state);
-
-  filesystem_actor& filesystem(); // getter/setter
-
-  partition_actor operator()(const uuid& id) const;
-
-  [[nodiscard]] size_t materializations() const;
-
-private:
-  filesystem_actor filesystem_;
-  const index_state& state_;
-
-  /// A counter for the amount passive partitions were loaded from disk.
-  mutable size_t materializations_ = 0;
-};
-
-/// Event counters for metrics.
-struct index_counters {
-  /// Stores how many passive partitions were loaded from disk until the last
-  /// time the delta was written to the metrics. This variable stores the
-  /// absolute number since the index was started and is only used to calulate
-  /// the delta for the next round.
-  size_t previous_materializations = 0;
-
-  /// How many queries were sent to partitions.
-  size_t partition_lookups = 0;
-
-  /// How many partitions were scheduled for queries.
-  size_t partition_scheduled = 0;
-};
-
 /// The state of the index actor.
 struct index_state {
   // -- constructor ------------------------------------------------------------
 
   explicit index_state(index_actor::pointer self);
-
-  // -- persistence ------------------------------------------------------------
-
-  [[nodiscard]] std::filesystem::path
-  index_filename(const std::filesystem::path& basename = {}) const;
-
-  /// The path to a partition transform finalize marker.
-  [[nodiscard]] std::filesystem::path marker_path(const uuid& id) const;
-
-  /// Maps partitions to their expected location on the file system.
-  [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
-
-  /// The directory that contains passive partition stores.
-  [[nodiscard]] std::filesystem::path archive_dir() const;
-
-  /// Returns a format string that can be formatted with a partition id to get
-  /// the input location of that partition for the partition transformer.
-  [[nodiscard]] std::string partition_path_template() const;
-
-  /// The path to which a partition transformer should write a partition with
-  /// the UUID `id`.
-  [[nodiscard]] std::filesystem::path
-  transformer_partition_path(const uuid& id) const;
-
-  /// Returns a format string that can be formatted with a partition id to
-  /// get the output location of that partition for the partition transformer.
-  [[nodiscard]] std::string transformer_partition_path_template() const;
-
-  /// Maps partition synopses to their expected location on the file system.
-  [[nodiscard]] std::filesystem::path
-  partition_synopsis_path(const uuid& id) const;
-
-  /// The path to which a partition transformer should write a synopsis
-  /// for a partition with the UUID `id`.
-  [[nodiscard]] std::filesystem::path
-  transformer_partition_synopsis_path(const uuid& id) const;
-
-  /// Returns a format string that can be formatted with a partition id to
-  /// get the output location of the that partition synopsis for the
-  /// partition transformer.
-  [[nodiscard]] std::string
-  transformer_partition_synopsis_path_template() const;
-
-  caf::error load_from_disk();
-
-  /// Requests that the index state be persisted. Writes are coalesced: the
-  /// first request arms a timer and later ones only set a flag, so a burst of
-  /// partition flushes results in a single write.
-  void flush_to_disk();
-
-  /// Writes the index state out immediately, bypassing the coalescing timer.
-  void flush_to_disk_now();
 
   // -- inbound path -----------------------------------------------------------
 
@@ -235,16 +88,6 @@ struct index_state {
 
   void drain_retired_partitions(caf::error reason);
 
-  /// Adds a new partition creation listener.
-  void
-  add_partition_creation_listener(partition_creation_listener_actor listener);
-
-  // -- query handling ---------------------------------------------------------
-
-  /// Schedules partitions for lookups. Returns the number of newly scheduled
-  /// partitions.
-  [[nodiscard]] auto schedule_lookups() -> size_t;
-
   // -- introspection ----------------------------------------------------------
 
   size_t memusage() const;
@@ -277,14 +120,6 @@ struct index_state {
 
   std::unordered_map<uuid, unpersisted_partition_info> unpersisted = {};
 
-  /// The set of passive (read-only) partitions currently loaded into memory.
-  /// Uses the `partition_factory` to load new partitions as needed, and evicts
-  /// old entries when the size exceeds `max_inmem_partitions`.
-  detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
-
-  /// The set of partitions that exist on disk.
-  std::unordered_set<uuid> persisted_partitions = {};
-
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
@@ -297,72 +132,16 @@ struct index_state {
   /// Timeout after which an active partition is forcibly flushed.
   duration active_partition_timeout = {};
 
-  /// The maximum size of the partition LRU cache (or the maximum number of
-  /// read-only partition loaded to memory).
-  size_t max_inmem_partitions = {};
-
-  /// The queue of in-flight queries.
-  query_queue pending_queries = {};
-
-  /// The maximum number of partitions to serve queries at the same time.
-  size_t max_concurrent_partition_lookups = 0;
-
-  /// A counter to track the number of partitions that are currently serving
-  /// lookups.
-  size_t running_partition_lookups = 0;
-
-  /// A counter generate incemental ids for active lookups.
-  size_t active_lookup_counter = 0;
-
-  /// Stores information about currently running partition lookups.
-  std::vector<std::tuple<size_t, std::chrono::system_clock::time_point,
-                         query_queue::entry>>
-    active_lookups;
-
   /// The CATALOG actor.
   catalog_actor catalog = {};
 
-  /// The directory for persistent state.
-  std::filesystem::path dir = {};
-
-  /// The directory for partition synopses.
-  std::filesystem::path synopsisdir = {};
-
-  /// The directory for in-progress partition transforms.
-  std::filesystem::path markersdir = {};
-
-  /// List of actors that wait for the next flush event.
-  std::vector<flush_listener_actor> flush_listeners = {};
-
-  /// List of actors that want to be notified about new partitions.
-  std::vector<partition_creation_listener_actor> partition_creation_listeners
-    = {};
+  /// The on-disk locations of the partition files.
+  partition_paths paths = {};
 
   bool shutting_down = false;
 
-  /// Whether a `flush_to_disk` request arrived that has not been written yet.
-  bool flush_pending = false;
-
-  /// Whether the coalescing timer is armed. While it is, `flush_to_disk` only
-  /// sets `flush_pending` instead of issuing another write.
-  bool flush_scheduled = false;
-
   /// Plugin responsible for spawning new partition-local stores.
   const tenzir::store_actor_plugin* store_actor_plugin = {};
-
-  /// The partitions currently being transformed.
-  detail::stable_set<uuid> partitions_in_transformation = {};
-
-  /// The collection of currently active transformers. These need to be
-  /// explicitly shut down if the index actor exists.
-  /// The `disposable` refers to the monitor that would otherwise automatically
-  /// remove the actor from the list if it finished on its own. It must be
-  /// disposed of before shutdown.
-  std::unordered_map<caf::actor_addr, caf::disposable> active_transformers;
-
-  /// Progress for the complete transformation transaction, including the
-  /// filesystem and catalog work performed after the transformer exits.
-  std::unordered_map<uuid, ActivePartitionTransform> active_transformations;
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
@@ -388,10 +167,6 @@ struct index_state {
 /// @param partition_capacity The maximum number of events per partition.
 /// @param active_partition_timeout Timeout after which an active partition is
 /// forcibly flushed.
-/// @param max_inmem_partitions The maximum number of passive partitions loaded
-/// into memory.
-/// @param max_concurrent_partition_lookups The maximum amount of concurrent
-/// lookups.
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
@@ -402,8 +177,7 @@ index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t max_concurrent_partition_lookups,
+      duration active_partition_timeout,
       const std::filesystem::path& catalog_dir, index_config index_config);
 
 } // namespace tenzir

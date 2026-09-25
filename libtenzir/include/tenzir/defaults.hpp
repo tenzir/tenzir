@@ -223,25 +223,24 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 inline constexpr caf::timespan active_partition_timeout
   = std::chrono::seconds{30};
 
+/// How long an erased partition may stay on disk because a retriever still
+/// holds it. Sized for a healthy but slow export rather than for wedge
+/// detection: an export throttled by its sink legitimately holds unopened
+/// candidates for its whole runtime.
+inline constexpr caf::timespan deferred_erase_timeout
+  = std::chrono::minutes{30};
+
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 
-/// Interval over which index state writes are coalesced. The on-disk index
-/// lists every persisted partition, so writing it per partition flush costs
-/// more the more partitions exist; batching bounds that to one write per
-/// interval.
-inline constexpr caf::timespan index_flush_interval = std::chrono::seconds{10};
-
-/// Maximum number of in-memory INDEX partitions.
-inline constexpr size_t max_in_mem_partitions = 1;
+/// How long the catalog waits before retrying a partition disposal whose file
+/// operations failed.
+inline constexpr caf::timespan disposal_retry_delay = std::chrono::minutes{1};
 
 /// Memory budget for the catalog's on-demand cache of deferred Bloom-filter
 /// sketches (see `tenzir.index.lazy-sketches`). Loaded sketches are evicted
 /// least-recently-used once the total exceeds this many bytes.
 inline constexpr size_t sketch_cache_bytes = 1'073'741'824; // 1 Gi
-
-/// Maximum number of concurrent INDEX queries.
-inline constexpr size_t num_query_supervisors = 10;
 
 /// The store backend to use.
 inline constexpr const char* store_backend = "feather";

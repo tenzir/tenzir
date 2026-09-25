@@ -15,6 +15,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/active_partition.hpp"
+#include "tenzir/catalog.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/concept/convertible/to.hpp"
@@ -37,7 +38,6 @@
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/ids.hpp"
-#include "tenzir/index.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
@@ -46,6 +46,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/plugin/command.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/plugin/store.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/store.hpp"
@@ -475,6 +476,23 @@ auto replay_markers(const std::filesystem::path& state_dir,
                                          entry.path()));
     }
     const auto* transform_v0 = transform->transform_as_v0();
+    // Only the catalog can replay policy commits, finalized replacements,
+    // and quarantines without losing their recovery obligations.
+    if (not transform_v0 or transform_v0->quarantine()
+        or transform_v0->finalized() or transform_v0->token_input()
+        or (transform_v0->policy_token()
+            and transform_v0->policy_token()->size() != 0)) {
+      return caf::make_error(ec::unspecified,
+                             "start the node once to recover pending catalog "
+                             "transforms before "
+                             "running the offline rebuild tool");
+    }
+    if (const auto* outputs = transform_v0->output_partitions();
+        outputs and outputs->size() != 0) {
+      if (auto error = invalidate_policy_history(state_dir); error.valid()) {
+        return error;
+      }
+    }
     // Restore the outputs before erasing anything so that a failure keeps all
     // data recoverable.
     auto restored = true;
@@ -1332,6 +1350,12 @@ auto execute_merge(const merge_group& group,
   // The swap is durable now; perform it. Failures below leave the marker in
   // place so that the next run or the node finishes the swap.
   cleanup_staged.disable();
+  cleanup_tmp.disable();
+  // No history changes are needed until a replacement is durable. If this
+  // fails, keep every staged output so node recovery can finish the swap.
+  if (auto error = invalidate_policy_history(state_dir); error.valid()) {
+    return error;
+  }
   std::filesystem::rename(store_tmp_path, store_out_path, err);
   if (err) {
     return caf::make_error(ec::filesystem_error,

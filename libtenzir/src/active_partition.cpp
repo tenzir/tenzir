@@ -104,6 +104,26 @@ void serialize(
   }
   TENZIR_ASSERT(self->state().persist_path);
   TENZIR_ASSERT(self->state().synopsis_path);
+  // Publish only after the optional synopsis write has settled, so catalog
+  // byte accounting never includes a synopsis that failed to reach disk.
+  const auto persist_partition = [self, partition = std::move(*partition)] {
+    TENZIR_TRACE("{} persists partition with a total size of {} bytes", *self,
+                 partition->size());
+    self->state().data.synopsis.unshared().indexes_file = {
+      .url = fmt::format("file://{}", *self->state().persist_path),
+      .size = partition->size(),
+    };
+    self->mail(atom::write_v, *self->state().persist_path, partition)
+      .request(self->state().filesystem, caf::infinite)
+      .then(
+        [self](atom::ok) {
+          self->state().persistence_promise.deliver(
+            self->state().data.synopsis);
+        },
+        [self](caf::error error) {
+          self->state().persistence_promise.deliver(std::move(error));
+        });
+  };
   // Note that this is a performance optimization: We used to store
   // the partition synopsis inside the `Partition` flatbuffer, and
   // then on startup the index would mmap all partitions and read
@@ -123,43 +143,30 @@ void serialize(
   if (auto ps_chunk = serialize_partition_synopsis(
         *self->state().data.synopsis,
         self->state().synopsis_index_config.skip_synopsis_verification)) {
-    self->state().data.synopsis.unshared().sketches_file = {
-      .url = fmt::format("file://{}", *self->state().synopsis_path),
-      .size = ps_chunk->size(),
-    };
+    const auto synopsis_size = ps_chunk->size();
     self->mail(atom::write_v, *self->state().synopsis_path, std::move(ps_chunk))
       .request(self->state().filesystem, caf::infinite)
       .then(
         [=](atom::ok) {
+          self->state().data.synopsis.unshared().sketches_file = {
+            .url = fmt::format("file://{}", *self->state().synopsis_path),
+            .size = synopsis_size,
+          };
           TENZIR_TRACE("{} persisted partition synopsis", *self);
+          persist_partition();
         },
         [=](const caf::error& err) {
           TENZIR_WARN("{} failed to persist partition synopsis to {} and will "
                       "attempt to restore it on the next start: {}",
                       *self, *self->state().synopsis_path, err);
+          persist_partition();
         });
   } else {
     TENZIR_WARN("{} failed to serialize partition synopsis and will attempt to "
                 "restore it on the next start",
                 *self);
+    persist_partition();
   }
-  TENZIR_TRACE("{} persists partition with a total size of "
-               "{} bytes",
-               *self, (*partition)->size());
-  self->state().data.synopsis.unshared().indexes_file = {
-    .url = fmt::format("file://{}", *self->state().persist_path),
-    .size = (*partition)->size(),
-  };
-  // TODO: Add a proper timeout.
-  self->mail(atom::write_v, *self->state().persist_path, std::move(*partition))
-    .request(self->state().filesystem, caf::infinite)
-    .then(
-      [=](atom::ok) {
-        self->state().persistence_promise.deliver(self->state().data.synopsis);
-      },
-      [=](caf::error e) {
-        self->state().persistence_promise.deliver(std::move(e));
-      });
 }
 
 } // namespace
@@ -284,7 +291,7 @@ active_partition_actor::behavior_type active_partition(
   TENZIR_TRACE("{} spawned new active store at {}", *self, builder);
   return {
     [self](atom::erase) -> caf::result<atom::done> {
-      // Erase is sent by the disk monitor to erase this partition
+      // Erase is sent by the catalog to erase this partition
       // from disk, but an active partition does not have any files
       // on disk, so it should never get selected for deletion.
       TENZIR_WARN("{} got erase atom as an active partition", *self);

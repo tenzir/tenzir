@@ -12,6 +12,7 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/set_operations.hpp"
 #include "tenzir/detail/tracepoint.hpp"
@@ -20,6 +21,7 @@
 #include "tenzir/duration_synopsis.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/fbs/partition.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/int64_synopsis.hpp"
@@ -28,15 +30,22 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/component.hpp"
+#include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
+#include "tenzir/plugin/store.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/time_synopsis.hpp"
 #include "tenzir/uint64_synopsis.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
@@ -54,36 +63,25 @@ namespace {
 
 TENZIR_ENUM(catalog_slice_selector, fields, schemas, partitions);
 
-auto contains_metadata(const expression& expr) -> bool {
-  return match(
-    expr,
-    [](caf::none_t) {
-      return false;
-    },
-    [](const predicate& pred) {
-      return is<meta_extractor>(pred.lhs) or is<meta_extractor>(pred.rhs);
-    },
-    [](const conjunction& expressions) {
-      return std::ranges::any_of(expressions, [](const auto& expression) {
-        return contains_metadata(expression);
-      });
-    },
-    [](const disjunction& expressions) {
-      return std::ranges::any_of(expressions, [](const auto& expression) {
-        return contains_metadata(expression);
-      });
-    },
-    [](const negation& expression) {
-      return contains_metadata(expression.expr());
-    });
+/// Collects the ids of every partition in a candidate set.
+auto partition_ids(const catalog_lookup_result& candidates)
+  -> std::vector<uuid> {
+  auto result = std::vector<uuid>{};
+  result.reserve(candidates.size());
+  for (const auto& [schema, info] : candidates.candidate_infos) {
+    for (const auto& partition : info.partition_infos) {
+      result.push_back(partition.uuid);
+    }
+  }
+  return result;
 }
 
 auto collect_synopses(const catalog_state& state)
   -> std::vector<partition_synopsis_pair> {
   auto result = std::vector<partition_synopsis_pair>{};
-  result.reserve(state.synopses_per_type.size());
-  for (const auto& [schema, id_synopsis_map] : state.synopses_per_type) {
-    for (const auto& [id, synopsis] : id_synopsis_map) {
+  result.reserve(state.synopses_per_type->size());
+  for (const auto& [schema, id_synopsis_map] : *state.synopses_per_type) {
+    for (const auto& [id, synopsis] : *id_synopsis_map) {
       result.push_back({id, synopsis});
     }
   }
@@ -98,11 +96,11 @@ auto collect_synopses(catalog_state& state, const expression& filter)
     return candidates.error();
   }
   for (const auto& [schema, candidate] : candidates->candidate_infos) {
-    const auto& partition_synopses = state.synopses_per_type.find(schema);
-    TENZIR_ASSERT(partition_synopses != state.synopses_per_type.end());
+    const auto& partition_synopses = state.synopses_per_type->find(schema);
+    TENZIR_ASSERT(partition_synopses != state.synopses_per_type->end());
     for (const auto& partition : candidate.partition_infos) {
-      const auto& synopsis = partition_synopses->second.find(partition.uuid);
-      if (synopsis == partition_synopses->second.end()) {
+      const auto& synopsis = partition_synopses->second->find(partition.uuid);
+      if (synopsis == partition_synopses->second->end()) {
         continue;
       }
       result.push_back({synopsis->first, synopsis->second});
@@ -336,6 +334,15 @@ auto sketch_cache::peek(const uuid& id) const -> partition_synopsis_ptr {
   return it->second.synopsis;
 }
 
+auto sketch_cache::get(const uuid& id) -> partition_synopsis_ptr {
+  const auto it = entries_.find(id);
+  if (it == entries_.end()) {
+    return nullptr;
+  }
+  lru_.splice(lru_.begin(), lru_, it->second.pos);
+  return it->second.synopsis;
+}
+
 auto sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis)
   -> size_t {
   if (budget_ == 0 or not synopsis) {
@@ -373,65 +380,8 @@ void sketch_cache::erase(const uuid& id) {
   entries_.erase(it);
 }
 
-auto catalog_state::ensure_sketches_loaded(const uuid& id, const type& schema)
-  -> size_t {
-  if (sketches.budget() == 0) {
-    return 0;
-  }
-  if (sketches.peek(id)) {
-    return 0; // already loaded
-  }
-  const auto type_it = synopses_per_type.find(schema);
-  if (type_it == synopses_per_type.end()) {
-    return 0;
-  }
-  const auto syn_it = type_it->second.find(id);
-  if (syn_it == type_it->second.end()) {
-    return 0;
-  }
-  const auto& resident = syn_it->second;
-  // The sketches live in the partition's `.mdx`; we can only mmap a local file,
-  // so remote stores (e.g. s3://) fall back to the conservative behavior.
-  constexpr auto prefix = std::string_view{"file://"};
-  const auto& url = resident->sketches_file.url;
-  if (not url.starts_with(prefix)) {
-    return 0;
-  }
-  const auto path = std::filesystem::path{url.substr(prefix.size())};
-  auto chunk = chunk::mmap(path);
-  if (not chunk) {
-    TENZIR_DEBUG("{} could not mmap sketches for partition {} at {}: {}", *self,
-                 id, path, chunk.error());
-    return 0;
-  }
-  auto synopsis_fb
-    = tenzir::flatbuffer<fbs::PartitionSynopsis>::make(std::move(*chunk));
-  if (not synopsis_fb) {
-    TENZIR_DEBUG("{} could not read sketches for partition {}: {}", *self, id,
-                 synopsis_fb.error());
-    return 0;
-  }
-  if ((*synopsis_fb)->partition_synopsis_type()
-      != fbs::partition_synopsis::PartitionSynopsis::legacy) {
-    return 0;
-  }
-  auto loaded = caf::make_copy_on_write<partition_synopsis>();
-  // Load fully, i.e. including the deferred Bloom-filter sketches.
-  if (auto error = unpack(*(*synopsis_fb)->partition_synopsis_as_legacy(),
-                          loaded.unshared(), /*lazy_sketches=*/false);
-      error.valid()) {
-    TENZIR_DEBUG("{} could not unpack sketches for partition {}: {}", *self, id,
-                 error);
-    return 0;
-  }
-  // Return the bytes actually cached: `put` refuses an entry larger than the
-  // whole budget, and the caller must not spend its query budget on a sketch
-  // that wasn't cached (it would stop loading later, smaller candidates).
-  return sketches.put(id, std::move(loaded));
-}
-
 auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
-  -> caf::result<atom::ok> {
+  -> caf::error {
   auto unsupported_partitions = std::vector<uuid>{};
   for (const auto& [uuid, synopsis] : partitions) {
     auto supported = version::support_for_partition_version(synopsis->version);
@@ -458,59 +408,340 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
     TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
     flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
   }
-  for (auto& [type, flat_data] : flat_data_map) {
-    std::ranges::sort(flat_data, std::ranges::less{},
-                      &flat_data_list::value_type::first);
-    synopses_per_type[type]
-      = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
-        std::move(flat_data));
-  }
-  TENZIR_ASSERT(cache);
-  cache->unstash();
-  cache.reset();
-  return atom::ok_v;
-}
-
-auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
-  -> caf::result<atom::ok> {
-  for (auto& [id, synopsis] : partitions) {
-    // With lazy sketches, drop the Bloom filters of newly flushed or
-    // transformed partitions too; otherwise ongoing ingest would accumulate
-    // them in resident memory and bypass the bounded sketch cache. They are
-    // reloaded on demand from the partition's `.mdx`, so only defer when that
-    // file is locally loadable -- never strip sketches we could not reload.
-    if (lazy_sketches and synopsis
-        and synopsis->sketches_file.url.starts_with("file://")) {
-      synopsis.unshared().defer_bloom_filters();
+  update_synopses([&](synopsis_map& map) {
+    for (auto& [type, flat_data] : flat_data_map) {
+      std::ranges::sort(flat_data, std::ranges::less{},
+                        &flat_data_list::value_type::first);
+      map[type] = std::make_shared<const schema_synopsis_map>(
+        schema_synopsis_map::make_unsafe(std::move(flat_data)));
     }
-    auto& entry = synopses_per_type[synopsis->schema][id];
-    entry = std::move(synopsis);
-    // Drop any stale loaded sketches for a replaced partition.
-    sketches.erase(id);
-  }
-  return atom::ok_v;
+  });
+  return caf::none;
 }
 
-void catalog_state::erase(const uuid& partition) {
-  sketches.erase(partition);
-  for (auto it = synopses_per_type.begin(); it != synopses_per_type.end();
-       ++it) {
-    const auto num_erased = it->second.erase(partition);
-    if (num_erased > 0) {
-      if (it->second.empty()) {
-        synopses_per_type.erase(it);
+auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions,
+                          merge_source source) -> caf::result<atom::ok> {
+  if (partitions.empty()) {
+    return atom::ok_v;
+  }
+  // Close the previous hour before admitting either ingested partitions or
+  // replacement outputs, so both wait for the next automatic collection.
+  close_rebuild_collection(time::clock::now());
+  update_synopses([&](synopsis_map& map) {
+    // Clone each touched schema exactly once for the whole batch.
+    auto cloned = std::unordered_map<type, schema_synopsis_map*>{};
+    for (auto& [id, synopsis] : partitions) {
+      const auto footprint = synopsis->store_file.size
+                             + synopsis->indexes_file.size
+                             + synopsis->sketches_file.size;
+      if (auto old = find_synopsis(id)) {
+        catalog_bytes -= old->store_file.size + old->indexes_file.size
+                         + old->sketches_file.size;
+      } else if (source == merge_source::ingest) {
+        // Credit only this partition's bytes observed by the accepted scan.
+        // Later arrivals must not consume unrelated non-partition overhead.
+        if (auto observed = scanned_ingest_bytes.find(id);
+            observed != scanned_ingest_bytes.end()) {
+          external_bytes
+            -= std::min({external_bytes, footprint, observed->second});
+          scanned_ingest_bytes.erase(observed);
+        }
       }
-      return;
+      catalog_bytes += footprint;
+      admissions[id] = ++admission_sequence;
+      open_rebuild_groups.emplace(synopsis->schema,
+                                  rebuild_day(synopsis->max_import_time));
+      ++storage_generation;
+      policy_dirty.insert(id);
+      // With lazy sketches, drop the Bloom filters of newly flushed or
+      // transformed partitions too; otherwise ongoing ingest would accumulate
+      // them in resident memory and bypass the bounded sketch cache. They are
+      // reloaded on demand from the partition's `.mdx`, so only defer when
+      // that file is locally loadable -- never strip sketches we could not
+      // reload.
+      if (lazy_sketches and synopsis
+          and synopsis->sketches_file.url.starts_with("file://")) {
+        synopsis.unshared().defer_bloom_filters();
+      }
+      auto [it, inserted] = cloned.try_emplace(synopsis->schema, nullptr);
+      if (inserted) {
+        it->second = &mutable_schema(map, synopsis->schema);
+      }
+      (*it->second)[id] = std::move(synopsis);
+      // Drop any stale loaded sketches for a replaced partition.
+      invalidate_sketches(id);
+    }
+  });
+  return atom::ok_v;
+}
+
+auto catalog_state::mutable_schema(synopsis_map& map, const type& schema)
+  -> schema_synopsis_map& {
+  auto copy = std::shared_ptr<schema_synopsis_map>{};
+  if (const auto it = map.find(schema); it != map.end() and it->second) {
+    copy = std::make_shared<schema_synopsis_map>(*it->second);
+  } else {
+    copy = std::make_shared<schema_synopsis_map>();
+  }
+  auto& result = *copy;
+  map[schema] = std::move(copy);
+  return result;
+}
+
+void catalog_state::erase(const uuid& partition, notify_policy notify) {
+  // Admissions identify accounted partitions, including while package startup
+  // still holds back maintenance scheduling.
+  if (auto synopsis = find_synopsis(partition);
+      synopsis and admissions.contains(partition)) {
+    catalog_bytes -= synopsis->store_file.size + synopsis->indexes_file.size
+                     + synopsis->sketches_file.size;
+  }
+  ++storage_generation;
+  admissions.erase(partition);
+  policy_dirty.erase(partition);
+  policy_pending.erase(partition);
+  eviction_suppressed.erase(partition);
+  if (policy and notify == notify_policy::yes) {
+    policy->on_erased(partition);
+  }
+  invalidate_sketches(partition);
+  // Find the containing schema first, so a miss clones nothing.
+  const auto containing = std::invoke([&]() -> Option<type> {
+    for (const auto& [schema, entries] : *synopses_per_type) {
+      if (entries->find(partition) != entries->end()) {
+        return schema;
+      }
+    }
+    return None{};
+  });
+  if (not containing) {
+    return;
+  }
+  update_synopses([&](synopsis_map& map) {
+    auto& entries = mutable_schema(map, *containing);
+    entries.erase(partition);
+    if (entries.empty()) {
+      map.erase(*containing);
+    }
+  });
+}
+
+auto catalog_state::find_synopsis(const uuid& partition) const
+  -> partition_synopsis_ptr {
+  for (const auto& [schema, entries] : *synopses_per_type) {
+    if (const auto it = entries->find(partition); it != entries->end()) {
+      return it->second;
     }
   }
+  return {};
+}
+
+auto catalog_state::add_lease(const uuid& query,
+                              const caf::strong_actor_ptr& owner,
+                              std::vector<uuid> partitions) -> uint64_t {
+  // A query without an id cannot be released by its owner, and an anonymous
+  // sender cannot be monitored; either way we would hold the lease forever.
+  if (partitions.empty() or query == uuid{} or not owner) {
+    return 0;
+  }
+  const auto owner_addr = owner->address();
+  for (const auto& partition : partitions) {
+    ++pin_counts[partition];
+  }
+  // A second lookup under the same query id supersedes the first one; that
+  // should not happen, but leaking the old lease would pin its partitions
+  // forever.
+  release_lease(query);
+  const auto generation = ++lease_generation;
+  leases.emplace(query, partition_lease{
+                          .owner = owner_addr,
+                          .partitions = std::move(partitions),
+                          .generation = generation,
+                        });
+  auto [consumer, inserted] = consumers.try_emplace(owner_addr);
+  if (inserted) {
+    consumer->second.second
+      = self->monitor(caf::actor_cast<caf::actor>(owner),
+                      [this, owner_addr](const caf::error&) {
+                        release_leases_of(owner_addr);
+                      });
+  }
+  ++consumer->second.first;
+  return generation;
+}
+
+void catalog_state::narrow_lease(const uuid& query, uint64_t generation,
+                                 const std::vector<uuid>& keep) {
+  const auto it = leases.find(query);
+  if (it == leases.end() or it->second.generation != generation) {
+    // The lease is gone or superseded; whoever owns the pins now decides.
+    return;
+  }
+  if (keep.empty()) {
+    release_lease(query);
+    return;
+  }
+  // `keep` is a subset of the leased partitions by construction: candidates
+  // come from the very snapshot the provisional lease covered.
+  const auto keep_set = std::unordered_set<uuid>{keep.begin(), keep.end()};
+  for (const auto& partition : it->second.partitions) {
+    if (not keep_set.contains(partition)) {
+      unpin(partition);
+    }
+  }
+  it->second.partitions = keep;
+}
+
+void catalog_state::release_lease(const uuid& query,
+                                  const std::vector<uuid>& partitions) {
+  const auto it = leases.find(query);
+  if (it == leases.end()) {
+    return;
+  }
+  for (const auto& partition : partitions) {
+    // A partition this lease does not hold is not an error: a reader that
+    // retries a query may release the same one twice.
+    if (std::erase(it->second.partitions, partition) == 0) {
+      continue;
+    }
+    unpin(partition);
+  }
+  if (it->second.partitions.empty()) {
+    release_lease(query);
+  }
+}
+
+void catalog_state::release_lease(const uuid& query) {
+  const auto it = leases.find(query);
+  if (it == leases.end()) {
+    return;
+  }
+  const auto lease = std::move(it->second);
+  leases.erase(it);
+  for (const auto& partition : lease.partitions) {
+    unpin(partition);
+  }
+  const auto consumer = consumers.find(lease.owner);
+  if (consumer == consumers.end()) {
+    return;
+  }
+  if (--consumer->second.first == 0) {
+    consumer->second.second.dispose();
+    consumers.erase(consumer);
+  }
+}
+
+void catalog_state::release_leases_of(const caf::actor_addr& owner) {
+  auto queries = std::vector<uuid>{};
+  for (const auto& [query, lease] : leases) {
+    if (lease.owner == owner) {
+      queries.push_back(query);
+    }
+  }
+  for (const auto& query : queries) {
+    release_lease(query);
+  }
+}
+
+auto catalog_state::deferred_erase_deadline() const -> Option<time> {
+  if (deferred_erase_timeout == duration::zero()) {
+    return None{};
+  }
+  return time::clock::now() + deferred_erase_timeout;
+}
+
+void catalog_state::sweep_deferred() {
+  const auto now = time::clock::now();
+  // Retry failed disposals first. They are unpinned -- a disposal only starts
+  // once the pins are gone, and a partition that left the catalog gains no
+  // new ones -- and their retry has nothing to do with the forcing timeout.
+  auto retries = std::vector<uuid>{};
+  for (const auto& [partition, erasure] : deferred) {
+    if (erasure.retry_at and *erasure.retry_at <= now
+        and not pin_counts.contains(partition)) {
+      retries.push_back(partition);
+    }
+  }
+  for (const auto& partition : retries) {
+    const auto entry = deferred.find(partition);
+    auto erasure = std::move(entry->second);
+    deferred.erase(entry);
+    dispose_of(partition, std::move(erasure), None{});
+  }
+  auto expired = std::vector<uuid>{};
+  for (const auto& [partition, erasure] : deferred) {
+    if (erasure.deadline and *erasure.deadline <= now) {
+      expired.push_back(partition);
+    }
+  }
+  for (const auto& partition : expired) {
+    const auto entry = deferred.find(partition);
+    auto erasure = std::move(entry->second);
+    deferred.erase(entry);
+    // Name who is holding it: a count says something is stuck, the owner says
+    // what. Scanning the leases is fine here -- this only runs when a deletion
+    // is actually being forced.
+    auto holders = std::vector<std::string>{};
+    for (const auto& [id, lease] : leases) {
+      if (std::ranges::find(lease.partitions, partition)
+          != lease.partitions.end()) {
+        holders.push_back(fmt::to_string(lease.owner));
+      }
+    }
+    std::ranges::sort(holders);
+    holders.erase(std::unique(holders.begin(), holders.end()), holders.end());
+    // The holder keeps its pin; it simply finds the files gone. That is the
+    // trade the timeout makes, and it is loud on purpose.
+    TENZIR_WARN("{} deletes partition {} after waiting {} for {} to release "
+                "it; a reader that has not opened it yet will read short",
+                *self, partition, data{deferred_erase_timeout},
+                holders.empty()
+                  ? std::string{"a retriever it can no longer name"}
+                  : fmt::format("{}", fmt::join(holders, ", ")));
+    dispose_of(partition, std::move(erasure), None{});
+  }
+}
+
+auto catalog_state::next_lookup_worker() -> const catalog_lookup_worker_actor& {
+  TENZIR_ASSERT(not lookup_pool.empty());
+  const auto index = next_lookup_worker_index;
+  next_lookup_worker_index
+    = (next_lookup_worker_index + 1) % lookup_pool.size();
+  return lookup_pool[index];
+}
+
+void catalog_state::invalidate_sketches(const uuid& partition) {
+  for (const auto& worker : lookup_pool) {
+    self->mail(atom::erase_v, partition).send(worker);
+  }
+}
+
+void catalog_state::unpin(const uuid& partition) {
+  const auto it = pin_counts.find(partition);
+  TENZIR_ASSERT(it != pin_counts.end());
+  TENZIR_ASSERT(it->second > 0);
+  if (--it->second > 0) {
+    return;
+  }
+  pin_counts.erase(it);
+  const auto entry = deferred.find(partition);
+  if (entry == deferred.end()) {
+    return;
+  }
+  auto erasure = std::move(entry->second);
+  deferred.erase(entry);
+  TENZIR_DEBUG("{} disposes of partition {} after the last pin went away",
+               *self, partition);
+  dispose_of(partition, std::move(erasure), None{});
+  advance_maintenance(time::clock::now());
 }
 
 namespace {
 
 /// Recovers the filesystem path from a `resource`'s `url`, which is always
 /// written as a literal `file://` prefix followed by the canonical path (see
-/// e.g. `index_state`'s population of `partition_synopsis::store_file`),
-/// never a percent-encoded or otherwise escaped URI.
+/// e.g. the catalog's population of `partition_synopsis::store_file`), never a
+/// percent-encoded or otherwise escaped URI.
 auto path_from_file_url(const resource& res) -> std::filesystem::path {
   constexpr auto prefix = std::string_view{"file://"};
   if (res.url.starts_with(prefix)) {
@@ -521,642 +752,669 @@ auto path_from_file_url(const resource& res) -> std::filesystem::path {
 
 } // namespace
 
-auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
-  -> caf::result<atom::done> {
-  const partition_synopsis* synopsis = nullptr;
-  for (const auto& [type, entries] : synopses_per_type) {
-    if (auto it = entries.find(partition); it != entries.end()) {
-      synopsis = it->second.get();
-      break;
+auto catalog_state::marker_referenced(const std::filesystem::path& marker) const
+  -> bool {
+  if (markers_in_disposal.contains(marker)) {
+    return true;
+  }
+  return std::ranges::any_of(deferred, [&](const auto& entry) {
+    return entry.second.marker == marker;
+  });
+}
+
+void catalog_state::erase_marker_if_unreferenced(
+  const std::filesystem::path& marker) {
+  if (marker.empty()) {
+    return;
+  }
+  if (marker_referenced(marker)) {
+    return;
+  }
+  // Erase errors don't matter too much here: a leftover marker is replayed at
+  // the next startup, which erases partitions that are already gone.
+  self->mail(atom::erase_v, marker)
+    .request(filesystem, caf::infinite)
+    .then([](atom::done) { /* nop */ },
+          [self = self, marker](const caf::error& err) {
+            TENZIR_DEBUG("{} failed to erase marker at {}: {}", *self, marker,
+                         err);
+          });
+}
+
+void catalog_state::release_marker_hold(const std::filesystem::path& marker) {
+  const auto it = markers_in_disposal.find(marker);
+  TENZIR_ASSERT(it != markers_in_disposal.end());
+  if (--it->second == 0) {
+    markers_in_disposal.erase(it);
+  }
+  erase_marker_if_unreferenced(marker);
+}
+
+auto catalog_state::invalidate_policy_history() -> caf::error {
+  return tenzir::invalidate_policy_history(paths.database_dir);
+}
+
+void catalog_state::release_marker_after_flush(std::filesystem::path marker) {
+  markers_waiting_for_flush.push_back(std::move(marker));
+  if (next_policy_flush == time::max()) {
+    next_policy_flush = time::clock::now() + std::chrono::seconds{10};
+  }
+  if (self and maintenance_ready) {
+    arm_maintenance_wakeup(time::clock::now());
+  }
+}
+
+auto catalog_state::flush_policy_markers() -> caf::error {
+  auto error = policy ? policy->flush()
+               : markers_waiting_for_flush.empty()
+                 ? caf::error{}
+                 : invalidate_policy_history();
+  if (error.valid()) {
+    if (not policy) {
+      TENZIR_WARN("{} retains replacement lineage because policy history "
+                  "could not be invalidated: {}",
+                  name, error);
+    }
+    // One retry covers the entire batch, including commits arriving meanwhile.
+    next_policy_flush = time::clock::now() + defaults::disposal_retry_delay;
+    return error;
+  }
+  next_policy_flush = time::max();
+  for (const auto& marker : std::exchange(markers_waiting_for_flush, {})) {
+    release_marker_hold(marker);
+  }
+  return {};
+}
+
+void catalog_state::retire_erased(const uuid& partition,
+                                  partition_synopsis_ptr synopsis,
+                                  std::filesystem::path marker) {
+  auto erasure = deferred_erase{
+    .synopsis = std::move(synopsis),
+    .marker = std::move(marker),
+    .quarantine_error = None{},
+    .deadline = deferred_erase_deadline(),
+  };
+  if (pin_counts.contains(partition)) {
+    TENZIR_DEBUG("{} defers the deletion of partition {} because a retriever "
+                 "still holds it",
+                 *self, partition);
+    deferred.emplace(partition, std::move(erasure));
+    return;
+  }
+  dispose_of(partition, std::move(erasure), None{});
+}
+
+catalog_state::catalog_state() = default;
+
+catalog_state::~catalog_state() {
+  maintenance_wakeup.dispose();
+}
+
+auto catalog_state::make_policy() -> caf::error {
+  for (const auto* plugin : plugins::get<storage_policy_plugin>()) {
+    auto candidate = plugin->make_storage_policy(storage_policy_context{
+      // The policy has no actor context of its own, so it borrows the
+      // catalog's. Both callbacks answer on the catalog's thread, and the
+      // filesystem actor resolves the paths against the database directory.
+      .read = [dbdir = paths.database_dir](
+                std::filesystem::path path) -> caf::expected<chunk_ptr> {
+        // Blocking, and deliberately not the filesystem actor: this runs
+        // once, inside make_policy() during the catalog's startup, next to
+        // the equally blocking marker replay and synopsis scan. A missing
+        // file is the ordinary first-start case. Any other failure means
+        // the file is there but unreadable, and the policy must hear about
+        // the difference: mistaking a transient read error for a clean
+        // slate would hand it an empty state to act on.
+        const auto resolved = dbdir / path;
+        auto err = std::error_code{};
+        const auto present = std::filesystem::exists(resolved, err);
+        if (err) {
+          return caf::make_error(ec::filesystem_error,
+                                 fmt::format("failed to probe {}: {}", resolved,
+                                             err.message()));
+        }
+        if (not present) {
+          return chunk_ptr{};
+        }
+        auto chunk = chunk::mmap(resolved);
+        if (not chunk) {
+          return std::move(chunk.error());
+        }
+        return std::move(*chunk);
+      },
+      .write = [dbdir = paths.database_dir](std::filesystem::path path,
+                                            chunk_ptr chunk) -> caf::error {
+        // Blocking, mirroring the filesystem actor's own write handler.
+        if (not chunk) {
+          return caf::make_error(ec::invalid_argument,
+                                 fmt::format("cannot write a nullptr to {}",
+                                             path));
+        }
+        const auto resolved = path.is_absolute() ? path : dbdir / path;
+        return io::save(resolved, as_bytes(chunk));
+      },
+      .run_delayed =
+        [self = this->self](duration delay, std::function<void()> what) {
+          detail::weak_run_delayed(self, delay, std::move(what));
+        },
+    });
+    if (not candidate) {
+      // An unconfigured implementation declines, which is not an error.
+      continue;
+    }
+    TENZIR_INFO("{} takes its storage policy from the {} plugin", *self,
+                plugin->name());
+    policy = std::move(candidate);
+    // One policy: a second would have to be reconciled with the first on every
+    // question, and there is no sensible way to do that.
+    break;
+  }
+  return replay_policy_transforms();
+}
+
+auto catalog_state::replay_policy_transforms() -> caf::error {
+  auto held_markers = std::vector<std::filesystem::path>{};
+  for (const auto& replayed : replayed_transforms) {
+    if (not replayed.marker.empty()) {
+      if (not policy and replayed.erasure) {
+        // An erasure creates no replacement lineage. Its independent file
+        // disposal references still keep the tombstone alive as needed.
+        release_marker_hold(replayed.marker);
+      } else {
+        held_markers.push_back(replayed.marker);
+      }
     }
   }
-  if (not synopsis) {
-    erase(partition);
-    return atom::done_v;
+  if (not policy) {
+    // One durable invalidation replaces arbitrarily many lineage markers.
+    // A subsequently enabled policy must not trust history predating it.
+    for (auto const& marker : held_markers) {
+      release_marker_after_flush(marker);
+    }
+    static_cast<void>(flush_policy_markers());
+    replayed_transforms.clear();
+    return {};
   }
-  const auto partition_path = path_from_file_url(synopsis->indexes_file);
-  const auto synopsis_path = path_from_file_url(synopsis->sketches_file);
-  const auto store_path = path_from_file_url(synopsis->store_file);
-  TENZIR_WARN("{} quarantines partition {} after an error: {}", *self,
-              partition, error);
-  // A partition whose synopsis failed to serialize can end up with an empty
-  // `resource::url` for one of these three fields (see e.g.
-  // `active_partition.cpp`'s handling of a failed external `.mdx` write).
-  // `path_from_file_url` would then return an empty path, which the
-  // filesystem actor resolves as its own root directory, turning an
-  // `atom::erase`/`atom::move` meant for one file into one that touches the
-  // whole database directory. Skip any request whose path is empty instead.
-  if (not partition_path.empty()) {
-    self->mail(atom::erase_v, partition_path)
-      .request(filesystem, caf::infinite)
-      .then([](atom::done) { /* nop */ },
-            [self = self, partition, partition_path](const caf::error& err) {
-              TENZIR_WARN("{} failed to erase quarantined partition {} at "
-                          "{}: {}",
-                          *self, partition, partition_path, err);
-            });
+  // Validate the whole replay before changing history. Otherwise an unknown
+  // token could become a generic replacement, lose its rule watermark, and
+  // let a non-idempotent rule run again. Keep every marker and refuse startup
+  // until the recorded commit can be recovered.
+  for (auto const& replayed : replayed_transforms) {
+    if (replayed.policy_token.empty() and not replayed.token_input) {
+      continue;
+    }
+    if (replayed.policy_token.empty() or not replayed.token_input
+        or not policy->deserialize_token(replayed.policy_token).has_value()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("cannot replay storage policy token in {}; the marker "
+                    "is retained and must be repaired before restarting",
+                    replayed.marker));
+    }
   }
-  if (not synopsis_path.empty()) {
-    self->mail(atom::erase_v, synopsis_path)
-      .request(filesystem, caf::infinite)
-      .then([](atom::done) { /* nop */ },
-            [self = self, partition, synopsis_path](const caf::error& err) {
-              TENZIR_WARN("{} failed to erase quarantined partition synopsis "
-                          "{} at {}: {}",
-                          *self, partition, synopsis_path, err);
-            });
+  // Transforms whose markers replayed at startup finished without their
+  // policy callbacks -- the crash landed between the durable marker and the
+  // continuation that would have called them. Feeding them now lets the
+  // history follow the data to its current ids and lands the interrupted
+  // commit; the policy's construction settled its state, so these land in a
+  // live history (or the degraded journal), and state the history already
+  // saw replays as a no-op.
+  //
+  // Chained transforms must feed in lineage order: with `A -> B` and
+  // `B -> C` pending, replaying `B -> C` first would find no state on `B` to
+  // carry, and the records `A -> B` restores afterwards would sit on the
+  // vanished `B` forever. Directory iteration guarantees no order, so pick,
+  // each round, a transform whose inputs no other pending transform
+  // produces.
+  auto pending = std::exchange(replayed_transforms, {});
+  auto ordered = std::vector<replayed_transform>{};
+  ordered.reserve(pending.size());
+  while (not pending.empty()) {
+    // A transform writes history onto its outputs -- and, for a
+    // preserve-input commit, onto its token_input, the surviving partition a
+    // later transform may consume. A candidate is ready when no *other*
+    // pending transform still writes onto an input, including token_input.
+    // Only a preserving transform writes back onto its token_input: treating
+    // a consumer as a writer would create a false dependency cycle.
+    const auto writes_onto = [](const replayed_transform& transform,
+                                const uuid& id) {
+      if (transform.inputs.empty() and transform.token_input
+          and *transform.token_input == id) {
+        return true;
+      }
+      return std::ranges::any_of(transform.outputs, [&](const auto& output) {
+        return output.uuid == id;
+      });
+    };
+    auto chosen = std::ranges::find_if(pending, [&](const auto& transform) {
+      return std::ranges::none_of(pending, [&](const auto& other) {
+        if (&other == &transform) {
+          return false;
+        }
+        // Two preserving commits both write back onto the same input. The
+        // later one depends on the earlier one, not vice versa. Equal (legacy
+        // zero) sequences remain ambiguous and fail below rather than guessing.
+        if (transform.inputs.empty() and other.inputs.empty()
+            and transform.token_input
+            and transform.token_input == other.token_input
+            and other.sequence > transform.sequence) {
+          return false;
+        }
+        return (transform.token_input
+                and writes_onto(other, *transform.token_input))
+               or std::ranges::any_of(transform.inputs, [&](const auto& input) {
+                    return writes_onto(other, input);
+                  });
+      });
+    });
+    if (chosen == pending.end()) {
+      return caf::make_error(
+        ec::format_error,
+        "cannot order transform marker replay; ambiguous or cyclic markers "
+        "are retained and must be repaired before restarting");
+    }
+    ordered.push_back(std::move(*chosen));
+    pending.erase(chosen);
   }
+  for (auto& replayed : ordered) {
+    if (replayed.erasure) {
+      for (const auto& input : replayed.inputs) {
+        policy->on_erased(input);
+      }
+    } else if (not replayed.inputs.empty()) {
+      policy->on_replaced(replayed.inputs, replayed.outputs);
+    }
+    if (not replayed.policy_token.empty() and replayed.token_input) {
+      policy->on_committed(policy->deserialize_token(replayed.policy_token),
+                           *replayed.token_input, replayed.outputs);
+    }
+  }
+  // The replay kept token-carrying markers alive; they may go only once the
+  // fed state is durable.
+  if (not held_markers.empty()) {
+    for (const auto& marker : held_markers) {
+      release_marker_after_flush(marker);
+    }
+    static_cast<void>(flush_policy_markers());
+  }
+  return {};
+}
+
+auto catalog_state::retire(const uuid& partition,
+                           Option<std::string> quarantine_error)
+  -> caf::result<atom::done> {
+  retiring.insert(partition);
+  auto erasure = deferred_erase{
+    .synopsis = find_synopsis(partition),
+    .marker = {},
+    .quarantine_error = std::move(quarantine_error),
+    .deadline = deferred_erase_deadline(),
+  };
   auto rp = self->make_response_promise<atom::done>();
-  if (store_path.empty()) {
-    TENZIR_WARN("{} cannot quarantine store for partition {}: no store path "
-                "on record",
-                *self, partition);
+  // Runs once the retirement is safe to act on, with the world re-checked:
+  // the partition stays live while a tombstone write is in flight, so a
+  // concurrent retirement, a transform, or a vanished pin may have beaten us.
+  auto proceed = [this, partition, rp](deferred_erase erasure) mutable {
+    if (deferred.contains(partition) or deleting.contains(partition)) {
+      // A concurrent retirement already parked it or is deleting its files;
+      // that retirement covers the erasure, so this one is redundant.
+      retiring.erase(partition);
+      erase_marker_if_unreferenced(erasure.marker);
+      rp.deliver(atom::done_v);
+      return;
+    }
+    if (in_transformation.contains(partition)) {
+      // A transform claimed it in the meantime; erasing its input now would
+      // let the data resurrect through the transform's output.
+      erase_marker_if_unreferenced(erasure.marker);
+      retiring.erase(partition);
+      rp.deliver(
+        caf::make_error(ec::busy, fmt::format("refusing to erase partition {} "
+                                              "while it is being transformed",
+                                              partition)));
+      return;
+    }
     erase(partition);
+    if (policy) {
+      ++markers_in_disposal[erasure.marker];
+      release_marker_after_flush(erasure.marker);
+    }
+    retiring.erase(partition);
+    // Pins may go away while a tombstone write is in flight; a release then
+    // found nothing parked and did nothing, so parking now would wait for a
+    // trigger that already came and went.
+    if (not pin_counts.contains(partition)) {
+      dispose_of(partition, std::move(erasure), rp);
+      return;
+    }
+    deferred.emplace(partition, std::move(erasure));
     rp.deliver(atom::done_v);
-    return rp;
-  }
-  auto quarantined_path
-    = store_path.parent_path() / "quarantined" / store_path.filename();
-  std::error_code err;
-  std::filesystem::create_directories(quarantined_path.parent_path(), err);
-  if (err) {
-    return caf::make_error(
-      ec::filesystem_error,
-      fmt::format("failed to create quarantine directory {}: {}",
-                  quarantined_path.parent_path(), err.message()));
-  }
-  self->mail(atom::move_v, store_path, quarantined_path)
+    advance_maintenance(time::clock::now());
+  };
+  // Every retirement records its intent first, pinned or not: a crash while
+  // the file operations are outstanding -- or an operation that fails --
+  // would otherwise resurrect the retired data, since a partition file whose
+  // synopsis went missing has its synopsis regenerated at the next startup.
+  // For an erasure the marker is a plain tombstone. A quarantine sets the
+  // marker's quarantine flag instead: its replay moves the store aside for
+  // inspection rather than erasing it, so a crash between the marker write
+  // and the store move preserves the evidence -- and does not resurrect a
+  // partition whose corrupt store keeps failing reads, which no automatic
+  // pass may ever select for a rebuild again.
+  // The partition stays in the catalog until the marker is durable; dropping
+  // it first and failing the write would leave files on disk that the next
+  // startup scans back in, while this process reports the retirement as
+  // failed.
+  erasure.marker = paths.marker(uuid::random());
+  self
+    ->mail(atom::write_v, erasure.marker,
+           create_marker({partition}, {}, keep_original_partition::no,
+                         erasure.quarantine_error.has_value()))
     .request(filesystem, caf::infinite)
     .then(
-      [this, partition, rp](atom::done) mutable {
-        erase(partition);
-        rp.deliver(atom::done_v);
+      [proceed, erasure](atom::ok) mutable {
+        proceed(std::move(erasure));
       },
       [this, partition, rp](caf::error& err) mutable {
-        TENZIR_WARN("{} failed to quarantine store for partition {}: {}", *self,
-                    partition, err);
-        erase(partition);
+        retiring.erase(partition);
+        eviction_retry_at = time::clock::now() + defaults::disposal_retry_delay;
+        // The partition never left the catalog: a failed erase is a no-op, not
+        // a limbo state.
         rp.deliver(std::move(err));
+        advance_maintenance(time::clock::now());
       });
   return rp;
 }
 
-auto catalog_state::finalize_lookup(catalog_lookup_result&& candidates,
-                                    stopwatch::time_point start) const
-  -> catalog_lookup_result {
-  // Sort each schema's partitions by recency and gather statistics.
-  auto num_candidate_partitions = size_t{0};
-  auto num_candidate_events = size_t{0};
-  for (auto& [type, per_schema] : candidates.candidate_infos) {
-    std::sort(per_schema.partition_infos.begin(),
-              per_schema.partition_infos.end(),
-              [](const partition_info& lhs, const partition_info& rhs) {
-                return lhs.max_import_time > rhs.max_import_time;
-              });
-    num_candidate_partitions += per_schema.partition_infos.size();
-    num_candidate_events
-      += std::transform_reduce(per_schema.partition_infos.begin(),
-                               per_schema.partition_infos.end(), size_t{0},
-                               std::plus<>{}, [](const auto& partition) {
-                                 return partition.events;
-                               });
+void catalog_state::dispose_of(
+  const uuid& partition, deferred_erase entry,
+  Option<caf::typed_response_promise<atom::done>> rp) {
+  ++storage_generation;
+  // Count the files against `deleting` until the filesystem actor is done
+  // with them: a database scan that races the deletion still sees them, and
+  // without the correction the budget loop would select further victims for
+  // bytes that are already on their way out. A failed deletion leaves the
+  // entry too -- the bytes then really are still in use, and the loop is
+  // right to look elsewhere.
+  if (entry.synopsis) {
+    const auto footprint = entry.synopsis->store_file.size
+                           + entry.synopsis->indexes_file.size
+                           + entry.synopsis->sketches_file.size;
+    if (footprint > 0) {
+      deleting[partition] = footprint;
+    }
   }
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    stopwatch::now() - start);
-  TENZIR_INFO("catalog found {} candidate partitions ({} events) in "
-              "{} microseconds",
-              num_candidate_partitions, num_candidate_events, delta.count());
-  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
-  return std::move(candidates);
+  // A partition whose synopsis failed to serialize can end up with an empty
+  // `resource::url` (see e.g. `active_partition.cpp`'s handling of a failed
+  // external `.mdx` write). `path_from_file_url` would then return an empty
+  // path, which the filesystem actor resolves as its own root directory,
+  // turning an erase or move meant for one file into one that touches the
+  // whole database directory. Fall back to the canonical layout instead.
+  const auto resolve
+    = [&](const resource& res,
+          const std::filesystem::path& fallback) -> std::filesystem::path {
+    if (not entry.synopsis) {
+      return fallback;
+    }
+    auto result = path_from_file_url(res);
+    return result.empty() ? fallback : result;
+  };
+  const auto partition_path
+    = resolve(entry.synopsis ? entry.synopsis->indexes_file : resource{},
+              paths.partition(partition));
+  const auto synopsis_path
+    = resolve(entry.synopsis ? entry.synopsis->sketches_file : resource{},
+              paths.synopsis(partition));
+  auto store_path = entry.synopsis
+                      ? path_from_file_url(entry.synopsis->store_file)
+                      : std::filesystem::path{};
+  if (store_path.empty()) {
+    // A retirement without a synopsis -- an uncataloged partition left behind
+    // by an interrupted write -- still owns a store, and finishing without
+    // deleting it would orphan `archive/<uuid>.*` forever, counted by every
+    // disk-budget scan and reclaimable by nothing. Probe the archive the way
+    // the index used to; no known store implementation deviates from the
+    // default path scheme.
+    auto probe_failed = false;
+    for (const auto* extension : {"store", "feather", "parquet"}) {
+      auto candidate
+        = paths.archive_dir / fmt::format("{}.{}", partition, extension);
+      auto probe_error = std::error_code{};
+      const auto present = std::filesystem::exists(candidate, probe_error);
+      if (probe_error) {
+        probe_failed = true;
+        continue;
+      }
+      if (present) {
+        store_path = std::move(candidate);
+        break;
+      }
+    }
+    if (store_path.empty() and probe_failed) {
+      // Absence must be confirmed: reporting success on an unprobed store
+      // would erase the tombstone and orphan the store forever. Re-park and
+      // retry instead.
+      deleting.erase(partition);
+      TENZIR_WARN("{} retries disposing of partition {} because it could not "
+                  "confirm whether a store remains",
+                  *self, partition);
+      entry.retry_at = time::clock::now() + defaults::disposal_retry_delay;
+      deferred.emplace(partition, std::move(entry));
+      if (rp) {
+        rp->deliver(caf::make_error(ec::filesystem_error,
+                                    fmt::format("could not confirm the store "
+                                                "of partition {}",
+                                                partition)));
+      }
+      advance_maintenance(time::clock::now());
+      return;
+    }
+  }
+  // Every file the disposal touches reports into one counter, so retirement
+  // completes only when the disk is actually clean. A partial failure -- the
+  // store gone but the dense index left behind, say -- re-parks the partition:
+  // the tombstone stays referenced, the deadline sweep retries the deletion
+  // (erasing a path that is already gone succeeds, so retries converge), and a
+  // crash in between still replays the erasure from the marker. Failed file
+  // operations are retried even when forced disposal of pinned data is off.
+  //
+  // The marker stays referenced for the whole disposal: nothing in `deferred`
+  // points at it while the deletions are in flight, and without the reference
+  // a transform delivering in that window would erase the tombstone its
+  // inputs still need.
+  if (not entry.marker.empty()) {
+    ++markers_in_disposal[entry.marker];
+  }
+  auto release_marker = [this](const std::filesystem::path& marker) {
+    if (marker.empty()) {
+      return;
+    }
+    const auto it = markers_in_disposal.find(marker);
+    TENZIR_ASSERT(it != markers_in_disposal.end());
+    if (--it->second == 0) {
+      markers_in_disposal.erase(it);
+    }
+  };
+  const auto operations = size_t{2} + (store_path.empty() ? 0 : 1);
+  auto counter = detail::make_fanout_counter(
+    operations,
+    [this, partition, entry, rp, release_marker]() mutable {
+      ++storage_generation;
+      deleting.erase(partition);
+      release_marker(entry.marker);
+      erase_marker_if_unreferenced(entry.marker);
+      if (rp) {
+        rp->deliver(atom::done_v);
+      }
+      advance_maintenance(time::clock::now());
+    },
+    [this, partition, entry, rp, release_marker](caf::error&& err) mutable {
+      deleting.erase(partition);
+      release_marker(entry.marker);
+      TENZIR_WARN("{} failed to dispose of partition {} and will retry: {}",
+                  *self, partition, err);
+      entry.deadline = deferred_erase_deadline();
+      entry.retry_at = time::clock::now() + defaults::disposal_retry_delay;
+      deferred.emplace(partition, std::move(entry));
+      if (rp) {
+        rp->deliver(std::move(err));
+      }
+      advance_maintenance(time::clock::now());
+    });
+  auto erase_file
+    = [this, partition, counter](const std::filesystem::path& path,
+                                 std::string_view what) {
+        self->mail(atom::erase_v, path)
+          .urgent()
+          .request(filesystem, caf::infinite)
+          .then(
+            [counter, self = self, partition, what](atom::done) {
+              TENZIR_TRACE("{} erased {} of partition {} from filesystem",
+                           *self, what, partition);
+              counter->receive_success();
+            },
+            [counter, self = self, partition, path, what](caf::error& err) {
+              TENZIR_WARN("{} failed to erase {} of partition {} at {}: {}",
+                          *self, what, partition, path, err);
+              counter->receive_error(std::move(err));
+            });
+      };
+  if (entry.quarantine_error) {
+    // Quarantining moves the store aside instead of deleting it -- and it
+    // moves *first*: erasing the dense index and synopsis before the move
+    // succeeded would, on a crash or a failed move, leave a store that
+    // nothing can rediscover until the marker replays at the next startup.
+    TENZIR_WARN("{} quarantines partition {} after an error: {}", *self,
+                partition, *entry.quarantine_error);
+    if (store_path.empty()) {
+      // Two operations were counted; there is no store to move.
+      TENZIR_WARN("{} cannot quarantine store for partition {}: no store path "
+                  "on record",
+                  *self, partition);
+      erase_file(synopsis_path, "synopsis");
+      erase_file(partition_path, "dense indexes");
+      return;
+    }
+    const auto quarantined_path
+      = store_path.parent_path() / "quarantined" / store_path.filename();
+    auto err = std::error_code{};
+    if (std::filesystem::exists(quarantined_path, err)) {
+      // A previous attempt already moved the store and failed later --
+      // repeating the move from the now-missing source would fail forever,
+      // wedging the retry. The move is done; only the index files remain.
+      erase_file(synopsis_path, "synopsis");
+      erase_file(partition_path, "dense indexes");
+      counter->receive_success();
+      return;
+    }
+    err.clear();
+    std::filesystem::create_directories(quarantined_path.parent_path(), err);
+    if (err) {
+      counter->receive_error(caf::make_error(
+        ec::filesystem_error,
+        fmt::format("failed to create quarantine directory {}: {}",
+                    quarantined_path.parent_path(), err.message())));
+      counter->receive_success();
+      counter->receive_success();
+      return;
+    }
+    self->mail(atom::move_v, store_path, quarantined_path)
+      .request(filesystem, caf::infinite)
+      .then(
+        [counter, erase_file, synopsis_path, partition_path](atom::done) {
+          erase_file(synopsis_path, "synopsis");
+          erase_file(partition_path, "dense indexes");
+          counter->receive_success();
+        },
+        [counter, this, partition](caf::error& err) {
+          TENZIR_WARN("{} failed to quarantine store for partition {}: {}",
+                      *self, partition, err);
+          counter->receive_error(std::move(err));
+          counter->receive_success();
+          counter->receive_success();
+        });
+    return;
+  }
+  erase_file(synopsis_path, "synopsis");
+  erase_file(partition_path, "dense indexes");
+  if (store_path.empty()) {
+    // No store path on record. That should not happen for a partition the
+    // catalog held, so say so rather than pass an empty path to the
+    // filesystem actor, which resolves it as its own root and would take the
+    // whole database directory with it.
+    TENZIR_WARN("{} cannot erase the store of partition {}: no store path on "
+                "record",
+                *self, partition);
+    return;
+  }
+  self->mail(atom::erase_v, store_path)
+    .urgent()
+    .request(filesystem, caf::infinite)
+    .then(
+      [counter](atom::done) {
+        counter->receive_success();
+      },
+      [counter](caf::error& err) {
+        counter->receive_error(std::move(err));
+      });
 }
 
+auto catalog_state::erase_from_disk(const uuid& partition)
+  -> caf::result<atom::done> {
+  TENZIR_VERBOSE("{} erases partition {}", *self, partition);
+  const auto known = find_synopsis(partition) != nullptr;
+  if (not known) {
+    // A caller may name a partition that never made it into the catalog --
+    // one left behind on disk by an interrupted write, say. Deleting it is
+    // still the right thing to do, but a partition that is neither known nor
+    // on disk is a caller error.
+    auto err = std::error_code{};
+    const auto path = paths.partition(partition);
+    if (not std::filesystem::exists(path, err)) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("unknown partition for path {}: {}",
+                                         path, err.message()));
+    }
+  } else if (in_transformation.contains(partition)) {
+    // Erasing a partition out from under a transform would let its data
+    // resurrect through the transform's output. The budget loop skips such a
+    // partition when selecting and picks it up once it is free.
+    return caf::make_error(ec::busy,
+                           fmt::format("refusing to erase partition {} while "
+                                       "it is being transformed",
+                                       partition));
+  }
+  return retire(partition, None{});
+}
+
+auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
+  -> caf::result<atom::done> {
+  if (not find_synopsis(partition)) {
+    erase(partition);
+    return atom::done_v;
+  }
+  if (in_transformation.contains(partition)) {
+    return caf::make_error(ec::busy,
+                           fmt::format("refusing to quarantine partition {} "
+                                       "while it is being transformed",
+                                       partition));
+  }
+  return retire(partition, std::move(error));
+}
 auto catalog_state::lookup(expression expr)
   -> caf::expected<catalog_lookup_result> {
-  auto start = stopwatch::now();
-  if (expr == caf::none) {
-    expr = trivially_true_expression();
-  }
-  auto normalized = normalize_and_validate(expr);
-  if (not normalized) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("{} failed to normalize and validate "
-                                       "epxression {}: {}",
-                                       *self, expr, normalized.error()));
-  }
-  // Short-circuit a match-everything lookup. The answer is every partition, so
-  // there is nothing to prune and no reason to pay for the machinery that
-  // would arrive at that conclusion: no taxonomy resolution per schema, no
-  // per-partition predicate evaluation, and none of the string construction
-  // the `meta_extractor::schema` branch does for each one. Rebuild and
-  // compaction issue exactly this expression on every run, over every
-  // partition in the database.
-  if (*normalized == trivially_true_expression()) {
-    auto total_candidates = catalog_lookup_result{};
-    for (const auto& [type, partition_synopses] : synopses_per_type) {
-      if (partition_synopses.empty()) {
-        continue;
-      }
-      auto& candidates = total_candidates.candidate_infos[type];
-      candidates.exp = trivially_true_expression();
-      candidates.partition_infos.reserve(partition_synopses.size());
-      for (const auto& [part_id, part_syn] : partition_synopses) {
-        candidates.partition_infos.emplace_back(part_id, *part_syn);
-      }
-    }
-    return finalize_lookup(std::move(total_candidates), start);
-  }
-  // Resolve the expression once per schema; reused across both phases below.
-  auto resolved_per_type = std::vector<std::pair<type, expression>>{};
-  resolved_per_type.reserve(synopses_per_type.size());
-  for (const auto& [type, _] : synopses_per_type) {
-    auto resolved = resolve(taxonomies, *normalized, type);
-    if (not resolved) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} failed to resolve epxression {}: "
-                                         "{}",
-                                         *self, expr, resolved.error()));
-    }
-    resolved_per_type.emplace_back(type, std::move(*resolved));
-  }
-  // Phase 1: prune using the resident synopses. Deferred Bloom-filter sketches
-  // are treated conservatively (their partitions are kept as candidates);
-  // `deferred_per_type` collects, per schema, the ids of partitions that were
-  // kept only because such a sketch could prune them if loaded.
-  auto deferred_per_type = std::unordered_map<type, std::unordered_set<uuid>>{};
-  auto total_candidates = catalog_lookup_result{};
-  for (const auto& [type, resolved] : resolved_per_type) {
-    auto& deferred = deferred_per_type[type];
-    auto candidates_per_type
-      = lookup_impl(resolved, type, synopses_per_type.at(type), deferred);
-    if (candidates_per_type.partition_infos.empty()) {
-      continue;
-    }
-    total_candidates.candidate_infos[type] = std::move(candidates_per_type);
-  }
-  // Phase 2: prune on the go. For each candidate that was kept only because of
-  // a deferred Bloom filter, load its sketches and re-evaluate that single
-  // partition, dropping it if its now-visible Bloom filter rules it out. Only
-  // one partition's sketches need to be resident at a time, so pruning is not
-  // limited by the cache budget (which only governs how many sketches stay
-  // warm for later queries); the candidate set is already narrowed by the
-  // cheap time/min-max pruning of phase 1. Restricting to `deferred` ids avoids
-  // loading sketches for candidates a Bloom filter cannot prune (e.g. those
-  // matched only by a `#schema` or other branch of a disjunction).
-  if (sketches.budget() > 0) {
-    for (const auto& [type, resolved] : resolved_per_type) {
-      auto candidate_it = total_candidates.candidate_infos.find(type);
-      if (candidate_it == total_candidates.candidate_infos.end()) {
-        continue;
-      }
-      const auto& deferred = deferred_per_type[type];
-      if (deferred.empty()) {
-        continue;
-      }
-      const auto& partition_synopses = synopses_per_type.at(type);
-      auto& partition_infos = candidate_it->second.partition_infos;
-      auto kept = std::vector<partition_info>{};
-      kept.reserve(partition_infos.size());
-      for (auto& info : partition_infos) {
-        const auto resident = partition_synopses.find(info.uuid);
-        // Only candidates kept because of a deferred Bloom filter are worth
-        // loading; everything else stays as-is.
-        if (not deferred.contains(info.uuid)
-            or resident == partition_synopses.end()) {
-          kept.push_back(std::move(info));
-          continue;
-        }
-        ensure_sketches_loaded(info.uuid, type);
-        // If the sketches could not be loaded (remote/oversized/missing), keep
-        // the partition as a conservative candidate.
-        if (not sketches.peek(info.uuid)) {
-          kept.push_back(std::move(info));
-          continue;
-        }
-        // Re-evaluate this single partition; `lookup_impl` picks up its loaded
-        // sketches via the cache. The throwaway deferred set is unused here.
-        auto single = detail::flat_map<uuid, partition_synopsis_ptr>{};
-        single[resident->first] = resident->second;
-        auto ignored = std::unordered_set<uuid>{};
-        if (not lookup_impl(resolved, type, single, ignored)
-                  .partition_infos.empty()) {
-          kept.push_back(std::move(info));
-        }
-      }
-      partition_infos = std::move(kept);
-    }
-    // Drop schemas whose candidates were all pruned, matching phase 1's
-    // "skip empty" contract.
-    std::erase_if(total_candidates.candidate_infos, [](const auto& entry) {
-      return entry.second.partition_infos.empty();
-    });
-  }
-  return finalize_lookup(std::move(total_candidates), start);
-}
-
-auto catalog_state::lookup_impl(
-  const expression& expr, const type& schema,
-  const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
-  std::unordered_set<uuid>& deferred_sketch_partitions) const
-  -> catalog_lookup_result::candidate_info {
-  TENZIR_ASSERT(not is<caf::none_t>(expr));
-  // The partition UUIDs must be sorted, otherwise the invariants of the
-  // inplace set algorithms are violated, leading to wrong results. So all
-  // places where we return an assembled set must
-  // ensure the post-condition of returning a sorted list. We currently
-  // rely on `flat_map` already traversing them in the correct order, so
-  // no separate sorting step is required.
-  auto memoized_partitions = catalog_lookup_result::candidate_info{};
-  auto all_partitions = [&] {
-    if (not memoized_partitions.partition_infos.empty()
-        or partition_synopses.empty()) {
-      return memoized_partitions;
-    }
-    for (const auto& [partition_id, synopsis] : partition_synopses) {
-      memoized_partitions.partition_infos.emplace_back(partition_id, *synopsis);
-    }
-    return memoized_partitions;
-  };
-  using synopsis_map = detail::flat_map<uuid, partition_synopsis_ptr>;
-  using candidate_info = catalog_lookup_result::candidate_info;
-  auto narrow_to = [&](const candidate_info& candidates) {
-    auto entries = typename synopsis_map::vector_type{};
-    entries.reserve(candidates.partition_infos.size());
-    for (const auto& candidate : candidates.partition_infos) {
-      const auto it = partition_synopses.find(candidate.uuid);
-      TENZIR_ASSERT(it != partition_synopses.end());
-      entries.push_back(*it);
-    }
-    return synopsis_map::make_unsafe(std::move(entries));
-  };
-  auto exclude = [&](const candidate_info& candidates) {
-    TENZIR_ASSERT(candidates.partition_infos.size()
-                  <= partition_synopses.size());
-    auto entries = typename synopsis_map::vector_type{};
-    entries.reserve(partition_synopses.size()
-                    - candidates.partition_infos.size());
-    auto candidate = candidates.partition_infos.begin();
-    for (const auto& entry : partition_synopses) {
-      if (candidate != candidates.partition_infos.end()
-          and candidate->uuid == entry.first) {
-        ++candidate;
-        continue;
-      }
-      entries.push_back(entry);
-    }
-    TENZIR_ASSERT(candidate == candidates.partition_infos.end());
-    return synopsis_map::make_unsafe(std::move(entries));
-  };
-  auto f = detail::overload{
-    [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
-      TENZIR_ASSERT(not x.empty());
-      auto result = catalog_lookup_result::candidate_info{};
-      auto initialized = false;
-      for (const auto metadata : {true, false}) {
-        for (const auto& op : x) {
-          if (contains_metadata(op) != metadata) {
-            continue;
-          }
-          if (not initialized) {
-            result = lookup_impl(op, schema, partition_synopses,
-                                 deferred_sketch_partitions);
-            initialized = true;
-          } else {
-            auto remaining = narrow_to(result);
-            result
-              = lookup_impl(op, schema, remaining, deferred_sketch_partitions);
-          }
-          if (result.partition_infos.empty()) {
-            return result; // short-circuit
-          }
-        }
-      }
-      return result;
-    },
-    [&](const disjunction& x) -> catalog_lookup_result::candidate_info {
-      catalog_lookup_result::candidate_info result;
-      for (const auto metadata : {true, false}) {
-        for (const auto& op : x) {
-          if (contains_metadata(op) != metadata) {
-            continue;
-          }
-          auto xs = catalog_lookup_result::candidate_info{};
-          if (result.partition_infos.empty()) {
-            xs = lookup_impl(op, schema, partition_synopses,
-                             deferred_sketch_partitions);
-          } else {
-            auto remaining = exclude(result);
-            if (remaining.empty()) {
-              return result;
-            }
-            xs = lookup_impl(op, schema, remaining, deferred_sketch_partitions);
-          }
-          TENZIR_ASSERT_EXPENSIVE(std::is_sorted(xs.partition_infos.begin(),
-                                                 xs.partition_infos.end()));
-          detail::inplace_unify(result.partition_infos, xs.partition_infos);
-          TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
-                                                 result.partition_infos.end()));
-          if (result.partition_infos.size() == partition_synopses.size()) {
-            return result; // short-circuit
-          }
-        }
-      }
-      return result;
-    },
-    [&](const negation&) -> catalog_lookup_result::candidate_info {
-      // We cannot handle negations, because a synopsis may return false
-      // positives, and negating such a result may cause false
-      // negatives.
-      // TODO: The above statement seems to only apply to bloom filter
-      // synopses, but it should be possible to handle time or bool synopses.
-      return all_partitions();
-    },
-    [&](const predicate& x) -> catalog_lookup_result::candidate_info {
-      // Performs a lookup on all *matching* synopses with operator and
-      // data from the predicate of the expression. The match function
-      // uses a qualified_record_field to determine whether the synopsis
-      // should be queried.
-      auto search = [&](auto match) {
-        TENZIR_ASSERT(is<data>(x.rhs));
-        const auto& rhs = as<data>(x.rhs);
-        catalog_lookup_result::candidate_info result;
-        auto matching_fields = std::vector<qualified_record_field>{};
-        const auto* schema_fields = try_as<record_type>(&schema);
-        const auto fields_resolved
-          = schema_fields != nullptr and not schema.name().empty();
-        if (fields_resolved) {
-          for (const auto& leaf : schema_fields->leaves()) {
-            auto field = qualified_record_field{schema, leaf.index};
-            if (match(field)) {
-              matching_fields.push_back(std::move(field));
-            }
-          }
-        }
-        for (const auto& [part_id, part_syn] : partition_synopses) {
-          // Prefer an on-demand-loaded synopsis (with Bloom-filter sketches)
-          // when one is cached; otherwise use the resident synopsis, whose
-          // deferred sketches are null.
-          const auto loaded = sketches.peek(part_id);
-          const auto& effective = loaded ? loaded : part_syn;
-          auto may_contain = [&](const qualified_record_field& field,
-                                 const synopsis_ptr& syn) {
-            // We need to prune the type's metadata here by converting it to a
-            // concrete type and back, because the type synopses are looked up
-            // independent from names and attributes.
-            auto prune = [&]<concrete_type T>(const T& x) {
-              return type{x};
-            };
-            auto cleaned_type = tenzir::match(field.type(), prune);
-            if (syn) {
-              auto opt = syn->lookup(x.op, make_view(rhs));
-              return not opt or *opt;
-            }
-            // The field has no dedicated synopsis. Check if there is one for
-            // the type in general.
-            if (auto it = effective->type_synopses_.find(cleaned_type);
-                it != effective->type_synopses_.end() and it->second) {
-              auto opt = it->second->lookup(x.op, make_view(rhs));
-              return not opt or *opt;
-            }
-            // The catalog couldn't rule out this partition, so we have to
-            // include it in the result set. If the missing synopsis is a
-            // deferred Bloom filter, record that loading it could prune
-            // further -- but only if the Bloom filter could actually answer
-            // this predicate. `bloom_filter_synopsis::lookup` only hashes
-            // literal values of the field type: it prunes `equal` against a
-            // literal and `in` against a list of literals. For anything else
-            // (`!=`, ranges, patterns, subnets/patterns inside an `in` list,
-            // type mismatches) it returns nullopt or silently skips the
-            // element, so loading the sketch could not prune -- or worse,
-            // could prune a partition exact evaluation would keep.
-            if (not loaded) {
-              // True iff `value` is a literal a Bloom filter on this field type
-              // can hash (string -> string, IP -> ip).
-              const auto is_bloom_literal = [&](const data& value) {
-                return tenzir::match(
-                  field.type(), [&]<concrete_type T>(const T&) {
-                    if constexpr (std::is_same_v<T, string_type>) {
-                      return is<std::string>(value);
-                    } else if constexpr (std::is_same_v<T, ip_type>) {
-                      return is<ip>(value);
-                    } else {
-                      return false;
-                    }
-                  });
-              };
-              auto bloom_prunable = false;
-              if (x.op == relational_operator::equal) {
-                bloom_prunable = is_bloom_literal(rhs);
-              } else if (x.op == relational_operator::in) {
-                if (const auto* xs = try_as<list>(&rhs)) {
-                  bloom_prunable = std::ranges::all_of(*xs, is_bloom_literal);
-                }
-              }
-              if (bloom_prunable) {
-                deferred_sketch_partitions.insert(part_id);
-              }
-            }
-            return true;
-          };
-          auto selected = false;
-          if (fields_resolved) {
-            for (const auto& field : matching_fields) {
-              const auto syn = effective->field_synopses_.find(field);
-              if (syn != effective->field_synopses_.end()
-                  and may_contain(field, syn->second)) {
-                selected = true;
-                break;
-              }
-            }
-          } else {
-            // Partition v0 synopses have no schema and may be heterogeneous,
-            // so resolve their matching fields separately.
-            for (const auto& [field, syn] : effective->field_synopses_) {
-              if (match(field) and may_contain(field, syn)) {
-                selected = true;
-                break;
-              }
-            }
-          }
-          if (selected) {
-            TENZIR_TRACE("{} selects {} at predicate {}",
-                         detail::pretty_type_name(this), part_id, x);
-            result.partition_infos.emplace_back(part_id, *effective);
-          }
-        }
-        TENZIR_DEBUG("{} checked {} partitions for predicate {} and got {} "
-                     "results",
-                     detail::pretty_type_name(this), partition_synopses.size(),
-                     x, result.partition_infos.size());
-        // Some calling paths require the result to be sorted.
-        TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
-                                               result.partition_infos.end()));
-        return result;
-      };
-      auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs,
-            const data& d) -> catalog_lookup_result::candidate_info {
-          switch (lhs.kind) {
-            case meta_extractor::schema: {
-              // We don't have to look into the synopses for type queries, just
-              // at the schema names.
-              catalog_lookup_result::candidate_info result;
-              if (schema and not schema.name().empty()) {
-                if (evaluate(std::string{schema.name()}, x.op, d)) {
-                  result = all_partitions();
-                }
-                return result;
-              }
-              // Partition v0 synopses have no schema, so recover their names
-              // from their qualified fields instead.
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                for (const auto& [fqf, _] : part_syn->field_synopses_) {
-                  // TODO: provide an overload for view of evaluate() so that
-                  // we can use string_view here. Fortunately type names are
-                  // short, so we're probably not hitting the allocator due to
-                  // SSO.
-                  if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
-                    result.partition_infos.emplace_back(part_id, *part_syn);
-                    break;
-                  }
-                }
-              }
-              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
-                result.partition_infos.begin(), result.partition_infos.end()));
-              return result;
-            }
-            case meta_extractor::schema_id: {
-              auto result = catalog_lookup_result::candidate_info{};
-#if TENZIR_ENABLE_ASSERTIONS
-              for (const auto& [_, part_syn] : partition_synopses) {
-                TENZIR_ASSERT_EXPENSIVE(part_syn->schema == schema);
-              }
-#endif
-              if (evaluate(schema.make_fingerprint(), x.op, d)) {
-                for (const auto& [part_id, part_syn] : partition_synopses) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                }
-              }
-              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
-                result.partition_infos.begin(), result.partition_infos.end()));
-              return result;
-            }
-            case meta_extractor::import_time: {
-              catalog_lookup_result::candidate_info result;
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                TENZIR_ASSERT(
-                  part_syn->min_import_time <= part_syn->max_import_time,
-                  "encountered empty or moved-from partition synopsis");
-                auto ts = time_synopsis{
-                  part_syn->min_import_time,
-                  part_syn->max_import_time,
-                };
-                auto add = ts.lookup(x.op, as<tenzir::time>(d));
-                if (not add or *add) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                }
-              }
-              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
-                result.partition_infos.begin(), result.partition_infos.end()));
-              return result;
-            }
-            case meta_extractor::internal: {
-              auto result = catalog_lookup_result::candidate_info{};
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                auto internal = false;
-                if (part_syn->schema) {
-                  internal = part_syn->schema.attribute("internal").has_value();
-                }
-                if (evaluate(internal, x.op, d)) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                }
-              };
-              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
-                result.partition_infos.begin(), result.partition_infos.end()));
-              return result;
-            }
-          }
-          TENZIR_WARN("{} cannot process meta extractor: {}",
-                      detail::pretty_type_name(this), lhs.kind);
-          return all_partitions();
-        },
-        [&](const field_extractor& lhs,
-            const data& d) -> catalog_lookup_result::candidate_info {
-          auto pred = [&](const auto& field) {
-            auto match_name = [&] {
-              auto field_name = field.field_name();
-              auto key = std::string_view{lhs.field};
-              if (field_name.length() >= key.length()) {
-                auto pos = field_name.length() - key.length();
-                auto sub = field_name.substr(pos);
-                return sub == key and (pos == 0 or field_name[pos - 1] == '.');
-              }
-              auto schema_name = field.schema_name();
-              if (key.length()
-                  > schema_name.length() + 1 + field_name.length()) {
-                return false;
-              }
-              auto pos = key.length() - field_name.length();
-              auto second = key.substr(pos);
-              if (second != field_name) {
-                return false;
-              }
-              if (key[pos - 1] != '.') {
-                return false;
-              }
-              auto fpos = schema_name.length() - (pos - 1);
-              return key.substr(0, pos - 1) == schema_name.substr(fpos)
-                     and (fpos == 0 or schema_name[fpos - 1] == '.');
-            };
-            if (not match_name()) {
-              return false;
-            }
-            TENZIR_ASSERT(not field.is_standalone_type());
-            return compatible(field.type(), x.op, d);
-          };
-          return search(pred);
-        },
-        [&](const type_extractor& lhs,
-            const data& d) -> catalog_lookup_result::candidate_info {
-          auto result = [&] {
-            if (not lhs.type) {
-              auto pred = [&](auto& field) {
-                const auto& type = field.type();
-                return type.name() == lhs.type.name()
-                       and compatible(type, x.op, d);
-              };
-              return search(pred);
-            }
-            auto pred = [&](auto& field) {
-              return congruent(field.type(), lhs.type);
-            };
-            return search(pred);
-          }();
-          return result;
-        },
-        [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
-          TENZIR_WARN("{} cannot process predicate: {}",
-                      detail::pretty_type_name(this), x);
-          return all_partitions();
-        },
-      };
-      return match(std::tie(x.lhs, x.rhs), extract_expr);
-    },
-    [&](caf::none_t) -> catalog_lookup_result::candidate_info {
-      TENZIR_ERROR("{} received an empty expression",
-                   detail::pretty_type_name(this));
-      TENZIR_ASSERT(false, "invalid expression");
-      return all_partitions();
-    },
-  };
-  auto result = match(expr, f);
-  result.exp = expr;
-  return result;
+  // The catalog's own engine carries no sketch budget: its internal callers
+  // (the rebuild filter, the initial dbstate collection) accept conservative
+  // candidate sets, and the configured budget belongs to the query-serving
+  // workers.
+  return lookup_engine.lookup(std::move(expr), *synopses_per_type);
 }
 
 auto catalog_state::memusage() const -> size_t {
   size_t result = 0;
-  for (const auto& [type, id_synopsis_map] : synopses_per_type) {
-    for (const auto& [id, synopsis] : id_synopsis_map) {
+  for (const auto& [type, id_synopsis_map] : *synopses_per_type) {
+    for (const auto& [id, synopsis] : *id_synopsis_map) {
       result += synopsis->memusage();
     }
   }
@@ -1164,43 +1422,222 @@ auto catalog_state::memusage() const -> size_t {
 }
 
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             filesystem_actor filesystem, size_t sketch_cache_bytes,
-             bool lazy_sketches) -> catalog_actor::behavior_type {
+             filesystem_actor filesystem, partition_paths paths,
+             std::string store_backend, index_config synopsis_opts,
+             size_t partition_capacity, size_t desired_batch_size,
+             maintenance_options maintenance, duration deferred_erase_timeout,
+             size_t sketch_cache_bytes, bool lazy_sketches,
+             size_t lookup_parallelism, node_actor node)
+  -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
   self->state().self = self;
   self->state().filesystem = std::move(filesystem);
-  self->state().taxonomies.concepts = modules::concepts();
+  self->state().paths = std::move(paths);
+  self->state().synopsis_opts = std::move(synopsis_opts);
+  // For historic reasons, the `tenzir.max-partition-size` is stored as the
+  // `cardinality` in the value index options.
+  self->state().index_opts["cardinality"] = partition_capacity;
+  // The transformer needs both of these to size its share of the memory
+  // budget. Passing them through `index_opts` keeps its spawn signature
+  // unchanged.
+  if (auto budget = caf::get_if<caf::config_value::integer>(
+        &content(self->system().config()), "tenzir.rebuild-memory-budget")) {
+    if (*budget < 0) {
+      auto error
+        = caf::make_error(ec::invalid_configuration,
+                          "tenzir.rebuild-memory-budget must not be negative");
+      TENZIR_ERROR("{}", render(error));
+      self->quit(error);
+      return catalog_actor::behavior_type::make_empty_behavior();
+    }
+    self->state().index_opts["rebuild-memory-budget"] = *budget;
+  }
+  self->state().index_opts["rebuild-parallelism"]
+    = caf::get_or(content(self->system().config()), "tenzir.automatic-rebuild",
+                  caf::config_value::integer{1});
+  self->state().partition_capacity = partition_capacity;
+  self->state().desired_batch_size = desired_batch_size;
+  self->state().deferred_erase_timeout = deferred_erase_timeout;
+  self->state().store_actor_plugin
+    = plugins::find<store_actor_plugin>(store_backend);
+  if (not self->state().store_actor_plugin) {
+    auto error = caf::make_error(ec::invalid_configuration,
+                                 fmt::format("could not find store plugin '{}'",
+                                             store_backend));
+    TENZIR_ERROR("{}", render(error));
+    self->quit(error);
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  self->state().lookup_engine.taxonomies.concepts = modules::concepts();
   self->state().lazy_sketches = lazy_sketches;
-  // Initialize the sketch cache before the request cache below, so that any
-  // queries stashed during startup observe a ready cache once unstashed.
-  self->state().sketches = sketch_cache{sketch_cache_bytes};
-  self->state().cache.emplace();
+  // Candidate lookups run on a pool of workers so that this actor's thread --
+  // which also performs the storage policy's blocking state writes -- never
+  // sits between a query and its candidate set. Each worker gets a share of
+  // the sketch-cache budget; the caches need no coordination, because
+  // partition ids are never reused (the defensive re-merge case is covered by
+  // `invalidate_sketches`).
+  const auto workers = std::max<size_t>(1, lookup_parallelism);
+  self->state().lookup_pool.reserve(workers);
+  for (auto i = size_t{0}; i < workers; ++i) {
+    // Also stop workers if initialization below exits before a behavior exists.
+    self->state().lookup_pool.push_back(self->spawn<caf::linked>(
+      catalog_lookup_worker, self->state().lookup_engine.taxonomies,
+      sketch_cache_bytes / workers));
+  }
+  // Load the on-disk state before installing the behavior below. The catalog
+  // is detached, so blocking here only delays this actor; everything sent to
+  // it in the meantime waits in the mailbox.
+  if (auto err = self->state().load_from_disk(); err.valid()) {
+    TENZIR_ERROR("{} failed to load its state from disk: {}", *self,
+                 render(err));
+    self->quit(std::move(err));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  TENZIR_VERBOSE("{} finished initializing and is ready to accept queries",
+                 *self);
+  // The rebuild metrics. The importer is not up yet when the catalog starts,
+  // so the periodic emitter below looks it up each time, the way the index
+  // does for its own actor metrics.
+  {
+    self->state().quarantine_metric = series_builder{type{
+      "tenzir.metrics.rebuild_quarantine",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partition", string_type{}},
+        {"error", string_type{}},
+      },
+      {{"internal"}},
+    }};
+    auto builder = series_builder{type{
+      "tenzir.metrics.rebuild",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partitions", uint64_type{}},
+        {"queued_partitions", uint64_type{}},
+      },
+      {{"internal"}},
+    }};
+    detail::weak_run_delayed_loop(
+      self, defaults::metrics_interval,
+      [self, builder = std::move(builder)]() mutable {
+        const auto importer
+          = self->system().registry().get<importer_actor>("tenzir.importer");
+        if (not importer) {
+          return;
+        }
+        const auto& rebuild = self->state().rebuild;
+        auto metric = builder.record();
+        metric.field("timestamp", time::clock::now());
+        // Partitions, not batches: `running` counts batches in flight, and
+        // the field has always meant partitions.
+        metric.field("partitions", rebuild ? rebuild->running_partitions : 0);
+        // The catalog selects a batch at a time against live state, so there
+        // is no queue to report. Always zero, by construction.
+        metric.field("queued_partitions", uint64_t{0});
+        self->mail(builder.finish_assert_one_slice()).send(importer);
+      });
+  }
+  self->state().maintenance = maintenance;
+  if (auto error = self->state().make_policy(); error.valid()) {
+    TENZIR_ERROR("{} failed to replay storage policy state: {}", *self,
+                 render(error));
+    self->quit(std::move(error));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  if (auto error = self->state().initialize_maintenance(time::clock::now());
+      error.valid()) {
+    self->quit(std::move(error));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  auto start_maintenance = [self] {
+    self->state().maintenance_ready = true;
+    self->state().advance_maintenance(time::clock::now());
+  };
+  if (node and plugins::find<component_plugin>("package-manager")) {
+    // The node answers only after creating its components. A status reply
+    // then establishes that the package manager finished initialization and
+    // published its operators. Keep serving catalog requests while waiting:
+    // component startup itself may need them.
+    auto fail_startup = [self](caf::error const& error) {
+      self->quit(diagnostic::error(error)
+                   .note("waiting for package operators before starting "
+                         "catalog maintenance")
+                   .to_error());
+    };
+    self
+      ->mail(atom::get_v, atom::label_v,
+             std::vector<std::string>{"package-manager"})
+      .request(node, caf::infinite)
+      .then(
+        [self, start_maintenance,
+         fail_startup](std::vector<caf::actor> const& components) {
+          TENZIR_ASSERT(components.size() == 1);
+          auto packages
+            = caf::actor_cast<component_plugin_actor>(components[0]);
+          self->mail(atom::status_v, status_verbosity::info, duration::zero())
+            .request(packages, caf::infinite)
+            .then(
+              [start_maintenance](record const&) {
+                start_maintenance();
+              },
+              fail_startup);
+        },
+        fail_startup);
+  } else {
+    start_maintenance();
+  }
   return {
-    [self](atom::start, std::vector<partition_synopsis_pair>& partitions)
-      -> caf::result<atom::ok> {
-      return self->state().initialize(std::move(partitions));
-    },
     [self](atom::merge, std::vector<partition_synopsis_pair>& partitions)
       -> caf::result<atom::ok> {
-      if (self->state().cache) {
-        return self->state().cache->stash(self, atom::merge_v,
-                                          std::move(partitions));
+      // Only the index sends this message, once per persisted ingest
+      // partition. Transform outputs are merged inside the apply handler
+      // instead, which is what keeps the partition creation listeners tied to
+      // ingest.
+      auto notification = self->state().partition_creation_listeners.empty()
+                            ? std::vector<partition_synopsis_pair>{}
+                            : partitions;
+      if (const auto& policy = self->state().policy) {
+        // Ingest only. A transform's outputs reach the policy through
+        // `on_committed`, so that a policy keeping per-partition state is not
+        // fed the same partition twice.
+        for (const auto& partition : partitions) {
+          policy->on_merged(partition);
+        }
       }
-      return self->state().merge(std::move(partitions));
+      auto const now = time::clock::now();
+      auto result = self->state().merge(std::move(partitions),
+                                        catalog_state::merge_source::ingest);
+      self->state().advance_maintenance(now);
+      for (const auto& listener : self->state().partition_creation_listeners) {
+        self->mail(atom::update_v, notification).send(listener);
+      }
+      return result;
+    },
+    [self](atom::apply, ast::pipeline& pipe,
+           std::vector<partition_info>& selected, keep_original_partition keep,
+           std::string& origin,
+           std::string& policy_token) -> caf::result<partition_apply_result> {
+      return self->state().apply(std::move(pipe), std::move(selected), keep,
+                                 std::move(origin), std::move(policy_token));
+    },
+    [self](atom::subscribe, atom::create,
+           const partition_creation_listener_actor& listener,
+           send_initial_dbstate should_send) -> caf::result<void> {
+      TENZIR_DEBUG("{} adds partition creation listener", *self);
+      self->state().add_partition_creation_listener(listener);
+      if (should_send == send_initial_dbstate::yes) {
+        self->mail(atom::update_v, collect_synopses(self->state()))
+          .send(listener);
+      }
+      return {};
     },
     [self](atom::get) -> caf::result<std::vector<partition_synopsis_pair>> {
-      // if (self->state().mail_cache) {
-      //   return self->state().stash<std::vector<partition_synopsis_pair>>();
-      // }
       return collect_synopses(self->state());
     },
     [self](atom::get, const expression& filter)
       -> caf::result<std::vector<partition_synopsis_pair>> {
-      // if (self->state().mail_cache) {
-      //   return self->state().stash<std::vector<partition_synopsis_pair>>();
-      // }
       return collect_synopses(self->state(), filter);
     },
     [self](atom::get, const std::string& selector)
@@ -1235,47 +1672,114 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       }
       return build_catalog_slices(*parsed, *synopses);
     },
-    [self](atom::erase, uuid partition) -> caf::result<atom::ok> {
-      if (self->state().cache) {
-        return self->state().cache->stash(self, atom::erase_v, partition);
+    [self](atom::erase, uuid partition) -> caf::result<atom::done> {
+      return self->state().erase_from_disk(partition);
+    },
+    [self](atom::erase,
+           const std::vector<uuid>& partitions) -> caf::result<atom::done> {
+      if (partitions.empty()) {
+        return atom::done_v;
       }
-      self->state().erase(partition);
-      return atom::ok_v;
+      auto rp = self->make_response_promise<atom::done>();
+      auto counter = detail::make_fanout_counter(
+        partitions.size(),
+        [rp]() mutable {
+          rp.deliver(atom::done_v);
+        },
+        [rp](caf::error&& err) mutable {
+          rp.deliver(std::move(err));
+        });
+      for (const auto& partition : partitions) {
+        self->mail(atom::erase_v, partition)
+          .request(static_cast<catalog_actor>(self), caf::infinite)
+          .then(
+            [counter](atom::done) {
+              counter->receive_success();
+            },
+            [counter](caf::error& err) {
+              counter->receive_error(std::move(err));
+            });
+      }
+      return rp;
     },
     [self](atom::erase, atom::extract, uuid partition,
            std::string& error) -> caf::result<atom::done> {
-      if (self->state().cache) {
-        return self->state().cache->stash(self, atom::erase_v, atom::extract_v,
-                                          partition, std::move(error));
-      }
       return self->state().erase_and_extract(partition, std::move(error));
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
            std::vector<partition_synopsis_pair>& new_synopses)
       -> caf::result<atom::ok> {
-      if (self->state().cache) {
-        return self->state().cache->stash(self, atom::replace_v, old_uuids,
-                                          std::move(new_synopses));
+      if (auto const& policy = self->state().policy) {
+        auto outputs = std::vector<partition_info>{};
+        for (auto const& [id, synopsis] : new_synopses) {
+          outputs.emplace_back(id, *synopsis);
+        }
+        policy->on_replaced(old_uuids, outputs);
       }
       for (auto const& uuid : old_uuids) {
-        self->state().erase(uuid);
+        self->state().erase(uuid, catalog_state::notify_policy::no);
       }
-      return self->state().merge(std::move(new_synopses));
+      auto result = self->state().merge(std::move(new_synopses));
+      self->state().advance_maintenance(time::clock::now());
+      return result;
     },
     [self](atom::candidates, tenzir::query_context query_context)
       -> caf::result<catalog_lookup_result> {
-      if (self->state().cache) {
-        return self->state().cache->stash(self, atom::candidates_v,
-                                          std::move(query_context));
+      auto& state = self->state();
+      // Evaluation runs on a worker against a snapshot, so this thread never
+      // sits behind predicate evaluation or on-demand sketch loading. The
+      // whole snapshot is leased provisionally before delegating: a partition
+      // retired while the worker evaluates is thereby parked instead of
+      // deleted, so a candidate the reply hands out is still openable -- the
+      // same guarantee the synchronous lookup gave by pinning at reply time.
+      // The lease narrows to the actual candidates when the result arrives.
+      auto snapshot = catalog_snapshot{state.synopses_per_type};
+      auto all_ids = std::vector<uuid>{};
+      for (const auto& [schema, entries] : *snapshot.synopses) {
+        for (const auto& [id, synopsis] : *entries) {
+          all_ids.push_back(id);
+        }
       }
-      return self->state().lookup(std::move(query_context.expr));
+      const auto query = query_context.id;
+      const auto generation
+        = state.add_lease(query, self->current_sender(), std::move(all_ids));
+      auto rp = self->make_response_promise<catalog_lookup_result>();
+      self
+        ->mail(atom::candidates_v, std::move(query_context.expr),
+               std::move(snapshot))
+        .request(state.next_lookup_worker(), caf::infinite)
+        .then(
+          [self, rp, query, generation](catalog_lookup_result& result) mutable {
+            self->state().narrow_lease(query, generation,
+                                       partition_ids(result));
+            rp.deliver(std::move(result));
+          },
+          [self, rp, query, generation](caf::error& error) mutable {
+            self->state().narrow_lease(query, generation, {});
+            rp.deliver(std::move(error));
+          });
+      return rp;
+    },
+    [self](atom::start, atom::rebuild,
+           rebuild_options& options) -> caf::result<void> {
+      return self->state().start_rebuild(std::move(options));
+    },
+    [self](atom::stop, atom::rebuild,
+           const rebuild_stop_options& options) -> caf::result<void> {
+      return self->state().stop_rebuild(options);
+    },
+    [self](atom::release, uuid query) -> caf::result<void> {
+      self->state().release_lease(query);
+      return {};
+    },
+    [self](atom::release, uuid query,
+           const std::vector<uuid>& partitions) -> caf::result<void> {
+      self->state().release_lease(query, partitions);
+      return {};
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
-      if (self->state().cache) {
-        return self->state().cache->stash(self, atom::get_v, uuid);
-      }
-      for (const auto& [type, synopses] : self->state().synopses_per_type) {
-        if (auto it = synopses.find(uuid); it != synopses.end()) {
+      for (const auto& [type, synopses] : *self->state().synopses_per_type) {
+        if (auto it = synopses->find(uuid); it != synopses->end()) {
           return partition_info{uuid, *it->second};
         }
       }
@@ -1283,8 +1787,51 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         tenzir::ec::lookup_error,
         fmt::format("unable to find partition with uuid: {}", uuid));
     },
-    [](atom::status, status_verbosity, duration) {
-      return record{};
+    [self](atom::run, atom::compaction, std::string& rule,
+           Option<duration> older_than,
+           Option<duration> newer_than) -> caf::result<atom::done> {
+      return self->state().run_named_rule(std::move(rule), older_than,
+                                          newer_than);
+    },
+    [self](atom::list, atom::compaction) -> caf::result<record> {
+      if (not self->state().policy) {
+        return caf::make_error(ec::invalid_configuration,
+                               "no storage policy is configured");
+      }
+      return self->state().policy->describe();
+    },
+    [self](atom::status, status_verbosity, duration) {
+      auto result = self->state().active_transformations_status();
+      if (auto rebuild = self->state().rebuild_status(); not rebuild.empty()) {
+        result["rebuild"] = std::move(rebuild);
+      }
+      if (auto space = self->state().space_status(); not space.empty()) {
+        result["space"] = std::move(space);
+      }
+      return result;
+    },
+    [self](const caf::exit_msg& msg) {
+      TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
+                     msg.source, msg.reason);
+      // Pending policy state becomes durable before teardown; the write is
+      // synchronous, so nothing can outrun it.
+      if (auto error = self->state().flush_policy_markers(); error.valid()) {
+        TENZIR_WARN("{} failed to flush its storage policy during "
+                    "shutdown: {}",
+                    *self, error);
+      }
+      auto dependents = std::vector<caf::actor>{};
+      dependents.reserve(self->state().active_transformers.size()
+                         + self->state().lookup_pool.size());
+      for (const auto& worker : self->state().lookup_pool) {
+        self->unlink_from(worker);
+        dependents.push_back(caf::actor_cast<caf::actor>(worker));
+      }
+      for (auto& [addr, disposable] : self->state().active_transformers) {
+        disposable.dispose();
+        dependents.push_back(caf::actor_cast<caf::actor>(addr));
+      }
+      shutdown<policy::parallel>(self, std::move(dependents), msg.reason);
     },
   };
 }

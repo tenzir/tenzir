@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/friend_attribute.hpp"
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/index_config.hpp"
@@ -222,6 +223,60 @@ struct partition_synopsis_pair {
   }
 };
 
+/// The synopses of all partitions of one schema, sorted by partition id.
+/// Immutable once published: the catalog clones a schema's map to mutate it,
+/// so shared references -- the snapshots held by lookup workers -- stay valid
+/// for as long as their holders need them.
+using schema_synopsis_map = detail::flat_map<uuid, partition_synopsis_ptr>;
+
+/// One generation of the catalog's synopsis set. Taking a snapshot is a
+/// single shared_ptr copy; the catalog publishes a new generation on every
+/// mutation, and a generation lives exactly as long as some reader holds it.
+struct catalog_snapshot {
+  using map_type
+    = std::unordered_map<type, std::shared_ptr<const schema_synopsis_map>>;
+
+  std::shared_ptr<const map_type> synopses = {};
+
+  /// Never serialized in practice -- lookup workers live in the catalog's
+  /// process -- but the type system wants a faithful round-trip anyway, so
+  /// this flattens to (uuid, synopsis) pairs and rebuilds.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, catalog_snapshot& x) {
+    if constexpr (Inspector::is_loading) {
+      auto flat = std::vector<partition_synopsis_pair>{};
+      if (not f.apply(flat)) {
+        return false;
+      }
+      auto grouped
+        = std::unordered_map<type, std::shared_ptr<schema_synopsis_map>>{};
+      for (auto& pair : flat) {
+        auto& schema_map = grouped[pair.synopsis->schema];
+        if (not schema_map) {
+          schema_map = std::make_shared<schema_synopsis_map>();
+        }
+        (*schema_map)[pair.uuid] = std::move(pair.synopsis);
+      }
+      auto result = std::make_shared<catalog_snapshot::map_type>();
+      for (auto& [schema, schema_map] : grouped) {
+        (*result)[schema] = std::move(schema_map);
+      }
+      x.synopses = std::move(result);
+      return true;
+    } else {
+      auto flat = std::vector<partition_synopsis_pair>{};
+      if (x.synopses) {
+        for (const auto& [schema, schema_map] : *x.synopses) {
+          for (const auto& [id, synopsis] : *schema_map) {
+            flat.push_back({id, synopsis});
+          }
+        }
+      }
+      return f.apply(flat);
+    }
+  }
+};
+
 struct partition_transformer_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_synopsis_pair> output_partitions;
@@ -245,6 +300,12 @@ struct partition_apply_result {
   bool input_complete = true;
   bool skipped = false;
 
+  /// The transform marker, held for a policy-driven transform until the
+  /// caller reports the policy flush done. Until the commit is durable the
+  /// marker is its only record; deleting it first would let a crash forget a
+  /// completed non-idempotent rule. Empty for transforms without a token.
+  std::string marker = {};
+
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_apply_result& x) {
     return f.object(x)
@@ -252,7 +313,7 @@ struct partition_apply_result {
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
               f.field("input-complete", x.input_complete),
-              f.field("skipped", x.skipped));
+              f.field("skipped", x.skipped), f.field("marker", x.marker));
   }
 };
 

@@ -55,6 +55,62 @@
 
 namespace tenzir {
 
+auto partition_transform_phase_name(PartitionTransformPhase phase)
+  -> std::string_view {
+  switch (phase) {
+    case PartitionTransformPhase::loading_input:
+      return "loading and transforming input";
+    case PartitionTransformPhase::finishing_pipeline:
+      return "finishing the transform pipeline";
+    case PartitionTransformPhase::creating_output:
+      return "creating output partitions";
+    case PartitionTransformPhase::persisting_stores:
+      return "persisting output stores";
+    case PartitionTransformPhase::packing_partition_metadata:
+      return "packing partition metadata";
+    case PartitionTransformPhase::writing_partition_files:
+      return "writing partition metadata";
+    case PartitionTransformPhase::writing_marker:
+      return "writing the in-progress marker";
+    case PartitionTransformPhase::moving_partition_files:
+      return "moving output files into place";
+    case PartitionTransformPhase::updating_catalog:
+      return "updating the catalog";
+    case PartitionTransformPhase::erasing_input_partitions:
+      return "erasing input partitions";
+    case PartitionTransformPhase::done:
+      return "done";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+void PartitionTransformProgress::set_phase(PartitionTransformPhase next) {
+  const auto previous = phase.exchange(next, std::memory_order_relaxed);
+  if (previous == next) {
+    return;
+  }
+  if (report_next_phase_transition.exchange(false, std::memory_order_relaxed)) {
+    TENZIR_WARN("partition transform {} transitioned from '{}' to '{}' after "
+                "being reported stalled",
+                id, partition_transform_phase_name(previous),
+                partition_transform_phase_name(next));
+  }
+}
+
+void PartitionTransformProgress::report_next_phase_transition_from(
+  PartitionTransformPhase previous) {
+  report_next_phase_transition.store(true, std::memory_order_relaxed);
+  const auto current = phase.load(std::memory_order_relaxed);
+  if (current != previous
+      and report_next_phase_transition.exchange(false,
+                                                std::memory_order_relaxed)) {
+    TENZIR_WARN("partition transform {} transitioned from '{}' to '{}' after "
+                "being reported stalled",
+                id, partition_transform_phase_name(previous),
+                partition_transform_phase_name(current));
+  }
+}
+
 namespace {
 
 struct memory_budget {
@@ -217,7 +273,6 @@ void pack_and_fulfill(
 void quit_or_stall(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   partition_transformer_state::stores_are_finished&&);
-
 void quit_or_stall(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
@@ -376,7 +431,7 @@ struct partition_source_state {
 /// `diagnostic::error(err).note(...).to_error()`, but preserves `err`'s
 /// original `tenzir::ec` code when it is `ec::format_error` instead of
 /// collapsing it to `ec::diagnostic`, and attaches `partition` as a second,
-/// typed context element. Callers such as the rebuilder need to identify
+/// typed context element. The catalog needs to identify
 /// exactly which partition in a batch a decode failure came from, which is
 /// only possible if that information survives the wrapping instead of being
 /// left to string-parsing after the fact (see `store_error_partition`).
@@ -784,6 +839,12 @@ void partition_transformer_state::fulfill(
         promise.deliver(std::move(e));
         self->quit();
       });
+  auto synopsis_sizes = std::unordered_map<uuid, uint64_t>{};
+  for (const auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
+    if (synopsis_chunk) {
+      synopsis_sizes[id] = synopsis_chunk->size();
+    }
+  }
   progress->partition_files_total.store(stream_data.partition_chunks->size(),
                                         std::memory_order_relaxed);
   for (auto& [id, schema, partition_chunk] : *stream_data.partition_chunks) {
@@ -797,6 +858,20 @@ void partition_transformer_state::fulfill(
       .uuid = id,
       .synopsis = std::move(synopsis),
     };
+    // Record the on-disk footprint of the files this loop writes. The catalog
+    // credits these sizes when it parks, deletes, or rewrites the partition,
+    // and without them a freshly transformed partition would count as nothing
+    // but its store. The URLs arrive separately -- the sketches path from the
+    // apply handler, the partition path from the next startup scan -- but the
+    // sizes are only known here, while the chunks are in hand.
+    if (aps.synopsis) {
+      auto& mutable_synopsis = aps.synopsis.unshared();
+      mutable_synopsis.indexes_file.size = partition_chunk->size();
+      if (const auto size = synopsis_sizes.find(id);
+          size != synopsis_sizes.end()) {
+        mutable_synopsis.sketches_file.size = size->second;
+      }
+    }
     auto filename = fmt::format(
       TENZIR_FMT_RUNTIME(self->state().partition_path_template), id);
     auto partition_path = std::filesystem::path{filename};
@@ -820,7 +895,7 @@ auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  const caf::settings& index_opts, filesystem_actor fs,
   std::vector<partition_info> input_partitions, ast::pipeline transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
@@ -842,7 +917,6 @@ auto partition_transformer(
     = caf::get_or(index_opts, "cardinality", defaults::max_partition_size);
   self->state().index_opts = index_opts;
   self->state().fs = std::move(fs);
-  self->state().catalog = std::move(catalog);
   self->state().input_partitions = std::move(input_partitions);
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);

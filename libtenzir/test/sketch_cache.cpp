@@ -67,6 +67,24 @@ TEST("sketch cache peek does not change recency") {
   CHECK_NOT_EQUAL(cache.peek(c), nullptr);
 }
 
+TEST("sketch cache hits keep hot entries resident") {
+  const auto a = uuid::random();
+  const auto b = uuid::random();
+  const auto c = uuid::random();
+  const auto one = make_synopsis()->memusage();
+  auto cache = sketch_cache{2 * one + 1};
+  cache.put(a, make_synopsis());
+  cache.put(b, make_synopsis());
+  CHECK_NOT_EQUAL(cache.get(a), nullptr);
+  CHECK_EQUAL(cache.get(uuid::random()), nullptr);
+  CHECK_EQUAL(cache.used(), 2 * one);
+  cache.put(c, make_synopsis());
+  CHECK_NOT_EQUAL(cache.peek(a), nullptr);
+  CHECK_EQUAL(cache.peek(b), nullptr);
+  CHECK_NOT_EQUAL(cache.peek(c), nullptr);
+  CHECK_LESS_EQUAL(cache.used(), cache.budget());
+}
+
 TEST("sketch cache erase removes an entry and frees budget") {
   const auto a = uuid::random();
   auto cache = sketch_cache{1024 * 1024};

@@ -253,9 +253,12 @@ struct package;
 struct package_pipelines_map;
 struct package_contexts_map;
 struct partition_apply_result;
+struct rebuild_options;
+struct rebuild_stop_options;
 struct partition_info;
 struct PartitionTransformProgress;
 struct partition_synopsis_pair;
+struct catalog_snapshot;
 struct partition_synopsis;
 struct partition_transformer_result;
 struct passive_partition_state;
@@ -484,6 +487,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::partition_apply_result))
   TENZIR_ADD_TYPE_ID((tenzir::partition_info))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_pair))
+  TENZIR_ADD_TYPE_ID((tenzir::catalog_snapshot))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::partition_transformer_result))
   TENZIR_ADD_TYPE_ID((tenzir::pattern))

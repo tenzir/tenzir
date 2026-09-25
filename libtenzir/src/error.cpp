@@ -64,6 +64,7 @@ const char* descriptions[] = {
   "serialization_error",
   "diagnostic",
   "report",
+  "busy",
 };
 
 static_assert(ec{std::size(descriptions)} == ec::ec_count,

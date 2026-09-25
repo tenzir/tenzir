@@ -1,0 +1,3 @@
+phase1-seed: ok
+phase2-evicts-down-to-the-budget: ok
+phase3-keeps-the-newest-data: ok

@@ -96,6 +96,8 @@ enum class ec : uint8_t {
   diagnostic,
   /// The error wraps a report.
   report,
+  /// The operation cannot proceed because its target is currently in use.
+  busy,
   /// No error; number of error codes.
   ec_count,
 };

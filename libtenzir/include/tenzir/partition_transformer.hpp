@@ -106,9 +106,6 @@ struct partition_transformer_state {
       self,
     stream_data&&, path_data&&) const;
 
-  /// Actor handle of the catalog.
-  catalog_actor catalog = {};
-
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
@@ -214,7 +211,7 @@ struct partition_transformer_state {
 /// if the error carries one. Errors from decoding a partition's store (e.g.
 /// a corrupt/truncated backing file) are tagged with the offending
 /// partition's uuid so that callers processing a batch of partitions (e.g.
-/// the rebuilder) can identify exactly which partition failed instead of
+/// the catalog) can identify exactly which partition failed instead of
 /// having to treat the whole batch as suspect.
 auto store_error_partition(const caf::error& err) -> Option<uuid>;
 
@@ -226,7 +223,7 @@ auto store_error_partition(const caf::error& err) -> Option<uuid>;
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  const caf::settings& index_opts, filesystem_actor fs,
   std::vector<partition_info> input_partitions, ast::pipeline transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,

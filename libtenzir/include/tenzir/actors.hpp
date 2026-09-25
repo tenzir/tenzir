@@ -147,10 +147,19 @@ using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, std::vector<partition_synopsis_pair>)
     ->caf::result<void>>::unwrap;
 
+/// The interface of a catalog lookup worker, which evaluates candidate
+/// lookups against a snapshot of the partition synopses so the catalog's own
+/// thread stays free for its bookkeeping -- including the storage policy's
+/// blocking state writes.
+using catalog_lookup_worker_actor = typed_actor_fwd<
+  // Evaluate an expression against a snapshot of the partition synopses.
+  auto(atom::candidates, expression, catalog_snapshot)
+    ->caf::result<catalog_lookup_result>,
+  // Drop cached sketches of a partition that left the catalog.
+  auto(atom::erase, uuid)->caf::result<void>>::unwrap;
+
 /// The CATALOG actor interface.
 using catalog_actor = typed_actor_fwd<
-  // Reinitialize the catalog from a set of partition synopses.
-  auto(atom::start, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
   // Merge a set of partition synopses.
   auto(atom::merge, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
   // Get *ALL* partition synopses stored in the catalog, optionally filtered
@@ -163,8 +172,11 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
   auto(atom::get, std::string)->caf::result<std::vector<table_slice>>,
   auto(atom::get, std::string, expression)->caf::result<std::vector<table_slice>>,
-  // Erase a single partition synopsis.
-  auto(atom::erase, uuid)->caf::result<atom::ok>,
+  // Erase a single partition: remove it from the catalog and delete its
+  // on-disk files (synopsis, dense indexes, and store).
+  auto(atom::erase, uuid)->caf::result<atom::done>,
+  // Erase a set of partitions.
+  auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
   // Quarantine a single partition: move its store file aside into a
   // "quarantined" directory (for postmortem inspection), delete its other
   // on-disk files, and erase it from the catalog, all as one operation. The
@@ -173,9 +185,49 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   auto(atom::replace, std::vector<uuid>, std::vector<partition_synopsis_pair>)
     ->caf::result<atom::ok>,
-  // Return the candidate partitions per type for a query.
+  // Applies the given pipeline (TQL2 AST) to the given partitions.
+  // When keep_original_partition is yes: merges the transformed partitions
+  // with the original ones and returns the new partition infos. When
+  // keep_original_partition is no: replaces the inputs with the outputs and
+  // erases the inputs from disk.
+  // The trailing string is the policy token of the maintenance action this
+  // transform runs, serialized by the storage policy; empty when the
+  // transform is not policy-driven. It rides in the transform marker so a
+  // commit a crash cut off can be replayed at the next startup.
+  auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
+       keep_original_partition, std::string, std::string)
+    ->caf::result<partition_apply_result>,
+  // Starts a rebuild run, or joins the one already in progress. The catalog
+  // selects the partitions itself, against live state, one batch at a time.
+  auto(atom::start, atom::rebuild, rebuild_options)->caf::result<void>,
+  // Stops the rebuild run in progress, if any.
+  auto(atom::stop, atom::rebuild, rebuild_stop_options)->caf::result<void>,
+  // Runs a named policy rule now, outside the periodic schedule. The durations
+  // override the rule's configured window when given.
+  auto(atom::run, atom::compaction, std::string, Option<duration>,
+       Option<duration>)
+    ->caf::result<atom::done>,
+  // Reports the storage policy's effective configuration, so that a client
+  // shows what the running node enforces rather than its own configuration.
+  auto(atom::list, atom::compaction)->caf::result<record>,
+  // Subscribes a PARTITION CREATION LISTENER to the CATALOG.
+  auto(atom::subscribe, atom::create, partition_creation_listener_actor,
+       send_initial_dbstate)
+    ->caf::result<void>,
+  // Return the candidate partitions per type for a query. Every returned
+  // partition is pinned under `query_context::id` until the requester releases
+  // the result or goes down: its files stay on disk even if it is replaced or
+  // erased in the meantime, so a reader that already got the candidate set can
+  // still open it.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
+  // Release part of a candidate set: the given partitions lose their pin.
+  // Readers release each partition as they finish with it, so a pin covers one
+  // partition read rather than a whole export.
+  auto(atom::release, uuid, std::vector<uuid>)->caf::result<void>,
+  // Release a whole candidate set. Implied by the requester's termination, so
+  // this is only needed by components that outlive their queries.
+  auto(atom::release, uuid)->caf::result<void>,
   // Retrieves information about a partition with a given UUID.
   auto(atom::get, uuid)->caf::result<partition_info>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -199,51 +251,17 @@ struct importer_actor_traits {
 };
 using importer_actor = caf::typed_actor<importer_actor_traits>;
 
-/// The INDEX actor interface.
+/// The INDEX actor interface. The index owns the ingest path: it routes
+/// incoming events into active partitions and hands them to the catalog once
+/// they are persisted. Everything about partitions that are already on disk —
+/// lookups, transforms, erasure — belongs to the CATALOG.
 using index_actor = typed_actor_fwd<
-  // Triggered when the INDEX finished querying a PARTITION.
-  auto(atom::done, uuid)->caf::result<void>,
   // Stores a table slice.
   auto(table_slice)->caf::result<void>,
-  // Subscribes a PARTITION CREATION LISTENER to the INDEX.
-  auto(atom::subscribe, atom::create, partition_creation_listener_actor,
-       send_initial_dbstate)
-    ->caf::result<void>,
-  // Resolves a query to its candidate partitions per type.
-  // TODO: Expose the catalog as a system component so this
-  // handler can go directly to the catalog.
-  auto(atom::resolve, expression)->caf::result<catalog_lookup_result>,
-  // Erases the given partition from the INDEX.
-  auto(atom::erase, uuid)->caf::result<atom::done>,
-  // Erases the given set of partitions from the INDEX.
-  auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
-  // Applies the given pipeline (TQL2 AST) to the partition.
-  // When keep_original_partition is yes: merges the transformed partitions
-  // with the original ones and returns the new partition infos. When
-  // keep_original_partition is no: does an in-place pipeline keeping the old
-  // ids, and makes new partitions preserving them. Three trailing arguments
-  // constrain the accepted inputs by absolute reduction, relative reduction,
-  // and inputs that independently require transformation. The byte-budget
-  // argument uses zero to request automatic estimation. A non-zero rebuild
-  // batch size enables the streaming fast path. The final argument optionally
-  // shares progress with the caller.
-  auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
-       keep_original_partition, std::string, uint64_t, double, std::vector<uuid>,
-       uint64_t, uint64_t, std::shared_ptr<PartitionTransformProgress>)
-    ->caf::result<partition_apply_result>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
   // Returns all events from active and unpersisted partitions.
   auto(atom::get, bool internal)->caf::result<std::vector<table_slice>>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The DISK MONITOR actor interface.
-using disk_monitor_actor = typed_actor_fwd<
-  // Checks the monitoring requirements.
-  auto(atom::ping)->caf::result<void>,
-  // Purge events as required for the monitoring requirements.
-  auto(atom::erase)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -439,9 +457,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_worker_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))
   TENZIR_ADD_TYPE_ID((tenzir::export_bridge_actor))
   TENZIR_ADD_TYPE_ID((tenzir::export_mode))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
@@ -452,11 +470,14 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::rebuild_options))
+  TENZIR_ADD_TYPE_ID((tenzir::rebuild_stop_options))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
   TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
