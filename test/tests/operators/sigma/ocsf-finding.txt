@@ -110,7 +110,7 @@
       matcher: "equals",
       case: "insensitive",
       polarity: "positive",
-      value: "4",
+      value: 4,
     },
     {
       field: "Hashes",

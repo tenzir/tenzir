@@ -54,21 +54,23 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
-    if (input.is_not<table_slice>()) {
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`merge` expects events as input")
         .primary(args_.keyword)
         .emit(dh);
       return failure::promise();
     }
-    // The subpipeline is a source: it must start on its own and produce events.
+    // The subpipeline is a source: it must start on its own and produce events
+    // in the same representation as the main input, since both lanes feed one
+    // consumer.
     TRY(auto branch_ty, args_.pipe.infer_type(tag_v<void>, dh));
-    if (branch_ty.is_not<table_slice>()) {
+    if (branch_ty != input) {
       diagnostic::error("`merge` subpipeline must be a source producing events")
         .primary(args_.pipe_location)
         .emit(dh);
       return failure::promise();
     }
-    return tag_v<table_slice>;
+    return input;
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)

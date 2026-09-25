@@ -11,6 +11,8 @@
 #include <tenzir/async/task.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
@@ -127,6 +129,118 @@ private:
   SeriesPusher pusher_;
 };
 
+class ReadDelimitedEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadDelimitedEvents(ReadDelimitedArgs args)
+    : args_{std::move(args)} {
+    match(
+      args_.separator.inner,
+      [&](std::string const& s) {
+        separator_ = s;
+      },
+      [&](blob const& b) {
+        separator_.assign(reinterpret_cast<char const*>(b.data()), b.size());
+      },
+      [](auto const&) {
+        TENZIR_UNREACHABLE();
+      });
+    binary_ = args_.binary.unwrap_or(is<blob>(args_.separator.inner));
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
+    auto remaining = std::string_view{buffer_};
+    while (true) {
+      auto const pos = remaining.find(separator_);
+      if (pos == std::string::npos) {
+        break;
+      }
+      auto const end = args_.include_separator ? pos + separator_.size() : pos;
+      emit(remaining.substr(0, end), ctx);
+      remaining = remaining.substr(pos + separator_.size());
+      if (static_cast<uint64_t>(builder_.length())
+          >= defaults::import::table_slice_size) {
+        co_await flush(push);
+      }
+    }
+    buffer_.erase(0, buffer_.size() - remaining.size());
+    if (timeout_.poll(builder_.length())) {
+      co_await flush(push);
+    }
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (timeout_.poll(builder_.length())) {
+      co_await flush(push);
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    // `buffer_` holds only data after the last separator; emit it as a final
+    // partial record if non-empty.
+    if (not buffer_.empty()) {
+      emit(buffer_, ctx);
+    }
+    buffer_.clear();
+    co_await flush(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await flush(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+  }
+
+private:
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    if (builder_.length() == 0) {
+      co_return;
+    }
+    auto data = builder_.finish();
+    builder_ = nova::ArrayBuilder<nova::Record>{};
+    timeout_.reset();
+    auto const length = data.length();
+    co_await push(
+      nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                   nova::Events::Meta::make_empty(length, type_name)});
+  }
+
+  auto emit(std::string_view segment, OpCtx& ctx) -> void {
+    if (binary_) {
+      builder_.record().field("data").data(blob_view{as_bytes(segment)});
+      return;
+    }
+    if (not arrow::util::ValidateUTF8(segment)) {
+      diagnostic::warning("got invalid UTF-8")
+        .hint("use `binary=true` if you are reading binary data")
+        .emit(ctx);
+      return;
+    }
+    builder_.record().field("data").data(segment);
+  }
+
+  constexpr static auto type_name = "tenzir.data";
+
+  ReadDelimitedArgs args_;
+  std::string separator_;
+  bool binary_ = false;
+  std::string buffer_;
+  nova::ArrayBuilder<nova::Record> builder_;
+  BatchTimeout timeout_{defaults::import::batch_timeout};
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -134,7 +248,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadDelimitedArgs, ReadDelimited>{};
+    auto d = Describer<ReadDelimitedArgs, ReadDelimited, ReadDelimitedEvents>{};
     auto sep
       = d.positional("separator", &ReadDelimitedArgs::separator, "string|blob");
     d.named("binary", &ReadDelimitedArgs::binary);

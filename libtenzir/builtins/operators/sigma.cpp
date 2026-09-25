@@ -30,6 +30,12 @@
 #include <tenzir/hash/hash.hpp>
 #include <tenzir/io/read.hpp>
 #include <tenzir/multi_series.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/function_plugin.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -719,10 +725,8 @@ auto lower_item(ir::DetectionItem const& item,
   -> ParseResult<ast::expression> {
   TRY(auto predicate,
       lower_item_predicate(item, bindings, keyword_field_count));
-  auto args = std::vector<ast::expression>{};
-  args.push_back(std::move(predicate));
-  args.emplace_back(ast::constant{false, location::unknown});
-  return make_function_expr("otherwise", std::move(args));
+  return make_binary_expr(std::move(predicate), ast::binary_op::else_,
+                          ast::constant{false, location::unknown});
 }
 
 /// Lowers a named detection: items within a group are AND-linked, groups are
@@ -2689,20 +2693,87 @@ struct SchemaEvaluationPlan {
 /// The namespace of the private columns the evaluation slice appends.
 constexpr auto private_column_prefix = std::string_view{"__sigma_ocsf_"};
 
-auto private_column_name(type const& schema, std::string_view role,
+/// What planning observes of a legacy schema. Planning never looks at the
+/// input otherwise, so that it serves both implementations.
+class LegacyPlanSchema {
+public:
+  explicit LegacyPlanSchema(type const& schema) : schema_{schema} {
+  }
+
+  auto is_ocsf() const -> bool {
+    return ocsf::is_schema(schema_);
+  }
+
+  auto num_fields() const -> size_t {
+    return as<record_type>(schema_).num_fields();
+  }
+
+  auto has_field(std::string_view name) const -> bool {
+    return as<record_type>(schema_).has_field(name);
+  }
+
+  auto validate(std::string_view sigma_field, FieldSource const& source) const
+    -> Option<ocsf::ProjectionError> {
+    return ocsf::validate(schema_, sigma_field, source);
+  }
+
+private:
+  type const& schema_;
+};
+
+/// What planning observes of one row. Rows that share a
+/// `nova_plan_key` answer every question identically.
+class NovaPlanSchema {
+public:
+  explicit NovaPlanSchema(nova::RowView<nova::Record> row)
+    : row_{std::move(row)} {
+  }
+
+  auto is_ocsf() const -> bool {
+    return ocsf::is_schema(row_);
+  }
+
+  auto num_fields() const -> size_t {
+    auto result = size_t{0};
+    for (auto const& field : row_) {
+      TENZIR_UNUSED(field);
+      ++result;
+    }
+    return result;
+  }
+
+  auto has_field(std::string_view name) const -> bool {
+    for (auto const& [key, value] : row_) {
+      TENZIR_UNUSED(value);
+      if (key == name) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  auto validate(std::string_view sigma_field, FieldSource const& source) const
+    -> Option<ocsf::ProjectionError> {
+    return ocsf::validate(row_, sigma_field, source);
+  }
+
+private:
+  nova::RowView<nova::Record> row_;
+};
+
+auto private_column_name(auto const& schema, std::string_view role,
                          size_t index) -> std::string {
   auto result = fmt::format("{}{}_{}", private_column_prefix, index, role);
-  auto const& root = as<record_type>(schema);
-  while (root.has_field(result)) {
+  while (schema.has_field(result)) {
     result += '_';
   }
   return result;
 }
 
-auto find_or_add_field(SchemaEvaluationPlan& plan, type const& schema,
+auto find_or_add_field(SchemaEvaluationPlan& plan, auto const& schema,
                        std::string_view sigma_field, FieldSource source)
   -> Result<size_t, ProjectionError> {
-  if (auto error = ocsf::validate(schema, sigma_field, source)) {
+  if (auto error = schema.validate(sigma_field, source)) {
     return Err{std::move(*error)};
   }
   auto const existing
@@ -2729,7 +2800,7 @@ auto find_or_add_field(SchemaEvaluationPlan& plan, type const& schema,
   return index;
 }
 
-auto find_or_add_guard(SchemaEvaluationPlan& plan, type const& schema,
+auto find_or_add_guard(SchemaEvaluationPlan& plan, auto const& schema,
                        ocsf::Mapping const& mapping, bool provenance)
   -> size_t {
   auto guard = LogsourceGuard{
@@ -2832,11 +2903,11 @@ auto resolve_field_source(ocsf::Mapping const* mapping, std::string_view field)
   return FieldSource{ocsf::LiteralField{}};
 }
 
-auto plan_rule(SchemaEvaluationPlan& plan, type const& schema,
+auto plan_rule(SchemaEvaluationPlan& plan, auto const& schema,
                RuleEntry const& entry, diagnostic_handler& dh) -> PlannedRule {
   auto result = PlannedRule{};
   auto const fields = rule_fields(entry.adjusted);
-  auto const keyword_field_count = as<record_type>(schema).num_fields();
+  auto const keyword_field_count = schema.num_fields();
   for (auto const* mapping : mapping_alternatives(entry.adjusted)) {
     auto const fields_before = plan.fields.size();
     auto const guards_before = plan.guards.size();
@@ -2946,10 +3017,10 @@ auto plan_rule(SchemaEvaluationPlan& plan, type const& schema,
   return result;
 }
 
-auto make_schema_plan(type const& schema, RuleMap const& rules,
+auto make_schema_plan(auto const& schema, RuleMap const& rules,
                       diagnostic_handler& dh) -> SchemaEvaluationPlan {
   auto result = SchemaEvaluationPlan{};
-  result.ocsf = ocsf::is_schema(schema);
+  result.ocsf = schema.is_ocsf();
   if (not result.ocsf) {
     return result;
   }
@@ -3168,7 +3239,7 @@ struct SliceMatchStats {
 };
 
 auto emit_unsupported_rule(RuleKey const& key, RuleEntry const& entry,
-                           PlannedRule const& plan, MappingState& state,
+                           PlannedRule const& plan, auto& state,
                            diagnostic_handler& dh) -> void {
   if (not state.should_warn(key, entry.revision)) {
     return;
@@ -3211,7 +3282,8 @@ auto match_slice(table_slice const& input, RuleMap const& rules,
     auto const plan_key = schema_plan_key(input.schema(), state.inputs);
     plan = state.plans.get(plan_key);
     if (not plan) {
-      auto compiled = make_schema_plan(input.schema(), rules, dh);
+      auto compiled
+        = make_schema_plan(LegacyPlanSchema{input.schema()}, rules, dh);
       auto const cost = plan_cost(compiled);
       plan = &state.plans.put(plan_key, std::move(compiled), cost);
     }
@@ -3258,13 +3330,920 @@ auto match_slice(table_slice const& input, RuleMap const& rules,
   }
 }
 
+// -- Event execution ---------------------------------------------------------
+//
+// This implementation shares rule loading, lowering, and planning with the
+// legacy one and only differs in how it evaluates. A record array has no
+// schema, so rows are grouped by what planning observes of them, and every
+// group compiles and caches one plan like a legacy schema does.
+
+// TODO(TNZ-1263): Use `nova::append_legacy_data` once the `api` port lands.
+/// Appends a legacy `data` value to an array builder, recursing into records
+/// and lists. Rule-side values such as the YAML document only exist as legacy
+/// data.
+auto append_legacy(auto&& builder, data const& value) -> void {
+  match(
+    value,
+    [&](caf::none_t) {
+      builder.null();
+    },
+    [&](std::string const& x) {
+      builder.data(std::string_view{x});
+    },
+    [&](blob const& x) {
+      builder.data(blob_view{x});
+    },
+    [&]<class T>(T const& x)
+      requires concepts::one_of<T, bool, int64_t, uint64_t, double, duration,
+                                time, ip, subnet>
+    {
+      builder.data(x);
+    },
+    [&](list const& xs) {
+      auto elements = builder.list();
+      for (auto const& x : xs) {
+        append_legacy(elements, x);
+      }
+    },
+    [&](record const& xs) {
+      auto fields = builder.record();
+      for (auto const& [name, x] : xs) {
+        append_legacy(fields.field(name), x);
+      }
+    },
+    [&](auto const&) {
+      builder.null();
+    });
+}
+
+/// Prepared evaluators for the expressions of one plan or rule set,
+/// built on first use. Keys identify the expression; an expression that fails
+/// to prepare stays cached as a failure.
+class EvaluatorCache {
+public:
+  template <class Make>
+  auto get(std::string const& key, Make make, nova::InstantiateCtx ctx)
+    -> nova::Evaluator* {
+    auto it = evaluators_.find(key);
+    if (it == evaluators_.end()) {
+      auto evaluator = nova::Evaluator::make(make(), ctx);
+      it = evaluators_
+             .emplace(key, evaluator
+                             ? Option<nova::Evaluator>{std::move(*evaluator)}
+                             : None{})
+             .first;
+    }
+    return it->second ? &*it->second : nullptr;
+  }
+
+  auto clear() -> void {
+    evaluators_.clear();
+  }
+
+private:
+  std::unordered_map<std::string, Option<nova::Evaluator>> evaluators_;
+};
+
+/// Keys an expression that a plan or rule entry owns by its address.
+auto expression_key(ast::expression const& expression) -> std::string {
+  return fmt::format("{}", fmt::ptr(&expression));
+}
+
+/// A compiled plan together with the evaluators of its expressions. The
+/// evaluators borrow nothing from the plan: each owns a copy of its
+/// expression.
+struct NovaPlan {
+  SchemaEvaluationPlan plan;
+  EvaluatorCache evaluators;
+};
+
+/// The row-based counterpart of `MappingState`.
+struct NovaMappingState {
+  auto reset(uint64_t revision, RuleMap const& rules) -> void {
+    if (rules_revision == revision) {
+      return;
+    }
+    rules_revision = revision;
+    plans.clear();
+    plans.budget(plan_cache_budget(rules));
+    inputs = collect_plan_inputs(rules);
+    direct.clear();
+    std::erase_if(warned_rules, [&](auto const& warning) {
+      auto const entry = rules.index.find(warning.first);
+      return entry == rules.index.end()
+             or rules.entries[entry->second].second.revision != warning.second;
+    });
+  }
+
+  auto should_warn(RuleKey const& key, uint64_t revision) -> bool {
+    if (auto const entry = warned_rules.find(key);
+        entry != warned_rules.end() and entry->second == revision) {
+      return false;
+    }
+    warned_rules.insert_or_assign(key, revision);
+    return true;
+  }
+
+  uint64_t rules_revision = 0;
+  PlanInputs inputs;
+  BudgetedLruCache<std::string, std::shared_ptr<NovaPlan>> plans{
+    plan_cache_min_budget};
+  /// Evaluators of the rules' own expressions for input without a plan.
+  EvaluatorCache direct;
+  std::unordered_map<RuleKey, uint64_t, RuleKeyHash> warned_rules;
+};
+
+/// Keys the plan cache by what planning observes of one row, the counterpart
+/// of `schema_plan_key`. Every non-OCSF row shares the empty key.
+auto nova_plan_key(nova::RowView<nova::Record> const& row,
+                   PlanInputs const& inputs) -> std::string {
+  if (not ocsf::is_schema(row)) {
+    return {};
+  }
+  auto result = std::string{"ocsf;"};
+  if (inputs.keywords) {
+    fmt::format_to(std::back_inserter(result), "fields={};",
+                   NovaPlanSchema{row}.num_fields());
+  }
+  for (auto const& [name, value] : row) {
+    TENZIR_UNUSED(value);
+    if (name.starts_with(private_column_prefix)) {
+      fmt::format_to(std::back_inserter(result), "collision={};", name);
+    }
+  }
+  result += ocsf::row_shape(row, inputs.paths);
+  return result;
+}
+
+struct NovaMatchStats {
+  uint64_t rule_evaluations = 0;
+  uint64_t matches = 0;
+};
+
+/// Everything evaluation needs besides the rows.
+struct NovaMatchCtx {
+  diagnostic_handler& dh;
+  registry const& reg;
+
+  auto instantiate() const -> nova::InstantiateCtx {
+    return nova::InstantiateCtx{dh, reg};
+  }
+};
+
+/// Returns the rows of `events` for which `evaluator` yields `true`.
+auto eval_rows(nova::Evaluator& evaluator, nova::Events const& events,
+               diagnostic_handler& dh) -> nova::storage::BitMap {
+  auto result = evaluator.eval(events, nova::EvalCtx{dh});
+  auto booleans = result.get_alternative<nova::Bool>();
+  if (not booleans) {
+    return nova::storage::BitMap{events.length(), false};
+  }
+  return events.mask & booleans->present
+         & as<nova::storage::BitMap>(booleans->data.storage());
+}
+
+/// Evaluates an expression that `evaluators` owns under `key`, yielding the
+/// rows for which it is `true`.
+template <class Make>
+auto eval_rows(EvaluatorCache& evaluators, std::string const& key, Make make,
+               nova::Events const& events, NovaMatchCtx const& ctx)
+  -> nova::storage::BitMap {
+  auto* evaluator = evaluators.get(key, make, ctx.instantiate());
+  if (not evaluator) {
+    return nova::storage::BitMap{events.length(), false};
+  }
+  return eval_rows(*evaluator, events, ctx.dh);
+}
+
+auto make_nova_events(nova::Array<nova::Record> data, std::string_view name)
+  -> nova::Events {
+  auto const length = data.length();
+  return nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                      nova::Events::Meta::make_empty(length, name)};
+}
+
+/// The rows of one rule that one plan variant, or the rule itself for input
+/// without a plan, matched, together with what building their findings
+/// needs. Per-row results are evaluated lazily over the matched rows.
+class MatchSource {
+public:
+  MatchSource(nova::Events const& evaluation, nova::storage::BitMap matched,
+              std::span<nova::storage::Index const> input_rows,
+              std::vector<IdentifierArtifact> const& identifiers,
+              Option<FieldBindings const&> bindings, EvaluatorCache& evaluators)
+    : matched_{std::move(matched)},
+      input_rows_{input_rows},
+      evaluation_{evaluation.data, matched_, evaluation.meta},
+      identifiers_{identifiers},
+      bindings_{bindings},
+      evaluators_{evaluators} {
+  }
+
+  auto matched() const -> nova::storage::BitMap const& {
+    return matched_;
+  }
+
+  auto input_row(nova::storage::Index row) const -> nova::storage::Index {
+    return input_rows_.empty() ? row : input_rows_[row];
+  }
+
+  auto identifiers() const -> std::vector<IdentifierArtifact> const& {
+    return identifiers_;
+  }
+
+  auto identifier(std::string_view name, nova::storage::Index row,
+                  NovaMatchCtx const& ctx) -> bool {
+    auto entry = identifier_values_.find(name);
+    if (entry == identifier_values_.end()) {
+      auto const identifier
+        = std::ranges::find(identifiers_, name, &IdentifierArtifact::name);
+      TENZIR_ASSERT(identifier != identifiers_.end());
+      entry = identifier_values_
+                .emplace(name,
+                         eval_rows(
+                           evaluators_, expression_key(identifier->expression),
+                           [&] {
+                             return identifier->expression;
+                           },
+                           evaluation_, ctx))
+                .first;
+    }
+    return entry->second.get(row);
+  }
+
+  auto item(ItemArtifact const& item, nova::storage::Index row,
+            NovaMatchCtx const& ctx) -> bool {
+    auto entry = item_values_.find(&item.expression);
+    if (entry == item_values_.end()) {
+      entry = item_values_
+                .emplace(&item.expression,
+                         eval_rows(
+                           evaluators_, expression_key(item.expression),
+                           [&] {
+                             return item.expression;
+                           },
+                           evaluation_, ctx))
+                .first;
+    }
+    return entry->second.get(row);
+  }
+
+  /// The value of a Sigma field and the path it was read from.
+  auto field(std::string const& field, nova::storage::Index row,
+             NovaMatchCtx const& ctx) -> std::pair<data, std::string> {
+    auto binding = Option<FieldBinding const&>{};
+    if (bindings_) {
+      auto const it = bindings_->find(field);
+      TENZIR_ASSERT(it != bindings_->end());
+      binding = it->second;
+    }
+    auto entry = field_values_.find(field);
+    if (entry == field_values_.end()) {
+      auto values = evaluate(fmt::format("field:{}", field),
+                             make_field_expr(field, bindings_), ctx);
+      auto paths = Option<nova::Array<nova::Data>>{};
+      if (binding and not binding->constant_evidence_path) {
+        paths = evaluate(fmt::format("path:{}", field),
+                         make_private_field_expr(binding->evidence_path_column),
+                         ctx);
+      }
+      entry = field_values_
+                .emplace(field, std::pair{std::move(values), std::move(paths)})
+                .first;
+    }
+    auto path = std::string{field};
+    if (binding and binding->constant_evidence_path) {
+      path = *binding->constant_evidence_path;
+    }
+    if (entry->second.second) {
+      auto const materialized
+        = nova::materialize(entry->second.second->get(row));
+      if (auto const* value = try_as<std::string>(&materialized)) {
+        path = *value;
+      }
+    }
+    return {nova::materialize(entry->second.first.get(row)), std::move(path)};
+  }
+
+private:
+  auto evaluate(std::string const& key, ast::expression expression,
+                NovaMatchCtx const& ctx) -> nova::Array<nova::Data> {
+    // The bindings identify the variant, and with it the field expressions.
+    auto const full_key
+      = fmt::format("{}:{}", bindings_ ? fmt::ptr(&*bindings_) : nullptr, key);
+    auto* evaluator = evaluators_.get(
+      full_key,
+      [&] {
+        auto provider = session_provider::make(ctx.dh);
+        std::ignore = resolve_entities(expression, provider.as_session());
+        return std::move(expression);
+      },
+      ctx.instantiate());
+    if (not evaluator) {
+      return nova::Array<nova::Data>{nova::Array<nova::Null>{
+        nova::storage::NullStorage{evaluation_.length()}}};
+    }
+    return evaluator->eval(evaluation_, nova::EvalCtx{ctx.dh});
+  }
+
+  nova::storage::BitMap matched_;
+  /// Maps compact group rows to input rows; empty for the zero-copy path.
+  std::span<nova::storage::Index const> input_rows_;
+  nova::Events evaluation_;
+  std::vector<IdentifierArtifact> const& identifiers_;
+  Option<FieldBindings const&> bindings_;
+  EvaluatorCache& evaluators_;
+  detail::flat_map<std::string_view, nova::storage::BitMap> identifier_values_;
+  std::unordered_map<ast::expression const*, nova::storage::BitMap> item_values_;
+  std::unordered_map<std::string, std::pair<nova::Array<nova::Data>,
+                                            Option<nova::Array<nova::Data>>>>
+    field_values_;
+};
+
+/// Appends one OCSF 1.9.0 Detection Finding for a matching row, the row-based
+/// counterpart of the loop body of `build_findings`.
+auto append_nova_finding(nova::ArrayBuilder<nova::Record>& builder,
+                         nova::RowView<nova::Record> const& event,
+                         nova::storage::Index row, RuleEntry const& entry,
+                         MatchSource& source, time now, NovaMatchCtx const& ctx)
+  -> void {
+  auto value_of = [&](std::string_view name) {
+    return source.identifier(name, row, ctx);
+  };
+  // The causal trace over all OR-linked condition entries: the first
+  // satisfied entry explains the match.
+  auto trace = std::vector<TraceDecision>{};
+  for (auto const& condition : entry.adjusted.conditions) {
+    if (evaluate_condition(condition, entry.adjusted, value_of)) {
+      causal_trace(condition, entry.adjusted, value_of, true, trace);
+      break;
+    }
+  }
+  // Field-level matches for positively contributing identifiers: the first
+  // satisfied group of each matched identifier explains it.
+  struct FieldMatch {
+    ItemArtifact const* item;
+    data value;
+    std::string evidence_path;
+  };
+  auto field_matches = std::vector<FieldMatch>{};
+  for (auto const& decision : trace) {
+    if (not decision.matched) {
+      continue;
+    }
+    auto const& identifiers = source.identifiers();
+    auto const artifact = std::ranges::find(identifiers, decision.identifier,
+                                            &IdentifierArtifact::name);
+    if (artifact == identifiers.end()) {
+      continue;
+    }
+    for (auto const& group : artifact->groups) {
+      auto const satisfied
+        = std::ranges::all_of(group, [&](ItemArtifact const& item) {
+            return source.item(item, row, ctx);
+          });
+      if (not satisfied) {
+        continue;
+      }
+      for (auto const& item : group) {
+        auto value = data{};
+        auto evidence_path = std::string{};
+        if (not item.keyword and not item.negated) {
+          std::tie(value, evidence_path) = source.field(item.field, row, ctx);
+        }
+        field_matches.push_back(
+          FieldMatch{&item, std::move(value), std::move(evidence_path)});
+      }
+      break;
+    }
+  }
+  auto const finding_uid = fmt::format("{}", uuid::random());
+  auto finding = builder.record();
+  finding.field("time").data(now);
+  finding.field("class_uid").data(int64_t{2004});
+  finding.field("category_uid").data(int64_t{2});
+  finding.field("activity_id").data(int64_t{1});
+  finding.field("type_uid").data(int64_t{200401});
+  finding.field("status_id").data(int64_t{1});
+  finding.field("severity_id").data(entry.finding.severity_id);
+  auto metadata_field = finding.field("metadata").record();
+  metadata_field.field("version").data(std::string_view{"1.9.0"});
+  auto product = metadata_field.field("product").record();
+  product.field("name").data(std::string_view{"Tenzir"});
+  product.field("vendor_name").data(std::string_view{"Tenzir"});
+  metadata_field.field("profiles")
+    .list()
+    .data(std::string_view{"security_control"});
+  finding.field("action_id").data(int64_t{3});
+  finding.field("disposition_id").data(int64_t{15});
+  if (not as<list>(entry.finding.attacks).empty()) {
+    append_legacy(finding.field("attacks"), entry.finding.attacks);
+  }
+  append_legacy(finding.field("policy"), entry.finding.policy);
+  auto info = finding.field("finding_info").record();
+  info.field("uid").data(std::string_view{finding_uid});
+  if (entry.finding.title) {
+    info.field("title").data(std::string_view{*entry.finding.title});
+  }
+  append_legacy(info.field("analytic"), entry.finding.analytic);
+  if (not as<list>(entry.finding.attacks).empty()) {
+    append_legacy(info.field("attacks"), entry.finding.attacks);
+  }
+  auto traits = info.field("traits").list();
+  for (auto const& decision : trace) {
+    if (not decision.matched) {
+      continue;
+    }
+    auto trait = traits.record();
+    trait.field("name").data(std::string_view{decision.identifier});
+    trait.field("type").data(std::string_view{"sigma:search-identifier"});
+  }
+  if (not as<list>(entry.finding.data_sources).empty()) {
+    append_legacy(info.field("data_sources"), entry.finding.data_sources);
+  }
+  auto observables = finding.field("observables").list();
+  for (auto const& field_match : field_matches) {
+    // Observables come only from positive field matches with a concrete
+    // value; the input is not OCSF, so no type is invented.
+    if (field_match.item->keyword or field_match.item->negated
+        or is<caf::none_t>(field_match.value)) {
+      continue;
+    }
+    auto observable = observables.record();
+    observable.field("name").data(std::string_view{
+      fmt::format("evidences[0].data.{}", field_match.evidence_path)});
+    observable.field("type_id").data(int64_t{0});
+    if (auto const* str = try_as<std::string>(&field_match.value)) {
+      observable.field("value").data(std::string_view{*str});
+    } else {
+      observable.field("value").data(
+        std::string_view{fmt::format("{}", field_match.value)});
+    }
+  }
+  auto evidences = finding.field("evidences").list();
+  nova::append_row(evidences.record().field("data"),
+                   nova::RowView<nova::Data>{event});
+  auto provenance = evidences.record();
+  provenance.field("name").data(std::string_view{"SigmaMatch"});
+  provenance.field("data").record();
+  auto sigma_info = provenance.field("sigma").record();
+  auto trace_list = sigma_info.field("trace").list();
+  for (auto const& decision : trace) {
+    auto decision_record = trace_list.record();
+    decision_record.field("identifier")
+      .data(std::string_view{decision.identifier});
+    decision_record.field("matched").data(decision.matched);
+  }
+  auto fields_list = sigma_info.field("fields").list();
+  for (auto const& field_match : field_matches) {
+    auto match_record = fields_list.record();
+    if (not field_match.item->keyword) {
+      match_record.field("field").data(
+        std::string_view{field_match.item->field});
+      // Dotted names resolve with exact-key precedence; record the resolved
+      // interpretation when it is ambiguous.
+      if (field_match.item->field.contains('.')) {
+        auto const exact
+          = NovaPlanSchema{event}.has_field(field_match.item->field);
+        match_record.field("path").data(
+          std::string_view{exact ? "exact-key" : "nested"});
+      }
+    }
+    match_record.field("matcher").data(
+      std::string_view{field_match.item->matcher});
+    match_record.field("case").data(std::string_view{
+      field_match.item->case_insensitive ? "insensitive" : "sensitive"});
+    match_record.field("polarity")
+      .data(
+        std::string_view{field_match.item->negated ? "negative" : "positive"});
+    if (not field_match.item->keyword and not field_match.item->negated) {
+      append_legacy(match_record.field("value"), field_match.value);
+    }
+  }
+}
+
+/// Builds the configured output representation for the rows that one rule
+/// matched, in row order. The sources match disjoint rows.
+auto build_nova_output(nova::Events const& input,
+                       std::vector<MatchSource>& sources,
+                       RuleEntry const& entry, sigma_format format,
+                       NovaMatchCtx const& ctx) -> nova::Events {
+  struct MatchedRow {
+    MatchSource* source = nullptr;
+    nova::storage::Index row = 0;
+  };
+  auto matched_rows = std::vector<MatchedRow>(input.length());
+  for (auto& source : sources) {
+    for (auto row : nova::storage::true_bits(source.matched())) {
+      auto& matched = matched_rows[source.input_row(row)];
+      TENZIR_ASSERT(not matched.source);
+      matched = MatchedRow{&source, row};
+    }
+  }
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  auto const now = time::clock::now();
+  for (auto row : nova::storage::true_bits(input.mask)) {
+    auto const& matched = matched_rows[row];
+    if (not matched.source) {
+      continue;
+    }
+    auto const event = input.data.get(row);
+    switch (format) {
+      case sigma_format::ocsf:
+        append_nova_finding(builder, event, matched.row, entry, *matched.source,
+                            now, ctx);
+        break;
+      case sigma_format::plain: {
+        auto result = builder.record();
+        nova::append_row(result.field("event"),
+                         nova::RowView<nova::Data>{event});
+        append_legacy(result.field("rule"), entry.yaml);
+        break;
+      }
+    }
+  }
+  return make_nova_events(builder.finish(), format == sigma_format::ocsf
+                                              ? "ocsf.detection_finding"
+                                              : "tenzir.sigma");
+}
+
+/// One group of rows that share a plan, prepared for evaluation. A group
+/// without a plan matches the rule fields literally.
+struct PreparedGroup {
+  nova::storage::BitMap rows;
+  std::shared_ptr<NovaPlan> plan;
+  /// The input plus the private columns of the plan, restricted to `rows`.
+  nova::Events evaluation;
+  std::vector<bool> guard_active;
+  /// Maps compact group rows to input rows; empty for the zero-copy path.
+  std::vector<nova::storage::Index> input_rows;
+};
+
+/// Compacts one group's active rows so its masks, projections, and evaluator
+/// results scale with the group rather than the full batch.
+auto gather_group(nova::Events const& input,
+                  std::span<nova::storage::Index const> rows) -> nova::Events {
+  auto data = nova::ArrayBuilder<nova::Record>{};
+  auto names = nova::ArrayBuilder<nova::String>{};
+  auto import_times = nova::ArrayBuilder<nova::Time>{};
+  auto internal = nova::ArrayBuilder<nova::Bool>{};
+  for (auto row : rows) {
+    auto record = data.record();
+    for (auto [name, value] : input.data.get(row)) {
+      nova::append_row(record.field(name), value);
+    }
+    names.data(*input.meta.name.get(row));
+    import_times.data(*input.meta.import_time.get(row));
+    internal.data(*input.meta.internal.get(row));
+  }
+  return nova::Events{
+    data.finish(),
+    nova::storage::BitMap{detail::narrow<nova::storage::Index>(rows.size()),
+                          true},
+    {names.finish(), import_times.finish(), internal.finish()},
+  };
+}
+
+/// Projects the plan's fields and evaluates its guards for the rows of one
+/// group, the counterpart of `evaluate_guards` and `make_evaluation_slice`.
+auto prepare_group(nova::Events const& input, std::shared_ptr<NovaPlan> planned,
+                   std::vector<nova::storage::Index> input_rows)
+  -> PreparedGroup {
+  auto const& rows = input.mask;
+  auto const& plan = planned->plan;
+  // A family whose guard rejects every row contributes no projections, and
+  // its variants skip evaluation.
+  auto guards = std::vector<nova::storage::BitMap>{};
+  auto guard_active = std::vector<bool>{};
+  guards.reserve(plan.guards.size());
+  for (auto const& guard : plan.guards) {
+    guards.push_back(ocsf::evaluate_guard(input.data, rows, guard.guard));
+    guard_active.push_back(guards.back().any());
+  }
+  using Column
+    = std::pair<std::string_view, nova::Array<nova::Record>::MaskedArray>;
+  auto columns = std::vector<Column>{};
+  auto add_column = [&](std::string_view name, nova::Array<nova::Data> data) {
+    columns.emplace_back(
+      name, nova::MaskedArray<nova::Array<nova::Data>>{std::move(data), rows});
+  };
+  for (auto const& field : plan.fields) {
+    auto const active
+      = field.ungated_user
+        or std::ranges::any_of(field.guard_users, [&](size_t guard) {
+             return guard_active[guard];
+           });
+    if (not active) {
+      continue;
+    }
+    auto projected = ocsf::project(input.data, rows, field.sigma_field,
+                                   field.binding.source);
+    add_column(field.binding.value_column, std::move(projected.value));
+    add_column(field.binding.presence_column,
+               nova::Array<nova::Bool>{std::move(projected.presence)});
+    if (not field.binding.constant_evidence_path) {
+      TENZIR_ASSERT(projected.evidence_path);
+      add_column(field.binding.evidence_path_column,
+                 std::move(*projected.evidence_path));
+    }
+  }
+  for (auto index = size_t{0}; index < plan.guards.size(); ++index) {
+    if (guard_active[index]) {
+      add_column(plan.guards[index].column,
+                 nova::Array<nova::Bool>{std::move(guards[index])});
+    }
+  }
+  auto evaluation = nova::Events{input.data.with_fields(std::move(columns)),
+                                 rows, input.meta};
+  return PreparedGroup{
+    .rows = rows,
+    .plan = std::move(planned),
+    .evaluation = std::move(evaluation),
+    .guard_active = std::move(guard_active),
+    .input_rows = std::move(input_rows),
+  };
+}
+
+/// Groups the active rows of a batch by their plan key, in order of their
+/// first row, and prepares every group for evaluation.
+auto prepare_groups(nova::Events const& input, RuleMap const& rules,
+                    sigma_mapping mapping, NovaMappingState& state,
+                    NovaMatchCtx const& ctx) -> std::vector<PreparedGroup> {
+  auto direct_group = [](nova::Events evaluation,
+                         std::vector<nova::storage::Index> input_rows) {
+    return PreparedGroup{
+      .rows = evaluation.mask,
+      .plan = nullptr,
+      .evaluation = std::move(evaluation),
+      .guard_active = {},
+      .input_rows = std::move(input_rows),
+    };
+  };
+  auto result = std::vector<PreparedGroup>{};
+  if (mapping == sigma_mapping::direct) {
+    result.push_back(direct_group(input, {}));
+    return result;
+  }
+  struct Group {
+    std::string key;
+    std::vector<nova::storage::Index> rows;
+  };
+  auto groups = std::vector<Group>{};
+  auto group_index = std::unordered_map<std::string, size_t>{};
+  for (auto row : nova::storage::true_bits(input.mask)) {
+    auto key = nova_plan_key(input.data.get(row), state.inputs);
+    auto [it, inserted] = group_index.try_emplace(key, groups.size());
+    if (inserted) {
+      groups.push_back(Group{std::move(key), {}});
+    }
+    groups[it->second].rows.push_back(row);
+  }
+  result.reserve(groups.size());
+  for (auto& group : groups) {
+    auto const first = group.rows.front();
+    // A single group can keep the original arrays and mask. Otherwise each
+    // active row is copied exactly once, and group-local lengths sum to the
+    // active row count rather than rows times groups.
+    auto evaluation
+      = groups.size() == 1 ? input : gather_group(input, group.rows);
+    auto input_rows = groups.size() == 1 ? std::vector<nova::storage::Index>{}
+                                         : std::move(group.rows);
+    if (group.key.empty()) {
+      result.push_back(
+        direct_group(std::move(evaluation), std::move(input_rows)));
+      continue;
+    }
+    auto planned = std::shared_ptr<NovaPlan>{};
+    if (auto* cached = state.plans.get(group.key)) {
+      planned = *cached;
+    } else {
+      auto compiled = make_schema_plan(NovaPlanSchema{input.data.get(first)},
+                                       rules, ctx.dh);
+      TENZIR_ASSERT(compiled.ocsf);
+      TENZIR_ASSERT(compiled.rules.size() == rules.entries.size());
+      auto const cost = plan_cost(compiled);
+      planned = std::make_shared<NovaPlan>(
+        NovaPlan{.plan = std::move(compiled), .evaluators = {}});
+      state.plans.put(group.key, planned, cost);
+    }
+    result.push_back(
+      prepare_group(evaluation, std::move(planned), std::move(input_rows)));
+  }
+  return result;
+}
+
+/// Matches every rule against the active rows of one batch, yielding each
+/// rule's output as soon as it exists. Like a legacy slice, the output of one
+/// rule lists its matches in row order.
+auto match_events(nova::Events const& input, RuleMap const& rules,
+                  sigma_mapping mapping, sigma_format format,
+                  NovaMappingState& state, NovaMatchStats& stats,
+                  NovaMatchCtx const& ctx) -> generator<nova::Events> {
+  state.reset(rules.revision, rules);
+  auto groups = prepare_groups(input, rules, mapping, state, ctx);
+  for (auto index = size_t{0}; index < rules.entries.size(); ++index) {
+    auto const& [key, entry] = rules.entries[index];
+    auto sources = std::vector<MatchSource>{};
+    for (auto& group : groups) {
+      if (not group.plan) {
+        stats.rule_evaluations += group.rows.true_count();
+        auto matched = eval_rows(
+          state.direct, expression_key(entry.rule),
+          [&] {
+            return entry.rule;
+          },
+          group.evaluation, ctx);
+        if (matched.any()) {
+          sources.emplace_back(group.evaluation, std::move(matched),
+                               group.input_rows, entry.identifiers, None{},
+                               state.direct);
+        }
+        continue;
+      }
+      auto const& rule = group.plan->plan.rules[index];
+      if (not rule.supported) {
+        emit_unsupported_rule(key, entry, rule, state, ctx.dh);
+        continue;
+      }
+      stats.rule_evaluations += group.rows.true_count();
+      for (auto const& variant : rule.variants) {
+        // A variant whose guard rejects every row cannot match; the guard is
+        // a conjunct of the variant expression.
+        if (variant.guard and not group.guard_active[*variant.guard]) {
+          continue;
+        }
+        auto matched = eval_rows(
+          group.plan->evaluators, expression_key(variant.expression),
+          [&] {
+            return variant.expression;
+          },
+          group.evaluation, ctx);
+        if (matched.any()) {
+          sources.emplace_back(group.evaluation, std::move(matched),
+                               group.input_rows, variant.identifiers,
+                               variant.bindings, group.plan->evaluators);
+        }
+      }
+    }
+    if (sources.empty()) {
+      continue;
+    }
+    for (auto const& source : sources) {
+      stats.matches += source.matched().true_count();
+    }
+    co_yield build_nova_output(input, sources, entry, format, ctx);
+  }
+}
+
 /// Internal function implementing Sigma keyword selections. An optional field
 /// count limits the outer record to its original columns during semantic
 /// evaluation.
-class SigmaKeywordsFunction final : public function_plugin {
+/// The counterpart of `keyword_match` for one row.
+auto keyword_match_row(nova::RowView<nova::Data> const& value,
+                       re2::RE2 const& regex,
+                       Option<size_t> top_level_field_count = None{}) -> bool {
+  return match(
+    value,
+    [&](nova::RowView<nova::String> const& str) {
+      auto const view = *str;
+      return re2::RE2::PartialMatch({view.data(), view.size()}, regex);
+    },
+    [&](nova::RowView<nova::Record> const& record) {
+      auto index = size_t{0};
+      for (auto const& [name, field] : record) {
+        TENZIR_UNUSED(name);
+        if (top_level_field_count and index == *top_level_field_count) {
+          break;
+        }
+        ++index;
+        if (keyword_match_row(field, regex)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [&](nova::RowView<nova::List> const& list) {
+      for (auto element : list) {
+        if (keyword_match_row(element, regex)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
+/// The counterpart of `field_regex_match` for one non-null row.
+auto field_regex_match_row(nova::RowView<nova::Data> const& value,
+                           re2::RE2 const& regex) -> bool {
+  return match(
+    value,
+    [&](nova::RowView<nova::String> const& str) {
+      auto const view = *str;
+      return re2::RE2::PartialMatch({view.data(), view.size()}, regex);
+    },
+    [&](nova::RowView<nova::List> const& list) {
+      for (auto element : list) {
+        if (field_regex_match_row(element, regex)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [](nova::RowView<nova::Record> const&) {
+      return false;
+    },
+    [](nova::RowView<nova::Null> const&) {
+      return false;
+    },
+    [&](auto const&) {
+      return re2::RE2::PartialMatch(to_string(nova::materialize(value)), regex);
+    });
+}
+
+/// Compiles a Sigma regex argument for a function kernel.
+auto compile_function_regex(located<std::string> const& pattern,
+                            diagnostic_handler& dh)
+  -> failure_or<std::shared_ptr<re2::RE2 const>> {
+  auto regex
+    = std::make_shared<re2::RE2>(pattern.inner, re2::RE2::CannedOptions::Quiet);
+  if (not regex->ok()) {
+    diagnostic::error("failed to parse regex: {}", regex->error())
+      .primary(pattern)
+      .emit(dh);
+    return failure::promise();
+  }
+  return regex;
+}
+
+/// Computes one `bool` per row of `frame.mask()`, `null` where `value_at`
+/// returns none.
+auto eval_row_booleans(nova::Array<nova::Data> const& input,
+                       nova::EvalFrame const& frame, auto&& value_at)
+  -> nova::Array<nova::Data> {
+  auto const length = frame.length();
+  auto values = nova::storage::BitMap::Builder{};
+  auto nulls = nova::storage::BitMap::Builder{};
+  for (auto row = nova::storage::Index{0}; row < length; ++row) {
+    auto value = frame.mask().get(row) ? Option<bool>{value_at(input.get(row))}
+                                       : Option<bool>{false};
+    values.emplace_back(value.value_or(false));
+    nulls.emplace_back(value.is_none());
+  }
+  return nova::Array<nova::Data>{
+    nova::Array<nova::Bool>{std::move(values).finish()}}
+    .null_where(std::move(nulls).finish());
+}
+
+struct SigmaKeywordsArgs {
+  nova::ValueArgument input;
+  located<std::string> pattern;
+  located<int64_t> field_count;
+  std::shared_ptr<re2::RE2 const> regex;
+};
+
+class SigmaKeywordsImpl final {
+public:
+  auto eval(SigmaKeywordsArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto const limit
+      = args.field_count.inner < 0
+          ? Option<size_t>{None{}}
+          : Option<size_t>{detail::narrow<size_t>(args.field_count.inner)};
+    return eval_row_booleans(
+      args.input.data, frame,
+      [&](nova::RowView<nova::Data> const& value) -> Option<bool> {
+        return keyword_match_row(value, *args.regex, limit);
+      });
+  }
+};
+
+class SigmaKeywordsFunction final : public virtual function_plugin,
+                                    public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "_sigma_keywords";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SigmaKeywordsArgs, SigmaKeywordsImpl>{};
+    d.positional("input", &SigmaKeywordsArgs::input, "any");
+    d.positional("regex", &SigmaKeywordsArgs::pattern);
+    d.positional("field_count", &SigmaKeywordsArgs::field_count);
+    d.validate(
+      [](SigmaKeywordsArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        TRY(args.regex, compile_function_regex(args.pattern, dh));
+        if (args.field_count.inner < -1) {
+          diagnostic::error("field count must be `-1` or non-negative")
+            .primary(args.field_count)
+            .emit(dh);
+          return failure::promise();
+        }
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {
@@ -3319,10 +4298,44 @@ public:
 
 /// Internal function implementing Sigma string matching for scalar and list
 /// fields.
-class SigmaRegexFunction final : public function_plugin {
+struct SigmaRegexArgs {
+  nova::ValueArgument input;
+  located<std::string> pattern;
+  std::shared_ptr<re2::RE2 const> regex;
+};
+
+class SigmaRegexImpl final {
+public:
+  auto eval(SigmaRegexArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return eval_row_booleans(
+      args.input.data, frame,
+      [&](nova::RowView<nova::Data> const& value) -> Option<bool> {
+        if (is<nova::RowView<nova::Null>>(value)) {
+          return None{};
+        }
+        return field_regex_match_row(value, *args.regex);
+      });
+  }
+};
+
+class SigmaRegexFunction final : public virtual function_plugin,
+                                 public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "_sigma_regex";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SigmaRegexArgs, SigmaRegexImpl>{};
+    d.positional("input", &SigmaRegexArgs::input, "any");
+    d.positional("regex", &SigmaRegexArgs::pattern);
+    d.validate(
+      [](SigmaRegexArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        TRY(args.regex, compile_function_regex(args.pattern, dh));
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {
@@ -3377,10 +4390,50 @@ public:
 
 /// Internal function implementing Sigma field resolution with exact-key
 /// precedence over nested traversal.
-class SigmaFieldFunction final : public function_plugin {
+struct SigmaFieldArgs {
+  nova::ValueArgument input;
+  located<std::string> field;
+};
+
+class SigmaFieldImpl final {
+public:
+  auto eval(SigmaFieldArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    for (auto row = nova::storage::Index{0}; row < frame.length(); ++row) {
+      auto const value
+        = frame.mask().get(row)
+            ? match(
+                args.input.data.get(row),
+                [&](nova::RowView<nova::Record> const& record) {
+                  return ocsf::resolve_field(record, args.field.inner);
+                },
+                [](auto const&) {
+                  return Option<nova::RowView<nova::Data>>{};
+                })
+            : None{};
+      if (value) {
+        nova::append_row(builder, *value);
+      } else {
+        builder.null();
+      }
+    }
+    return builder.finish();
+  }
+};
+
+class SigmaFieldFunction final : public virtual function_plugin,
+                                 public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "_sigma_field";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SigmaFieldArgs, SigmaFieldImpl>{};
+    d.positional("input", &SigmaFieldArgs::input, "record");
+    d.positional("field", &SigmaFieldArgs::field);
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {
@@ -3408,10 +4461,42 @@ public:
 
 /// Internal function implementing the Sigma `exists` modifier with the same
 /// field-resolution precedence as `_sigma_field`.
-class SigmaHasFunction final : public function_plugin {
+struct SigmaHasArgs {
+  nova::ValueArgument input;
+  located<std::string> field;
+};
+
+class SigmaHasImpl final {
+public:
+  auto eval(SigmaHasArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return eval_row_booleans(
+      args.input.data, frame,
+      [&](nova::RowView<nova::Data> const& value) -> Option<bool> {
+        return match(
+          value,
+          [&](nova::RowView<nova::Record> const& record) {
+            return ocsf::resolve_presence(record, args.field.inner);
+          },
+          [](auto const&) {
+            return false;
+          });
+      });
+  }
+};
+
+class SigmaHasFunction final : public virtual function_plugin,
+                               public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "_sigma_has";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SigmaHasArgs, SigmaHasImpl>{};
+    d.positional("input", &SigmaHasArgs::input, "record");
+    d.positional("field", &SigmaHasArgs::field);
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {
@@ -3763,6 +4848,91 @@ private:
   std::chrono::steady_clock::time_point last_update_ = {};
 };
 
+class SigmaEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit SigmaEvents(SigmaArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto rules = Option<located<data>>{};
+    if (args_.rules) {
+      auto evaluated = const_eval(*args_.rules, ctx.dh());
+      // Argument validation already ran at pipeline-construction time.
+      TENZIR_ASSERT(evaluated);
+      rules = std::move(*evaluated);
+    }
+    auto sources
+      = normalize_sources(args_.legacy_path, args_.path, rules,
+                          args_.refresh_interval, args_.operator_location);
+    TENZIR_ASSERT(sources.is_ok());
+    sources_ = std::move(sources).unwrap();
+    if (args_.rules) {
+      locate_inline_rules(*args_.rules, sources_);
+    }
+    auto format = normalize_format(args_.format);
+    TENZIR_ASSERT(format.is_ok());
+    format_ = std::move(format).unwrap();
+    auto mapping = normalize_mapping(args_.mapping);
+    TENZIR_ASSERT(mapping.is_ok());
+    mapping_ = std::move(mapping).unwrap();
+    refresh_interval_ = args_.refresh_interval ? args_.refresh_interval->inner
+                                               : default_refresh_interval;
+    auto diagnostics
+      = make_source_diagnostic_handler(ctx.dh(), sources_.source);
+    std::ignore = update_rules(sources_, rules_, filter_bank_, reload_state_,
+                               diagnostics);
+    state_.reset(rules_.revision, rules_);
+    metrics_ = make_metric_handler(ctx, sigma_metrics_type);
+    last_update_ = std::chrono::steady_clock::now();
+    co_return;
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto const events = static_cast<uint64_t>(input.active_count());
+    if (events == 0) {
+      co_return;
+    }
+    // Inline rules are part of the operator plan and never change.
+    auto diagnostics
+      = make_source_diagnostic_handler(ctx.dh(), sources_.source);
+    auto const now = std::chrono::steady_clock::now();
+    if (not sources_.paths.empty() and now - last_update_ > refresh_interval_) {
+      if (update_rules(sources_, rules_, filter_bank_, reload_state_,
+                       diagnostics)) {
+        state_.reset(rules_.revision, rules_);
+      }
+      last_update_ = now;
+    }
+    auto stats = NovaMatchStats{};
+    auto const match_ctx = NovaMatchCtx{diagnostics, ctx.reg()};
+    for (auto&& output : match_events(input, rules_, mapping_, format_, state_,
+                                      stats, match_ctx)) {
+      co_await push(std::move(output));
+    }
+    metrics_.emit({
+      {"events", events},
+      {"rule_evaluations", stats.rule_evaluations},
+      {"matches", stats.matches},
+    });
+  }
+
+private:
+  SigmaArgs args_;
+  SigmaSources sources_;
+  duration refresh_interval_ = default_refresh_interval;
+  RuleMap rules_;
+  FilterBank filter_bank_;
+  ReloadState reload_state_;
+  NovaMappingState state_;
+  metric_handler metrics_ = {};
+  sigma_format format_ = sigma_format::ocsf;
+  sigma_mapping mapping_ = sigma_mapping::automatic;
+  // Rules are reloaded from disk in `start()`, and `last_update_` uses
+  // `steady_clock`, so the default no-op snapshot behavior is sufficient.
+  std::chrono::steady_clock::time_point last_update_ = {};
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -3770,7 +4940,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SigmaArgs, Sigma>{};
+    auto d = Describer<SigmaArgs, Sigma, SigmaEvents>{};
     d.parallelizable();
     auto legacy_path = d.positional("legacy_path", &SigmaArgs::legacy_path);
     auto path = d.named("path", &SigmaArgs::path);

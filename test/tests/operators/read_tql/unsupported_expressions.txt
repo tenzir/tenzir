@@ -1,0 +1,11 @@
+warning: expected constant record expression in stream
+
+warning: expected record at top level, got other type
+{
+  before: 1,
+}
+{
+  u: -9223372036854775808,
+  bl: b"hi",
+  t: false,
+}

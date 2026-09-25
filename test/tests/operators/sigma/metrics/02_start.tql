@@ -1,3 +1,5 @@
+// TODO(TNZ-1360): Run this directory on Nova once `api` and `metrics` work
+// with `--nova`.
 api "/pipeline/update", {
   id: "00000000-0000-0000-0000-000000000001",
   action: "start",

@@ -10,6 +10,8 @@
 
 #include <tenzir/data.hpp>
 #include <tenzir/detail/enum.hpp>
+#include <tenzir/nova/array.hpp>
+#include <tenzir/nova/bitmap.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/ref.hpp>
 #include <tenzir/result.hpp>
@@ -312,5 +314,55 @@ auto project(series const& input, std::string_view sigma_field,
 /// Computes one vectorized event guard for a table slice.
 auto evaluate_guard(series const& input, EvaluationGuard const& guard)
   -> series;
+
+// -- Row-based projections ----------------------------------------------------
+//
+// The functions below mirror the ones above for `nova::Events`. A record
+// array has no schema: every row carries its own shape. Validation and
+// planning therefore inspect one row, and two rows with the same `row_shape`
+// validate every projection identically.
+
+/// Resolves a Sigma field in one row with exact-key precedence over nested
+/// traversal. Returns none when the field does not exist in the row.
+auto resolve_field(nova::RowView<nova::Record> const& row,
+                   std::string_view name) -> Option<nova::RowView<nova::Data>>;
+
+/// Returns whether a Sigma field exists in one row, with the same precedence
+/// as `resolve_field`. A field that exists with a `null` value is present.
+auto resolve_presence(nova::RowView<nova::Record> const& row,
+                      std::string_view name) -> bool;
+
+/// Returns whether a row has the structural OCSF discriminator fields.
+auto is_schema(nova::RowView<nova::Record> const& row) -> bool;
+
+/// Validates one projection against the values of one row.
+auto validate(nova::RowView<nova::Record> const& row,
+              std::string_view sigma_field, FieldProjection const& projection)
+  -> Option<ProjectionError>;
+
+/// Renders what `validate` observes of a row at the given paths, the
+/// counterpart of `schema_shape`.
+auto row_shape(nova::RowView<nova::Record> const& row,
+               std::span<std::string const> paths) -> std::string;
+
+/// One semantic projection over the rows of a record array.
+struct ProjectionArrays {
+  nova::Array<nova::Data> value;
+  nova::storage::BitMap presence;
+  /// Per-row evidence paths, produced under the same condition as
+  /// `ProjectionSeries::evidence_path`.
+  Option<nova::Array<nova::Data>> evidence_path;
+};
+
+/// Computes one semantic projection for the rows selected by `rows`. Rows
+/// outside `rows` hold `null` and are not present.
+auto project(nova::Array<nova::Record> const& input,
+             nova::storage::BitMap const& rows, std::string_view sigma_field,
+             FieldProjection const& projection) -> ProjectionArrays;
+
+/// Returns the rows among `rows` that pass one event guard.
+auto evaluate_guard(nova::Array<nova::Record> const& input,
+                    nova::storage::BitMap const& rows,
+                    EvaluationGuard const& guard) -> nova::storage::BitMap;
 
 } // namespace tenzir::plugins::sigma::ocsf

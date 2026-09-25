@@ -10,10 +10,8 @@
   mixed: [
     {
       a: 1,
-      b: null,
     },
     {
-      a: null,
       b: 2,
     },
   ],

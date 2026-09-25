@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/option.hpp"
 
 #include <tenzir/arrow_utils.hpp>
@@ -24,10 +27,159 @@ namespace tenzir::plugins::slice {
 
 namespace {
 
-class Plugin : public virtual function_plugin {
+/// Clamps Python-style slice bounds, where negative values count from the
+/// end, to `[0, length]`.
+auto normalize_slice_bounds(int64_t length, Option<int64_t> begin,
+                            Option<int64_t> end)
+  -> std::pair<int64_t, int64_t> {
+  auto normalized_begin = begin.value_or(0);
+  auto normalized_end = end.value_or(length);
+  if (normalized_begin < 0) {
+    normalized_begin = length + normalized_begin;
+  }
+  if (normalized_end < 0) {
+    normalized_end = length + normalized_end;
+  }
+  normalized_begin = std::clamp(normalized_begin, int64_t{0}, length);
+  normalized_end = std::clamp(normalized_end, int64_t{0}, length);
+  return {normalized_begin, normalized_end};
+}
+
+/// Calls `f` with the index of every element of `[0, length)` that the slice
+/// selects, in output order.
+auto for_each_slice_index(int64_t length, Option<int64_t> begin,
+                          Option<int64_t> end, int64_t stride, auto&& f)
+  -> void {
+  auto const [first, last] = normalize_slice_bounds(length, begin, end);
+  if (last <= first) {
+    return;
+  }
+  if (stride > 0) {
+    for (auto index = first; index < last;) {
+      f(index);
+      if (last - index <= stride) {
+        break;
+      }
+      index += stride;
+    }
+    return;
+  }
+  if (stride == std::numeric_limits<int64_t>::min()) {
+    f(last - 1);
+    return;
+  }
+  auto const abs_stride = -stride;
+  for (auto index = last - 1; index >= first; index -= abs_stride) {
+    f(index);
+    if (index - first < abs_stride) {
+      break;
+    }
+  }
+}
+
+struct SliceArgs {
+  nova::ValueArgument x;
+  Option<located<int64_t>> begin;
+  Option<located<int64_t>> end;
+  Option<located<int64_t>> stride;
+};
+
+class SliceFunction final {
+public:
+  auto eval(SliceArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const begin
+      = args.begin ? Option<int64_t>{args.begin->inner} : Option<int64_t>{};
+    auto const end
+      = args.end ? Option<int64_t>{args.end->inner} : Option<int64_t>{};
+    auto const stride = args.stride ? args.stride->inner : int64_t{1};
+    auto const& mask = frame.mask();
+    auto const length = mask.length();
+    auto strings = args.x.data.get_alternative<String>();
+    auto lists = args.x.data.get_alternative<List>();
+    auto nulls = args.x.data.get_alternative<Null>();
+    auto const string_rows
+      = strings ? mask & strings->present : storage::BitMap{length, false};
+    auto const list_rows
+      = lists ? mask & lists->present : storage::BitMap{length, false};
+    auto const null_rows
+      = nulls ? mask & nulls->present : storage::BitMap{length, false};
+    if (mask.and_not(string_rows).and_not(list_rows).and_not(null_rows).any()) {
+      diagnostic::warning("`slice` expected `string` or `list`, but got a "
+                          "different type")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    // Strings only slice forward, like the legacy implementation.
+    auto const slice_strings = stride > 0 or not string_rows.any();
+    if (not slice_strings) {
+      diagnostic::error("`stride` must be greater 0, but got {}", stride)
+        .primary(*args.stride)
+        .emit(frame);
+    }
+    auto builder = ArrayBuilder<Data>{};
+    auto code_points = std::vector<size_t>{};
+    for (auto row = storage::Index{0}; row < length; ++row) {
+      if (string_rows.get(row) and slice_strings) {
+        // Bounds count code points, so slice at their byte offsets.
+        auto const value = *strings->data.get(row);
+        code_points.clear();
+        for (auto offset = size_t{0}; offset < value.size(); ++offset) {
+          if ((static_cast<unsigned char>(value[offset]) & 0b1100'0000)
+              != 0b1000'0000) {
+            code_points.push_back(offset);
+          }
+        }
+        auto const count = static_cast<int64_t>(code_points.size());
+        code_points.push_back(value.size());
+        auto result = std::string{};
+        for_each_slice_index(count, begin, end, stride, [&](int64_t index) {
+          auto const from = code_points[static_cast<size_t>(index)];
+          auto const to = code_points[static_cast<size_t>(index) + 1];
+          result += value.substr(from, to - from);
+        });
+        builder.data(std::string_view{result});
+        continue;
+      }
+      if (list_rows.get(row)) {
+        auto const list = lists->data.get(row);
+        auto elements = builder.list();
+        for_each_slice_index(list.length(), begin, end, stride,
+                             [&](int64_t index) {
+                               append_row(elements, list.get(index));
+                             });
+        continue;
+      }
+      builder.null();
+    }
+    return builder.finish();
+  }
+};
+
+class Plugin : public virtual function_plugin,
+               public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "slice";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SliceArgs, SliceFunction>{};
+    d.positional("x", &SliceArgs::x, "string|list");
+    d.named("begin", &SliceArgs::begin);
+    d.named("end", &SliceArgs::end);
+    d.named("stride", &SliceArgs::stride);
+    d.validate([](SliceArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+      if (args.stride and args.stride->inner == 0) {
+        diagnostic::error("`stride` must not be 0")
+          .primary(*args.stride)
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

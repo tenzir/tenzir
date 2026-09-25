@@ -13,6 +13,7 @@
 #include <tenzir/concept/printable/tenzir/data.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/nova/array_builder.hpp>
 #include <tenzir/series.hpp>
 
 #include <arrow/array/array_base.h>
@@ -25,6 +26,7 @@
 #include <iterator>
 #include <ranges>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 namespace tenzir::plugins::sigma::ocsf {
@@ -950,6 +952,607 @@ auto evaluate_guard(series const& input, EvaluationGuard const& guard)
     check(builder.Append(eligible));
   }
   return series{bool_type{}, finish(builder)};
+}
+
+// -- Row-based projections ----------------------------------------------------
+
+namespace {
+
+using nova::RowView;
+
+auto find_member(RowView<nova::Record> const& record, std::string_view name)
+  -> Option<RowView<nova::Data>> {
+  for (auto const& [key, value] : record) {
+    if (key == name) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+auto as_record(RowView<nova::Data> const& value)
+  -> Option<RowView<nova::Record>> {
+  return match(
+    value,
+    [](RowView<nova::Record> const& record) -> Option<RowView<nova::Record>> {
+      return record;
+    },
+    [](auto const&) -> Option<RowView<nova::Record>> {
+      return None{};
+    });
+}
+
+auto as_list(RowView<nova::Data> const& value) -> Option<RowView<nova::List>> {
+  return match(
+    value,
+    [](RowView<nova::List> const& list) -> Option<RowView<nova::List>> {
+      return list;
+    },
+    [](auto const&) -> Option<RowView<nova::List>> {
+      return None{};
+    });
+}
+
+auto is_null(RowView<nova::Data> const& value) -> bool {
+  return is<RowView<nova::Null>>(value);
+}
+
+auto string_of(Option<RowView<nova::Data>> const& value)
+  -> Option<std::string_view> {
+  if (not value) {
+    return None{};
+  }
+  return match(
+    *value,
+    [](RowView<nova::String> const& str) -> Option<std::string_view> {
+      return *str;
+    },
+    [](auto const&) -> Option<std::string_view> {
+      return None{};
+    });
+}
+
+/// The non-negative integer value, like `integer_at`.
+auto integer_of(Option<RowView<nova::Data>> const& value) -> Option<uint64_t> {
+  if (not value) {
+    return None{};
+  }
+  return match(
+    *value,
+    [](RowView<nova::Int> const& x) -> Option<uint64_t> {
+      if (*x < 0) {
+        return None{};
+      }
+      return static_cast<uint64_t>(*x);
+    },
+    [](RowView<nova::UInt> const& x) -> Option<uint64_t> {
+      return *x;
+    },
+    [](auto const&) -> Option<uint64_t> {
+      return None{};
+    });
+}
+
+auto is_integral(RowView<nova::Data> const& value) -> bool {
+  return is<RowView<nova::Int>>(value) or is<RowView<nova::UInt>>(value);
+}
+
+/// The legacy type kind name of a value, so that diagnostics read the same
+/// for both implementations.
+auto kind_name(RowView<nova::Data> const& value) -> std::string_view {
+  return match(
+    value,
+    [](RowView<nova::Null> const&) {
+      return to_string(type_kind::of<null_type>);
+    },
+    [](RowView<nova::Bool> const&) {
+      return to_string(type_kind::of<bool_type>);
+    },
+    [](RowView<nova::Int> const&) {
+      return to_string(type_kind::of<int64_type>);
+    },
+    [](RowView<nova::UInt> const&) {
+      return to_string(type_kind::of<uint64_type>);
+    },
+    [](RowView<nova::Float> const&) {
+      return to_string(type_kind::of<double_type>);
+    },
+    [](RowView<nova::String> const&) {
+      return to_string(type_kind::of<string_type>);
+    },
+    [](RowView<nova::Blob> const&) {
+      return to_string(type_kind::of<blob_type>);
+    },
+    [](RowView<nova::Ip> const&) {
+      return to_string(type_kind::of<ip_type>);
+    },
+    [](RowView<nova::Subnet> const&) {
+      return to_string(type_kind::of<subnet_type>);
+    },
+    [](RowView<nova::Time> const&) {
+      return to_string(type_kind::of<time_type>);
+    },
+    [](RowView<nova::Duration> const&) {
+      return to_string(type_kind::of<duration_type>);
+    },
+    [](RowView<nova::List> const&) {
+      return to_string(type_kind::of<list_type>);
+    },
+    [](RowView<nova::Record> const&) {
+      return to_string(type_kind::of<record_type>);
+    });
+}
+
+auto validate_row_path(RowView<nova::Record> const& row, std::string_view path,
+                       ProjectedKind kind) -> Option<ProjectionError> {
+  auto const actual = resolve_field(row, path);
+  if (not actual or is_null(*actual) or kind == ProjectedKind::any) {
+    return None{};
+  }
+  auto valid = false;
+  auto expected = std::string_view{"the projected value type"};
+  switch (kind) {
+    case ProjectedKind::any:
+      TENZIR_UNREACHABLE();
+    case ProjectedKind::string:
+      valid = is<RowView<nova::String>>(*actual);
+      expected = "string";
+      break;
+    case ProjectedKind::integral:
+      valid = is_integral(*actual);
+      expected = "int64 or uint64";
+      break;
+    case ProjectedKind::source_identifier:
+      valid = is<RowView<nova::String>>(*actual) or is_integral(*actual);
+      expected = "string, int64, or uint64";
+      break;
+  }
+  if (valid) {
+    return None{};
+  }
+  return ProjectionError{
+    fmt::format("OCSF path `{}` has type `{}`, expected {}", path,
+                kind_name(*actual), expected)};
+}
+
+auto validate_row_fingerprints(RowView<nova::Record> const& row,
+                               std::string_view path)
+  -> Option<ProjectionError> {
+  auto const hashes = resolve_field(row, path);
+  if (not hashes or is_null(*hashes)) {
+    return None{};
+  }
+  auto const list = as_list(*hashes);
+  if (not list) {
+    return ProjectionError{
+      fmt::format("OCSF path `{}` must be a list of Fingerprints", path)};
+  }
+  for (auto element : *list) {
+    if (is_null(element)) {
+      continue;
+    }
+    auto const fingerprint = as_record(element);
+    if (not fingerprint) {
+      return ProjectionError{
+        fmt::format("OCSF path `{}` must contain Fingerprint objects", path)};
+    }
+    if (auto const algorithm = find_member(*fingerprint, "algorithm_id");
+        algorithm and not is_null(*algorithm) and not is_integral(*algorithm)) {
+      return ProjectionError{
+        "Fingerprint `algorithm_id` must be int64 or uint64"};
+    }
+    if (auto const algorithm = find_member(*fingerprint, "algorithm");
+        algorithm and not is_null(*algorithm)
+        and not is<RowView<nova::String>>(*algorithm)) {
+      return ProjectionError{"Fingerprint `algorithm` must be a string"};
+    }
+    if (auto const value = find_member(*fingerprint, "value");
+        value and not is_null(*value)
+        and not is<RowView<nova::String>>(*value)) {
+      return ProjectionError{"Fingerprint `value` must be a string"};
+    }
+  }
+  return None{};
+}
+
+auto validate_row_object_list(RowView<nova::Record> const& row,
+                              ObjectListField const& projection)
+  -> Option<ProjectionError> {
+  auto const objects = resolve_field(row, projection.path);
+  if (not objects or is_null(*objects)) {
+    return None{};
+  }
+  auto const list = as_list(*objects);
+  if (not list) {
+    return ProjectionError{
+      fmt::format("OCSF path `{}` must be a list of objects", projection.path)};
+  }
+  for (auto element : *list) {
+    if (is_null(element)) {
+      continue;
+    }
+    auto const object = as_record(element);
+    if (not object) {
+      return ProjectionError{
+        fmt::format("OCSF path `{}` must contain objects", projection.path)};
+    }
+    auto const member = find_member(*object, projection.member);
+    if (member and not is_null(*member)
+        and not is<RowView<nova::String>>(*member)) {
+      return ProjectionError{
+        fmt::format("OCSF path `{}.{}` has type `{}`, expected string",
+                    projection.path, projection.member, kind_name(*member))};
+    }
+  }
+  return None{};
+}
+
+/// Describes a value as far as validation inspects it: its kind, and for a
+/// list every non-null element's kind and, for objects, their members' kinds.
+/// Keep distinct shapes in encounter order to preserve the first validation
+/// error without growing cache keys for repeated shapes.
+auto describe(RowView<nova::Data> const& value, std::string& out) -> void {
+  auto const list = as_list(value);
+  if (not list) {
+    out += kind_name(value);
+    return;
+  }
+  out += "list<";
+  auto seen = std::unordered_set<std::string>{};
+  for (auto element : *list) {
+    if (is_null(element)) {
+      continue;
+    }
+    auto shape = std::string{};
+    if (auto const object = as_record(element)) {
+      shape += "record{";
+      for (auto const& [name, member] : *object) {
+        // Length-prefix names so they cannot impersonate shape delimiters.
+        fmt::format_to(std::back_inserter(shape), "{}:{}:{},", name.size(),
+                       name, kind_name(member));
+      }
+      shape += '}';
+    } else {
+      shape += kind_name(element);
+    }
+    if (seen.insert(shape).second) {
+      out += shape;
+      out += ';';
+    }
+  }
+  out += '>';
+}
+
+auto source_identifier_of(Option<RowView<nova::Data>> const& value)
+  -> Option<std::string> {
+  if (auto const str = string_of(value)) {
+    return std::string{*str};
+  }
+  if (not value) {
+    return None{};
+  }
+  return match(
+    *value,
+    [](RowView<nova::Int> const& x) -> Option<std::string> {
+      return fmt::to_string(*x);
+    },
+    [](RowView<nova::UInt> const& x) -> Option<std::string> {
+      return fmt::to_string(*x);
+    },
+    [](auto const&) -> Option<std::string> {
+      return None{};
+    });
+}
+
+auto append_optional(nova::ArrayBuilder<nova::Data>& builder,
+                     Option<RowView<nova::Data>> const& value) -> void {
+  if (value) {
+    nova::append_row(builder, *value);
+  } else {
+    builder.null();
+  }
+}
+
+auto append_optional(nova::ArrayBuilder<nova::Data>& builder,
+                     Option<std::string_view> value) -> void {
+  if (value) {
+    builder.data(*value);
+  } else {
+    builder.null();
+  }
+}
+
+auto fingerprints_of(RowView<nova::List> const& list) -> std::string {
+  auto result = std::string{};
+  for (auto element : list) {
+    auto const fingerprint = as_record(element);
+    if (not fingerprint) {
+      continue;
+    }
+    auto const algorithm_id
+      = integer_of(find_member(*fingerprint, "algorithm_id"));
+    auto const value = string_of(find_member(*fingerprint, "value"));
+    if (not algorithm_id or not value) {
+      continue;
+    }
+    auto const standard_algorithm = fingerprint_algorithm(*algorithm_id);
+    auto const sibling_algorithm
+      = string_of(find_member(*fingerprint, "algorithm"));
+    auto const algorithm
+      = standard_algorithm ? standard_algorithm : sibling_algorithm;
+    if (not algorithm or algorithm->empty()) {
+      continue;
+    }
+    if (not result.empty()) {
+      result += ',';
+    }
+    fmt::format_to(std::back_inserter(result), "{}={}", *algorithm, *value);
+  }
+  return result;
+}
+
+} // namespace
+
+auto resolve_field(RowView<nova::Record> const& row, std::string_view name)
+  -> Option<RowView<nova::Data>> {
+  if (auto exact = find_member(row, name)) {
+    return exact;
+  }
+  auto current = row;
+  auto const parts = detail::split(name, ".");
+  for (auto index = size_t{0}; index < parts.size(); ++index) {
+    auto next = find_member(current, parts[index]);
+    if (not next or index + 1 == parts.size()) {
+      return next;
+    }
+    auto nested = as_record(*next);
+    if (not nested) {
+      return None{};
+    }
+    current = *nested;
+  }
+  return None{};
+}
+
+auto resolve_presence(RowView<nova::Record> const& row, std::string_view name)
+  -> bool {
+  if (find_member(row, name)) {
+    return true;
+  }
+  auto current = row;
+  auto const parts = detail::split(name, ".");
+  for (auto index = size_t{0}; index + 1 < parts.size(); ++index) {
+    auto next = find_member(current, parts[index]);
+    auto nested = next ? as_record(*next) : None{};
+    if (not nested) {
+      return false;
+    }
+    current = *nested;
+  }
+  return find_member(current, parts.back()).is_some();
+}
+
+auto is_schema(RowView<nova::Record> const& row) -> bool {
+  auto const version = resolve_field(row, "metadata.version");
+  auto const class_uid = resolve_field(row, "class_uid");
+  return version and is<RowView<nova::String>>(*version) and class_uid
+         and is_integral(*class_uid);
+}
+
+auto validate(RowView<nova::Record> const& row, std::string_view sigma_field,
+              FieldProjection const& projection) -> Option<ProjectionError> {
+  auto validate_string_path
+    = [&](std::string_view path) -> Option<ProjectionError> {
+    return validate_row_path(row, path, ProjectedKind::string);
+  };
+  return match(
+    projection.value,
+    [&](LiteralField const&) -> Option<ProjectionError> {
+      if (resolve_field(row, sigma_field)) {
+        return None{};
+      }
+      return ProjectionError{
+        fmt::format("field `{}` is absent from the OCSF schema", sigma_field)};
+    },
+    [&](PathField const& value) -> Option<ProjectionError> {
+      return validate_row_path(row, value.path, projection.kind);
+    },
+    [&](FallbackField const& value) -> Option<ProjectionError> {
+      if (auto error = validate_string_path(value.primary)) {
+        return error;
+      }
+      return validate_string_path(value.fallback);
+    },
+    [&](JoinedField const& value) -> Option<ProjectionError> {
+      if (auto error = validate_string_path(value.left)) {
+        return error;
+      }
+      return validate_string_path(value.right);
+    },
+    [&](PrincipalField const& value) -> Option<ProjectionError> {
+      if (auto error = validate_string_path(value.domain)) {
+        return error;
+      }
+      return validate_string_path(value.name);
+    },
+    [&](FingerprintListField const& value) {
+      return validate_row_fingerprints(row, value.path);
+    },
+    [&](ObjectListField const& value) {
+      return validate_row_object_list(row, value);
+    });
+}
+
+auto row_shape(RowView<nova::Record> const& row,
+               std::span<std::string const> paths) -> std::string {
+  auto result = std::string{};
+  for (auto const& path : paths) {
+    fmt::format_to(std::back_inserter(result), "{}=", path);
+    if (auto const value = resolve_field(row, path)) {
+      describe(*value, result);
+    } else {
+      result += '-';
+    }
+    result += ';';
+  }
+  return result;
+}
+
+auto project(nova::Array<nova::Record> const& input,
+             nova::storage::BitMap const& rows, std::string_view sigma_field,
+             FieldProjection const& projection) -> ProjectionArrays {
+  auto const length = input.length();
+  TENZIR_ASSERT_EQ(length, rows.length());
+  auto values = nova::ArrayBuilder<nova::Data>{};
+  auto presence = nova::storage::BitMap::Builder{};
+  auto paths = Option<nova::ArrayBuilder<nova::Data>>{};
+  if (not constant_evidence_path(projection.value, sigma_field)) {
+    paths.emplace();
+  }
+  for (auto index = nova::storage::Index{0}; index < length; ++index) {
+    if (not rows.get(index)) {
+      values.null();
+      presence.emplace_back(false);
+      if (paths) {
+        paths->null();
+      }
+      continue;
+    }
+    auto const row = input.get(index);
+    auto present = match(
+      projection.value,
+      [&](LiteralField const&) {
+        append_optional(values, resolve_field(row, sigma_field));
+        return resolve_presence(row, sigma_field);
+      },
+      [&](PathField const& value) {
+        auto projected = resolve_field(row, value.path);
+        if (projection.kind == ProjectedKind::source_identifier) {
+          auto const identifier = source_identifier_of(projected);
+          append_optional(values, identifier
+                                    ? Option<std::string_view>{*identifier}
+                                    : None{});
+        } else {
+          append_optional(values, projected);
+        }
+        return resolve_presence(row, value.path);
+      },
+      [&](FallbackField const& value) {
+        auto const primary = string_of(resolve_field(row, value.primary));
+        auto const fallback = string_of(resolve_field(row, value.fallback));
+        auto const use_primary = primary and not primary->empty();
+        append_optional(values, use_primary ? primary : fallback);
+        TENZIR_ASSERT(paths);
+        append_optional(*paths,
+                        use_primary ? Option<std::string_view>{value.primary}
+                        : fallback  ? Option<std::string_view>{value.fallback}
+                                    : None{});
+        return resolve_presence(row, value.primary)
+               or resolve_presence(row, value.fallback);
+      },
+      [&](JoinedField const& value) {
+        auto const left = string_of(resolve_field(row, value.left));
+        auto const right = string_of(resolve_field(row, value.right));
+        if (not left or not right) {
+          values.null();
+        } else if (left->empty()) {
+          values.data(*right);
+        } else if (right->empty()) {
+          values.data(*left);
+        } else {
+          values.data(std::string_view{
+            fmt::format("{}{}{}", *left, value.separator, *right)});
+        }
+        return resolve_presence(row, value.left)
+               and resolve_presence(row, value.right);
+      },
+      [&](PrincipalField const& value) {
+        auto const name = string_of(resolve_field(row, value.name));
+        auto const domain = string_of(resolve_field(row, value.domain));
+        if (not name) {
+          values.null();
+        } else if (not domain or domain->empty()) {
+          values.data(*name);
+        } else {
+          values.data(std::string_view{fmt::format("{}\\{}", *domain, *name)});
+        }
+        return resolve_presence(row, value.name);
+      },
+      [&](FingerprintListField const& value) {
+        auto const hashes = resolve_field(row, value.path);
+        auto const list = hashes ? as_list(*hashes) : None{};
+        if (list) {
+          values.data(std::string_view{fingerprints_of(*list)});
+        } else {
+          values.null();
+        }
+        return resolve_presence(row, value.path);
+      },
+      [&](ObjectListField const& value) {
+        auto const objects = resolve_field(row, value.path);
+        auto const list = objects ? as_list(*objects) : None{};
+        if (not list) {
+          values.null();
+        } else {
+          auto members = values.list();
+          for (auto element : *list) {
+            auto const object = as_record(element);
+            auto const member
+              = object ? find_member(*object, value.member) : None{};
+            if (member) {
+              nova::append_row(members, *member);
+            } else {
+              members.null();
+            }
+          }
+        }
+        return resolve_presence(row, value.path);
+      });
+    presence.emplace_back(present);
+  }
+  return ProjectionArrays{
+    values.finish(),
+    std::move(presence).finish(),
+    paths ? Option<nova::Array<nova::Data>>{paths->finish()} : None{},
+  };
+}
+
+auto evaluate_guard(nova::Array<nova::Record> const& input,
+                    nova::storage::BitMap const& rows,
+                    EvaluationGuard const& guard) -> nova::storage::BitMap {
+  auto const length = input.length();
+  TENZIR_ASSERT_EQ(length, rows.length());
+  auto result = nova::storage::BitMap::Builder{};
+  for (auto index = nova::storage::Index{0}; index < length; ++index) {
+    if (not rows.get(index)) {
+      result.emplace_back(false);
+      continue;
+    }
+    auto const row = input.get(index);
+    auto eligible
+      = integer_of(resolve_field(row, "class_uid")) == guard.event.class_uid;
+    auto const activity = integer_of(resolve_field(row, "activity_id"));
+    if (eligible and activity and *activity != 0 and *activity != 99) {
+      eligible = contains(guard.event.activity_ids, *activity);
+    }
+    if (eligible and guard.event.os) {
+      eligible = not known_os_contradiction(
+        *guard.event.os, integer_of(resolve_field(row, "device.os.type_id")),
+        string_of(resolve_field(row, "device.os.name")));
+    }
+    auto const log_name = string_of(resolve_field(row, "metadata.log_name"));
+    if (eligible and guard.event.source) {
+      eligible = not known_source_contradiction(
+        log_name, string_of(resolve_field(row, "metadata.product.name")),
+        *guard.event.source);
+    }
+    if (eligible and guard.event.log_name and log_name
+        and contains(guard.event.conflicting_log_names, *log_name)) {
+      eligible = false;
+    }
+    result.emplace_back(eligible);
+  }
+  return std::move(result).finish();
 }
 
 } // namespace tenzir::plugins::sigma::ocsf

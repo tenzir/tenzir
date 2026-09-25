@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import os
-import select
+import queue
 import shlex
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -152,6 +153,10 @@ detection:
 """
 
 
+# The stdout lines of every running process, read on a background thread.
+OUTPUT_LINES: dict[int, queue.Queue[str | None]] = {}
+
+
 def resolve_tenzir_binary() -> tuple[str, ...]:
     if value := os.environ.get("TENZIR_BINARY"):
         return tuple(shlex.split(value))
@@ -163,16 +168,17 @@ def resolve_tenzir_binary() -> tuple[str, ...]:
 def start_process(rule: Path) -> subprocess.Popen[str]:
     pipeline = "\n".join(
         [
-            "from_stdin { read_ndjson }",
+            "from_stdin { read_json }",
             f"sigma path={json.dumps(str(rule))}, refresh_interval=10ms",
             "select id = evidences[0].data.id",
             "to_stdout { write_ndjson }",
         ]
     )
-    return subprocess.Popen(
+    process = subprocess.Popen(
         [
             *resolve_tenzir_binary(),
             "--bare-mode",
+            "--nova=true",
             "--console-verbosity=warning",
             pipeline,
         ],
@@ -181,21 +187,32 @@ def start_process(rule: Path) -> subprocess.Popen[str]:
         stderr=subprocess.PIPE,
         text=True,
     )
+    # Several output lines can arrive in one write. Reading them on a thread
+    # avoids waiting on the pipe for lines that already sit in the buffer.
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def pump() -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            lines.put(line)
+        lines.put(None)
+
+    threading.Thread(target=pump, daemon=True).start()
+    OUTPUT_LINES[process.pid] = lines
+    return process
 
 
 def read_event(
     process: subprocess.Popen[str], expected_id: str, diagnostics: list[str]
 ) -> None:
-    assert process.stdout is not None
+    lines = OUTPUT_LINES[process.pid]
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        readable, _, _ = select.select(
-            [process.stdout], [], [], deadline - time.monotonic()
-        )
-        if not readable:
+        try:
+            line = lines.get(timeout=deadline - time.monotonic())
+        except queue.Empty:
             break
-        line = process.stdout.readline()
-        if not line:
+        if line is None:
             break
         try:
             event = json.loads(line)
@@ -230,9 +247,10 @@ def finish_process(
     assert process.stdin is not None
     process.stdin.close()
     process.wait(timeout=10)
-    assert process.stdout is not None
     assert process.stderr is not None
-    diagnostics.append(process.stdout.read())
+    lines = OUTPUT_LINES.pop(process.pid)
+    while (line := lines.get(timeout=10)) is not None:
+        diagnostics.append(line)
     diagnostics.append(process.stderr.read())
     combined_diagnostics = "".join(diagnostics)
     if process.returncode != 0:

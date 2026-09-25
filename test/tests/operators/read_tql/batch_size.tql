@@ -1,0 +1,3 @@
+from_stdin { read_tql _batch_size=1 }
+measure
+select events

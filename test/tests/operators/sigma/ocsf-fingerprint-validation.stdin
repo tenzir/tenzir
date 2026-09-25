@@ -1,0 +1,10 @@
+{id: "valid-first", hashes: [{algorithm_id: 1, value: "abc"}]}
+{id: "invalid-algorithm-id", hashes: [{algorithm_id: 1, value: "abc"}, {algorithm_id: "1", value: "def"}]}
+{id: "invalid-algorithm", hashes: [{algorithm_id: 1, value: "abc"}, {algorithm_id: 99, algorithm: 42, value: "def"}]}
+{id: "invalid-value", hashes: [{algorithm_id: 1, value: "abc"}, {algorithm_id: 1, value: 42}]}
+{id: "invalid-element", hashes: [{algorithm_id: 1, value: "abc"}, "invalid"]}
+{id: "invalid-after-nulls", hashes: [null, {algorithm_id: 1, value: "abc"}, null, {value: 42}]}
+{id: "valid-with-nulls", hashes: [null, {algorithm_id: 1, value: "abc"}, {algorithm_id: null, algorithm: null, value: null}]}
+{id: "valid-last", hashes: [{algorithm_id: 1, value: "abc"}, {algorithm_id: 99, algorithm: "CUSTOM", value: "def"}]}
+{id: "empty", hashes: []}
+{id: "all-null", hashes: [null, null]}

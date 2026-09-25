@@ -1,0 +1,16 @@
+// Valid and malformed lists share their first element's shape. They must
+// neither share a plan within a batch nor reuse one across batches.
+from_stdin { read_tql _batch_size=3 }
+class_uid = 4003
+metadata = {version: "1.9.0"}
+sigma rules=r#"
+title: DNS answer validation
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryResults: '42'
+  condition: selection
+"#, format="plain"
+select id=event.id

@@ -1,0 +1,1 @@
+Mixed indexing preserves row types, masks, and record order

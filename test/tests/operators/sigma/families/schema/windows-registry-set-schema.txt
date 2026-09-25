@@ -1,0 +1,10 @@
+warning: dropping field which does not exist in schema
+  --> tests/operators/sigma/families/schema/windows-registry-set-schema.tql:11:1
+   |
+11 | ocsf_cast
+   | ~~~~~~~~~
+   |
+   = note: found `user`
+{
+  events: 5,
+}

@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_kernel.hpp"
 #include "tenzir/nova/events.hpp"
@@ -476,9 +478,88 @@ public:
   }
 };
 
-class year_month_day final : public function_plugin {
+/// Arguments of the calendar and clock component functions. The component is
+/// not an argument; `describe` stores it here for the shared kernel.
+struct TimeComponentArgs {
+  nova::ValueArgument x;
+  std::string_view name;
+  Option<ymd_subtype> ymd;
+  Option<hms_subtype> hms;
+  location call;
+};
+
+class TimeComponentFunction final {
+public:
+  auto eval(TimeComponentArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    if (args.hms == hms_subtype::second) {
+      // Seconds include the subsecond part and are therefore a `float`.
+      return apply_kernel<1>(
+        frame, args.name, {args.x}, args.call,
+        detail::overload{
+          [](diagnostic_handler&, Null) -> Option<Float> {
+            return None{};
+          },
+          [](diagnostic_handler&, Time value) -> Option<Float> {
+            auto const since_minute
+              = value - std::chrono::floor<std::chrono::minutes>(value);
+            return static_cast<double>(since_minute.count()) / 1e9;
+          },
+        });
+    }
+    return apply_kernel<1>(
+      frame, args.name, {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, Null) -> Option<Int> {
+          return None{};
+        },
+        [&](diagnostic_handler&, Time value) -> Option<Int> {
+          auto const day = std::chrono::floor<std::chrono::days>(value);
+          if (args.ymd) {
+            auto const ymd = std::chrono::year_month_day{day};
+            switch (*args.ymd) {
+              case ymd_subtype::year:
+                return int64_t{static_cast<int>(ymd.year())};
+              case ymd_subtype::month:
+                return int64_t{static_cast<unsigned>(ymd.month())};
+              case ymd_subtype::day:
+                return int64_t{static_cast<unsigned>(ymd.day())};
+            }
+            TENZIR_UNREACHABLE();
+          }
+          auto const since_day = value - day;
+          auto const hours
+            = std::chrono::duration_cast<std::chrono::hours>(since_day);
+          if (args.hms == hms_subtype::hour) {
+            return int64_t{hours.count()};
+          }
+          TENZIR_ASSERT(args.hms == hms_subtype::minute);
+          return int64_t{
+            std::chrono::duration_cast<std::chrono::minutes>(since_day - hours)
+              .count()};
+        },
+      });
+  }
+};
+
+class year_month_day final : public nova::FunctionPlugin {
 public:
   explicit year_month_day(ymd_subtype field) : ymd_subtype_(field) {
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<TimeComponentArgs, TimeComponentFunction>{};
+    d.positional("x", &TimeComponentArgs::x, "time");
+    d.call_location(&TimeComponentArgs::call);
+    d.validate([field = ymd_subtype_](TimeComponentArgs& args,
+                                      diagnostic_handler&) -> failure_or<void> {
+      args.name = to_string(field);
+      args.ymd = field;
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto name() const -> std::string override {
@@ -548,9 +629,23 @@ private:
   ymd_subtype ymd_subtype_;
 };
 
-class hour_minute_second final : public function_plugin {
+class hour_minute_second final : public nova::FunctionPlugin {
 public:
   explicit hour_minute_second(hms_subtype field) : hms_subtype_(field) {
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<TimeComponentArgs, TimeComponentFunction>{};
+    d.positional("x", &TimeComponentArgs::x, "time");
+    d.call_location(&TimeComponentArgs::call);
+    d.validate([field = hms_subtype_](TimeComponentArgs& args,
+                                      diagnostic_handler&) -> failure_or<void> {
+      args.name = to_string(field);
+      args.hms = field;
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto name() const -> std::string override {
@@ -646,8 +741,23 @@ private:
   hms_subtype hms_subtype_;
 };
 
-class now final : public function_plugin {
+struct NowArgs {};
+
+class NowFunction final {
 public:
+  auto eval(NowArgs const&, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    return nova::Array<nova::Time>{nova::storage::ConstantStorage<nova::Time>{
+      frame.length(), time{time::clock::now()}}};
+  }
+};
+
+class now final : public nova::FunctionPlugin {
+public:
+  auto describe() const -> nova::FunctionDescription override {
+    return nova::FunctionDescriber<NowArgs, NowFunction>{}.finish();
+  }
+
   auto name() const -> std::string override {
     return "now";
   }
@@ -671,8 +781,84 @@ public:
   }
 };
 
-class format_time : public virtual function_plugin {
+struct FormatTimeArgs {
+  nova::ValueArgument x;
+  located<std::string> format;
+  Option<located<std::string>> locale;
+  location call;
+};
+
+class FormatTimeFunction final {
 public:
+  auto eval(FormatTimeArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const& mask = frame.mask();
+    auto const length = mask.length();
+    auto times = args.x.data.get_alternative<Time>();
+    auto time_rows
+      = times ? mask & times->present : storage::BitMap{length, false};
+    auto nulls = args.x.data.get_alternative<Null>();
+    auto null_rows
+      = nulls ? mask & nulls->present : storage::BitMap{length, false};
+    if (mask.and_not(time_rows).and_not(null_rows).any()) {
+      diagnostic::warning("`format_time` expected `time`, but got a different "
+                          "type")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    if (not time_rows.any()) {
+      return frame.null();
+    }
+    // Formatting goes through Arrow's `strftime`, like the legacy
+    // implementation, so both agree on every format specifier and locale.
+    auto input = arrow::TimestampBuilder{
+      arrow::timestamp(arrow::TimeUnit::NANO), arrow_memory_pool()};
+    check(input.Reserve(time_rows.true_count()));
+    for (auto row : storage::true_bits(time_rows)) {
+      check(input.Append((*times->data.get(row)).time_since_epoch().count()));
+    }
+    auto options = arrow::compute::StrftimeOptions(
+      args.format.inner, args.locale ? args.locale->inner : "C");
+    auto result
+      = arrow::compute::CallFunction("strftime", {finish(input)}, &options);
+    if (not result.ok()) {
+      diagnostic::warning("{}", result.status().ToString())
+        .primary(args.call)
+        .emit(frame);
+      return frame.null();
+    }
+    auto const formatted = result.MoveValueUnsafe().make_array();
+    auto const& strings = as<arrow::StringArray>(*formatted);
+    auto builder = ArrayBuilder<Data>{};
+    auto index = int64_t{0};
+    for (auto row = storage::Index{0}; row < length; ++row) {
+      if (not time_rows.get(row)) {
+        builder.null();
+        continue;
+      }
+      if (strings.IsNull(index)) {
+        builder.null();
+      } else {
+        builder.data(std::string_view{strings.GetView(index)});
+      }
+      ++index;
+    }
+    return builder.finish();
+  }
+};
+
+class format_time : public virtual nova::FunctionPlugin {
+public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<FormatTimeArgs, FormatTimeFunction>{};
+    d.positional("input", &FormatTimeArgs::x, "time");
+    d.positional("format", &FormatTimeArgs::format);
+    d.named("locale", &FormatTimeArgs::locale);
+    d.call_location(&FormatTimeArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "format_time";
   }

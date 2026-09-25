@@ -1,0 +1,1 @@
+Grouped Sigma output preserves row order and provenance

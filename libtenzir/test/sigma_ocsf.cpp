@@ -8,9 +8,12 @@
 
 #include "../builtins/operators/sigma/ocsf.hpp"
 #include "../builtins/operators/sigma/plan_cache.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -454,4 +457,219 @@ TEST("Sigma plan cache evicts by cost and keeps the newest plan") {
   cache.clear();
   CHECK_EQUAL(cache.size(), size_t{0});
   CHECK_EQUAL(cache.cost(), uint64_t{0});
+}
+
+namespace {
+
+/// One row per builder callback, for the row-based projection primitives.
+auto make_rows(
+  std::vector<std::function<void(nova::ArrayBuilder<nova::Record>&)>> rows)
+  -> nova::Array<nova::Record> {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (auto const& row : rows) {
+    row(builder);
+  }
+  return builder.finish();
+}
+
+auto all_rows(nova::storage::Index length) -> nova::storage::BitMap {
+  return nova::storage::BitMap{length, true};
+}
+
+} // namespace
+
+TEST("OCSF Sigma row field resolution prefers exact keys") {
+  auto rows = make_rows({
+    [](auto& builder) {
+      auto row = builder.record();
+      row.field("a.b").data(std::int64_t{1});
+      row.field("a").record().field("b").data(std::int64_t{2});
+    },
+    [](auto& builder) {
+      builder.record().field("a").record().field("b").null();
+    },
+    [](auto& builder) {
+      builder.record().field("a").data(std::int64_t{3});
+    },
+  });
+  auto const exact = ocsf::resolve_field(rows.get(0), "a.b");
+  REQUIRE(exact);
+  CHECK_EQUAL(nova::materialize(*exact), data{std::int64_t{1}});
+  // A field that exists with a `null` value is present, a field below a
+  // scalar is not.
+  CHECK(ocsf::resolve_presence(rows.get(1), "a.b"));
+  CHECK(not ocsf::resolve_presence(rows.get(2), "a.b"));
+  CHECK(not ocsf::resolve_field(rows.get(2), "a.b"));
+}
+
+TEST("OCSF Sigma validation and row shapes follow the values") {
+  auto rows = make_rows({
+    [](auto& builder) {
+      auto row = builder.record();
+      row.field("class_uid").data(std::int64_t{1007});
+      row.field("metadata")
+        .record()
+        .field("version")
+        .data(std::string_view{"1.9.0"});
+      row.field("path").data(std::string_view{"C:\\x.exe"});
+    },
+    [](auto& builder) {
+      auto row = builder.record();
+      row.field("class_uid").data(std::int64_t{1007});
+      row.field("metadata")
+        .record()
+        .field("version")
+        .data(std::string_view{"1.9.0"});
+      row.field("path").data(std::int64_t{42});
+    },
+  });
+  CHECK(ocsf::is_schema(rows.get(0)));
+  auto const projection = ocsf::FieldProjection{
+    .value = ocsf::PathField{"path"},
+    .kind = ocsf::ProjectedKind::string,
+  };
+  CHECK(not ocsf::validate(rows.get(0), "Image", projection));
+  auto const error = ocsf::validate(rows.get(1), "Image", projection);
+  REQUIRE(error);
+  CHECK_EQUAL(error->message,
+              "OCSF path `path` has type `int64`, expected string");
+  auto const literal = ocsf::FieldProjection{.value = ocsf::LiteralField{}};
+  auto const absent = ocsf::validate(rows.get(0), "CallTrace", literal);
+  REQUIRE(absent);
+  CHECK_EQUAL(absent->message,
+              "field `CallTrace` is absent from the OCSF schema");
+  auto const paths = std::vector<std::string>{"path", "missing"};
+  CHECK_EQUAL(ocsf::row_shape(rows.get(0), paths), "path=string;missing=-;");
+  CHECK_NOT_EQUAL(ocsf::row_shape(rows.get(0), paths),
+                  ocsf::row_shape(rows.get(1), paths));
+}
+
+TEST("OCSF Sigma list shapes cover every non-null element") {
+  auto rows = make_rows({
+    [](auto& builder) {
+      builder.record().field("answers").list().record().field("rdata").data(
+        std::string_view{"x"});
+    },
+    [](auto& builder) {
+      auto list = builder.record().field("answers").list();
+      list.record().field("rdata").data(std::string_view{"x"});
+      list.record().field("rdata").data(int64_t{42});
+    },
+    [](auto& builder) {
+      auto list = builder.record().field("answers").list();
+      list.record().field("rdata").data(std::string_view{"x"});
+      list.data(int64_t{42});
+    },
+    [](auto& builder) {
+      auto list = builder.record().field("answers").list();
+      list.null();
+      list.record().field("rdata").data(std::string_view{"x"});
+      list.record().field("rdata").data(std::string_view{"y"});
+      list.null();
+    },
+    [](auto& builder) {
+      auto object = builder.record().field("answers").list().record();
+      object.field("foo").data(std::string_view{"x"});
+      object.field("rdata").data(int64_t{42});
+    },
+    [](auto& builder) {
+      builder.record()
+        .field("answers")
+        .list()
+        .record()
+        .field("foo:string,rdata")
+        .data(int64_t{42});
+    },
+    [](auto& builder) {
+      builder.record().field("answers").list();
+    },
+    [](auto& builder) {
+      auto list = builder.record().field("answers").list();
+      list.null();
+      list.null();
+    },
+  });
+  auto const projection = ocsf::FieldProjection{
+    .value = ocsf::ObjectListField{"answers", "rdata"},
+  };
+  auto const paths = std::vector<std::string>{"answers"};
+  auto shape = [&](nova::storage::Index row) {
+    return ocsf::row_shape(rows.get(row), paths);
+  };
+  CHECK(not ocsf::validate(rows.get(0), "QueryResults", projection));
+  auto const bad_member
+    = ocsf::validate(rows.get(1), "QueryResults", projection);
+  REQUIRE(bad_member);
+  CHECK_EQUAL(bad_member->message,
+              "OCSF path `answers.rdata` has type `int64`, expected string");
+  auto const bad_element
+    = ocsf::validate(rows.get(2), "QueryResults", projection);
+  REQUIRE(bad_element);
+  CHECK_EQUAL(bad_element->message, "OCSF path `answers` must contain objects");
+  CHECK_NOT_EQUAL(shape(0), shape(1));
+  CHECK_NOT_EQUAL(shape(0), shape(2));
+  // Repeated shapes and null elements do not change validation or cache keys.
+  CHECK(not ocsf::validate(rows.get(3), "QueryResults", projection));
+  CHECK_EQUAL(shape(0), shape(3));
+  // Field names containing delimiters must not alias real member shapes.
+  CHECK(ocsf::validate(rows.get(4), "QueryResults", projection));
+  CHECK(not ocsf::validate(rows.get(5), "QueryResults", projection));
+  CHECK_NOT_EQUAL(shape(4), shape(5));
+  // Empty and all-null lists have no elements to validate in either projection.
+  auto const fingerprints = ocsf::FieldProjection{
+    .value = ocsf::FingerprintListField{"answers"},
+  };
+  for (auto index : {nova::storage::Index{6}, nova::storage::Index{7}}) {
+    CHECK(not ocsf::validate(rows.get(index), "QueryResults", projection));
+    CHECK(not ocsf::validate(rows.get(index), "Hashes", fingerprints));
+  }
+  CHECK_EQUAL(shape(6), shape(7));
+}
+
+TEST("OCSF Sigma row projections and guards") {
+  auto rows = make_rows({
+    [](auto& builder) {
+      auto row = builder.record();
+      row.field("class_uid").data(std::int64_t{1007});
+      auto user = row.field("user").record();
+      user.field("domain").data(std::string_view{"CORP"});
+      user.field("name").data(std::string_view{"alice"});
+      auto hashes = row.field("hashes").list();
+      auto md5 = hashes.record();
+      md5.field("algorithm_id").data(std::int64_t{1});
+      md5.field("value").data(std::string_view{"abc"});
+      auto custom = hashes.record();
+      custom.field("algorithm_id").data(std::int64_t{99});
+      custom.field("algorithm").data(std::string_view{"X"});
+      custom.field("value").data(std::string_view{"def"});
+    },
+    [](auto& builder) {
+      auto row = builder.record();
+      row.field("class_uid").data(std::int64_t{4001});
+      row.field("user").record().field("name").data(std::string_view{"bob"});
+    },
+  });
+  auto const rows_mask = all_rows(rows.length());
+  auto const principal = ocsf::project(
+    rows, rows_mask, "User",
+    ocsf::FieldProjection{
+      .value = ocsf::PrincipalField{"user.domain", "user.name", "user"}});
+  CHECK_EQUAL(nova::materialize(principal.value.get(0)),
+              data{std::string{"CORP\\alice"}});
+  CHECK_EQUAL(nova::materialize(principal.value.get(1)),
+              data{std::string{"bob"}});
+  CHECK(principal.presence.get(0));
+  CHECK(not principal.evidence_path);
+  auto const hashes = ocsf::project(
+    rows, rows_mask, "Hashes",
+    ocsf::FieldProjection{.value = ocsf::FingerprintListField{"hashes"}});
+  CHECK_EQUAL(nova::materialize(hashes.value.get(0)),
+              data{std::string{"MD5=abc,X=def"}});
+  CHECK_EQUAL(nova::materialize(hashes.value.get(1)), data{});
+  CHECK(not hashes.presence.get(1));
+  auto guard = ocsf::EvaluationGuard{};
+  guard.event.class_uid = 1007;
+  auto const eligible = ocsf::evaluate_guard(rows, rows_mask, guard);
+  CHECK(eligible.get(0));
+  CHECK(not eligible.get(1));
 }

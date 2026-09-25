@@ -1,0 +1,21 @@
+warning: sigma operator skips rule '<rules[0]>' for OCSF input
+ --> tests/operators/sigma/ocsf-object-list-validation.tql:7:1
+  |
+7 | title: DNS answer validation
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `QueryResults`
+  = note: OCSF path `answers.rdata` has type `int64`, expected string
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  id: "valid-first",
+}
+{
+  id: "valid-after-missing-member",
+}
+{
+  id: "valid-with-nulls",
+}
+{
+  id: "valid-last",
+}

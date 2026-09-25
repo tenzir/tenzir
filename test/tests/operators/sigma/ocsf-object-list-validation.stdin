@@ -1,0 +1,10 @@
+{id: "valid-first", answers: [{rdata: "x"}, {rdata: "42"}]}
+{id: "invalid-member", answers: [{rdata: "x"}, {rdata: 42}]}
+{id: "invalid-element", answers: [{rdata: "42"}, 42]}
+{id: "invalid-after-nulls", answers: [null, {rdata: "x"}, null, {rdata: 42}]}
+{id: "invalid-after-missing-member", answers: [{type: "A"}, {rdata: 42}]}
+{id: "valid-after-missing-member", answers: [{type: "A"}, {rdata: "42"}]}
+{id: "valid-with-nulls", answers: [null, {rdata: "42"}, null]}
+{id: "valid-last", answers: [{rdata: "x"}, {rdata: "42"}]}
+{id: "empty", answers: []}
+{id: "all-null", answers: [null, null]}

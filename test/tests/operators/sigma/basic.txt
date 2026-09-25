@@ -58,14 +58,10 @@
       data: {
         foo: "needle",
       },
-      name: null,
-      sigma: null,
     },
     {
-      data: {
-        foo: null,
-      },
       name: "SigmaMatch",
+      data: {},
       sigma: {
         trace: [
           {

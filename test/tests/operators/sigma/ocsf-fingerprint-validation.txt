@@ -1,0 +1,18 @@
+warning: sigma operator skips rule '<rules[0]>' for OCSF input
+ --> tests/operators/sigma/ocsf-fingerprint-validation.tql:9:1
+  |
+9 | title: Fingerprint validation
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `Hashes`
+  = note: Fingerprint `algorithm_id` must be int64 or uint64
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  id: "valid-first",
+}
+{
+  id: "valid-with-nulls",
+}
+{
+  id: "valid-last",
+}

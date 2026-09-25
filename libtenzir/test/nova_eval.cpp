@@ -137,6 +137,53 @@ auto is_null_array(const Array<Data>& data) -> bool {
 
 } // namespace
 
+TEST("unary not propagates null without a diagnostic") {
+  auto events = make_int_field_events({1, 2});
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto reg = tenzir::registry{};
+  auto expr = tenzir::ast::expression{tenzir::ast::unary_expr{
+    tenzir::located<tenzir::ast::unary_op>{tenzir::ast::unary_op::not_,
+                                           tenzir::location::unknown},
+    null_const()}};
+  auto result = eval(expr, events, all_rows(events), dh, reg);
+  CHECK_EQUAL(std::move(dh).collect().size(), 0u);
+  CHECK(is_null_array(result));
+  CHECK_EQUAL(result.length(), events.length());
+}
+
+TEST("unary not handles mixed bool and null rows under a mask") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(true);
+  builder.record().field("x").null();
+  builder.record().field("x").data(false);
+  builder.record().field("x").data(std::int64_t{1});
+  auto events = make_events(builder.finish());
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto reg = tenzir::registry{};
+  auto expr = tenzir::ast::expression{tenzir::ast::unary_expr{
+    tenzir::located<tenzir::ast::unary_op>{tenzir::ast::unary_op::not_,
+                                           tenzir::location::unknown},
+    root_field("x")}};
+  auto result = eval(expr, events, all_rows(events).keep_first(3), dh, reg);
+  CHECK_EQUAL(std::move(dh).collect().size(), 0u);
+  CHECK_EQUAL(materialize(result.get(0)), tenzir::data{false});
+  CHECK_EQUAL(materialize(result.get(1)), tenzir::data{});
+  CHECK_EQUAL(materialize(result.get(2)), tenzir::data{true});
+}
+
+TEST("unary not still rejects numeric operands") {
+  auto events = make_int_field_events({0, 1});
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto reg = tenzir::registry{};
+  auto expr = tenzir::ast::expression{tenzir::ast::unary_expr{
+    tenzir::located<tenzir::ast::unary_op>{tenzir::ast::unary_op::not_,
+                                           tenzir::location::unknown},
+    root_field("x")}};
+  auto result = eval(expr, events, all_rows(events), dh, reg);
+  CHECK_EQUAL(std::move(dh).collect().size(), 1u);
+  CHECK(is_null_array(result));
+}
+
 TEST("unary neg kernel negates an int column") {
   auto events = make_int_field_events({1, -2, 3});
   auto dh = tenzir::null_diagnostic_handler{};
@@ -1056,4 +1103,164 @@ TEST("record spread over a union turns non-record rows into empty records") {
   CHECK_EQUAL(materialize(result.get(2)),
               (tenzir::data{tenzir::record{{"b", std::int64_t{2}},
                                            {"y", std::int64_t{1}}}}));
+}
+
+namespace {
+
+auto index_expr(tenzir::ast::expression subject, tenzir::ast::expression index,
+                bool optional = false) -> tenzir::ast::expression {
+  return tenzir::ast::expression{tenzir::ast::index_expr{
+    std::move(subject), tenzir::location::unknown, std::move(index),
+    tenzir::location::unknown, optional, false}};
+}
+
+auto string_const(std::string value) -> tenzir::ast::expression {
+  return tenzir::ast::expression{tenzir::ast::constant::make(
+    tenzir::located<tenzir::data>{tenzir::data{std::move(value)},
+                                  tenzir::location::unknown})};
+}
+
+auto bitmap_of(std::vector<bool> bits) -> storage::BitMap {
+  auto builder = storage::BitMap::Builder{};
+  for (auto bit : bits) {
+    builder.emplace_back(bit);
+  }
+  return std::move(builder).finish();
+}
+
+} // namespace
+
+TEST("numeric index selects list elements and warns out of bounds") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto list = builder.record().field("xs").list();
+    list.data(std::int64_t{1});
+    list.data(std::int64_t{2});
+    list.data(std::int64_t{3});
+  }
+  {
+    auto list = builder.record().field("xs").list();
+    list.data(std::int64_t{4});
+  }
+  builder.record().field("xs").null();
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto first = eval(index_expr(root_field("xs"), int_const(0)), events,
+                    all_rows(events), dh, reg);
+  CHECK_EQUAL(materialize(first.get(0)), (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize(first.get(1)), (tenzir::data{std::int64_t{4}}));
+  CHECK_EQUAL(materialize(first.get(2)), (tenzir::data{}));
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), 1u);
+  CHECK_EQUAL(diags[0].message, "cannot index into `null`");
+  auto last = eval(index_expr(root_field("xs"), int_const(-2)), events,
+                   bitmap_of({true, true, false}), dh, reg);
+  CHECK_EQUAL(materialize(last.get(0)), (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize(last.get(1)), (tenzir::data{}));
+  diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), 1u);
+  CHECK_EQUAL(diags[0].message, "list index out of bounds");
+}
+
+TEST("numeric index selects record fields by position") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto record = builder.record().field("r").record();
+    record.field("a").data(std::int64_t{1});
+    record.field("b").data(std::int64_t{2});
+  }
+  {
+    auto record = builder.record().field("r").record();
+    record.field("b").data(std::int64_t{20});
+    record.field("a").data(std::int64_t{10});
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto second = eval(index_expr(root_field("r"), int_const(1)), events,
+                     all_rows(events), dh, reg);
+  CHECK_EQUAL(materialize(second.get(0)), (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize(second.get(1)), (tenzir::data{std::int64_t{10}}));
+  auto missing = eval(index_expr(root_field("r"), int_const(2)), events,
+                      all_rows(events), dh, reg);
+  CHECK_EQUAL(materialize(missing.get(0)), (tenzir::data{}));
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), 1u);
+  CHECK_EQUAL(diags[0].message, "index out of bounds");
+}
+
+TEST("record indexing specializes only active types and diagnoses nulls") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto row = builder.record();
+    row.field("r").record().field("a").data(std::int64_t{1});
+    row.field("key").data(std::string_view{"a"});
+  }
+  {
+    auto row = builder.record();
+    row.field("r").record().field("a").data(std::int64_t{2});
+    row.field("key").null();
+  }
+  {
+    auto row = builder.record();
+    row.field("r").null();
+    row.field("key").data(std::string_view{"a"});
+  }
+  {
+    auto row = builder.record();
+    row.field("r").data(true);
+    row.field("key").data(std::int64_t{0});
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto mask = bitmap_of({true, true, true, false});
+  auto dynamic = eval(index_expr(root_field("r"), root_field("key")), events,
+                      mask, dh, reg);
+  CHECK_EQUAL(materialize(dynamic.get(0)), (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize(dynamic.get(1)), tenzir::data{});
+  CHECK_EQUAL(materialize(dynamic.get(2)), tenzir::data{});
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), 2u);
+  CHECK_EQUAL(diags[0].message, "cannot index into `null`");
+  CHECK_EQUAL(diags[1].message, "cannot use `null` as index");
+  auto constant = eval(index_expr(root_field("r"), string_const("a")), events,
+                       mask, dh, reg);
+  CHECK_EQUAL(materialize(constant.get(0)), (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize(constant.get(1)), (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize(constant.get(2)), tenzir::data{});
+  diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), 1u);
+  CHECK_EQUAL(diags[0].message, "cannot index into `null`");
+  auto optional = eval(index_expr(root_field("r"), root_field("key"), true),
+                       events, mask, dh, reg);
+  CHECK_EQUAL(materialize(optional.get(0)), (tenzir::data{std::int64_t{1}}));
+  CHECK(std::move(dh).collect().empty());
+  auto missing
+    = eval(index_expr(root_field("r"), string_const("missing"), true), events,
+           mask, dh, reg);
+  CHECK_EQUAL(materialize(missing.get(0)), tenzir::data{});
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("constant list indices handle unsigned and signed extremes") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("xs").list().data(std::int64_t{42});
+  builder.record().field("xs").null();
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto first = eval(index_expr(root_field("xs"), uint_const(0), true), events,
+                    all_rows(events), dh, reg);
+  CHECK_EQUAL(materialize(first.get(0)), (tenzir::data{std::int64_t{42}}));
+  CHECK_EQUAL(materialize(first.get(1)), tenzir::data{});
+  for (auto index : {int_const(std::numeric_limits<int64_t>::min()),
+                     uint_const(std::numeric_limits<uint64_t>::max())}) {
+    auto result = eval(index_expr(root_field("xs"), index, true), events,
+                       all_rows(events), dh, reg);
+    CHECK_EQUAL(materialize(result.get(0)), tenzir::data{});
+    CHECK_EQUAL(materialize(result.get(1)), tenzir::data{});
+  }
+  CHECK(std::move(dh).collect().empty());
 }

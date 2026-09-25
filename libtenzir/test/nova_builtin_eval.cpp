@@ -33,6 +33,8 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
 
+#include <arrow/compute/initialize.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -144,6 +146,23 @@ auto list_at(Array<Data> const& data, storage::Index i)
     result.push_back(*as<RowView<Int>>(v));
   }
   return result;
+}
+
+auto string_at(Array<Data> const& data, storage::Index i)
+  -> Option<std::string> {
+  auto strings = data.get_alternative<String>();
+  if (not strings or not strings->present.get(i)) {
+    return None{};
+  }
+  return std::string{*strings->data.get(i)};
+}
+
+auto float_at(Array<Data> const& data, storage::Index i) -> Option<double> {
+  auto floats = data.get_alternative<Float>();
+  if (not floats or not floats->present.get(i)) {
+    return None{};
+  }
+  return *floats->data.get(i);
 }
 
 auto bool_at(Array<Data> const& data, storage::Index i) -> Option<bool> {
@@ -440,5 +459,92 @@ TEST("split on a null column is null without a warning") {
   auto result = eval(call("split", {root_field("x"), str_const(",")}), events,
                      storage::BitMap{1, true}, dh);
   CHECK(is_null_at(result, 0));
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("match_regex matches anywhere and propagates null silently") {
+  auto events = make_mixed_string_events();
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("match_regex", {root_field("x"), str_const(",b$")}),
+                     events, storage::BitMap{3, true}, dh);
+  CHECK_EQUAL(bool_at(result, 0), Option<bool>{true});
+  CHECK(is_null_at(result, 1));
+  CHECK(is_null_at(result, 2));
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), size_t{1});
+  CHECK_EQUAL(diags[0].severity, severity::warning);
+}
+
+TEST("match_regex rejects an invalid regex at instantiation") {
+  auto dh = collecting_diagnostic_handler{};
+  auto const reg = global_registry();
+  auto evaluator
+    = Evaluator::make(call("match_regex", {root_field("x"), str_const("(")}),
+                      InstantiateCtx{dh, *reg});
+  CHECK(not evaluator);
+  auto diags = std::move(dh).collect();
+  REQUIRE(not diags.empty());
+  CHECK_EQUAL(diags[0].severity, severity::error);
+}
+
+TEST("join concatenates strings and nulls rows with null elements") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto list = builder.record().field("xs").list();
+    list.data(std::string_view{"a"});
+    list.data(std::string_view{"b"});
+  }
+  builder.record().field("xs").list();
+  {
+    auto list = builder.record().field("xs").list();
+    list.data(std::string_view{"a"});
+    list.null();
+  }
+  builder.record().field("xs").null();
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("join", {root_field("xs"), str_const("-")}), events,
+                     storage::BitMap{4, true}, dh);
+  CHECK_EQUAL(string_at(result, 0), Option<std::string>{"a-b"});
+  CHECK_EQUAL(string_at(result, 1), Option<std::string>{""});
+  CHECK(is_null_at(result, 2));
+  CHECK(is_null_at(result, 3));
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), size_t{1});
+  CHECK_EQUAL(diags[0].message, "found `null` in list passed to `join`");
+}
+
+TEST("time components and format_time read a time column") {
+  // `format_time` goes through Arrow's `strftime`, which only the `tenzir`
+  // binary registers at startup.
+  REQUIRE(arrow::compute::Initialize().ok());
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("t").data(
+    tenzir::time{std::chrono::sys_days{std::chrono::year{2024} / 6 / 15}
+                 + std::chrono::hours{14} + std::chrono::minutes{30}
+                 + std::chrono::milliseconds{45'500}});
+  builder.record().field("t").null();
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto check_int = [&](std::string name, std::int64_t expected) {
+    auto result = eval(call(name, {root_field("t")}), events,
+                       storage::BitMap{2, true}, dh);
+    CHECK_EQUAL(int_at(result, 0), Option<std::int64_t>{expected});
+    CHECK(is_null_at(result, 1));
+  };
+  check_int("year", 2024);
+  check_int("month", 6);
+  check_int("day", 15);
+  check_int("hour", 14);
+  check_int("minute", 30);
+  auto seconds = eval(call("second", {root_field("t")}), events,
+                      storage::BitMap{2, true}, dh);
+  CHECK_EQUAL(float_at(seconds, 0), Option<double>{45.5});
+  CHECK(is_null_at(seconds, 1));
+  auto formatted
+    = eval(call("format_time", {root_field("t"), str_const("%Y-%m-%d %V")}),
+           events, storage::BitMap{2, true}, dh);
+  CHECK_EQUAL(string_at(formatted, 0), Option<std::string>{"2024-06-15 24"});
+  CHECK(is_null_at(formatted, 1));
   CHECK(std::move(dh).collect().empty());
 }

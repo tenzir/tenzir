@@ -75,12 +75,18 @@ auto _::EvalRun::eval(const ast::unary_expr& x, EvalFrame frame)
         frame, "unary operator `not`", {x.expr}, x.get_location(),
         // Constrained to exactly `Bool`: an unconstrained `Bool` parameter
         // would also accept `Int`/`UInt`/`Float` through implicit conversion
-        // (see the note on `is_kernel_invocable_for`).
-        []<class T>(diagnostic_handler&, T v) -> Option<Bool>
-          requires std::same_as<T, Bool>
-        {
-          return not v;
-        });
+        // (see the note on `is_kernel_invocable_for`). `not null` is `null`,
+        // silently, like in the legacy evaluator.
+        ::tenzir::detail::overload{
+          []<class T>(diagnostic_handler&, T v) -> Option<Bool>
+            requires std::same_as<T, Bool>
+          {
+            return not v;
+          },
+          [](diagnostic_handler&, Null) -> Option<Bool> {
+            return None{};
+          },
+          });
     case move:
       return frame.eval(x.expr);
   }

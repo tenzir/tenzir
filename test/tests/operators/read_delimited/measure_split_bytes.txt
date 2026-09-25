@@ -1,3 +1,4 @@
 {
   events: 3,
+  selected: 3,
 }

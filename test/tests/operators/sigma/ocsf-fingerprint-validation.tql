@@ -1,0 +1,18 @@
+// A matching fingerprint must not hide a malformed later element. The same
+// leading fingerprint exercises plan grouping and reuse across batches.
+from_stdin { read_tql _batch_size=3 }
+class_uid = 1007
+metadata = {version: "1.9.0"}
+process = {file: {hashes: hashes}}
+drop hashes
+sigma rules=r#"
+title: Fingerprint validation
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Hashes|contains: MD5=abc
+  condition: selection
+"#, format="plain"
+select id=event.id

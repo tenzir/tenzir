@@ -301,10 +301,59 @@ public:
   }
 };
 
-class match_regex : public virtual function_plugin {
+struct MatchRegexArgs {
+  nova::ValueArgument x;
+  located<std::string> pattern;
+  /// Compiled from `pattern` in `validate`.
+  std::shared_ptr<re2::RE2 const> regex;
+  location call;
+};
+
+class MatchRegexFunction final {
+public:
+  auto eval(MatchRegexArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    return apply_kernel<1>(
+      frame, "match_regex", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, Null) -> Option<Bool> {
+          return None{};
+        },
+        [&](diagnostic_handler&, std::string_view value) -> Option<Bool> {
+          return re2::RE2::PartialMatch({value.data(), value.size()},
+                                        *args.regex);
+        },
+      });
+  }
+};
+
+class match_regex : public virtual function_plugin,
+                    public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "match_regex";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<MatchRegexArgs, MatchRegexFunction>{};
+    d.positional("input", &MatchRegexArgs::x, "string");
+    d.positional("regex", &MatchRegexArgs::pattern);
+    d.call_location(&MatchRegexArgs::call);
+    d.validate(
+      [](MatchRegexArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        auto regex = std::make_shared<re2::RE2>(args.pattern.inner,
+                                                re2::RE2::CannedOptions::Quiet);
+        if (not regex->ok()) {
+          diagnostic::error("failed to parse regex: {}", regex->error())
+            .primary(args.pattern)
+            .emit(dh);
+          return failure::promise();
+        }
+        args.regex = std::move(regex);
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {
@@ -1525,10 +1574,81 @@ private:
   bool regex_ = {};
 };
 
-class join : public virtual function_plugin {
+struct JoinArgs {
+  nova::ValueArgument x;
+  Option<located<std::string>> separator;
+  location call;
+};
+
+class JoinFunction final {
+public:
+  auto eval(JoinArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto const separator = args.separator
+                             ? std::string_view{args.separator->inner}
+                             : std::string_view{};
+    auto warn_null = WarnOnce{};
+    auto warn_type = WarnOnce{};
+    auto buffer = std::string{};
+    return apply_kernel<1>(
+      frame, "join", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, Null) -> Option<std::string_view> {
+          return None{};
+        },
+        [&](diagnostic_handler& dh,
+            RowView<List> const& list) -> Option<std::string_view> {
+          buffer.clear();
+          auto first = true;
+          for (auto element : list) {
+            auto ok = match(
+              element,
+              [&](RowView<String> value) {
+                if (not std::exchange(first, false)) {
+                  buffer += separator;
+                }
+                buffer += *value;
+                return true;
+              },
+              [&](RowView<Null>) {
+                warn_null(dh, diagnostic::warning("found `null` in list passed "
+                                                  "to `join`")
+                                .primary(args.x.source)
+                                .hint("consider using `.where(x => x != null)` "
+                                      "before"));
+                return false;
+              },
+              [&](auto const&) {
+                warn_type(dh, diagnostic::warning(
+                                "`join` expected `list<string>`, but got a "
+                                "list with other elements")
+                                .primary(args.x.source));
+                return false;
+              });
+            if (not ok) {
+              return None{};
+            }
+          }
+          return std::string_view{buffer};
+        },
+      });
+  }
+};
+
+class join : public virtual function_plugin,
+             public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "join";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<JoinArgs, JoinFunction>{};
+    d.positional("x", &JoinArgs::x, "list");
+    d.positional("separator", &JoinArgs::separator);
+    d.call_location(&JoinArgs::call);
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

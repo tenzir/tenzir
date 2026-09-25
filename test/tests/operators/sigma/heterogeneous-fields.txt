@@ -12,7 +12,7 @@
       matcher: "equals",
       case: "insensitive",
       polarity: "positive",
-      value: "42",
+      value: 42,
     },
   ],
 }
@@ -30,7 +30,7 @@
       matcher: "equals",
       case: "insensitive",
       polarity: "positive",
-      value: "42",
+      value: 42,
     },
   ],
 }
