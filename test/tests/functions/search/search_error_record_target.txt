@@ -1,0 +1,8 @@
+error: `target` cannot be a list or a record
+ --> tests/functions/search/search_error_record_target.tql:4:34
+  |
+4 | from {found: search({value: 42}, {value: 42})}
+  |                                  ^^^^^^^^^^^
+  |
+  = usage: search(input:any, target:any, [exact=bool, ignore_case=bool])
+  = docs: https://tenzir.com/docs/reference/functions/search

@@ -1,0 +1,13 @@
+warning: `contains` is deprecated
+ --> tests/functions/search/contains_deprecated_method.tql:2:16
+  |
+2 | method_match = nested.contains("Ali")
+  |                ~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = hint: use `search` instead
+{
+  nested: {
+    value: "Alice",
+  },
+  method_match: true,
+}

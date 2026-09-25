@@ -12,4 +12,5 @@
   empty_record_match: false,
   empty_list_match: false,
   null_match: true,
+  nested_null_match: false,
 }

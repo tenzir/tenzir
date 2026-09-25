@@ -20,4 +20,5 @@ this = {
   empty_record_match: search(empty_record, "Alice"),
   empty_list_match: search(empty_list, 42),
   null_match: search(missing, null),
+  nested_null_match: search(nested, null),
 }

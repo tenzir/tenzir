@@ -1,0 +1,2 @@
+from {nested: {value: "Alice"}}
+method_match = nested.contains("Ali")

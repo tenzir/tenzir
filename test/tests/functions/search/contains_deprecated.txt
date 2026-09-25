@@ -1,16 +1,8 @@
 warning: `contains` is deprecated
- --> tests/functions/contains_deprecated.tql:2:18
+ --> tests/functions/search/contains_deprecated.tql:2:18
   |
 2 | function_match = contains(nested, "alice", exact=true, ignore_case=true)
   |                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  |
-  = hint: use `search` instead
-
-warning: `contains` is deprecated
- --> tests/functions/contains_deprecated.tql:3:16
-  |
-3 | method_match = nested.contains("Ali")
-  |                ~~~~~~~~~~~~~~~~~~~~~~
   |
   = hint: use `search` instead
 {
@@ -18,5 +10,4 @@ warning: `contains` is deprecated
     value: "Alice",
   },
   function_match: true,
-  method_match: true,
 }

@@ -10,6 +10,10 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/multi_series.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
@@ -129,14 +133,106 @@ auto contains(const series& input, const type& what_type, const data& what,
   }
 }
 
+auto contains(nova::RowView<nova::Data> input, const data& target, bool exact,
+              bool ignore_case) -> bool {
+  return match(
+    input, [&]<nova::data_type T>(nova::RowView<T> const& value) -> bool {
+      if constexpr (std::same_as<T, nova::Record>) {
+        if (is<caf::none_t>(target)) {
+          return false;
+        }
+        for (auto const& field : value) {
+          if (contains(field.second, target, exact, ignore_case)) {
+            return true;
+          }
+        }
+        return false;
+      } else if constexpr (std::same_as<T, nova::List>) {
+        if (is<caf::none_t>(target)) {
+          return false;
+        }
+        for (auto const& element : value) {
+          if (contains(element, target, exact, ignore_case)) {
+            return true;
+          }
+        }
+        return false;
+      } else if constexpr (std::same_as<T, nova::Null>) {
+        return equals(data_view3{caf::none}, target, exact);
+      } else {
+        if constexpr (std::same_as<T, nova::String>) {
+          if (ignore_case and is<std::string>(target)) {
+            const auto& needle = as<std::string>(target);
+            const auto folded = detail::utf8_fold_case(*value);
+            return exact ? folded == needle : folded.contains(needle);
+          }
+        }
+        return equals(data_view3{*value}, target, exact);
+      }
+    });
+}
+
+struct SearchArgs {
+  nova::ValueArgument input;
+  located<data> target;
+  bool exact = false;
+  bool ignore_case = false;
+  location call;
+};
+
+template <bool Deprecated>
+class SearchFunction final {
+public:
+  auto eval(SearchArgs const& args, nova::EvalFrame frame) const
+    -> nova::Array<nova::Data> {
+    auto result = nova::Results{frame.mask().length()};
+    nova::storage::for_each_true(frame.mask(), [&](nova::storage::Index row) {
+      result.set<nova::Bool>(row, contains(args.input.data.get(row),
+                                           args.target.inner, args.exact,
+                                           args.ignore_case));
+    });
+    return std::move(result).finish(frame.mask());
+  }
+};
+
 template <bool Deprecated = false>
-class Plugin final : public function_plugin {
+class Plugin final : public nova::FunctionPlugin {
   auto is_deterministic() const -> bool override {
     return true;
   }
 
   auto name() const -> std::string override {
     return Deprecated ? "contains" : "search";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SearchArgs, SearchFunction<Deprecated>>{};
+    d.positional("input", &SearchArgs::input, "any");
+    d.positional("target", &SearchArgs::target);
+    d.named_optional("exact", &SearchArgs::exact);
+    d.named_optional("ignore_case", &SearchArgs::ignore_case);
+    d.call_location(&SearchArgs::call);
+    d.validate(
+      [](SearchArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        if constexpr (Deprecated) {
+          diagnostic::warning("`contains` is deprecated")
+            .primary(args.call)
+            .hint("use `search` instead")
+            .emit(dh);
+        }
+        if (is<record>(args.target.inner) or is<list>(args.target.inner)) {
+          diagnostic::error("`target` cannot be a list or a record")
+            .primary(args.target)
+            .emit(dh);
+          return failure::promise();
+        }
+        if (args.ignore_case and is<std::string>(args.target.inner)) {
+          args.target.inner
+            = detail::utf8_fold_case(as<std::string>(args.target.inner));
+        }
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
