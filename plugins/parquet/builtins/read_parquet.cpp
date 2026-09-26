@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/column_selection.hpp"
+#include "parquet/constant_columns.hpp"
 #include "parquet/row_group_pruning.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/option.hpp"
@@ -30,6 +31,7 @@
 #include <arrow/compute/cast.h>
 #include <arrow/util/key_value_metadata.h>
 #include <parquet/arrow/reader.h>
+#include <parquet/arrow/schema.h>
 
 namespace tenzir::plugins::parquet {
 
@@ -91,6 +93,18 @@ auto format_decimal_type(std::shared_ptr<arrow::DataType> type,
   }
 }
 
+auto format_decimal_array(std::shared_ptr<arrow::Array> array,
+                          decimal_format format)
+  -> arrow::Result<std::shared_ptr<arrow::Array>> {
+  auto target_type = format_decimal_type(array->type(), format);
+  if (target_type == array->type()) {
+    return array;
+  }
+  ARROW_ASSIGN_OR_RAISE(auto result,
+                        arrow::compute::Cast(array, std::move(target_type)));
+  return result.make_array();
+}
+
 auto format_decimal_arrays(std::shared_ptr<arrow::RecordBatch> batch,
                            decimal_format format)
   -> arrow::Result<std::shared_ptr<arrow::RecordBatch>> {
@@ -101,15 +115,11 @@ auto format_decimal_arrays(std::shared_ptr<arrow::RecordBatch> batch,
   fields.reserve(batch->num_columns());
   for (auto index = 0; index < batch->num_columns(); ++index) {
     auto array = batch->column(index);
-    auto target_type = format_decimal_type(array->type(), format);
-    if (target_type != array->type()) {
-      ARROW_ASSIGN_OR_RAISE(
-        auto result, arrow::compute::Cast(array, std::move(target_type)));
-      array = result.make_array();
-      changed = true;
-    }
-    arrays.push_back(array);
-    fields.push_back(batch->schema()->field(index)->WithType(array->type()));
+    ARROW_ASSIGN_OR_RAISE(auto formatted, format_decimal_array(array, format));
+    changed |= formatted != array;
+    arrays.push_back(formatted);
+    fields.push_back(
+      batch->schema()->field(index)->WithType(formatted->type()));
   }
   if (not changed) {
     return batch;
@@ -162,6 +172,37 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
     arrow::key_value_metadata(std::move(keys), std::move(values)));
 }
 
+/// The types that the reader restores for the columns of a file, including
+/// those from an embedded Arrow schema, if Arrow can tell.
+auto make_manifest(::parquet::FileMetaData const& metadata)
+  -> std::shared_ptr<::parquet::arrow::SchemaManifest const> {
+  // The manifest points into itself, so it must not move once made.
+  auto manifest = std::make_shared<::parquet::arrow::SchemaManifest>();
+  if (not ::parquet::arrow::SchemaManifest::Make(
+            metadata.schema(), metadata.key_value_metadata(),
+            ::parquet::ArrowReaderProperties{}, manifest.get())
+            .ok()) {
+    return nullptr;
+  }
+  return manifest;
+}
+
+/// Plans which of the selected `columns` of `row_groups` the statistics
+/// provide, so that they need no decoding.
+auto plan_constants(::parquet::FileMetaData const& metadata,
+                    ::parquet::arrow::SchemaManifest const* manifest,
+                    std::span<int const> row_groups,
+                    std::span<int const> columns, decimal_format format)
+  -> ConstantColumns {
+  // The constants must import like the decoded columns would, which includes
+  // formatting decimals.
+  return ConstantColumns::make(metadata, manifest, row_groups, columns,
+                               [format](std::shared_ptr<arrow::Array> array) {
+                                 return format_decimal_array(std::move(array),
+                                                             format);
+                               });
+}
+
 /// State and steps that the byte-stream and the file reader share: the
 /// pushed-down filter, limit, and projection, and batch conversion.
 class ParquetDecoding {
@@ -187,6 +228,29 @@ protected:
       filters_.push_back(std::move(*evaluator));
     }
     co_return {};
+  }
+
+  /// Turns a batch of decoded columns into the batch to import, or returns
+  /// nullptr after reporting an error.
+  auto prepare(std::shared_ptr<arrow::RecordBatch> batch,
+               ConstantColumns& constants, diagnostic_handler& dh) const
+    -> std::shared_ptr<arrow::RecordBatch> {
+    auto formatted = format_decimal_arrays(std::move(batch), decimal_format_);
+    if (not formatted.ok()) {
+      diagnostic::error("failed to format parquet decimals")
+        .note("{}", formatted.status().ToStringWithoutContextLines())
+        .emit(dh);
+      return nullptr;
+    }
+    // The constants are formatted already.
+    auto completed = constants.complete(std::move(*formatted));
+    if (not completed.ok()) {
+      diagnostic::error("failed to read parquet columns")
+        .note("{}", completed.status().ToStringWithoutContextLines())
+        .emit(dh);
+      return nullptr;
+    }
+    return inject_tenzir_metadata(std::move(*completed));
   }
 
   /// Batch conversion is independent of how the file bytes were obtained.
@@ -309,8 +373,15 @@ public:
         break;
       }
     }
-    // One decoder reads all row groups, so a column stays a dictionary only if
-    // it holds a single value in each of them. Every row group brings its own
+    // One decoder reads all row groups, and its batches may span several of
+    // them. So the statistics provide a column only if it holds the same value
+    // in all of them.
+    auto manifest = make_manifest(*metadata);
+    auto constants = plan_constants(*metadata, manifest.get(), row_groups,
+                                    columns, decimal_format_);
+    columns = constants.decoded();
+    // For the same reason, a column stays a dictionary only if it holds a
+    // single value in each of them. Every row group brings its own
     // dictionary, and Arrow cannot assemble a column inside records or lists
     // from several of them.
     for (auto column : columns) {
@@ -376,14 +447,10 @@ public:
         // the next batch until it is needed; a filter or limit may stop here.
         next = reader->Next();
       }
-      auto formatted = format_decimal_arrays(std::move(batch), decimal_format_);
-      if (not formatted.ok()) {
-        diagnostic::error("failed to format parquet decimals")
-          .note("{}", formatted.status().ToStringWithoutContextLines())
-          .emit(ctx);
+      batch = prepare(std::move(batch), constants, ctx.dh());
+      if (not batch) {
         co_return FinalizeBehavior::done;
       }
-      batch = inject_tenzir_metadata(std::move(*formatted));
       if (not co_await process_batch(std::move(batch), push, ctx)) {
         co_return FinalizeBehavior::done;
       }
@@ -492,6 +559,7 @@ public:
     scan_file_ = std::move(file);
     scan_metadata_ = std::move(*metadata);
     scan_columns_ = select_columns(*scan_metadata_, projection_);
+    scan_manifest_ = make_manifest(*scan_metadata_);
     // Every row group starts at the rows of the ones before, which positions
     // count even if they are skipped.
     auto start = uint64_t{0};
@@ -544,6 +612,8 @@ public:
           break;
         }
         scan_batches_ = std::move(*opened);
+        // The batches may outlive the decoder of their row group.
+        scan_constants_ = scan_batches_->constants;
         scan_rows_ = scan_batches_->rows;
         scan_consumed_ = scan_starts_[scan_batches_->group];
         // Fetch the next row group while this one decodes, unless the limit
@@ -590,14 +660,11 @@ public:
       if (not batch) {
         continue;
       }
-      auto formatted = format_decimal_arrays(std::move(batch), decimal_format_);
-      if (not formatted.ok()) {
-        diagnostic::error("failed to format parquet decimals")
-          .note("{}", formatted.status().ToStringWithoutContextLines())
-          .emit(dh);
+      batch = prepare(std::move(batch), *scan_constants_, dh);
+      if (not batch) {
         break;
       }
-      auto events = convert(inject_tenzir_metadata(std::move(*formatted)), dh);
+      auto events = convert(std::move(batch), dh);
       if (not events) {
         break;
       }
@@ -610,6 +677,8 @@ public:
     }
     scan_prefetch_ = None{};
     scan_batches_.reset();
+    scan_constants_.reset();
+    scan_manifest_.reset();
     scan_metadata_.reset();
     scan_file_.reset();
     co_return None{};
@@ -621,6 +690,8 @@ private:
     std::shared_ptr<arrow::RecordBatchReader> batches;
     int64_t rows;
     int group;
+    /// The columns that come from the statistics of the row group.
+    std::shared_ptr<ConstantColumns> constants;
   };
 
   /// The next row group to read, past the ones whose statistics rule out the
@@ -644,9 +715,10 @@ private:
   auto open_row_group(int group)
     -> Task<arrow::Result<std::shared_ptr<ScanBatches>>> {
     co_return co_await spawn_blocking(
-      [file = scan_file_, metadata = scan_metadata_, group,
-       columns
-       = scan_columns_]() -> arrow::Result<std::shared_ptr<ScanBatches>> {
+      [file = scan_file_, metadata = scan_metadata_, manifest = scan_manifest_,
+       group, columns = scan_columns_,
+       format
+       = decimal_format_]() -> arrow::Result<std::shared_ptr<ScanBatches>> {
         try {
           auto properties = ::parquet::ReaderProperties{arrow_memory_pool()};
           properties.enable_buffered_stream();
@@ -657,7 +729,12 @@ private:
           arrow_properties.set_cache_options(
             arrow::io::CacheOptions::Defaults());
           auto row_group = metadata->RowGroup(group);
-          for (auto column : columns) {
+          // Neither fetch nor decode the column chunks whose statistics
+          // provide their values.
+          auto constants = std::make_shared<ConstantColumns>(plan_constants(
+            *metadata, manifest.get(), std::array{group}, columns, format));
+          auto const& decoded = constants->decoded();
+          for (auto column : decoded) {
             if (is_constant_chunk(*row_group, column)) {
               arrow_properties.set_read_dictionary(column, true);
             }
@@ -670,9 +747,10 @@ private:
                                                             std::move(parquet),
                                                             arrow_properties));
           ARROW_ASSIGN_OR_RAISE(auto batches,
-                                reader->GetRecordBatchReader({group}, columns));
+                                reader->GetRecordBatchReader({group}, decoded));
           return std::make_shared<ScanBatches>(std::move(reader),
-                                               std::move(batches), rows, group);
+                                               std::move(batches), rows, group,
+                                               std::move(constants));
         } catch (::parquet::ParquetException const& error) {
           return arrow::Status::Invalid(error.what());
         }
@@ -694,6 +772,7 @@ private:
 
   std::shared_ptr<arrow::io::RandomAccessFile> scan_file_;
   std::shared_ptr<::parquet::FileMetaData> scan_metadata_;
+  std::shared_ptr<::parquet::arrow::SchemaManifest const> scan_manifest_;
   std::vector<int> scan_columns_;
   /// The first row of every row group within the file.
   std::vector<uint64_t> scan_starts_;
@@ -706,6 +785,8 @@ private:
   /// Rows of the file consumed through the last decoded batch.
   uint64_t scan_consumed_ = 0;
   std::shared_ptr<ScanBatches> scan_batches_;
+  /// The columns that come from the statistics of the current row group.
+  std::shared_ptr<ConstantColumns> scan_constants_;
   /// The next row group, whose column chunks are being fetched.
   Option<arrow::Result<std::shared_ptr<ScanBatches>>> scan_prefetch_;
   arrow::Result<std::shared_ptr<arrow::RecordBatch>> scan_next_{

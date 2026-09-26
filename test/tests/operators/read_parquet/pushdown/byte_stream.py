@@ -50,6 +50,11 @@ def read(path: Path, tail: str = "", mode: str = "file", reader: str = "read_par
     return [json.loads(line) for line in result.stdout.splitlines()]
 
 
+def per_group(*values):
+    """The values of a column with one value per row group of three rows."""
+    return [value for value in values for _ in range(3)]
+
+
 def main():
     root = Path(os.environ["READ_PUSHDOWN_ROOT"])
     inputs = Path(os.environ["TENZIR_INPUTS"]) / "parquet"
@@ -62,6 +67,22 @@ def main():
         (root / "corrupt-nested", "select nested.x\nhead 2", "read_parquet", 2),
         (root / "constants", "", "read_parquet", 9),
         (root / "constants", 'where group == "b"\nselect id', "read_parquet", 3),
+        (root / "statistics", "", "read_parquet", 9),
+        (root / "statistics", "", 'read_parquet decimal_format="float"', 9),
+        (
+            root / "statistics",
+            'where text == "b"\nselect id, record.c',
+            "read_parquet",
+            3,
+        ),
+        (root / "statistics", "select same, none, record.inner", "read_parquet", 9),
+        (root / "corrupt-constants", "", "read_parquet", 9),
+        (
+            root / "corrupt-constants",
+            "where number == 42\nselect id, meta",
+            "read_parquet",
+            9,
+        ),
         (root / "input", "select\nhead 4", "read_parquet", 4),
         (root / "corrupt-unused", "select\nhead 4", "read_parquet", 4),
         (root / "unsupported-only", "select\nhead 4", "read_parquet", 4),
@@ -108,6 +129,62 @@ def main():
             }, columns
         if path == root / "constants" and tail:
             assert expected == [{"id": 3}, {"id": 4}, {"id": 5}]
+        if path == root / "statistics" and not tail:
+            columns = {name: [row[name] for row in expected] for name in expected[0]}
+            decimals = ("1.50", "-2.25", "0.00")
+            if "float" in reader:
+                decimals = (1.5, -2.25, 0.0)
+            assert columns == {
+                "id": list(range(9)),
+                "flag": per_group(True, False, True),
+                "small": per_group(-128, 127, 0),
+                "count": per_group(0, 2**32 - 1, 7),
+                "big": per_group(0, 2**64 - 1, 1),
+                "text": per_group("a", "b", "c"),
+                "time": per_group(
+                    "1970-01-01T00:00:00Z",
+                    "1970-01-01T00:00:01.234Z",
+                    "1970-01-01T00:00:05.678Z",
+                ),
+                "duration": per_group("1s", "1min", "1h"),
+                "decimal": per_group(*decimals),
+                # JSON has no NaN, which the writer prints as null.
+                "nan": [1.0, None, 1.0, *per_group(2.0, 3.0)],
+                "same": ["everywhere"] * 9,
+                "none": [None] * 9,
+                "record": [
+                    {"x": i, "c": 7, "n": None, "inner": {"a": "ab"[i // 6], "b": None}}
+                    for i in range(9)
+                ],
+            }, columns
+        if path == root / "statistics" and tail.startswith("where"):
+            assert expected == [{"id": i, "record": {"c": 7}} for i in range(3, 6)]
+        if path == root / "statistics" and tail.startswith("select"):
+            assert expected == [
+                {
+                    "same": "everywhere",
+                    "none": None,
+                    "record": {"inner": {"a": "ab"[i // 6], "b": None}},
+                }
+                for i in range(9)
+            ], expected
+        if path == root / "corrupt-constants":
+            # The damaged column chunks come from the statistics.
+            meta = {"product": "p", "version": 1}
+            if tail:
+                assert expected == [{"id": i, "meta": meta} for i in range(9)]
+            else:
+                assert expected == [
+                    {
+                        "id": i,
+                        "number": 42,
+                        "same": "everywhere",
+                        "none": None,
+                        "record": {"x": i, "c": 7, "n": None},
+                        "meta": meta,
+                    }
+                    for i in range(9)
+                ], expected
         if path == root / "corrupt-nested":
             assert expected == [{"nested": {"x": 50}}, {"nested": {"x": 51}}]
         if tail == "select\nhead 4":

@@ -1,8 +1,9 @@
 """Generate columnar inputs for reader pushdown tests.
 
 READ_PUSHDOWN_ROOT contains input, clean, and corrupt-unused files. Parquet
-also provides a copy of the input whose nested sibling field is corrupt, a file
-whose columns hold one value per row group, and a wide file whose size dwarfs
+also provides a copy of the input whose nested sibling field is corrupt, files
+whose columns hold one value or only nulls per row group, of which one is
+corrupt where the statistics suffice, and a wide file whose size dwarfs
 the reader's footer read, plus a gzipped copy, so that tests can tell a
 random-access scan from a whole-file read by the bytes it fetches. IPC formats also provide a store envelope; IPC
 streams additionally provide concatenated schemas and trailing corruption. The
@@ -84,9 +85,16 @@ def _setup_inputs(root: Path, format: str) -> None:
 
     if format == "parquet":
         # Damage only `nested.sibling`, so that reading `nested.x` succeeds only
-        # if the reader decodes the fields of a struct selectively.
+        # if the reader decodes the fields of a struct selectively. The sibling
+        # varies, as readers need not decode a field whose statistics show a
+        # single value.
+        nested = pa.array([{"x": i + 50, "sibling": f"keep{i}"} for i in range(9)])
         corrupted = root / "corrupt-nested"
-        pq.write_table(table, corrupted, row_group_size=3)
+        pq.write_table(
+            table.set_column(table.schema.get_field_index("nested"), "nested", nested),
+            corrupted,
+            row_group_size=3,
+        )
         metadata = pq.read_metadata(corrupted).row_group(0)
         (sibling,) = (
             metadata.column(i)
@@ -108,6 +116,84 @@ def _setup_inputs(root: Path, format: str) -> None:
             }
         )
         pq.write_table(constants, root / "constants", row_group_size=3)
+
+        # Columns whose statistics show a single value, or only nulls, in each
+        # row group, which readers may take from the statistics instead of
+        # decoding. Values change between row groups, except in `same` and
+        # `none`, which readers of byte streams can take from the statistics,
+        # too, as their batches may span row groups. Statistics leave out NaNs.
+        def per_group(*values):
+            return [value for value in values for _ in range(3)]
+
+        record = pa.struct(
+            [
+                ("x", pa.int64()),
+                ("c", pa.int32()),
+                ("n", pa.string()),
+                ("inner", pa.struct([("a", pa.string()), ("b", pa.float64())])),
+            ]
+        )
+        statistics = pa.table(
+            {
+                "id": pa.array(range(9), pa.int64()),
+                "flag": pa.array(per_group(True, False, True)),
+                "small": pa.array(per_group(-128, 127, 0), pa.int8()),
+                "count": pa.array(per_group(0, 2**32 - 1, 7), pa.uint32()),
+                "big": pa.array(per_group(0, 2**64 - 1, 1), pa.uint64()),
+                "text": pa.array(per_group("a", "b", "c")),
+                "time": pa.array(
+                    per_group(0, 1234, 5678), pa.timestamp("ms", tz="UTC")
+                ),
+                "duration": pa.array(per_group(1, 60, 3600), pa.duration("s")),
+                "decimal": pa.array(
+                    per_group(Decimal("1.50"), Decimal("-2.25"), Decimal("0.00")),
+                    pa.decimal128(10, 2),
+                ),
+                "nan": pa.array([1.0, float("nan"), 1.0, *per_group(2.0, 3.0)]),
+                "same": pa.array(["everywhere"] * 9),
+                "none": pa.nulls(9, pa.int64()),
+                "record": pa.array(
+                    [
+                        {"x": i, "c": 7, "n": None, "inner": {"a": "ab"[i // 6]}}
+                        for i in range(9)
+                    ],
+                    record,
+                ),
+            }
+        )
+        pq.write_table(statistics, root / "statistics", row_group_size=3)
+        # Damage the columns that the statistics provide in every row group, so
+        # that the file reads only if no reader decodes them.
+        constant = pa.table(
+            {
+                "id": pa.array(range(9), pa.int64()),
+                "number": pa.array([42] * 9, pa.int64()),
+                "same": pa.array(["everywhere"] * 9),
+                "none": pa.nulls(9, pa.string()),
+                "record": pa.array(
+                    [{"x": i, "c": 7, "n": None} for i in range(9)],
+                    pa.struct(
+                        [("x", pa.int64()), ("c", pa.int32()), ("n", pa.string())]
+                    ),
+                ),
+                "meta": pa.array([{"product": "p", "version": 1}] * 9),
+            }
+        )
+        corrupted = root / "corrupt-constants"
+        pq.write_table(constant, corrupted, row_group_size=3)
+        metadata = pq.read_metadata(corrupted)
+        damaged = bytearray(corrupted.read_bytes())
+        for group in range(metadata.num_row_groups):
+            for i in range(metadata.num_columns):
+                chunk = metadata.row_group(group).column(i)
+                if chunk.path_in_schema not in {"id", "record.x"}:
+                    first_page = (
+                        chunk.dictionary_page_offset
+                        if chunk.has_dictionary_page
+                        else chunk.data_page_offset
+                    )
+                    damaged[first_page] = 0
+        corrupted.write_bytes(damaged)
         pq.write_table(
             table.select(["unused"]), root / "unsupported-only", row_group_size=3
         )

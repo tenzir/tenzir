@@ -216,40 +216,10 @@ auto import_bytes(ArrowArray const& input, ArrowBuffers& buffers)
     std::move(data), copy_spans(input)}}};
 }
 
-/// The value that every row of a dictionary refers to, if they all refer to
-/// the same valid string or blob. Readers keep columns as dictionaries where
-/// they expect a single value, which then becomes a constant instead of one
-/// copy per row.
-auto constant_value(arrow::DictionaryArray const& input) -> Option<Data> {
-  if (input.length() == 0 or input.null_count() != 0) {
-    return None{};
-  }
-  auto const& dictionary = *input.dictionary();
-  auto index = input.GetValueIndex(0);
-  // Indices are in bounds, so all rows name the only value of a dictionary
-  // that has one.
-  if (dictionary.length() != 1) {
-    for (auto i = int64_t{1}; i < input.length(); ++i) {
-      if (input.GetValueIndex(i) != index) {
-        return None{};
-      }
-    }
-  }
-  if (dictionary.IsNull(index)) {
-    return None{};
-  }
-  switch (dictionary.type_id()) {
-    case arrow::Type::STRING:
-      return Data{String{as<arrow::StringArray>(dictionary).GetView(index)}};
-    case arrow::Type::BINARY: {
-      auto view = as<arrow::BinaryArray>(dictionary).GetView(index);
-      auto const* bytes = reinterpret_cast<std::byte const*>(view.data());
-      return Data{Blob{bytes, bytes + view.size()}};
-    }
-    default:
-      // TODO: Other value types, which Parquet readers do not produce.
-      return None{};
-  }
+/// The value at `index` of an array whose class the type id identified.
+template <class Tag, class ArrowArray>
+auto value_at(arrow::Array const& array, int64_t index) -> Data {
+  return Data{Tag{static_cast<ArrowArray const&>(array).Value(index)}};
 }
 
 auto import_ips(ip_type::array_type const& input, ArrowBuffers& buffers)
@@ -484,6 +454,78 @@ struct ArrowImporter {
     }
     return arrow::Status::NotImplemented("unsupported arrow type `",
                                          input.type()->ToString(), "`");
+  }
+
+  /// The value that every row of a dictionary refers to, if they all refer to
+  /// the same valid value. Readers keep columns as dictionaries where they
+  /// expect a single value, which then becomes a constant instead of one copy
+  /// per row.
+  static auto constant_value(arrow::DictionaryArray const& input)
+    -> Option<Data> {
+    if (input.length() == 0 or input.null_count() != 0) {
+      return None{};
+    }
+    auto const& dictionary = *input.dictionary();
+    auto index = input.GetValueIndex(0);
+    // Indices are in bounds, so all rows name the only value of a dictionary
+    // that has one.
+    if (dictionary.length() != 1) {
+      for (auto i = int64_t{1}; i < input.length(); ++i) {
+        if (input.GetValueIndex(i) != index) {
+          return None{};
+        }
+      }
+    }
+    if (dictionary.IsNull(index)) {
+      return None{};
+    }
+    switch (dictionary.type_id()) {
+      case arrow::Type::STRING:
+        return Data{String{as<arrow::StringArray>(dictionary).GetView(index)}};
+      case arrow::Type::BINARY: {
+        auto view = as<arrow::BinaryArray>(dictionary).GetView(index);
+        auto const* bytes = reinterpret_cast<std::byte const*>(view.data());
+        return Data{Blob{bytes, bytes + view.size()}};
+      }
+      case arrow::Type::BOOL:
+        return value_at<Bool, arrow::BooleanArray>(dictionary, index);
+      case arrow::Type::INT8:
+        return value_at<Int, arrow::Int8Array>(dictionary, index);
+      case arrow::Type::INT16:
+        return value_at<Int, arrow::Int16Array>(dictionary, index);
+      case arrow::Type::INT32:
+        return value_at<Int, arrow::Int32Array>(dictionary, index);
+      case arrow::Type::INT64:
+        return value_at<Int, arrow::Int64Array>(dictionary, index);
+      case arrow::Type::UINT8:
+        return value_at<UInt, arrow::UInt8Array>(dictionary, index);
+      case arrow::Type::UINT16:
+        return value_at<UInt, arrow::UInt16Array>(dictionary, index);
+      case arrow::Type::UINT32:
+        return value_at<UInt, arrow::UInt32Array>(dictionary, index);
+      case arrow::Type::UINT64:
+        return value_at<UInt, arrow::UInt64Array>(dictionary, index);
+      case arrow::Type::FLOAT:
+        return value_at<Float, arrow::FloatArray>(dictionary, index);
+      case arrow::Type::DOUBLE:
+        return value_at<Float, arrow::DoubleArray>(dictionary, index);
+      default: {
+        // Import the one value that the rows refer to, which also converts
+        // units and extension types. Values that fail to import leave the
+        // error to the import of the whole column, and records and lists keep
+        // their import per row.
+        auto buffers = ArrowBuffers{};
+        auto value = import(*dictionary.Slice(index, 1), buffers);
+        if (not value.ok()) {
+          return None{};
+        }
+        auto result = to_data(value->get(0));
+        if (is<List>(result) or is<Record>(result)) {
+          return None{};
+        }
+        return result;
+      }
+    }
   }
 };
 

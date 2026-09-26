@@ -8,8 +8,12 @@
 
 #include "parquet/row_group_pruning.hpp"
 
+#include "parquet/statistics_values.hpp"
+
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/arrow_import.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/time.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -76,6 +80,17 @@ auto to_value(ast::constant::kind const& constant) -> Option<Value> {
   });
 }
 
+auto to_value(nova::Data const& data) -> Option<Value> {
+  return match(data, []<class T>(T const& x) -> Option<Value> {
+    if constexpr (concepts::one_of<T, int64_t, uint64_t, double, time,
+                                   std::string, bool>) {
+      return Value{x};
+    } else {
+      return None{};
+    }
+  });
+}
+
 /// What the statistics of a column chunk tell about its values.
 struct Bounds {
   /// A value that no value of the chunk is less than, if known.
@@ -93,7 +108,7 @@ struct Bounds {
 /// differ from what the Parquet types say. Arrow writes durations as plain
 /// `INT64`, for example, and restores them from the embedded Arrow schema.
 auto min_max(::parquet::ColumnDescriptor const& column,
-             ::arrow::DataType const& restored,
+             std::shared_ptr<::arrow::DataType> const& restored,
              ::parquet::Statistics const& stats) -> Option<Bounds> {
   // Older writers ordered strings by signed bytes, for example, which the
   // column order of the schema reveals.
@@ -101,32 +116,6 @@ auto min_max(::parquet::ColumnDescriptor const& column,
     return None{};
   }
   auto const& logical = *column.logical_type();
-  auto typed = [&]<class Type>(auto convert) -> Option<Bounds> {
-    auto const& x = static_cast<::parquet::TypedStatistics<Type> const&>(stats);
-    // Writers may truncate long values and then flag them as inexact. Files
-    // that predate the flag leave it unset, and their bounds are exact.
-    // TODO: A truncated minimum is still a lower bound, and a truncated
-    // maximum an upper bound if the writer rounded it up. Relying on that
-    // needs to know which writers do.
-    auto exact = [](Option<bool> flag) {
-      return flag.value_or(true);
-    };
-    auto min = Option<Value>{convert(x.min())};
-    auto max = Option<Value>{convert(x.max())};
-    // A bound without a representation as a value means that the import
-    // rejects some value of the chunk, so its statistics decide nothing.
-    if (not min or not max) {
-      return None{};
-    }
-    return Bounds{
-      .min = exact(stats.is_min_value_exact()) ? std::move(min) : None{},
-      .max = exact(stats.is_max_value_exact()) ? std::move(max) : None{},
-      .floating = std::is_floating_point_v<typename Type::c_type>,
-    };
-  };
-  auto as_int64 = [](auto x) {
-    return int64_t{x};
-  };
   auto is_signed_int = [&] {
     return logical.is_none()
            or (logical.is_int()
@@ -134,81 +123,73 @@ auto min_max(::parquet::ColumnDescriptor const& column,
                      .is_signed());
   };
   auto restores_as = [&](auto... ids) {
-    return ((restored.id() == ids) or ...);
+    return ((restored->id() == ids) or ...);
   };
-  switch (column.physical_type()) {
-    case ::parquet::Type::BOOLEAN:
-      if (not restores_as(::arrow::Type::BOOL)) {
-        return None{};
-      }
-      return typed.operator()<::parquet::BooleanType>([](bool x) {
-        return x;
-      });
-    case ::parquet::Type::INT32:
-      // TODO: Unsigned integers are ordered as unsigned in the statistics.
-      if (not is_signed_int()
-          or not restores_as(::arrow::Type::INT8, ::arrow::Type::INT16,
-                             ::arrow::Type::INT32)) {
-        return None{};
-      }
-      return typed.operator()<::parquet::Int32Type>(as_int64);
-    case ::parquet::Type::INT64:
-      if (is_signed_int()) {
-        if (not restores_as(::arrow::Type::INT64)) {
-          return None{};
-        }
-        return typed.operator()<::parquet::Int64Type>(as_int64);
-      }
-      if (logical.is_timestamp() and restores_as(::arrow::Type::TIMESTAMP)) {
-        // TODO: Check how timestamps that are not adjusted to UTC import.
-        auto unit = static_cast<::parquet::TimestampLogicalType const&>(logical)
-                      .time_unit();
-        auto factor = unit == ::parquet::LogicalType::TimeUnit::MILLIS
-                        ? int64_t{1'000'000}
-                      : unit == ::parquet::LogicalType::TimeUnit::MICROS
-                        ? int64_t{1'000}
-                        : int64_t{1};
-        return typed.operator()<::parquet::Int64Type>(
-          [factor](int64_t x) -> Option<Value> {
-            // Like the import, reject what nanoseconds cannot represent.
-            auto nanoseconds = int64_t{};
-            if (__builtin_mul_overflow(x, factor, &nanoseconds)) {
-              return None{};
-            }
-            return Value{time{duration{nanoseconds}}};
-          });
-      }
-      return None{};
-    case ::parquet::Type::FLOAT:
-    case ::parquet::Type::DOUBLE:
-      // Statistics leave out NaNs, and -0 and +0 compare equal.
-      if (not logical.is_none()
-          or not restores_as(::arrow::Type::FLOAT, ::arrow::Type::DOUBLE)) {
-        return None{};
-      }
-      if (column.physical_type() == ::parquet::Type::FLOAT) {
-        return typed.operator()<::parquet::FloatType>([](float x) {
-          return double{x};
-        });
-      }
-      return typed.operator()<::parquet::DoubleType>([](double x) {
-        return x;
-      });
-    case ::parquet::Type::BYTE_ARRAY:
-      // Dictionaries and extension types import as something else.
-      if (not logical.is_string()
-          or not restores_as(::arrow::Type::STRING, ::arrow::Type::LARGE_STRING,
-                             ::arrow::Type::STRING_VIEW)) {
-        return None{};
-      }
-      return typed.operator()<::parquet::ByteArrayType>(
-        [](::parquet::ByteArray x) {
-          return std::string{reinterpret_cast<char const*>(x.ptr), x.len};
-        });
-    default:
-      // TODO: Dates, decimals, and fixed-length byte arrays such as IPs.
-      return None{};
+  auto ordered = [&] {
+    switch (column.physical_type()) {
+      case ::parquet::Type::BOOLEAN:
+        return restores_as(::arrow::Type::BOOL);
+      case ::parquet::Type::INT32:
+        // TODO: Unsigned integers are ordered as unsigned in the statistics.
+        return is_signed_int()
+               and restores_as(::arrow::Type::INT8, ::arrow::Type::INT16,
+                               ::arrow::Type::INT32);
+      case ::parquet::Type::INT64:
+        return (is_signed_int() and restores_as(::arrow::Type::INT64))
+               or (logical.is_timestamp()
+                   and restores_as(::arrow::Type::TIMESTAMP));
+      case ::parquet::Type::FLOAT:
+      case ::parquet::Type::DOUBLE:
+        // Statistics leave out NaNs, and -0 and +0 compare equal.
+        return logical.is_none()
+               and restores_as(::arrow::Type::FLOAT, ::arrow::Type::DOUBLE);
+      case ::parquet::Type::BYTE_ARRAY:
+        // Dictionaries and extension types import as something else, and the
+        // import rejects large strings and string views.
+        return logical.is_string() and restores_as(::arrow::Type::STRING);
+      default:
+        // TODO: Dates, decimals, and fixed-length byte arrays such as IPs.
+        return false;
+    }
+  };
+  if (not ordered()) {
+    return None{};
   }
+  // What the import makes of a bound after the reader decoded it, which, for
+  // example, rejects timestamps that nanoseconds cannot represent.
+  auto bound = [&](bool upper) -> Option<Value> {
+    auto value = statistics_bound(stats, upper);
+    auto decoded = value ? decode_value(column, restored, *value) : None{};
+    if (not decoded) {
+      return None{};
+    }
+    auto imported = nova::import_arrow_array(**decoded);
+    if (imported.is_err()) {
+      return None{};
+    }
+    return to_value(nova::to_data(imported.unwrap().get(0)));
+  };
+  auto min = bound(false);
+  auto max = bound(true);
+  // A bound without a representation as a value means that the import rejects
+  // some value of the chunk, so its statistics decide nothing.
+  if (not min or not max) {
+    return None{};
+  }
+  // Writers may truncate long values and then flag them as inexact. Files that
+  // predate the flag leave it unset, and their bounds are exact.
+  // TODO: A truncated minimum is still a lower bound, and a truncated maximum
+  // an upper bound if the writer rounded it up. Relying on that needs to know
+  // which writers do.
+  auto exact = [](Option<bool> flag) {
+    return flag.value_or(true);
+  };
+  return Bounds{
+    .min = exact(stats.is_min_value_exact()) ? std::move(min) : None{},
+    .max = exact(stats.is_max_value_exact()) ? std::move(max) : None{},
+    .floating = column.physical_type() == ::parquet::Type::FLOAT
+                or column.physical_type() == ::parquet::Type::DOUBLE,
+  };
 }
 
 /// What a row group means for a predicate.
@@ -380,7 +361,7 @@ private:
       = static_cast<::parquet::arrow::SchemaField const*>(nullptr);
     auto bounds
       = manifest_.GetColumnField(*column, &field).ok() and field->field
-          ? min_max(*schema_.Column(*column), *field->field->type(), *stats)
+          ? min_max(*schema_.Column(*column), field->field->type(), *stats)
           : None{};
     if (not value or not bounds
         or (ordering and (is<std::string>(*value) or is<bool>(*value)))) {

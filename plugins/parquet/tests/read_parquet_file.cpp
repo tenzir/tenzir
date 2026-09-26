@@ -11,11 +11,13 @@
 // equality alone cannot tell a scan from a whole-file read, so these tests look
 // at the reads.
 
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file_handle.hpp>
 #include <tenzir/forwarding_file.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/materialize.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -27,16 +29,23 @@
 #include <arrow/api.h>
 #include <arrow/extension_type.h>
 #include <arrow/io/memory.h>
+#include <arrow/json/from_string.h>
 #include <arrow/util/future.h>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <folly/coro/BlockingWait.h>
 #include <parquet/arrow/writer.h>
 #include <parquet/file_reader.h>
+#include <parquet/statistics.h>
 
+#include <array>
+#include <cmath>
+#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <mutex>
+#include <ranges>
+#include <span>
 
 using namespace tenzir;
 
@@ -443,6 +452,8 @@ struct RunOptions {
   Option<caf::byte_buffer> restore = None{};
   /// The size that the handle reports, if not the actual one.
   Option<int64_t> size = None{};
+  /// The reader and its arguments.
+  std::string_view pipeline = "read_parquet";
 };
 
 /// Reads `buffer` through the file implementation of a `read_parquet`
@@ -455,7 +466,7 @@ auto run(std::shared_ptr<arrow::Buffer> buffer, ir::OptimizeRequest request,
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto const& reg = provider.as_session().reg();
-  auto pipe = compile("read_parquet", std::move(request), base_ctx{dh, reg});
+  auto pipe = compile(options.pipeline, std::move(request), base_ctx{dh, reg});
   REQUIRE_EQUAL(pipe.operators.size(), 1u);
   auto spawned = pipe.operators.front()->spawn(tag_v<FileHandle>);
   auto op = std::move(as<Box<Operator<FileHandle, nova::Events>>>(spawned));
@@ -1040,12 +1051,12 @@ TEST("orderings that warn at runtime read every row group") {
   CHECK(not result.diagnostics.empty());
   CHECK_EQUAL(data_reads(result.file->reads()).size(), size_t{row_groups});
   // Nulls do not order either. The first row group holds 1 and null, the
-  // second one 10 and 10.
+  // second one 10 and 11.
   auto builder = arrow::Int64Builder{};
   REQUIRE(builder.Append(1).ok());
   REQUIRE(builder.AppendNull().ok());
   REQUIRE(builder.Append(10).ok());
-  REQUIRE(builder.Append(10).ok());
+  REQUIRE(builder.Append(11).ok());
   buffer = write_column("x", builder.Finish().ValueOrDie(), 2);
   result = run(buffer,
                {.filter = {id_filter("x > 5")}, .order = EventOrder::ordered});
@@ -1102,6 +1113,20 @@ TEST("columns that the reader restores as another type are not pruned") {
                         .order = EventOrder::ordered});
   CHECK(result.events.empty());
   CHECK(result.diagnostics.empty());
+}
+
+TEST("columns that the import rejects are not pruned") {
+  // Arrow restores large strings from the schema it embeds, which the import
+  // rejects. Skipping the row group would hide that.
+  auto builder = arrow::LargeStringBuilder{};
+  REQUIRE(builder.Append("a").ok());
+  REQUIRE(builder.Append("b").ok());
+  auto buffer = write_column("s", builder.Finish().ValueOrDie(), 2, true);
+  auto result = run(buffer, {.filter = {id_filter("s == \"x\"")},
+                             .order = EventOrder::ordered});
+  CHECK(result.events.empty());
+  REQUIRE_EQUAL(result.diagnostics.size(), 1u);
+  CHECK_EQUAL(result.diagnostics.front().severity, severity::error);
 }
 
 TEST("duplicate column paths are not pruned") {
@@ -1198,6 +1223,27 @@ TEST("timestamps compare against time constants") {
                                        sink, rows_per_group)
             .ok());
   auto buffer = sink->Finish().ValueOrDie();
+  auto result
+    = run(buffer, {.filter = {id_filter("time >= 2026-01-01T00:03:20Z")},
+                   .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{100});
+  CHECK_EQUAL(read_row_groups(result, buffer), (std::vector{2}));
+}
+
+TEST("timestamps of seconds compare in the unit of their statistics") {
+  // Parquet has no seconds, so Arrow writes milliseconds, which the
+  // statistics hold, too. The embedded schema says seconds, but the reader
+  // restores milliseconds.
+  auto builder
+    = arrow::TimestampBuilder{arrow::timestamp(arrow::TimeUnit::SECOND, "UTC"),
+                              arrow::default_memory_pool()};
+  auto start = int64_t{1'767'225'600}; // 2026-01-01T00:00:00Z
+  for (auto i = int64_t{0}; i < 3 * rows_per_group; ++i) {
+    REQUIRE(builder.Append(start + i).ok());
+  }
+  auto buffer
+    = write_column("time", builder.Finish().ValueOrDie(), rows_per_group, true);
   auto result
     = run(buffer, {.filter = {id_filter("time >= 2026-01-01T00:03:20Z")},
                    .order = EventOrder::ordered});
@@ -1312,4 +1358,645 @@ TEST("a restore rejects a file that changed since the checkpoint") {
   CHECK(resumed.file->reads().empty());
   REQUIRE_EQUAL(resumed.diagnostics.size(), 1u);
   CHECK_EQUAL(resumed.diagnostics.front().severity, severity::error);
+}
+
+// -- columns from statistics --------------------------------------------------
+
+namespace {
+
+constexpr auto group_rows = 3;
+
+/// An Arrow array from its JSON representation.
+auto from_json(std::shared_ptr<arrow::DataType> type, std::string const& text)
+  -> std::shared_ptr<arrow::Array> {
+  auto result = arrow::json::ArrayFromJSONString(std::move(type), text);
+  REQUIRE(result.ok());
+  return result.MoveValueUnsafe();
+}
+
+/// The JSON of a column that holds each of `values` in one row group.
+auto each(std::initializer_list<std::string_view> values) -> std::string {
+  auto result = std::string{"["};
+  for (auto value : values) {
+    for (auto i = 0; i < group_rows; ++i) {
+      if (result.size() > 1) {
+        result += ',';
+      }
+      result += value;
+    }
+  }
+  return result + ']';
+}
+
+/// The JSON of a column of the numbers `0` to `rows - 1`.
+auto iota(int64_t rows) -> std::string {
+  auto result = std::string{"["};
+  for (auto i = int64_t{0}; i < rows; ++i) {
+    result += fmt::format("{}{}", i == 0 ? "" : ",", i);
+  }
+  return result + ']';
+}
+
+/// Writes a table in row groups of `group_rows` rows, embedding the Arrow
+/// schema, with or without statistics. Without statistics, the reader must
+/// decode every column, so reading the other file tells what decoding yields.
+auto write_groups(arrow::FieldVector fields, arrow::ArrayVector columns,
+                  bool statistics = true) -> std::shared_ptr<arrow::Buffer> {
+  auto table = arrow::Table::Make(arrow::schema(std::move(fields)), columns);
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto builder = ::parquet::WriterProperties::Builder{};
+  builder.compression(::parquet::Compression::UNCOMPRESSED);
+  if (not statistics) {
+    builder.disable_statistics();
+  }
+  REQUIRE(::parquet::arrow::WriteTable(
+            *table, arrow::default_memory_pool(), sink, group_rows,
+            builder.build(),
+            ::parquet::ArrowWriterProperties::Builder{}.store_schema()->build())
+            .ok());
+  return sink->Finish().ValueOrDie();
+}
+
+/// Every event of a read, in order.
+auto rows(Run const& result) -> std::vector<data> {
+  auto rows = std::vector<data>{};
+  for (auto const& events : result.events) {
+    for (auto i : nova::storage::true_bits(events.mask)) {
+      rows.push_back(nova::materialize(events.data.get(i)));
+    }
+  }
+  return rows;
+}
+
+/// The diagnostics of a read, one line each.
+auto messages(Run const& result) -> std::vector<std::string> {
+  auto messages = std::vector<std::string>{};
+  for (auto const& diagnostic : result.diagnostics) {
+    auto message
+      = fmt::format("{}: {}", diagnostic.severity, diagnostic.message);
+    for (auto const& note : diagnostic.notes) {
+      message += fmt::format(" ({})", note.message);
+    }
+    messages.push_back(std::move(message));
+  }
+  return messages;
+}
+
+/// Reads a table with and without statistics, and checks that both yield the
+/// same events and diagnostics. Returns the read with statistics.
+auto read_both(arrow::FieldVector const& fields,
+               arrow::ArrayVector const& columns,
+               ir::OptimizeRequest const& request
+               = {.filter = {}, .order = EventOrder::ordered},
+               RunOptions const& options = {}) -> std::pair<Run, Run> {
+  auto buffer = write_groups(fields, columns);
+  auto result = run(buffer, request, options);
+  auto decoded = run(write_groups(fields, columns, false), request, options);
+  CHECK_EQUAL(rows(result), rows(decoded));
+  CHECK_EQUAL(messages(result), messages(decoded));
+  return {std::move(result), std::move(decoded)};
+}
+
+/// The values of a field, which may be nested, such as `a.b`.
+auto values(nova::Events const& events, std::string_view path)
+  -> nova::Array<nova::Data> {
+  auto result = nova::Array<nova::Data>{events.data};
+  while (not path.empty()) {
+    auto name = path.substr(0, path.find('.'));
+    path.remove_prefix(std::min(path.size(), name.size() + 1));
+    auto records = result.get_alternative<nova::Record>();
+    REQUIRE(records);
+    auto field = records->data.field(name);
+    REQUIRE(field);
+    result = std::move(field->data);
+  }
+  return result;
+}
+
+/// Whether an array repeats a single value, or is null throughout, instead of
+/// storing a value for every row.
+auto repeats(nova::Array<nova::Data> const& array) -> bool {
+  return match(
+    array,
+    [](nova::UnionArray const&) {
+      return false;
+    },
+    []<class Tag>(nova::Array<Tag> const& values) {
+      return match(values.storage(), []<class Storage>(Storage const& x) {
+        // Booleans are bits, which a bitmap of a single value does not store.
+        if constexpr (std::same_as<Storage, nova::storage::BitMap>) {
+          return x.data().empty();
+        } else {
+          TENZIR_UNUSED(x);
+          return std::same_as<Storage, nova::storage::NullStorage>
+                 or concepts::instantiation_of<Storage,
+                                               nova::storage::ConstantStorage>;
+        }
+      });
+    });
+}
+
+/// Whether a field repeats a value in every batch of a read.
+auto repeats(Run const& result, std::string_view path) -> bool {
+  REQUIRE(not result.events.empty());
+  return std::ranges::all_of(result.events, [&](nova::Events const& events) {
+    return repeats(values(events, path));
+  });
+}
+
+/// The leaf columns of a file by name.
+auto column_index(std::shared_ptr<arrow::Buffer> const& buffer,
+                  std::string_view path) -> int {
+  auto metadata = ::parquet::ReadMetaData(
+    std::make_shared<arrow::io::BufferReader>(buffer));
+  for (auto i = 0; i < metadata->num_columns(); ++i) {
+    if (metadata->schema()->Column(i)->path()->ToDotString() == path) {
+      return i;
+    }
+  }
+  FAIL("no column {}", path);
+  return -1;
+}
+
+/// The column chunks that a read fetched, as pairs of row group and column.
+auto fetched(Run const& result, std::shared_ptr<arrow::Buffer> const& buffer)
+  -> std::vector<std::pair<int, int>> {
+  auto metadata = ::parquet::ReadMetaData(
+    std::make_shared<arrow::io::BufferReader>(buffer));
+  auto reads = data_reads(result.file->reads());
+  auto chunks = std::vector<std::pair<int, int>>{};
+  for (auto group = 0; group < metadata->num_row_groups(); ++group) {
+    for (auto column = 0; column < metadata->num_columns(); ++column) {
+      if (touches(reads, column_chunk(*metadata, group, column))) {
+        chunks.emplace_back(group, column);
+      }
+    }
+  }
+  return chunks;
+}
+
+/// The column chunks of `columns` in all row groups.
+auto chunks_of(std::initializer_list<int> columns, int groups)
+  -> std::vector<std::pair<int, int>> {
+  auto chunks = std::vector<std::pair<int, int>>{};
+  for (auto group = 0; group < groups; ++group) {
+    for (auto column : columns) {
+      chunks.emplace_back(group, column);
+    }
+  }
+  return chunks;
+}
+
+/// Replaces bytes in the footer of a file, where it keeps the statistics.
+auto patch_footer(std::shared_ptr<arrow::Buffer> const& buffer,
+                  std::string_view from, std::string_view to)
+  -> std::shared_ptr<arrow::Buffer> {
+  REQUIRE_EQUAL(from.size(), to.size());
+  auto bytes = buffer->ToString();
+  // The footer precedes its length and the magic bytes.
+  auto length = uint32_t{};
+  std::memcpy(&length, bytes.data() + bytes.size() - 8, sizeof(length));
+  auto offset = bytes.find(from, bytes.size() - 8 - length);
+  REQUIRE(offset != std::string::npos);
+  REQUIRE_EQUAL(bytes.find(from, offset + 1), std::string::npos);
+  bytes.replace(offset, from.size(), to);
+  return arrow::Buffer::FromString(std::move(bytes));
+}
+
+} // namespace
+
+TEST("statistics provide single-valued columns of every type") {
+  // Every column but `id` holds one value per row group, and a different one
+  // in the next.
+  auto fields = arrow::FieldVector{arrow::field("id", arrow::int64())};
+  auto columns = arrow::ArrayVector{from_json(arrow::int64(), iota(9))};
+  auto add = [&](std::string name, std::shared_ptr<arrow::DataType> type,
+                 std::initializer_list<std::string_view> values) {
+    fields.push_back(arrow::field(std::move(name), type));
+    columns.push_back(from_json(std::move(type), each(values)));
+  };
+  add("bool", arrow::boolean(), {"true", "false", "true"});
+  add("int8", arrow::int8(), {"-128", "127", "0"});
+  add("int16", arrow::int16(), {"-32768", "32767", "1"});
+  add("int32", arrow::int32(), {"-2147483648", "2147483647", "2"});
+  add("int64", arrow::int64(),
+      {"-9223372036854775808", "9223372036854775807", "3"});
+  add("uint8", arrow::uint8(), {"0", "255", "4"});
+  add("uint16", arrow::uint16(), {"0", "65535", "5"});
+  // Parquet stores the larger ones in the bits of negative numbers.
+  add("uint32", arrow::uint32(), {"0", "4294967295", "6"});
+  add("uint64", arrow::uint64(), {"0", "18446744073709551615", "7"});
+  add("string", arrow::utf8(), {R"("first")", R"("")", R"("third")"});
+  add("blob", arrow::binary(), {R"("\u0000")", R"("b")", R"("c")"});
+  auto units = std::array{
+    std::pair{arrow::TimeUnit::SECOND, "s"},
+    std::pair{arrow::TimeUnit::MILLI, "ms"},
+    std::pair{arrow::TimeUnit::MICRO, "us"},
+    std::pair{arrow::TimeUnit::NANO, "ns"},
+  };
+  // Parquet has no timestamps of seconds, which Arrow writes as milliseconds.
+  // The reader restores milliseconds, which the statistics hold, too.
+  for (auto [unit, name] : units) {
+    add(fmt::format("time_{}", name), arrow::timestamp(unit, "UTC"),
+        {"-1", "0", "1767225600"});
+  }
+  // Arrow stores durations as integers and restores them from its schema.
+  for (auto [unit, name] : units) {
+    add(fmt::format("duration_{}", name), arrow::duration(unit),
+        {"-1", "0", "86400"});
+  }
+  add("decimal", arrow::decimal128(10, 2),
+      {R"("1.50")", R"("-2.25")", R"("0.00")"});
+  auto buffer = write_groups(fields, columns);
+  for (auto pipeline :
+       {"read_parquet", R"(read_parquet decimal_format="float")"}) {
+    auto [result, decoded]
+      = read_both(fields, columns, {.filter = {}, .order = EventOrder::ordered},
+                  {.pipeline = pipeline});
+    REQUIRE_EQUAL(result.events.size(), size_t{3});
+    auto events = rows(result);
+    CHECK_EQUAL(as<record>(events[0]).at("time_s"),
+                data{tenzir::time{std::chrono::seconds{-1}}});
+    CHECK_EQUAL(as<record>(events[6]).at("time_s"),
+                data{tenzir::time{std::chrono::seconds{1'767'225'600}}});
+    CHECK(not repeats(result, "id"));
+    for (auto const& field : fields | std::views::drop(1)) {
+      CHECK(repeats(result, field->name()));
+      CHECK(not repeats(decoded, field->name()));
+    }
+    // Only `id` is fetched.
+    result = run(buffer, {.filter = {}, .order = EventOrder::ordered},
+                 {.pipeline = pipeline});
+    CHECK_EQUAL(fetched(result, buffer), chunks_of({0}, 3));
+  }
+  // A constant outside of the projection is not read at all.
+  auto result = run(buffer, {.filter = {},
+                             .order = EventOrder::ordered,
+                             .projection = projection_of("uint32")});
+  CHECK(result.diagnostics.empty());
+  CHECK(data_reads(result.file->reads()).empty());
+  REQUIRE_EQUAL(rows(result).size(), size_t{9});
+  CHECK_EQUAL(rows(result)[3],
+              (data{record{{"uint32", uint64_t{4294967295}}}}));
+}
+
+TEST("statistics provide chunks that are null throughout") {
+  auto fields = arrow::FieldVector{
+    arrow::field("id", arrow::int64()),
+    // Nulls within a row group, which need decoding.
+    arrow::field("sparse", arrow::int64()),
+  };
+  auto columns = arrow::ArrayVector{
+    from_json(arrow::int64(), iota(9)),
+    from_json(arrow::int64(), "[null,1,2,3,null,5,6,7,null]"),
+  };
+  auto types = arrow::DataTypeVector{
+    arrow::int64(),
+    arrow::float64(),
+    arrow::boolean(),
+    arrow::utf8(),
+    arrow::timestamp(arrow::TimeUnit::MILLI, "UTC"),
+    arrow::duration(arrow::TimeUnit::SECOND),
+    arrow::decimal128(10, 2),
+  };
+  for (auto const& type : types) {
+    fields.push_back(arrow::field(fmt::format("null_{}", fields.size()), type));
+    columns.push_back(from_json(type, each({"null", "null", "null"})));
+  }
+  // Null in the first and last row group, a value in the one between.
+  fields.push_back(arrow::field("gaps", arrow::int64()));
+  columns.push_back(from_json(arrow::int64(), each({"null", "1", "null"})));
+  auto [result, decoded] = read_both(fields, columns);
+  CHECK(result.diagnostics.empty());
+  auto buffer = write_groups(fields, columns);
+  result = run(buffer, {.filter = {}, .order = EventOrder::ordered});
+  CHECK_EQUAL(fetched(result, buffer), chunks_of({0, 1}, 3));
+}
+
+TEST("floats with equal bounds are decoded") {
+  // Statistics leave out NaNs, so they record 1 as both bounds of the first
+  // row group.
+  auto nan = std::numeric_limits<double>::quiet_NaN();
+  auto doubles = arrow::DoubleBuilder{};
+  auto floats = arrow::FloatBuilder{};
+  for (auto x : {1.0, nan, 1.0, 2.0, 2.0, 2.0}) {
+    REQUIRE(doubles.Append(x).ok());
+    REQUIRE(floats.Append(static_cast<float>(x)).ok());
+  }
+  auto fields = arrow::FieldVector{
+    arrow::field("double", arrow::float64()),
+    arrow::field("float", arrow::float32()),
+    arrow::field("int", arrow::int64()),
+  };
+  auto columns = arrow::ArrayVector{
+    doubles.Finish().ValueOrDie(),
+    floats.Finish().ValueOrDie(),
+    from_json(arrow::int64(), each({"1", "2"})),
+  };
+  auto buffer = write_groups(fields, columns);
+  auto result = run(buffer, {.filter = {}, .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(fetched(result, buffer), chunks_of({0, 1}, 2));
+  CHECK(repeats(result, "int"));
+  auto events = rows(result);
+  REQUIRE_EQUAL(events.size(), size_t{6});
+  for (auto name : {"double", "float"}) {
+    auto value = as<record>(events[1]).at(name);
+    CHECK(std::isnan(as<double>(value)));
+    CHECK_EQUAL(as<record>(events[2]).at(name), data{1.0});
+  }
+}
+
+TEST("inexact bounds are decoded") {
+  // In the first row group, flag the bounds as inexact, and make them equal,
+  // as a writer that truncates `x-1` and `x-2` to `x-` might.
+  auto fields = arrow::FieldVector{
+    arrow::field("id", arrow::int64()),
+    arrow::field("string", arrow::utf8()),
+  };
+  auto columns = arrow::ArrayVector{
+    from_json(arrow::int64(), iota(6)),
+    from_json(arrow::utf8(), R"(["x-1","x-2","x-1","y","y","y"])"),
+  };
+  // The statistics of a string column hold the maximum, then the minimum, then
+  // whether each is exact.
+  auto buffer
+    = patch_footer(write_groups(fields, columns), "\x03x-2\x18\x03x-1\x11\x11",
+                   "\x03x-1\x18\x03x-1\x12\x12");
+  auto metadata = ::parquet::ReadMetaData(
+    std::make_shared<arrow::io::BufferReader>(buffer));
+  auto stats = metadata->RowGroup(0)->ColumnChunk(1)->statistics();
+  REQUIRE(stats);
+  REQUIRE_EQUAL(stats->EncodeMin(), stats->EncodeMax());
+  REQUIRE(stats->is_min_value_exact() == false);
+  REQUIRE(stats->is_max_value_exact() == false);
+  auto result = run(buffer, {.filter = {}, .order = EventOrder::ordered});
+  CHECK(result.diagnostics.empty());
+  auto decoded = run(write_groups(fields, columns, false),
+                     {.filter = {}, .order = EventOrder::ordered});
+  CHECK_EQUAL(rows(result), rows(decoded));
+  CHECK_EQUAL(fetched(result, buffer),
+              (std::vector<std::pair<int, int>>{{0, 0}, {0, 1}, {1, 0}}));
+}
+
+TEST("timestamps that nanoseconds cannot represent are decoded") {
+  // The first row group holds 2026-01-01 and the second one the year 2500,
+  // which exceeds nanoseconds since the epoch.
+  auto fields = arrow::FieldVector{
+    arrow::field("id", arrow::int64()),
+    arrow::field("time", arrow::timestamp(arrow::TimeUnit::MILLI, "UTC")),
+    arrow::field("duration", arrow::duration(arrow::TimeUnit::SECOND)),
+  };
+  for (auto const& values : {
+         std::pair{each({"1767225600000", "16725225600000"}), each({"1", "1"})},
+         std::pair{each({"1767225600000", "1767225600000"}),
+                   each({"1", "10000000000000"})},
+       }) {
+    auto columns = arrow::ArrayVector{
+      from_json(arrow::int64(), iota(6)),
+      from_json(fields[1]->type(), values.first),
+      from_json(fields[2]->type(), values.second),
+    };
+    auto [result, decoded] = read_both(fields, columns);
+    // The import reports the second row group, as it did before.
+    CHECK_EQUAL(rows(result).size(), size_t{3});
+    REQUIRE_EQUAL(result.diagnostics.size(), 1u);
+    CHECK_EQUAL(result.diagnostics.front().severity, severity::error);
+    CHECK(repeats(result, "time"));
+    CHECK(repeats(result, "duration"));
+  }
+}
+
+TEST("statistics provide the types that the reader restores") {
+  auto fields = arrow::FieldVector{arrow::field("id", arrow::int64())};
+  auto columns = arrow::ArrayVector{from_json(arrow::int64(), iota(6))};
+  auto add = [&](std::string name, std::shared_ptr<arrow::Array> array) {
+    fields.push_back(arrow::field(std::move(name), array->type()));
+    columns.push_back(std::move(array));
+  };
+  auto ips = ip_type::make_arrow_builder(arrow::default_memory_pool());
+  auto subnets = subnet_type::make_arrow_builder(arrow::default_memory_pool());
+  auto enumeration = enumeration_type{{"first"}, {"second"}};
+  auto enumerations
+    = enumeration.make_arrow_builder(arrow::default_memory_pool());
+  auto bytes = std::array<uint8_t, 16>{};
+  bytes.back() = 1;
+  auto loopback = ip::v6(std::span{bytes});
+  for (auto i = 0; i < 2 * group_rows; ++i) {
+    auto first = i < group_rows;
+    auto address = first ? ip::v4(0x0a000001) : loopback;
+    REQUIRE(append_builder(ip_type{}, *ips, address).ok());
+    REQUIRE(
+      append_builder(subnet_type{}, *subnets,
+                     subnet{address, static_cast<uint8_t>(first ? 104 : 128)})
+        .ok());
+    REQUIRE(enumerations->Append(first ? 0 : 1).ok());
+  }
+  add("ip", ips->Finish().ValueOrDie());
+  add("subnet", subnets->Finish().ValueOrDie());
+  add("enumeration", enumerations->Finish().ValueOrDie());
+  auto dictionary = arrow::StringDictionaryBuilder{};
+  for (auto value : {"a", "a", "a", "b", "b", "b"}) {
+    REQUIRE(dictionary.Append(value).ok());
+  }
+  add("dictionary", dictionary.Finish().ValueOrDie());
+  add("zoned",
+      from_json(arrow::timestamp(arrow::TimeUnit::NANO, "Europe/Berlin"),
+                each({"0", "1"})));
+  auto [result, decoded] = read_both(fields, columns);
+  CHECK(result.diagnostics.empty());
+  for (auto const& field : fields | std::views::drop(1)) {
+    CHECK(repeats(result, field->name()));
+  }
+  auto events = rows(result);
+  REQUIRE_EQUAL(events.size(), size_t{6});
+  CHECK_EQUAL(as<record>(events[0]).at("ip"), data{ip::v4(0x0a000001)});
+  CHECK_EQUAL(as<record>(events[3]).at("subnet"),
+              (data{subnet{loopback, 128}}));
+  CHECK_EQUAL(as<record>(events[3]).at("enumeration"), data{"second"});
+  auto buffer = write_groups(fields, columns);
+  result = run(buffer, {.filter = {}, .order = EventOrder::ordered});
+  CHECK_EQUAL(fetched(result, buffer), chunks_of({0}, 2));
+}
+
+TEST("records mix fields from statistics with decoded ones") {
+  // A record whose constants sit between decoded fields, and a record with
+  // nulls, whose leaves then have nulls, too, except the one that has nothing
+  // but nulls.
+  auto inner = arrow::struct_({
+    arrow::field("e", arrow::int32()),
+    arrow::field("f", arrow::int64()),
+  });
+  auto outer = arrow::struct_({
+    arrow::field("a", arrow::int64()),
+    arrow::field("b", arrow::int64()),
+    arrow::field("c", arrow::utf8()),
+    arrow::field("d", inner),
+    arrow::field("g", arrow::uint8()),
+  });
+  auto nullable = arrow::struct_({
+    arrow::field("x", arrow::int64()),
+    arrow::field("z", arrow::int64()),
+  });
+  auto fields = arrow::FieldVector{
+    arrow::field("r", outer),
+    arrow::field("s", nullable),
+  };
+  auto columns = arrow::ArrayVector{
+    from_json(outer, R"([
+      {"a": 0, "b": 1, "c": null, "d": {"e": 2, "f": 0}, "g": 3},
+      {"a": 1, "b": 1, "c": null, "d": {"e": 2, "f": 1}, "g": 3},
+      {"a": 2, "b": 1, "c": null, "d": {"e": 2, "f": 2}, "g": 3},
+      {"a": 3, "b": 4, "c": null, "d": {"e": 5, "f": 3}, "g": 6},
+      {"a": 4, "b": 4, "c": null, "d": {"e": 5, "f": 4}, "g": 6},
+      {"a": 5, "b": 4, "c": null, "d": {"e": 5, "f": 5}, "g": 6}
+    ])"),
+    from_json(nullable, R"([
+      {"x": 0, "z": null}, null, {"x": 2, "z": null},
+      null, {"x": 4, "z": null}, {"x": 5, "z": null}
+    ])"),
+  };
+  auto [result, decoded] = read_both(fields, columns);
+  CHECK(result.diagnostics.empty());
+  for (auto path : {"r.b", "r.d.e", "r.g"}) {
+    CHECK(repeats(result, path));
+  }
+  for (auto path : {"r.a", "r.d.f"}) {
+    CHECK(not repeats(result, path));
+  }
+  // The fields keep their order, which the comparison with the decoded file
+  // checks, too.
+  auto events = rows(result);
+  REQUIRE_EQUAL(events.size(), size_t{6});
+  auto names = std::vector<std::string>{};
+  for (auto const& [name, _] : as<record>(as<record>(events[0]).at("r"))) {
+    names.push_back(name);
+  }
+  CHECK_EQUAL(names, (std::vector<std::string>{"a", "b", "c", "d", "g"}));
+  CHECK_EQUAL(as<record>(events[1]).at("s"), data{});
+  // A restore within a row group slices the records.
+  auto buffer = write_groups(fields, columns);
+  auto resumed = run(buffer, {.filter = {}, .order = EventOrder::ordered},
+                     {.restore = checkpoint_at(buffer, 1)});
+  CHECK(resumed.diagnostics.empty());
+  auto expected = rows(decoded);
+  expected.erase(expected.begin());
+  CHECK_EQUAL(rows(resumed), expected);
+  CHECK(repeats(resumed, "r.b"));
+}
+
+TEST("records whose leaves all come from statistics") {
+  // `n` has nulls, and so does its only field in the other rows, which the
+  // statistics cannot tell apart. `m` has no nulls, and `p` no nulls anywhere.
+  auto leaf = arrow::struct_({arrow::field("z", arrow::int64())});
+  auto nested = arrow::struct_({
+    arrow::field("q", arrow::int64()),
+    arrow::field("r", arrow::struct_({
+                        arrow::field("s", arrow::utf8()),
+                        arrow::field("t", arrow::int64()),
+                      })),
+  });
+  auto fields = arrow::FieldVector{
+    arrow::field("id", arrow::int64()),
+    arrow::field("n", leaf),
+    arrow::field("p", nested),
+    arrow::field("m", leaf, /*nullable=*/false),
+  };
+  auto columns = arrow::ArrayVector{
+    from_json(arrow::int64(), iota(6)),
+    from_json(leaf, R"([{"z": null}, null, {"z": null}, null, null, null])"),
+    from_json(nested, R"([
+      {"q": 1, "r": {"s": "x", "t": null}},
+      {"q": 1, "r": {"s": "x", "t": null}},
+      {"q": 1, "r": {"s": "x", "t": null}},
+      {"q": 2, "r": {"s": "y", "t": null}},
+      {"q": 2, "r": {"s": "y", "t": null}},
+      {"q": 2, "r": {"s": "y", "t": null}}
+    ])"),
+    from_json(leaf, each({R"({"z": null})", R"({"z": null})"})),
+  };
+  auto [result, decoded] = read_both(fields, columns);
+  CHECK(result.diagnostics.empty());
+  auto events = rows(result);
+  REQUIRE_EQUAL(events.size(), size_t{6});
+  CHECK_EQUAL(as<record>(events[0]).at("n"), (data{record{{"z", data{}}}}));
+  CHECK_EQUAL(as<record>(events[1]).at("n"), data{});
+  CHECK_EQUAL(as<record>(events[4]).at("m"), (data{record{{"z", data{}}}}));
+  CHECK(repeats(result, "p.q"));
+  CHECK(repeats(result, "p.r.s"));
+  auto buffer = write_groups(fields, columns);
+  result = run(buffer, {.filter = {}, .order = EventOrder::ordered});
+  CHECK_EQUAL(fetched(result, buffer),
+              chunks_of({0, column_index(buffer, "n.z")}, 2));
+}
+
+TEST("filters see the columns from statistics") {
+  auto fields = arrow::FieldVector{
+    arrow::field("id", arrow::int64()),
+    arrow::field("c", arrow::int64()),
+  };
+  auto columns = arrow::ArrayVector{
+    from_json(arrow::int64(), iota(9)),
+    from_json(arrow::int64(), each({"1", "2", "3"})),
+  };
+  auto buffer = write_groups(fields, columns);
+  auto request = [](std::string_view filter) {
+    return ir::OptimizeRequest{.filter = {id_filter(filter)},
+                               .order = EventOrder::ordered};
+  };
+  // Row-group pruning leaves the second row group.
+  auto [result, decoded] = read_both(fields, columns, request("c == 2"));
+  CHECK_EQUAL(total_rows(result.events), uint64_t{3});
+  result = run(buffer, request("c == 2"));
+  CHECK_EQUAL(fetched(result, buffer),
+              (std::vector<std::pair<int, int>>{{1, 0}}));
+  // Arithmetic keeps every row group, and the filter evaluates the constants.
+  std::tie(result, decoded) = read_both(fields, columns, request("c + 0 != 2"));
+  CHECK_EQUAL(total_rows(result.events), uint64_t{6});
+  result = run(buffer, request("c + 0 != 2"));
+  CHECK_EQUAL(fetched(result, buffer), chunks_of({0}, 3));
+  // A comparison that warns warns the same way.
+  std::tie(result, decoded) = read_both(fields, columns, request("c > \"x\""));
+  CHECK(result.events.empty());
+  CHECK(not result.diagnostics.empty());
+}
+
+TEST("statistics that do not decode leave their row group to the reader") {
+  auto fields = arrow::FieldVector{
+    arrow::field("id", arrow::int64()),
+    arrow::field("c", arrow::int64()),
+  };
+  auto columns = arrow::ArrayVector{
+    from_json(arrow::int64(), iota(6)),
+    from_json(arrow::int64(), each({"7", "8"})),
+  };
+  // Shorten the minimum of `c` in the second row group to three bytes, which
+  // do not decode as a 64-bit integer, and lengthen the maximum to keep the
+  // size of the footer.
+  auto eight = std::string{"\x08\0\0\0\0\0\0\0", 8};
+  auto buffer = patch_footer(write_groups(fields, columns),
+                             "\x28\x08" + eight + "\x18\x08" + eight,
+                             "\x28\x0d" + eight + std::string(5, '\0')
+                               + "\x18\x03" + eight.substr(0, 3));
+  auto metadata = ::parquet::ReadMetaData(
+    std::make_shared<arrow::io::BufferReader>(buffer));
+  auto throws = false;
+  try {
+    std::ignore = metadata->RowGroup(1)->ColumnChunk(1)->statistics();
+  } catch (::parquet::ParquetException const&) {
+    throws = true;
+  }
+  REQUIRE(throws);
+  auto result = run(buffer, {.filter = {}, .order = EventOrder::ordered});
+  // Arrow attaches the statistics to what it decodes, which fails as it did
+  // before.
+  CHECK_EQUAL(total_rows(result.events), uint64_t{3});
+  REQUIRE_EQUAL(result.diagnostics.size(), 1u);
+  auto const& error = result.diagnostics.front();
+  CHECK_EQUAL(error.severity, severity::error);
+  CHECK(error.message.starts_with("IOError"));
+  REQUIRE_EQUAL(error.notes.size(), 1u);
+  CHECK_EQUAL(error.notes.front().message, "failed to read record batch");
+  CHECK_EQUAL(fetched(result, buffer),
+              (std::vector<std::pair<int, int>>{{0, 0}, {1, 0}, {1, 1}}));
 }

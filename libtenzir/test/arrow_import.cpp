@@ -5,6 +5,7 @@
 #include "tenzir/nova/arrow_import.hpp"
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/concepts.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -12,6 +13,7 @@
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
+#include <arrow/json/from_string.h>
 #include <arrow/util/compression.h>
 
 #include <cstring>
@@ -202,6 +204,79 @@ TEST("Arrow dictionaries with nulls or several values import per row") {
   CHECK_EQUAL(nova::materialize_legacy(result.get(1)), data{});
   result = import(*make_dictionary({}, make_strings({"a"})));
   CHECK_EQUAL(result.length(), 0);
+}
+
+namespace {
+
+auto from_json(std::shared_ptr<arrow::DataType> type, std::string const& text)
+  -> std::shared_ptr<arrow::Array> {
+  auto result = arrow::json::ArrayFromJSONString(std::move(type), text);
+  REQUIRE(result.ok());
+  return result.MoveValueUnsafe();
+}
+
+/// Whether an array repeats one value instead of storing it for every row.
+auto repeats(nova::Array<nova::Data> const& array) -> bool {
+  return match(
+    array,
+    [](nova::UnionArray const&) {
+      return false;
+    },
+    []<class Tag>(nova::Array<Tag> const& values) {
+      return match(values.storage(), []<class Storage>(Storage const& x) {
+        // A bitmap of a single value does not store its bits.
+        if constexpr (std::same_as<Storage, nova::storage::BitMap>) {
+          return x.data().empty();
+        } else {
+          TENZIR_UNUSED(x);
+          return concepts::instantiation_of<Storage,
+                                            nova::storage::ConstantStorage>;
+        }
+      });
+    });
+}
+
+} // namespace
+
+TEST("Arrow dictionaries of a single value of any type import as constants") {
+  auto check = [](std::shared_ptr<arrow::Array> values, data const& expected) {
+    auto result = import(*make_dictionary({0, 0, 0}, std::move(values)));
+    CHECK(repeats(result));
+    CHECK_EQUAL(result.length(), 3);
+    CHECK_EQUAL(nova::materialize(result.get(2)), expected);
+  };
+  check(from_json(arrow::boolean(), "[true]"), data{true});
+  check(from_json(arrow::int8(), "[-128]"), data{int64_t{-128}});
+  check(from_json(arrow::int16(), "[-2]"), data{int64_t{-2}});
+  check(from_json(arrow::int32(), "[-3]"), data{int64_t{-3}});
+  check(from_json(arrow::int64(), "[-4]"), data{int64_t{-4}});
+  check(from_json(arrow::uint8(), "[255]"), data{uint64_t{255}});
+  check(from_json(arrow::uint16(), "[2]"), data{uint64_t{2}});
+  check(from_json(arrow::uint32(), "[4294967295]"), data{uint64_t{4294967295}});
+  check(from_json(arrow::uint64(), "[18446744073709551615]"),
+        data{std::numeric_limits<uint64_t>::max()});
+  check(from_json(arrow::float32(), "[1.5]"), data{1.5});
+  check(from_json(arrow::float64(), "[-0.5]"), data{-0.5});
+  // Other types import their value, which converts units and extension
+  // types.
+  check(from_json(arrow::timestamp(arrow::TimeUnit::MILLI, "UTC"), "[1234]"),
+        data{tenzir::time{std::chrono::milliseconds{1234}}});
+  check(from_json(arrow::duration(arrow::TimeUnit::SECOND), "[-2]"),
+        data{duration{std::chrono::seconds{-2}}});
+  auto ips = ip_type::make_arrow_builder(arrow::default_memory_pool());
+  REQUIRE(append_builder(ip_type{}, *ips, ip::v4(0x0a000001)).ok());
+  check(ips->Finish().ValueOrDie(), data{ip::v4(0x0a000001)});
+  auto subnets = subnet_type::make_arrow_builder(arrow::default_memory_pool());
+  auto network = subnet{ip::v4(0x0a000000), 104};
+  REQUIRE(append_builder(subnet_type{}, *subnets, network).ok());
+  check(subnets->Finish().ValueOrDie(), data{network});
+  // A value that fails to import fails as it would without the dictionary.
+  auto overflow = from_json(arrow::timestamp(arrow::TimeUnit::SECOND),
+                            "[9223372036854775807]");
+  auto result = nova::import_arrow_array(*make_dictionary({0, 0}, overflow));
+  REQUIRE(result.is_err());
+  CHECK_EQUAL(result.unwrap_err(),
+              nova::import_arrow_array(*overflow).unwrap_err());
 }
 
 TEST("Arrow numeric imports preserve physical widths and own their buffers") {
