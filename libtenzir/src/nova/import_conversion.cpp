@@ -16,6 +16,7 @@
 #include <arrow/record_batch.h>
 
 #include <limits>
+#include <map>
 #include <utility>
 
 namespace tenzir::nova {
@@ -56,60 +57,189 @@ auto refine(type const& lhs, type const& rhs) -> Result<type, std::string> {
   return Err{"concrete value types differ"};
 }
 
-auto infer(RowView<Data> row) -> Result<type, std::string>;
-
-auto infer_record(RowView<Record> row) -> Result<record_type, std::string> {
-  auto fields = std::vector<struct record_type::field>{};
-  for (auto [name, value] : row) {
-    TRY(auto field_type, infer(value));
-    fields.emplace_back(std::string{name}, std::move(field_type));
+// Discover types from columns, constructing each distinct schema once. Rows
+// only carry schema IDs; scalar values never participate in discovery.
+class SchemaDiscovery {
+public:
+  SchemaDiscovery() {
+    std::ignore = intern(type{null_type{}});
   }
-  return record_type{fields};
-}
 
-auto infer(RowView<Data> row) -> Result<type, std::string> {
-  return match(row, []<class T>(RowView<T> value) -> Result<type, std::string> {
-    if constexpr (std::same_as<T, Null>) {
-      return type{null_type{}};
-    } else if constexpr (std::same_as<T, Bool>) {
-      return type{bool_type{}};
-    } else if constexpr (std::same_as<T, Int>) {
-      return type{int64_type{}};
-    } else if constexpr (std::same_as<T, UInt>) {
-      return type{uint64_type{}};
-    } else if constexpr (std::same_as<T, Float>) {
-      return type{double_type{}};
-    } else if constexpr (std::same_as<T, String>) {
-      return type{string_type{}};
-    } else if constexpr (std::same_as<T, Blob>) {
-      return type{blob_type{}};
-    } else if constexpr (std::same_as<T, Ip>) {
-      return type{ip_type{}};
-    } else if constexpr (std::same_as<T, Subnet>) {
-      return type{subnet_type{}};
-    } else if constexpr (std::same_as<T, Time>) {
-      return type{time_type{}};
-    } else if constexpr (std::same_as<T, Duration>) {
-      return type{duration_type{}};
-    } else if constexpr (std::same_as<T, Record>) {
-      TRY(auto record, infer_record(value));
-      return type{std::move(record)};
-    } else {
-      static_assert(std::same_as<T, List>);
-      auto element = type{null_type{}};
-      for (auto item : value) {
-        TRY(auto item_type, infer(item));
-        auto refined = refine(element, item_type);
-        if (not refined) {
-          return Err{"list contains incompatible element types or record "
-                     "shapes"};
-        }
-        element = std::move(refined).unwrap();
-      }
-      return type{list_type{element}};
+  auto types() const -> std::vector<type> const& {
+    return types_;
+  }
+
+  auto discover(Array<Data> const& array, storage::BitMap const& selected)
+    -> Result<std::vector<size_t>, std::string> {
+    auto result = std::vector<size_t>(array.length(), 0);
+    if (not selected.any()) {
+      return result;
     }
-  });
-}
+    TRY(match(
+      array,
+      [&](UnionArray const& union_) -> Result<void, std::string> {
+        for (auto const& alternative : union_.fields()) {
+          auto mask = selected & alternative.present;
+          if (not mask.any()) {
+            continue;
+          }
+          TRY(auto ids, discover(Array<Data>{alternative.data}, mask));
+          storage::for_each_true(mask, [&](auto row) {
+            result[row] = ids[row];
+          });
+        }
+        return {};
+      },
+      [&]<class T>(Array<T> const& values) -> Result<void, std::string> {
+        if constexpr (std::same_as<T, Record>) {
+          TRY(result, discover_record(values, selected));
+        } else if constexpr (std::same_as<T, List>) {
+          TRY(result, discover_list(values, selected));
+        } else {
+          auto id = size_t{0};
+          if constexpr (not std::same_as<T, Null>) {
+            id = intern(type{data_to_type_t<T>{}});
+          }
+          storage::for_each_true(selected, [&](auto row) {
+            result[row] = id;
+          });
+        }
+        return {};
+      }));
+    return result;
+  }
+
+private:
+  auto intern(type value) -> size_t {
+    auto [it, inserted] = ids_.try_emplace(value, types_.size());
+    if (inserted) {
+      types_.push_back(std::move(value));
+    }
+    return it->second;
+  }
+
+  auto
+  discover_record(Array<Record> const& array, storage::BitMap const& selected)
+    -> Result<std::vector<size_t>, std::string> {
+    auto primary = array.to_primary();
+    auto const& records = *as<storage::RecordStorage>(primary.storage());
+    auto masks = std::vector<storage::BitMap::Mutable>{};
+    for (auto i = size_t{0}; i < records.arrays.size(); ++i) {
+      masks.emplace_back(array.length());
+    }
+    for (auto row : storage::true_bits(selected)) {
+      auto shape = records.shape_indices.get(row);
+      if (shape < 0) {
+        return Err{"selected row has no record shape"};
+      }
+      for (auto field : records.shape_table.fields(shape)) {
+        masks[field].set(row, true);
+      }
+    }
+    auto columns = std::vector<std::vector<size_t>>{};
+    for (auto i = size_t{0}; i < records.arrays.size(); ++i) {
+      auto mask = std::move(masks[i]).finish() & records.arrays[i].present;
+      TRY(auto ids, discover(records.arrays[i].data, mask));
+      columns.push_back(std::move(ids));
+    }
+    auto result = std::vector<size_t>(array.length(), 0);
+    auto schemas = std::map<std::vector<size_t>, size_t>{};
+    auto signature = std::vector<size_t>{};
+    for (auto row : storage::true_bits(selected)) {
+      auto shape = records.shape_indices.get(row);
+      auto fields = records.shape_table.fields(shape);
+      signature.clear();
+      signature.push_back(static_cast<size_t>(shape));
+      for (auto field : fields) {
+        signature.push_back(columns[field][row]);
+      }
+      auto it = schemas.find(signature);
+      if (it == schemas.end()) {
+        auto schema = std::vector<struct record_type::field>{};
+        for (auto field : fields) {
+          schema.emplace_back(std::string{records.names_by_index[field]},
+                              types_[columns[field][row]]);
+        }
+        it
+          = schemas.emplace(signature, intern(type{record_type{schema}})).first;
+      }
+      result[row] = it->second;
+    }
+    return result;
+  }
+
+  auto discover_list(Array<List> const& array, storage::BitMap const& selected)
+    -> Result<std::vector<size_t>, std::string> {
+    if (auto constant = try_as<storage::ConstantStorage<List, RowView<List>>>(
+          array.storage())) {
+      auto single = Array<List>{
+        storage::ConstantStorage<List, RowView<List>>{1, constant->value()}};
+      TRY(auto ids,
+          discover_list(single.to_primary(), storage::BitMap{1, true}));
+      auto result = std::vector<size_t>(array.length(), 0);
+      storage::for_each_true(selected, [&](auto row) {
+        result[row] = ids[0];
+      });
+      return result;
+    }
+    auto const& lists = as<storage::ListStorage>(array.storage());
+    if (lists.values().length() == 0) {
+      auto id = intern(type{list_type{type{null_type{}}}});
+      auto result = std::vector<size_t>(array.length(), 0);
+      storage::for_each_true(selected, [&](auto row) {
+        result[row] = id;
+      });
+      return result;
+    }
+    auto children = storage::BitMap::Mutable{lists.values().length()};
+    for (auto row : storage::true_bits(selected)) {
+      auto span = lists.spans()[row];
+      for (auto i = span.begin; i < span.end; ++i) {
+        children.set(i, true);
+      }
+    }
+    TRY(auto ids, discover(lists.values(), std::move(children).finish()));
+    auto result = std::vector<size_t>(array.length(), 0);
+    auto merged = std::map<std::pair<size_t, size_t>, size_t>{};
+    auto list_types = std::map<size_t, size_t>{};
+    for (auto row : storage::true_bits(selected)) {
+      auto element = size_t{0};
+      auto span = lists.spans()[row];
+      for (auto i = span.begin; i < span.end; ++i) {
+        auto next = ids[i];
+        if (element == next or next == 0) {
+          continue;
+        }
+        if (element == 0) {
+          element = next;
+          continue;
+        }
+        auto key = std::pair{element, next};
+        auto it = merged.find(key);
+        if (it == merged.end()) {
+          auto refined = refine(types_[element], types_[next]);
+          if (not refined) {
+            return Err{"list contains incompatible element types or record "
+                       "shapes"};
+          }
+          it = merged.emplace(key, intern(std::move(refined).unwrap())).first;
+        }
+        element = it->second;
+      }
+      auto it = list_types.find(element);
+      if (it == list_types.end()) {
+        it = list_types
+               .emplace(element, intern(type{list_type{types_[element]}}))
+               .first;
+      }
+      result[row] = it->second;
+    }
+    return result;
+  }
+
+  std::vector<type> types_;
+  std::map<type, size_t> ids_;
+};
 
 auto make_slice(Events const& events, record_type const& schema,
                 std::vector<storage::Index> const& rows,
@@ -190,7 +320,21 @@ auto ImportConversionBuffer::add(Events events, storage::BitMap selection)
         or *events.meta.internal.get(index) != internal_) {
       return Err{"event metadata does not match the conversion buffer"};
     }
-    TRY(auto incoming, infer_record(events.data.get(index)));
+  }
+  auto discovery = SchemaDiscovery{};
+  TRY(auto schemas, discovery.discover(Array<Data>{events.data}, selection));
+  // Refinement changes first-fit decisions, so cached assignments are only
+  // valid until a candidate schema changes or a new candidate is appended.
+  auto epoch = size_t{1};
+  auto destinations = std::vector<std::pair<size_t, size_t>>(
+    discovery.types().size(), {0, unassigned});
+  for (auto index : storage::true_bits(selection)) {
+    auto& cached = destinations[schemas[index]];
+    if (cached.first == epoch) {
+      assignments[index] = cached.second;
+      continue;
+    }
+    auto incoming = as<record_type>(discovery.types()[schemas[index]]);
     auto destination = unassigned;
     for (auto i = size_t{0}; i < staged_schemas.size(); ++i) {
       if (staged_schemas[i] == incoming) {
@@ -202,7 +346,11 @@ auto ImportConversionBuffer::add(Events events, storage::BitMap selection)
       for (auto i = size_t{0}; i < staged_schemas.size(); ++i) {
         auto merged = refine(type{staged_schemas[i]}, type{incoming});
         if (merged) {
-          staged_schemas[i] = as<record_type>(std::move(merged).unwrap());
+          auto schema = as<record_type>(std::move(merged).unwrap());
+          if (schema != staged_schemas[i]) {
+            staged_schemas[i] = std::move(schema);
+            ++epoch;
+          }
           destination = i;
           break;
         }
@@ -211,7 +359,9 @@ auto ImportConversionBuffer::add(Events events, storage::BitMap selection)
     if (destination == unassigned) {
       destination = staged_schemas.size();
       staged_schemas.push_back(std::move(incoming));
+      ++epoch;
     }
+    cached = {epoch, destination};
     assignments[index] = destination;
   }
   auto const batch_index = batches_.size();

@@ -3396,6 +3396,102 @@ TEST("import conversion rejects mixed lists without mutating candidates") {
               }));
 }
 
+TEST("import conversion discovers selected nested schemas from columns") {
+  auto rows = std::vector<Record>{
+    Record{{"ignored", List{Int{1}, String{"invalid"}}}},
+    Record{{"parent", Record{{"x", Null{}}}}, {"items", List{}}},
+    Record{{"parent", Record{{"x", Int{1}}}}, {"items", List{Null{}, Int{2}}}},
+    Record{{"parent", Record{{"x", String{"s"}}}},
+           {"items", List{String{"t"}}}},
+    Record{{"items", List{List{}, List{Null{}, Int{3}}}}, {"parent", Null{}}},
+    Record{{"parent", Record{{"y", Bool{true}}}},
+           {"items", List{Record{{"a", Null{}}}, Record{{"a", Int{4}}}}}},
+    Record{{"parent", Null{}}, {"items", List{Null{}}}},
+  };
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& row : rows) {
+    append_export_row(builder, row);
+  }
+  auto events = Events{builder.finish(), storage::BitMap{7, true},
+                       Events::Meta::make_empty(7, "events")};
+  auto selection = bitmap({false, true, true, true, true, true, true});
+  auto batch = ImportConversionBuffer{"events", false};
+  REQUIRE(batch.add(events, selection));
+  auto singles = ImportConversionBuffer{"events", false};
+  for (auto i = size_t{1}; i < rows.size(); ++i) {
+    auto single = export_events(rows[i]);
+    single.meta = Events::Meta::make_empty(1, "events");
+    REQUIRE(singles.add(single, single.mask));
+  }
+  auto actual = batch.snapshot();
+  auto expected = singles.snapshot();
+  REQUIRE(actual);
+  REQUIRE(expected);
+  CHECK_EQUAL(batch.rows(), 6u);
+  CHECK_EQUAL(export_values(actual.unwrap()), export_values(expected.unwrap()));
+  auto expanded_schemas = [](auto const& slices) {
+    auto result = std::vector<tenzir::type>{};
+    for (auto const& slice : slices) {
+      result.insert(result.end(), slice.rows(), slice.schema());
+    }
+    return result;
+  };
+  CHECK_EQUAL(expanded_schemas(actual.unwrap()),
+              expanded_schemas(expected.unwrap()));
+}
+
+TEST("import conversion preserves first-fit decisions as schemas refine") {
+  auto rows = std::vector<Record>{
+    Record{{"x", Int{1}}, {"y", Null{}}},
+    Record{{"x", String{"s"}}, {"y", Null{}}},
+    Record{{"x", Null{}}, {"y", Int{2}}},
+    Record{{"x", String{"t"}}, {"y", String{"u"}}},
+    Record{{"x", Null{}}, {"y", Int{3}}},
+    Record{{"x", Null{}}, {"y", Null{}}},
+    Record{{"x", Int{4}}, {"y", Int{5}}},
+  };
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& row : rows) {
+    append_export_row(builder, row);
+  }
+  auto events = Events{builder.finish(), storage::BitMap{7, true},
+                       Events::Meta::make_empty(7, "events")};
+  auto batch = ImportConversionBuffer{"events", false};
+  REQUIRE(batch.add(events, events.mask));
+  auto singles = ImportConversionBuffer{"events", false};
+  for (auto const& row : rows) {
+    auto single = export_events(row);
+    single.meta = Events::Meta::make_empty(1, "events");
+    REQUIRE(singles.add(single, single.mask));
+  }
+  auto actual = batch.snapshot();
+  auto expected = singles.snapshot();
+  REQUIRE(actual);
+  REQUIRE(expected);
+  CHECK_EQUAL(export_values(actual.unwrap()), export_values(expected.unwrap()));
+}
+
+TEST("import conversion ignores incompatible list rows outside selection") {
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, Record{{"xs", List{Int{1}, String{"bad"}}}});
+  append_export_row(builder, Record{{"xs", List{Int{2}}}});
+  append_export_row(builder, Record{{"xs", List{String{"three"}}}});
+  auto events = Events{builder.finish(), bitmap({true, true, false}),
+                       Events::Meta::make_empty(3, "events")};
+  auto buffer = ImportConversionBuffer{"events", false};
+  REQUIRE(buffer.add(events, bitmap({false, true, false})));
+  auto output = buffer.snapshot();
+  REQUIRE(output);
+  CHECK_EQUAL(export_values(output.unwrap()),
+              (std::vector<tenzir::data>{
+                tenzir::record{{"xs", tenzir::list{Int{2}}}},
+              }));
+  CHECK(not buffer.add(events, events.mask));
+  CHECK_EQUAL(buffer.rows(), 1u);
+  CHECK(not buffer.add(events, bitmap({false, false, true})));
+  CHECK_EQUAL(buffer.rows(), 1u);
+}
+
 TEST("import transport preserves selected values, order, and metadata") {
   auto builder = ArrayBuilder<Record>{};
   append_export_row(builder, Record{{"ignored", String{"backing"}}});
