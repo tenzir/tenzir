@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace tenzir::nova {
+namespace tenzir {
 
 /// Retains selected events while null-compatible output schemas are inferred.
 /// A failed add leaves the buffer unchanged. Each output has one concrete
@@ -23,16 +23,16 @@ class ImportConversionBuffer {
 public:
   ImportConversionBuffer(std::string name, bool internal);
 
-  auto add(Events events, storage::BitMap selection)
+  auto add(nova::Events events, nova::storage::BitMap selection)
     -> Result<void, std::string>;
   auto snapshot() const -> Result<std::vector<table_slice>, std::string>;
-  auto selected_events() const -> std::vector<std::pair<type, Events>>;
+  auto selected_events() const -> std::vector<std::pair<type, nova::Events>>;
   auto rows() const -> size_t;
 
 private:
   struct Selection {
     size_t batch;
-    storage::BitMap mask;
+    nova::storage::BitMap mask;
   };
 
   struct Candidate {
@@ -43,13 +43,13 @@ private:
   std::string name_;
   bool internal_;
   size_t rows_ = 0;
-  std::vector<Events> batches_;
+  std::vector<nova::Events> batches_;
   std::vector<Candidate> candidates_;
 };
 
 /// Adapts an existing Arrow slice for local subscribers without changing its
 /// schema, metadata, or import timestamp.
 auto import_table_slice(table_slice const& slice)
-  -> Result<Events, std::string>;
+  -> Result<nova::Events, std::string>;
 
-} // namespace tenzir::nova
+} // namespace tenzir

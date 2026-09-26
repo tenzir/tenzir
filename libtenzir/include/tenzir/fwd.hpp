@@ -281,11 +281,12 @@ using series = basic_series<type>;
 
 namespace nova {
 struct Events;
-struct ImportWireBatch;
 namespace storage {
 class BitMap;
 } // namespace storage
 } // namespace nova
+
+struct ImportWireBatch;
 
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;

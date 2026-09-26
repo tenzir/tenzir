@@ -5,17 +5,21 @@
 #include "tenzir/nova/arrow_export.hpp"
 
 #include "tenzir/arrow_memory_pool.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/nova/arrow_metadata.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <arrow/array.h>
+#include <arrow/builder.h>
 #include <arrow/record_batch.h>
 #include <arrow/util/key_value_metadata.h>
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
+#include <set>
 #include <utility>
 
 namespace tenzir::nova {
@@ -44,8 +48,9 @@ auto to_table_slices(Events const& events) -> std::vector<table_slice> {
   for (auto& [metadata, builder] : builders) {
     auto slices = builder.finish_as_table_slice(metadata.name);
     for (auto& slice : slices) {
-      slice
-        = table_slice{to_record_batch(slice), metadata.apply(slice.schema())};
+      auto schema = metadata.apply(slice.schema()).to_arrow_schema();
+      slice = table_slice{
+        to_record_batch(slice)->ReplaceSchemaMetadata(schema->metadata())};
     }
     result.insert(result.end(), std::make_move_iterator(slices.begin()),
                   std::make_move_iterator(slices.end()));
@@ -54,6 +59,175 @@ auto to_table_slices(Events const& events) -> std::vector<table_slice> {
 }
 
 namespace {
+
+auto export_status(arrow::Status const& status) -> Result<void, std::string> {
+  if (not status.ok()) {
+    return Err{status.ToString()};
+  }
+  return {};
+}
+
+auto finish_array(arrow::ArrayBuilder& builder)
+  -> Result<std::shared_ptr<arrow::Array>, std::string> {
+  auto result = builder.Finish();
+  if (not result.ok()) {
+    return Err{result.status().ToString()};
+  }
+  return std::move(*result);
+}
+
+auto export_column(Array<Data> const& array, type const& schema,
+                   std::span<storage::Index const> rows,
+                   storage::BitMap const& present)
+  -> Result<std::shared_ptr<arrow::Array>, std::string> {
+  auto nulls = array.get_alternative<Null>();
+  auto absent = [&](auto row) {
+    return row < 0 or not present.get(row)
+           or (nulls and nulls->present.get(row));
+  };
+  return match(
+    schema,
+    [&]<class T>(
+      T const& target) -> Result<std::shared_ptr<arrow::Array>, std::string> {
+      if constexpr (std::same_as<T, record_type>
+                    or std::same_as<T, list_type>) {
+        using Tag
+          = std::conditional_t<std::same_as<T, record_type>, Record, List>;
+        auto values = array.get_alternative<Tag>();
+        auto selected = std::vector<storage::Index>{};
+        selected.reserve(rows.size());
+        auto validity = arrow::BooleanBuilder{arrow_memory_pool()};
+        TRY(export_status(validity.Reserve(rows.size())));
+        auto null_count = int64_t{0};
+        for (auto row : rows) {
+          if (absent(row)) {
+            selected.push_back(-1);
+            ++null_count;
+            TRY(export_status(validity.Append(false)));
+          } else {
+            if (not values or not values->present.get(row)) {
+              return Err{"concrete value type differs from Arrow schema"};
+            }
+            selected.push_back(row);
+            TRY(export_status(validity.Append(true)));
+          }
+        }
+        if (null_count == static_cast<int64_t>(rows.size())) {
+          auto result = arrow::MakeArrayOfNull(
+            schema.to_arrow_type(), rows.size(), arrow_memory_pool());
+          if (not result.ok()) {
+            return Err{result.status().ToString()};
+          }
+          return std::move(*result);
+        }
+        TRY(auto bits, finish_array(validity));
+        auto bitmap = null_count == 0 ? nullptr : bits->data()->buffers[1];
+        if constexpr (std::same_as<T, record_type>) {
+          auto primary = values->data.to_primary();
+          auto const& records = *as<storage::RecordStorage>(primary.storage());
+          auto validated = std::set<ShapeTable::ShapeId>{};
+          for (auto row : selected) {
+            if (row < 0) {
+              continue;
+            }
+            auto shape = records.shape_indices.get(row);
+            if (shape < 0) {
+              return Err{"selected row has no record shape"};
+            }
+            if (not validated.insert(shape).second) {
+              continue;
+            }
+            auto fields = records.shape_table.fields(shape);
+            if (fields.size() != target.num_fields()) {
+              return Err{"record shape differs from Arrow schema"};
+            }
+            for (auto i = size_t{0}; i < fields.size(); ++i) {
+              if (records.names_by_index[fields[i]] != target.field(i).name) {
+                return Err{"record field order differs from Arrow schema"};
+              }
+            }
+          }
+          auto columns = arrow::ArrayVector{};
+          for (auto const& field : target.fields()) {
+            auto index = records.names.find(field.name)->second;
+            auto const& source = records.arrays[index];
+            TRY(auto column, export_column(source.data, field.type, selected,
+                                           source.present));
+            columns.push_back(std::move(column));
+          }
+          return std::shared_ptr<arrow::Array>{
+            std::make_shared<arrow::StructArray>(
+              schema.to_arrow_type(), rows.size(), std::move(columns),
+              std::move(bitmap), null_count)};
+        } else {
+          // Expand a constant list once, not once for every selected row.
+          auto constant = try_as<storage::ConstantStorage<List, RowView<List>>>(
+            values->data.storage());
+          auto primary
+            = constant
+                ? Array<List>{storage::ConstantStorage<List, RowView<List>>{
+                                1, constant->value()}}
+                    .to_primary()
+                : values->data;
+          auto const& lists = as<storage::ListStorage>(primary.storage());
+          auto children = std::vector<storage::Index>{};
+          auto offsets = arrow::Int32Builder{arrow_memory_pool()};
+          TRY(export_status(offsets.Reserve(rows.size() + 1)));
+          TRY(export_status(offsets.Append(0)));
+          for (auto row : selected) {
+            if (row >= 0) {
+              auto span = lists.spans()[constant ? 0 : row];
+              if (children.size() + static_cast<size_t>(span.end - span.begin)
+                  > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+                return Err{"Arrow list child count exceeds the offset limit"};
+              }
+              for (auto i = span.begin; i < span.end; ++i) {
+                children.push_back(i);
+              }
+            }
+            TRY(export_status(
+              offsets.Append(static_cast<int32_t>(children.size()))));
+          }
+          TRY(auto child,
+              export_column(lists.values(), target.value_type(), children,
+                            storage::BitMap{lists.values().length(), true}));
+          TRY(auto positions, finish_array(offsets));
+          return std::shared_ptr<arrow::Array>{
+            std::make_shared<arrow::ListArray>(
+              schema.to_arrow_type(), rows.size(),
+              positions->data()->buffers[1], std::move(child),
+              std::move(bitmap), null_count)};
+        }
+      } else if constexpr (std::same_as<T, null_type>) {
+        for (auto row : rows) {
+          if (not absent(row)) {
+            return Err{"concrete value type differs from Arrow schema"};
+          }
+        }
+        return std::shared_ptr<arrow::Array>{
+          std::make_shared<arrow::NullArray>(rows.size())};
+      } else if constexpr (fundamental_type<type_to_data_t<T>>) {
+        auto values = array.get_alternative<type_to_data_t<T>>();
+        auto builder = target.make_arrow_builder(arrow_memory_pool());
+        TRY(export_status(builder->Reserve(rows.size())));
+        auto& typed = *builder;
+        for (auto row : rows) {
+          if (absent(row)) {
+            TRY(export_status(typed.AppendNull()));
+          } else {
+            if (not values or not values->present.get(row)) {
+              return Err{"concrete value type differs from Arrow schema"};
+            }
+            TRY(export_status(
+              append_builder(target, typed, *values->data.get(row))));
+          }
+        }
+        return finish_array(*builder);
+      } else {
+        return Err{"unsupported Arrow export type"};
+      }
+    });
+}
 
 // Deliberately narrower than Arrow's schema unification/casting: no numeric
 // promotions, field insertion, field removal, or field reordering are allowed.
@@ -161,6 +335,26 @@ auto normalize(std::shared_ptr<arrow::ArrayData> const& source,
 }
 
 } // namespace
+
+auto to_arrow_record_batch(Array<Record> const& records, type const& schema,
+                           std::span<storage::Index const> rows)
+  -> Result<std::shared_ptr<arrow::RecordBatch>, std::string> {
+  if (not is<record_type>(schema)) {
+    return Err{"Arrow export schema must be a record"};
+  }
+  for (auto row : rows) {
+    if (row < 0 or row >= records.length()) {
+      return Err{"Arrow export row is out of bounds"};
+    }
+  }
+  TRY(auto array, export_column(Array<Data>{records}, schema, rows,
+                                storage::BitMap{records.length(), true}));
+  auto const& structure = as<arrow::StructArray>(*array);
+  auto batch = arrow::RecordBatch::Make(schema.to_arrow_schema(), rows.size(),
+                                        structure.fields());
+  TRY(export_status(batch->ValidateFull()));
+  return batch;
+}
 
 ArrowExportBuilder::ArrowExportBuilder() : ArrowExportBuilder{Limits{}} {
 }
@@ -275,7 +469,34 @@ auto ArrowExportBuilder::add(Events const& events, diagnostic_handler& dh,
   -> failure_or<std::vector<table_slice>> {
   auto result = std::vector<table_slice>{};
   auto builder = series_builder{};
-  for (auto index : storage::true_bits(events.mask)) {
+  auto rows = std::vector<storage::Index>{};
+  for (auto row : storage::true_bits(events.mask)) {
+    rows.push_back(row);
+  }
+  auto direct = true;
+  for (auto offset = size_t{0}; offset < rows.size();) {
+    if (direct and fixed_ and schema_ and pending_.empty()) {
+      auto count = std::min(size_t{1024}, rows.size() - offset);
+      auto selection = std::span{rows}.subspan(offset, count);
+      auto metadata = ArrowMetadata::from_arrow(*schema_);
+      auto same_metadata = std::ranges::all_of(selection, [&](auto row) {
+        return *events.meta.name.get(row) == metadata.name
+               and *events.meta.internal.get(row) == metadata.internal;
+      });
+      if (same_metadata) {
+        auto batch = to_arrow_record_batch(
+          events.data, type::from_arrow(*schema_), selection);
+        if (batch) {
+          TRY(accept(table_slice{std::move(batch).unwrap()}, result, dh, loc));
+          offset += count;
+          continue;
+        }
+        direct = false;
+      }
+      // Preserve existing coercions and diagnostics for inputs that cannot be
+      // represented directly, notably heterogeneous lists.
+    }
+    auto index = rows[offset++];
     auto metadata = ArrowMetadata{std::string{*events.meta.name.get(index)},
                                   *events.meta.internal.get(index)};
     builder.data(materialize_legacy(events.data.get(index)));
@@ -283,8 +504,9 @@ auto ArrowExportBuilder::add(Events const& events, diagnostic_handler& dh,
     // shape/order. Convert each row separately before validation, retaining
     // the builder's heterogeneous-list coercion within that row.
     for (auto& slice : builder.finish_as_table_slice(metadata.name)) {
-      slice
-        = table_slice{to_record_batch(slice), metadata.apply(slice.schema())};
+      auto schema = metadata.apply(slice.schema()).to_arrow_schema();
+      slice = table_slice{
+        to_record_batch(slice)->ReplaceSchemaMetadata(schema->metadata())};
       TRY(accept(std::move(slice), result, dh, loc));
     }
   }

@@ -13,10 +13,10 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/import_wire.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/nova/array_builder.hpp"
-#include "tenzir/nova/import_wire.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -423,19 +423,19 @@ TEST("export delivers native snapshots and transport without Arrow "
       .then(
         [&, self](nova::Events batch) {
           REQUIRE_EQUAL(batch.active_count(), 1);
-          CHECK(nova::materialize(batch.data.get(0))
-                == nova::materialize(events.data.get(0)));
+          CHECK(nova::materialize_legacy(batch.data.get(0))
+                == nova::materialize_legacy(events.data.get(0)));
           ++received;
           self->mail(atom::get_v, atom::internal_v, true)
             .request(bridge, caf::infinite)
             .then(
-              [&](nova::ImportWireBatch batch) {
-                auto decoded = nova::from_import_wire(batch);
+              [&](ImportWireBatch batch) {
+                auto decoded = from_import_wire(batch);
                 REQUIRE(decoded);
                 auto const& restored = decoded.unwrap();
                 REQUIRE_EQUAL(restored.active_count(), 1);
-                CHECK(nova::materialize(restored.data.get(0))
-                      == nova::materialize(events.data.get(0)));
+                CHECK(nova::materialize_legacy(restored.data.get(0))
+                      == nova::materialize_legacy(events.data.get(0)));
                 CHECK_EQUAL(*restored.meta.name.get(0), "test");
                 ++received;
               },

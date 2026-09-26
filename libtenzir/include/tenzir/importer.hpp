@@ -16,6 +16,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/retention_policy.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>

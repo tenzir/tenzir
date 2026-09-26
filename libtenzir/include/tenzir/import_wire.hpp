@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace tenzir::nova {
+namespace tenzir {
 
 /// Serializable envelope for crossing the importer actor's node boundary.
 /// The payload uses the existing columnar Bitz v2 codec.
@@ -25,9 +25,9 @@ struct ImportWireBatch {
   }
 };
 
-auto to_import_wire(Events const& events)
+auto to_import_wire(nova::Events const& events)
   -> Result<ImportWireBatch, std::string>;
 auto from_import_wire(ImportWireBatch const& batch)
-  -> Result<Events, std::string>;
+  -> Result<nova::Events, std::string>;
 
-} // namespace tenzir::nova
+} // namespace tenzir

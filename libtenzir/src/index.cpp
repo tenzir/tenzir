@@ -37,12 +37,12 @@
 #include "tenzir/fbs/uuid.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/ids.hpp"
+#include "tenzir/import_routing.hpp"
 #include "tenzir/io/read.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
-#include "tenzir/nova/import_routing.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova_active_partition.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -99,7 +99,7 @@
 //
 // clang-format on
 
-namespace tenzir::nova {
+namespace tenzir {
 
 auto ImportShapeKeyHash::operator()(ImportShapeKey const& key) const -> size_t {
   auto result = std::hash<std::string>{}(key.name);
@@ -113,7 +113,7 @@ auto ImportShapeKeyHash::operator()(ImportShapeKey const& key) const -> size_t {
   return result;
 }
 
-auto group_import_shapes(Events const& events)
+auto group_import_shapes(nova::Events const& events)
   -> Result<std::vector<ImportShapeGroup>, std::string> {
   if (events.mask.length() != events.length()
       or events.meta.name.length() != events.length()
@@ -121,14 +121,15 @@ auto group_import_shapes(Events const& events)
     return Err{"event metadata or mask has the wrong length"};
   }
   auto primary = events.data.to_primary();
-  auto const& record_storage = *as<storage::RecordStorage>(primary.storage());
+  auto const& record_storage
+    = *as<nova::storage::RecordStorage>(primary.storage());
   auto fields_by_shape
-    = std::unordered_map<ShapeTable::ShapeId, std::vector<std::string>>{};
+    = std::unordered_map<nova::ShapeTable::ShapeId, std::vector<std::string>>{};
   auto index_by_key
     = std::unordered_map<ImportShapeKey, size_t, ImportShapeKeyHash>{};
   auto keys = std::vector<ImportShapeKey>{};
   auto assignments = std::vector<size_t>(events.length(), size_t{0});
-  for (auto row : storage::true_bits(events.mask)) {
+  for (auto row : nova::storage::true_bits(events.mask)) {
     auto shape = record_storage.shape_indices.get(row);
     if (shape < 0) {
       return Err{"selected row has no record shape"};
@@ -147,12 +148,12 @@ auto group_import_shapes(Events const& events)
     }
     assignments[row] = it->second;
   }
-  auto masks = std::vector<storage::BitMap::Mutable>{};
+  auto masks = std::vector<nova::storage::BitMap::Mutable>{};
   masks.reserve(keys.size());
   for (auto i = size_t{0}; i < keys.size(); ++i) {
     masks.emplace_back(events.length());
   }
-  for (auto row : storage::true_bits(events.mask)) {
+  for (auto row : nova::storage::true_bits(events.mask)) {
     masks[assignments[row]].set(row, true);
   }
   auto result = std::vector<ImportShapeGroup>{};
@@ -164,7 +165,7 @@ auto group_import_shapes(Events const& events)
   return result;
 }
 
-} // namespace tenzir::nova
+} // namespace tenzir
 
 namespace tenzir {
 
@@ -231,7 +232,7 @@ void index_state::handle_slice(table_slice x) {
 }
 
 auto index_state::handle_events(nova::Events events) -> caf::result<void> {
-  auto grouped = nova::group_import_shapes(events);
+  auto grouped = group_import_shapes(events);
   if (not grouped) {
     return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
   }
@@ -345,10 +346,9 @@ void index_state::release_nova_pressure() {
 
 // -- partition handling -----------------------------------------------------
 
-auto index_state::create_nova_active_partition(nova::ImportShapeKey const& key)
-  -> caf::expected<
-    std::unordered_map<nova::ImportShapeKey, nova_active_partition_info,
-                       nova::ImportShapeKeyHash>::iterator> {
+auto index_state::create_nova_active_partition(ImportShapeKey const& key)
+  -> caf::expected<std::unordered_map<
+    ImportShapeKey, nova_active_partition_info, ImportShapeKeyHash>::iterator> {
   auto generation = uuid::random();
   auto actor = self->spawn(nova_active_partition, key.name, key.internal, paths,
                            filesystem, index_opts, synopsis_opts,
@@ -372,7 +372,7 @@ auto index_state::create_nova_active_partition(nova::ImportShapeKey const& key)
 }
 
 void index_state::decommission_nova_active_partition(
-  nova::ImportShapeKey key, std::function<void(caf::error const&)> completion) {
+  ImportShapeKey key, std::function<void(caf::error const&)> completion) {
   auto it = nova_active_partitions.find(key);
   TENZIR_ASSERT(it != nova_active_partitions.end());
   TENZIR_ASSERT(buffered_events >= it->second.events);
@@ -575,7 +575,7 @@ auto index_state::flush() -> caf::typed_response_promise<void> {
   for (const auto& schema : schemas) {
     decommission_active_partition(schema, {});
   }
-  auto nova_keys = std::vector<nova::ImportShapeKey>{};
+  auto nova_keys = std::vector<ImportShapeKey>{};
   nova_keys.reserve(nova_active_partitions.size());
   for (auto const& [key, _] : nova_active_partitions) {
     nova_keys.push_back(key);

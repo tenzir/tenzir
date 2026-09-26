@@ -25,14 +25,14 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/export_bridge.hpp>
+#include <tenzir/import_conversion.hpp>
+#include <tenzir/import_routing.hpp>
+#include <tenzir/import_wire.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/eval.hpp>
-#include <tenzir/nova/import_conversion.hpp>
-#include <tenzir/nova/import_routing.hpp>
-#include <tenzir/nova/import_wire.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -284,7 +284,7 @@ public:
       if (not wire) {
         co_return caf::expected<nova::Events>{wire.error()};
       }
-      auto events = nova::from_import_wire(*wire);
+      auto events = from_import_wire(*wire);
       if (not events) {
         co_return caf::expected<nova::Events>{
           caf::make_error(ec::type_clash, std::move(events).unwrap_err())};
@@ -417,7 +417,7 @@ private:
     }
     if (uses_prometheus_shape_) {
       // The existing Prometheus formatter consumes Arrow; raw exports do not.
-      auto groups = nova::group_import_shapes(events);
+      auto groups = group_import_shapes(events);
       if (not groups) {
         diagnostic::error("{}", std::move(groups).unwrap_err()).emit(ctx);
         co_return;
@@ -435,7 +435,7 @@ private:
           continue;
         }
         auto conversion
-          = nova::ImportConversionBuffer{group.key.name, group.key.internal};
+          = ImportConversionBuffer{group.key.name, group.key.internal};
         auto added = conversion.add(events, group.mask);
         if (not added) {
           diagnostic::error("{}", std::move(added).unwrap_err()).emit(ctx);
@@ -513,7 +513,7 @@ private:
       }
     } else {
       static_assert(std::same_as<Output, nova::Events>);
-      auto imported = nova::import_table_slice(slice);
+      auto imported = import_table_slice(slice);
       if (not imported) {
         diagnostic::error("{}", std::move(imported).unwrap_err())
           .note("failed to convert exported events")

@@ -14,11 +14,12 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
+#include "tenzir/import_conversion.hpp"
+#include "tenzir/import_routing.hpp"
+#include "tenzir/import_wire.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
-#include "tenzir/nova/import_conversion.hpp"
-#include "tenzir/nova/import_routing.hpp"
-#include "tenzir/nova/import_wire.hpp"
+#include "tenzir/recent_snapshot.hpp"
 #include "tenzir/retention_policy.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/status.hpp"
@@ -84,7 +85,7 @@ void importer::handle_slice(table_slice&& slice) {
         events.emplace(slice);
         events->import_time(time::clock::now());
       }
-      auto converted = nova::import_table_slice(*events);
+      auto converted = import_table_slice(*events);
       if (converted) {
         self->mail(std::move(converted).unwrap()).send(subscriber.receiver);
       } else {
@@ -143,7 +144,7 @@ void importer::flush(Option<type> schema) {
       }
       for (auto const& subscriber : nova_subscribers) {
         if (not subscriber.eager and subscriber.internal == is_internal) {
-          auto converted = nova::import_table_slice(events);
+          auto converted = import_table_slice(events);
           if (converted) {
             self->mail(std::move(converted).unwrap()).send(subscriber.receiver);
           } else {
@@ -363,9 +364,9 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       handle_slice(std::move(slice));
       return {};
     },
-    [this](nova::ImportWireBatch& batch) -> caf::result<void> {
+    [this](ImportWireBatch& batch) -> caf::result<void> {
       auto const now = time::clock::now();
-      auto converted = nova::from_import_wire(batch);
+      auto converted = from_import_wire(batch);
       if (not converted) {
         return caf::make_error(ec::type_clash,
                                std::move(converted).unwrap_err());
@@ -377,7 +378,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
         times.data(timestamp == time{} ? now : timestamp);
       }
       events.meta.import_time = times.finish();
-      auto grouped = nova::group_import_shapes(events);
+      auto grouped = group_import_shapes(events);
       if (not grouped) {
         return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
       }
@@ -536,7 +537,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           continue;
         }
         for (auto const& slice : slices) {
-          auto converted = nova::import_table_slice(slice);
+          auto converted = import_table_slice(slice);
           if (not converted) {
             return caf::make_error(ec::type_clash,
                                    std::move(converted).unwrap_err());
@@ -607,7 +608,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
                 [snapshot, first_error,
                  finish](std::vector<table_slice> slices) mutable {
                   for (auto const& slice : slices) {
-                    auto converted = nova::import_table_slice(slice);
+                    auto converted = import_table_slice(slice);
                     if (not converted) {
                       *first_error = caf::make_error(
                         ec::type_clash, std::move(converted).unwrap_err());
@@ -664,7 +665,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
               continue;
             }
             for (auto const& slice : buffered) {
-              auto converted = nova::import_table_slice(slice);
+              auto converted = import_table_slice(slice);
               if (converted) {
                 self->mail(std::move(converted).unwrap())
                   .send(nova_subscribers.back().receiver);
@@ -696,7 +697,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           continue;
         }
         for (auto const& slice : buffered) {
-          auto converted = nova::import_table_slice(slice);
+          auto converted = import_table_slice(slice);
           if (not converted) {
             rp.deliver(caf::make_error(ec::type_clash,
                                        std::move(converted).unwrap_err()));
@@ -733,7 +734,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
         .then(
           [snapshot, finish](std::vector<table_slice> slices) mutable {
             for (auto const& slice : slices) {
-              auto converted = nova::import_table_slice(slice);
+              auto converted = import_table_slice(slice);
               if (not converted) {
                 snapshot->error = caf::make_error(
                   ec::type_clash, std::move(converted).unwrap_err());

@@ -14,9 +14,9 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/import_wire.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
-#include <tenzir/nova/import_wire.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -96,7 +96,7 @@ public:
     if (not importer_) {
       co_return;
     }
-    auto wire = Option<nova::ImportWireBatch>{};
+    auto wire = Option<ImportWireBatch>{};
     if constexpr (std::same_as<Input, table_slice>) {
       auto has_secrets = false;
       std::tie(has_secrets, input) = replace_secrets(std::move(input));
@@ -124,7 +124,7 @@ public:
       if (input.active_count() == 0) {
         co_return;
       }
-      auto encoded = nova::to_import_wire(input);
+      auto encoded = to_import_wire(input);
       if (not encoded) {
         diagnostic::error("failed to encode import batch: {}",
                           std::move(encoded).unwrap_err())

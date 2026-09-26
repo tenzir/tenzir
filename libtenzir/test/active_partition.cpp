@@ -179,8 +179,8 @@ TEST("shape-grouped partition persists independent typed outputs") {
   for (auto const& batch : *snapshot) {
     CHECK_EQUAL(batch.length(), events.length());
     for (auto row : nova::storage::true_bits(batch.mask)) {
-      CHECK(nova::materialize(batch.data.get(row))
-            == nova::materialize(events.data.get(row)));
+      CHECK(nova::materialize_legacy(batch.data.get(row))
+            == nova::materialize_legacy(events.data.get(row)));
       ++seen;
     }
   }

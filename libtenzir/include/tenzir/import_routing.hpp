@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace tenzir::nova {
+namespace tenzir {
 
 struct ImportShapeKey {
   std::string name;
@@ -29,12 +29,12 @@ struct ImportShapeKeyHash {
 
 struct ImportShapeGroup {
   ImportShapeKey key;
-  storage::BitMap mask;
+  nova::storage::BitMap mask;
 };
 
 /// Resolves batch-local shape IDs to ordered field names and groups selected
 /// rows by shape and metadata without copying their values.
-auto group_import_shapes(Events const& events)
+auto group_import_shapes(nova::Events const& events)
   -> Result<std::vector<ImportShapeGroup>, std::string>;
 
-} // namespace tenzir::nova
+} // namespace tenzir

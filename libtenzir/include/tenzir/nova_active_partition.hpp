@@ -6,8 +6,8 @@
 #pragma once
 
 #include "tenzir/actors.hpp"
+#include "tenzir/import_conversion.hpp"
 #include "tenzir/index_config.hpp"
-#include "tenzir/nova/import_conversion.hpp"
 #include "tenzir/nova_persist_result.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/partition_paths.hpp"
@@ -27,7 +27,7 @@ struct nova_active_partition_state {
   static constexpr auto name = "active-partition";
 
   nova_active_partition_actor::pointer self = nullptr;
-  Option<nova::ImportConversionBuffer> conversion = None{};
+  Option<ImportConversionBuffer> conversion = None{};
   std::unordered_set<type> published;
   std::vector<active_partition_actor> children;
   partition_paths paths;

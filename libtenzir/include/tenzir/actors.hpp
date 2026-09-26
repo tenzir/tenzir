@@ -13,10 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/nova/import_wire.hpp"
-#include "tenzir/nova_persist_result.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/recent_snapshot.hpp"
 #include "tenzir/secret_store.hpp"
 
 #include <caf/inspector_access.hpp>
@@ -27,6 +24,9 @@
 #define TENZIR_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(tenzir_actors, type)
 
 namespace tenzir {
+
+struct recent_snapshot;
+struct NovaRecentSnapshot;
 
 /// Helper utility that enables extending typed actor forward declarations
 /// without including <caf/typed_actor.hpp>.
@@ -265,7 +265,7 @@ struct importer_actor_traits {
     auto(atom::flush)->caf::result<void>,
     // Import a batch of data.
     auto(table_slice)->caf::result<void>,
-    auto(nova::ImportWireBatch)->caf::result<void>,
+    auto(ImportWireBatch)->caf::result<void>,
     auto(atom::resume, uuid)->caf::result<void>,
     // Conform to the protocol of the STATUS CLIENT actor.
     auto(atom::status, status_verbosity, duration)->caf::result<record>>;
@@ -415,7 +415,7 @@ struct export_bridge_actor_traits {
     auto(atom::get)->caf::result<table_slice>,
     auto(atom::get, atom::internal)->caf::result<nova::Events>,
     // Serializable delivery for clients in another actor system.
-    auto(atom::get, atom::internal, bool)->caf::result<nova::ImportWireBatch>,
+    auto(atom::get, atom::internal, bool)->caf::result<ImportWireBatch>,
     auto(nova::Events)->caf::result<void>,
     // Insert a new table slice.
     auto(table_slice slice)->caf::result<void>>;
@@ -522,10 +522,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
   TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
   TENZIR_ADD_TYPE_ID((tenzir::nova_active_partition_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::nova::Events))
-  TENZIR_ADD_TYPE_ID((tenzir::nova::ImportWireBatch))
+  TENZIR_ADD_TYPE_ID((tenzir::ImportWireBatch))
   TENZIR_ADD_TYPE_ID((tenzir::nova::storage::BitMap))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::nova::Events>))
   TENZIR_ADD_TYPE_ID((tenzir::NovaPersistResult))
   TENZIR_ADD_TYPE_ID((tenzir::recent_snapshot))
   TENZIR_ADD_TYPE_ID((tenzir::NovaRecentSnapshot))
@@ -544,9 +542,7 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transformer_result)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::Events)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::storage::BitMap)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<tenzir::nova::Events>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaPersistResult)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaRecentSnapshot)
 #undef tenzir_uuid_synopsis_map

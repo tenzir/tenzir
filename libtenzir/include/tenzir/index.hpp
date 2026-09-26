@@ -13,8 +13,8 @@
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
 #include "tenzir/catalog.hpp"
+#include "tenzir/import_routing.hpp"
 #include "tenzir/importer.hpp"
-#include "tenzir/nova/import_routing.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
@@ -71,14 +71,12 @@ struct index_state {
   void handle_slice(table_slice slice);
   auto handle_events(nova::Events events) -> caf::result<void>;
 
-  auto create_nova_active_partition(nova::ImportShapeKey const& key)
-    -> caf::expected<
-      std::unordered_map<nova::ImportShapeKey, nova_active_partition_info,
-                         nova::ImportShapeKeyHash>::iterator>;
+  auto create_nova_active_partition(ImportShapeKey const& key)
+    -> caf::expected<std::unordered_map<
+      ImportShapeKey, nova_active_partition_info, ImportShapeKeyHash>::iterator>;
 
   void decommission_nova_active_partition(
-    nova::ImportShapeKey key,
-    std::function<void(caf::error const&)> completion);
+    ImportShapeKey key, std::function<void(caf::error const&)> completion);
 
   void enforce_buffer_limit();
   void release_nova_pressure();
@@ -132,8 +130,8 @@ struct index_state {
   /// One active (read/write) partition per schema.
   std::unordered_map<type, active_partition_info> active_partitions = {};
 
-  std::unordered_map<nova::ImportShapeKey, nova_active_partition_info,
-                     nova::ImportShapeKeyHash>
+  std::unordered_map<ImportShapeKey, nova_active_partition_info,
+                     ImportShapeKeyHash>
     nova_active_partitions = {};
 
   struct nova_unpersisted_partition_info {

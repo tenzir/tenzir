@@ -16,11 +16,11 @@ trap cleanup EXIT
 mkdir -p "$scratch/state" "$scratch/cache"
 
 start_node() {
-  : > "$scratch/endpoint"
+  : >"$scratch/endpoint"
   "$TENZIR_NODE_BINARY" --bare-mode --console-verbosity=error \
     --state-directory="$scratch/state" --cache-directory="$scratch/cache" \
     --endpoint=localhost:0 --print-endpoint --no-autostart \
-    > "$scratch/endpoint" 2> "$scratch/node.log" &
+    >"$scratch/endpoint" 2>"$scratch/node.log" &
   node_pid=$!
   attempts=0
   while [ ! -s "$scratch/endpoint" ] && [ "$attempts" -lt 300 ]; do

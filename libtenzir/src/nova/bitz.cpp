@@ -557,7 +557,13 @@ auto write_array(Writer& writer, Array<Data> const& array,
                  storage::BitMap const& visible, std::size_t depth)
   -> Result<void, std::string>;
 
+auto write_concrete(Writer&, Array<Secret> const&, storage::BitMap const&,
+                    std::size_t) -> Result<void, std::string> {
+  return Err{"secrets cannot be serialized by Bitz"};
+}
+
 template <data_type Tag>
+  requires(not std::same_as<Tag, Secret>)
 auto write_concrete(Writer& writer, Array<Tag> const& array,
                     storage::BitMap const& visible, std::size_t depth)
   -> Result<void, std::string> {

@@ -9,6 +9,9 @@
 #include "tenzir/allocator.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/hash/hash.hpp"
+#include "tenzir/import_conversion.hpp"
+#include "tenzir/import_routing.hpp"
+#include "tenzir/import_wire.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -19,9 +22,6 @@
 #include "tenzir/nova/bitz.hpp"
 #include "tenzir/nova/drop_null_fields.hpp"
 #include "tenzir/nova/eval_util.hpp"
-#include "tenzir/nova/import_conversion.hpp"
-#include "tenzir/nova/import_routing.hpp"
-#include "tenzir/nova/import_wire.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova/storage.hpp"
@@ -3319,8 +3319,8 @@ TEST("import routing resolves batch-local shapes and metadata") {
   append_export_row(builder, Record{{"x", Int{2}}});
   auto second = Events{builder.finish(), bitmap({false, true}),
                        Events::Meta::make_empty(2, "events")};
-  auto a = group_import_shapes(first);
-  auto b = group_import_shapes(second);
+  auto a = tenzir::group_import_shapes(first);
+  auto b = tenzir::group_import_shapes(second);
   REQUIRE(a);
   REQUIRE(b);
   REQUIRE_EQUAL(a.unwrap().size(), 1u);
@@ -3329,28 +3329,28 @@ TEST("import routing resolves batch-local shapes and metadata") {
   CHECK(not b.unwrap()[0].mask.get(0));
   CHECK(b.unwrap()[0].mask.get(1));
   second.meta = Events::Meta::make_empty(2, "other");
-  auto renamed = group_import_shapes(second);
+  auto renamed = tenzir::group_import_shapes(second);
   REQUIRE(renamed);
   CHECK(a.unwrap()[0].key != renamed.unwrap()[0].key);
   auto reordered = export_events(Record{{"y", Int{1}}, {"x", Int{2}}});
   reordered.meta = Events::Meta::make_empty(1, "events");
-  auto other_shape = group_import_shapes(reordered);
+  auto other_shape = tenzir::group_import_shapes(reordered);
   REQUIRE(other_shape);
   CHECK(a.unwrap()[0].key != other_shape.unwrap()[0].key);
   auto missing_field = export_events(Record{{"x", Null{}}, {"y", Int{1}}});
   missing_field.meta = Events::Meta::make_empty(1, "events");
-  auto with_field = group_import_shapes(missing_field);
+  auto with_field = tenzir::group_import_shapes(missing_field);
   REQUIRE(with_field);
   CHECK(a.unwrap()[0].key != with_field.unwrap()[0].key);
   auto internal = first;
   internal.meta.internal = Array<Bool>{storage::BitMap{1, true}};
-  auto internal_group = group_import_shapes(internal);
+  auto internal_group = tenzir::group_import_shapes(internal);
   REQUIRE(internal_group);
   CHECK(a.unwrap()[0].key != internal_group.unwrap()[0].key);
 }
 
 TEST("import conversion refines nulls and splits concrete types") {
-  auto buffer = ImportConversionBuffer{"events", false};
+  auto buffer = tenzir::ImportConversionBuffer{"events", false};
   auto add = [&](Record row) {
     auto events = export_events(std::move(row));
     events.meta = Events::Meta::make_empty(1, "events");
@@ -3378,8 +3378,81 @@ TEST("import conversion refines nulls and splits concrete types") {
               }));
 }
 
+TEST("Arrow column export preserves selected scalars and nulls") {
+  auto ip = tenzir::ip::v4(uint32_t{0xc0000201});
+  auto subnet = tenzir::subnet{ip, 24};
+  auto value = Record{
+    {"boolean", Bool{true}},
+    {"integer", Int{-42}},
+    {"unsigned", UInt{43}},
+    {"float", Float{1.25}},
+    {"string", String{"hello"}},
+    {"blob", Blob{std::byte{1}, std::byte{2}}},
+    {"ip", ip},
+    {"subnet", subnet},
+    {"time", Time{std::chrono::seconds{7}}},
+    {"duration", Duration{std::chrono::seconds{8}}},
+    {"parent", Record{{"ip", ip}, {"subnet", subnet}}},
+  };
+  auto nulls = Record{};
+  for (auto const& [name, field] : value) {
+    std::ignore = field;
+    nulls.emplace(name, Null{});
+  }
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, Record{{"ignored", List{Int{1}, String{"bad"}}}});
+  append_export_row(builder, value);
+  append_export_row(builder, nulls);
+  auto source = builder.finish();
+  auto baseline = to_table_slices(export_events(value));
+  REQUIRE_EQUAL(baseline.size(), 1u);
+  auto schema
+    = ArrowMetadata{"column.export", true}.apply(baseline[0].schema());
+  auto rows = std::array<storage::Index, 2>{2, 1};
+  auto batch = to_arrow_record_batch(source, schema, rows);
+  REQUIRE(batch);
+  CHECK(batch.unwrap()->ValidateFull().ok());
+  auto output = tenzir::table_slice{batch.unwrap()};
+  CHECK_EQUAL(output.schema(), schema);
+  CHECK_EQUAL(export_values({output}),
+              (std::vector<tenzir::data>{
+                materialize_legacy(RowView<Data>{source.get(2)}),
+                materialize_legacy(RowView<Data>{source.get(1)}),
+              }));
+  auto only_nulls
+    = to_arrow_record_batch(source, schema, std::array<storage::Index, 1>{2});
+  REQUIRE(only_nulls);
+  CHECK(only_nulls.unwrap()->ValidateFull().ok());
+  CHECK_EQUAL(export_values({tenzir::table_slice{only_nulls.unwrap()}}),
+              (std::vector<tenzir::data>{
+                materialize_legacy(RowView<Data>{source.get(2)}),
+              }));
+  CHECK(not to_arrow_record_batch(source, schema,
+                                  std::array<storage::Index, 1>{0}));
+  CHECK(not to_arrow_record_batch(source, schema,
+                                  std::array<storage::Index, 1>{3}));
+}
+
+TEST("Arrow column export repeats constant nested lists and refines nulls") {
+  auto row = Record{{"parent", Record{{"x", Int{1}}, {"empty", List{}}}},
+                    {"lists", List{List{Int{2}, Null{}}, List{}, Null{}}}};
+  auto events = export_events(row, 5);
+  auto baseline = to_table_slices(export_events(row));
+  REQUIRE_EQUAL(baseline.size(), 1u);
+  auto rows = std::array<storage::Index, 3>{4, 0, 2};
+  auto batch = to_arrow_record_batch(events.data, baseline[0].schema(), rows);
+  REQUIRE(batch);
+  auto output = tenzir::table_slice{batch.unwrap()};
+  CHECK_EQUAL(export_values({output}),
+              (std::vector<tenzir::data>(3, export_values(baseline)[0])));
+  auto empty = to_arrow_record_batch(events.data, baseline[0].schema(), {});
+  REQUIRE(empty);
+  CHECK_EQUAL(empty.unwrap()->num_rows(), 0);
+  CHECK(empty.unwrap()->ValidateFull().ok());
+}
+
 TEST("import conversion rejects mixed lists without mutating candidates") {
-  auto buffer = ImportConversionBuffer{"events", false};
+  auto buffer = tenzir::ImportConversionBuffer{"events", false};
   auto good = export_events(Record{{"xs", List{Int{1}}}});
   good.meta = Events::Meta::make_empty(1, "events");
   REQUIRE(buffer.add(good, good.mask));
@@ -3415,9 +3488,9 @@ TEST("import conversion discovers selected nested schemas from columns") {
   auto events = Events{builder.finish(), storage::BitMap{7, true},
                        Events::Meta::make_empty(7, "events")};
   auto selection = bitmap({false, true, true, true, true, true, true});
-  auto batch = ImportConversionBuffer{"events", false};
+  auto batch = tenzir::ImportConversionBuffer{"events", false};
   REQUIRE(batch.add(events, selection));
-  auto singles = ImportConversionBuffer{"events", false};
+  auto singles = tenzir::ImportConversionBuffer{"events", false};
   for (auto i = size_t{1}; i < rows.size(); ++i) {
     auto single = export_events(rows[i]);
     single.meta = Events::Meta::make_empty(1, "events");
@@ -3456,9 +3529,9 @@ TEST("import conversion preserves first-fit decisions as schemas refine") {
   }
   auto events = Events{builder.finish(), storage::BitMap{7, true},
                        Events::Meta::make_empty(7, "events")};
-  auto batch = ImportConversionBuffer{"events", false};
+  auto batch = tenzir::ImportConversionBuffer{"events", false};
   REQUIRE(batch.add(events, events.mask));
-  auto singles = ImportConversionBuffer{"events", false};
+  auto singles = tenzir::ImportConversionBuffer{"events", false};
   for (auto const& row : rows) {
     auto single = export_events(row);
     single.meta = Events::Meta::make_empty(1, "events");
@@ -3478,7 +3551,7 @@ TEST("import conversion ignores incompatible list rows outside selection") {
   append_export_row(builder, Record{{"xs", List{String{"three"}}}});
   auto events = Events{builder.finish(), bitmap({true, true, false}),
                        Events::Meta::make_empty(3, "events")};
-  auto buffer = ImportConversionBuffer{"events", false};
+  auto buffer = tenzir::ImportConversionBuffer{"events", false};
   REQUIRE(buffer.add(events, bitmap({false, true, false})));
   auto output = buffer.snapshot();
   REQUIRE(output);
@@ -3501,9 +3574,9 @@ TEST("import transport preserves selected values, order, and metadata") {
                        Events::Meta::make_empty(2, "events")};
   events.meta.import_time = Array<Time>{
     storage::ConstantStorage<Time>{2, tenzir::time{std::chrono::seconds{7}}}};
-  auto wire = to_import_wire(events);
+  auto wire = tenzir::to_import_wire(events);
   REQUIRE(wire);
-  auto restored = from_import_wire(wire.unwrap());
+  auto restored = tenzir::from_import_wire(wire.unwrap());
   REQUIRE(restored);
   CHECK_EQUAL(restored.unwrap().length(), 2);
   CHECK_EQUAL(restored.unwrap().active_count(), 1u);
@@ -3514,7 +3587,7 @@ TEST("import transport preserves selected values, order, and metadata") {
   CHECK_EQUAL(record_field_names(restored.unwrap().data.get(1)),
               (std::vector<std::string>{"b", "a"}));
   CHECK_GREATER(events.approx_bytes(), size_t{0});
-  CHECK_EQUAL(materialize(RowView<Data>{restored.unwrap().data.get(1)}),
+  CHECK_EQUAL(materialize_legacy(RowView<Data>{restored.unwrap().data.get(1)}),
               (tenzir::data{tenzir::record{
                 {"b", tenzir::list{Int{1}, caf::none, Int{2}}},
                 {"a", tenzir::record{{"present", caf::none}}},
@@ -3522,14 +3595,15 @@ TEST("import transport preserves selected values, order, and metadata") {
 }
 
 TEST("import transport rejects malformed and non-record Bitz payloads") {
-  CHECK(not from_import_wire(ImportWireBatch{{std::byte{0}}}));
+  CHECK(not tenzir::from_import_wire(tenzir::ImportWireBatch{{std::byte{0}}}));
   auto payload
     = bitz::encode(bitz::Batch{Array<Int>{storage::ConstantStorage<Int>{1, 42}},
                                storage::BitMap{1, true},
                                Events::Meta::make_empty(1, "events")});
   REQUIRE(payload);
-  CHECK(not from_import_wire(ImportWireBatch{std::move(payload).unwrap()}));
-  auto sentinel = from_import_wire(ImportWireBatch{});
+  CHECK(not tenzir::from_import_wire(
+    tenzir::ImportWireBatch{std::move(payload).unwrap()}));
+  auto sentinel = tenzir::from_import_wire(tenzir::ImportWireBatch{});
   REQUIRE(sentinel);
   CHECK_EQUAL(sentinel.unwrap().active_count(), 0u);
 }
@@ -3544,7 +3618,7 @@ TEST("import conversion preserves per-row import timestamps") {
   times.data(tenzir::time{std::chrono::seconds{1}});
   times.data(tenzir::time{std::chrono::seconds{2}});
   events.meta.import_time = times.finish();
-  auto conversion = ImportConversionBuffer{"events", false};
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
   REQUIRE(conversion.add(events, events.mask));
   auto slices = conversion.snapshot();
   REQUIRE(slices);
@@ -3564,8 +3638,16 @@ TEST("import memory accounting charges backing behind sparse selections") {
   CHECK_GREATER(events.approx_bytes(), size_t{4096});
 }
 
+TEST("Nova import rejects unredacted secrets") {
+  auto events = export_events(Record{{"secret", Secret{}}});
+  auto encoded = tenzir::to_import_wire(events);
+  CHECK(not encoded);
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
+  CHECK(not conversion.add(events, events.mask));
+}
+
 TEST("import conversion refines null parents and nested empty lists") {
-  auto conversion = ImportConversionBuffer{"events", false};
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto first = export_events(Record{{"parent", Null{}}, {"items", List{}}});
   first.meta = Events::Meta::make_empty(1, "events");
   auto second = export_events(Record{{"parent", Record{{"value", Int{7}}}},
@@ -3589,7 +3671,7 @@ TEST("import conversion refines null parents and nested empty lists") {
 }
 
 TEST("import conversion keeps signed and unsigned schemas separate") {
-  auto conversion = ImportConversionBuffer{"events", false};
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto signed_value = export_events(Record{{"value", Int{1}}});
   signed_value.meta = Events::Meta::make_empty(1, "events");
   auto unsigned_value = export_events(Record{{"value", UInt{1}}});
@@ -3603,7 +3685,7 @@ TEST("import conversion keeps signed and unsigned schemas separate") {
 }
 
 TEST("import conversion seals unresolved fields as Arrow null") {
-  auto conversion = ImportConversionBuffer{"events", false};
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto events
     = export_events(Record{{"unknown", Null{}}, {"items", List{Null{}}}});
   events.meta = Events::Meta::make_empty(1, "events");
@@ -3625,7 +3707,7 @@ TEST("import conversion seals unresolved fields as Arrow null") {
 }
 
 TEST("import conversion snapshots do not freeze inference") {
-  auto conversion = ImportConversionBuffer{"events", false};
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto unknown = export_events(Record{{"value", Null{}}});
   unknown.meta = Events::Meta::make_empty(1, "events");
   REQUIRE(conversion.add(unknown, unknown.mask));
@@ -3645,7 +3727,7 @@ TEST("import conversion snapshots do not freeze inference") {
 }
 
 TEST("import conversion rejects incompatible record elements in a list") {
-  auto conversion = ImportConversionBuffer{"events", false};
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto bad = export_events(Record{{
     "items",
     List{Record{{"a", Int{1}}}, Record{{"b", Int{2}}}},
@@ -3924,6 +4006,21 @@ TEST("ArrowExportBuilder bounds frozen output batches and normalizes nulls") {
   for (auto const& slice : *result) {
     CHECK_EQUAL(to_record_batch(slice)->column(0)->type_id(),
                 arrow::Type::INT64);
+  }
+  CHECK(dh.empty());
+}
+
+TEST("ArrowExportBuilder preserves internal metadata in frozen batches") {
+  auto exporter = ArrowExportBuilder{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto events = export_events(Record{{"x", Int{7}}}, 2048);
+  events.meta.internal = Array<Bool>{storage::BitMap{2048, true}};
+  auto output = exporter.add(events, dh, tenzir::location::unknown);
+  REQUIRE(output);
+  CHECK_EQUAL(export_values(*output).size(), 2048u);
+  for (auto const& slice : *output) {
+    CHECK(slice.schema().attribute("internal").has_value());
+    CHECK(to_record_batch(slice)->ValidateFull().ok());
   }
   CHECK(dh.empty());
 }
