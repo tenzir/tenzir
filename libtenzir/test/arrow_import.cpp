@@ -243,7 +243,7 @@ TEST("Arrow dictionaries of a single value of any type import as constants") {
     auto result = import(*make_dictionary({0, 0, 0}, std::move(values)));
     CHECK(repeats(result));
     CHECK_EQUAL(result.length(), 3);
-    CHECK_EQUAL(nova::materialize(result.get(2)), expected);
+    CHECK_EQUAL(nova::materialize_legacy(result.get(2)), expected);
   };
   check(from_json(arrow::boolean(), "[true]"), data{true});
   check(from_json(arrow::int8(), "[-128]"), data{int64_t{-128}});

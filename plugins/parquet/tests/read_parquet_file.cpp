@@ -1422,7 +1422,7 @@ auto rows(Run const& result) -> std::vector<data> {
   auto rows = std::vector<data>{};
   for (auto const& events : result.events) {
     for (auto i : nova::storage::true_bits(events.mask)) {
-      rows.push_back(nova::materialize(events.data.get(i)));
+      rows.push_back(nova::materialize_legacy(events.data.get(i)));
     }
   }
   return rows;

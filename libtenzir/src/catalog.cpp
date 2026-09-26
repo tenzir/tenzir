@@ -396,7 +396,8 @@ auto build_partition_events(const std::vector<partition_synopsis_pair>& synopses
     auto event = builder.record();
     const auto uuid_string = fmt::to_string(synopsis.uuid);
     event.field("uuid").data(std::string_view{uuid_string});
-    event.field("memusage").data(synopsis.synopsis->memusage());
+    event.field("memusage")
+      .data(static_cast<uint64_t>(synopsis.synopsis->memusage()));
     event.field("diskusage")
       .data(synopsis.synopsis->store_file.size
             + synopsis.synopsis->indexes_file.size
