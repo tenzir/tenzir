@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Rounding must not collapse adjacent represented edges.
+from {}
+model = histogram([1.0], bins=2, width=1.0, start=1e300)

@@ -1,0 +1,11 @@
+// Invalid counters, geometry, duplicate keys, and schema versions must not crash.
+from {}
+h = histogram([0.5], bins=2, width=1.0)
+f = frequency_table(["a"])
+select bad_count = model_merge([{...h, count: uint(2)}]),
+  bad_edge = model_merge([{...h, bins: [{lower: 0.0, upper: 2.0, count: uint(1)}]}]),
+  duplicate = model_merge([{...f, values: [{value: "a", count: uint(1)}, {value: "a", count: uint(1)}]}]),
+  bad_version = model_merge([{...f, version: uint(2)}]),
+  missing = model_divergence({}, h, method="jensen_shannon"),
+  null_query = frequency_table_count(f, null),
+  malformed_lookup = histogram_bucket({...h, bins: []}, 0.5)

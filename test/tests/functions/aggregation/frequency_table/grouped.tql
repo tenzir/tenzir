@@ -1,0 +1,5 @@
+// Independent groups keep separate categorical counts.
+from {g: "a", x: "a"}, {g: "b", x: "b"}, {g: "a", x: "a"},
+  {g: "b", x: "c"}, {g: "a", x: "d"}
+summarize g, model = frequency_table(x)
+select g, count = model.count, values = model.values

@@ -1,0 +1,3 @@
+// A failed list row must not poison another row, and repeated warnings deduplicate.
+from {xs: [1, "bad"]}, {xs: [1, "bad"]}, {xs: [2, 2]}, {xs: null}
+select table = frequency_table(xs), histogram = histogram(xs, bins=2, width=1.0)

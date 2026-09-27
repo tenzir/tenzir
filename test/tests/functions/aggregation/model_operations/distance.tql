@@ -1,0 +1,15 @@
+// Read persisted models without relying on a model-constructor function.
+from {}
+p = {
+  model: "tdigest", version: uint(1), input_count: uint(2),
+  count: uint(2), null_count: uint(0), non_finite_count: uint(0),
+  compression: uint(100), min: 1.0, max: 1.0,
+  centroids: [{mean: 1.0, weight: 2.0}],
+}
+q = {...p, min: 4.0, max: 4.0, centroids: [{mean: 4.0, weight: 2.0}]}
+empty = {...p, input_count: uint(0), count: uint(0), min: null, max: null, centroids: []}
+select ks = model_distance(p, q, method="kolmogorov_smirnov"),
+  wasserstein = model_distance(p, q, method="wasserstein"),
+  same = model_distance(p, p, method="wasserstein"),
+  empty = model_distance(p, empty, method="wasserstein"),
+  null_model = model_distance(null, p, method="wasserstein")

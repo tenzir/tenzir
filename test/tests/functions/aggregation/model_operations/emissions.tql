@@ -1,0 +1,7 @@
+// Count-based emissions reset constructor and merge state between windows.
+from {x: 0.5}, {x: 0.5}, {x: 1.5}, {x: 1.5}, {x: 0.5}
+single = histogram([x], bins=2, width=1.0)
+summarize table = frequency_table(x), hist = histogram(x, bins=2, width=1.0),
+  merged = model_merge(single), options={emit: 2, mode: "reset"}
+select values = table.values, bins = hist.bins.map(b => b.count),
+  merged_bins = merged.bins.map(b => b.count), count = hist.count

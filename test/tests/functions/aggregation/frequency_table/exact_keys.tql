@@ -1,0 +1,12 @@
+// Lookup remains type-sensitive, including nested keys and large integers.
+from {}
+ints = frequency_table([1, 9007199254740993])
+nested = frequency_table([[], [1], [1, null]])
+select integer = frequency_table_count(ints, 1),
+  unsigned = frequency_table_count(ints, uint(1)),
+  floating = frequency_table_count(ints, 1.0),
+  large = frequency_table_count(ints, 9007199254740993),
+  rounded = frequency_table_count(ints, 9007199254740992.0),
+  empty = frequency_table_count(nested, []),
+  nested_unsigned = frequency_table_count(nested, [uint(1)]),
+  nested_null = frequency_table_count(model_merge([nested, nested]), [1, null])

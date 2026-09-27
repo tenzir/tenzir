@@ -1,0 +1,10 @@
+{
+  integer: 1,
+  unsigned: 0,
+  floating: 0,
+  large: 1,
+  rounded: 0,
+  empty: 1,
+  nested_unsigned: 0,
+  nested_null: 2,
+}

@@ -34,6 +34,7 @@
 #include <string_view>
 #include <vector>
 
+#include "model_fields.hpp"
 #include "sketch_helpers.hpp"
 
 namespace tenzir::plugins::hll {
@@ -91,6 +92,24 @@ auto make_record(model const& value) -> data {
   };
 }
 
+auto make_nova_record(model const& value) -> nova::Data {
+  auto registers = nova::List{};
+  registers.reserve(value.registers.size());
+  for (auto rank : value.registers) {
+    registers.emplace_back(uint64_t{rank});
+  }
+  return nova::Record{
+    {"model", std::string{model_name}},
+    {"version", schema_version},
+    {"input_count", value.input_count},
+    {"count", value.count},
+    {"null_count", value.null_count},
+    {"precision", uint64_t{value.precision}},
+    {"hash", std::string{hash_contract}},
+    {"registers", std::move(registers)},
+  };
+}
+
 auto result_type() -> type {
   return model_record_type({
     {"precision", uint64_type{}},
@@ -135,6 +154,64 @@ auto parse_model(record_view3 record) -> Result<model, std::string> {
   for (auto const value : *registers) {
     TRY(auto rank, model_uint64(value));
     result.registers.push_back(static_cast<uint8_t>(rank));
+  }
+  return result;
+}
+
+// Validates everything that `hll_cardinality` relies on, so that merging never
+// produces a model that the accessor rejects.
+auto parse_model(nova::RowView<nova::Record> record)
+  -> Result<model, std::string> {
+  using model_fields::get;
+  TRY(auto envelope, parse_model_envelope(record));
+  if (envelope.model != model_name) {
+    return Err{fmt::format("`model` must be `{}`", model_name)};
+  }
+  if (envelope.version != schema_version) {
+    return Err{fmt::format("unsupported HLL model version {}; "
+                           "expected version {}",
+                           envelope.version, schema_version)};
+  }
+  TRY(auto precision, model_fields::get_uint(record, "precision"));
+  if (precision < min_precision or precision > max_precision) {
+    return Err{fmt::format("`precision` must be in [{}, {}]", min_precision,
+                           max_precision)};
+  }
+  TRY(auto hash, get<nova::String>(record, "hash"));
+  if (*hash != hash_contract) {
+    return Err{fmt::format("`hash` must be `{}`", hash_contract)};
+  }
+  auto const classified = checked_add(envelope.count, envelope.null_count);
+  if (not classified or *classified != envelope.input_count) {
+    return Err{"inconsistent HLL counters"};
+  }
+  TRY(auto registers, get<nova::List>(record, "registers"));
+  auto result = model{
+    .precision = static_cast<uint8_t>(precision),
+    .input_count = envelope.input_count,
+    .count = envelope.count,
+    .null_count = envelope.null_count,
+    .registers = {},
+  };
+  if (static_cast<size_t>(registers.length())
+      != register_count(result.precision)) {
+    return Err{"HLL register count does not match its precision"};
+  }
+  auto const max_rank = maximum_rank(result.precision);
+  result.registers.reserve(register_count(result.precision));
+  auto any_rank = false;
+  for (auto value : registers) {
+    auto rank = model_uint64(value);
+    if (not rank or rank.unwrap() > max_rank) {
+      return Err{
+        fmt::format("HLL registers must be ranks in [0, {}]", max_rank)};
+    }
+    any_rank = any_rank or rank.unwrap() != 0;
+    result.registers.push_back(static_cast<uint8_t>(rank.unwrap()));
+  }
+  // Every counted value sets a nonzero rank.
+  if ((envelope.count > 0) != any_rank) {
+    return Err{"inconsistent HLL registers"};
   }
   return result;
 }
@@ -318,12 +395,14 @@ private:
   bool warned_overflow_ = false;
 };
 
-class merge_state final : public model_merge_state {
+template <class Base = model_merge_state, class View = record_view3,
+          class Data = data>
+class merge_state final : public Base {
 public:
   explicit merge_state(model state) : state_{std::move(state)} {
   }
 
-  auto merge(record_view3 value) -> Result<void, std::string> override {
+  auto merge(View value) -> Result<void, std::string> override {
     TRY(auto incoming, parse_model(value));
     if (incoming.precision != state_.precision) {
       return Err{fmt::format("incompatible precision: expected {}, got {}",
@@ -354,8 +433,12 @@ public:
     return {};
   }
 
-  auto get() const -> data override {
-    return make_record(state_);
+  auto get() const -> Data override {
+    if constexpr (std::same_as<Data, nova::Data>) {
+      return make_nova_record(state_);
+    } else {
+      return make_record(state_);
+    }
   }
 
 private:
@@ -397,24 +480,6 @@ auto append_hash(xxh3_64& hash, nova::RowView<Tag> value, bool& saw_secret)
   } else {
     hash_append(hash, data_view3{*value});
   }
-}
-
-auto make_nova_record(model const& value) -> nova::Data {
-  auto registers = nova::List{};
-  registers.reserve(value.registers.size());
-  for (auto rank : value.registers) {
-    registers.emplace_back(uint64_t{rank});
-  }
-  return nova::Record{
-    {"model", std::string{model_name}},
-    {"version", schema_version},
-    {"input_count", value.input_count},
-    {"count", value.count},
-    {"null_count", value.null_count},
-    {"precision", uint64_t{value.precision}},
-    {"hash", std::string{hash_contract}},
-    {"registers", std::move(registers)},
-  };
 }
 
 struct HllArgs {
@@ -640,6 +705,14 @@ public:
     -> Result<Box<model_merge_state>, std::string> override {
     TRY(auto parsed, parse_model(value));
     return Box<model_merge_state>{merge_state{std::move(parsed)}};
+  }
+
+  auto make_model_merge_state(nova::RowView<nova::Record> value) const
+    -> Result<Box<nova::ModelMergeState>, std::string> override {
+    TRY(auto parsed, parse_model(value));
+    return Box<nova::ModelMergeState>{
+      merge_state<nova::ModelMergeState, nova::RowView<nova::Record>,
+                  nova::Data>{std::move(parsed)}};
   }
 };
 

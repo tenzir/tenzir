@@ -1,0 +1,11 @@
+error: `bins`, `width`, and `start` do not produce finite, strictly increasing bin edges
+ --> tests/functions/aggregation/histogram/invalid_edges.tql:7:31
+  |
+7 | model = histogram([1.0], bins=2, width=1.0, start=1e300)
+  |                               ^
+  ⋮
+7 | model = histogram([1.0], bins=2, width=1.0, start=1e300)
+  |                                        ---
+  |
+  = usage: histogram(x:number, bins=int, width=any, [start=any])
+  = docs: https://tenzir.com/docs/reference/functions/histogram

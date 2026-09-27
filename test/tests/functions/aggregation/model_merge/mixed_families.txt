@@ -1,4 +1,4 @@
-warning: `model_merge` failed: incompatible models: expected `histogram` version 1, got `tdigest` version 1
+warning: `model_merge` failed: incompatible models: expected `histogram` version 1, got `frequency_table` version 1
  --> tests/functions/aggregation/model_merge/mixed_families.tql:5:32
   |
 5 | summarize merged = model_merge(m)

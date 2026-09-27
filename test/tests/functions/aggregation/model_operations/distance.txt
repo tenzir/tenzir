@@ -1,0 +1,7 @@
+{
+  ks: 1.0,
+  wasserstein: 3.0,
+  same: 0.0,
+  empty: null,
+  null_model: null,
+}

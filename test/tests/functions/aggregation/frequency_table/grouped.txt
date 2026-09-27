@@ -1,0 +1,28 @@
+{
+  g: "a",
+  count: 3,
+  values: [
+    {
+      value: "a",
+      count: 2,
+    },
+    {
+      value: "d",
+      count: 1,
+    },
+  ],
+}
+{
+  g: "b",
+  count: 2,
+  values: [
+    {
+      value: "b",
+      count: 1,
+    },
+    {
+      value: "c",
+      count: 1,
+    },
+  ],
+}

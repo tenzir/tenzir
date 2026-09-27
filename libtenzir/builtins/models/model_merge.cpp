@@ -10,12 +10,16 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/model.hpp>
+#include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/view3.hpp>
 
 #include <fmt/format.h>
+
+#include "model_fields.hpp"
 
 namespace tenzir::plugins::model_merge {
 
@@ -189,10 +193,133 @@ private:
   bool warned_ = false;
 };
 
-class plugin final : public aggregation_plugin {
+/// A model fold shared by the accumulator and the independent list kernel.
+class ModelFold {
+public:
+  template <class Tag>
+  auto add(nova::RowView<Tag> value, location source, diagnostic_handler& dh,
+           nova::WarnOnce& warning) -> void {
+    if (failed_) {
+      return;
+    }
+    if constexpr (std::same_as<Tag, nova::Null>) {
+      return;
+    } else if constexpr (std::same_as<Tag, nova::Record>) {
+      auto result = merge(value);
+      if (result) {
+        return;
+      }
+      fail(result.unwrap_err(), source, dh, warning);
+    } else {
+      fail(fmt::format("expected a model record, got `{}`",
+                       nova::Type<Tag>::static_name),
+           source, dh, warning);
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return state_ and not failed_ ? (*state_)->get() : nova::Data{};
+  }
+
+private:
+  auto merge(nova::RowView<nova::Record> value) -> Result<void, std::string> {
+    auto parsed = parse_model_envelope(value);
+    if (not parsed) {
+      return Err{
+        fmt::format("malformed model record: {}", parsed.unwrap_err())};
+    }
+    auto envelope = std::move(parsed).unwrap();
+    if (not state_) {
+      TRY(auto provider, find_model_plugin(envelope));
+      auto state = provider->make_model_merge_state(value);
+      if (not state) {
+        return Err{fmt::format("malformed `{}` model: {}", envelope.model,
+                               state.unwrap_err())};
+      }
+      state_.emplace(std::move(state).unwrap());
+      model_ = std::string{envelope.model};
+      version_ = envelope.version;
+      return {};
+    }
+    if (envelope.model != model_ or envelope.version != version_) {
+      return Err{fmt::format(
+        "incompatible models: expected `{}` version {}, got `{}` version {}",
+        model_, version_, envelope.model, envelope.version)};
+    }
+    auto result = (*state_)->merge(value);
+    if (not result) {
+      return Err{fmt::format("cannot merge `{}` models: {}", model_,
+                             result.unwrap_err())};
+    }
+    return {};
+  }
+
+  auto fail(std::string const& message, location source, diagnostic_handler& dh,
+            nova::WarnOnce& warning) -> void {
+    failed_ = true;
+    state_.reset();
+    warning(dh, diagnostic::warning("`model_merge` failed: {}", message)
+                  .primary(source.subloc(0, 1)));
+  }
+
+  Option<Box<nova::ModelMergeState>> state_;
+  std::string model_;
+  uint64_t version_ = 0;
+  bool failed_ = false;
+};
+
+struct MergeArgs {
+  nova::ValueArgument model;
+};
+
+class MergeFunction {
+public:
+  static auto eval(MergeArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto dh = model_fields::DeduplicatingHandler{frame};
+    return nova::aggregate_lists(args.model, frame,
+                                 [&](nova::ListElements const& elements,
+                                     nova::ArrayBuilder<nova::Data>& out) {
+                                   auto fold = ModelFold{};
+                                   auto warning = nova::WarnOnce{};
+                                   elements.for_each([&](auto value) {
+                                     fold.add(value, args.model.source, dh,
+                                              warning);
+                                   });
+                                   nova::append_data(out, fold.get());
+                                 });
+  }
+
+  auto update(MergeArgs const& args, nova::EvalFrame frame) -> void {
+    model_fields::for_each(args.model.data, frame.mask(), [&](auto value) {
+      fold_.add(value, args.model.source, frame, warning_);
+    });
+  }
+
+  auto get() const -> nova::Data {
+    return fold_.get();
+  }
+
+  auto reset() -> void {
+    // Warning latches belong to the instance, not the resettable model.
+    fold_ = {};
+  }
+
+private:
+  ModelFold fold_;
+  nova::WarnOnce warning_;
+};
+
+class plugin final : public aggregation_plugin, public nova::AggregationPlugin {
 public:
   auto name() const -> std::string override {
     return "model_merge";
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<MergeArgs, MergeFunction>{};
+    d.positional("model", &MergeArgs::model, "record");
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

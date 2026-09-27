@@ -1,0 +1,9 @@
+error: unsupported distance method `unsupported`
+ --> tests/functions/aggregation/model_operations/invalid_method.tql:6:39
+  |
+6 | x = model_distance(null, null, method="unsupported")
+  |                                       ^^^^^^^^^^^^^
+  |
+  = hint: use `kolmogorov_smirnov` or `wasserstein`
+  = usage: model_distance(p:record, q:record, method=string)
+  = docs: https://tenzir.com/docs/reference/functions/model_distance

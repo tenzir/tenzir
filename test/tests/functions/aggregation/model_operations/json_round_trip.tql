@@ -1,0 +1,19 @@
+// Models remain usable after a JSON round trip turns their unsigned counters
+// into signed integers, while negative counters stay malformed.
+from {}
+h = histogram([0.5, 1.5, 1.5], bins=2, width=1.0)
+f = frequency_table(["a", "a", "b"])
+d = tdigest([1.0, 2.0])
+s = hll([1, 2], precision=4)
+write_json
+read_json
+select histogram = model_merge([h, h]).count,
+  integral_width = model_merge([{...h, width: 1}]).count,
+  bucket = histogram_bucket(h, 1.5).count,
+  divergence = model_divergence(h, h, method="jensen_shannon"),
+  frequency = model_merge([f]).count,
+  frequency_count = frequency_table_count(f, "a"),
+  digest = model_merge([d, d]).count,
+  distance = model_distance(d, d, method="wasserstein"),
+  cardinality = hll_cardinality(model_merge([s, s])),
+  negative = model_merge([{...h, count: -1}])

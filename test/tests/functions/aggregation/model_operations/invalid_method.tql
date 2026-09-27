@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+x = model_distance(null, null, method="unsupported")

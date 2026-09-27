@@ -105,6 +105,32 @@ auto events_of(Ts... values) -> Events {
   return make_events(builder.finish());
 }
 
+auto named(std::string name, data value) -> ast::expression {
+  return ast::expression{ast::assignment{root_field(std::move(name)),
+                                         location::unknown,
+                                         constant(std::move(value))}};
+}
+
+auto distribution_call(std::string name) -> ast::expression {
+  auto args = std::vector<ast::expression>{root_field("x")};
+  if (name == "histogram") {
+    args.push_back(named("bins", uint64_t{2}));
+    args.push_back(named("width", 1.0));
+  }
+  return call(std::move(name), std::move(args));
+}
+
+auto model_count(Data const& model, std::string_view field = "count")
+  -> uint64_t {
+  for (auto [name, value] : as<RowView<Record>>(RowView<Data>{model})) {
+    if (name == field) {
+      return *as<RowView<UInt>>(value);
+    }
+  }
+  FAIL("missing model counter");
+  return 0;
+}
+
 auto make_sum(diagnostic_handler& dh) -> Box<AggregationInstance> {
   auto const reg = global_registry();
   auto instance
@@ -682,4 +708,125 @@ TEST("t-digest accessors propagate null and ignore inactive invalid queries") {
     CHECK(is_null_at(result, 2));
   }
   CHECK(std::move(dh).collect().empty());
+}
+
+TEST("models accumulate selected rows across batches, reset, and merge") {
+  for (auto name : {"histogram", "frequency_table", "hll", "tdigest"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto reg = global_registry();
+    auto aggregation
+      = tenzir::test::make_aggregation(distribution_call(name), dh, *reg);
+    REQUIRE(aggregation);
+    CHECK(is_null((*aggregation)->get()));
+    auto events = events_of(Float{0.5}, String{"inactive"}, Null{}, Float{1.5});
+    events.mask = bitmap({true, false, true, true});
+    (*aggregation)->update(events, EvalCtx{dh});
+    CHECK_EQUAL(model_count((*aggregation)->get()), uint64_t{2});
+    CHECK_EQUAL(model_count((*aggregation)->get(), "input_count"), uint64_t{3});
+    CHECK_EQUAL(model_count((*aggregation)->get(), "null_count"), uint64_t{1});
+    (*aggregation)->update(events_of(Float{0.5}), EvalCtx{dh});
+    auto model = (*aggregation)->get();
+    CHECK_EQUAL(model_count(model), uint64_t{3});
+    (*aggregation)->reset();
+    CHECK(is_null((*aggregation)->get()));
+    (*aggregation)->update(events_of(Float{1.5}), EvalCtx{dh});
+    CHECK_EQUAL(model_count((*aggregation)->get()), uint64_t{1});
+    CHECK_EQUAL(model_count((*aggregation)->get(), "null_count"), uint64_t{0});
+    // Merge state must also honor masks and accumulate across calls.
+    auto merge = tenzir::test::make_aggregation(
+      call("model_merge", {root_field("x")}), dh, *reg);
+    REQUIRE(merge);
+    auto builder = ArrayBuilder<Record>{};
+    append_data(builder.record().field("x"), model);
+    builder.record().field("x").data(Int{42});
+    append_data(builder.record().field("x"), model);
+    auto models = make_events(builder.finish());
+    models.mask = bitmap({true, false, true});
+    (*merge)->update(models, EvalCtx{dh});
+    CHECK_EQUAL(model_count((*merge)->get()), uint64_t{6});
+    (*merge)->update(models, EvalCtx{dh});
+    CHECK_EQUAL(model_count((*merge)->get()), uint64_t{12});
+    (*merge)->reset();
+    CHECK(is_null((*merge)->get()));
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("histogram warnings survive resets while counts start over") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = global_registry();
+  auto aggregation
+    = tenzir::test::make_aggregation(distribution_call("histogram"), dh, *reg);
+  REQUIRE(aggregation);
+  for (auto i = 0; i < 3; ++i) {
+    auto invalid = i == 0 ? events_of(String{"bad"}, Duration{1})
+                          : events_of(Bool{false}, Time{});
+    (*aggregation)->update(invalid, EvalCtx{dh});
+    CHECK_EQUAL(model_count((*aggregation)->get()), uint64_t{0});
+    CHECK_EQUAL(model_count((*aggregation)->get(), "input_count"), uint64_t{2});
+    (*aggregation)->reset();
+    CHECK(is_null((*aggregation)->get()));
+    (*aggregation)->update(events_of(Float{0.5}), EvalCtx{dh});
+    CHECK_EQUAL(model_count((*aggregation)->get()), uint64_t{1});
+    CHECK_EQUAL(model_count((*aggregation)->get(), "input_count"), uint64_t{1});
+    (*aggregation)->reset();
+  }
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{2});
+  CHECK_EQUAL(diagnostics[0].message, "expected `int`, `uint`, or `float`, got "
+                                      "`string`; skipping these "
+                                      "values");
+  CHECK_EQUAL(diagnostics[1].message, "`histogram` does not support `duration` "
+                                      "values yet; skipping them");
+}
+
+TEST("model failures reset independently of their warning latches") {
+  for (auto name : {"frequency_table", "model_merge"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto reg = global_registry();
+    auto aggregation
+      = tenzir::test::make_aggregation(distribution_call(name), dh, *reg);
+    REQUIRE(aggregation);
+    auto valid = events_of(Float{0.5});
+    if (std::string_view{name} == "model_merge") {
+      auto models = eval(call("frequency_table", {constant(list{0.5})}), valid,
+                         bitmap({true}), dh);
+      auto builder = ArrayBuilder<Record>{};
+      append_data(builder.record().field("x"), to_data(models.get(0)));
+      valid = make_events(builder.finish());
+    }
+    for (auto i = 0; i < 3; ++i) {
+      auto invalid = i == 0 ? events_of(Float{0.5}, String{"bad"})
+                            : events_of(Bool{false}, String{"bad"});
+      (*aggregation)->update(invalid, EvalCtx{dh});
+      CHECK(is_null((*aggregation)->get()));
+      (*aggregation)->reset();
+      CHECK(is_null((*aggregation)->get()));
+      (*aggregation)->update(valid, EvalCtx{dh});
+      CHECK_EQUAL(model_count((*aggregation)->get()), uint64_t{1});
+      (*aggregation)->reset();
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), size_t{1});
+  }
+}
+
+TEST("distribution list kernels preserve nulls and ignore inactive rows") {
+  for (auto name : {"histogram", "frequency_table"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto builder = ArrayBuilder<Record>{};
+    append_data(builder.record().field("x"),
+                List{Float{0.5}, Null{}, Float{1.5}});
+    builder.record().field("x").data(String{"inactive"});
+    builder.record().field("x").null();
+    append_data(builder.record().field("x"), List{});
+    auto events = make_events(builder.finish());
+    auto result = eval(distribution_call(name), std::move(events),
+                       bitmap({true, false, true, true}), dh);
+    auto first = to_data(result.get(0));
+    CHECK_EQUAL(model_count(first), uint64_t{2});
+    CHECK_EQUAL(model_count(first, "null_count"), uint64_t{1});
+    CHECK(is_null_at(result, 2));
+    CHECK_EQUAL(model_count(to_data(result.get(3))), uint64_t{0});
+    CHECK(std::move(dh).collect().empty());
+  }
 }

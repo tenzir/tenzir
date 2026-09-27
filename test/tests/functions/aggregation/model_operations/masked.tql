@@ -1,0 +1,15 @@
+// Inactive invalid rows must not warn or affect model counters.
+from {keep: true, xs: [0.5, null, 1.5]}, {keep: false, xs: ["bad"]},
+  {keep: true, xs: [1.5, 1.5]}
+where keep
+h = histogram(xs, bins=2, width=1.0)
+f = frequency_table(xs)
+select h, f,
+  bucket = histogram_bucket(h, 1.5).count,
+  frequency = frequency_table_count(f, 1.5),
+  divergence = model_divergence(h, h, method="jensen_shannon")
+summarize h = model_merge(h), f = model_merge(f),
+  buckets = collect(bucket), frequencies = collect(frequency), divergences = collect(divergence)
+select count = h.count, null_count = h.null_count,
+  bins = h.bins.map(b => b.count), values = f.values,
+  buckets, frequencies, divergences

@@ -3,5 +3,5 @@
 from {}
 p = frequency_table(["a", "a", "b"])
 q = frequency_table(["b", "c", "c"])
-select matches_aligned_counts = model_divergence(p, q, method="jensen_shannon") == jensen_shannon([2, 1, 0], [0, 1, 2]),
+select divergence = model_divergence(p, q, method="jensen_shannon"),
   empty = model_divergence(p, frequency_table([]), method="jensen_shannon")

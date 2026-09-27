@@ -8,6 +8,10 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/model.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -50,8 +54,96 @@ auto warn_once(bool& warned, std::string const& message,
 
 enum class comparison_kind { divergence, distance };
 
+struct ComparisonArgs {
+  nova::ValueArgument p;
+  nova::ValueArgument q;
+  located<std::string> method;
+};
+
 template <comparison_kind Kind>
-class comparison final : public function_plugin {
+class ComparisonFunction {
+public:
+  static auto eval(ComparisonArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto out = ArrayBuilder<Data>{};
+    auto warning = WarnOnce{};
+    auto warn = [&](std::string const& message, location loc) {
+      warning(frame,
+              diagnostic::warning("{}", message).primary(loc.subloc(0, 1)));
+    };
+    for (auto row : storage::true_bits(frame.mask())) {
+      out.skip_n(row - out.length());
+      auto p = args.p.data.get(row);
+      auto q = args.q.data.get(row);
+      if (is<RowView<Null>>(p) or is<RowView<Null>>(q)) {
+        out.null();
+        continue;
+      }
+      auto lhs = try_as<RowView<Record>>(p);
+      auto rhs = try_as<RowView<Record>>(q);
+      if (not lhs or not rhs) {
+        warn("expected a model record",
+             not lhs ? args.p.source : args.q.source);
+        out.null();
+        continue;
+      }
+      auto result = compare(*lhs, *rhs, args.method.inner);
+      if (not result) {
+        auto const& error = result.unwrap_err();
+        warn(error.message, error.operand == ModelComparisonError::Operand::rhs
+                              ? args.q.source
+                              : args.p.source);
+        out.null();
+      } else if (auto value = std::move(result).unwrap()) {
+        out.data(*value);
+      } else {
+        out.null();
+      }
+    }
+    out.skip_n(frame.length() - out.length());
+    return out.finish();
+  }
+
+private:
+  static auto compare(nova::RowView<nova::Record> lhs,
+                      nova::RowView<nova::Record> rhs, std::string_view method)
+    -> Result<Option<double>, nova::ModelComparisonError> {
+    auto p_result = parse_model_envelope(lhs);
+    if (not p_result) {
+      return Err{
+        fmt::format("malformed model record: {}", p_result.unwrap_err())};
+    }
+    auto q_result = parse_model_envelope(rhs);
+    if (not q_result) {
+      return Err{nova::ModelComparisonError::from_rhs(
+        fmt::format("malformed model record: {}", q_result.unwrap_err()))};
+    }
+    auto p = std::move(p_result).unwrap();
+    auto q = std::move(q_result).unwrap();
+    TRY(find_model_plugin(p));
+    if (p.model != q.model or p.version != q.version) {
+      return Err{
+        fmt::format("cannot compare `{}` version {} with `{}` version {}",
+                    p.model, p.version, q.model, q.version)};
+    }
+    if constexpr (Kind == comparison_kind::divergence) {
+      if (auto plugin = plugins::find<model_divergence_plugin>(p.model)) {
+        return plugin->model_divergence(lhs, rhs, method);
+      }
+    } else {
+      if (auto plugin = plugins::find<model_distance_plugin>(p.model)) {
+        return plugin->model_distance(lhs, rhs, method);
+      }
+    }
+    return Err{fmt::format(
+      "model `{}` does not support {} method `{}`", p.model,
+      Kind == comparison_kind::divergence ? "divergence" : "distance", method)};
+  }
+};
+
+template <comparison_kind Kind>
+class comparison final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     if constexpr (Kind == comparison_kind::divergence) {
@@ -62,6 +154,36 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<ComparisonArgs, ComparisonFunction<Kind>>{};
+    d.positional("p", &ComparisonArgs::p, "record");
+    d.positional("q", &ComparisonArgs::q, "record");
+    d.named("method", &ComparisonArgs::method);
+    d.validate([](ComparisonArgs& args,
+                  diagnostic_handler& dh) -> failure_or<void> {
+      if constexpr (Kind == comparison_kind::divergence) {
+        if (args.method.inner != "jensen_shannon") {
+          diagnostic::error("unsupported divergence method `{}`",
+                            args.method.inner)
+            .primary(args.method)
+            .hint("use `jensen_shannon`")
+            .emit(dh);
+          return failure::promise();
+        }
+      } else if (args.method.inner != "kolmogorov_smirnov"
+                 and args.method.inner != "wasserstein") {
+        diagnostic::error("unsupported distance method `{}`", args.method.inner)
+          .primary(args.method)
+          .hint("use `kolmogorov_smirnov` or `wasserstein`")
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

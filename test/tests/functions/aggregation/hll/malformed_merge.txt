@@ -1,0 +1,50 @@
+warning: `model_merge` failed: malformed `hll` model: `precision` must be in [4, 18]
+ --> tests/functions/aggregation/hll/malformed_merge.tql:7:30
+  |
+7 | select precision=model_merge([{...a, precision: uint(19)}]),
+  |                              ~
+  |
+
+warning: `model_merge` failed: cannot merge `hll` models: `hash` must be `tenzir.data.xxh3_64.v1`
+ --> tests/functions/aggregation/hll/malformed_merge.tql:8:20
+  |
+8 |   hash=model_merge([a, {...a, hash: "other"}]),
+  |                    ~
+  |
+
+warning: `model_merge` failed: malformed `hll` model: HLL register count does not match its precision
+ --> tests/functions/aggregation/hll/malformed_merge.tql:9:21
+  |
+9 |   short=model_merge([{...a, registers: [uint(1)]}]),
+  |                     ~
+  |
+
+warning: `model_merge` failed: cannot merge `hll` models: HLL registers must be ranks in [0, 61]
+  --> tests/functions/aggregation/hll/malformed_merge.tql:10:20
+   |
+10 |   rank=model_merge([a, {...a, registers: [uint(99), ...zeros]}]),
+   |                    ~
+   |
+
+warning: `model_merge` failed: malformed `hll` model: inconsistent HLL counters
+  --> tests/functions/aggregation/hll/malformed_merge.tql:11:24
+   |
+11 |   counters=model_merge([{...a, input_count: uint(3)}]),
+   |                        ~
+   |
+
+warning: `model_merge` failed: cannot merge `hll` models: inconsistent HLL registers
+  --> tests/functions/aggregation/hll/malformed_merge.tql:12:25
+   |
+12 |   registers=model_merge([a, {...a, count: uint(0), input_count: uint(0)}]),
+   |                         ~
+   |
+{
+  precision: null,
+  hash: null,
+  short: null,
+  rank: null,
+  counters: null,
+  registers: null,
+  valid: 4,
+}

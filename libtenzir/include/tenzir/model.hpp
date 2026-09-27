@@ -10,6 +10,7 @@
 
 #include "tenzir/box.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/nova/union_array.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/plugin/base.hpp"
 #include "tenzir/result.hpp"
@@ -19,6 +20,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace tenzir {
@@ -41,12 +43,21 @@ auto parse_model_envelope(record_view3 record)
 auto parse_model_envelope(record const& record)
   -> Result<model_envelope, std::string>;
 
-/// Reads an unsigned integer from a model record.
+auto parse_model_envelope(nova::RowView<nova::Record> record)
+  -> Result<model_envelope, std::string>;
+
+/// Reads an unsigned integer from a model record. The Nova overload also
+/// accepts nonnegative signed integers, which a JSON round trip produces.
 auto model_uint64(data_view3 value) -> Result<uint64_t, std::string>;
 auto model_uint64(data const& value) -> Result<uint64_t, std::string>;
+auto model_uint64(nova::RowView<nova::Data> value)
+  -> Result<uint64_t, std::string>;
 
-/// Reads a double from a model record.
+/// Reads a double from a model record. The Nova overload also accepts
+/// integers, as JSON does not distinguish them from integral doubles.
 auto model_double(data_view3 value) -> Result<double, std::string>;
+auto model_double(nova::RowView<nova::Data> value)
+  -> Result<double, std::string>;
 
 /// Prepends the common envelope to model-specific result fields.
 auto model_record_type(std::vector<struct record_type::field> fields) -> type;
@@ -70,6 +81,30 @@ public:
   }
 };
 
+namespace nova {
+
+/// A comparison error and the operand to highlight in its diagnostic.
+struct ModelComparisonError {
+  enum class Operand { lhs, rhs };
+
+  std::string message;
+  Operand operand = Operand::lhs;
+
+  static auto from_rhs(std::string message) -> ModelComparisonError {
+    return {std::move(message), Operand::rhs};
+  }
+};
+
+/// Mutable model state that consumes borrowed records without Arrow conversion.
+class ModelMergeState {
+public:
+  virtual ~ModelMergeState() = default;
+  virtual auto merge(RowView<Record> model) -> Result<void, std::string> = 0;
+  virtual auto get() const -> Data = 0;
+};
+
+} // namespace nova
+
 /// Dispatch interface implemented by every first-class mergeable model plugin.
 /// The same concrete plugin should also implement `aggregation_plugin` to
 /// expose the model constructor as a TQL aggregation function.
@@ -88,6 +123,9 @@ public:
   /// override this overload.
   virtual auto make_model_merge_state(record const& model) const
     -> Result<Box<model_merge_state>, std::string>;
+
+  virtual auto make_model_merge_state(nova::RowView<nova::Record> model) const
+    -> Result<Box<nova::ModelMergeState>, std::string>;
 };
 
 /// A model that supports divergence measures.
@@ -97,6 +135,11 @@ public:
                                 std::string_view method) const
     -> Result<Option<double>, std::string>
     = 0;
+
+  virtual auto model_divergence(nova::RowView<nova::Record> lhs,
+                                nova::RowView<nova::Record> rhs,
+                                std::string_view method) const
+    -> Result<Option<double>, nova::ModelComparisonError>;
 };
 
 /// A model that supports distance measures.
@@ -106,6 +149,11 @@ public:
                               std::string_view method) const
     -> Result<Option<double>, std::string>
     = 0;
+
+  virtual auto
+  model_distance(nova::RowView<nova::Record> lhs,
+                 nova::RowView<nova::Record> rhs, std::string_view method) const
+    -> Result<Option<double>, nova::ModelComparisonError>;
 };
 
 /// Finds the provider whose plugin name and version match an envelope.

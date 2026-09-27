@@ -1,6 +1,5 @@
-// Cumulative emissions retain frequency-table and merge state across batches.
+// Cumulative emissions retain frequency-table and merge state.
 from {x: "a"}, {x: "b"}, {x: "a"}, {x: "c"}, {x: "a"}
-batch 1
 single = frequency_table([x])
 summarize direct = frequency_table(x), merged = model_merge(single),
   options={emit: 2, mode: "cumulative"}

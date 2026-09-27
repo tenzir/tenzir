@@ -1,0 +1,7 @@
+// Overflow must invalidate the result rather than return a partial merge.
+from {}
+f = frequency_table(["a"])
+huge = {...f, input_count: uint("18446744073709551615"),
+  count: uint("18446744073709551615"),
+  values: [{value: "a", count: uint("18446744073709551615")}]}
+select result = model_merge([huge, f])

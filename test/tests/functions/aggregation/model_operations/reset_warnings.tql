@@ -1,0 +1,11 @@
+// Per-event resets clear failed models but retain warning latches.
+from {h: "bad", x: "nan".float(), m: 42},
+  {h: 1s, x: "inf".float(), m: {}},
+  {h: false, x: [1, "bad"], m: "bad"},
+  {h: 2s, x: "nan".float(), m: 42},
+  {h: 0.5, x: "ok", m: frequency_table(["ok"])}
+summarize hist = histogram(h, bins=2, width=1.0),
+  table = frequency_table(x), merged = model_merge(m),
+  options={emit: 1, mode: "reset"}
+select histogram_count = hist.count, frequency_count = table.count?,
+  merged_count = merged.count?

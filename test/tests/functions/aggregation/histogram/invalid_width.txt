@@ -4,3 +4,5 @@ error: `width` must be a finite number greater than zero
 7 | model = histogram([1], bins=2, width=-1.0)
   |                                      ^^^^
   |
+  = usage: histogram(x:number, bins=int, width=any, [start=any])
+  = docs: https://tenzir.com/docs/reference/functions/histogram

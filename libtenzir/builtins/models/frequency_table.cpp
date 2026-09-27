@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "frequency_table.hpp"
+
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/blob.hpp>
 #include <tenzir/checked_math.hpp>
@@ -573,7 +575,9 @@ private:
   bool warned_ = false;
 };
 
-class plugin final : public aggregation_plugin, public model_divergence_plugin {
+class plugin final : public aggregation_plugin,
+                     public nova::AggregationPlugin,
+                     public model_divergence_plugin {
 public:
   auto name() const -> std::string override {
     return std::string{model_name};
@@ -594,6 +598,31 @@ public:
           .positional("x", expr, "any")
           .parse(inv, ctx));
     return std::make_unique<instance>(std::move(expr));
+  }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<native::FrequencyArgs,
+                                        native::FrequencyFunction>{};
+    d.positional("x", &native::FrequencyArgs::x, "any");
+    return std::move(d).finish();
+  }
+
+  auto make_model_merge_state(nova::RowView<nova::Record> value) const
+    -> Result<Box<nova::ModelMergeState>, std::string> override {
+    TRY(auto parsed, native::parse(value));
+    return Box<nova::ModelMergeState>{
+      native::FrequencyMergeState{std::move(parsed)}};
+  }
+
+  auto model_divergence(nova::RowView<nova::Record> lhs,
+                        nova::RowView<nova::Record> rhs,
+                        std::string_view method) const
+    -> Result<Option<double>, nova::ModelComparisonError> override {
+    if (method != "jensen_shannon") {
+      return Err{fmt::format(
+        "model `{}` does not support divergence method `{}`", name(), method)};
+    }
+    return native::divergence(lhs, rhs);
   }
 
   auto list_call_result_type(type const& input_type) const
@@ -644,10 +673,18 @@ public:
   }
 };
 
-class count final : public function_plugin {
+class count final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "frequency_table_count";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<native::CountArgs, native::CountFunction>{};
+    d.positional("model", &native::CountArgs::model, "record");
+    d.positional("x", &native::CountArgs::x, "any");
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

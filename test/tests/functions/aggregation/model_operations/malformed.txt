@@ -1,0 +1,43 @@
+warning: `model_merge` failed: malformed `histogram` model: inconsistent histogram counters
+ --> tests/functions/aggregation/model_operations/malformed.tql:5:32
+  |
+5 | select bad_count = model_merge([{...h, count: uint(2)}]),
+  |                                ~
+  |
+
+warning: `model_merge` failed: malformed `histogram` model: histogram bins do not match represented edges
+ --> tests/functions/aggregation/model_operations/malformed.tql:6:26
+  |
+6 |   bad_edge = model_merge([{...h, bins: [{lower: 0.0, upper: 2.0, count: uint(1)}]}]),
+  |                          ~
+  |
+
+warning: `model_merge` failed: malformed `frequency_table` model: frequency-table values must be unique
+ --> tests/functions/aggregation/model_operations/malformed.tql:7:27
+  |
+7 |   duplicate = model_merge([{...f, values: [{value: "a", count: uint(1)}, {value: "a", count: uint(1)}]}]),
+  |                           ~
+  |
+
+warning: `model_merge` failed: unsupported `frequency_table` model version 2; expected version 1
+ --> tests/functions/aggregation/model_operations/malformed.tql:8:29
+  |
+8 |   bad_version = model_merge([{...f, version: uint(2)}]),
+  |                             ~
+  |
+
+warning: malformed model record: missing common model field `model`
+ --> tests/functions/aggregation/model_operations/malformed.tql:9:30
+  |
+9 |   missing = model_divergence({}, h, method="jensen_shannon"),
+  |                              ~
+  |
+{
+  bad_count: null,
+  bad_edge: null,
+  duplicate: null,
+  bad_version: null,
+  missing: null,
+  null_query: null,
+  malformed_lookup: null,
+}

@@ -1,0 +1,53 @@
+warning: expected `int`, `uint`, or `float`, got `string`; skipping these values
+ --> tests/functions/aggregation/model_operations/reset_warnings.tql:7:28
+  |
+7 | summarize hist = histogram(h, bins=2, width=1.0),
+  |                            ~
+  |
+
+warning: `frequency_table` failed: values must not contain NaN or infinity
+ --> tests/functions/aggregation/model_operations/reset_warnings.tql:8:27
+  |
+8 |   table = frequency_table(x), merged = model_merge(m),
+  |                           ~
+  |
+
+warning: `model_merge` failed: expected a model record, got `int`
+ --> tests/functions/aggregation/model_operations/reset_warnings.tql:8:52
+  |
+8 |   table = frequency_table(x), merged = model_merge(m),
+  |                                                    ~
+  |
+
+warning: `histogram` does not support `duration` values yet; skipping them
+ --> tests/functions/aggregation/model_operations/reset_warnings.tql:7:28
+  |
+7 | summarize hist = histogram(h, bins=2, width=1.0),
+  |                            ~
+  |
+  = hint: convert to a number first, e.g., `x / 1s` for durations or `x.since_epoch() / 1s` for timestamps
+{
+  histogram_count: 0,
+  frequency_count: null,
+  merged_count: null,
+}
+{
+  histogram_count: 0,
+  frequency_count: null,
+  merged_count: null,
+}
+{
+  histogram_count: 0,
+  frequency_count: null,
+  merged_count: null,
+}
+{
+  histogram_count: 0,
+  frequency_count: null,
+  merged_count: null,
+}
+{
+  histogram_count: 1,
+  frequency_count: 1,
+  merged_count: 1,
+}

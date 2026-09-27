@@ -1,0 +1,21 @@
+// Comparison diagnostics highlight the malformed operand, not its valid peer.
+from {}
+h = histogram([0.5], bins=2, width=1.0)
+f = frequency_table(["a"])
+d = {
+  model: "tdigest", version: uint(1), input_count: uint(2),
+  count: uint(2), null_count: uint(0), non_finite_count: uint(0),
+  compression: uint(100), min: 1.0, max: 1.0,
+  centroids: [{mean: 1.0, weight: 2.0}],
+}
+bad_h = {...h, count: uint(2)}
+bad_f = {...f, count: uint(2)}
+bad_d = {...d, compression: uint(0)}
+select divergence_envelope = model_divergence(h, {}, method="jensen_shannon"),
+  distance_envelope = model_distance(d, {}, method="wasserstein"),
+  histogram_rhs = model_divergence(h, bad_h, method="jensen_shannon"),
+  histogram_lhs = model_divergence(bad_h, h, method="jensen_shannon"),
+  frequency_rhs = model_divergence(f, bad_f, method="jensen_shannon"),
+  frequency_lhs = model_divergence(bad_f, f, method="jensen_shannon"),
+  distance_rhs = model_distance(d, bad_d, method="wasserstein"),
+  distance_lhs = model_distance(bad_d, d, method="wasserstein")

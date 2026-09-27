@@ -1,0 +1,18 @@
+warning: `model_merge` failed: malformed model record: `count` must be a nonnegative integer
+  --> tests/functions/aggregation/model_operations/json_round_trip.tql:19:26
+   |
+19 |   negative = model_merge([{...h, count: -1}])
+   |                          ~
+   |
+{
+  histogram: 6,
+  integral_width: 3,
+  bucket: 2,
+  divergence: 0.0,
+  frequency: 3,
+  frequency_count: 2,
+  digest: 4,
+  distance: 0.0,
+  cardinality: 2,
+  negative: null,
+}

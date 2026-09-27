@@ -27,6 +27,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -35,6 +36,7 @@
 #include <utility>
 #include <vector>
 
+#include "model_fields.hpp"
 #include "model_helpers.hpp"
 #include "sketch_helpers.hpp"
 
@@ -95,6 +97,30 @@ auto make_record(model const& m) -> record {
     {"non_finite_count", m.non_finite_count},
     {"min", m.count > 0 ? data{state.min} : data{}},
     {"max", m.count > 0 ? data{state.max} : data{}},
+    {"centroids", std::move(centroids)},
+  };
+}
+
+auto make_nova_record(model const& m) -> nova::Data {
+  auto const state = m.digest.save();
+  auto centroids = nova::List{};
+  centroids.reserve(state.means.size());
+  for (auto i = size_t{0}; i < state.means.size(); ++i) {
+    centroids.emplace_back(nova::Record{
+      {"mean", state.means[i]},
+      {"weight", state.weights[i]},
+    });
+  }
+  return nova::Record{
+    {"model", std::string{model_name}},
+    {"version", model_version},
+    {"input_count", m.input_count},
+    {"count", m.count},
+    {"null_count", m.null_count},
+    {"compression", uint64_t{m.compression}},
+    {"non_finite_count", m.non_finite_count},
+    {"min", m.count > 0 ? nova::Data{state.min} : nova::Data{}},
+    {"max", m.count > 0 ? nova::Data{state.max} : nova::Data{}},
     {"centroids", std::move(centroids)},
   };
 }
@@ -237,12 +263,73 @@ auto parse_model(record_view3 rec) -> Result<model, std::string> {
                     envelope.null_count, *non_finite_count, std::move(state));
 }
 
-class merge_state final : public model_merge_state {
+auto parse_model(nova::RowView<nova::Record> rec)
+  -> Result<model, std::string> {
+  using namespace nova;
+  using model_fields::get;
+  TRY(auto envelope, parse_model_envelope(rec));
+  if (envelope.model != model_name or envelope.version != model_version) {
+    return Err{"expected a t-digest model of version 1"};
+  }
+  TRY(auto compression, model_fields::get_uint(rec, "compression"));
+  if (compression < min_compression or compression > max_compression) {
+    return Err{"invalid t-digest compression"};
+  }
+  TRY(auto non_finite, model_fields::get_uint(rec, "non_finite_count"));
+  auto classified
+    = checked_sum(std::array{envelope.count, envelope.null_count, non_finite});
+  if (not classified or *classified > envelope.input_count) {
+    return Err{"inconsistent t-digest counters"};
+  }
+  TRY(auto centroids, get<List>(rec, "centroids"));
+  if (static_cast<uint64_t>(centroids.length()) > max_compression) {
+    return Err{"too many t-digest centroids"};
+  }
+  auto state = detail::tdigest_state{};
+  auto total = uint64_t{0};
+  for (auto value : centroids) {
+    auto centroid = try_as<RowView<Record>>(value);
+    if (not centroid) {
+      return Err{"`centroids` must contain only records"};
+    }
+    TRY(auto mean, model_fields::get_number(*centroid, "mean"));
+    TRY(auto weight, model_fields::get_number(*centroid, "weight"));
+    auto integral_weight = checked_weight(weight);
+    if (not integral_weight) {
+      return Err{"invalid t-digest centroid weight"};
+    }
+    auto next = checked_add(total, *integral_weight);
+    if (not next) {
+      return Err{"t-digest weight sum overflows"};
+    }
+    total = *next;
+    state.means.push_back(mean);
+    state.weights.push_back(weight);
+  }
+  if (total != envelope.count) {
+    return Err{"inconsistent t-digest count"};
+  }
+  if (envelope.count > 0) {
+    TRY(auto min, model_fields::get_number(rec, "min"));
+    TRY(auto max, model_fields::get_number(rec, "max"));
+    state.min = min;
+    state.max = max;
+  } else {
+    TRY(get<Null>(rec, "min"));
+    TRY(get<Null>(rec, "max"));
+  }
+  return make_model(compression, envelope.input_count, envelope.count,
+                    envelope.null_count, non_finite, std::move(state));
+}
+
+template <class Base = model_merge_state, class View = record_view3,
+          class Data = data>
+class merge_state final : public Base {
 public:
   explicit merge_state(model initial) : model_{std::move(initial)} {
   }
 
-  auto merge(record_view3 rec) -> Result<void, std::string> override {
+  auto merge(View rec) -> Result<void, std::string> override {
     TRY(auto other, parse_model(rec));
     if (other.compression != model_.compression) {
       return Err{fmt::format("incompatible compression: expected {}, got {}",
@@ -287,8 +374,12 @@ public:
     return {};
   }
 
-  auto get() const -> data override {
-    return make_record(model_);
+  auto get() const -> Data override {
+    if constexpr (std::same_as<Data, nova::Data>) {
+      return make_nova_record(model_);
+    } else {
+      return make_record(model_);
+    }
   }
 
 private:
@@ -453,30 +544,6 @@ private:
   bool warned_type_ = false;
   bool warned_failure_ = false;
 };
-
-auto make_nova_record(model const& m) -> nova::Data {
-  auto const state = m.digest.save();
-  auto centroids = nova::List{};
-  centroids.reserve(state.means.size());
-  for (auto i = size_t{0}; i < state.means.size(); ++i) {
-    centroids.emplace_back(nova::Record{
-      {"mean", state.means[i]},
-      {"weight", state.weights[i]},
-    });
-  }
-  return nova::Record{
-    {"model", std::string{model_name}},
-    {"version", model_version},
-    {"input_count", m.input_count},
-    {"count", m.count},
-    {"null_count", m.null_count},
-    {"compression", uint64_t{m.compression}},
-    {"non_finite_count", m.non_finite_count},
-    {"min", m.count > 0 ? nova::Data{state.min} : nova::Data{}},
-    {"max", m.count > 0 ? nova::Data{state.max} : nova::Data{}},
-    {"centroids", std::move(centroids)},
-  };
-}
 
 struct TdigestArgs {
   nova::ValueArgument x;
@@ -707,6 +774,33 @@ public:
     -> Result<Box<model_merge_state>, std::string> override {
     TRY(auto parsed, parse_model(rec));
     return Box<model_merge_state>{merge_state{std::move(parsed)}};
+  }
+
+  auto make_model_merge_state(nova::RowView<nova::Record> rec) const
+    -> Result<Box<nova::ModelMergeState>, std::string> override {
+    TRY(auto parsed, parse_model(rec));
+    return Box<nova::ModelMergeState>{
+      merge_state<nova::ModelMergeState, nova::RowView<nova::Record>,
+                  nova::Data>{std::move(parsed)}};
+  }
+
+  auto
+  model_distance(nova::RowView<nova::Record> lhs,
+                 nova::RowView<nova::Record> rhs, std::string_view method) const
+    -> Result<Option<double>, nova::ModelComparisonError> override {
+    if (method != "kolmogorov_smirnov" and method != "wasserstein") {
+      return Err{fmt::format("model `{}` does not support distance method `{}`",
+                             name(), method)};
+    }
+    TRY(auto p, parse_model(lhs));
+    TRY(auto q, parse_model(rhs).map_err(nova::ModelComparisonError::from_rhs));
+    if (p.count == 0 or q.count == 0) {
+      return None{};
+    }
+    if (method == "kolmogorov_smirnov") {
+      return Option{p.digest.ks_distance(q.digest)};
+    }
+    return Option{p.digest.wasserstein_distance(q.digest)};
   }
 
   auto model_distance(record_view3 lhs, record_view3 rhs,

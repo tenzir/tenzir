@@ -8,6 +8,7 @@
 
 #include "tenzir/model.hpp"
 
+#include "tenzir/concepts.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
@@ -63,6 +64,27 @@ auto parse_model_uint64(Value&& value) -> Result<uint64_t, std::string> {
     return Err{"must be a uint"};
   }
   return *result;
+}
+
+// Accept nonnegative signed integers as well, because a JSON round trip does
+// not preserve that persisted counters are unsigned.
+auto parse_model_uint64(nova::RowView<nova::Data> value)
+  -> Result<uint64_t, std::string> {
+  if (auto result = try_as<nova::RowView<nova::UInt>>(value)) {
+    return **result;
+  }
+  if (auto result = try_as<nova::RowView<nova::Int>>(value);
+      result and **result >= 0) {
+    return static_cast<uint64_t>(**result);
+  }
+  return Err{"must be a nonnegative integer"};
+}
+
+auto model_string(nova::RowView<nova::Data> value) -> Option<std::string_view> {
+  if (auto result = try_as<nova::RowView<nova::String>>(value)) {
+    return **result;
+  }
+  return None{};
 }
 
 auto model_string(data_view3 value) -> Option<std::string_view> {
@@ -140,6 +162,24 @@ auto model_uint64(data const& value) -> Result<uint64_t, std::string> {
   return parse_model_uint64(value);
 }
 
+auto model_uint64(nova::RowView<nova::Data> value)
+  -> Result<uint64_t, std::string> {
+  return parse_model_uint64(value);
+}
+
+auto model_double(nova::RowView<nova::Data> value)
+  -> Result<double, std::string> {
+  return match(
+    value,
+    []<concepts::one_of<nova::Float, nova::Int, nova::UInt> Tag>(
+      nova::RowView<Tag> number) -> Result<double, std::string> {
+      return static_cast<double>(*number);
+    },
+    [](auto const&) -> Result<double, std::string> {
+      return Err{"must be a number"};
+    });
+}
+
 auto model_double(data_view3 value) -> Result<double, std::string> {
   auto const* result = try_as<double>(value);
   if (not result) {
@@ -156,6 +196,32 @@ auto parse_model_envelope(record_view3 record)
 auto parse_model_envelope(record const& record)
   -> Result<model_envelope, std::string> {
   return parse_model_envelope_impl(record);
+}
+
+auto parse_model_envelope(nova::RowView<nova::Record> record)
+  -> Result<model_envelope, std::string> {
+  return parse_model_envelope_impl(record);
+}
+
+auto model_plugin::make_model_merge_state(nova::RowView<nova::Record>) const
+  -> Result<Box<nova::ModelMergeState>, std::string> {
+  return Err{fmt::format("model `{}` does not support merging", name())};
+}
+
+auto model_divergence_plugin::model_divergence(nova::RowView<nova::Record>,
+                                               nova::RowView<nova::Record>,
+                                               std::string_view method) const
+  -> Result<Option<double>, nova::ModelComparisonError> {
+  return Err{fmt::format("model `{}` does not support divergence method `{}`",
+                         name(), method)};
+}
+
+auto model_distance_plugin::model_distance(nova::RowView<nova::Record>,
+                                           nova::RowView<nova::Record>,
+                                           std::string_view method) const
+  -> Result<Option<double>, nova::ModelComparisonError> {
+  return Err{fmt::format("model `{}` does not support distance method `{}`",
+                         name(), method)};
 }
 
 auto model_record_type(std::vector<struct record_type::field> fields) -> type {

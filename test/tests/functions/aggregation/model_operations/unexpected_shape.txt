@@ -1,6 +1,4 @@
 {
   histogram: null,
   frequency_table: null,
-  hll: null,
-  tdigest: null,
 }

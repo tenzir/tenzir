@@ -1,0 +1,13 @@
+// HLL merges reject models that `hll_cardinality` would reject, whether they
+// initialize the merge or join it later.
+from {}
+a = hll([1, 2], precision=4)
+zeros = [uint(0), uint(0), uint(0), uint(0), uint(0), uint(0), uint(0), uint(0),
+  uint(0), uint(0), uint(0), uint(0), uint(0), uint(0), uint(0)]
+select precision=model_merge([{...a, precision: uint(19)}]),
+  hash=model_merge([a, {...a, hash: "other"}]),
+  short=model_merge([{...a, registers: [uint(1)]}]),
+  rank=model_merge([a, {...a, registers: [uint(99), ...zeros]}]),
+  counters=model_merge([{...a, input_count: uint(3)}]),
+  registers=model_merge([a, {...a, count: uint(0), input_count: uint(0)}]),
+  valid=model_merge([a, a]).count

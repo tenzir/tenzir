@@ -43,11 +43,14 @@ for pipeline, error in (
     assert error in result.stderr, result.stderr
     assert not result.stdout, result.stdout
 
-# Representation support is checked by type inference, before plan construction.
-result = compile_pipeline(
-    "from []\nsummarize result=frequency_table(x)", "--dump-opt-ir"
-)
-assert result.returncode != 0, result.stdout
-assert "`frequency_table` does not support `--nova` yet" in result.stderr, result.stderr
+# Model aggregations pass type inference with `--nova`.
+for aggregate in (
+    "frequency_table(x)",
+    "histogram(x, bins=2, width=1.0)",
+    "model_merge(x)",
+):
+    result = compile_pipeline(f"from []\nsummarize result={aggregate}", "--dump-opt-ir")
+    assert result.returncode == 0, result.stderr
+    assert not result.stderr, result.stderr
 
 print("aggregation planning and validation: ok")

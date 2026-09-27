@@ -1,9 +1,17 @@
-warning: cannot compare `histogram` version 1 with `tdigest` version 1
+warning: cannot compare `histogram` version 1 with `frequency_table` version 1
  --> tests/functions/aggregation/model_operations/unsupported.tql:5:31
   |
-5 | select mixed = model_distance(hist, digest, method="wasserstein")
+5 | select mixed = model_distance(hist, table, method="wasserstein"),
   |                               ~
+  |
+
+warning: model `histogram` does not support distance method `kolmogorov_smirnov`
+ --> tests/functions/aggregation/model_operations/unsupported.tql:6:32
+  |
+6 |   unsupported = model_distance(hist, hist, method="kolmogorov_smirnov")
+  |                                ~
   |
 {
   mixed: null,
+  unsupported: null,
 }

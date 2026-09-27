@@ -1,0 +1,51 @@
+{
+  values: [
+    {
+      value: 0.5,
+      count: 2,
+    },
+  ],
+  bins: [
+    2,
+    0,
+  ],
+  merged_bins: [
+    2,
+    0,
+  ],
+  count: 2,
+}
+{
+  values: [
+    {
+      value: 1.5,
+      count: 2,
+    },
+  ],
+  bins: [
+    0,
+    2,
+  ],
+  merged_bins: [
+    0,
+    2,
+  ],
+  count: 2,
+}
+{
+  values: [
+    {
+      value: 0.5,
+      count: 1,
+    },
+  ],
+  bins: [
+    1,
+    0,
+  ],
+  merged_bins: [
+    1,
+    0,
+  ],
+  count: 1,
+}

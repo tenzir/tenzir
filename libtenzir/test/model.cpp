@@ -9,6 +9,7 @@
 #include "tenzir/model.hpp"
 
 #include "tenzir/blob.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/test/test.hpp"
 
 namespace tenzir {
@@ -44,6 +45,34 @@ TEST("frequency-table merge checkpoints preserve nested key types") {
   auto const field = restored_record.find("_checkpoint_key_type");
   REQUIRE(field != restored_record.end());
   CHECK_EQUAL(as<blob>(field->second), blob{as_bytes(key_type)});
+}
+
+TEST("default model providers report unsupported operations") {
+  auto histogram = plugins::find<model_divergence_plugin>("histogram");
+  auto tdigest = plugins::find<model_distance_plugin>("tdigest");
+  REQUIRE(histogram);
+  REQUIRE(tdigest);
+  auto record = nova::Record{};
+  auto view = nova::RowView<nova::Record>{record};
+  // Call the defaults explicitly, independently of provider-specific overrides.
+  auto merge = histogram->model_plugin::make_model_merge_state(view);
+  REQUIRE(merge.is_err());
+  CHECK_EQUAL(merge.unwrap_err(), "model `histogram` does not support merging");
+  auto divergence = histogram->model_divergence_plugin::model_divergence(
+    view, view, "jensen_shannon");
+  REQUIRE(divergence.is_err());
+  CHECK_EQUAL(divergence.unwrap_err().operand,
+              nova::ModelComparisonError::Operand::lhs);
+  CHECK_EQUAL(divergence.unwrap_err().message,
+              "model `histogram` does not support divergence method "
+              "`jensen_shannon`");
+  auto distance
+    = tdigest->model_distance_plugin::model_distance(view, view, "wasserstein");
+  REQUIRE(distance.is_err());
+  CHECK_EQUAL(distance.unwrap_err().operand,
+              nova::ModelComparisonError::Operand::lhs);
+  CHECK_EQUAL(distance.unwrap_err().message,
+              "model `tdigest` does not support distance method `wasserstein`");
 }
 
 } // namespace tenzir

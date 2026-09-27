@@ -1,6 +1,0 @@
----
-error: true
----
-
-from []
-summarize result=frequency_table(x)

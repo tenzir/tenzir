@@ -14,6 +14,8 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/model.hpp>
+#include <tenzir/nova/aggregation.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
@@ -29,6 +31,7 @@
 #include <tuple>
 #include <vector>
 
+#include "model_fields.hpp"
 #include "model_helpers.hpp"
 
 namespace tenzir::plugins::histogram {
@@ -295,18 +298,98 @@ auto parse_model(record_view3 rec) -> Result<model, std::string> {
   return result;
 }
 
+auto parse_model(nova::RowView<nova::Record> rec)
+  -> Result<model, std::string> {
+  using namespace nova;
+  using model_fields::get;
+  TRY(auto envelope, parse_model_envelope(rec));
+  if (envelope.model != model_name or envelope.version != model_version) {
+    return Err{"expected a histogram model of version 1"};
+  }
+  TRY(auto kind, get<String>(rec, "kind"));
+  if (*kind != fixed_width_kind) {
+    return Err{fmt::format("unsupported model kind `{}`", *kind)};
+  }
+  TRY(auto start, model_fields::get_number(rec, "start"));
+  TRY(auto width, model_fields::get_number(rec, "width"));
+  TRY(auto bins, get<List>(rec, "bins"));
+  if (bins.length() == 0 or static_cast<uint64_t>(bins.length()) > max_bins
+      or not std::isfinite(start) or not std::isfinite(width) or width <= 0) {
+    return Err{"invalid histogram geometry"};
+  }
+  auto edges = make_edges(start, width, bins.length());
+  if (not edges) {
+    return Err{"invalid histogram edges"};
+  }
+  TRY(auto underflow, model_fields::get_uint(rec, "underflow"));
+  TRY(auto overflow, model_fields::get_uint(rec, "overflow"));
+  TRY(auto non_finite, model_fields::get_uint(rec, "non_finite_count"));
+  auto result = model{.start = start,
+                      .width = width,
+                      .edges = std::move(*edges),
+                      .counts = {},
+                      .underflow = underflow,
+                      .overflow = overflow,
+                      .input_count = envelope.input_count,
+                      .count = envelope.count,
+                      .null_count = envelope.null_count,
+                      .non_finite_count = non_finite};
+  auto total = checked_add(underflow, overflow);
+  auto i = size_t{0};
+  for (auto bin : bins) {
+    auto record = try_as<RowView<Record>>(bin);
+    if (not record) {
+      return Err{"invalid histogram model shape"};
+    }
+    TRY(auto lower, model_fields::get_number(*record, "lower"));
+    TRY(auto upper, model_fields::get_number(*record, "upper"));
+    TRY(auto count, model_fields::get_uint(*record, "count"));
+    if (lower != result.edges[i] or upper != result.edges[i + 1]) {
+      return Err{"histogram bins do not match represented edges"};
+    }
+    ++i;
+    result.counts.push_back(count);
+    if (total) {
+      total = checked_add(*total, count);
+    }
+  }
+  auto classified = checked_sum(
+    std::array{result.count, result.null_count, result.non_finite_count});
+  if (not total or *total != result.count or not classified
+      or *classified > result.input_count) {
+    return Err{"inconsistent histogram counters"};
+  }
+  if (result.count > 0) {
+    TRY(auto min, model_fields::get_number(rec, "min"));
+    TRY(auto max, model_fields::get_number(rec, "max"));
+    if (not std::isfinite(min) or not std::isfinite(max) or min > max) {
+      return Err{"invalid histogram extrema"};
+    }
+    result.min = min;
+    result.max = max;
+  } else {
+    TRY(get<Null>(rec, "min"));
+    TRY(get<Null>(rec, "max"));
+  }
+  return result;
+}
+
 /// Materializes a validated model in the public field order.
-auto model_to_data(model const& m) -> data {
-  auto bins = list{};
+template <class Data = data>
+auto model_to_data(model const& m) -> Data {
+  using Record
+    = std::conditional_t<std::same_as<Data, data>, record, nova::Record>;
+  using List = std::conditional_t<std::same_as<Data, data>, list, nova::List>;
+  auto bins = List{};
   bins.reserve(m.counts.size());
   for (auto i = size_t{0}; i < m.counts.size(); ++i) {
-    bins.emplace_back(record{
+    bins.emplace_back(Record{
       {"lower", m.edges[i]},
       {"upper", m.edges[i + 1]},
       {"count", m.counts[i]},
     });
   }
-  return record{
+  return Record{
     {"model", std::string{model_name}},
     {"version", model_version},
     {"input_count", m.input_count},
@@ -314,8 +397,8 @@ auto model_to_data(model const& m) -> data {
     {"null_count", m.null_count},
     {"kind", std::string{fixed_width_kind}},
     {"non_finite_count", m.non_finite_count},
-    {"min", m.count > 0 ? data{m.min} : data{}},
-    {"max", m.count > 0 ? data{m.max} : data{}},
+    {"min", m.count > 0 ? Data{m.min} : Data{}},
+    {"max", m.count > 0 ? Data{m.max} : Data{}},
     {"start", m.start},
     {"width", m.width},
     {"underflow", m.underflow},
@@ -343,12 +426,14 @@ auto compatible(model const& p, model const& q) -> bool {
          and p.counts.size() == q.counts.size() and p.edges == q.edges;
 }
 
-class histogram_merge_state final : public model_merge_state {
+template <class Base = model_merge_state, class View = record_view3,
+          class Data = data>
+class histogram_merge_state final : public Base {
 public:
   explicit histogram_merge_state(model state) : state_{std::move(state)} {
   }
 
-  auto merge(record_view3 input) -> Result<void, std::string> override {
+  auto merge(View input) -> Result<void, std::string> override {
     TRY(auto parsed, parse_model(input));
     if (not compatible(state_, parsed)) {
       return Err{
@@ -418,8 +503,8 @@ public:
     return {};
   }
 
-  auto get() const -> data override {
-    return model_to_data(state_);
+  auto get() const -> Data override {
+    return model_to_data<Data>(state_);
   }
 
 private:
@@ -688,7 +773,148 @@ private:
   bool warned_overflow_ = false;
 };
 
+struct HistogramArgs {
+  nova::ValueArgument x;
+  located<uint64_t> bins;
+  nova::ConstantArgument width;
+  Option<nova::ConstantArgument> start;
+  model initial;
+};
+
+struct HistogramWarnings {
+  nova::WarnOnce type;
+  nova::WarnOnce temporal;
+  nova::WarnOnce overflow;
+};
+
+/// Shared counting logic, independent of both the accumulator and list kernel.
+class HistogramCounts {
+public:
+  explicit HistogramCounts(model initial) : state_{std::move(initial)} {
+  }
+
+  template <class Tag>
+  auto add(nova::RowView<Tag> value, location source, diagnostic_handler& dh,
+           HistogramWarnings& warnings) -> void {
+    using namespace nova;
+    if (not increment(state_.input_count, "input_count", source, dh,
+                      warnings)) {
+      return;
+    }
+    if constexpr (std::same_as<Tag, Null>) {
+      std::ignore
+        = increment(state_.null_count, "null_count", source, dh, warnings);
+    } else if constexpr (concepts::one_of<Tag, Int, UInt, Float>) {
+      auto x = static_cast<double>(*value);
+      if (not std::isfinite(x)) {
+        std::ignore = increment(state_.non_finite_count, "non_finite_count",
+                                source, dh, warnings);
+        return;
+      }
+      auto index = find_bucket_index(state_.edges, x);
+      auto& bucket = index == -1 ? state_.underflow
+                     : index == static_cast<int64_t>(state_.counts.size())
+                       ? state_.overflow
+                       : state_.counts[index];
+      auto count = checked_add(state_.count, uint64_t{1});
+      auto next = checked_add(bucket, uint64_t{1});
+      if (not count or not next) {
+        overflow(source, dh, warnings);
+        return;
+      }
+      state_.min = state_.count == 0 ? x : std::min(state_.min, x);
+      state_.max = state_.count == 0 ? x : std::max(state_.max, x);
+      state_.count = *count;
+      bucket = *next;
+    } else if constexpr (concepts::one_of<Tag, Duration, Time>) {
+      warnings.temporal(
+        dh, diagnostic::warning("`histogram` does not support `{}` values yet; "
+                                "skipping them",
+                                Type<Tag>::static_name)
+              .primary(source)
+              .hint("convert to a number first, e.g., `x / 1s` for durations "
+                    "or `x.since_epoch() / 1s` for timestamps"));
+    } else {
+      warnings.type(dh,
+                    diagnostic::warning("expected `int`, `uint`, or `float`, "
+                                        "got `{}`; skipping these values",
+                                        Type<Tag>::static_name)
+                      .primary(source));
+    }
+  }
+
+  auto get() const -> nova::Data {
+    return model_to_data<nova::Data>(state_);
+  }
+
+private:
+  auto increment(uint64_t& value, std::string_view field, location source,
+                 diagnostic_handler& dh, HistogramWarnings& warnings) -> bool {
+    auto next = checked_add(value, uint64_t{1});
+    if (not next) {
+      warnings.overflow(dh, diagnostic::warning("`histogram` {} counter "
+                                                "overflowed; skipping values",
+                                                field)
+                              .primary(source));
+      return false;
+    }
+    value = *next;
+    return true;
+  }
+
+  auto overflow(location source, diagnostic_handler& dh,
+                HistogramWarnings& warnings) -> void {
+    warnings.overflow(dh, diagnostic::warning("`histogram` counter overflowed; "
+                                              "skipping values")
+                            .primary(source));
+  }
+
+  model state_;
+};
+
+class HistogramFunction {
+public:
+  static auto eval(HistogramArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto dh = model_fields::DeduplicatingHandler{frame};
+    return nova::aggregate_lists(args.x, frame,
+                                 [&](nova::ListElements const& elements,
+                                     nova::ArrayBuilder<nova::Data>& out) {
+                                   auto counts = HistogramCounts{args.initial};
+                                   auto warnings = HistogramWarnings{};
+                                   elements.for_each([&](auto value) {
+                                     counts.add(value, args.x.source, dh,
+                                                warnings);
+                                   });
+                                   nova::append_data(out, counts.get());
+                                 });
+  }
+
+  auto update(HistogramArgs const& args, nova::EvalFrame frame) -> void {
+    if (not counts_) {
+      counts_.emplace(args.initial);
+    }
+    model_fields::for_each(args.x.data, frame.mask(), [&](auto value) {
+      counts_->add(value, args.x.source, frame, warnings_);
+    });
+  }
+
+  auto get() const -> nova::Data {
+    return counts_ ? counts_->get() : nova::Data{};
+  }
+
+  auto reset() -> void {
+    // Warning latches belong to the instance, not the resettable model.
+    counts_.reset();
+  }
+
+private:
+  Option<HistogramCounts> counts_;
+  HistogramWarnings warnings_;
+};
+
 class histogram_plugin final : public aggregation_plugin,
+                               public nova::AggregationPlugin,
                                public model_divergence_plugin {
 public:
   auto name() const -> std::string override {
@@ -793,14 +1019,174 @@ public:
   auto list_call_result_type(type const&) const -> Option<type> override {
     return result_type();
   }
+
+  auto describe() const -> nova::AggregationDescription override {
+    auto d = nova::AggregationDescriber<HistogramArgs, HistogramFunction>{};
+    d.positional("x", &HistogramArgs::x, "number");
+    d.named("bins", &HistogramArgs::bins);
+    d.named("width", &HistogramArgs::width);
+    d.named("start", &HistogramArgs::start);
+    d.validate(
+      [](HistogramArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        auto failed = false;
+        if (args.bins.inner == 0 or args.bins.inner > max_bins) {
+          diagnostic::error("`bins` must be in [1, {}]", max_bins)
+            .primary(args.bins)
+            .emit(dh);
+          failed = true;
+        }
+        auto width = number_to_double(args.width.inner);
+        if (not width or not std::isfinite(*width) or *width <= 0) {
+          diagnostic::error("`width` must be a finite number greater than zero")
+            .primary(args.width)
+            .emit(dh);
+          failed = true;
+        }
+        auto start = args.start ? number_to_double(args.start->inner)
+                                : Option<double>{0.0};
+        if (not start or not std::isfinite(*start)) {
+          diagnostic::error("`start` must be a finite number")
+            .primary(*args.start)
+            .emit(dh);
+          failed = true;
+        }
+        if (failed) {
+          return failure::promise();
+        }
+        auto edges = make_edges(*start, *width, args.bins.inner);
+        if (not edges) {
+          diagnostic::error("`bins`, `width`, and `start` do not produce "
+                            "finite, strictly increasing bin edges")
+            .primary(args.bins)
+            .secondary(args.width)
+            .emit(dh);
+          return failure::promise();
+        }
+        args.initial.start = *start;
+        args.initial.width = *width;
+        args.initial.edges = std::move(*edges);
+        args.initial.counts.resize(args.bins.inner);
+        return {};
+      });
+    return std::move(d).finish();
+  }
+
+  auto make_model_merge_state(nova::RowView<nova::Record> input) const
+    -> Result<Box<nova::ModelMergeState>, std::string> override {
+    TRY(auto parsed, parse_model(input));
+    return Box<nova::ModelMergeState>{
+      histogram_merge_state<nova::ModelMergeState, nova::RowView<nova::Record>,
+                            nova::Data>{std::move(parsed)}};
+  }
+
+  auto model_divergence(nova::RowView<nova::Record> lhs,
+                        nova::RowView<nova::Record> rhs,
+                        std::string_view method) const
+    -> Result<Option<double>, nova::ModelComparisonError> override {
+    if (method != "jensen_shannon") {
+      return Err{fmt::format(
+        "model `{}` does not support divergence method `{}`", name(), method)};
+    }
+    TRY(auto p, parse_model(lhs));
+    TRY(auto q, parse_model(rhs).map_err(nova::ModelComparisonError::from_rhs));
+    if (not compatible(p, q)) {
+      return Err{"histogram models have different represented edges"};
+    }
+    if (p.count == 0 or q.count == 0) {
+      return None{};
+    }
+    return Option{js_divergence(p, q)};
+  }
 };
 
 // -- lookup and comparison functions -----------------------------------------
 
-class histogram_bucket final : public function_plugin {
+struct BucketArgs {
+  nova::ValueArgument model;
+  nova::ValueArgument x;
+};
+
+class BucketFunction {
+public:
+  static auto eval(BucketArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto out = ArrayBuilder<Data>{};
+    auto warning = WarnOnce{};
+    auto records = args.model.data.get_alternative<Record>();
+    for (auto row : storage::true_bits(frame.mask())) {
+      out.skip_n(row - out.length());
+      if (not records or not records->present.get(row)) {
+        out.null();
+        continue;
+      }
+      auto x = match(
+        args.x.data.get(row),
+        [&]<class Tag>(RowView<Tag> value) -> Option<double> {
+          if constexpr (concepts::one_of<Tag, Int, UInt, Float>) {
+            return static_cast<double>(*value);
+          } else if constexpr (not std::same_as<Tag, Null>) {
+            warning(frame, diagnostic::warning("expected `number`, got `{}`",
+                                               Type<Tag>::static_name)
+                             .primary(args.x.source));
+          }
+          return None{};
+        });
+      if (not x) {
+        out.null();
+        continue;
+      }
+      if (not std::isfinite(*x)) {
+        warning(frame,
+                diagnostic::warning("histogram query value must be finite")
+                  .primary(args.x.source));
+        out.null();
+        continue;
+      }
+      auto parsed = parse_model(records->data.get(row));
+      if (not parsed) {
+        out.null();
+        continue;
+      }
+      auto const& m = parsed.unwrap();
+      auto index = find_bucket_index(m.edges, *x);
+      auto rec = out.record();
+      if (index == -1) {
+        rec.field("kind").data(std::string_view{"underflow"});
+        rec.field("index").data(index);
+        rec.field("lower").null();
+        rec.field("upper").data(m.edges.front());
+        rec.field("count").data(m.underflow);
+      } else if (index == static_cast<int64_t>(m.counts.size())) {
+        rec.field("kind").data(std::string_view{"overflow"});
+        rec.field("index").data(index);
+        rec.field("lower").data(m.edges.back());
+        rec.field("upper").null();
+        rec.field("count").data(m.overflow);
+      } else {
+        rec.field("kind").data(std::string_view{"regular"});
+        rec.field("index").data(index);
+        rec.field("lower").data(m.edges[index]);
+        rec.field("upper").data(m.edges[index + 1]);
+        rec.field("count").data(m.counts[index]);
+      }
+    }
+    out.skip_n(frame.length() - out.length());
+    return out.finish();
+  }
+};
+
+class histogram_bucket final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "histogram_bucket";
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<BucketArgs, BucketFunction>{};
+    d.positional("model", &BucketArgs::model, "record");
+    d.positional("x", &BucketArgs::x, "number");
+    return std::move(d).finish();
   }
 
   auto is_deterministic() const -> bool override {

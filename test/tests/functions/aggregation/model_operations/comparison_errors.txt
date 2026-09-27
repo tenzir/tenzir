@@ -1,0 +1,65 @@
+warning: malformed model record: missing common model field `model`
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:14:50
+   |
+14 | select divergence_envelope = model_divergence(h, {}, method="jensen_shannon"),
+   |                                                  ~
+   |
+
+warning: malformed model record: missing common model field `model`
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:15:41
+   |
+15 |   distance_envelope = model_distance(d, {}, method="wasserstein"),
+   |                                         ~
+   |
+
+warning: inconsistent histogram counters
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:16:39
+   |
+16 |   histogram_rhs = model_divergence(h, bad_h, method="jensen_shannon"),
+   |                                       ~
+   |
+
+warning: inconsistent histogram counters
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:17:36
+   |
+17 |   histogram_lhs = model_divergence(bad_h, h, method="jensen_shannon"),
+   |                                    ~
+   |
+
+warning: inconsistent frequency-table counters
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:18:39
+   |
+18 |   frequency_rhs = model_divergence(f, bad_f, method="jensen_shannon"),
+   |                                       ~
+   |
+
+warning: inconsistent frequency-table counters
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:19:36
+   |
+19 |   frequency_lhs = model_divergence(bad_f, f, method="jensen_shannon"),
+   |                                    ~
+   |
+
+warning: invalid t-digest compression
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:20:36
+   |
+20 |   distance_rhs = model_distance(d, bad_d, method="wasserstein"),
+   |                                    ~
+   |
+
+warning: invalid t-digest compression
+  --> tests/functions/aggregation/model_operations/comparison_errors.tql:21:33
+   |
+21 |   distance_lhs = model_distance(bad_d, d, method="wasserstein")
+   |                                 ~
+   |
+{
+  divergence_envelope: null,
+  distance_envelope: null,
+  histogram_rhs: null,
+  histogram_lhs: null,
+  frequency_rhs: null,
+  frequency_lhs: null,
+  distance_rhs: null,
+  distance_lhs: null,
+}
