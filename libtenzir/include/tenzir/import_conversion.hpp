@@ -16,6 +16,11 @@
 
 namespace tenzir {
 
+/// Redacts secrets before import transport, preserving masks and metadata.
+/// Returns whether any secret values were replaced.
+auto redact_import_secrets(nova::Events events)
+  -> std::pair<bool, nova::Events>;
+
 /// Retains selected events while null-compatible output schemas are inferred.
 /// A failed add leaves the buffer unchanged. Each output has one concrete
 /// schema and keeps the import times of its selected rows.

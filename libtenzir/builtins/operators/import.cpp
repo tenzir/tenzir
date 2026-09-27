@@ -14,6 +14,7 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/import_conversion.hpp>
 #include <tenzir/import_wire.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
@@ -119,6 +120,13 @@ public:
       }
     } else {
       static_assert(std::same_as<Input, nova::Events>);
+      auto has_secrets = false;
+      std::tie(has_secrets, input) = redact_import_secrets(std::move(input));
+      if (has_secrets) {
+        diagnostic::warning("`secret` cannot be imported as secrets")
+          .note("fields will be `\"***\"`")
+          .emit(ctx.dh());
+      }
       write_bytes_counter_.add(input.approx_bytes());
       write_events_counter_.add(input.active_count());
       if (input.active_count() == 0) {

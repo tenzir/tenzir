@@ -1,3 +1,5 @@
 tenzir:
   nova: true
+  secrets:
+    test-secret: test-value
   import-buffer-timeout: 0s

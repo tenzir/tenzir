@@ -3646,6 +3646,59 @@ TEST("Nova import rejects unredacted secrets") {
   CHECK(not conversion.add(events, events.mask));
 }
 
+TEST("import redacts nested secrets while preserving masks and metadata") {
+  auto builder = ArrayBuilder<Record>{};
+  append_export_row(builder, Record{{"value", String{"unchanged"}},
+                                    {"items", List{String{"plain"}, Null{}}}});
+  append_export_row(builder, Record{{"value", Secret{}},
+                                    {"items", List{Secret{}, String{"plain"}}},
+                                    {"nested", Record{{"secret", Secret{}}}}});
+  auto events = Events{builder.finish(), bitmap({false, true}),
+                       Events::Meta::make_empty(2, "redacted")};
+  events.meta.import_time = Array<Time>{
+    storage::ConstantStorage<Time>{2, tenzir::time{std::chrono::seconds{7}}}};
+  auto [changed, redacted] = tenzir::redact_import_secrets(events);
+  CHECK(changed);
+  CHECK_EQUAL(redacted.length(), 2);
+  CHECK_EQUAL(redacted.mask.length(), events.mask.length());
+  CHECK_EQUAL(redacted.mask.get(0), events.mask.get(0));
+  CHECK_EQUAL(redacted.mask.get(1), events.mask.get(1));
+  CHECK_EQUAL(*redacted.meta.name.get(1), "redacted");
+  CHECK_EQUAL(*redacted.meta.import_time.get(1),
+              *events.meta.import_time.get(1));
+  CHECK_EQUAL(materialize_legacy(RowView<Data>{redacted.data.get(1)}),
+              (tenzir::data{tenzir::record{
+                {"value", "***"},
+                {"items", tenzir::list{"***", "plain"}},
+                {"nested", tenzir::record{{"secret", "***"}}},
+              }}));
+  auto wire = tenzir::to_import_wire(redacted);
+  REQUIRE(wire);
+  auto restored = tenzir::from_import_wire(wire.unwrap());
+  REQUIRE(restored);
+  CHECK_EQUAL(restored.unwrap().active_count(), 1u);
+  CHECK(not restored.unwrap().mask.get(0));
+  CHECK(not tenzir::to_import_wire(events));
+}
+
+TEST("import redaction retains secret-free backing and constant records") {
+  auto events = export_events(Record{{"value", String{"plain"}}});
+  events.data = std::move(events.data).to_primary();
+  auto [changed, unchanged] = tenzir::redact_import_secrets(events);
+  CHECK(not changed);
+  CHECK_EQUAL(&*as<storage::RecordStorage>(unchanged.data.storage()),
+              &*as<storage::RecordStorage>(events.data.storage()));
+  auto constant
+    = repeat(Data{Record{{"items", List{Secret{}, String{"plain"}}}}}, 3);
+  events.data = *constant.try_as<Record>();
+  events.mask = storage::BitMap{3, true};
+  events.meta = Events::Meta::make_empty(3, "constant");
+  auto result = tenzir::redact_import_secrets(events);
+  CHECK(result.first);
+  CHECK(not is<storage::RecordStorage>(result.second.data.storage()));
+  REQUIRE(tenzir::to_import_wire(result.second));
+}
+
 TEST("import conversion refines null parents and nested empty lists") {
   auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto first = export_events(Record{{"parent", Null{}}, {"items", List{}}});
