@@ -281,6 +281,7 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
       it->second.bytes += retained_bytes;
       buffered_nova_bytes += retained_bytes;
       buffered_events += count;
+      auto generation = it->second.generation;
       remaining = remaining.and_not(part);
       ++*pending;
       self->mail(events, std::move(part))
@@ -289,7 +290,9 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
           [finish]() mutable {
             finish();
           },
-          [finish, first_error](caf::error const& error) mutable {
+          [this, key = group.key, generation, count, retained_bytes, finish,
+           first_error](caf::error const& error) mutable {
+            rollback_nova_append(key, generation, count, retained_bytes);
             if (not first_error->valid()) {
               *first_error = error;
             }
@@ -342,6 +345,32 @@ void index_state::release_nova_pressure() {
     waiter.deliver();
   }
   nova_pressure_waiters.clear();
+}
+
+void index_state::rollback_nova_append(ImportShapeKey const& key,
+                                       uuid const& generation, size_t events,
+                                       size_t bytes) {
+  if (auto it = nova_active_partitions.find(key);
+      it != nova_active_partitions.end()
+      and it->second.generation == generation) {
+    TENZIR_ASSERT_GEQ(it->second.events, events);
+    TENZIR_ASSERT_GEQ(it->second.bytes, bytes);
+    TENZIR_ASSERT_GEQ(buffered_events, events);
+    it->second.events -= events;
+    it->second.bytes -= bytes;
+    buffered_events -= events;
+  } else if (auto it = nova_unpersisted.find(generation);
+             it != nova_unpersisted.end()) {
+    // Sealing already released the row reservation, but retains the bytes.
+    TENZIR_ASSERT_GEQ(it->second.bytes, bytes);
+    it->second.bytes -= bytes;
+  } else {
+    // Retirement already released this generation's entire reservation.
+    return;
+  }
+  TENZIR_ASSERT_GEQ(buffered_nova_bytes, bytes);
+  buffered_nova_bytes -= bytes;
+  release_nova_pressure();
 }
 
 // -- partition handling -----------------------------------------------------

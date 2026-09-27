@@ -80,6 +80,8 @@ struct index_state {
 
   void enforce_buffer_limit();
   void release_nova_pressure();
+  void rollback_nova_append(ImportShapeKey const& key, uuid const& generation,
+                            size_t events, size_t bytes);
 
   void complete_publication(caf::error error);
   void publish_or_defer(std::function<void()> action);
