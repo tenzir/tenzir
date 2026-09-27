@@ -492,9 +492,14 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           [this, rp, token, subscriber, internal, live, eager,
            buffered = std::move(buffered)]() mutable {
             snapshot_barriers.insert(token);
-            self->monitor(subscriber, [this, token](caf::error const&) {
-              release_snapshot_barrier(token);
-            });
+            self->monitor(subscriber,
+                          [this, token,
+                           source = subscriber.address()](caf::error const&) {
+                            std::erase_if(subscribers, [&](auto const& sub) {
+                              return sub.receiver.address() == source;
+                            });
+                            release_snapshot_barrier(token);
+                          });
             if (live) {
               subscribers.emplace_back(subscriber, internal, eager);
             }
@@ -564,9 +569,14 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           [this, rp, token, subscriber, internal, live, eager,
            buffered = std::move(buffered)]() mutable {
             snapshot_barriers.insert(token);
-            self->monitor(subscriber, [this, token](caf::error const&) {
-              release_snapshot_barrier(token);
-            });
+            self->monitor(
+              subscriber,
+              [this, token, source = subscriber.address()](caf::error const&) {
+                std::erase_if(nova_subscribers, [&](auto const& sub) {
+                  return sub.receiver.address() == source;
+                });
+                release_snapshot_barrier(token);
+              });
             if (live) {
               nova_subscribers.emplace_back(subscriber, internal, eager);
             }
