@@ -270,7 +270,9 @@ type suricata.dhcp = suricata.component.common + record {
 
 type suricata.soa_record = record {
   mname: string,
+  mname_truncated: bool,
   rname: string,
+  rname_truncated: bool,
   serial: uint64,
   refresh: uint64,
   retry: uint64,
@@ -333,6 +335,104 @@ type suricata.dns = suricata.component.common + record {
       SRV: list<suricata.srv_record>
     },
     answers: list<suricata.dns_answer_detail>
+  }
+}
+
+type suricata.dnp3_link_control = record {
+  dir: bool,
+  pri: bool,
+  fcb: bool,
+  fcv: bool,
+  function_code: uint64
+}
+
+type suricata.dnp3_application_control = record {
+  fir: bool,
+  fin: bool,
+  con: bool,
+  uns: bool,
+  sequence: uint64
+}
+
+// Points carry additional, object-specific fields that depend on the group
+// and variation of the object.
+type suricata.dnp3_point = record {
+  prefix: uint64,
+  index: uint64,
+  size: uint64
+}
+
+type suricata.dnp3_object = record {
+  group: uint64,
+  variation: uint64,
+  qualifier: uint64,
+  prefix_code: uint64,
+  range_code: uint64,
+  start: uint64,
+  stop: uint64,
+  count: uint64,
+  points: list<suricata.dnp3_point>
+}
+
+type suricata.dnp3 = suricata.component.common + record {
+  dnp3: record {
+    type: string,
+    control: suricata.dnp3_link_control,
+    src: uint64,
+    dst: uint64,
+    application: record {
+      control: suricata.dnp3_application_control,
+      function_code: uint64,
+      objects: list<suricata.dnp3_object>,
+      complete: bool
+    },
+    iin: record {
+      indicators: list<string>
+    }
+  }
+}
+
+type suricata.component.verdict = record {
+  action: string,
+  reject_target: string,
+  reject: list<string>
+}
+
+type suricata.drop = suricata.component.common + record {
+  direction: string,
+  drop: record {
+    len: uint64,
+    tos: uint64,
+    ttl: uint64,
+    ipid: uint64,
+    tc: uint64,
+    hoplimit: uint64,
+    flowlbl: uint64,
+    tcpseq: uint64,
+    tcpack: uint64,
+    tcpwin: uint64,
+    syn: bool,
+    ack: bool,
+    psh: bool,
+    rst: bool,
+    urg: bool,
+    fin: bool,
+    tcpres: uint64,
+    tcpurgp: uint64,
+    udplen: uint64,
+    icmp_id: uint64,
+    icmp_seq: uint64,
+    reason: string
+  },
+  verdict: suricata.component.verdict,
+  alert: record {
+    action: string,
+    gid: uint64 #index=hash,
+    signature_id: uint64 #index=hash,
+    rev: uint64,
+    signature: string,
+    category: string,
+    severity: uint64
   }
 }
 
@@ -435,7 +535,15 @@ type suricata.http = suricata.component.common + record {
     protocol: string,
     status: uint64,
     redirect: string,
-    length: uint64
+    length: uint64,
+    version: string,
+    request_headers: list<suricata.http2_header>,
+    response_headers: list<suricata.http2_header>,
+    http2: record {
+      stream_id: uint64,
+      request: suricata.http2_stream,
+      response: suricata.http2_stream
+    }
   },
   tx_id: uint64 #index=hash
 }
@@ -501,6 +609,20 @@ type suricata.fileinfo = suricata.component.common + record {
 
 type suricata.flow = suricata.component.common + record {
   flow: suricata.component.flow,
+}
+
+type suricata.frame = suricata.component.common + record {
+  frame: record {
+    type: string,
+    id: uint64,
+    direction: string,
+    stream_offset: uint64,
+    length: uint64,
+    complete: bool,
+    payload: blob,
+    payload_printable: string,
+    tx_id: uint64 #index=hash
+  }
 }
 
 type suricata.ikev2 = suricata.component.common + record {
@@ -604,6 +726,160 @@ type suricata.krb5 = suricata.component.common + record {
     ticket_weak_encryption: bool
   },
   host: string
+}
+
+type suricata.ldap_control = record {
+  control_type: string,
+  criticality: bool,
+  control_value: string
+}
+
+type suricata.ldap_result = record {
+  result_code: string,
+  matched_dn: string,
+  message: string
+}
+
+type suricata.ldap_attribute = record {
+  type: string,
+  values: list<string>
+}
+
+type suricata.ldap = suricata.component.common + record {
+  ldap: record {
+    request: record {
+      message_id: uint64,
+      operation: string,
+      search_request: record {
+        base_object: string,
+        scope: uint64,
+        deref_alias: uint64,
+        size_limit: uint64,
+        time_limit: uint64,
+        types_only: bool,
+        filter: record {
+          type: string,
+          value: string
+        },
+        attributes: list<string>
+      },
+      bind_request: record {
+        version: uint64,
+        name: string,
+        sasl: record {
+          mechanism: string,
+          credentials: string
+        }
+      },
+      modify_request: record {
+        object: string,
+        changes: list<record {
+          operation: string,
+          modification: record {
+            attribute_type: string,
+            attribute_values: list<string>
+          }
+        }>
+      },
+      add_request: record {
+        entry: string,
+        attributes: list<record {
+          name: string,
+          values: list<string>
+        }>
+      },
+      del_request: record {
+        dn: string
+      },
+      mod_dn_request: record {
+        entry: string,
+        new_rdn: string,
+        delete_old_rdn: bool,
+        new_superior: string
+      },
+      compare_request: record {
+        entry: string,
+        attribute_value_assertion: record {
+          description: string,
+          value: string
+        }
+      },
+      extended_request: record {
+        name: string,
+        value: string
+      },
+      controls: list<suricata.ldap_control>
+    },
+    responses: list<record {
+      operation: string,
+      message_id: uint64,
+      search_result_entry: record {
+        base_object: string,
+        attributes: list<suricata.ldap_attribute>
+      },
+      search_result_done: suricata.ldap_result,
+      bind_response: suricata.ldap_result + record {
+        server_sasl_creds: string
+      },
+      modify_response: suricata.ldap_result,
+      add_response: suricata.ldap_result,
+      del_response: suricata.ldap_result,
+      mod_dn_response: suricata.ldap_result,
+      compare_response: suricata.ldap_result,
+      extended_response: suricata.ldap_result + record {
+        name: string,
+        value: string
+      },
+      intermediate_response: record {
+        name: string,
+        value: string
+      },
+      controls: list<suricata.ldap_control>
+    }>
+  }
+}
+
+type suricata.llmnr_opt = record {
+  code: uint64,
+  data: string
+}
+
+// Resource records carry the record data in a field named after the
+// lowercase record type, e.g., `a` for A records.
+type suricata.llmnr_record = record {
+  rrname: string,
+  rrname_truncated: bool,
+  a: ip,
+  aaaa: ip,
+  cname: string,
+  mx: string,
+  ns: string,
+  ptr: string,
+  rdata_truncated: bool,
+  txt: list<string>,
+  soa: suricata.soa_record,
+  sshfp: suricata.sshfp_record,
+  srv: suricata.srv_record,
+  opt: list<suricata.llmnr_opt>
+}
+
+type suricata.llmnr_query = record {
+  rrname: string,
+  rrname_truncated: bool,
+  rrtype: string
+}
+
+type suricata.llmnr = suricata.component.common + record {
+  llmnr: record {
+    type: string,
+    id: uint64,
+    flags: list<string>,
+    opcode: uint64,
+    queries: list<suricata.llmnr_query>,
+    answers: list<suricata.llmnr_record>,
+    authorities: list<suricata.llmnr_record>,
+    additionals: list<suricata.llmnr_record>
+  }
 }
 
 type suricata.mdns_additionals_item = record {
@@ -876,6 +1152,15 @@ type suricata.nfs = suricata.component.common + record {
       last_xid: uint64,
       chunks: uint64
     }
+  }
+}
+
+type suricata.ntp = suricata.component.common + record {
+  ntp: record {
+    version: uint64,
+    mode: uint64,
+    stratum: uint64,
+    reference_id: string
   }
 }
 
