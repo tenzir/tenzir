@@ -250,8 +250,7 @@ public:
     }
     if constexpr (std::same_as<Output, nova::Events>) {
       if (remainder_) {
-        auto evaluator = nova::Evaluator::make(
-          *remainder_, nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+        auto evaluator = co_await nova::Evaluator::make(*remainder_, ctx);
         if (not evaluator) {
           co_return;
         }

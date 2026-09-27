@@ -13,7 +13,9 @@ try:
     result = tenzir.run('from {value: "unbuffered"}\nimport\n')
     assert result.returncode == 0, result.stderr.decode()
     result = tenzir.run(
-        'export\nwhere value == "unbuffered"\nto_stdout { write_ndjson }\n'
+        'export\nwhere value == "unbuffered" and '
+        'hmac(value, secret("test-secret")) == hmac(value, "test-value")\n'
+        "to_stdout { write_ndjson }\n"
     )
     assert result.returncode == 0, result.stderr.decode()
     assert json.loads(result.stdout.decode())["value"] == "unbuffered"
