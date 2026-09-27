@@ -9,6 +9,8 @@
 #include "tenzir/detail/prometheus_metric_shaper.hpp"
 
 #include "tenzir/data.hpp"
+#include "tenzir/import_conversion.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/plugin/metrics.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/test/test.hpp"
@@ -89,6 +91,64 @@ TEST("prometheus metric shaper flattens nested memory metrics") {
   CHECK_EQUAL(get<double>(rows[1], "value"), 1000.0);
   CHECK_EQUAL(get<std::string>(rows[1], "type"), "counter");
   CHECK_EQUAL(get<std::string>(rows[1], "unit"), "bytes");
+}
+
+TEST("prometheus metric shaper uses layout annotations by field name") {
+  auto layout = type{
+    "tenzir.metrics.custom",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"details",
+       record_type{
+         {"name", metrics::prometheus_label(string_type{})},
+         {"items",
+          list_type{record_type{{"elapsed", metrics::prometheus_gauge(
+                                              duration_type{}, "seconds")}}}},
+       }},
+    },
+  };
+  auto b = series_builder{type{
+    "tenzir.metrics.custom",
+    record_type{
+      {"details",
+       record_type{
+         {"items", list_type{record_type{{"elapsed", duration_type{}}}}},
+         {"name", string_type{}},
+       }},
+      {"timestamp", time_type{}},
+      {"extra", int64_type{}},
+    },
+  }};
+  auto row = b.record();
+  auto details = row.field("details").record();
+  details.field("items").list().record().field(
+    "elapsed", duration{std::chrono::seconds{2}});
+  details.field("name", "worker");
+  row.field("timestamp", test_timestamp());
+  row.field("extra", int64_t{99});
+  auto input = b.finish_assert_one_slice();
+  auto shaper = detail::prometheus_metric_shaper{layout};
+  auto slices = shaper.shape(input);
+  REQUIRE_EQUAL(slices.size(), 1u);
+  auto rows = std::vector<record>{};
+  for (auto value : slices[0].values()) {
+    rows.push_back(materialize(value));
+  }
+  REQUIRE_EQUAL(rows.size(), 1u);
+  CHECK_EQUAL(get<double>(rows[0], "value"), 2.0);
+  CHECK_EQUAL(get<time>(rows[0], "timestamp"), test_timestamp());
+  CHECK_EQUAL(get<std::string>(rows[0], "type"), "gauge");
+  CHECK_EQUAL(get<std::string>(rows[0], "unit"), "seconds");
+  CHECK_EQUAL(get<std::string>(get<record>(rows[0], "labels"), "name"),
+              "worker");
+  auto imported = import_table_slice(input);
+  REQUIRE(imported);
+  auto native = shaper.shape(imported.unwrap());
+  REQUIRE_EQUAL(native.size(), 1u);
+  REQUIRE_EQUAL(native[0].active_count(), 1);
+  auto result = nova::materialize_legacy(
+    nova::RowView<nova::Data>{native[0].data.get(0)});
+  CHECK_EQUAL(as<record>(result), rows[0]);
 }
 
 TEST("prometheus metric shaper converts durations to seconds") {
@@ -272,13 +332,23 @@ TEST("prometheus metric shaper drops schema ids and aggregates") {
   row1.field("schema", "suricata.alert");
   row1.field("schema_id", "bbbbbbbbbbbbbbbb");
   row1.field("events", uint64_t{3});
-  auto rows = shape_rows(b.finish_assert_one_slice());
+  auto input = b.finish_assert_one_slice();
+  auto rows = shape_rows(input);
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_ingest_events");
   CHECK_EQUAL(get<double>(rows[0], "value"), 5.0);
   auto& labels = get<record>(rows[0], "labels");
   CHECK_EQUAL(get<std::string>(labels, "schema"), "suricata.alert");
   CHECK(not get_if<std::string>(&labels, "schema_id"));
+  auto imported = import_table_slice(input);
+  REQUIRE(imported);
+  auto native
+    = detail::prometheus_metric_shaper{input.schema()}.shape(imported.unwrap());
+  REQUIRE_EQUAL(native.size(), 1u);
+  REQUIRE_EQUAL(native[0].active_count(), 1);
+  auto result = nova::materialize_legacy(
+    nova::RowView<nova::Data>{native[0].data.get(0)});
+  CHECK_EQUAL(as<record>(result), rows[0]);
 }
 
 TEST("prometheus metric shaper skips operator metadata") {

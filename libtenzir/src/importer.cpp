@@ -112,6 +112,59 @@ void importer::handle_slice(table_slice&& slice) {
   }
 }
 
+auto importer::handle_events(nova::Events events) -> caf::result<void> {
+  auto const now = time::clock::now();
+  auto times = nova::ArrayBuilder<nova::Time>{};
+  for (auto i = nova::storage::Index{0}; i < events.length(); ++i) {
+    auto timestamp = *events.meta.import_time.get(i);
+    times.data(timestamp == time{} ? now : timestamp);
+  }
+  events.meta.import_time = times.finish();
+  auto grouped = group_import_shapes(events);
+  if (not grouped) {
+    return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
+  }
+  for (auto& group : grouped.unwrap()) {
+    if (group.key.fields.empty()) {
+      continue;
+    }
+    if (not group.key.internal) {
+      nova_name_counters[group.key.name] += group.mask.true_count();
+    }
+    auto selected = events;
+    selected.mask = std::move(group.mask);
+    for (auto const& subscriber : nova_subscribers) {
+      if (subscriber.eager and subscriber.internal == group.key.internal) {
+        self->mail(selected).send(subscriber.receiver);
+      }
+    }
+    if (unpersisted_nova_events.empty()
+        and import_buffer_timeout != duration::zero()) {
+      auto generation = nova_buffer_generation;
+      self->run_delayed_weak(import_buffer_timeout, [this, generation] {
+        if (nova_buffer_generation == generation) {
+          flush_nova();
+        }
+      });
+    }
+    unpersisted_nova_events.push_back(std::move(selected));
+    unpersisted_nova_bytes += unpersisted_nova_events.back().approx_bytes();
+  }
+  if (import_buffer_timeout == duration::zero()
+      or unpersisted_nova_bytes >= max_unpersisted_nova_bytes) {
+    flush_nova();
+  }
+  if (pending_nova_requests > 0) {
+    auto rp = self->make_response_promise<void>();
+    nova_accept_waiters.push_back(rp);
+    return rp;
+  }
+  if (nova_error.valid()) {
+    return nova_error;
+  }
+  return {};
+}
+
 void importer::flush(Option<type> schema) {
   const auto do_flush = [&](std::vector<table_slice> events,
                             const bool is_internal) {
@@ -364,63 +417,16 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       handle_slice(std::move(slice));
       return {};
     },
+    [this](nova::Events& events) -> caf::result<void> {
+      return handle_events(std::move(events));
+    },
     [this](ImportWireBatch& batch) -> caf::result<void> {
-      auto const now = time::clock::now();
       auto converted = from_import_wire(batch);
       if (not converted) {
         return caf::make_error(ec::type_clash,
                                std::move(converted).unwrap_err());
       }
-      auto events = std::move(converted).unwrap();
-      auto times = nova::ArrayBuilder<nova::Time>{};
-      for (auto i = nova::storage::Index{0}; i < events.length(); ++i) {
-        auto timestamp = *events.meta.import_time.get(i);
-        times.data(timestamp == time{} ? now : timestamp);
-      }
-      events.meta.import_time = times.finish();
-      auto grouped = group_import_shapes(events);
-      if (not grouped) {
-        return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
-      }
-      for (auto& group : grouped.unwrap()) {
-        if (group.key.fields.empty()) {
-          continue;
-        }
-        if (not group.key.internal) {
-          nova_name_counters[group.key.name] += group.mask.true_count();
-        }
-        auto selected = events;
-        selected.mask = std::move(group.mask);
-        for (auto const& subscriber : nova_subscribers) {
-          if (subscriber.eager and subscriber.internal == group.key.internal) {
-            self->mail(selected).send(subscriber.receiver);
-          }
-        }
-        if (unpersisted_nova_events.empty()
-            and import_buffer_timeout != duration::zero()) {
-          auto generation = nova_buffer_generation;
-          self->run_delayed_weak(import_buffer_timeout, [this, generation] {
-            if (nova_buffer_generation == generation) {
-              flush_nova();
-            }
-          });
-        }
-        unpersisted_nova_events.push_back(std::move(selected));
-        unpersisted_nova_bytes += unpersisted_nova_events.back().approx_bytes();
-      }
-      if (import_buffer_timeout == duration::zero()
-          or unpersisted_nova_bytes >= max_unpersisted_nova_bytes) {
-        flush_nova();
-      }
-      if (pending_nova_requests > 0) {
-        auto rp = self->make_response_promise<void>();
-        nova_accept_waiters.push_back(rp);
-        return rp;
-      }
-      if (nova_error.valid()) {
-        return nova_error;
-      }
-      return {};
+      return handle_events(std::move(converted).unwrap());
     },
     [this](atom::get, receiver_actor<table_slice>& subscriber, bool internal,
            bool live, bool recent,

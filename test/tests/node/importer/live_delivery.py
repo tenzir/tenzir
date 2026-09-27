@@ -63,6 +63,7 @@ node.start()
 live: subprocess.Popen[bytes] | None = None
 streaming_import: subprocess.Popen[bytes] | None = None
 internal_live: subprocess.Popen[bytes] | None = None
+special_live: list[subprocess.Popen[bytes]] = []
 try:
     import_event(node.env, 1)
     live = subprocess.Popen(
@@ -147,6 +148,45 @@ try:
     assert not empty.stdout
     assert live.stdout is not None
     assert not select.select([live.stdout], [], [], 1)[0], "duplicate live event"
+    for schema, source in [
+        ("tenzir.metrics.import-test", 'metrics "import-test",'),
+        ("tenzir.diagnostic", "diagnostics"),
+    ]:
+        seed = subprocess.run(
+            command(
+                node.env,
+                f"from {{id: 4}}\n@name = {json.dumps(schema)}\n"
+                "@internal = true\nimport",
+            ),
+            capture_output=True,
+            check=False,
+            timeout=45,
+        )
+        assert seed.returncode == 0, seed.stderr.decode()
+        process = subprocess.Popen(
+            command(
+                node.env,
+                f"{source} live=true, retro=true\nwhere id == 4 or id == 5\n"
+                "head 2\nto_stdout { write_ndjson }",
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        special_live.append(process)
+        assert read_event(process, 45) == {"id": 4}
+        seed = subprocess.run(
+            command(
+                node.env,
+                f"from {{id: 5}}\n@name = {json.dumps(schema)}\n"
+                "@internal = true\nimport",
+            ),
+            capture_output=True,
+            check=False,
+            timeout=45,
+        )
+        assert seed.returncode == 0, seed.stderr.decode()
+        assert read_event(process, 45) == {"id": 5}
+        assert process.wait(timeout=45) == 0
     print("ok: buffered live delivery, active snapshots, and internal events")
 finally:
     if streaming_import is not None:
@@ -157,7 +197,7 @@ finally:
         except subprocess.TimeoutExpired:
             streaming_import.kill()
             streaming_import.wait()
-    for process in [internal_live, live]:
+    for process in [internal_live, live, *special_live]:
         if process is None:
             continue
         process.terminate()

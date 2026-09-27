@@ -264,7 +264,7 @@ struct importer_actor_traits {
     // Push buffered slices downstream to make the data available.
     auto(atom::flush)->caf::result<void>,
     // Import a batch of data.
-    auto(table_slice)->caf::result<void>,
+    auto(table_slice)->caf::result<void>, auto(nova::Events)->caf::result<void>,
     auto(ImportWireBatch)->caf::result<void>,
     auto(atom::resume, uuid)->caf::result<void>,
     // Conform to the protocol of the STATUS CLIENT actor.

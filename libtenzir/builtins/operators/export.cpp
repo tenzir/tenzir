@@ -415,7 +415,6 @@ private:
       events.mask = std::move(keep).finish();
     }
     if (uses_prometheus_shape_) {
-      // The existing Prometheus formatter consumes Arrow; raw exports do not.
       auto groups = group_import_shapes(events);
       if (not groups) {
         diagnostic::error("{}", std::move(groups).unwrap_err()).emit(ctx);
@@ -433,24 +432,21 @@ private:
           }
           continue;
         }
-        auto conversion
-          = ImportConversionBuffer{group.key.name, group.key.internal};
-        auto added = conversion.add(events, group.mask);
-        if (not added) {
-          diagnostic::error("{}", std::move(added).unwrap_err()).emit(ctx);
-          co_return;
-        }
-        auto slices = conversion.snapshot();
-        if (not slices) {
-          diagnostic::error("{}", std::move(slices).unwrap_err()).emit(ctx);
-          co_return;
-        }
-        for (auto const& slice : slices.unwrap()) {
-          for (auto&& output : shaper->second.shape(slice)) {
-            co_await emit_slice(std::move(output), push, ctx);
-          }
+        auto selected = events;
+        selected.mask = group.mask;
+        for (auto&& output : shaper->second.shape(selected)) {
+          co_await emit_nova_output(std::move(output), push, ctx);
         }
       }
+      co_return;
+    }
+    co_await emit_nova_output(std::move(events), push, ctx);
+  }
+
+  auto emit_nova_output(nova::Events events, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> {
+    if (local_limit_ and *local_limit_ == 0) {
+      done_ = true;
       co_return;
     }
     if (evaluator_) {
@@ -626,12 +622,13 @@ public:
   };
 
   auto describe() const -> Description override {
-    auto d = Describer<ExportArgs, Export<table_slice>>{ExportArgs{
-      .internal = true,
-      .optimization = {},
-      .special_filter = export_special_filter::diagnostics,
-      .metrics_name = {},
-    }};
+    auto d = Describer<ExportArgs, Export<table_slice>, Export<nova::Events>>{
+      ExportArgs{
+        .internal = true,
+        .optimization = {},
+        .special_filter = export_special_filter::diagnostics,
+        .metrics_name = {},
+      }};
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
     d.named("_high_priority", &ExportArgs::high_priority);
@@ -657,12 +654,13 @@ public:
   };
 
   auto describe() const -> Description override {
-    auto d = Describer<ExportArgs, Export<table_slice>>{ExportArgs{
-      .internal = true,
-      .optimization = {},
-      .special_filter = export_special_filter::metrics,
-      .metrics_name = {},
-    }};
+    auto d = Describer<ExportArgs, Export<table_slice>, Export<nova::Events>>{
+      ExportArgs{
+        .internal = true,
+        .optimization = {},
+        .special_filter = export_special_filter::metrics,
+        .metrics_name = {},
+      }};
     auto name = d.positional("name", &ExportArgs::metrics_name);
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);

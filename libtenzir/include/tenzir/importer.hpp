@@ -40,6 +40,7 @@ private:
 
   /// Process a slice and forward it to the index.
   void handle_slice(table_slice&& slice);
+  auto handle_events(nova::Events events) -> caf::result<void>;
 
   void flush(Option<type> schema = {});
   void flush_nova();

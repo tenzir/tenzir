@@ -38,6 +38,36 @@ try:
         "nested": {"token": "***"},
         "items": ["***", "plain", None],
     }
+    for schema, source in [
+        ("tenzir.metrics.import-test", 'metrics "import-test"'),
+        ("tenzir.diagnostic", "diagnostics"),
+    ]:
+        result = tenzir.run(
+            'from {marker: "internal-operators", id: 0}\n'
+            f"@name = {json.dumps(schema)}\n@internal = true\nimport\n"
+        )
+        assert result.returncode == 0, result.stderr.decode()
+        result = tenzir.run(
+            'from {marker: "internal-operators", id: 99}\n'
+            f"@name = {json.dumps(schema)}\nimport\n"
+        )
+        assert result.returncode == 0, result.stderr.decode()
+        result = tenzir.run(
+            f'{source}\nwhere marker == "internal-operators"\n'
+            "to_stdout { write_ndjson }\n"
+        )
+        assert result.returncode == 0, result.stderr.decode()
+        assert json.loads(result.stdout.decode()) == {
+            "marker": "internal-operators",
+            "id": 0,
+        }
+    result = tenzir.run(
+        'metrics\nwhere marker == "internal-operators"\nto_stdout { write_ndjson }\n'
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    assert [json.loads(line) for line in result.stdout.splitlines()] == [
+        {"marker": "internal-operators", "id": 0}
+    ]
     print("ok: unbuffered import persists events")
 finally:
     node.stop()
