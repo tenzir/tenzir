@@ -3,4 +3,5 @@ from {}
 repeat 10
 enumerate x
 batch 10
+@name = "buffered"
 import

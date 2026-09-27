@@ -1,2 +1,3 @@
 tenzir:
+  nova: true
   import-buffer-timeout: 8s

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 
-
 node = acquire_fixture("node")
 node.start()
 tenzir = Executor.from_env(node.env)
+tenzir.binary = (*tenzir.binary, "--nova=true")
 
 try:
     result = tenzir.run('from {value: "unbuffered"}\nimport\n')

@@ -1,2 +1,0 @@
-suite: max-buffered-events-nova
-fixtures: [node]

@@ -24,6 +24,7 @@ class Executor:
     def command(self, pipeline: str) -> list[str]:
         cmd = [
             self._binary,
+            "--nova=true",
             "--bare-mode",
             "--console-verbosity=warning",
         ]
@@ -36,8 +37,7 @@ class Executor:
         return subprocess.run(
             self.command(pipeline),
             timeout=COMMAND_TIMEOUT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=True,
         )
 
