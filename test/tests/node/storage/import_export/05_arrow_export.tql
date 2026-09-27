@@ -1,4 +1,0 @@
-export
-where @name == "test.events"
-sort id
-write_json

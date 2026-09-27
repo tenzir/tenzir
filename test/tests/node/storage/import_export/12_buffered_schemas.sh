@@ -22,10 +22,12 @@ for workload in homogeneous nullheavy conflict; do
   "
   "$TENZIR_BINARY" --bare-mode --console-verbosity=error \
     --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" "
-    partitions
-    where schema == \"buffered.$workload\"
-    summarize partitions=count(), events=sum(events)
-    write_ndjson
+    remote {
+      partitions
+      where schema == \"buffered.$workload\"
+      summarize partitions=count(), events=sum(events)
+      write_ndjson
+    }
   "
   "$TENZIR_BINARY" --bare-mode --console-verbosity=error \
     --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" "
