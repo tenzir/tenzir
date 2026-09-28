@@ -8,6 +8,11 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/distribution.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
+#include <tenzir/nova/list_util.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -136,7 +141,430 @@ auto extract_or_warn(view3<list> row, std::vector<double>& out, bool& warned,
   TENZIR_UNREACHABLE();
 }
 
-class jensen_shannon_plugin final : public function_plugin {
+struct DistributionArgs {
+  nova::ValueArgument lhs;
+  nova::ValueArgument rhs;
+};
+
+auto extract_numbers(nova::RowView<nova::List> row, std::vector<double>& out,
+                     bool exact_integers) -> extraction {
+  using namespace nova;
+  out.clear();
+  out.reserve(row.length());
+  for (auto value : row) {
+    auto result = extraction::wrong_type;
+    match(
+      value,
+      [&](RowView<Null>) {
+        result = extraction::has_null;
+      },
+      [&](RowView<Int> x) {
+        if (exact_integers
+            and (*x < -static_cast<int64_t>(max_exact_integer)
+                 or *x > static_cast<int64_t>(max_exact_integer))) {
+          result = extraction::inexact;
+        } else {
+          out.push_back(static_cast<double>(*x));
+          result = extraction::ok;
+        }
+      },
+      [&](RowView<UInt> x) {
+        if (exact_integers and *x > max_exact_integer) {
+          result = extraction::inexact;
+        } else {
+          out.push_back(static_cast<double>(*x));
+          result = extraction::ok;
+        }
+      },
+      [&](RowView<Float> x) {
+        if (std::isfinite(*x)) {
+          out.push_back(*x);
+          result = extraction::ok;
+        } else {
+          result = extraction::non_finite;
+        }
+      },
+      [&](auto const&) {});
+    if (result != extraction::ok) {
+      return result;
+    }
+  }
+  return extraction::ok;
+}
+
+auto extract_temporal(nova::RowView<nova::List> row, bool timestamp,
+                      std::vector<int64_t>& out) -> extraction {
+  using namespace nova;
+  out.clear();
+  out.reserve(row.length());
+  for (auto value : row) {
+    auto result = extraction::wrong_type;
+    match(
+      value,
+      [&](RowView<Null>) {
+        result = extraction::has_null;
+      },
+      [&](RowView<Time> x) {
+        if (timestamp) {
+          out.push_back((*x).time_since_epoch().count());
+          result = extraction::ok;
+        }
+      },
+      [&](RowView<Duration> x) {
+        if (not timestamp) {
+          out.push_back((*x).count());
+          result = extraction::ok;
+        }
+      },
+      [&](auto const&) {});
+    if (result != extraction::ok) {
+      return result;
+    }
+  }
+  return extraction::ok;
+}
+
+auto finish_nova(nova::ArrayBuilder<nova::Data>& builder,
+                 nova::EvalFrame const& frame,
+                 nova::storage::BitMap const& rows) -> nova::Array<nova::Data> {
+  builder.skip_n(frame.length() - builder.length());
+  return builder.finish().null_where(frame.mask().and_not(rows));
+}
+
+enum class distance_kind { kolmogorov_smirnov, wasserstein };
+
+class JensenShannonFunction final {
+public:
+  static auto eval(DistributionArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto lhs = nova::resolve_list(args.lhs, frame);
+    auto rhs = nova::resolve_list(args.rhs, frame);
+    if (not lhs or not rhs) {
+      return frame.null();
+    }
+    auto rows = lhs->present & rhs->present;
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto warned = nova::WarnOnce{};
+    auto p = std::vector<double>{};
+    auto q = std::vector<double>{};
+    for (auto row : nova::storage::true_bits(rows)) {
+      builder.skip_n(row - builder.length());
+      auto const fail = [&](std::string_view message, location source) {
+        warned(frame, diagnostic::warning("{}", message).primary(source));
+        builder.null();
+      };
+      auto const p_status = extract_numbers(lhs->data.get(row), p, false);
+      auto const q_status = extract_numbers(rhs->data.get(row), q, false);
+      if (p_status != extraction::ok or q_status != extraction::ok) {
+        auto const status = p_status != extraction::ok ? p_status : q_status;
+        auto const message = [&] {
+          switch (status) {
+            case extraction::has_null:
+              return "distribution samples must not contain nulls";
+            case extraction::non_finite:
+              return "distribution samples must be finite";
+            case extraction::inexact:
+              return "distribution integers must be between -2^53 and 2^53";
+            case extraction::wrong_type:
+              return "distribution samples must be numbers";
+            case extraction::ok:
+              TENZIR_UNREACHABLE();
+          }
+          TENZIR_UNREACHABLE();
+        }();
+        fail(message,
+             p_status != extraction::ok ? args.lhs.source : args.rhs.source);
+      } else if (p.size() != q.size()) {
+        fail("Jensen-Shannon weight lists must have equal lengths",
+             args.lhs.source);
+      } else if (std::ranges::any_of(p,
+                                     [](auto x) {
+                                       return x < 0;
+                                     })
+                 or std::ranges::any_of(q, [](auto x) {
+                      return x < 0;
+                    })) {
+        fail("Jensen-Shannon weights must be non-negative", args.lhs.source);
+      } else if (not std::ranges::any_of(p,
+                                         [](auto x) {
+                                           return x > 0;
+                                         })
+                 or not std::ranges::any_of(q, [](auto x) {
+                      return x > 0;
+                    })) {
+        builder.null();
+      } else {
+        nova::append_data(builder, nova::Data{detail::jensen_shannon(p, q)});
+      }
+    }
+    return finish_nova(builder, frame, rows);
+  }
+};
+
+class EcdfFunction final {
+public:
+  static auto eval(DistributionArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto samples = nova::resolve_list(args.lhs, frame);
+    if (not samples) {
+      return frame.null();
+    }
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto warned = nova::WarnOnce{};
+    auto numbers = std::vector<double>{};
+    auto temporal = std::vector<int64_t>{};
+    for (auto row : nova::storage::true_bits(samples->present)) {
+      builder.skip_n(row - builder.length());
+      auto const list = samples->data.get(row);
+      if (list.length() == 0) {
+        builder.null();
+        continue;
+      }
+      auto const point = args.rhs.data.get(row);
+      if (is<nova::RowView<nova::Null>>(point)) {
+        builder.null();
+        continue;
+      }
+      auto const temporal_kind = [&] {
+        auto result = Option<bool>{};
+        for (auto value : list) {
+          match(
+            value,
+            [&](nova::RowView<nova::Time>) {
+              result = true;
+            },
+            [&](nova::RowView<nova::Duration>) {
+              result = false;
+            },
+            [&](auto const&) {});
+          if (result) {
+            break;
+          }
+        }
+        return result;
+      }();
+      if (temporal_kind) {
+        auto query = Option<int64_t>{};
+        match(
+          point,
+          [&](nova::RowView<nova::Time> x) {
+            if (*temporal_kind) {
+              query = (*x).time_since_epoch().count();
+            }
+          },
+          [&](nova::RowView<nova::Duration> x) {
+            if (not *temporal_kind) {
+              query = (*x).count();
+            }
+          },
+          [&](auto const&) {});
+        if (not query) {
+          warned(frame, diagnostic::warning("ECDF query values must match the "
+                                            "sample type")
+                          .primary(args.rhs.source));
+          builder.null();
+        } else if (auto const status
+                   = extract_temporal(list, *temporal_kind, temporal);
+                   status != extraction::ok) {
+          auto const message = [&] {
+            switch (status) {
+              case extraction::has_null:
+                return "distribution samples must not contain nulls";
+              case extraction::wrong_type:
+                return "ECDF samples must have matching temporal types";
+              case extraction::ok:
+              case extraction::non_finite:
+              case extraction::inexact:
+                TENZIR_UNREACHABLE();
+            }
+            TENZIR_UNREACHABLE();
+          }();
+          warned(frame,
+                 diagnostic::warning("{}", message).primary(args.lhs.source));
+          builder.null();
+        } else if (temporal.empty()) {
+          builder.null();
+        } else {
+          nova::append_data(builder,
+                            nova::Data{detail::ecdf(temporal, *query)});
+        }
+        continue;
+      }
+      auto query = Option<double>{};
+      auto valid = true;
+      match(
+        point,
+        [&](nova::RowView<nova::Int> x) {
+          valid = *x >= -static_cast<int64_t>(max_exact_integer)
+                  and *x <= static_cast<int64_t>(max_exact_integer);
+          query = static_cast<double>(*x);
+        },
+        [&](nova::RowView<nova::UInt> x) {
+          valid = *x <= max_exact_integer;
+          query = static_cast<double>(*x);
+        },
+        [&](nova::RowView<nova::Float> x) {
+          query = *x;
+        },
+        [&](auto const&) {});
+      if (not valid) {
+        warned(frame, diagnostic::warning("ECDF query integers must be between "
+                                          "-2^53 and 2^53")
+                        .primary(args.rhs.source));
+        builder.null();
+      } else if (not query or not std::isfinite(*query)) {
+        warned(frame,
+               diagnostic::warning("ECDF query values must be finite numbers")
+                 .primary(args.rhs.source));
+        builder.null();
+      } else if (auto const status = extract_numbers(list, numbers, true);
+                 status != extraction::ok) {
+        auto const message = [&] {
+          switch (status) {
+            case extraction::has_null:
+              return "distribution samples must not contain nulls";
+            case extraction::non_finite:
+              return "distribution samples must be finite";
+            case extraction::inexact:
+              return "distribution integers must be between -2^53 and 2^53";
+            case extraction::wrong_type:
+              return "distribution samples must be numbers";
+            case extraction::ok:
+              TENZIR_UNREACHABLE();
+          }
+          TENZIR_UNREACHABLE();
+        }();
+        warned(frame,
+               diagnostic::warning("{}", message).primary(args.lhs.source));
+        builder.null();
+      } else if (numbers.empty()) {
+        builder.null();
+      } else {
+        nova::append_data(builder, nova::Data{detail::ecdf(numbers, *query)});
+      }
+    }
+    return finish_nova(builder, frame, samples->present);
+  }
+};
+
+template <distance_kind Kind>
+class DistanceFunction final {
+public:
+  static auto eval(DistributionArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto lhs = nova::resolve_list(args.lhs, frame);
+    auto rhs = nova::resolve_list(args.rhs, frame);
+    if (not lhs or not rhs) {
+      return frame.null();
+    }
+    auto rows = lhs->present & rhs->present;
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto warned = nova::WarnOnce{};
+    auto x = std::vector<double>{};
+    auto y = std::vector<double>{};
+    auto temporal_x = std::vector<int64_t>{};
+    auto temporal_y = std::vector<int64_t>{};
+    for (auto row : nova::storage::true_bits(rows)) {
+      builder.skip_n(row - builder.length());
+      auto const xs = lhs->data.get(row);
+      auto const ys = rhs->data.get(row);
+      auto const duration_x = extract_temporal(xs, false, temporal_x);
+      auto const duration_y = extract_temporal(ys, false, temporal_y);
+      if (duration_x == extraction::has_null
+          or duration_y == extraction::has_null) {
+        warned(frame,
+               diagnostic::warning("distribution samples must not contain "
+                                   "nulls")
+                 .primary(duration_x == extraction::has_null
+                            ? args.lhs.source
+                            : args.rhs.source));
+        builder.null();
+        continue;
+      }
+      auto temporal
+        = duration_x == extraction::ok and duration_y == extraction::ok;
+      if (not temporal) {
+        auto const time_x = extract_temporal(xs, true, temporal_x);
+        auto const time_y = extract_temporal(ys, true, temporal_y);
+        if (time_x == extraction::has_null or time_y == extraction::has_null) {
+          warned(frame,
+                 diagnostic::warning("distribution samples must not "
+                                     "contain nulls")
+                   .primary(time_x == extraction::has_null ? args.lhs.source
+                                                           : args.rhs.source));
+          builder.null();
+          continue;
+        }
+        temporal = time_x == extraction::ok and time_y == extraction::ok;
+      }
+      if (temporal) {
+        if (temporal_x.empty() or temporal_y.empty()) {
+          builder.null();
+          continue;
+        }
+        std::ranges::sort(temporal_x);
+        std::ranges::sort(temporal_y);
+        if constexpr (Kind == distance_kind::kolmogorov_smirnov) {
+          nova::append_data(builder, nova::Data{detail::kolmogorov_smirnov(
+                                       temporal_x, temporal_y)});
+        } else {
+          auto const result = detail::wasserstein(temporal_x, temporal_y);
+          if (result >= static_cast<double>(
+                std::numeric_limits<duration::rep>::max())) {
+            warned(frame, diagnostic::warning("Wasserstein distance exceeds "
+                                              "duration range")
+                            .primary(args.lhs.source));
+            builder.null();
+          } else {
+            nova::append_data(builder, nova::Data{duration{
+                                         static_cast<duration::rep>(result)}});
+          }
+        }
+        continue;
+      }
+      auto const x_status = extract_numbers(xs, x, true);
+      auto const y_status = extract_numbers(ys, y, true);
+      if (x_status != extraction::ok or y_status != extraction::ok) {
+        auto const status = x_status != extraction::ok ? x_status : y_status;
+        auto const message = [&] {
+          switch (status) {
+            case extraction::has_null:
+              return "distribution samples must not contain nulls";
+            case extraction::non_finite:
+              return "distribution samples must be finite";
+            case extraction::inexact:
+              return "distribution integers must be between -2^53 and 2^53";
+            case extraction::wrong_type:
+              return "distribution samples must be numbers";
+            case extraction::ok:
+              TENZIR_UNREACHABLE();
+          }
+          TENZIR_UNREACHABLE();
+        }();
+        warned(frame, diagnostic::warning("{}", message)
+                        .primary(x_status != extraction::ok ? args.lhs.source
+                                                            : args.rhs.source));
+        builder.null();
+        continue;
+      }
+      if (x.empty() or y.empty()) {
+        builder.null();
+        continue;
+      }
+      std::ranges::sort(x);
+      std::ranges::sort(y);
+      if constexpr (Kind == distance_kind::kolmogorov_smirnov) {
+        nova::append_data(builder,
+                          nova::Data{detail::kolmogorov_smirnov(x, y)});
+      } else {
+        nova::append_data(builder, nova::Data{detail::wasserstein(x, y)});
+      }
+    }
+    return finish_nova(builder, frame, rows);
+  }
+};
+
+class jensen_shannon_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "jensen_shannon";
@@ -144,6 +572,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<DistributionArgs, JensenShannonFunction>{};
+    d.positional("p", &DistributionArgs::lhs, "list");
+    d.positional("q", &DistributionArgs::rhs, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -219,7 +654,7 @@ public:
   }
 };
 
-class ecdf_plugin final : public function_plugin {
+class ecdf_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "ecdf";
@@ -227,6 +662,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<DistributionArgs, EcdfFunction>{};
+    d.positional("samples", &DistributionArgs::lhs, "list");
+    d.positional("x", &DistributionArgs::rhs, "number|duration|time");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -316,10 +758,8 @@ public:
   }
 };
 
-enum class distance_kind { kolmogorov_smirnov, wasserstein };
-
 template <distance_kind Kind>
-class distance_plugin final : public function_plugin {
+class distance_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     if constexpr (Kind == distance_kind::kolmogorov_smirnov) {
@@ -330,6 +770,14 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<DistributionArgs, DistanceFunction<Kind>>{};
+    d.positional("x", &DistributionArgs::lhs, "list");
+    d.positional("y", &DistributionArgs::rhs, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

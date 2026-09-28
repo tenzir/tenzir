@@ -12,6 +12,7 @@
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/function_plugin.hpp>
+#include <tenzir/nova/list_util.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -158,18 +159,17 @@ struct AutocorrelationFunction {
     auto warn_non_finite = false;
     auto warn_type = false;
     auto warn_degenerate = false;
+    auto lists = nova::resolve_list(args.xs, frame, false);
     nova::storage::for_each_true(frame.mask(), [&](auto row) {
       builder.skip_n(row - builder.length());
-      auto value = args.xs.data.get(row);
-      auto const* list = try_as<nova::RowView<nova::List>>(value);
-      if (not list) {
-        if (not is<nova::RowView<nova::Null>>(value)) {
+      if (not lists or not lists->present.get(row)) {
+        if (not is<nova::RowView<nova::Null>>(args.xs.data.get(row))) {
           warn_type = true;
         }
         builder.null();
         return;
       }
-      switch (extract_doubles(*list, xs)) {
+      switch (extract_doubles(lists->data.get(row), xs)) {
         case extraction::has_null:
           warn_null = true;
           builder.null();
@@ -373,18 +373,17 @@ struct PeriodogramFunction {
     auto warn_null = false;
     auto warn_non_finite = false;
     auto warn_type = false;
+    auto lists = nova::resolve_list(args.xs, frame, false);
     nova::storage::for_each_true(frame.mask(), [&](auto row) {
       builder.skip_n(row - builder.length());
-      auto value = args.xs.data.get(row);
-      auto const* list = try_as<nova::RowView<nova::List>>(value);
-      if (not list) {
-        if (not is<nova::RowView<nova::Null>>(value)) {
+      if (not lists or not lists->present.get(row)) {
+        if (not is<nova::RowView<nova::Null>>(args.xs.data.get(row))) {
           warn_type = true;
         }
         builder.null();
         return;
       }
-      switch (extract_doubles(*list, xs)) {
+      switch (extract_doubles(lists->data.get(row), xs)) {
         case extraction::has_null:
           warn_null = true;
           builder.null();
@@ -559,20 +558,20 @@ struct DominantPeriodFunction {
       record.field("period").null();
       record.field("strength").data(0.0);
     };
+    auto lists = nova::resolve_list(args.times, frame, false);
     nova::storage::for_each_true(frame.mask(), [&](auto row) {
       builder.skip_n(row - builder.length());
-      auto value = args.times.data.get(row);
-      auto const* list = try_as<nova::RowView<nova::List>>(value);
-      if (not list) {
-        if (not is<nova::RowView<nova::Null>>(value)) {
+      if (not lists or not lists->present.get(row)) {
+        if (not is<nova::RowView<nova::Null>>(args.times.data.get(row))) {
           warn_type = true;
         }
         builder.null();
         return;
       }
+      auto const list = lists->data.get(row);
       times.clear();
-      times.reserve(list->length());
-      for (auto element : *list) {
+      times.reserve(list.length());
+      for (auto element : list) {
         if (auto const* time = try_as<nova::RowView<nova::Time>>(element)) {
           times.push_back((**time).time_since_epoch().count());
         } else if (is<nova::RowView<nova::Null>>(element)) {

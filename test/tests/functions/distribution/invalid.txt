@@ -20,44 +20,72 @@ warning: distribution samples must not contain nulls
   |
 
 warning: distribution samples must be finite
- --> tests/functions/distribution/invalid.tql:7:25
+ --> tests/functions/distribution/invalid.tql:8:25
   |
-7 |   non_finite_ecdf: ecdf([1.0, "nan".float()], 1.0),
+8 |   non_finite_ecdf: ecdf([1.0, "nan".float()], 1.0),
   |                         ~~~~~~~~~~~~~~~~~~~~
   |
 
 warning: ECDF query integers must be between -2^53 and 2^53
- --> tests/functions/distribution/invalid.tql:8:42
+ --> tests/functions/distribution/invalid.tql:9:42
   |
-8 |   inexact_ecdf: ecdf([9007199254740993], 9007199254740993),
+9 |   inexact_ecdf: ecdf([9007199254740993], 9007199254740993),
   |                                          ~~~~~~~~~~~~~~~~
   |
 
 warning: distribution integers must be between -2^53 and 2^53
-  --> tests/functions/distribution/invalid.tql:10:54
+  --> tests/functions/distribution/invalid.tql:10:29
    |
-10 |   inexact_ks: kolmogorov_smirnov([9007199254740992], [9007199254740993]),
+10 |   inexact_ecdf_sample: ecdf([9007199254740993], 1),
+   |                             ~~~~~~~~~~~~~~~~~~
+   |
+
+warning: distribution samples must be numbers
+  --> tests/functions/distribution/invalid.tql:11:32
+   |
+11 |   wrong_type_ecdf_sample: ecdf(["x"], 1),
+   |                                ~~~~~
+   |
+
+warning: ECDF samples must have matching temporal types
+  --> tests/functions/distribution/invalid.tql:14:29
+   |
+14 |   mixed_temporal_ecdf: ecdf([1s, 2], 1s),
+   |                             ~~~~~~~
+   |
+
+warning: distribution integers must be between -2^53 and 2^53
+  --> tests/functions/distribution/invalid.tql:16:54
+   |
+16 |   inexact_ks: kolmogorov_smirnov([9007199254740992], [9007199254740993]),
    |                                                      ~~~~~~~~~~~~~~~~~~
    |
 
 warning: distribution samples must not contain nulls
-  --> tests/functions/distribution/invalid.tql:11:33
+  --> tests/functions/distribution/invalid.tql:17:33
    |
-11 |   null_wasserstein: wasserstein([1, null], [1, 2]),
+17 |   null_wasserstein: wasserstein([1, null], [1, 2]),
    |                                 ~~~~~~~~~
    |
 
-warning: distribution integers must be between -2^53 and 2^53
-  --> tests/functions/distribution/invalid.tql:12:56
+warning: distribution samples must not contain nulls
+  --> tests/functions/distribution/invalid.tql:18:42
    |
-12 |   inexact_wasserstein: wasserstein([9007199254740992], [9007199254740993]),
+18 |   null_duration_wasserstein: wasserstein([1s, null], [2s, 3s]),
+   |                                          ~~~~~~~~~~
+   |
+
+warning: distribution integers must be between -2^53 and 2^53
+  --> tests/functions/distribution/invalid.tql:19:56
+   |
+19 |   inexact_wasserstein: wasserstein([9007199254740992], [9007199254740993]),
    |                                                        ~~~~~~~~~~~~~~~~~~
    |
 
 warning: Wasserstein distance exceeds duration range
-  --> tests/functions/distribution/invalid.tql:13:38
+  --> tests/functions/distribution/invalid.tql:20:38
    |
-13 |   out_of_range_duration: wasserstein([0ns], [9223372036854775807ns])
+20 |   out_of_range_duration: wasserstein([0ns], [9223372036854775807ns])
    |                                      ~~~~~
    |
 {
@@ -66,11 +94,18 @@ warning: Wasserstein distance exceeds duration range
   zero_weight: null,
   null_weight: null,
   empty_ecdf: null,
+  empty_duration_ecdf: null,
   non_finite_ecdf: null,
   inexact_ecdf: null,
+  inexact_ecdf_sample: null,
+  wrong_type_ecdf_sample: null,
+  null_ecdf_query: null,
+  null_ecdf_duration_query: null,
+  mixed_temporal_ecdf: null,
   empty_ks: null,
   inexact_ks: null,
   null_wasserstein: null,
+  null_duration_wasserstein: null,
   inexact_wasserstein: null,
   out_of_range_duration: null,
 }

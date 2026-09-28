@@ -12,6 +12,7 @@
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/list_util.hpp"
 #include "tenzir/nova/type_system.hpp"
 
 #include <tenzir/arrow_memory_pool.hpp>
@@ -158,11 +159,6 @@ auto check_add_types(const type& list_element_type, const type& element_type,
   return emit_add_type_warning(classification, &list_expr, element_expr, ctx);
 }
 
-struct ListArgument {
-  nova::Array<nova::List> data;
-  nova::storage::BitMap present;
-};
-
 auto invalid_list_rows(const nova::ValueArgument& arg, nova::EvalFrame frame)
   -> nova::storage::BitMap {
   using namespace nova;
@@ -182,43 +178,6 @@ auto invalid_list_rows(const nova::ValueArgument& arg, nova::EvalFrame frame)
     },
     [&]<data_type Tag>(const Array<Tag>&) {
       return frame.mask();
-    });
-}
-
-auto resolve_list(const nova::ValueArgument& arg, nova::EvalFrame frame)
-  -> Option<ListArgument> {
-  using namespace nova;
-  auto const& requested = frame.mask();
-  return match(
-    arg.data,
-    [&](const Array<List>& list) -> Option<ListArgument> {
-      return ListArgument{list, requested};
-    },
-    [&](const Array<Null>&) -> Option<ListArgument> {
-      return None{};
-    },
-    [&](const UnionArray& array) -> Option<ListArgument> {
-      auto list = array.get_alternative<List>();
-      auto present = list ? requested & list->present
-                          : storage::BitMap{frame.length(), false};
-      auto invalid
-        = requested.and_not(present).and_not(array.alternative_mask<Null>());
-      if (invalid.any()) {
-        diagnostic::warning("expected `list`, got a different type")
-          .primary(arg.source)
-          .emit(frame);
-      }
-      if (not list) {
-        return None{};
-      }
-      return ListArgument{std::move(list->data), std::move(present)};
-    },
-    [&]<nova::data_type Tag>(const nova::Array<Tag>&) -> Option<ListArgument> {
-      diagnostic::warning("expected `list`, got `{}`",
-                          nova::Type<Tag>::static_name)
-        .primary(arg.source)
-        .emit(frame);
-      return None{};
     });
 }
 
