@@ -303,3 +303,9 @@ in
     extraEnv = [ "TENZIR_DEMAND__MAX_BATCHES=3" ];
   };
 }
+// lib.optionalAttrs (pkg.hasDeployment or false) {
+  tenzir2 = buildTenzirImage {
+    name = "tenzir/tenzir2";
+    entrypoint = [ "tenzir2" ];
+  };
+}

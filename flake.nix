@@ -86,6 +86,7 @@
             inherit (package) tenzir-de-static;
             inherit (package) tenzir;
             inherit (package) tenzir-static;
+            inherit (package) tenzir2;
             tenzir-de-clang = package-clang.tenzir-de;
             tenzir-de-static-clang = package-clang.tenzir-de-static;
             tenzir-clang = package-clang.tenzir;

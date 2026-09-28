@@ -10,6 +10,7 @@ let
       tenzirPythonPkgs,
       caf,
       curl-ws,
+      opentelemetry-cpp,
       cacert,
       iconv,
       lz4,
@@ -17,6 +18,9 @@ let
       expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
+      # The sibling `deployment/` project. When set, the build also produces
+      # `tenzir2`, which only builds in tree.
+      deployment-source ? null,
       extraPlugins ? [ ],
       symlinkJoin,
       extraCmakeFlags ? [ ],
@@ -149,13 +153,19 @@ let
               cp -R $plug source/extra-plugins/$(basename $plug)
             done
             chmod -R u+w source/extra-plugins
+          ''
+          # The engine adds `../deployment` when it exists, so the sibling has
+          # to land next to the unpacked source rather than inside it.
+          + lib.optionalString (deployment-source != null) ''
+            cp -R ${deployment-source} deployment
+            chmod -R u+w deployment
           '';
 
           outputs = [ "out" ] ++ (if isStatic then [ "package" ] else [ "dev" ]);
 
           inherit (deps) nativeBuildInputs;
           inherit (deps) propagatedNativeBuildInputs;
-          inherit (deps) buildInputs;
+          buildInputs = deps.buildInputs ++ lib.optional (deployment-source != null) opentelemetry-cpp;
           inherit (deps) propagatedBuildInputs;
 
           env = {
@@ -186,6 +196,7 @@ let
             # reasonable coverage.
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
+            "-DTENZIR_ENABLE_DEPLOYMENT=${lib.boolToString (deployment-source != null)}"
           ]
           ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [
             "-DTENZIR_INSTALL_ARCHIVEDIR=${placeholder "dev"}/lib"
@@ -313,6 +324,7 @@ let
             excludedBundledPluginNames = privatePluginNames ++ excludedPluginNames;
             darwinDeploymentTarget = "26.0";
             plugins = [ ];
+            hasDeployment = deployment-source != null;
             withPlugins =
               if isStatic then
                 withTenzirPluginsStatic {
