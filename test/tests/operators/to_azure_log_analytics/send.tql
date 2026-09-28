@@ -1,0 +1,27 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: ingestion
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 0
+      tokens: 1
+      ingestions: 1
+      events:
+        - id: 1
+          message: "azüre"
+          value: null
+        - id: 3
+          nested:
+            items: [1, "two", null]
+---
+from {id: 1, message: "azüre", value: null},
+     {id: 2, message: "filtered"},
+     {id: 3, nested: {items: [1, "two", null]}}
+where id != 2
+to_azure_log_analytics tenant_id="fixture-tenant",
+  client_id="fixture-client", client_secret="fixture-secret",
+  dce=env("AZLOG_URL"), dcr="fixture-rule", stream="fixture-stream",
+  _token_url=env("AZLOG_URL") + "/fixture-tenant/oauth2/v2.0/token",
+  parallel=1
