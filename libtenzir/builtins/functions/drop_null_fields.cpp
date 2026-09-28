@@ -9,6 +9,8 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/drop_null_fields.hpp>
+#include <tenzir/nova/drop_null_fields.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series.hpp>
@@ -72,8 +74,83 @@ auto slice_as_record_series(const table_slice& slice) -> series {
   return series{slice.schema(), std::move(struct_array)};
 }
 
-class drop_null_fields_function final : public function_plugin {
+struct DropNullFieldsArgs {
+  nova::ValueArgument value;
+  std::vector<ast::field_path> fields;
+  nova::NullFieldSelection selection;
+};
+
+struct DropNullFieldsFunction {
+  static auto eval(DropNullFieldsArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto records = args.value.data.get_alternative<Record>();
+    auto invalid = frame.mask();
+    if (records) {
+      invalid = invalid.and_not(records->present);
+    }
+    if (auto nulls = args.value.data.get_alternative<Null>()) {
+      invalid = invalid.and_not(nulls->present);
+    }
+    if (invalid.any()) {
+      auto warn = [&]<data_type Tag>(Array<Tag> const&) {
+        if constexpr (not std::same_as<Tag, Record>
+                      and not std::same_as<Tag, Null>) {
+          diagnostic::warning("expected `record`, got `{}`",
+                              Type<Tag>::static_name)
+            .primary(args.value.source)
+            .emit(frame);
+        }
+      };
+      match(args.value.data, warn, [&](UnionArray const& array) {
+        for (auto const& field : array.fields()) {
+          if ((invalid & field.present).any()) {
+            match(field.data, warn);
+          }
+        }
+      });
+    }
+    if (not records) {
+      return frame.null();
+    }
+    // Null fields become absent; already absent fields stay absent. Null
+    // parents stay null, and records inside lists are not traversed.
+    args.selection.apply(records->data, frame.mask() & records->present);
+    return Array<Data>{std::move(records->data)}.null_where(
+      frame.mask().and_not(records->present));
+  }
+};
+
+class drop_null_fields_function final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<DropNullFieldsArgs, DropNullFieldsFunction>{};
+    d.positional("record", &DropNullFieldsArgs::value, "record");
+    d.optional_variadic("fields", &DropNullFieldsArgs::fields);
+    d.validate(
+      [](DropNullFieldsArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        args.selection.recursive = args.fields.empty();
+        for (auto const& path : args.fields) {
+          if (path.has_this()) {
+            diagnostic::error("cannot drop `this`").primary(path).emit(dh);
+            return failure::promise();
+          }
+          auto* node = &args.selection;
+          for (auto const& segment : path.path()) {
+            if (node->recursive) {
+              break;
+            }
+            node = &node->children[segment.id.name];
+          }
+          node->recursive = true;
+          node->children.clear();
+        }
+        return {};
+      });
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "drop_null_fields";
   }

@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -14,8 +16,41 @@ namespace tenzir::plugins::blob {
 
 namespace {
 
-class blob final : public function_plugin {
+struct BlobArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+struct BlobFunction {
+  static auto eval(BlobArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    if (args.x.data.try_as<nova::Blob>()) {
+      return args.x.data;
+    }
+    return nova::apply_kernel<1>(
+      frame, "blob", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<blob_view> {
+          return None{};
+        },
+        [](diagnostic_handler&, blob_view value) -> Option<blob_view> {
+          return value;
+        },
+        [](diagnostic_handler&, std::string_view value) -> Option<blob_view> {
+          return blob_view{as_bytes(value)};
+        }});
+  }
+};
+
+class blob final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<BlobArgs, BlobFunction>{};
+    d.positional("x", &BlobArgs::x, "blob|string");
+    d.call_location(&BlobArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "blob";
   }

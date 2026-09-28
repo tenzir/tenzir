@@ -1,0 +1,4 @@
+from {x: {a: 1}, keep: true}, {x: [{bad: null}], keep: false},
+     {x: {b: null}, keep: true}
+where keep
+select type = type_of(x)

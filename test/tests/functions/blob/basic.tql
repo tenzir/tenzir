@@ -1,5 +1,5 @@
 from {text: "hello"},
-  {text: null.string()},
+  {text: null},
   {text: "🚀"}
 data = blob(text)
 select value = data.string(), kind = type_of(data).kind

@@ -1,0 +1,5 @@
+from {x: {a: null, b: {c: null, d: null, keep: 1}}},
+     {x: {b: {d: null}}}
+select selected = drop_null_fields(x, b.c),
+       subtree = drop_null_fields(x, b, b.c, b),
+       missing = drop_null_fields(x, missing.child)

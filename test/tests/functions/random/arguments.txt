@@ -1,0 +1,8 @@
+error: too many positional arguments
+ --> tests/functions/random/arguments.tql:5:16
+  |
+5 | value = random(1)
+  |                ^
+  |
+  = usage: random()
+  = docs: https://tenzir.com/docs/reference/functions/random

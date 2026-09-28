@@ -11,6 +11,8 @@
 #include <tenzir/concept/parseable/tenzir/subnet.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/type_traits.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/subnet.hpp>
@@ -209,8 +211,67 @@ auto append_with_prefix(subnet_type::builder_type& builder, series const& value,
   match(std::tie(*value.array, *prefix.array), f);
 }
 
-class subnet final : public function_plugin {
+struct SubnetArgs {
+  nova::ValueArgument x;
+  Option<nova::ValueArgument> prefix;
+  location call;
+};
+
+struct SubnetFunction {
+  static auto eval(SubnetArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    if (not args.prefix) {
+      return apply_kernel<1>(
+        frame, "subnet", {args.x}, args.call,
+        detail::overload{
+          [](diagnostic_handler&, Null) -> Option<Subnet> {
+            return None{};
+          },
+          [](diagnostic_handler&, Subnet value) -> Option<Subnet> {
+            return value;
+          },
+          [](diagnostic_handler&, Ip value) -> Option<Subnet> {
+            return make_subnet(value);
+          },
+          [](diagnostic_handler&, std::string_view value) -> Option<Subnet> {
+            return parse_subnet(value);
+          }});
+    }
+    return apply_kernel<2>(
+      frame, "subnet", {args.x, *args.prefix}, args.call,
+      detail::overload{
+        []<class T, class P>(diagnostic_handler&, T, P) -> Option<Subnet>
+          requires(std::same_as<T, Null> or std::same_as<P, Null>)
+                  {
+                    return None{};
+                  },
+                  []<class T, class P>(diagnostic_handler&, T value,
+                                       P prefix) -> Option<Subnet>
+                    requires(concepts::one_of<T, std::string_view, Ip, Subnet>
+                             and concepts::one_of<P, Int, UInt>)
+        {
+          if constexpr (std::same_as<T, std::string_view>) {
+            return parse_subnet(value, prefix);
+          } else if constexpr (std::same_as<T, Subnet>) {
+            return make_subnet(value.network(), prefix);
+          } else {
+            return make_subnet(value, prefix);
+          }
+        }});
+  }
+};
+
+class subnet final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SubnetArgs, SubnetFunction>{};
+    d.positional("x", &SubnetArgs::x, "string|ip|subnet");
+    d.optional_positional("prefix", &SubnetArgs::prefix, "int");
+    d.call_location(&SubnetArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "subnet";
   }

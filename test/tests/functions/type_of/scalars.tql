@@ -1,0 +1,4 @@
+from {x: null}, {x: true}, {x: -1}, {x: uint(1)}, {x: 1.5},
+     {x: "text"}, {x: b"bytes"}, {x: 1s}, {x: 2026-01-01T00:00:00Z},
+     {x: 127.0.0.1}, {x: 10.0.0.0/8}
+select type = type_of(x)

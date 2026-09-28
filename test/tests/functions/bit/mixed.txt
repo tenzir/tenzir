@@ -1,0 +1,32 @@
+{
+  anded: 1,
+  ored: 7,
+  xored: 6,
+  inverted: -6,
+  left: 40,
+  right: 0,
+}
+{
+  anded: 2,
+  ored: -1,
+  xored: -3,
+  inverted: 0,
+  left: -4,
+  right: -1,
+}
+{
+  anded: null,
+  ored: null,
+  xored: null,
+  inverted: null,
+  left: null,
+  right: null,
+}
+{
+  anded: null,
+  ored: null,
+  xored: null,
+  inverted: -2,
+  left: null,
+  right: null,
+}

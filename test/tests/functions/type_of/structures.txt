@@ -1,0 +1,242 @@
+{
+  type: {
+    name: null,
+    kind: "record",
+    attributes: [],
+    state: {
+      fields: [],
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "record",
+    attributes: [],
+    state: {
+      fields: [
+        {
+          name: "a",
+          type: {
+            name: null,
+            kind: "null",
+            attributes: [],
+            state: null,
+          },
+        },
+      ],
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "record",
+    attributes: [],
+    state: {
+      fields: [
+        {
+          name: "b",
+          type: {
+            name: null,
+            kind: "record",
+            attributes: [],
+            state: {
+              fields: [
+                {
+                  name: "c",
+                  type: {
+                    name: null,
+                    kind: "int",
+                    attributes: [],
+                    state: null,
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          name: "a",
+          type: {
+            name: null,
+            kind: "string",
+            attributes: [],
+            state: null,
+          },
+        },
+      ],
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "null",
+        attributes: [],
+        state: null,
+      },
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "null",
+        attributes: [],
+        state: null,
+      },
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "int",
+        attributes: [],
+        state: null,
+      },
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "union",
+        attributes: [],
+        state: {
+          types: [
+            {
+              name: null,
+              kind: "int",
+              attributes: [],
+              state: null,
+            },
+            {
+              name: null,
+              kind: "string",
+              attributes: [],
+              state: null,
+            },
+            {
+              name: null,
+              kind: "null",
+              attributes: [],
+              state: null,
+            },
+          ],
+        },
+      },
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "union",
+        attributes: [],
+        state: {
+          types: [
+            {
+              name: null,
+              kind: "null",
+              attributes: [],
+              state: null,
+            },
+            {
+              name: null,
+              kind: "string",
+              attributes: [],
+              state: null,
+            },
+            {
+              name: null,
+              kind: "int",
+              attributes: [],
+              state: null,
+            },
+          ],
+        },
+      },
+    },
+  },
+}
+{
+  type: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "union",
+        attributes: [],
+        state: {
+          types: [
+            {
+              name: null,
+              kind: "record",
+              attributes: [],
+              state: {
+                fields: [
+                  {
+                    name: "a",
+                    type: {
+                      name: null,
+                      kind: "int",
+                      attributes: [],
+                      state: null,
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              name: null,
+              kind: "record",
+              attributes: [],
+              state: {
+                fields: [
+                  {
+                    name: "b",
+                    type: {
+                      name: null,
+                      kind: "int",
+                      attributes: [],
+                      state: null,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+}

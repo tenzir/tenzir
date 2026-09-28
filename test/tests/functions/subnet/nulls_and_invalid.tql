@@ -21,12 +21,12 @@ from (
   },
   {
     case: "null-input",
-    result: subnet(null.string(), 24),
-    host: subnet(null.string()),
+    result: subnet(null, 24),
+    host: subnet(null),
   },
   {
     case: "null-prefix",
-    result: subnet("10.1.2.3", null.int()),
+    result: subnet("10.1.2.3", null),
     host: subnet("10.1.2.3"),
   },
 )

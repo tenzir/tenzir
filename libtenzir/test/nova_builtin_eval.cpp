@@ -24,6 +24,7 @@
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/events.hpp"
@@ -37,6 +38,7 @@
 #include <arrow/compute/initialize.h>
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -460,6 +462,265 @@ TEST("split on a null column is null without a warning") {
   auto result = eval(call("split", {root_field("x"), str_const(",")}), events,
                      storage::BitMap{1, true}, dh);
   CHECK(is_null_at(result, 0));
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("bitwise functions preserve integer signedness and all 64 bits") {
+  auto const max = std::numeric_limits<UInt>::max();
+  struct Case {
+    Data lhs;
+    Data rhs;
+    Data and_result;
+    Data or_result;
+    Data xor_result;
+    Data not_result;
+  };
+  auto cases = std::vector<Case>{
+    {Int{5}, Int{3}, Int{1}, Int{7}, Int{6}, Int{-6}},
+    {UInt{max}, Int{1}, Int{1}, Int{-1}, Int{-2}, UInt{0}},
+    {Int{-1}, UInt{max}, Int{-1}, Int{-1}, Int{0}, Int{0}},
+    {UInt{max}, UInt{1}, UInt{1}, UInt{max}, UInt{max - 1}, UInt{0}},
+  };
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& test : cases) {
+    auto row = builder.record();
+    append_data(row.field("lhs"), test.lhs);
+    append_data(row.field("rhs"), test.rhs);
+  }
+  auto events = make_events(builder.finish());
+  for (auto name : {"bit_and", "bit_or", "bit_xor", "bit_not"}) {
+    auto args = std::vector<ast::expression>{root_field("lhs")};
+    if (std::string_view{name} != "bit_not") {
+      args.push_back(root_field("rhs"));
+    }
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call(name, std::move(args)), events, events.mask, dh);
+    for (auto row = storage::Index{0}; row < result.length(); ++row) {
+      auto const& test = cases[row];
+      auto const& expected
+        = std::string_view{name} == "bit_and"   ? test.and_result
+          : std::string_view{name} == "bit_or"  ? test.or_result
+          : std::string_view{name} == "bit_xor" ? test.xor_result
+                                                : test.not_result;
+      CHECK(equal(result.get(row), repeat(expected, 1).get(0)));
+    }
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("shifts validate counts using lhs signedness and honor masks") {
+  auto builder = ArrayBuilder<Record>{};
+  auto add = [&](Data lhs, Data rhs) {
+    auto row = builder.record();
+    append_data(row.field("lhs"), lhs);
+    append_data(row.field("rhs"), rhs);
+  };
+  add(Int{-8}, UInt{2});
+  add(UInt{1}, Int{63});
+  add(Int{1}, Int{62});
+  add(Int{1}, UInt{63});
+  add(UInt{1}, Int{-1});
+  add(UInt{1}, UInt{64});
+  add(Null{}, Int{-1});
+  auto events = make_events(builder.finish());
+  for (auto name : {"shift_left", "shift_right"}) {
+    for (auto invalid_active : {false, true}) {
+      auto dh = collecting_diagnostic_handler{};
+      auto mask = bitmap({true, true, true, invalid_active, invalid_active,
+                          invalid_active, true});
+      auto result = eval(call(name, {root_field("lhs"), root_field("rhs")}),
+                         events, std::move(mask), dh);
+      auto const left = std::string_view{name} == "shift_left";
+      CHECK_EQUAL(int_at(result, 0), (left ? Int{-32} : Int{-2}));
+      auto unsigneds = result.get_alternative<UInt>();
+      REQUIRE(unsigneds);
+      CHECK(unsigneds->present.get(1));
+      CHECK_EQUAL(*unsigneds->data.get(1), (left ? UInt{1} << 63 : UInt{0}));
+      CHECK_EQUAL(int_at(result, 2), (left ? Int{1} << 62 : Int{0}));
+      if (invalid_active) {
+        for (auto row = 3; row < 6; ++row) {
+          CHECK(is_null_at(result, row));
+        }
+      }
+      CHECK(is_null_at(result, 6));
+      auto diags = std::move(dh).collect();
+      CHECK_EQUAL(diags.size(), invalid_active ? 1uz : 0uz);
+      if (not diags.empty()) {
+        CHECK_EQUAL(diags[0].message, "out of range");
+      }
+    }
+  }
+}
+
+TEST("bitwise functions reject bool and float only on active rows") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(Int{5});
+  builder.record().field("x").null();
+  builder.record().field("x").data(true);
+  builder.record().field("x").data(1.5);
+  auto events = make_events(builder.finish());
+  for (auto name : {"bit_and", "bit_or", "bit_xor", "bit_not", "shift_left",
+                    "shift_right"}) {
+    for (auto invalid_active : {false, true}) {
+      auto args = std::vector<ast::expression>{root_field("x")};
+      if (std::string_view{name} != "bit_not") {
+        args.push_back(int_const(1));
+      }
+      auto dh = collecting_diagnostic_handler{};
+      auto result
+        = eval(call(name, std::move(args)), events,
+               bitmap({true, true, invalid_active, invalid_active}), dh);
+      CHECK(is_null_at(result, 1));
+      if (invalid_active) {
+        CHECK(is_null_at(result, 2));
+        CHECK(is_null_at(result, 3));
+      }
+      CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 2uz : 0uz);
+    }
+  }
+}
+
+TEST("blob preserves bytes and nulls and ignores masked invalid inputs") {
+  auto bytes = std::string{"\0\xff", 2};
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::string_view{bytes});
+  builder.record().field("x").data(blob_view{as_bytes(bytes)});
+  builder.record().field("x").null();
+  builder.record().field("x").data(Int{42});
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("blob", {root_field("x")}), events,
+                       bitmap({true, true, true, invalid_active}), dh);
+    auto blobs = result.get_alternative<Blob>();
+    REQUIRE(blobs);
+    for (auto row : {0, 1}) {
+      CHECK(blobs->present.get(row));
+      CHECK_EQUAL(*blobs->data.get(row), blob_view{as_bytes(bytes)});
+    }
+    CHECK(is_null_at(result, 2));
+    if (invalid_active) {
+      CHECK(is_null_at(result, 3));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+  }
+}
+
+TEST("drop_null_fields distinguishes absent fields and null parents under "
+     "masks") {
+  auto builder = ArrayBuilder<Record>{};
+  append_data(builder.record().field("x"),
+              Record{{"gone", Null{}}, {"keep", Int{1}}});
+  append_data(builder.record().field("x"), Record{{"keep", Int{2}}});
+  builder.record().field("x").null();
+  builder.record().field("x").data(Int{42});
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("drop_null_fields", {root_field("x")}), events,
+                       bitmap({true, true, true, invalid_active}), dh);
+    auto records = result.get_alternative<Record>();
+    REQUIRE(records);
+    auto gone = records->data.field("gone");
+    CHECK(not gone or not gone->present.any());
+    CHECK_EQUAL(*as<RowView<Int>>(records->data.field("keep")->data.get(0)), 1);
+    CHECK_EQUAL(*as<RowView<Int>>(records->data.field("keep")->data.get(1)), 2);
+    CHECK(is_null_at(result, 2));
+    if (invalid_active) {
+      CHECK(is_null_at(result, 3));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+    auto original = events.data.field("x")->data.get_alternative<Record>();
+    REQUIRE(original);
+    CHECK(original->data.field("gone")->present.get(0));
+  }
+}
+
+TEST("subnet ignores invalid inactive rows and propagates nulls") {
+  auto builder = ArrayBuilder<Record>{};
+  auto first = builder.record();
+  first.field("ip").data(std::string_view{"10.1.2.3"});
+  first.field("prefix").data(UInt{24});
+  auto second = builder.record();
+  second.field("ip").null();
+  second.field("prefix").data(Int{24});
+  auto third = builder.record();
+  third.field("ip").data(Int{42});
+  third.field("prefix").data(true);
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto mask = bitmap({true, true, invalid_active});
+    auto subnet = eval(call("subnet", {root_field("ip"), root_field("prefix")}),
+                       events, mask, dh);
+    CHECK_EQUAL(fmt::format("{}", *as<RowView<Subnet>>(subnet.get(0))),
+                "10.1.2.0/24");
+    CHECK(is_null_at(subnet, 1));
+    if (invalid_active) {
+      CHECK(is_null_at(subnet, 2));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+  }
+}
+
+TEST("sqrt ignores invalid inactive rows and propagates nulls") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(UInt{9});
+  builder.record().field("x").null();
+  builder.record().field("x").data(true);
+  auto events = make_events(builder.finish());
+  for (auto invalid_active : {false, true}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("sqrt", {root_field("x")}), events,
+                       bitmap({true, true, invalid_active}), dh);
+    CHECK_EQUAL(*as<RowView<Float>>(result.get(0)), 3.0);
+    CHECK(is_null_at(result, 1));
+    if (invalid_active) {
+      CHECK(is_null_at(result, 2));
+    }
+    CHECK_EQUAL(std::move(dh).collect().size(), invalid_active ? 1uz : 0uz);
+  }
+}
+
+TEST("random produces values for sparse and empty masks") {
+  auto events = make_events(Array<Record>::make_empty(5));
+  auto dh = collecting_diagnostic_handler{};
+  for (auto mask :
+       {bitmap({false, true, false, true, false}), storage::BitMap{5, false}}) {
+    auto result = eval(call("random", {}), events, mask, dh);
+    CHECK_EQUAL(result.length(), 5);
+    for (auto row : storage::true_bits(mask)) {
+      auto value = *as<RowView<Float>>(result.get(row));
+      CHECK(value >= 0.0);
+      CHECK(value < 1.0);
+    }
+  }
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("type_of reports null as a type and does not inspect inactive rows") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").null();
+  builder.record();
+  builder.record().field("x").data(Int{42});
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("type_of", {root_field("x")}), events,
+                     bitmap({true, false, true}), dh);
+  auto records = result.try_as<Record>();
+  REQUIRE(records);
+  auto kinds = records->field("kind");
+  REQUIRE(kinds);
+  CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(0)), "null");
+  CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(2)), "int");
+  auto constant = eval(call("type_of", {int_const(42)}), events,
+                       bitmap({false, true, false}), dh);
+  auto constant_records = constant.try_as<Record>();
+  REQUIRE(constant_records);
+  CHECK((is<storage::ConstantStorage<Record, RowView<Record>>>(
+    constant_records->storage())));
+  CHECK_EQUAL(
+    *as<RowView<String>>(constant_records->field("kind")->data.get(1)), "int");
   CHECK(std::move(dh).collect().empty());
 }
 

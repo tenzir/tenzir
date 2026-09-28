@@ -1,0 +1,27 @@
+{
+  result: 0.0.0.0/0,
+}
+{
+  result: 10.1.2.3/32,
+}
+{
+  result: ::/0,
+}
+{
+  result: 2001:db8::1/128,
+}
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: null,
+}

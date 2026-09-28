@@ -1,0 +1,3 @@
+from {x: {a: null, b: {c: null, d: 1}, xs: [{n: null}]}},
+     {x: {b: {d: 2}}}, {x: null}, {x: {}}
+select result = drop_null_fields(x)

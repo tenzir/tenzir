@@ -1,0 +1,2 @@
+from {x: ""}, {x: "a\x00b"}, {x: "🚀"}, {x: null}, {x: b"\x00\xff"}
+select bytes = blob(x).encode_hex(), again = blob(blob(x)).encode_hex()

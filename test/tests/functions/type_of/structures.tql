@@ -1,0 +1,4 @@
+from {x: {}}, {x: {a: null}}, {x: {b: {c: 1}, a: "x"}},
+     {x: []}, {x: [null]}, {x: [1, 2]}, {x: [1, "x", null, 2]},
+     {x: [null, "y", 3]}, {x: [{a: 1}, {b: 2}]}
+select type = type_of(x)

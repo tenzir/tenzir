@@ -1,0 +1,2 @@
+from {x: 0}, {x: 4}, {x: uint(9)}, {x: 2.25}, {x: -1}, {x: null}
+select result = sqrt(x)

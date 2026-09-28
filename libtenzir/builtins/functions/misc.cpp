@@ -30,6 +30,8 @@
 #endif
 
 #include "tenzir/nova/array.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
@@ -76,8 +78,96 @@ public:
   }
 };
 
-class type_of final : public function_plugin {
+auto nova_type_definition(std::string_view kind,
+                          nova::Data state = nova::Null{}) -> nova::Record {
+  // Nova values do not carry schema names or attributes.
+  return {{"name", nova::Null{}},
+          {"kind", std::string{kind}},
+          {"attributes", nova::List{}},
+          {"state", std::move(state)}};
+}
+
+auto nova_type_definition(nova::RowView<nova::Data> row) -> nova::Record {
+  using namespace nova;
+  return match(row, []<class Tag>(RowView<Tag> value) -> Record {
+    if constexpr (std::same_as<Tag, Record>) {
+      auto fields = List{};
+      for (auto [name, field] : value) {
+        fields.emplace_back(Record{{"name", std::string{name}},
+                                   {"type", nova_type_definition(field)}});
+      }
+      return nova_type_definition(Type<Tag>::static_name,
+                                  Record{{"fields", std::move(fields)}});
+    } else if constexpr (std::same_as<Tag, List>) {
+      // Unlike Arrow lists, Nova lists may be heterogeneous. Keep distinct
+      // element types in first-occurrence order.
+      auto types = List{};
+      for (auto element : value) {
+        auto type = nova_type_definition(element);
+        if (std::ranges::none_of(types, [&](Data const& existing) {
+              return equal(RowView<Data>{existing}, RowView<Record>{type});
+            })) {
+          types.emplace_back(std::move(type));
+        }
+      }
+      auto element_type = nova_type_definition(Type<Null>::static_name);
+      if (types.size() == 1) {
+        element_type = as<Record>(std::move(types.front()));
+      } else if (not types.empty()) {
+        element_type
+          = nova_type_definition("union", Record{{"types", std::move(types)}});
+      }
+      return nova_type_definition(Type<Tag>::static_name,
+                                  Record{{"type", std::move(element_type)}});
+    } else {
+      return nova_type_definition(Type<Tag>::static_name);
+    }
+  });
+}
+
+struct TypeOfArgs {
+  nova::ValueArgument x;
+};
+
+struct TypeOfFunction {
+  static auto eval(TypeOfArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto describe_rows = [&]() -> Array<Data> {
+      auto builder = ArrayBuilder<Data>{};
+      for (auto row : storage::bitmap_iteration(frame.mask())) {
+        if (row) {
+          append_data(builder, nova_type_definition(args.x.data.get(*row)));
+        } else {
+          builder.skip();
+        }
+      }
+      return builder.finish();
+    };
+    return match(
+      args.x.data,
+      [&]<data_type Tag>(Array<Tag> const&) -> Array<Data> {
+        if constexpr (fundamental_type<Tag>) {
+          return repeat(nova_type_definition(Type<Tag>::static_name),
+                        frame.length());
+        } else {
+          return describe_rows();
+        }
+      },
+      [&](UnionArray const&) {
+        return describe_rows();
+      });
+  }
+};
+
+class type_of final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<TypeOfArgs, TypeOfFunction>{};
+    d.positional("x", &TypeOfArgs::x);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "type_of";
   }

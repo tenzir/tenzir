@@ -16,6 +16,10 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/aggregation.hpp>
 #include <tenzir/nova/aggregation/statistics.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -31,8 +35,41 @@
 namespace tenzir::plugins::numeric {
 
 namespace {
-class sqrt final : public function_plugin {
+
+struct SqrtArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+struct SqrtFunction {
+  static auto eval(SqrtArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(
+      frame, "sqrt", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<nova::Float> {
+          return None{};
+        },
+        []<class T>(diagnostic_handler&, T value) -> Option<nova::Float>
+          requires concepts::one_of<T, nova::Int, nova::UInt, nova::Float>
+        {
+          if (value < 0) {
+            return None{};
+          }
+          return std::sqrt(static_cast<double>(value));
+        }});
+  }
+};
+
+class sqrt final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SqrtArgs, SqrtFunction>{};
+    d.positional("x", &SqrtArgs::x, "number");
+    d.call_location(&SqrtArgs::call);
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     return "sqrt";
   }
@@ -104,8 +141,31 @@ public:
   }
 };
 
-class random final : public function_plugin {
+struct RandomArgs {};
+
+struct RandomFunction {
+  static auto eval(RandomArgs const&, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto engine = std::default_random_engine{std::random_device{}()};
+    auto distribution = std::uniform_real_distribution<double>{0.0, 1.0};
+    auto builder = nova::ArrayBuilder<nova::Float>{};
+    for (auto row : nova::storage::bitmap_iteration(frame.mask())) {
+      if (row) {
+        builder.data(distribution(engine));
+      } else {
+        builder.skip();
+      }
+    }
+    return builder.finish();
+  }
+};
+
+class random final : public nova::FunctionPlugin {
 public:
+  auto describe() const -> nova::FunctionDescription override {
+    return nova::FunctionDescriber<RandomArgs, RandomFunction>{}.finish();
+  }
+
   auto name() const -> std::string override {
     return "random";
   }

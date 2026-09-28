@@ -1,0 +1,20 @@
+{
+  bytes: "",
+  again: "",
+}
+{
+  bytes: "610062",
+  again: "610062",
+}
+{
+  bytes: "F09F9A80",
+  again: "F09F9A80",
+}
+{
+  bytes: null,
+  again: null,
+}
+{
+  bytes: "00FF",
+  again: "00FF",
+}
