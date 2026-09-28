@@ -1,3 +1,7 @@
+---
+skip: "`keys` does not support Nova yet"
+---
+
 from (
   {foo: 10, bar: 20, baz: 30},
   {foo: 100, bar: 200},

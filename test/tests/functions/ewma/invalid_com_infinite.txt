@@ -1,8 +1,8 @@
-error: expected exactly one of `alpha`, `span`, `com`, or `halflife`
- --> tests/functions/ewma/multiple_decay.tql:6:10
+error: expected `com` to be finite and non-negative
+ --> tests/functions/ewma/invalid_com_infinite.tql:6:22
   |
-6 | result = xs.ewma(alpha=0.5, span=3)
-  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+6 | result = xs.ewma(com="inf".float())
+  |                      ^^^^^^^^^^^^^
   |
   = usage: ewma(xs:list, [alpha=number, span=number, com=number, halflife=number or duration, times=list, adjust=bool, ignore_nulls=bool])
   = docs: https://tenzir.com/docs/reference/functions/ewma

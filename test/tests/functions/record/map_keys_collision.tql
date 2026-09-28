@@ -4,4 +4,4 @@ from {
     host: "lower",
   },
 }
-request = request.map_keys(key => key.to_lower())
+request = request.map_keys(key => "key")

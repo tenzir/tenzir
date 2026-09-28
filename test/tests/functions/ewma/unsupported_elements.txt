@@ -1,4 +1,4 @@
-warning: expected a list of numbers, but got a list of `string`
+warning: expected a list of numbers
  --> tests/functions/ewma/unsupported_elements.tql:2:10
   |
 2 | result = xs.ewma(alpha=0.5)

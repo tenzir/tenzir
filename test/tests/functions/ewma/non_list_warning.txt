@@ -1,4 +1,4 @@
-warning: expected `list`, but got `int64`
+warning: expected a list of numbers
  --> tests/functions/ewma/non_list_warning.tql:2:10
   |
 2 | result = x.ewma(alpha=0.5)

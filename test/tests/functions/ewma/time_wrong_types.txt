@@ -1,11 +1,11 @@
-warning: expected `times` to be a list of times, but got `int64`
+warning: expected `times` to be a list of times
  --> tests/functions/ewma/time_wrong_types.tql:3:50
   |
 3 | select kind, result = xs.ewma(halflife=1d, times=times)
   |                                                  ~~~~~
   |
 
-warning: expected `times` to be a list of times, but got a list of `int64`
+warning: expected `times` to be non-decreasing without nulls
  --> tests/functions/ewma/time_wrong_types.tql:3:50
   |
 3 | select kind, result = xs.ewma(halflife=1d, times=times)

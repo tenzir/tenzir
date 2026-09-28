@@ -18,5 +18,5 @@ select keep = xs.ewm_variance(alpha=0.5),
        constant = [2, 2, 2].ewm_variance(alpha=0.5),
        empty = [].ewm_variance(alpha=0.5),
        single = [42].ewm_variance(alpha=0.5)
-keep = keep.map(x => round(x * $precision) / $precision)
-ignore = ignore.map(x => round(x * $precision) / $precision)
+keep = keep.map(x => round(x * $precision) / $precision if x != null else null)
+ignore = ignore.map(x => round(x * $precision) / $precision if x != null else null)

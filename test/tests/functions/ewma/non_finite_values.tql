@@ -13,8 +13,9 @@
 //   inf = pd.Series([np.inf, -np.inf, 5.0, 6.0])
 //   inf.ewm(alpha=0.5).mean()  # [nan, nan, 5.0, 5.6666...]
 //   inf.ewm(alpha=0.5).var()   # [nan, nan, nan, 0.5]
-from {raw: "{nan: [1.0, .nan, 3.0], inf: [.inf, -.inf, 5.0, 6.0]}"}
-this = raw.parse_yaml()
+from {}
+nan = [1.0, "nan".float(), 3.0]
+inf = ["inf".float(), "-inf".float(), 5.0, 6.0]
 select nan_mean = nan.ewma(alpha=0.5),
        nan_variance = nan.ewm_variance(alpha=0.5),
        inf_mean = inf.ewma(alpha=0.5),

@@ -5,4 +5,8 @@ from {
     Host: "domain.gent",
   },
 }
-request = request.map_keys(key => key.to_lower())
+request = request.map_keys(
+  key => key.replace("Cache-Control", "cache-control")
+    .replace("Pragma", "pragma")
+    .replace("Host", "host"),
+)

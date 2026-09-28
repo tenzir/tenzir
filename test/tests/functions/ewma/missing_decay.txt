@@ -4,3 +4,5 @@ error: expected exactly one of `alpha`, `span`, `com`, or `halflife`
 6 | result = xs.ewma()
   |          ^^^^^^^^^
   |
+  = usage: ewma(xs:list, [alpha=number, span=number, com=number, halflife=number or duration, times=list, adjust=bool, ignore_nulls=bool])
+  = docs: https://tenzir.com/docs/reference/functions/ewma
