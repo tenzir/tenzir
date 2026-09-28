@@ -1,0 +1,8 @@
+from {
+  a: 1,
+  b: 2,
+  c: 3,
+}
+drop a, b
+write_bitz
+read_bitz

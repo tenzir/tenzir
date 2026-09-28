@@ -1,4 +1,4 @@
-error: unexpected BITZ header length 0
+error: unexpected BITZ v2 header length 0
  --> tests/operators/bitz/error_missing_header.tql:5:3
   |
 5 |   read_bitz

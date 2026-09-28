@@ -1,3 +1,15 @@
 {
-  x: 1,
+  "x": 1
+}
+{
+  "foo": 1,
+  "bar": "baz",
+  "schema": "tenzir.unknown",
+  "import_time": null
+}
+{
+  "foo": 2,
+  "bar": "qux",
+  "schema": "tenzir.unknown",
+  "import_time": null
 }

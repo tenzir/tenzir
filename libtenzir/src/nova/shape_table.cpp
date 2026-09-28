@@ -68,6 +68,11 @@ auto ShapeTable::with_field(ShapeId id, storage::Index field,
   return new_id;
 }
 
+auto ShapeTable::with_fields(std::span<const storage::Index> fields)
+  -> ShapeId {
+  return find_or_add(FieldsType{fields.begin(), fields.end()});
+}
+
 auto ShapeTable::without_field(ShapeId id, storage::Index field) -> ShapeId {
   TENZIR_ASSERT_LEQ_EXPENSIVE(0, id);
   TENZIR_ASSERT_LT_EXPENSIVE(id, static_cast<ShapeId>(nodes_.size()));

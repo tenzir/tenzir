@@ -167,6 +167,11 @@ public:
     return data_[i];
   }
 
+  /// Raw access to the `length()` elements.
+  auto data() const noexcept -> T const* {
+    return data_.begin();
+  }
+
   SparseStorage(DataOwner<T[]> data) : data_{std::move(data)} {
   }
 

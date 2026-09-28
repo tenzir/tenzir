@@ -1,4 +1,4 @@
-error: unexpected message length 408
+error: unexpected BITZ v2 message length 408
  --> tests/operators/bitz/error_truncated_payload.tql:5:3
   |
 5 |   read_bitz

@@ -33,6 +33,8 @@ public:
 
   auto with_field(ShapeId id, storage::Index field,
                   FieldPosition position = FieldPosition::back) -> ShapeId;
+  /// Interns a complete shape whose fields are known to be unique.
+  auto with_fields(std::span<const storage::Index> fields) -> ShapeId;
   auto without_field(ShapeId id, storage::Index field) -> ShapeId;
   auto without_fields(ShapeId id, std::span<const storage::Index> fields)
     -> ShapeId;

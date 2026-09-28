@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/bitz/v2.bitz" {
+  read_bitz
+}
+schema = @name
+import_time = @import_time

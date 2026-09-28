@@ -1,7 +1,7 @@
-error: unexpected BITZ magic
+error: unexpected BITZ v2 magic
  --> tests/operators/bitz/error_invalid_magic.tql:5:3
   |
 5 |   read_bitz
   |   ^^^^^^^^^
   |
-  = note: expected TNZ1
+  = note: expected TNZ2

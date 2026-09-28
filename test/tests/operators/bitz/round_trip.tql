@@ -1,5 +1,14 @@
-from_stdin {
-  read_ndjson
+from {
+  integer: -42,
+  unsigned: uint(42),
+  float: 1.25,
+  string: "text",
+  ip: 192.0.2.1,
+  subnet: 2001:db8::/32,
+  time: 2024-01-02T03:04:05Z,
+  duration: 1.5s,
+  list: [1, "two", null],
+  record: {first: 1, second: null},
 }
 write_bitz
 read_bitz
