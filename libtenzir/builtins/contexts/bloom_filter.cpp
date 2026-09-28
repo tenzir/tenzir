@@ -200,7 +200,7 @@ public:
           .emit(ctx);
       }
     }
-    if (args.value) {
+    if (args.value and not args.implicit_value) {
       diagnostic::warning("unsupported option for bloom-filter context")
         .primary(*args.value)
         .emit(ctx);

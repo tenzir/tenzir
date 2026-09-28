@@ -17,6 +17,7 @@
 #include "tenzir/import_conversion.hpp"
 #include "tenzir/import_routing.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/arrow_export.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/recent_snapshot.hpp"
 #include "tenzir/retention_policy.hpp"
@@ -135,6 +136,17 @@ auto importer::handle_events(nova::Events events) -> caf::result<void> {
     for (auto const& subscriber : nova_subscribers) {
       if (subscriber.eager and subscriber.internal == group.key.internal) {
         self->mail(selected).send(subscriber.receiver);
+      }
+    }
+    if (std::ranges::any_of(subscribers, [&](auto const& subscriber) {
+          return subscriber.eager and subscriber.internal == group.key.internal;
+        })) {
+      for (auto& slice : nova::to_table_slices(selected)) {
+        for (auto const& subscriber : subscribers) {
+          if (subscriber.eager and subscriber.internal == group.key.internal) {
+            self->mail(slice).send(subscriber.receiver);
+          }
+        }
       }
     }
     if (unpersisted_nova_events.empty()
@@ -260,6 +272,17 @@ void importer::flush_nova() {
     for (auto const& subscriber : nova_subscribers) {
       if (not subscriber.eager and subscriber.internal == internal) {
         self->mail(events).send(subscriber.receiver);
+      }
+    }
+    if (std::ranges::any_of(subscribers, [internal](auto const& subscriber) {
+          return not subscriber.eager and subscriber.internal == internal;
+        })) {
+      for (auto& slice : nova::to_table_slices(events)) {
+        for (auto const& subscriber : subscribers) {
+          if (not subscriber.eager and subscriber.internal == internal) {
+            self->mail(slice).send(subscriber.receiver);
+          }
+        }
       }
     }
     if (not retention_policy.should_be_persisted(first, internal)) {
@@ -487,6 +510,23 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           }
         }
       }
+      for (auto const& events : unpersisted_nova_events) {
+        for (auto row : nova::storage::true_bits(events.mask)) {
+          auto name = *events.meta.name.get(row);
+          auto is_internal = *events.meta.internal.get(row);
+          if (is_internal == internal
+              and not retention_policy.should_be_persisted(name, is_internal)) {
+            auto slices = nova::to_table_slices(events);
+            for (auto& slice : slices) {
+              slice.import_time(snapshot_time);
+            }
+            buffered.insert(buffered.end(),
+                            std::make_move_iterator(slices.begin()),
+                            std::make_move_iterator(slices.end()));
+          }
+          break;
+        }
+      }
       flush({}, snapshot_time);
       flush_nova();
       auto token = uuid::random();
@@ -509,19 +549,50 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
             }
             auto snapshot = std::make_shared<recent_snapshot>(
               recent_snapshot{std::move(buffered), token});
+            auto pending = std::make_shared<size_t>(2);
+            auto first_error = std::make_shared<caf::error>();
+            auto finish
+              = [this, rp, token, snapshot, pending, first_error]() mutable {
+                  if (--*pending != 0) {
+                    return;
+                  }
+                  if (first_error->valid()) {
+                    release_snapshot_barrier(token);
+                    rp.deliver(*first_error);
+                  } else {
+                    rp.deliver(std::move(*snapshot));
+                  }
+                };
             self->mail(atom::get_v, internal)
               .request(index, caf::infinite)
               .then(
-                [rp, snapshot](std::vector<table_slice> events) mutable {
+                [snapshot, finish](std::vector<table_slice> events) mutable {
                   snapshot->events.insert(
                     snapshot->events.end(),
                     std::make_move_iterator(events.begin()),
                     std::make_move_iterator(events.end()));
-                  rp.deliver(std::move(*snapshot));
+                  finish();
                 },
-                [this, rp, token](caf::error error) mutable {
-                  release_snapshot_barrier(token);
-                  rp.deliver(std::move(error));
+                [first_error, finish](caf::error error) mutable {
+                  *first_error = std::move(error);
+                  finish();
+                });
+            self->mail(atom::get_v, atom::internal_v, internal)
+              .request(index, caf::infinite)
+              .then(
+                [snapshot, finish](std::vector<nova::Events> events) mutable {
+                  for (auto const& event : events) {
+                    auto slices = nova::to_table_slices(event);
+                    snapshot->events.insert(
+                      snapshot->events.end(),
+                      std::make_move_iterator(slices.begin()),
+                      std::make_move_iterator(slices.end()));
+                  }
+                  finish();
+                },
+                [first_error, finish](caf::error error) mutable {
+                  *first_error = std::move(error);
+                  finish();
                 });
           },
           [rp](caf::error error) mutable {

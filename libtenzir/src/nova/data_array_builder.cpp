@@ -229,6 +229,18 @@ auto append_legacy_data_into(Builder& builder, const data& value,
     [&](const blob& x) {
       builder.data(blob_view{x});
     },
+    [&](const pattern& x) {
+      builder.data(std::string_view{x.string()});
+    },
+    [&](enumeration x) {
+      builder.data(fmt::to_string(static_cast<unsigned>(x)));
+    },
+    [&](const map&) {
+      builder.null();
+    },
+    [&](const secret&) {
+      builder.null();
+    },
     [&](bool x) {
       builder.data(x);
     },

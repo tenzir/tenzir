@@ -40,12 +40,15 @@ struct context_parameter_map
 struct context_update_args {
   ast::expression key = {};
   Option<ast::expression> value = None{};
+  /// The Nova adapter supplies the original event as an implicit `value`.
+  bool implicit_value = false;
   Option<located<duration>> create_timeout = None{};
   Option<located<duration>> write_timeout = None{};
   Option<located<duration>> read_timeout = None{};
 
   friend auto inspect(auto& f, context_update_args& x) -> bool {
     return f.object(x).fields(f.field("key", x.key), f.field("value", x.value),
+                              f.field("implicit_value", x.implicit_value),
                               f.field("create_timeout", x.create_timeout),
                               f.field("update_timeout", x.write_timeout),
                               f.field("read_timeout", x.read_timeout));
