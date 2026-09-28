@@ -1,0 +1,6 @@
+// `move` only takes effect on fields within assignments. Elsewhere it warns
+// and evaluates to its operand.
+from {x: 1, y: 2}
+where move x == 1
+z = move 1
+w = [2].map(v => move v)

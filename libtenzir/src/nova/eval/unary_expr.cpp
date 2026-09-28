@@ -88,6 +88,19 @@ auto _::EvalRun::eval(const ast::unary_expr& x, EvalFrame frame)
           },
           });
     case move:
+      // Assignments resolve `move` on fields before evaluation, so a `move`
+      // that reaches the evaluator has no effect.
+      if (ast::field_path::try_from(x.expr)) {
+        diagnostic::warning("move is not supported here")
+          .primary(x.get_location(), "has no effect")
+          .hint("move only works on fields within assignments")
+          .emit(frame);
+      } else {
+        diagnostic::warning("move has no effect")
+          .primary(x.expr, "is not a field")
+          .hint("move only works on fields within assignments")
+          .emit(frame);
+      }
       return frame.eval(x.expr);
   }
 }

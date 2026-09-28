@@ -1,0 +1,31 @@
+warning: move is not supported here
+ --> tests/language/expr/move/outside_assignment.tql:4:7
+  |
+4 | where move x == 1
+  |       ~~~~~~ has no effect
+  |
+  = hint: move only works on fields within assignments
+
+warning: move has no effect
+ --> tests/language/expr/move/outside_assignment.tql:5:10
+  |
+5 | z = move 1
+  |          ~ is not a field
+  |
+  = hint: move only works on fields within assignments
+
+warning: move is not supported here
+ --> tests/language/expr/move/outside_assignment.tql:6:18
+  |
+6 | w = [2].map(v => move v)
+  |                  ~~~~~~ has no effect
+  |
+  = hint: move only works on fields within assignments
+{
+  x: 1,
+  y: 2,
+  z: 1,
+  w: [
+    2,
+  ],
+}
