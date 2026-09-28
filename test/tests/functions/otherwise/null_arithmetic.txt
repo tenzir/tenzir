@@ -1,0 +1,9 @@
+{
+  x: null,
+  result: {
+    add: 0,
+    sub: 0,
+    mul: 0,
+    div: 0,
+  },
+}

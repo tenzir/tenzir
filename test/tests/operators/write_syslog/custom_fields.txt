@@ -4,6 +4,7 @@ warning: event does not have field
 10 |                hostname=host,
    |                         ~~~~
    |
+   = hint: append `?` to suppress this warning
 
 warning: `facility` evaluated to `null`
  --> tests/operators/write_syslog/custom_fields.tql:8:25

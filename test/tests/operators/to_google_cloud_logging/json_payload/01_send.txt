@@ -4,3 +4,4 @@ warning: event does not have field
 10 | name = f"user-{id}" if name != null else null
    |                        ~~~~
    |
+   = hint: append `?` to suppress this warning

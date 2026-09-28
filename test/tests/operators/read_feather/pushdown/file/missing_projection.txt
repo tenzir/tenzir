@@ -4,6 +4,7 @@ warning: event does not have field
 5 | select absent
   |        ~~~~~~
   |
+  = hint: append `?` to suppress this warning
 {
   absent: null,
 }

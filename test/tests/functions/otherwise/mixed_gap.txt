@@ -1,4 +1,4 @@
-warning: field `x` not found
+warning: event does not have field
  --> tests/functions/otherwise/mixed_gap.tql:3:5
   |
 3 | z = x.otherwise(-1)

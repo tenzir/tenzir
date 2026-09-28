@@ -13,6 +13,7 @@ auto _::EvalRun::eval(const ast::field_access& x, EvalFrame frame)
       diagnostic::warning("record does not have field")
         .primary(x.left)
         .secondary(x.name, "field does not exist")
+        .hint("append `?` to suppress this warning")
         .emit(frame);
     }
   };

@@ -50,6 +50,19 @@ auto select_rows(const Array<Data>& a, storage::BitMap const& mask_a,
                      MaskedArray<Array<Data>>{b, mask_b});
 }
 
+/// Wraps arithmetic kernels so a null operand propagates without a type
+/// warning. Comparisons use their own null semantics instead.
+auto null_propagating(auto kernel) {
+  return detail::overload{
+    []<class T, class U>(diagnostic_handler&, T, U) -> Option<Int>
+      requires(std::same_as<T, Null> or std::same_as<U, Null>)
+    {
+      return None{};
+    },
+    std::move(kernel),
+    };
+}
+
 /// Equality compares `null` by nullness. The ordering operators have no order
 /// to report, so they do not accept it at all and `apply_kernel` warns.
 template <class U, class T, ast::binary_op Op>
@@ -299,7 +312,7 @@ auto evaluate_subtraction(EvalFrame frame, std::array<Array<Data>, 2> args,
   auto warn_time_overflow = WarnOnce{};
   return apply_kernel<2>(
     frame, "binary operator `-`", std::move(args), loc,
-    ::tenzir::detail::overload{
+    null_propagating(::tenzir::detail::overload{
       [loc, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh, T lhs,
                                                   U rhs)
         requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -345,7 +358,7 @@ auto evaluate_subtraction(EvalFrame frame, std::array<Array<Data>, 2> args,
         }
         return Duration{*result};
       },
-    });
+    }));
 }
 
 auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
@@ -357,7 +370,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       auto warn_duration_overflow = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `+`", {x.left, x.right}, x.get_location(),
-        ::tenzir::detail::overload{
+        null_propagating(::tenzir::detail::overload{
           [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
                                                      T lhs, U rhs)
             requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -418,7 +431,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
             }
             return Duration{*result};
           },
-        });
+        }));
     }
     case sub:
       return evaluate_subtraction(
@@ -445,7 +458,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       };
       return apply_kernel<2>(
         frame, "binary operator `*`", {x.left, x.right}, x.get_location(),
-        ::tenzir::detail::overload{
+        null_propagating(::tenzir::detail::overload{
           [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
                                                      T lhs, U rhs)
             requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -487,13 +500,13 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
           {
             return mul_duration(dh, rhs, lhs);
           },
-        });
+        }));
     }
     case div: {
       auto warn_div_by_zero = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `/`", {x.left, x.right}, x.get_location(),
-        ::tenzir::detail::overload{
+        null_propagating(::tenzir::detail::overload{
           [&x, &warn_div_by_zero]<class T, class U>(
             diagnostic_handler& dh, T lhs, U rhs) -> Option<Float>
             requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -509,8 +522,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
                       }
                       return static_cast<Float>(lhs) / static_cast<Float>(rhs);
                     },
-                    [&x, &warn_div_by_zero](diagnostic_handler& dh,
-                                            Duration lhs,
+                    [&x, &warn_div_by_zero](diagnostic_handler& dh, Duration lhs,
                                             Duration rhs) -> Option<Float> {
                       if (rhs.count() == 0) {
                         warn_div_by_zero(
@@ -534,7 +546,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
             }
             return std::chrono::duration_cast<Duration>(lhs / rhs);
           },
-          });
+          }));
     }
     case eq:
       return eval_comparison<eq>(x, "binary operator `==`", std::move(frame));

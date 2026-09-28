@@ -1,0 +1,10 @@
+from {
+  x: int(null),
+}
+
+result = {
+  add: (x + 1).otherwise(0),
+  sub: (x - 1).otherwise(0),
+  mul: (x * 1).otherwise(0),
+  div: (x / 1).otherwise(0),
+}

@@ -11,6 +11,7 @@ auto _::EvalRun::eval(const ast::root_field& x, EvalFrame frame)
     if (not x.has_question_mark) {
       diagnostic::warning("event does not have field")
         .primary(x.get_location())
+        .hint("append `?` to suppress this warning")
         .emit(frame);
     }
   };

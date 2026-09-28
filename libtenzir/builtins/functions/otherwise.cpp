@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/nova/array_merge.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -14,7 +16,44 @@ namespace tenzir::plugins::otherwise {
 
 namespace {
 
-class otherwise final : public function_plugin {
+struct OtherwiseArgs {
+  nova::ValueArgument primary;
+  nova::ValueArgument fallback;
+};
+
+class OtherwiseFunction final {
+public:
+  static auto eval(OtherwiseArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return match(
+      args.primary.data,
+      [&](nova::Array<nova::Null> const&) -> nova::Array<nova::Data> {
+        return args.fallback.data;
+      },
+      [&]<nova::data_type Tag>(
+        nova::Array<Tag> const&) -> nova::Array<nova::Data>
+        requires(not std::same_as<Tag, nova::Null>)
+      {
+        return args.primary.data;
+      },
+      [&](nova::UnionArray const& primary) -> nova::Array<nova::Data> {
+        auto fallback_rows
+          = frame.mask() & primary.alternative_mask<nova::Null>();
+        if (not fallback_rows.any()) {
+          return args.primary.data;
+        }
+        auto primary_rows = frame.mask().and_not(fallback_rows);
+        if (not primary_rows.any()) {
+          return args.fallback.data;
+        }
+        return nova::with_merged({args.primary.data, std::move(primary_rows)},
+                                 {args.fallback.data,
+                                  std::move(fallback_rows)});
+      });
+  }
+};
+
+class otherwise final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "otherwise";
@@ -22,6 +61,13 @@ public:
 
   auto is_deterministic() const -> bool final {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<OtherwiseArgs, OtherwiseFunction>{};
+    d.positional("primary", &OtherwiseArgs::primary, "any");
+    d.positional("fallback", &OtherwiseArgs::fallback, "any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
