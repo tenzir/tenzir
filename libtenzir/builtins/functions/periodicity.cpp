@@ -9,6 +9,9 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/periodicity.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -81,7 +84,154 @@ auto extract_doubles(arrow::ListArray const& array, int64_t row,
     });
 }
 
-class autocorrelation_plugin final : public function_plugin {
+auto extract_doubles(nova::RowView<nova::List> const& list,
+                     std::vector<double>& out) -> extraction {
+  out.clear();
+  out.reserve(list.length());
+  auto origin = __int128{};
+  auto has_origin = false;
+  for (auto value : list) {
+    auto set_origin = [&](auto x) {
+      if (not has_origin) {
+        origin = static_cast<__int128>(x);
+        has_origin = true;
+      }
+    };
+    if (auto const* x = try_as<nova::RowView<nova::Int>>(value)) {
+      set_origin(**x);
+    } else if (auto const* x = try_as<nova::RowView<nova::UInt>>(value)) {
+      set_origin(**x);
+    } else if (auto const* x = try_as<nova::RowView<nova::Duration>>(value)) {
+      set_origin((**x).count());
+    } else if (auto const* x = try_as<nova::RowView<nova::Float>>(value)) {
+      if (not std::isfinite(**x)) {
+        return extraction::non_finite;
+      }
+    } else if (is<nova::RowView<nova::Null>>(value)) {
+      return extraction::has_null;
+    } else {
+      return extraction::wrong_type;
+    }
+  }
+  for (auto value : list) {
+    auto append_integral = [&](auto x) {
+      if (has_origin) {
+        out.push_back(static_cast<double>(static_cast<__int128>(x) - origin));
+      } else {
+        out.push_back(static_cast<double>(x));
+      }
+    };
+    if (auto const* x = try_as<nova::RowView<nova::Int>>(value)) {
+      append_integral(**x);
+    } else if (auto const* x = try_as<nova::RowView<nova::UInt>>(value)) {
+      append_integral(**x);
+    } else if (auto const* x = try_as<nova::RowView<nova::Duration>>(value)) {
+      append_integral((**x).count());
+    } else if (auto const* x = try_as<nova::RowView<nova::Float>>(value)) {
+      if (has_origin) {
+        constexpr auto scale = __int128{1} << 32;
+        auto const high = origin / scale * scale;
+        auto const low = origin - high;
+        out.push_back(**x - static_cast<double>(high)
+                      - static_cast<double>(low));
+      } else {
+        out.push_back(**x);
+      }
+    } else {
+      TENZIR_UNREACHABLE();
+    }
+  }
+  return extraction::ok;
+}
+
+struct AutocorrelationArgs {
+  nova::ValueArgument xs;
+  Option<located<int64_t>> max_lag;
+};
+
+struct AutocorrelationFunction {
+  static auto eval(AutocorrelationArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto xs = std::vector<double>{};
+    auto warn_null = false;
+    auto warn_non_finite = false;
+    auto warn_type = false;
+    auto warn_degenerate = false;
+    nova::storage::for_each_true(frame.mask(), [&](auto row) {
+      builder.skip_n(row - builder.length());
+      auto value = args.xs.data.get(row);
+      auto const* list = try_as<nova::RowView<nova::List>>(value);
+      if (not list) {
+        if (not is<nova::RowView<nova::Null>>(value)) {
+          warn_type = true;
+        }
+        builder.null();
+        return;
+      }
+      switch (extract_doubles(*list, xs)) {
+        case extraction::has_null:
+          warn_null = true;
+          builder.null();
+          return;
+        case extraction::non_finite:
+          warn_non_finite = true;
+          builder.null();
+          return;
+        case extraction::wrong_type:
+          warn_type = true;
+          builder.null();
+          return;
+        case extraction::ok:
+          break;
+      }
+      if (xs.empty()) {
+        builder.list();
+        return;
+      }
+      auto const lag = args.max_lag ? args.max_lag->inner
+                                    : static_cast<int64_t>(xs.size()) / 2;
+      auto const acf = detail::autocorrelation(xs, lag);
+      if (not acf) {
+        warn_degenerate = true;
+        builder.null();
+        return;
+      }
+      auto result = builder.list();
+      for (auto const r : *acf) {
+        result.data(r);
+      }
+    });
+    if (warn_null) {
+      diagnostic::warning("list contains null values")
+        .note("autocorrelation requires a gap-free series")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    if (warn_non_finite) {
+      diagnostic::warning("list contains non-finite values")
+        .note("autocorrelation requires finite samples")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    if (warn_type) {
+      diagnostic::warning(
+        "expected list of `int`, `uint`, `double`, or `duration`")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    if (warn_degenerate) {
+      diagnostic::warning(
+        "autocorrelation is undefined for constant or single-element lists")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    builder.skip_n(frame.length() - builder.length());
+    return builder.finish();
+  }
+};
+
+class autocorrelation_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "autocorrelation";
@@ -89,6 +239,24 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<AutocorrelationArgs, AutocorrelationFunction>{};
+    d.positional("xs", &AutocorrelationArgs::xs, "list");
+    d.named("max_lag", &AutocorrelationArgs::max_lag, "int");
+    d.validate([](AutocorrelationArgs& args,
+                  diagnostic_handler& dh) -> failure_or<void> {
+      if (args.max_lag and args.max_lag->inner < 1) {
+        diagnostic::error("`max_lag` must be at least 1")
+          .primary(*args.max_lag)
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -193,7 +361,83 @@ public:
   }
 };
 
-class periodogram_plugin final : public function_plugin {
+struct PeriodogramArgs {
+  nova::ValueArgument xs;
+};
+
+struct PeriodogramFunction {
+  static auto eval(PeriodogramArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto xs = std::vector<double>{};
+    auto warn_null = false;
+    auto warn_non_finite = false;
+    auto warn_type = false;
+    nova::storage::for_each_true(frame.mask(), [&](auto row) {
+      builder.skip_n(row - builder.length());
+      auto value = args.xs.data.get(row);
+      auto const* list = try_as<nova::RowView<nova::List>>(value);
+      if (not list) {
+        if (not is<nova::RowView<nova::Null>>(value)) {
+          warn_type = true;
+        }
+        builder.null();
+        return;
+      }
+      switch (extract_doubles(*list, xs)) {
+        case extraction::has_null:
+          warn_null = true;
+          builder.null();
+          return;
+        case extraction::non_finite:
+          warn_non_finite = true;
+          builder.null();
+          return;
+        case extraction::wrong_type:
+          warn_type = true;
+          builder.null();
+          return;
+        case extraction::ok:
+          break;
+      }
+      auto const result = detail::periodogram(xs);
+      if (not result) {
+        warn_non_finite = true;
+        builder.null();
+        return;
+      }
+      auto output = builder.list();
+      for (size_t k = 1; k <= result->power.size(); ++k) {
+        auto record = output.record();
+        record.field("period").data(static_cast<double>(result->fft_size)
+                                    / static_cast<double>(k));
+        record.field("power").data(result->power[k - 1]);
+      }
+    });
+    if (warn_null) {
+      diagnostic::warning("list contains null values")
+        .note("periodogram requires a gap-free series")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    if (warn_non_finite) {
+      diagnostic::warning("list contains non-finite values")
+        .note("periodogram requires finite samples and powers")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    if (warn_type) {
+      diagnostic::warning(
+        "expected list of `int`, `uint`, `double`, or `duration`")
+        .primary(args.xs.source)
+        .emit(frame);
+    }
+    builder.skip_n(frame.length() - builder.length());
+    return builder.finish();
+  }
+};
+
+class periodogram_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "periodogram";
@@ -201,6 +445,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PeriodogramArgs, PeriodogramFunction>{};
+    d.positional("xs", &PeriodogramArgs::xs, "list");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -290,7 +540,122 @@ public:
   }
 };
 
-class dominant_period_plugin final : public function_plugin {
+struct DominantPeriodArgs {
+  nova::ValueArgument times;
+  located<duration> resolution;
+};
+
+struct DominantPeriodFunction {
+  static auto eval(DominantPeriodArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto times = std::vector<int64_t>{};
+    auto warn_null = false;
+    auto warn_type = false;
+    auto warn_bins = false;
+    auto warn_period = false;
+    auto no_peak = [&] {
+      auto record = builder.record();
+      record.field("period").null();
+      record.field("strength").data(0.0);
+    };
+    nova::storage::for_each_true(frame.mask(), [&](auto row) {
+      builder.skip_n(row - builder.length());
+      auto value = args.times.data.get(row);
+      auto const* list = try_as<nova::RowView<nova::List>>(value);
+      if (not list) {
+        if (not is<nova::RowView<nova::Null>>(value)) {
+          warn_type = true;
+        }
+        builder.null();
+        return;
+      }
+      times.clear();
+      times.reserve(list->length());
+      for (auto element : *list) {
+        if (auto const* time = try_as<nova::RowView<nova::Time>>(element)) {
+          times.push_back((**time).time_since_epoch().count());
+        } else if (is<nova::RowView<nova::Null>>(element)) {
+          warn_null = true;
+          builder.null();
+          return;
+        } else {
+          warn_type = true;
+          builder.null();
+          return;
+        }
+      }
+      if (times.size() < 2) {
+        no_peak();
+        return;
+      }
+      auto const [min_it, max_it]
+        = std::minmax_element(times.begin(), times.end());
+      auto const resolution_ns = args.resolution.inner.count();
+      auto const span
+        = static_cast<__int128>(*max_it) - static_cast<__int128>(*min_it);
+      auto const num_bins_wide = span / resolution_ns + 1;
+      if (num_bins_wide > max_bins) {
+        warn_bins = true;
+        builder.null();
+        return;
+      }
+      auto const num_bins = static_cast<size_t>(num_bins_wide);
+      if (num_bins < 4) {
+        no_peak();
+        return;
+      }
+      auto counts = std::vector<double>(num_bins, 0.0);
+      for (auto const t : times) {
+        auto const offset
+          = static_cast<__int128>(t) - static_cast<__int128>(*min_it);
+        auto const bin = static_cast<size_t>(offset / resolution_ns);
+        counts[bin] += 1.0;
+      }
+      auto const peak = detail::dominant_lag(counts);
+      if (not peak) {
+        no_peak();
+        return;
+      }
+      auto const period_ns = static_cast<__int128>(peak->first) * resolution_ns;
+      if (period_ns > std::numeric_limits<int64_t>::max()) {
+        warn_period = true;
+        builder.null();
+        return;
+      }
+      auto record = builder.record();
+      record.field("period").data(duration{static_cast<int64_t>(period_ns)});
+      record.field("strength").data(std::clamp(peak->second, 0.0, 1.0));
+    });
+    if (warn_null) {
+      diagnostic::warning("list contains null values")
+        .note("dominant_period requires complete timestamp samples")
+        .primary(args.times.source)
+        .emit(frame);
+    }
+    if (warn_type) {
+      diagnostic::warning("expected list of `time`")
+        .primary(args.times.source)
+        .emit(frame);
+    }
+    if (warn_bins) {
+      diagnostic::warning("`resolution` is too fine for the time span")
+        .note("the span must cover at most {} bins", max_bins)
+        .primary(args.times.source)
+        .emit(frame);
+    }
+    if (warn_period) {
+      diagnostic::warning("the detected period is too large")
+        .note("the period must fit into a 64-bit nanosecond duration")
+        .primary(args.times.source)
+        .emit(frame);
+    }
+    builder.skip_n(frame.length() - builder.length());
+    return builder.finish();
+  }
+};
+
+class dominant_period_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "dominant_period";
@@ -298,6 +663,24 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d
+      = nova::FunctionDescriber<DominantPeriodArgs, DominantPeriodFunction>{};
+    d.positional("times", &DominantPeriodArgs::times, "list");
+    d.named("resolution", &DominantPeriodArgs::resolution, "duration");
+    d.validate(
+      [](DominantPeriodArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        if (args.resolution.inner <= duration::zero()) {
+          diagnostic::error("`resolution` must be positive")
+            .primary(args.resolution)
+            .emit(dh);
+          return failure::promise();
+        }
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

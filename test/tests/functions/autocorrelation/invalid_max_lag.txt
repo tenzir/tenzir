@@ -4,3 +4,5 @@ error: `max_lag` must be at least 1
 6 | select ys = xs.autocorrelation(max_lag=0)
   |                                        ^
   |
+  = usage: autocorrelation(xs:list, [max_lag=int])
+  = docs: https://tenzir.com/docs/reference/functions/autocorrelation

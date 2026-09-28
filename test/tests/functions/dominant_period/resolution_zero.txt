@@ -4,3 +4,5 @@ error: `resolution` must be positive
 6 | select beat = times.dominant_period(resolution=0s)
   |                                                ^^
   |
+  = usage: dominant_period(times:list, resolution=duration)
+  = docs: https://tenzir.com/docs/reference/functions/dominant_period
