@@ -87,9 +87,9 @@ auto finalize_lookup(catalog_lookup_result&& candidates,
   }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     stopwatch::now() - start);
-  TENZIR_INFO("catalog found {} candidate partitions ({} events) in "
-              "{} microseconds",
-              num_candidate_partitions, num_candidate_events, delta.count());
+  TENZIR_DEBUG("catalog found {} candidate partitions ({} events) in "
+               "{} microseconds",
+               num_candidate_partitions, num_candidate_events, delta.count());
   TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
   return std::move(candidates);
 }
