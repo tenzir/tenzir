@@ -11,4 +11,4 @@ rule large_matches {
 select matches_complete=evidences[0].data.matches_complete,
        match_count=evidences[0].data.matches.length(),
        first_has_data=evidences[0].data.matches[0].data != null,
-       last_has_data=evidences[0].data.matches[-1].data != null
+       last_has_data=evidences[0].data.matches[-1].data? != null

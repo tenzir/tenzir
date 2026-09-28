@@ -20,6 +20,8 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/hash/sha.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/data_array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -144,6 +146,7 @@ struct RuleMatch {
 };
 
 struct ScanOutcome {
+  std::vector<RuleMatch> matches;
   std::vector<table_slice> slices;
   std::vector<std::string> warnings;
   std::string error;
@@ -809,6 +812,120 @@ auto build_findings(std::vector<RuleMatch> const& matches,
   return builder.finish_as_table_slice("ocsf.detection_finding");
 }
 
+auto finish_events(nova::ArrayBuilder<nova::Data> builder,
+                   std::string_view name) -> Option<nova::Events> {
+  auto array = builder.finish();
+  auto record = array.get_alternative<nova::Record>();
+  if (not record) {
+    return None{};
+  }
+  auto const length = record->data.length();
+  return nova::Events{std::move(record->data), std::move(record->present),
+                      nova::Events::Meta::make_empty(length, name)};
+}
+
+auto build_plain_event(RuleMatch const& rule, std::span<const std::byte> input)
+  -> nova::Events {
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  auto dh = null_diagnostic_handler{};
+  auto result = builder.record();
+  result.field("input").data(blob_view{input.data(), input.size()});
+  nova::append_legacy_data(result.field("rule"), make_rule_descriptor(rule),
+                           dh);
+  auto events = finish_events(std::move(builder), "tenzir.yara");
+  TENZIR_ASSERT(events);
+  return std::move(*events);
+}
+
+auto build_finding_events(std::vector<RuleMatch> const& matches,
+                          std::span<const std::byte> input, bool fast_scan)
+  -> Option<nova::Events> {
+  if (matches.empty()) {
+    return None{};
+  }
+  auto const input_digest = sha256_hex(input);
+  auto const now = time::clock::now();
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  auto dh = null_diagnostic_handler{};
+  for (auto const& rule : matches) {
+    auto const analytic_uid = make_rule_identity(rule);
+    auto const finding_uid = fmt::format("{}", uuid::random());
+    auto description = Option<std::string>{};
+    if (auto entry = rule.metadata.find("description");
+        entry != rule.metadata.end()) {
+      if (auto const* value = try_as<std::string>(&entry->second)) {
+        description = *value;
+      }
+    }
+    auto finding = builder.record();
+    finding.field("time").data(now);
+    finding.field("class_uid").data(int64_t{2004});
+    finding.field("category_uid").data(int64_t{2});
+    finding.field("activity_id").data(int64_t{1});
+    finding.field("type_uid").data(int64_t{200401});
+    finding.field("status_id").data(int64_t{1});
+    finding.field("severity_id").data(int64_t{0});
+    finding.field("confidence_id").data(int64_t{0});
+    finding.field("action_id").data(int64_t{3});
+    finding.field("disposition_id").data(int64_t{15});
+    auto metadata = finding.field("metadata").record();
+    metadata.field("uid").data(fmt::format("{}", uuid::random()));
+    metadata.field("version").data("1.9.0");
+    auto product = metadata.field("product").record();
+    product.field("name").data("Tenzir");
+    product.field("vendor_name").data("Tenzir");
+    metadata.field("profiles").list().data("security_control");
+    if (not rule.tags.empty()) {
+      nova::append_legacy_data(metadata.field("labels"), data_list(rule.tags),
+                               dh);
+    }
+    auto info = finding.field("finding_info").record();
+    info.field("uid").data(finding_uid);
+    info.field("title").data(fmt::format("YARA match: {}", rule.identifier));
+    if (description) {
+      info.field("desc").data(*description);
+    }
+    info.field("created_time").data(now);
+    auto analytic = info.field("analytic").record();
+    analytic.field("uid").data(analytic_uid);
+    analytic.field("name").data(rule.identifier);
+    analytic.field("type_id").data(int64_t{1});
+    analytic.field("type").data("Rule");
+    auto policy = finding.field("policy").record();
+    policy.field("uid").data(analytic_uid);
+    policy.field("name").data(rule.identifier);
+    policy.field("type").data("YARA rule");
+    policy.field("is_applied").data(true);
+    nova::append_legacy_data(policy.field("data"), make_rule_descriptor(rule),
+                             dh);
+    auto evidences = finding.field("evidences").list();
+    auto evidence = evidences.record();
+    evidence.field("uid").data(fmt::format("sha256:{}", input_digest));
+    evidence.field("name").data("Scanned byte stream");
+    auto evidence_data = evidence.field("data").record();
+    auto input_data = evidence_data.field("input").record();
+    input_data.field("size").data(detail::narrow<uint64_t>(input.size()));
+    input_data.field("sha256").data(input_digest);
+    evidence_data.field("matches_complete")
+      .data(not fast_scan and rule.truncated_patterns.empty()
+            and not rule.evidence_truncated);
+    auto evidence_matches = evidence_data.field("matches").list();
+    for (auto const& match : rule.matches) {
+      auto item = evidence_matches.record();
+      item.field("pattern").data(match.pattern);
+      item.field("offset").data(detail::narrow<uint64_t>(match.offset));
+      item.field("length").data(detail::narrow<uint64_t>(match.length));
+      if (match.include_data) {
+        auto encoded = item.field("data").record();
+        encoded.field("encoding").data("base64");
+        encoded.field("value").data(
+          detail::base64::encode(input.subspan(match.offset, match.length)));
+      }
+    }
+  }
+  return finish_events(std::move(builder), "ocsf.detection_finding");
+}
+
 auto scan(Rules const& rules, std::span<const std::byte> input,
           ScanConfig const& config) -> ScanOutcome {
   auto outcome = ScanOutcome{};
@@ -889,14 +1006,7 @@ auto scan(Rules const& rules, std::span<const std::byte> input,
   std::ranges::sort(matches, {}, [](RuleMatch const& match) {
     return std::tuple{match.namespace_, match.identifier};
   });
-  switch (config.format) {
-    case yara_format::ocsf:
-      outcome.slices = build_findings(matches, input, config.fast_scan);
-      break;
-    case yara_format::plain:
-      outcome.slices = build_plain_matches(matches, input);
-      break;
-  }
+  outcome.matches = std::move(matches);
   return outcome;
 }
 
@@ -988,7 +1098,14 @@ public:
         } else if (first_chunk) {
           bytes = as_bytes(first_chunk);
         }
-        return scan(*rules, bytes, config);
+        auto outcome = scan(*rules, bytes, config);
+        if (outcome.error.empty()) {
+          outcome.slices
+            = config.format == yara_format::ocsf
+                ? build_findings(outcome.matches, bytes, config.fast_scan)
+                : build_plain_matches(outcome.matches, bytes);
+        }
+        return outcome;
       });
     if (not outcome.error.empty()) {
       diagnostic::error("failed to scan input with YARA-X")
@@ -1028,6 +1145,149 @@ private:
   Option<Arc<Rules>> rules_;
 };
 
+class YaraEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit YaraEvents(YaraArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto normalized_sources = normalize_sources(
+      args_.path, args_.rules, args_.include_dirs, args_.operator_location);
+    TENZIR_ASSERT(normalized_sources.is_ok());
+    auto sources = std::move(normalized_sources).unwrap();
+    auto const source = sources.source;
+    auto format = normalize_format(args_.format);
+    TENZIR_ASSERT(format.is_ok());
+    config_ = scan_config(args_, std::move(format).unwrap());
+    auto outcome = co_await spawn_blocking([sources = std::move(sources)]() {
+      return compile_sources(sources);
+    });
+    auto const has_compiler_error = std::ranges::any_of(
+      outcome.messages, [](CompilerMessage const& message) {
+        return not message.warning;
+      });
+    emit_compiler_messages(outcome.messages, source, ctx.dh());
+    if (not outcome.rules) {
+      if (not has_compiler_error) {
+        diagnostic::error("failed to compile YARA rules")
+          .primary(source.subloc(0, 1))
+          .note("{}", outcome.error)
+          .emit(ctx);
+      }
+      failed_ = true;
+      co_return;
+    }
+    rules_ = std::move(*outcome.rules);
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    if (failed_ or not input or input->size() == 0) {
+      co_return;
+    }
+    if (input->size() > config_.max_input_size - input_size_) {
+      diagnostic::error("YARA input exceeds `max_input_size={}`",
+                        config_.max_input_size)
+        .primary(args_.operator_location.subloc(0, 4))
+        .note("the operator buffers one finite byte stream before scanning")
+        .emit(ctx);
+      failed_ = true;
+      first_chunk_ = {};
+      buffer_.clear();
+      input_size_ = 0;
+      co_return;
+    }
+    input_size_ += input->size();
+    if (not buffer_.empty()) {
+      buffer_.insert(buffer_.end(), input->begin(), input->end());
+    } else if (not first_chunk_) {
+      first_chunk_ = std::move(input);
+    } else {
+      buffer_.reserve(first_chunk_->size() + input->size());
+      buffer_.insert(buffer_.end(), first_chunk_->begin(), first_chunk_->end());
+      buffer_.insert(buffer_.end(), input->begin(), input->end());
+      first_chunk_ = {};
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (failed_ or not rules_) {
+      co_return FinalizeBehavior::done;
+    }
+    auto rules = *rules_;
+    auto first_chunk = std::exchange(first_chunk_, {});
+    auto buffer = std::exchange(buffer_, std::vector<std::byte>{});
+    input_size_ = 0;
+    auto result = co_await spawn_blocking([rules, first_chunk,
+                                           buffer = std::move(buffer),
+                                           config = config_]() mutable {
+      auto bytes = buffer.empty() ? as_bytes(first_chunk) : as_bytes(buffer);
+      return std::pair{scan(*rules, bytes, config),
+                       std::pair{std::move(first_chunk), std::move(buffer)}};
+    });
+    auto& [outcome, input] = result;
+    if (not outcome.error.empty()) {
+      diagnostic::error("failed to scan input with YARA-X")
+        .primary(args_.operator_location.subloc(0, 4))
+        .note("{}", outcome.error)
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+    for (auto const& warning : outcome.warnings) {
+      diagnostic::warning("YARA-X match evidence is incomplete")
+        .primary(args_.operator_location.subloc(0, 4))
+        .note("{}", warning)
+        .emit(ctx);
+    }
+    auto& [input_chunk, input_buffer] = input;
+    auto bytes
+      = input_buffer.empty() ? as_bytes(input_chunk) : as_bytes(input_buffer);
+    if (config_.format == yara_format::ocsf) {
+      auto events
+        = co_await spawn_blocking([matches = std::move(outcome.matches), bytes,
+                                   fast_scan = config_.fast_scan]() mutable {
+            return build_finding_events(matches, bytes, fast_scan);
+          });
+      if (events) {
+        co_await push(std::move(*events));
+      }
+    } else {
+      for (auto& rule : outcome.matches) {
+        auto events
+          = co_await spawn_blocking([rule = std::move(rule), bytes]() mutable {
+              return build_plain_event(rule, bytes);
+            });
+        co_await push(std::move(events));
+      }
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // Buffered input is intentionally part of the snapshot. Its maximum size
+    // is bounded by `max_input_size`.
+    serde("failed", failed_);
+    serde("first_chunk", first_chunk_);
+    serde("buffer", buffer_);
+    serde("input_size", input_size_);
+  }
+
+private:
+  YaraArgs args_;
+  ScanConfig config_;
+  bool failed_ = false;
+  chunk_ptr first_chunk_;
+  std::vector<std::byte> buffer_;
+  uint64_t input_size_ = 0;
+  Option<Arc<Rules>> rules_;
+};
+
 // The plugin stays loaded for the process lifetime. Calling `yrx_finalize`
 // during ordinary shutdown is unsafe because it tears down process-wide
 // Wasmtime signal state.
@@ -1038,7 +1298,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<YaraArgs, Yara>{};
+    auto d = Describer<YaraArgs, Yara, YaraEvents>{};
     auto path = d.named("path", &YaraArgs::path);
     auto rules = d.named("rules", &YaraArgs::rules);
     d.named("fast_scan", &YaraArgs::fast_scan);
