@@ -1,0 +1,90 @@
+{
+  events: [
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      unmapped: {},
+      activity_id: null,
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      unmapped: {
+        nested: [
+          1,
+          "two",
+        ],
+      },
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: {
+        ip: 192.0.2.1,
+      },
+    },
+  ],
+  cast: [
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      unmapped: null,
+      activity_id: null,
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      unmapped: {
+        nested: [
+          1,
+          "two",
+        ],
+      },
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: {
+        ip: 192.0.2.1,
+      },
+    },
+  ],
+  encoded: [
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      unmapped: null,
+      activity_id: null,
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      unmapped: "{\"nested\":[1,\"two\"]}",
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: {
+        ip: 192.0.2.1,
+      },
+    },
+  ],
+}

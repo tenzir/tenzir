@@ -1,2 +1,2 @@
-from {class_uid: null.int(), metadata: {version: "1.5.0"}}
+from {class_uid: null, metadata: {version: "1.5.0"}}
 ocsf_cast null_fill=true

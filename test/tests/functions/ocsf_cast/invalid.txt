@@ -1,0 +1,48 @@
+warning: ocsf_cast expects a record
+ --> tests/functions/ocsf_cast/invalid.tql:3:20
+  |
+3 | result = ocsf_cast(x)
+  |                    ~
+  |
+
+warning: dropping events where `metadata` does not exist
+ --> tests/functions/ocsf_cast/invalid.tql:3:10
+  |
+3 | result = ocsf_cast(x)
+  |          ~~~~~~~~~~~~
+  |
+
+warning: expected type `int64` for `activity_id`, but got `string`
+ --> tests/functions/ocsf_cast/invalid.tql:3:10
+  |
+3 | result = ocsf_cast(x)
+  |          ~~~~~~~~~~~~
+  |
+{
+  x: null,
+  result: null,
+}
+{
+  x: 42,
+  result: null,
+}
+{
+  x: {},
+  result: null,
+}
+{
+  x: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: "bad",
+  },
+  result: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+  },
+}

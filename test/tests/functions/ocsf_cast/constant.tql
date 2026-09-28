@@ -1,0 +1,3 @@
+let $event = ocsf_cast({class_uid: 4001, metadata: {version: "1.5.0"}, unmapped: {x: 1}}, encode_variants=true)
+from {}, {}
+event = ocsf_cast($event, encode_variants=true)

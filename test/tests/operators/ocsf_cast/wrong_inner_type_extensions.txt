@@ -5,38 +5,22 @@ warning: ignoring extensions for events where `metadata.extensions` is not a lis
   | ~~~~~~~~~
   |
 
-warning: expected type `record` for `metadata.extensions[]`, but got `int64`
+warning: expected type `record` for `metadata.extensions[]`, but got `int`
  --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
   |
 9 | ocsf_cast null_fill=true
   | ~~~~~~~~~
   |
 {
-  activity_id: null,
-  activity_name: null,
-  actor: null,
-  actual_permissions: null,
-  category_name: null,
-  category_uid: null,
-  class_name: null,
-  class_uid: 1007,
-  count: null,
-  device: null,
-  duration: null,
-  end_time: null,
-  enrichments: null,
-  exit_code: null,
-  injection_type: null,
-  injection_type_id: null,
-  message: null,
   metadata: {
+    version: "1.5.0",
+    extensions: [
+      null,
+    ],
     correlation_uid: null,
     debug: null,
     event_code: null,
     extension: null,
-    extensions: [
-      null,
-    ],
     labels: null,
     log_level: null,
     log_name: null,
@@ -54,10 +38,8 @@ warning: expected type `record` for `metadata.extensions[]`, but got `int64`
     tenant_uid: null,
     transformation_info_list: null,
     uid: null,
-    version: "1.5.0",
   },
-  module: null,
-  observables: null,
+  class_uid: 1007,
   process: {
     ancestry: null,
     cmd_line: null,
@@ -82,6 +64,24 @@ warning: expected type `record` for `metadata.extensions[]`, but got `int64`
     working_directory: null,
     xattributes: null,
   },
+  activity_id: null,
+  activity_name: null,
+  actor: null,
+  actual_permissions: null,
+  category_name: null,
+  category_uid: null,
+  class_name: null,
+  count: null,
+  device: null,
+  duration: null,
+  end_time: null,
+  enrichments: null,
+  exit_code: null,
+  injection_type: null,
+  injection_type_id: null,
+  message: null,
+  module: null,
+  observables: null,
   raw_data: null,
   raw_data_size: null,
   requested_permissions: null,

@@ -13,10 +13,18 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/array_merge.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova_json_printer.hpp"
 #include "tenzir/ocsf_enums.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/value_path.hpp"
 #include "tenzir/view3.hpp"
@@ -1601,6 +1609,475 @@ auto process_derive_slice(const table_slice& slice, location self,
   return result;
 }
 
+namespace nova_ocsf {
+
+using namespace nova;
+
+auto field(RowView<Record> record, std::string_view name)
+  -> Option<RowView<Data>> {
+  for (auto [key, value] : record) {
+    if (key == name) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+struct Group {
+  ocsf_schema schema;
+  std::string version;
+  int64_t class_uid;
+  std::vector<std::string> profiles;
+  std::vector<std::string> extensions;
+  storage::BitMap rows;
+};
+
+auto groups(Array<Record> const& input, storage::BitMap& active, location self,
+            diagnostic_handler& dh, bool with_profiles = false)
+  -> std::vector<Group> {
+  auto result = std::vector<Group>{};
+  auto masks = std::vector<storage::BitMap::Mutable>{};
+  auto accepted = storage::BitMap::Mutable{input.length()};
+  for (auto row : storage::true_bits(active)) {
+    auto record = input.get(row);
+    auto meta = field(record, "metadata");
+    auto metadata = meta ? try_as<RowView<Record>>(*meta) : nullptr;
+    if (not metadata) {
+      diagnostic::warning(
+        "{}", meta ? "dropping events where `metadata` is not a record"
+                   : "dropping events where `metadata` does not exist")
+        .primary(self)
+        .emit(dh);
+      continue;
+    }
+    auto version = field(*metadata, "version");
+    auto class_uid = field(record, "class_uid");
+    auto version_value = Option<std::string_view>{};
+    auto class_value = Option<int64_t>{};
+    if (not version
+        or (not is<RowView<Null>>(*version)
+            and not is<RowView<String>>(*version))) {
+      diagnostic::warning(
+        "{}", version
+                ? "dropping events where `metadata.version` is not a string"
+                : "dropping events where `metadata.version` does not exist")
+        .primary(self)
+        .emit(dh);
+      continue;
+    }
+    if (not class_uid
+        or (not is<RowView<Null>>(*class_uid)
+            and not is<RowView<Int>>(*class_uid))) {
+      diagnostic::warning(
+        "{}", class_uid ? "dropping events where `class_uid` is not an integer"
+                        : "dropping events where `class_uid` does not exist")
+        .primary(self)
+        .emit(dh);
+      continue;
+    }
+    if (auto value = try_as<RowView<String>>(*version)) {
+      version_value = **value;
+    }
+    if (auto value = try_as<RowView<Int>>(*class_uid)) {
+      class_value = **value;
+    }
+    auto read_names = [&](std::string_view name, bool extension) {
+      auto names = std::vector<std::string>{};
+      auto value = field(*metadata, name);
+      if (not value or is<RowView<Null>>(*value)) {
+        return names;
+      }
+      auto list = try_as<RowView<List>>(*value);
+      if (not list) {
+        diagnostic::warning("ignoring {} for events where `metadata.{}` is not "
+                            "a list",
+                            name, name)
+          .primary(self)
+          .emit(dh);
+        return names;
+      }
+      for (auto item : *list) {
+        if (is<RowView<Null>>(item)) {
+          continue;
+        }
+        if (extension) {
+          auto record = try_as<RowView<Record>>(item);
+          if (not record) {
+            diagnostic::warning(
+              "ignoring extensions for events where `metadata.extensions` is "
+              "not a list of records")
+              .primary(self)
+              .emit(dh);
+            return std::vector<std::string>{};
+          }
+          auto name = field(*record, "name");
+          if (not name) {
+            diagnostic::warning("ignoring extensions for events where "
+                                "`metadata.extensions[].name` does not exist")
+              .primary(self)
+              .emit(dh);
+            return std::vector<std::string>{};
+          }
+          item = *name;
+          if (is<RowView<Null>>(item)) {
+            continue;
+          }
+        }
+        auto text = try_as<RowView<String>>(item);
+        if (not text) {
+          diagnostic::warning(
+            "{}", extension ? "ignoring extensions for events where "
+                              "`metadata.extensions[].name` is not a string"
+                            : "ignoring profiles for events where "
+                              "`metadata.profiles` is not a list of strings")
+            .primary(self)
+            .emit(dh);
+          return std::vector<std::string>{};
+        }
+        names.emplace_back(**text);
+      }
+      return names;
+    };
+    auto profiles = with_profiles ? read_names("profiles", false)
+                                  : std::vector<std::string>{};
+    auto extensions = with_profiles ? read_names("extensions", true)
+                                    : std::vector<std::string>{};
+    auto it = std::ranges::find_if(result, [&](Group const& group) {
+      return version_value and class_value and group.version == *version_value
+             and group.class_uid == *class_value and group.profiles == profiles
+             and group.extensions == extensions;
+    });
+    if (it != result.end()) {
+      masks[it - result.begin()].set(row, true);
+      accepted.set(row, true);
+      continue;
+    }
+    auto schema = get_ocsf_schema(version_value, class_value, self, dh);
+    if (not schema) {
+      continue;
+    }
+    if (with_profiles) {
+      if (auto extension = schema->type.attribute("extension");
+          extension
+          and std::ranges::find(extensions, *extension) == extensions.end()) {
+        diagnostic::warning("dropping event for class {:?} because extension "
+                            "{:?} is not enabled",
+                            schema->class_name, *extension)
+          .primary(self)
+          .emit(dh);
+        continue;
+      }
+    }
+    result.push_back({std::move(*schema), std::string{*version_value},
+                      *class_value, std::move(profiles), std::move(extensions),
+                      storage::BitMap{input.length(), false}});
+    masks.emplace_back(input.length());
+    masks.back().set(row, true);
+    accepted.set(row, true);
+  }
+  for (auto i = size_t{0}; i < result.size(); ++i) {
+    result[i].rows = std::move(masks[i]).finish();
+  }
+  active = std::move(accepted).finish();
+  return result;
+}
+
+template <class F>
+auto map_lists(Array<Data> input, storage::BitMap const& rows, F transform)
+  -> Array<Data> {
+  return std::move(input).map_alternative<List>([&](auto list) {
+    auto selected = rows & list.present;
+    if (not selected.any()) {
+      return std::move(list.data);
+    }
+    auto primary = list.data.to_primary();
+    auto storage = as<nova::storage::ListStorage>(primary.storage());
+    auto elements = nova::storage::BitMap::Mutable{storage.values().length()};
+    for (auto row : nova::storage::true_bits(selected)) {
+      auto span = storage.spans()[row];
+      for (auto index = span.begin; index < span.end; ++index) {
+        elements.set(index, true);
+      }
+    }
+    auto values = transform(storage.values(), std::move(elements).finish());
+    return Array<List>{storage.spans(), std::move(values)};
+  });
+}
+
+struct CastOptions {
+  bool encode_variants;
+  bool null_fill;
+  bool timestamp_to_ms;
+};
+
+auto enabled(type const& ty, Group const& group) -> bool {
+  auto has = [](auto const& names, std::string_view name) {
+    return std::ranges::find(names, name) != names.end();
+  };
+  if (auto profile = ty.attribute("profile");
+      profile and not has(group.profiles, *profile)) {
+    return false;
+  }
+  if (auto profiles = ty.attribute("profiles")) {
+    auto found = false;
+    for (auto profile : detail::split(*profiles, "|")) {
+      found |= has(group.profiles, profile);
+    }
+    if (not found) {
+      return false;
+    }
+  }
+  if (auto extension = ty.attribute("extension");
+      extension and not has(group.extensions, *extension)) {
+    return false;
+  }
+  if (auto pairs = ty.attribute("profile_extensions")) {
+    for (auto pair : detail::split(*pairs, "|")) {
+      auto [profile, extension] = detail::split_once(pair, ":");
+      if (has(group.profiles, profile) and has(group.extensions, extension)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+auto cast_record(Array<Record> input, record_type const& schema,
+                 storage::BitMap const& rows, Group const& group,
+                 CastOptions options, location self, diagnostic_handler& dh,
+                 value_path path) -> Array<Record>;
+
+auto cast_value(Array<Data> input, type const& schema,
+                storage::BitMap const& rows, Group const& group,
+                CastOptions options, location self, diagnostic_handler& dh,
+                value_path path) -> Array<Data> {
+  if (not rows.any()) {
+    return input;
+  }
+  auto invalid = storage::BitMap::Mutable{input.length()};
+  auto changed = storage::BitMap::Mutable{input.length()};
+  auto builder = ArrayBuilder<Data>{};
+  auto printer = nova::json_printer{{.style = no_style(), .oneline = true}};
+  auto variant = schema.attribute("variant").has_value();
+  for (auto row : storage::true_bits(rows)) {
+    auto value = input.get(row);
+    if (is<RowView<Null>>(value)) {
+      continue;
+    }
+    auto replace = [&](auto value) {
+      builder.skip_n(row - builder.length());
+      builder.data(value);
+      changed.set(row, true);
+    };
+    if (variant) {
+      if (schema.attribute("must_be_record") and not is<RowView<Record>>(value)
+          and (not options.encode_variants or not is<RowView<String>>(value))) {
+        match(value, [&]<class T>(RowView<T>) {
+          diagnostic::warning("expected type `record` for `{}`, but got `{}`",
+                              path, Type<T>::static_name)
+            .primary(self)
+            .emit(dh);
+        });
+        invalid.set(row, true);
+        continue;
+      }
+      if (schema.attribute("nullify_empty_records")) {
+        if (auto record = try_as<RowView<Record>>(value);
+            record and record->begin() == record->end()) {
+          invalid.set(row, true);
+          continue;
+        }
+      }
+      if (options.encode_variants and not is<RowView<String>>(value)) {
+        printer.print(value);
+        auto bytes = printer.bytes();
+        replace(std::string_view{reinterpret_cast<char const*>(bytes.data()),
+                                 bytes.size()});
+      }
+      continue;
+    }
+    match(value, [&]<class T>(RowView<T> value) {
+      auto correct = [&] {
+        if constexpr (std::same_as<T, Record>) {
+          return is<record_type>(schema);
+        } else if constexpr (std::same_as<T, List>) {
+          return is<list_type>(schema);
+        } else if constexpr (std::same_as<T, Null> or std::same_as<T, Secret>) {
+          return false;
+        } else {
+          return is<data_to_type_t<T>>(schema);
+        }
+      }();
+      if constexpr (std::same_as<T, UInt>) {
+        if (is<int64_type>(schema)) {
+          if (std::in_range<int64_t>(*value)) {
+            replace(static_cast<int64_t>(*value));
+          } else {
+            diagnostic::warning("integer in `{}` exceeds maximum", path)
+              .note("found {}", *value)
+              .primary(self)
+              .emit(dh);
+            invalid.set(row, true);
+          }
+          return;
+        }
+      }
+      if (not correct) {
+        diagnostic::warning("expected type `{}` for `{}`, but got `{}`",
+                            schema.kind(), path, Type<T>::static_name)
+          .primary(self)
+          .emit(dh);
+        invalid.set(row, true);
+      } else if constexpr (std::same_as<T, Time>) {
+        if (options.timestamp_to_ms and schema.attribute("epochtime")) {
+          replace(
+            std::chrono::time_point_cast<std::chrono::milliseconds>(*value)
+              .time_since_epoch()
+              .count());
+        }
+      }
+    });
+  }
+  auto replacements = std::move(changed).finish();
+  if (replacements.any()) {
+    builder.skip_n(input.length() - builder.length());
+    input = with_merged({input, storage::BitMap{input.length(), true}},
+                        {builder.finish(), std::move(replacements)});
+  }
+  input = std::move(input).null_where(std::move(invalid).finish());
+  if (variant) {
+    return input;
+  }
+  if (auto record = try_as<record_type>(schema)) {
+    return std::move(input).map_alternative<Record>([&](auto records) {
+      return cast_record(std::move(records.data), *record,
+                         rows & records.present, group, options, self, dh,
+                         path);
+    });
+  }
+  if (auto list = try_as<list_type>(schema)) {
+    return map_lists(std::move(input), rows, [&](auto values, auto elements) {
+      return cast_value(std::move(values), list->value_type(), elements, group,
+                        options, self, dh, path.list());
+    });
+  }
+  return input;
+}
+
+auto cast_record(Array<Record> input, record_type const& schema,
+                 storage::BitMap const& rows, Group const& group,
+                 CastOptions options, location self, diagnostic_handler& dh,
+                 value_path path) -> Array<Record> {
+  if (not rows.any()) {
+    return input;
+  }
+  input = std::move(input).to_primary();
+  auto source = as<storage::RecordStorage>(input.storage());
+  auto removed = std::vector<std::string_view>{};
+  for (auto const& [name, index] : (*source).names) {
+    if (not(rows & (*source).arrays[index].present).any()) {
+      continue;
+    }
+    auto target = schema.field(name);
+    if (not target) {
+      diagnostic::warning("dropping field which does not exist in schema")
+        .note("found `{}`", path.field(name))
+        .primary(self)
+        .emit(dh);
+      removed.push_back(name);
+    } else if (not enabled(*target, group)) {
+      auto profile = target->attribute("profile");
+      auto profiles = target->attribute("profiles");
+      auto extension = target->attribute("extension");
+      if (profile
+          and std::ranges::find(group.profiles, *profile)
+                == group.profiles.end()) {
+        diagnostic::warning("dropping `{}` because profile `{}` is not enabled",
+                            path.field(name), *profile)
+          .primary(self)
+          .emit(dh);
+      }
+      if (profiles
+          and std::ranges::none_of(
+            detail::split(*profiles, "|"), [&](auto name) {
+              return std::ranges::find(group.profiles, name)
+                     != group.profiles.end();
+            })) {
+        diagnostic::warning("dropping `{}` because none of the profiles `{}` "
+                            "are enabled",
+                            path.field(name), *profiles)
+          .primary(self)
+          .emit(dh);
+      }
+      if (extension
+          and std::ranges::find(group.extensions, *extension)
+                == group.extensions.end()) {
+        diagnostic::warning("dropping `{}` because extension `{}` is not "
+                            "enabled",
+                            path.field(name), *extension)
+          .primary(self)
+          .emit(dh);
+      }
+      if (auto pairs = target->attribute("profile_extensions");
+          pairs
+          and std::ranges::none_of(detail::split(*pairs, "|"), [&](auto pair) {
+                auto [profile, extension] = detail::split_once(pair, ":");
+                return std::ranges::find(group.profiles, profile)
+                         != group.profiles.end()
+                       and std::ranges::find(group.extensions, extension)
+                             != group.extensions.end();
+              })) {
+        diagnostic::warning("dropping `{}` because no profile/extension pair "
+                            "in `{}` is enabled",
+                            path.field(name), *pairs)
+          .primary(self)
+          .emit(dh);
+      }
+      removed.push_back(name);
+    }
+  }
+  input = std::move(input).without_fields(removed, rows);
+  auto updates
+    = std::vector<std::pair<std::string_view, Array<Record>::MaskedArray>>{};
+  for (auto const& [name, target] : schema.fields()) {
+    if (not enabled(target, group)) {
+      continue;
+    }
+    auto value = input.field(name);
+    if (not value) {
+      if (options.null_fill) {
+        updates.emplace_back(name, Array<Record>::MaskedArray{
+                                     Array<Data>{Array<Null>{
+                                       storage::NullStorage{input.length()}}},
+                                     rows});
+      }
+      continue;
+    }
+    value->data
+      = cast_value(std::move(value->data), target, rows & value->present, group,
+                   options, self, dh, path.field(name));
+    if (options.null_fill) {
+      value->data
+        = std::move(value->data).null_where(rows.and_not(value->present));
+      value->present = value->present | rows;
+    }
+    updates.emplace_back(name, std::move(*value));
+  }
+  return std::move(input).with_fields(std::move(updates));
+}
+
+auto cast(Array<Record> input, storage::BitMap& rows, location self,
+          diagnostic_handler& dh, CastOptions options) -> Array<Record> {
+  for (auto& group : groups(input, rows, self, dh, true)) {
+    input = cast_record(std::move(input), as<record_type>(group.schema.type),
+                        group.rows, group, options, self, dh, {});
+  }
+  return input;
+}
+
+} // namespace nova_ocsf
+
 auto make_dependency_path(std::initializer_list<std::string_view> names)
   -> ast::field_path {
   TENZIR_ASSERT(names.size() > 0);
@@ -1691,6 +2168,127 @@ private:
   DeriveArgs args_;
 };
 
+class NovaCast final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit NovaCast(CastArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    input.data = nova_ocsf::cast(
+      std::move(input.data), input.mask, args_.operator_location, ctx.dh(),
+      {args_.encode_variants, args_.null_fill, args_.timestamp_to_ms});
+    auto names = nova::ArrayBuilder<nova::String>{};
+    for (auto row = nova::storage::Index{0}; row < input.length(); ++row) {
+      if (not input.mask.get(row)) {
+        names.data(*input.meta.name.get(row));
+        continue;
+      }
+      auto record = input.data.get(row);
+      auto metadata = nova_ocsf::field(record, "metadata");
+      auto version = nova_ocsf::field(
+        as<nova::RowView<nova::Record>>(*metadata), "version");
+      auto uid = nova_ocsf::field(record, "class_uid");
+      auto parsed
+        = parse_ocsf_version(*as<nova::RowView<nova::String>>(*version));
+      auto name = ocsf_class_name(*parsed, *as<nova::RowView<nova::Int>>(*uid));
+      names.data("ocsf." + mangle_class_name(*name));
+    }
+    input.meta.name = names.finish();
+    co_await push(std::move(input));
+  }
+
+private:
+  CastArgs args_;
+};
+
+enum class NovaTransform { cast };
+
+struct OcsfFunctionArgs {
+  nova::ValueArgument x;
+  bool encode_variants = false;
+  bool null_fill = false;
+  bool timestamp_to_ms = false;
+  location call;
+};
+
+template <NovaTransform Mode>
+struct OcsfFunction {
+  static auto name() -> std::string_view {
+    return "ocsf_cast";
+  }
+
+  static auto eval(OcsfFunctionArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto records = args.x.data.get_alternative<nova::Record>();
+    auto selected = records ? frame.mask() & records->present
+                            : nova::storage::BitMap{frame.length(), false};
+    auto invalid = frame.mask().and_not(selected);
+    if (auto nulls = args.x.data.get_alternative<nova::Null>()) {
+      invalid = invalid.and_not(nulls->present);
+    }
+    if (invalid.any()) {
+      diagnostic::warning("{} expects a record", name())
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    if (not selected.any()) {
+      return frame.null();
+    }
+    auto result = [&] {
+      if constexpr (Mode == NovaTransform::cast) {
+        return nova_ocsf::cast(
+          std::move(records->data), selected, args.call, frame.dh(),
+          {args.encode_variants, args.null_fill, args.timestamp_to_ms});
+      }
+    }();
+    return nova::Array<nova::Data>{std::move(result)}.null_where(
+      frame.mask().and_not(selected));
+  }
+};
+
+template <NovaTransform Mode>
+class OcsfFunctionPlugin final : public nova::FunctionPlugin {
+public:
+  auto name() const -> std::string override {
+    return std::string{OcsfFunction<Mode>::name()};
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<OcsfFunctionArgs, OcsfFunction<Mode>>{};
+    d.positional("x", &OcsfFunctionArgs::x, "record");
+    d.call_location(&OcsfFunctionArgs::call);
+    if constexpr (Mode == NovaTransform::cast) {
+      d.named_optional("encode_variants", &OcsfFunctionArgs::encode_variants);
+      d.named_optional("null_fill", &OcsfFunctionArgs::null_fill);
+      d.named_optional("timestamp_to_ms", &OcsfFunctionArgs::timestamp_to_ms);
+    }
+    return std::move(d).finish();
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    // Top-level `let` bindings still use this API. Evaluate constants through
+    // the same descriptor and core as runtime expressions.
+    TRY(auto array, nova::const_eval_array(ast::expression{inv.call},
+                                           {ctx.dh(), ctx.reg()}));
+    auto value = nova::materialize_legacy(array.get(0));
+    return function_use::make(
+      [value = std::move(value)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        auto builder = series_builder{};
+        for (auto i = int64_t{0}; i < eval.length(); ++i) {
+          builder.data(value);
+        }
+        return multi_series{builder.finish()};
+      });
+  }
+};
+
 class cast_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -1702,7 +2300,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<CastArgs, Cast>{};
+    auto d = Describer<CastArgs, Cast, NovaCast>{};
     d.parallelizable();
     d.named("encode_variants", &CastArgs::encode_variants);
     d.named("null_fill", &CastArgs::null_fill);
@@ -1791,3 +2389,5 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::cast_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
+                       tenzir::plugins::ocsf::NovaTransform::cast>)
