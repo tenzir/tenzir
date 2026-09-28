@@ -1,0 +1,29 @@
+warning: expected `time`
+ --> tests/operators/timeshift/nested_mixed_values.tql:6:11
+  |
+6 | timeshift x?.ts?, start=2025-03-03T12:00:00, speed=2.0
+  |           ~~~~~
+  |
+{
+  id: 0,
+  x: {
+    ts: 2025-03-03T12:00:00Z,
+  },
+}
+{
+  id: 1,
+  x: {
+    ts: "keep",
+  },
+}
+{
+  id: 2,
+  x: 42,
+}
+{
+  id: 3,
+  x: {},
+}
+{
+  id: 4,
+}

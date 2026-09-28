@@ -9,6 +9,13 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/array_merge.hpp>
+#include <tenzir/nova/bitmap.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -86,6 +93,82 @@ private:
   Option<time> first_time_;
 };
 
+class TimeshiftNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit TimeshiftNova(TimeshiftArgs args)
+    : selector_{std::move(args.selector)},
+      speed_{args.speed},
+      start_{args.start} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto evaluator = co_await nova::Evaluator::make(selector_.inner(), ctx);
+    if (not evaluator) {
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(evaluator_);
+    auto values = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto times = values.get_alternative<nova::Time>();
+    auto time_rows = times ? input.mask & times->present
+                           : nova::storage::BitMap{input.length(), false};
+    auto nulls = values.get_alternative<nova::Null>();
+    auto null_rows = nulls ? input.mask & nulls->present
+                           : nova::storage::BitMap{input.length(), false};
+    if (input.mask.and_not(time_rows).and_not(null_rows).any()) {
+      diagnostic::warning("expected `time`").primary(selector_).emit(ctx.dh());
+    }
+    if (not times or not time_rows.any()) {
+      co_await push(std::move(input));
+      co_return;
+    }
+    auto shifted = nova::ArrayBuilder<nova::Time>{};
+    nova::storage::for_each_true(time_rows, [&](auto row) {
+      shifted.skip_n(row - shifted.length());
+      auto value = *times->data.get(row);
+      if (not first_time_) [[unlikely]] {
+        first_time_ = value;
+      }
+      if (not start_) [[unlikely]] {
+        start_ = value;
+      }
+      const auto offset
+        = std::chrono::duration_cast<duration>((value - *first_time_) / speed_);
+      shifted.data(*start_ + offset);
+    });
+    shifted.skip_n(input.length() - shifted.length());
+    auto result = nova::with_merged({values, input.mask},
+                                    {nova::Array<nova::Data>{shifted.finish()},
+                                     time_rows});
+    auto assignment_rows = nova::storage::BitMap::Mutable{input.length()};
+    nova::storage::for_each_true(input.mask, [&](auto row) {
+      if (nova::lookup_field_path(input.data.get(row), selector_.path()).value) {
+        assignment_rows.set(row, true);
+      }
+    });
+    input.data = nova::assign_nested_field(
+      std::move(input.data), selector_.path(),
+      {std::move(result), std::move(assignment_rows).finish()}, ctx.dh());
+    co_await push(std::move(input));
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("start_", start_);
+    serde("first_time_", first_time_);
+  }
+
+private:
+  ast::field_path selector_;
+  double speed_;
+  Option<time> start_;
+  Option<time> first_time_;
+  Option<nova::Evaluator> evaluator_;
+};
+
 struct plugin2 : virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -93,7 +176,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<TimeshiftArgs, Timeshift>{};
+    auto d = Describer<TimeshiftArgs, Timeshift, TimeshiftNova>{};
     auto selector = d.positional("field", &TimeshiftArgs::selector, "time");
     auto speed = d.named_optional("speed", &TimeshiftArgs::speed);
     d.named("start", &TimeshiftArgs::start);
