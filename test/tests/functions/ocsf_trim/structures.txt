@@ -1,0 +1,71 @@
+{
+  events: [
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      activity_id: null,
+      src_endpoint: {
+        ip: null,
+        unknown: 1,
+      },
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: {
+        ip: 192.0.2.1,
+      },
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: null,
+      unmapped: {
+        unknown: [
+          null,
+          {},
+        ],
+      },
+    },
+  ],
+  trimmed: [
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      activity_id: null,
+      src_endpoint: {
+        ip: null,
+      },
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: {
+        ip: 192.0.2.1,
+      },
+    },
+    {
+      class_uid: 4001,
+      metadata: {
+        version: "1.5.0",
+      },
+      src_endpoint: null,
+      unmapped: {
+        unknown: [
+          null,
+          {},
+        ],
+      },
+    },
+  ],
+}

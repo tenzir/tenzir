@@ -1804,6 +1804,69 @@ auto map_lists(Array<Data> input, storage::BitMap const& rows, F transform)
   });
 }
 
+auto trim_record(Array<Record> input, record_type const& schema,
+                 storage::BitMap const& rows, bool optional, bool recommended)
+  -> Array<Record>;
+
+auto trim_value(Array<Data> input, type const& schema,
+                storage::BitMap const& rows, bool optional, bool recommended)
+  -> Array<Data> {
+  if (schema.attribute("variant")) {
+    return input;
+  }
+  if (auto record = try_as<record_type>(schema)) {
+    return std::move(input).map_alternative<Record>([&](auto records) {
+      return trim_record(std::move(records.data), *record,
+                         rows & records.present, optional, recommended);
+    });
+  }
+  if (auto list = try_as<list_type>(schema)) {
+    return map_lists(std::move(input), rows, [&](auto values, auto elements) {
+      return trim_value(std::move(values), list->value_type(), elements,
+                        optional, recommended);
+    });
+  }
+  return input;
+}
+
+auto trim_record(Array<Record> input, record_type const& schema,
+                 storage::BitMap const& rows, bool optional, bool recommended)
+  -> Array<Record> {
+  if (not rows.any()) {
+    return input;
+  }
+  input = std::move(input).to_primary();
+  auto source = as<storage::RecordStorage>(input.storage());
+  auto removed = std::vector<std::string_view>{};
+  auto updates
+    = std::vector<std::pair<std::string_view, Array<Record>::MaskedArray>>{};
+  for (auto const& [name, index] : (*source).names) {
+    auto target = schema.field(name);
+    if (not target or (optional and target->attribute("optional"))
+        or (recommended and target->attribute("recommended"))) {
+      removed.push_back(name);
+      continue;
+    }
+    auto field = (*source).arrays[index];
+    field.data = trim_value(std::move(field.data), *target,
+                            rows & field.present, optional, recommended);
+    updates.emplace_back(name, std::move(field));
+  }
+  return std::move(input)
+    .without_fields(removed, rows)
+    .with_fields(std::move(updates));
+}
+
+auto trim(Array<Record> input, storage::BitMap& rows, location self,
+          diagnostic_handler& dh, bool optional, bool recommended)
+  -> Array<Record> {
+  for (auto& group : groups(input, rows, self, dh)) {
+    input = trim_record(std::move(input), as<record_type>(group.schema.type),
+                        group.rows, optional, recommended);
+  }
+  return input;
+}
+
 struct CastOptions {
   bool encode_variants;
   bool null_fill;
@@ -2202,20 +2265,43 @@ private:
   CastArgs args_;
 };
 
-enum class NovaTransform { cast };
+class NovaTrim final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit NovaTrim(TrimArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    input.data = nova_ocsf::trim(std::move(input.data), input.mask,
+                                 args_.operator_location, ctx.dh(),
+                                 args_.drop_optional, args_.drop_recommended);
+    co_await push(std::move(input));
+  }
+
+private:
+  TrimArgs args_;
+};
+
+enum class NovaTransform { cast, trim };
 
 struct OcsfFunctionArgs {
   nova::ValueArgument x;
   bool encode_variants = false;
   bool null_fill = false;
   bool timestamp_to_ms = false;
+  bool drop_optional = true;
+  bool drop_recommended = false;
   location call;
 };
 
 template <NovaTransform Mode>
 struct OcsfFunction {
   static auto name() -> std::string_view {
-    return "ocsf_cast";
+    if constexpr (Mode == NovaTransform::cast) {
+      return "ocsf_cast";
+    } else {
+      return "ocsf_trim";
+    }
   }
 
   static auto eval(OcsfFunctionArgs const& args, nova::EvalFrame frame)
@@ -2240,6 +2326,10 @@ struct OcsfFunction {
         return nova_ocsf::cast(
           std::move(records->data), selected, args.call, frame.dh(),
           {args.encode_variants, args.null_fill, args.timestamp_to_ms});
+      } else if constexpr (Mode == NovaTransform::trim) {
+        return nova_ocsf::trim(std::move(records->data), selected, args.call,
+                               frame.dh(), args.drop_optional,
+                               args.drop_recommended);
       }
     }();
     return nova::Array<nova::Data>{std::move(result)}.null_where(
@@ -2266,6 +2356,9 @@ public:
       d.named_optional("encode_variants", &OcsfFunctionArgs::encode_variants);
       d.named_optional("null_fill", &OcsfFunctionArgs::null_fill);
       d.named_optional("timestamp_to_ms", &OcsfFunctionArgs::timestamp_to_ms);
+    } else if constexpr (Mode == NovaTransform::trim) {
+      d.named_optional("drop_optional", &OcsfFunctionArgs::drop_optional);
+      d.named_optional("drop_recommended", &OcsfFunctionArgs::drop_recommended);
     }
     return std::move(d).finish();
   }
@@ -2332,7 +2425,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<TrimArgs, Trim>{};
+    auto d = Describer<TrimArgs, Trim, NovaTrim>{};
     d.parallelizable();
     d.named("drop_optional", &TrimArgs::drop_optional);
     d.named("drop_recommended", &TrimArgs::drop_recommended);
@@ -2391,3 +2484,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
                        tenzir::plugins::ocsf::NovaTransform::cast>)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
+                       tenzir::plugins::ocsf::NovaTransform::trim>)

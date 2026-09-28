@@ -1,0 +1,51 @@
+{
+  original: {
+    class_uid: 4001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+    message: "",
+    enrichments: [],
+    src_endpoint: {},
+    unmapped: {
+      custom: null,
+      empty: [],
+    },
+  },
+  trimmed: {
+    class_uid: 4001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+    message: "",
+    src_endpoint: {},
+  },
+  retained: {
+    class_uid: 4001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+    message: "",
+    enrichments: [],
+    src_endpoint: {},
+    unmapped: {
+      custom: null,
+      empty: [],
+    },
+  },
+  required: {
+    class_uid: 4001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+    enrichments: [],
+    unmapped: {
+      custom: null,
+      empty: [],
+    },
+  },
+}
