@@ -11,6 +11,7 @@
 #include <tenzir/base_ctx.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pcap.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -321,7 +322,8 @@ auto dispatch_packets(u_char* user, const pcap_pkthdr* pkt_hdr,
   }
 }
 
-class FromNic final : public Operator<void, table_slice> {
+template <class Output>
+class FromNic final : public Operator<void, Output> {
 public:
   explicit FromNic(FromNicArgs args) : args_{std::move(args)} {
   }
@@ -384,7 +386,7 @@ public:
     co_return co_await chunk_queue_->dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>&, OpCtx& ctx)
     -> Task<void> override {
     auto sub = ctx.get_sub(caf::none);
     if (not sub) {
@@ -412,15 +414,20 @@ public:
     }
   }
 
-  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&)
-    -> Task<void> override {
+  auto finish_sub(SubKeyView, Push<Output>&, OpCtx&) -> Task<void> override {
     sub_finished_->notify_one();
     co_return;
   }
 
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
-                   OpCtx&) -> Task<void> override {
-    auto const rows = slice.rows();
+  auto process_sub(SubKeyView, Output slice, Push<Output>& push, OpCtx&)
+    -> Task<void> override {
+    auto const rows = [&] {
+      if constexpr (std::same_as<Output, nova::Events>) {
+        return slice.active_count();
+      } else {
+        return slice.rows();
+      }
+    }();
     co_await push(std::move(slice));
     events_read_counter_.add(rows);
   }
@@ -506,7 +513,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromNicArgs, FromNic>{};
+    auto d
+      = Describer<FromNicArgs, FromNic<table_slice>, FromNic<nova::Events>>{};
     d.operator_location(&FromNicArgs::self);
     auto iface = d.positional("iface", &FromNicArgs::iface);
     auto snaplen = d.named("snaplen", &FromNicArgs::snaplen);
@@ -543,7 +551,7 @@ public:
         if (output.is_error()) {
           return {};
         }
-        if (output->is_not<table_slice>()) {
+        if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
           diagnostic::error("pipeline must return events")
             .primary(parser_value->source.subloc(0, 1))
             .emit(ctx);

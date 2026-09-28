@@ -28,6 +28,7 @@ from . import microsoft_365_activity  # noqa: F401
 from . import microsoft_sql  # noqa: F401
 from . import mysql  # noqa: F401
 from . import nats  # noqa: F401
+from . import nic  # noqa: F401
 from . import openai_responses  # noqa: F401
 from . import otlp_grpc  # noqa: F401
 from . import package_http  # noqa: F401
@@ -82,6 +83,7 @@ __all__ = [
     "mock_s3",
     "mysql",
     "nats",
+    "nic",
     "openai_responses",
     "otlp_grpc",
     "platform_ws",

@@ -1,0 +1,19 @@
+---
+fixtures:
+  - nic
+  - udp:
+      mode: client
+      payload: "from_nic Nova capture test"
+timeout: 30
+skip:
+  on: fixture-unavailable
+  reason: requires permission to capture packets on the Linux loopback interface
+---
+from_nic env("NIC_INTERFACE"), snaplen=48,
+  filter=f"udp dst port {env("UDP_ENDPOINT").split(":")[1]}" {
+  read_pcap
+  where captured_packet_length == 48
+}
+head 1
+select truncated = original_packet_length > captured_packet_length,
+       valid_data = data.length() == 48

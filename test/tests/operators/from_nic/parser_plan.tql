@@ -1,0 +1,5 @@
+---
+runner: dump-plan
+---
+from_nic "lo" { read_pcap }
+head 1

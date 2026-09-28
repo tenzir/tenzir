@@ -1,0 +1,9 @@
+● {input}
+│
+● from_nic
+│
+● head
+│
+● to_stdout
+│
+● {output}
