@@ -1,0 +1,6 @@
+// A column that mixes times and durations rounds each by its own rules: times
+// align to calendar weeks, months, and years, durations to multiples.
+from {x: 2024-08-27T16:42:43}, {x: 90min}, {x: 2024-02-10T00:00:00}
+r = round(x, 1mo)
+c = ceil(x, 1w)
+f = floor(x, 1y)

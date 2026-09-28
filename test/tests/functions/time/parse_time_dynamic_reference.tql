@@ -1,0 +1,7 @@
+// `reference` is evaluated per row: a time fills the missing year, while null
+// and non-time references leave the row null.
+from {s: "May  5 18:16:21", r: 2026-06-01T00:00:00Z},
+  {s: "May  5 18:16:21", r: null},
+  {s: "May  5 18:16:21", r: 42},
+  {s: 7, r: 2026-06-01T00:00:00Z}
+t = s.parse_time("%b %e %H:%M:%S", reference=r)

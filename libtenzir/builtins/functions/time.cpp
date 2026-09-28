@@ -259,7 +259,41 @@ auto resolve_missing_date(std::tm& tm, const std::tm& reference_tm,
   return true;
 }
 
-class time_ final : public function_plugin {
+struct TimeArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+class TimeFunction final {
+public:
+  static auto eval(TimeArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto warn_parse = nova::WarnOnce{};
+    return nova::apply_kernel<1>(
+      frame, "time", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<nova::Time> {
+          return None{};
+        },
+        [](diagnostic_handler&, nova::Time value) -> Option<nova::Time> {
+          return value;
+        },
+        [&](diagnostic_handler& dh,
+            std::string_view input) -> Option<nova::Time> {
+          auto result = time{};
+          if (parsers::time(input, result)) {
+            return result;
+          }
+          warn_parse(dh, diagnostic::warning("`time` failed to parse string")
+                           .primary(args.x.source)
+                           .note("tried to convert: {}", input));
+          return None{};
+        },
+      });
+  }
+};
+
+class time_ final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "time";
@@ -267,6 +301,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<TimeArgs, TimeFunction>{};
+    d.positional("x", &TimeArgs::x, "string");
+    d.call_location(&TimeArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -915,7 +956,262 @@ public:
   }
 };
 
-class parse_time : public virtual function_plugin {
+/// The `reference` of `parse_time` for one input row.
+struct ParseTimeReference {
+  enum class Kind {
+    /// The call has no `reference`.
+    absent,
+    /// The row's reference is `value`.
+    value,
+    /// The row's reference is null.
+    null,
+    /// The row's reference is not a `time`.
+    mistyped,
+  };
+
+  Kind kind = Kind::absent;
+  time value = {};
+};
+
+/// The conditions that `parse_time` reports once per batch.
+struct ParseTimeIssues {
+  bool error = false;
+  bool reference_type_error = false;
+  bool reference_ignored = false;
+  bool missing_reference = false;
+  bool unsupported_reference = false;
+  bool deprecated_missing_reference = false;
+};
+
+/// Parses one input string of `parse_time`, filling the date fields that
+/// `format` lacks from `reference`. Returns `None` for a row that becomes null
+/// and records why in `issues`. `buffer` is scratch space for the
+/// NUL-terminated copy that `strptime` needs.
+auto parse_time_row(std::string_view input, std::string const& format,
+                    date_fields const& fields, ParseTimeReference reference,
+                    std::string& buffer, ParseTimeIssues& issues)
+  -> Option<time> {
+  using Kind = ParseTimeReference::Kind;
+  auto const has_reference = reference.kind != Kind::absent;
+  if (has_reference and fields.iso_week_number
+      and not fields.complete_calendar_date) {
+    issues.unsupported_reference = true;
+    return None{};
+  }
+  auto tm = std::tm{};
+  buffer = input;
+  // Start from the UNIX epoch. The format scanner decides which date fields
+  // are missing; using extreme sentinels here breaks platform `strptime`
+  // implementations for some formats.
+  tm.tm_mon = 0;
+  tm.tm_mday = 1;
+  tm.tm_year = 70;
+  tm.tm_isdst = -1;
+  auto const* end = strptime(buffer.c_str(), format.c_str(), &tm);
+  if (end != buffer.c_str() + buffer.length()) {
+    issues.error = true;
+    return None{};
+  }
+  auto const offset = tm.tm_gmtoff;
+  auto const needs_year = not fields.year;
+  auto const needs_month = not fields.month;
+  auto const needs_day = not fields.day;
+  auto const needs_reference = needs_year or needs_month or needs_day;
+  if (has_reference
+      and ((fields.week_number and needs_year)
+           or (fields.weekday and needs_year and (needs_month or needs_day))
+           or (needs_year and fields.ordinal_day))) {
+    issues.unsupported_reference = true;
+    return None{};
+  }
+  if (needs_reference) {
+    switch (reference.kind) {
+      case Kind::value: {
+        auto const reference_tm = as_tm(reference.value);
+        if (not reference_tm) {
+          issues.error = true;
+          return None{};
+        }
+        if (not needs_year or needs_month != needs_day) {
+          issues.unsupported_reference = true;
+          return None{};
+        }
+        // The guard above leaves two cases: the format has no date fields at
+        // all, or only the year is missing.
+        auto const resolved
+          = needs_month
+              ? resolve_missing_date(tm, *reference_tm, reference.value, offset)
+              : resolve_missing_year(tm, reference.value, offset);
+        if (not resolved) {
+          issues.error = true;
+          return None{};
+        }
+        break;
+      }
+      case Kind::absent:
+        if (needs_year) {
+          issues.deprecated_missing_reference = true;
+          tm.tm_year = 70;
+        }
+        if (needs_month) {
+          tm.tm_mon = 0;
+        }
+        if (needs_day) {
+          tm.tm_mday = 1;
+        }
+        break;
+      case Kind::null:
+        issues.missing_reference = true;
+        return None{};
+      case Kind::mistyped:
+        issues.reference_type_error = true;
+        return None{};
+    }
+  } else if (has_reference) {
+    issues.reference_ignored = true;
+  }
+  if (fields.ordinal_day and not apply_ordinal_day(tm)) {
+    issues.error = true;
+    return None{};
+  }
+  errno = 0;
+  auto parsed = timegm(&tm);
+  if (parsed == -1 and errno != 0) {
+    issues.error = true;
+    return None{};
+  }
+  parsed -= offset;
+  return time_point_cast<std::chrono::nanoseconds>(
+    time::clock::from_time_t(parsed));
+}
+
+/// Emits the diagnostics for the conditions in `issues`. `reference` and
+/// `reference_type` are only read for conditions that involve a reference.
+auto emit_parse_time_issues(ParseTimeIssues const& issues, location input,
+                            location format, location reference,
+                            std::string_view reference_type,
+                            diagnostic_handler& dh) -> void {
+  if (issues.error) {
+    diagnostic::warning("failed to parse timestamp")
+      .primary(input)
+      .secondary(format)
+      .emit(dh);
+  }
+  if (issues.reference_type_error) {
+    diagnostic::warning("`parse_time` expected `reference` to be `time`, but "
+                        "got `{}`",
+                        reference_type)
+      .primary(reference)
+      .emit(dh);
+  }
+  if (issues.reference_ignored) {
+    diagnostic::warning("`parse_time` ignores `reference` because the format "
+                        "includes a complete date")
+      .primary(reference)
+      .secondary(format)
+      .emit(dh);
+  }
+  if (issues.missing_reference) {
+    diagnostic::warning("`parse_time` cannot fill missing date fields because "
+                        "`reference` is null")
+      .primary(reference)
+      .emit(dh);
+  }
+  if (issues.unsupported_reference) {
+    diagnostic::warning("`parse_time` cannot fill unsupported date fields from "
+                        "`reference`")
+      .primary(reference)
+      .secondary(format)
+      .emit(dh);
+  }
+  if (issues.deprecated_missing_reference) {
+    diagnostic::warning("`parse_time` parsed a timestamp without a year as "
+                        "1970; this is deprecated and will become an error in "
+                        "a future release")
+      .primary(input)
+      .emit(dh);
+  }
+}
+
+struct ParseTimeArgs {
+  nova::ValueArgument x;
+  located<std::string> format;
+  Option<nova::ValueArgument> reference;
+  date_fields fields;
+  location call;
+};
+
+class ParseTimeFunction final {
+public:
+  static auto eval(ParseTimeArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    using Kind = ParseTimeReference::Kind;
+    auto issues = ParseTimeIssues{};
+    auto buffer = std::string{};
+    auto reference_type = std::string_view{};
+    auto input_tag = Option<std::size_t>{};
+    auto parse = [&](std::string_view input,
+                     ParseTimeReference reference) -> Option<Time> {
+      return parse_time_row(input, args.format.inner, args.fields, reference,
+                            buffer, issues);
+    };
+    auto result = [&] {
+      if (not args.reference) {
+        return apply_kernel<1>(
+          frame, "parse_time", {args.x}, args.call,
+          detail::overload{
+            [](diagnostic_handler&, Null) -> Option<Time> {
+              return None{};
+            },
+            [&](diagnostic_handler&, std::string_view input) -> Option<Time> {
+              return parse(input, {});
+            },
+          });
+      }
+      return apply_kernel<2>(
+        frame, "parse_time", {args.x, *args.reference}, args.call,
+        detail::overload{
+          []<class R>(diagnostic_handler&, Null, R) -> Option<Time> {
+            return None{};
+          },
+          // Rejecting the input here rather than through `apply_kernel` keeps
+          // the reference type out of the diagnostic.
+          [&]<class S, class R>(diagnostic_handler&, S, R) -> Option<Time>
+            requires(not std::same_as<S, std::string_view>
+                     and not std::same_as<S, Null>)
+          {
+            input_tag = KernelViewList::unique_index_of<S>;
+            return None{};
+          },
+          [&]<class R>(diagnostic_handler&, std::string_view input,
+                       R reference) -> Option<Time> {
+            if constexpr (std::same_as<R, Time>) {
+              return parse(input, {Kind::value, reference});
+            } else if constexpr (std::same_as<R, Null>) {
+              return parse(input, {Kind::null});
+            } else {
+              reference_type
+                = Type<data_type_list::at<KernelViewList::unique_index_of<R>>>::
+                  static_name;
+              return parse(input, {Kind::mistyped});
+            }
+          },
+          });
+    }();
+    if (input_tag) {
+      warn_rejected_kernel_types(frame, "parse_time", args.call,
+                                 std::array{*input_tag});
+    }
+    emit_parse_time_issues(issues, args.x.source, args.format.source,
+                           args.reference ? args.reference->source
+                                          : location::unknown,
+                           reference_type, frame);
+    return result;
+  }
+};
+
+class parse_time : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_time";
@@ -923,6 +1219,20 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseTimeArgs, ParseTimeFunction>{};
+    d.positional("input", &ParseTimeArgs::x, "string");
+    d.positional("format", &ParseTimeArgs::format);
+    d.named_optional("reference", &ParseTimeArgs::reference, "time");
+    d.call_location(&ParseTimeArgs::call);
+    d.validate(
+      [](ParseTimeArgs& args, diagnostic_handler&) -> failure_or<void> {
+        args.fields = parse_date_fields(args.format.inner);
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -935,203 +1245,75 @@ public:
           .positional("format", format)
           .named("reference", reference, "time")
           .parse(inv, ctx));
-    return function_use::make([fn = inv.call.fn.get_location(),
-                               subject_expr = std::move(subject_expr),
-                               format = std::move(format),
-                               reference = std::move(reference)](evaluator eval,
-                                                                 session ctx) {
-      const auto result_type = time_type{};
-      const auto parsed_date_fields = parse_date_fields(format.inner);
-      auto null_reference = series::null(null_type{}, eval.length());
-      auto references = reference ? eval(*reference)
-                                  : multi_series{std::move(null_reference)};
-      return map_series(
-        eval(subject_expr), std::move(references),
-        [&](series subject, series reference_series) {
-          return match(
-            *subject.array,
-            [&](const arrow::StringArray& array) {
-              auto error = false;
-              auto reference_type_error = false;
-              auto reference_ignored = false;
-              auto missing_reference = false;
-              auto deprecated_missing_reference = false;
-              auto unsupported_reference = false;
-              auto b = time_type::make_arrow_builder(arrow_memory_pool());
-              check(b->Reserve(array.length()));
-              auto nul_terminated = std::string{};
-              const auto reference_array = reference_series.as<time_type>();
-              for (auto i = int64_t{0}; i < array.length(); ++i) {
-                if (array.IsNull(i)) {
-                  b->UnsafeAppendNull();
-                  continue;
-                }
-                if (reference and parsed_date_fields.iso_week_number
-                    and not parsed_date_fields.complete_calendar_date) {
-                  unsupported_reference = true;
-                  b->UnsafeAppendNull();
-                  continue;
-                }
-                const auto str = array.GetView(i);
-                auto tm = std::tm{};
-                nul_terminated = str;
-                // Start from the UNIX epoch. The format scanner below decides
-                // which date fields are missing; using extreme sentinels here
-                // breaks platform `strptime` implementations for some formats.
-                tm.tm_mon = 0;
-                tm.tm_mday = 1;
-                tm.tm_year = 70;
-                tm.tm_isdst = -1;
-                auto res
-                  = strptime(nul_terminated.c_str(), format.inner.c_str(), &tm);
-                if (res != nul_terminated.c_str() + nul_terminated.length()) {
-                  error = true;
-                  b->UnsafeAppendNull();
-                  continue;
-                }
-                const auto offset = tm.tm_gmtoff;
-                const auto needs_year = not parsed_date_fields.year;
-                const auto needs_month = not parsed_date_fields.month;
-                const auto needs_day = not parsed_date_fields.day;
-                const auto needs_reference
-                  = needs_year or needs_month or needs_day;
-                if (reference
-                    and ((parsed_date_fields.week_number and needs_year)
-                         or (parsed_date_fields.weekday and needs_year
-                             and (needs_month or needs_day))
-                         or (needs_year and parsed_date_fields.ordinal_day))) {
-                  unsupported_reference = true;
-                  b->UnsafeAppendNull();
-                  continue;
-                }
-                if (needs_reference) {
-                  if (reference_array) {
-                    if (not reference_array->array->IsValid(i)) {
-                      missing_reference = true;
-                      b->UnsafeAppendNull();
-                      continue;
-                    }
-                    const auto ref
-                      = *view_at<time_type>(*reference_array->array, i);
-                    const auto ref_tm = as_tm(ref);
-                    if (not ref_tm) {
-                      error = true;
-                      b->UnsafeAppendNull();
-                      continue;
-                    }
-                    if (not needs_year or needs_month != needs_day) {
-                      unsupported_reference = true;
-                      b->UnsafeAppendNull();
-                      continue;
-                    }
-                    // The guard above leaves two cases: the format has no
-                    // date fields at all, or only the year is missing.
-                    const auto resolved
-                      = needs_month
-                          ? resolve_missing_date(tm, *ref_tm, ref, offset)
-                          : resolve_missing_year(tm, ref, offset);
-                    if (not resolved) {
-                      error = true;
-                      b->UnsafeAppendNull();
-                      continue;
-                    }
-                  } else if (not reference) {
-                    if (needs_year) {
-                      deprecated_missing_reference = true;
-                      tm.tm_year = 70;
-                    }
-                    if (needs_month) {
-                      tm.tm_mon = 0;
-                    }
-                    if (needs_day) {
-                      tm.tm_mday = 1;
-                    }
-                  } else if (is<null_type>(reference_series.type)) {
-                    missing_reference = true;
-                    b->UnsafeAppendNull();
-                    continue;
-                  } else {
-                    reference_type_error = true;
+    return function_use::make(
+      [subject_expr = std::move(subject_expr), format = std::move(format),
+       reference = std::move(reference)](evaluator eval, session ctx) {
+        using Kind = ParseTimeReference::Kind;
+        const auto result_type = time_type{};
+        const auto parsed_date_fields = parse_date_fields(format.inner);
+        auto null_reference = series::null(null_type{}, eval.length());
+        auto references = reference ? eval(*reference)
+                                    : multi_series{std::move(null_reference)};
+        return map_series(
+          eval(subject_expr), std::move(references),
+          [&](series subject, series reference_series) {
+            return match(
+              *subject.array,
+              [&](const arrow::StringArray& array) {
+                auto issues = ParseTimeIssues{};
+                auto b = time_type::make_arrow_builder(arrow_memory_pool());
+                check(b->Reserve(array.length()));
+                auto buffer = std::string{};
+                const auto reference_array = reference_series.as<time_type>();
+                for (auto i = int64_t{0}; i < array.length(); ++i) {
+                  if (array.IsNull(i)) {
                     b->UnsafeAppendNull();
                     continue;
                   }
-                } else if (reference) {
-                  reference_ignored = true;
+                  auto row_reference = ParseTimeReference{};
+                  if (not reference) {
+                    row_reference.kind = Kind::absent;
+                  } else if (reference_array) {
+                    if (reference_array->array->IsValid(i)) {
+                      row_reference.kind = Kind::value;
+                      row_reference.value
+                        = *view_at<time_type>(*reference_array->array, i);
+                    } else {
+                      row_reference.kind = Kind::null;
+                    }
+                  } else if (is<null_type>(reference_series.type)) {
+                    row_reference.kind = Kind::null;
+                  } else {
+                    row_reference.kind = Kind::mistyped;
+                  }
+                  auto parsed = parse_time_row(array.GetView(i), format.inner,
+                                               parsed_date_fields,
+                                               row_reference, buffer, issues);
+                  if (parsed) {
+                    b->UnsafeAppend(parsed->time_since_epoch().count());
+                  } else {
+                    b->UnsafeAppendNull();
+                  }
                 }
-                if (parsed_date_fields.ordinal_day
-                    and not apply_ordinal_day(tm)) {
-                  error = true;
-                  b->UnsafeAppendNull();
-                  continue;
-                }
-                errno = 0;
-                auto parsed = timegm(&tm);
-                if (parsed == -1 and errno != 0) {
-                  error = true;
-                  b->UnsafeAppendNull();
-                  continue;
-                }
-                parsed -= offset;
-                const auto tp = time_point_cast<std::chrono::nanoseconds>(
-                  time::clock::from_time_t(parsed));
-                b->UnsafeAppend(tp.time_since_epoch().count());
-              }
-              if (error) {
-                diagnostic::warning("failed to parse timestamp")
-                  .primary(subject_expr)
-                  .secondary(format)
-                  .emit(ctx);
-              }
-              if (reference_type_error) {
-                diagnostic::warning("`parse_time` expected `reference` to be "
-                                    "`time`, but got `{}`",
-                                    reference_series.type.kind())
-                  .primary(*reference)
-                  .emit(ctx);
-              }
-              if (reference_ignored) {
-                diagnostic::warning(
-                  "`parse_time` ignores `reference` "
-                  "because the format includes a complete date")
-                  .primary(*reference)
-                  .secondary(format)
-                  .emit(ctx);
-              }
-              if (missing_reference) {
-                diagnostic::warning("`parse_time` cannot fill missing date "
-                                    "fields because `reference` is null")
-                  .primary(*reference)
-                  .emit(ctx);
-              }
-              if (unsupported_reference) {
-                diagnostic::warning("`parse_time` cannot fill unsupported date "
-                                    "fields from `reference`")
-                  .primary(*reference)
-                  .secondary(format)
-                  .emit(ctx);
-              }
-              if (deprecated_missing_reference) {
-                diagnostic::warning("`parse_time` parsed a timestamp without "
-                                    "a year as 1970; this is deprecated and "
-                                    "will become an error in a future release")
+                emit_parse_time_issues(
+                  issues, subject_expr.get_location(), format.source,
+                  reference ? reference->get_location() : location::unknown,
+                  fmt::to_string(reference_series.type.kind()), ctx);
+                return series{time_type{}, finish(*b)};
+              },
+              [&](const arrow::NullArray& array) {
+                return series::null(result_type, array.length());
+              },
+              [&](const auto&) {
+                diagnostic::warning("`parse_time` expected `string`, but got "
+                                    "`{}`",
+                                    subject.type.kind())
                   .primary(subject_expr)
                   .emit(ctx);
-              }
-              return series{time_type{}, finish(*b)};
-            },
-            [&](const arrow::NullArray& array) {
-              return series::null(result_type, array.length());
-            },
-            [&](const auto&) {
-              diagnostic::warning("`parse_time` expected `string`, but got "
-                                  "`{}`",
-                                  subject.type.kind())
-                .primary(subject_expr)
-                .emit(ctx);
-              return series::null(result_type, subject.length());
-            });
-        });
-    });
+                return series::null(result_type, subject.length());
+              });
+          });
+      });
   }
 };
 } // namespace

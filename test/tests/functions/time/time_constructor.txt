@@ -1,8 +1,8 @@
-warning: `year` expected `time`, but got `int64`
+warning: year does not accept the argument type `int`
  --> tests/functions/time/time_constructor.tql:9:16
   |
 9 | invalid_year = x.year()
-  |                ~
+  |                ~~~~~~~~
   |
 {
   n: 2024-09-24T20:20:26.168426Z,

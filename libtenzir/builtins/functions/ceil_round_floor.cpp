@@ -6,12 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/array_merge.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_kernel.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/nova/type_system.hpp"
 
+#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
@@ -21,6 +25,8 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <arrow/compute/api.h>
 
 #include <cmath>
 #include <limits>
@@ -37,6 +43,51 @@ struct RoundArgs {
   Option<located<duration>> unit;
   location call;
 };
+
+/// Rounds `times` at `rows` through Arrow's temporal rounding, like the legacy
+/// implementation, so that units of weeks, months, and years align to the
+/// calendar rather than to multiples since the epoch. Weeks start on Monday.
+template <mode Mode>
+auto round_times(Array<Time> const& times, storage::BitMap const& rows,
+                 duration unit, location call, diagnostic_handler& dh)
+  -> Option<Array<Time>> {
+  auto input = arrow::TimestampBuilder{arrow::timestamp(arrow::TimeUnit::NANO),
+                                       arrow_memory_pool()};
+  check(input.Reserve(rows.true_count()));
+  for (auto row : storage::true_bits(rows)) {
+    check(input.Append((*times.get(row)).time_since_epoch().count()));
+  }
+  auto options = make_round_temporal_options(unit);
+  auto rounded = [&] {
+    if constexpr (Mode == mode::ceil) {
+      return arrow::compute::CeilTemporal(finish(input), std::move(options));
+    } else if constexpr (Mode == mode::floor) {
+      return arrow::compute::FloorTemporal(finish(input), std::move(options));
+    } else {
+      static_assert(Mode == mode::round);
+      return arrow::compute::RoundTemporal(finish(input), std::move(options));
+    }
+  }();
+  if (not rounded.ok()) {
+    diagnostic::warning("{}", rounded.status().ToString())
+      .primary(call)
+      .emit(dh);
+    return None{};
+  }
+  auto const values = rounded.MoveValueUnsafe().make_array();
+  auto const& timestamps = as<arrow::TimestampArray>(*values);
+  auto builder = ArrayBuilder<Time>{};
+  auto next = storage::Index{0};
+  auto index = int64_t{0};
+  for (auto row : storage::true_bits(rows)) {
+    builder.skip_n(row - next);
+    builder.data(Time{Duration{timestamps.Value(index)}});
+    ++index;
+    next = row + 1;
+  }
+  builder.skip_n(rows.length() - next);
+  return builder.finish();
+}
 
 template <mode Mode>
 class RoundFunction final {
@@ -99,9 +150,29 @@ public:
     // fn(x, 1h) -> to multiples of 1h
     // fn(<time>, <duration>)
     // fn(x, 1h) -> time is multiples of 1h (for UTC timezone?)
+    // `time` rows round through Arrow, all other rows through the kernel.
+    auto const& mask = frame.mask();
+    auto const times = args.x.data.get_alternative<Time>();
+    auto time_rows
+      = times ? mask & times->present : storage::BitMap{mask.length(), false};
+    auto other_rows = mask.and_not(time_rows);
+    auto time_result = [&]() -> Array<Data> {
+      if (not time_rows.any()) {
+        return frame.null();
+      }
+      auto rounded = round_times<Mode>(times->data, time_rows, args.unit->inner,
+                                       args.call, frame);
+      if (not rounded) {
+        return frame.null();
+      }
+      return std::move(*rounded);
+    }();
+    if (not other_rows.any()) {
+      return time_result;
+    }
     const auto count = std::abs(args.unit->inner.count());
-    return apply_kernel<1>(
-      frame, name, {args.x}, args.call,
+    auto other_result = apply_kernel<1>(
+      frame.narrow(other_rows), name, {args.x}, args.call,
       detail::overload{
         [count](diagnostic_handler&, Duration v) -> Option<Duration> {
           const auto val = v.count();
@@ -120,25 +191,12 @@ public:
             return Duration{val + (std::abs(floor) < ceil ? floor : ceil)};
           }
         },
-        [count](diagnostic_handler&, Time v) -> Option<Time> {
-          const auto val = v.time_since_epoch().count();
-          const auto rem = std::abs(val % count);
-          if (rem == 0) {
-            return v;
-          }
-          const auto ceil = val >= 0 ? count - rem : rem;
-          const auto floor = val >= 0 ? -rem : rem - count;
-          if constexpr (Mode == mode::ceil) {
-            return Time{Duration{val + ceil}};
-          } else if constexpr (Mode == mode::floor) {
-            return Time{Duration{val + floor}};
-          } else {
-            static_assert(Mode == mode::round);
-            return Time{
-              Duration{val + (std::abs(floor) < ceil ? floor : ceil)}};
-          }
-        },
       });
+    if (not time_rows.any()) {
+      return other_result;
+    }
+    return with_merged(MaskedArray<Array<Data>>{other_result, other_rows},
+                       MaskedArray<Array<Data>>{time_result, time_rows});
   }
 };
 

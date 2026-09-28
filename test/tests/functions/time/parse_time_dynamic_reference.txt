@@ -1,0 +1,40 @@
+warning: `parse_time` cannot fill missing date fields because `reference` is null
+ --> tests/functions/time/parse_time_dynamic_reference.tql:7:46
+  |
+7 | t = s.parse_time("%b %e %H:%M:%S", reference=r)
+  |                                              ~
+  |
+
+warning: `parse_time` expected `reference` to be `time`, but got `int`
+ --> tests/functions/time/parse_time_dynamic_reference.tql:7:46
+  |
+7 | t = s.parse_time("%b %e %H:%M:%S", reference=r)
+  |                                              ~
+  |
+
+warning: parse_time does not accept the argument type `int`
+ --> tests/functions/time/parse_time_dynamic_reference.tql:7:5
+  |
+7 | t = s.parse_time("%b %e %H:%M:%S", reference=r)
+  |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  s: "May  5 18:16:21",
+  r: 2026-06-01T00:00:00Z,
+  t: 2026-05-05T18:16:21Z,
+}
+{
+  s: "May  5 18:16:21",
+  r: null,
+  t: null,
+}
+{
+  s: "May  5 18:16:21",
+  r: 42,
+  t: null,
+}
+{
+  s: 7,
+  r: 2026-06-01T00:00:00Z,
+  t: null,
+}
