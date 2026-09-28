@@ -1700,6 +1700,10 @@ private:
       // which may be too late to prevent further output.
       TENZIR_ASSERT(operator_scope_);
       operator_scope_->cancel();
+      // An operator that returned `FinalizeBehavior::continue_` can no longer
+      // reach `done` because we just cancelled its remaining work, so
+      // `check_done()` must not wait for it.
+      operator_draining_ = false;
       for (auto& [_, sub] : subpipelines_) {
         sub.closed_data = true;
         sub.push = None{};
