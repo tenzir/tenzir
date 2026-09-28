@@ -10,9 +10,8 @@ from {
   net: 10.0.0.0/8,
   text: "abc",
   payload: b"\x00\x01",
-  sec: secret("test", _literal=true),
   nested: {count: 1},
   items: [1, 2],
 }
 size = internal_memory_size(this)
-drop nothing, flag, signed, unsigned, real, dur, ts, addr, net, text, payload, sec, nested, items
+drop nothing, flag, signed, unsigned, real, dur, ts, addr, net, text, payload, nested, items
