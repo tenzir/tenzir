@@ -1,27 +1,6 @@
 {
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 8192,
-}
-{
-  events: 1,
+  slices: 9,
+  min_rows: 1,
+  max_rows: 8192,
+  total_rows: 65537,
 }
