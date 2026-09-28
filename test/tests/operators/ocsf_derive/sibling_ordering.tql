@@ -1,5 +1,4 @@
-// Test that derived enum is inserted immediately before sibling when only
-// sibling is present in input.
+// Existing fields retain their order; derived fields are appended.
 from {
   metadata: {
     version: "1.5.0",

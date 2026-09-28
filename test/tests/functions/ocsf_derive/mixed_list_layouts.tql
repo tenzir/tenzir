@@ -1,0 +1,9 @@
+from {events: [
+  {class_uid: 4003, metadata: {version: "1.5.0"},
+   answers: [{flag_ids: [3]}]},
+  {class_uid: 4003, metadata: {version: "1.5.0"},
+   answers: [{flag_ids: [1], flags: []}]},
+  {class_uid: 4003, metadata: {version: "1.5.0"},
+   answers: [{flag_ids: [1], flags: [null]}]},
+]}
+derived = events.map(x => ocsf_derive(x))

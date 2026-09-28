@@ -1,0 +1,104 @@
+warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
+ --> tests/functions/ocsf_derive/mixed_list_layouts.tql:9:27
+  |
+9 | derived = events.map(x => ocsf_derive(x))
+  |                           ~~~~~~~~~~~~~~
+  |
+{
+  events: [
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            3,
+          ],
+        },
+      ],
+    },
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            1,
+          ],
+          flags: [],
+        },
+      ],
+    },
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            1,
+          ],
+          flags: [
+            null,
+          ],
+        },
+      ],
+    },
+  ],
+  derived: [
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            3,
+          ],
+          flags: [
+            "Recursion Desired",
+          ],
+        },
+      ],
+      class_name: "DNS Activity",
+    },
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            1,
+          ],
+          flags: [],
+        },
+      ],
+      class_name: "DNS Activity",
+    },
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            1,
+          ],
+          flags: [
+            "Authoritative Answer",
+          ],
+        },
+      ],
+      class_name: "DNS Activity",
+    },
+  ],
+}

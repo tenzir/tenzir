@@ -2139,6 +2139,286 @@ auto cast(Array<Record> input, storage::BitMap& rows, location self,
   return input;
 }
 
+auto kind(RowView<Data> value) -> std::string_view {
+  return match(value, []<class T>(RowView<T>) {
+    return Type<T>::static_name;
+  });
+}
+
+template <class Builder>
+auto derive_one(Builder& output, RowView<Data> value, bool to_string,
+                std::string_view enum_id, value_path path, location self,
+                diagnostic_handler& dh) -> void {
+  if (is<RowView<Null>>(value)) {
+    output.null();
+    return;
+  }
+  if (auto list = try_as<RowView<List>>(value)) {
+    auto result = output.list();
+    for (auto item : *list) {
+      derive_one(result, item, to_string, enum_id, path.list(), self, dh);
+    }
+    return;
+  }
+  if (to_string) {
+    auto number = try_as<RowView<Int>>(value);
+    if (not number) {
+      diagnostic::warning("expected field `{}` to be `int`, but got `{}`", path,
+                          kind(value))
+        .primary(self)
+        .emit(dh);
+      output.null();
+      return;
+    }
+    auto const& lookup = check(get_ocsf_int_to_string(enum_id)).get();
+    if (auto it = lookup.find(**number); it != lookup.end()) {
+      output.data(std::string_view{it->second});
+      return;
+    }
+    diagnostic::warning("found invalid value for `{}`", path)
+      .primary(self)
+      .note("got {}", **number)
+      .emit(dh);
+  } else {
+    auto text = try_as<RowView<String>>(value);
+    if (not text) {
+      diagnostic::warning("expected field `{}` to be `string`, but got `{}`",
+                          path, kind(value))
+        .primary(self)
+        .emit(dh);
+      output.null();
+      return;
+    }
+    auto const& lookup = check(get_ocsf_string_to_int(enum_id)).get();
+    if (auto it = lookup.find(**text); it != lookup.end()) {
+      output.data(it->second);
+      return;
+    }
+    diagnostic::warning("found invalid value for `{}`", path)
+      .primary(self)
+      .note("got {:?}", **text)
+      .emit(dh);
+  }
+  output.null();
+}
+
+template <class Builder>
+auto derive_pair(Builder& integers, Builder& strings, RowView<Data> number,
+                 RowView<Data> text, std::string_view enum_id,
+                 value_path number_path, value_path text_path, location self,
+                 diagnostic_handler& dh) -> void {
+  if (is<RowView<Null>>(number)) {
+    derive_one(integers, text, false, enum_id, text_path, self, dh);
+    append_row(strings, text);
+    return;
+  }
+  if (is<RowView<Null>>(text)) {
+    append_row(integers, number);
+    derive_one(strings, number, true, enum_id, number_path, self, dh);
+    return;
+  }
+  if (auto numbers = try_as<RowView<List>>(number)) {
+    auto texts = try_as<RowView<List>>(text);
+    if (not texts) {
+      diagnostic::warning("field `{}` must be `list<string>`, but got `{}`",
+                          text_path, kind(text))
+        .primary(self)
+        .emit(dh);
+    } else if (numbers->length() != texts->length()) {
+      diagnostic::warning("found inconsistent list layout between `{}` and "
+                          "`{}`",
+                          number_path, text_path)
+        .primary(self)
+        .emit(dh);
+    } else {
+      auto lhs = integers.list();
+      auto rhs = strings.list();
+      for (auto i = storage::Index{0}; i < numbers->length(); ++i) {
+        derive_pair(lhs, rhs, numbers->get(i), texts->get(i), enum_id,
+                    number_path.list(), text_path.list(), self, dh);
+      }
+      return;
+    }
+    append_row(integers, number);
+    append_row(strings, text);
+    return;
+  }
+  auto integer = try_as<RowView<Int>>(number);
+  auto string = try_as<RowView<String>>(text);
+  if (not integer) {
+    diagnostic::warning("field `{}` must be `int`, but got `{}`", number_path,
+                        kind(number))
+      .primary(self)
+      .emit(dh);
+  } else if (not string) {
+    diagnostic::warning("field `{}` must be `string`, but got `{}`", text_path,
+                        kind(text))
+      .primary(self)
+      .emit(dh);
+  } else {
+    auto const& forward = check(get_ocsf_int_to_string(enum_id)).get();
+    auto const& reverse = check(get_ocsf_string_to_int(enum_id)).get();
+    auto expected_string = forward.find(**integer);
+    if (expected_string == forward.end()) {
+      diagnostic::warning("found invalid value for `{}`", number_path)
+        .primary(self)
+        .note("got {}", **integer)
+        .emit(dh);
+    }
+    if (expected_string == forward.end()
+        or expected_string->second != "Other") {
+      auto expected_int = reverse.find(**string);
+      if (expected_int == reverse.end()) {
+        diagnostic::warning("found invalid value for `{}`", text_path)
+          .primary(self)
+          .note("got {:?}", **string)
+          .emit(dh);
+      } else if (expected_string != forward.end()
+                 and (**integer != expected_int->second
+                      or **string != expected_string->second)) {
+        diagnostic::warning("found inconsistency between `{}` and `{}`",
+                            number_path, text_path)
+          .primary(self)
+          .note("got {} ({:?}) and {:?} ({})", **integer,
+                expected_string->second, **string, expected_int->second)
+          .emit(dh);
+      }
+    }
+  }
+  append_row(integers, number);
+  append_row(strings, text);
+}
+
+auto derive_record(Array<Record> input, record_type const& schema,
+                   storage::BitMap const& rows, location self,
+                   diagnostic_handler& dh, value_path path) -> Array<Record>;
+
+auto derive_value(Array<Data> input, type const& schema,
+                  storage::BitMap const& rows, location self,
+                  diagnostic_handler& dh, value_path path) -> Array<Data> {
+  if (schema.attribute("variant")) {
+    return input;
+  }
+  if (auto record = try_as<record_type>(schema)) {
+    return std::move(input).map_alternative<Record>([&](auto records) {
+      return derive_record(std::move(records.data), *record,
+                           rows & records.present, self, dh, path);
+    });
+  }
+  if (auto list = try_as<list_type>(schema)) {
+    return map_lists(std::move(input), rows, [&](auto values, auto elements) {
+      return derive_value(std::move(values), list->value_type(), elements, self,
+                          dh, path.list());
+    });
+  }
+  return input;
+}
+
+auto derive_record(Array<Record> input, record_type const& schema,
+                   storage::BitMap const& rows, location self,
+                   diagnostic_handler& dh, value_path path) -> Array<Record> {
+  if (not rows.any()) {
+    return input;
+  }
+  auto siblings = boost::unordered_flat_set<std::string_view>{};
+  for (auto const& [name, ty] : schema.fields()) {
+    if (ty.attribute("enum")) {
+      if (auto sibling = ty.attribute("sibling")) {
+        siblings.insert(*sibling);
+      }
+    }
+  }
+  for (auto const& [name, ty] : schema.fields()) {
+    auto value = input.field(name);
+    auto enum_id = ty.attribute("enum");
+    auto sibling = ty.attribute("sibling");
+    if (not enum_id or not sibling) {
+      if (value and not siblings.contains(name)) {
+        value->data
+          = derive_value(std::move(value->data), ty, rows & value->present,
+                         self, dh, path.field(name));
+        input = std::move(input).with_field_overwrite(name, std::move(*value));
+      }
+      continue;
+    }
+    auto other = input.field(*sibling);
+    auto absent = storage::BitMap{input.length(), false};
+    auto selected = rows
+                    & ((value ? value->present : absent)
+                       | (other ? other->present : absent));
+    if (not selected.any()) {
+      continue;
+    }
+    auto nulls = Array<Data>{Array<Null>{storage::NullStorage{input.length()}}};
+    // Preserve incompatible list pairs without suppressing other rows.
+    if (value and other) {
+      auto lhs = value->data.get_alternative<List>();
+      auto rhs = other->data.get_alternative<List>();
+      if (lhs and rhs and (selected & lhs->present).any()
+          and (selected & rhs->present).any()) {
+        auto incompatible = storage::BitMap::Mutable{input.length()};
+        auto paired = selected & value->present & other->present;
+        for (auto row : storage::true_bits(paired)) {
+          auto l = lhs->present.get(row);
+          auto r = rhs->present.get(row);
+          if (l != r
+              or (l
+                  and lhs->data.get(row).length()
+                        != rhs->data.get(row).length())) {
+            incompatible.set(row, true);
+          }
+        }
+        auto invalid = std::move(incompatible).finish();
+        if (invalid.any()) {
+          diagnostic::warning("found inconsistent list layout between `{}` and "
+                              "`{}`",
+                              path.field(name), path.field(*sibling))
+            .primary(self)
+            .emit(dh);
+          selected = selected.and_not(invalid);
+        }
+      }
+    }
+    if (not selected.any()) {
+      continue;
+    }
+    auto integers = ArrayBuilder<Data>{};
+    auto strings = ArrayBuilder<Data>{};
+    for (auto row : storage::true_bits(selected)) {
+      auto lhs = value and value->present.get(row) ? value->data.get(row)
+                                                   : nulls.get(row);
+      auto rhs = other and other->present.get(row) ? other->data.get(row)
+                                                   : nulls.get(row);
+      integers.skip_n(row - integers.length());
+      strings.skip_n(row - strings.length());
+      derive_pair(integers, strings, lhs, rhs, *enum_id, path.field(name),
+                  path.field(*sibling), self, dh);
+    }
+    integers.skip_n(input.length() - integers.length());
+    strings.skip_n(input.length() - strings.length());
+    auto update = [&](std::string_view key, auto old, Array<Data> replacement) {
+      if (old) {
+        replacement = with_merged(*old, {std::move(replacement), selected});
+      }
+      input = std::move(input).with_field_overwrite(
+        key,
+        {std::move(replacement), selected | (old ? old->present : absent)});
+    };
+    update(name, std::move(value), integers.finish());
+    update(*sibling, std::move(other), strings.finish());
+  }
+  return input;
+}
+
+auto derive(Array<Record> input, storage::BitMap& rows, location self,
+            diagnostic_handler& dh) -> Array<Record> {
+  for (auto& group : groups(input, rows, self, dh)) {
+    input = derive_record(std::move(input), as<record_type>(group.schema.type),
+                          group.rows, self, dh, {});
+  }
+  return input;
+}
+
 } // namespace nova_ocsf
 
 auto make_dependency_path(std::initializer_list<std::string_view> names)
@@ -2282,7 +2562,23 @@ private:
   TrimArgs args_;
 };
 
-enum class NovaTransform { cast, trim };
+class NovaDerive final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit NovaDerive(DeriveArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    input.data = nova_ocsf::derive(std::move(input.data), input.mask,
+                                   args_.operator_location, ctx.dh());
+    co_await push(std::move(input));
+  }
+
+private:
+  DeriveArgs args_;
+};
+
+enum class NovaTransform { cast, trim, derive };
 
 struct OcsfFunctionArgs {
   nova::ValueArgument x;
@@ -2299,8 +2595,10 @@ struct OcsfFunction {
   static auto name() -> std::string_view {
     if constexpr (Mode == NovaTransform::cast) {
       return "ocsf_cast";
-    } else {
+    } else if constexpr (Mode == NovaTransform::trim) {
       return "ocsf_trim";
+    } else {
+      return "ocsf_derive";
     }
   }
 
@@ -2330,6 +2628,9 @@ struct OcsfFunction {
         return nova_ocsf::trim(std::move(records->data), selected, args.call,
                                frame.dh(), args.drop_optional,
                                args.drop_recommended);
+      } else {
+        return nova_ocsf::derive(std::move(records->data), selected, args.call,
+                                 frame.dh());
       }
     }();
     return nova::Array<nova::Data>{std::move(result)}.null_where(
@@ -2459,7 +2760,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<DeriveArgs, Derive>{};
+    auto d = Describer<DeriveArgs, Derive, NovaDerive>{};
     d.parallelizable();
     d.operator_location(&DeriveArgs::operator_location);
     // Derivation may change either side of arbitrary schema-defined enum and
@@ -2486,3 +2787,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
                        tenzir::plugins::ocsf::NovaTransform::cast>)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
                        tenzir::plugins::ocsf::NovaTransform::trim>)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
+                       tenzir::plugins::ocsf::NovaTransform::derive>)

@@ -1,0 +1,3 @@
+let $event = ocsf_derive({class_uid: 1001, metadata: {version: "1.5.0"}, activity_id: 1})
+from {}, {}
+event = ocsf_derive($event)

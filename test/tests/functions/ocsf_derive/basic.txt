@@ -1,0 +1,87 @@
+{
+  events: [
+    {
+      class_uid: 1001,
+      metadata: {
+        version: "1.5.0",
+      },
+      activity_id: 1,
+    },
+    {
+      class_uid: 1001,
+      metadata: {
+        version: "1.5.0",
+      },
+      activity_name: "Read",
+    },
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            1,
+            null,
+            3,
+          ],
+        },
+        {
+          flags: [
+            "Authoritative Answer",
+          ],
+        },
+      ],
+    },
+  ],
+  derived: [
+    {
+      class_uid: 1001,
+      metadata: {
+        version: "1.5.0",
+      },
+      activity_id: 1,
+      activity_name: "Create",
+      class_name: "File System Activity",
+    },
+    {
+      class_uid: 1001,
+      metadata: {
+        version: "1.5.0",
+      },
+      activity_name: "Read",
+      activity_id: 2,
+      class_name: "File System Activity",
+    },
+    {
+      class_uid: 4003,
+      metadata: {
+        version: "1.5.0",
+      },
+      answers: [
+        {
+          flag_ids: [
+            1,
+            null,
+            3,
+          ],
+          flags: [
+            "Authoritative Answer",
+            null,
+            "Recursion Desired",
+          ],
+        },
+        {
+          flags: [
+            "Authoritative Answer",
+          ],
+          flag_ids: [
+            1,
+          ],
+        },
+      ],
+      class_name: "DNS Activity",
+    },
+  ],
+}
