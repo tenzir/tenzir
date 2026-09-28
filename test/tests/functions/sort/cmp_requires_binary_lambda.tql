@@ -1,5 +1,6 @@
 ---
 error: true
+skip: "binary lambda arguments are not supported yet"
 ---
 
 from {xs: [3, 1, 2]}

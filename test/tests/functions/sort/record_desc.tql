@@ -1,0 +1,2 @@
+from {r: {b: 2, a: 1}}
+select r = sort(r, desc=true)

@@ -157,4 +157,14 @@ auto compare(A lhs, B rhs) -> Bool {
   return _::compare_numbers<Op>(lhs, rhs);
 }
 
+enum class Order {
+  ascending,
+  descending,
+};
+
+/// Establishes a weak ordering for dynamically typed values, including nested
+/// lists and records. Nulls compare after non-null values in either direction.
+auto weak_order(RowView<Data> lhs, RowView<Data> rhs,
+                Order order = Order::ascending) -> std::weak_ordering;
+
 } // namespace tenzir::nova

@@ -32,9 +32,7 @@
 #include <arrow/compute/api_vector.h>
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
-#include <ranges>
 
 namespace tenzir::plugins::sort {
 
@@ -214,20 +212,11 @@ public:
         for (auto const& key : keys_) {
           auto const lhs_value = key.chunks[lhs.batch].get(lhs.row);
           auto const rhs_value = key.chunks[rhs.batch].get(rhs.row);
-          auto const lhs_null = is_null(lhs_value);
-          auto const rhs_null = is_null(rhs_value);
-          if (lhs_null and rhs_null) {
-            continue;
-          }
-          if (lhs_null) {
-            return false;
-          }
-          if (rhs_null) {
-            return true;
-          }
-          auto const relation = compare(lhs_value, rhs_value);
+          auto const order
+            = key.reverse ? nova::Order::descending : nova::Order::ascending;
+          auto const relation = nova::weak_order(lhs_value, rhs_value, order);
           if (relation != std::weak_ordering::equivalent) {
-            return (relation == std::weak_ordering::less) != key.reverse;
+            return relation == std::weak_ordering::less;
           }
         }
         return false;
@@ -253,144 +242,6 @@ public:
   }
 
 private:
-  static auto is_null(nova::RowView<nova::Data> const& value) -> bool {
-    return match(value, []<class T>(nova::RowView<T>) {
-      return std::same_as<T, nova::Null>;
-    });
-  }
-
-  static auto rank(nova::RowView<nova::Data> const& value) -> size_t {
-    return match(value, []<class T>(nova::RowView<T>) {
-      if constexpr (std::same_as<T, nova::Null>) {
-        return size_t{12};
-      } else if constexpr (std::same_as<T, bool>) {
-        return size_t{0};
-      } else if constexpr (std::same_as<T, int64_t>) {
-        return size_t{1};
-      } else if constexpr (std::same_as<T, uint64_t>) {
-        return size_t{2};
-      } else if constexpr (std::same_as<T, double>) {
-        return size_t{3};
-      } else if constexpr (std::same_as<T, duration>) {
-        return size_t{4};
-      } else if constexpr (std::same_as<T, time>) {
-        return size_t{5};
-      } else if constexpr (std::same_as<T, nova::String>) {
-        return size_t{6};
-      } else if constexpr (std::same_as<T, ip>) {
-        return size_t{7};
-      } else if constexpr (std::same_as<T, subnet>) {
-        return size_t{8};
-      } else if constexpr (std::same_as<T, nova::List>) {
-        return size_t{9};
-      } else if constexpr (std::same_as<T, nova::Record>) {
-        return size_t{10};
-      } else if constexpr (std::same_as<T, nova::Secret>) {
-        return size_t{11};
-      } else {
-        static_assert(std::same_as<T, nova::Blob>);
-        return size_t{12};
-      }
-    });
-  }
-
-  static auto compare(nova::RowView<nova::Data> const& lhs,
-                      nova::RowView<nova::Data> const& rhs)
-    -> std::weak_ordering {
-    return match(
-      std::tie(lhs, rhs),
-      []<class L, class R>(nova::RowView<L> lhs,
-                           nova::RowView<R> rhs) -> std::weak_ordering {
-        constexpr auto lhs_numeric
-          = concepts::one_of<L, int64_t, uint64_t, double>;
-        constexpr auto rhs_numeric
-          = concepts::one_of<R, int64_t, uint64_t, double>;
-        if constexpr (lhs_numeric and rhs_numeric) {
-          auto const relation = nova::_::compare_numbers(*lhs, *rhs);
-          if (relation == std::partial_ordering::unordered) {
-            if constexpr (std::same_as<L, double> and std::same_as<R, double>) {
-              return std::isnan(*lhs) == std::isnan(*rhs)
-                       ? std::weak_ordering::equivalent
-                     : std::isnan(*lhs) ? std::weak_ordering::greater
-                                        : std::weak_ordering::less;
-            } else if constexpr (std::same_as<L, double>) {
-              return std::weak_ordering::greater;
-            } else {
-              return std::weak_ordering::less;
-            }
-          }
-          return relation < 0   ? std::weak_ordering::less
-                 : relation > 0 ? std::weak_ordering::greater
-                                : std::weak_ordering::equivalent;
-        } else if constexpr (not std::same_as<L, R>) {
-          return rank(lhs) <=> rank(rhs);
-        } else if constexpr (std::same_as<L, nova::Null>) {
-          return std::weak_ordering::equivalent;
-        } else if constexpr (std::same_as<L, nova::List>) {
-          auto lhs_it = lhs.begin();
-          auto rhs_it = rhs.begin();
-          while (lhs_it != lhs.end() and rhs_it != rhs.end()) {
-            if (auto result = compare(*lhs_it, *rhs_it);
-                result != std::weak_ordering::equivalent) {
-              return result;
-            }
-            ++lhs_it;
-            ++rhs_it;
-          }
-          if (lhs_it == lhs.end() and rhs_it == rhs.end()) {
-            return std::weak_ordering::equivalent;
-          }
-          return lhs_it == lhs.end() ? std::weak_ordering::less
-                                     : std::weak_ordering::greater;
-        } else if constexpr (std::same_as<L, nova::Record>) {
-          auto lhs_it = lhs.begin();
-          auto rhs_it = rhs.begin();
-          while (lhs_it != lhs.end() and rhs_it != rhs.end()) {
-            auto [lhs_name, lhs_value] = *lhs_it;
-            auto [rhs_name, rhs_value] = *rhs_it;
-            if (auto result = lhs_name <=> rhs_name;
-                result != std::weak_ordering::equivalent) {
-              return result;
-            }
-            if (auto result = compare(lhs_value, rhs_value);
-                result != std::weak_ordering::equivalent) {
-              return result;
-            }
-            ++lhs_it;
-            ++rhs_it;
-          }
-          if (lhs_it == lhs.end() and rhs_it == rhs.end()) {
-            return std::weak_ordering::equivalent;
-          }
-          return lhs_it == lhs.end() ? std::weak_ordering::less
-                                     : std::weak_ordering::greater;
-        } else if constexpr (std::same_as<L, nova::Secret>) {
-          return std::weak_ordering::equivalent;
-        } else if constexpr (std::same_as<L, blob_view>) {
-          if (std::ranges::lexicographical_compare(*lhs, *rhs)) {
-            return std::weak_ordering::less;
-          }
-          if (std::ranges::lexicographical_compare(*rhs, *lhs)) {
-            return std::weak_ordering::greater;
-          }
-          return std::weak_ordering::equivalent;
-        } else if constexpr (requires {
-                               *lhs < *rhs;
-                               *lhs > *rhs;
-                             }) {
-          if (nova::compare<ast::binary_op::lt>(*lhs, *rhs)) {
-            return std::weak_ordering::less;
-          }
-          if (nova::compare<ast::binary_op::gt>(*lhs, *rhs)) {
-            return std::weak_ordering::greater;
-          }
-          return std::weak_ordering::equivalent;
-        } else {
-          static_assert(sizeof(L) == 0, "missing Nova sort comparator");
-        }
-      });
-  }
-
   struct EventsBuilder {
     auto append(nova::Events const& input, nova::storage::Index row) -> void {
       auto output = data.record();

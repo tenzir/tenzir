@@ -1,0 +1,13 @@
+warning: `desc` is only applied when sorting lists
+ --> tests/functions/sort/record_desc.tql:2:12
+  |
+2 | select r = sort(r, desc=true)
+  |            ~~~~~~~~~~~~~~~~~~
+  |
+  = note: record fields are always sorted ascending by key
+{
+  r: {
+    a: 1,
+    b: 2,
+  },
+}

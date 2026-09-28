@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/comparison.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/option.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
@@ -26,6 +30,7 @@
 #include <algorithm>
 #include <ranges>
 #include <string_view>
+#include <vector>
 
 namespace tenzir::plugins::sort_function {
 
@@ -262,7 +267,106 @@ auto sort_record(const series& input) -> series {
   };
 }
 
-class plugin final : public function_plugin {
+struct SortArgs {
+  nova::ValueArgument x;
+  bool descending = false;
+  location call;
+};
+
+template <class Builder>
+auto append_sorted_records(Builder&& builder, nova::RowView<nova::Data> value)
+  -> void {
+  using namespace nova;
+  match(value, [&]<class T>(nova::RowView<T> value) {
+    if constexpr (std::same_as<T, Null>) {
+      builder.null();
+    } else if constexpr (std::same_as<T, List>) {
+      auto output = builder.list();
+      for (auto element : value) {
+        append_sorted_records(output, element);
+      }
+    } else if constexpr (std::same_as<T, Record>) {
+      auto fields = std::vector<std::pair<std::string_view, RowView<Data>>>{};
+      for (auto field : value) {
+        fields.push_back(field);
+      }
+      std::ranges::sort(fields, std::less<>{},
+                        &decltype(fields)::value_type::first);
+      auto output = builder.record();
+      for (auto const& [name, field] : fields) {
+        append_sorted_records(output.field(name), field);
+      }
+    } else {
+      builder.data(*value);
+    }
+  });
+}
+
+template <class Builder>
+auto append_sorted_list(Builder&& builder, nova::RowView<nova::List> value,
+                        bool descending) -> void {
+  using namespace nova;
+  auto elements = std::vector<RowView<Data>>{};
+  for (auto element : value) {
+    elements.push_back(element);
+  }
+  auto const order = descending ? Order::descending : Order::ascending;
+  std::stable_sort(
+    elements.begin(), elements.end(), [order](auto lhs, auto rhs) {
+      return nova::weak_order(lhs, rhs, order) == std::weak_ordering::less;
+    });
+  auto output = builder.list();
+  for (auto element : elements) {
+    append_row(output, element);
+  }
+}
+
+class SortFunction final {
+public:
+  static auto eval(SortArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto builder = ArrayBuilder<Data>{};
+    auto invalid = false;
+    auto record_descending = false;
+    for (auto row = storage::Index{0}; row < frame.length(); ++row) {
+      if (not frame.mask().get(row)) {
+        builder.skip();
+        continue;
+      }
+      auto value = args.x.data.get(row);
+      match(value, [&]<class T>(RowView<T> value) {
+        if constexpr (std::same_as<T, Null>) {
+          builder.null();
+        } else if constexpr (std::same_as<T, List>) {
+          append_sorted_list(builder, value, args.descending);
+        } else if constexpr (std::same_as<T, Record>) {
+          record_descending |= args.descending;
+          append_sorted_records(builder, RowView<Data>{value});
+        } else {
+          invalid = true;
+          builder.null();
+        }
+      });
+    }
+    if (invalid) {
+      diagnostic::warning("`sort` expected `record` or `list`, got a different "
+                          "type")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    if (record_descending) {
+      diagnostic::warning("`desc` is only applied when sorting lists")
+        .primary(args.call)
+        .note("record fields are always sorted ascending by key")
+        .emit(frame);
+    }
+    return builder.finish();
+  }
+};
+
+class plugin final : public virtual function_plugin,
+                     public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "sort-function";
@@ -274,6 +378,14 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SortArgs, SortFunction>{};
+    d.positional("x", &SortArgs::x, "list|record");
+    d.named_optional("desc", &SortArgs::descending, "bool");
+    d.call_location(&SortArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

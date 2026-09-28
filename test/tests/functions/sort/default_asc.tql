@@ -1,2 +1,2 @@
-from {xs: [3, 1, 2]}
-select ys = sort(xs)
+from {xs: [3, null, 1, 2, 2], nested: [[null], [1]]}
+select ys = sort(xs), nested = sort(nested)
