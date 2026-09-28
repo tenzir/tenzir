@@ -210,5 +210,5 @@ TEST("const_eval rejects secrets") {
   CHECK(
     not const_eval(call("secret", {constant("k")}), InstantiateCtx{dh, *reg}));
   CHECK_EQUAL(first_error(std::move(dh).collect()),
-              "`secret` cannot be used here");
+              "`secret` cannot be used in this context");
 }
