@@ -1,0 +1,9 @@
+from {src: 45.146.166.123, dst: 198.71.247.91, sport: 52482, dport: 749, proto: "tcp", seed: 0},
+     {src: 198.71.247.91, dst: 45.146.166.123, sport: 749, dport: 52482, proto: "tcp", seed: 0},
+     {src: 45.146.166.123, dst: 198.71.247.91, sport: 0, dport: 65535, proto: "udp", seed: 65535},
+     {src: fe80::200:86ff:fe05:80da, dst: fe80::260:97ff:fe07:69ea, sport: 135, dport: 0, proto: "icmp6", seed: 1},
+     {src: 192.168.0.89, dst: 192.168.0.1, sport: null, dport: null, proto: "icmp", seed: null},
+     {src: null, dst: 192.168.0.1, sport: null, dport: null, proto: "tcp", seed: 0},
+     {src: 192.168.0.89, dst: null, sport: null, dport: null, proto: "tcp", seed: 0},
+     {src: 192.168.0.89, dst: 192.168.0.1, sport: null, dport: null, proto: null, seed: 0}
+select id = community_id(src_ip=src, dst_ip=dst, src_port=sport, dst_port=dport, proto=proto, seed=seed)

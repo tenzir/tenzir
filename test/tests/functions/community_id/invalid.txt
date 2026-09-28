@@ -1,0 +1,64 @@
+warning: `src_port` must be between 0 and 65535
+  --> tests/functions/community_id/invalid.tql:10:71
+   |
+10 | select id = community_id(src_ip=192.0.2.1, dst_ip=192.0.2.2, src_port=sport, dst_port=dport, proto=proto, seed=seed)
+   |                                                                       ~~~~~
+   |
+
+warning: `dst_port` must be between 0 and 65535
+  --> tests/functions/community_id/invalid.tql:10:87
+   |
+10 | select id = community_id(src_ip=192.0.2.1, dst_ip=192.0.2.2, src_port=sport, dst_port=dport, proto=proto, seed=seed)
+   |                                                                                       ~~~~~
+   |
+
+warning: encountered only `src_port` or `dst_port` but not both
+  --> tests/functions/community_id/invalid.tql:10:71
+   |
+10 | select id = community_id(src_ip=192.0.2.1, dst_ip=192.0.2.2, src_port=sport, dst_port=dport, proto=proto, seed=seed)
+   |                                                                       ~~~~~
+   ⋮
+10 | select id = community_id(src_ip=192.0.2.1, dst_ip=192.0.2.2, src_port=sport, dst_port=dport, proto=proto, seed=seed)
+   |                                                                                       ~~~~~
+   |
+
+warning: `seed` must be between 0 and 65535
+  --> tests/functions/community_id/invalid.tql:10:112
+   |
+10 | select id = community_id(src_ip=192.0.2.1, dst_ip=192.0.2.2, src_port=sport, dst_port=dport, proto=proto, seed=seed)
+   |                                                                                                                ~~~~
+   |
+
+warning: `proto` must be `tcp`, `udp`, `icmp`, or `icmp6`
+  --> tests/functions/community_id/invalid.tql:10:100
+   |
+10 | select id = community_id(src_ip=192.0.2.1, dst_ip=192.0.2.2, src_port=sport, dst_port=dport, proto=proto, seed=seed)
+   |                                                                                                    ~~~~~
+   |
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}

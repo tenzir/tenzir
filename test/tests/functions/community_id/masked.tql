@@ -1,0 +1,6 @@
+from {keep: true, src: 45.146.166.123, sport: 52482, seed: null},
+     {keep: false, src: "invalid", sport: true, seed: "invalid"},
+     {keep: false, src: 45.146.166.123, sport: -1, seed: -1},
+     {keep: true, src: 45.146.166.123, sport: 52482, seed: 0}
+where keep
+select id = community_id(src_ip=src, dst_ip=198.71.247.91, src_port=sport, dst_port=749, proto="tcp", seed=seed)
