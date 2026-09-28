@@ -1,0 +1,16 @@
+let $seed = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+from {x: 192.0.2.1}, {x: 2001:db8::1}
+default_value = x.encrypt_cryptopan()
+empty_value = x.encrypt_cryptopan(seed="")
+odd_value = x.encrypt_cryptopan(seed="abc")
+padded_value = x.encrypt_cryptopan(seed="abc0")
+invalid_value = x.encrypt_cryptopan(seed="mysecretkey12345")
+full_value = x.encrypt_cryptopan(seed=$seed)
+truncated_value = x.encrypt_cryptopan(seed=$seed + "ff")
+assert default_value == empty_value
+assert odd_value == padded_value
+assert full_value == truncated_value
+assert default_value.decrypt_cryptopan() == x
+assert odd_value.decrypt_cryptopan(seed="abc") == x
+assert invalid_value.decrypt_cryptopan(seed="mysecretkey12345") == x
+assert full_value.decrypt_cryptopan(seed=$seed) == x

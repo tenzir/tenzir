@@ -1,0 +1,8 @@
+error: `family` must be one of `ipv4`, `ipv6`
+ --> tests/functions/ip/cryptopan_invalid_family.tql:4:45
+  |
+4 | from {x: 192.0.2.1.decrypt_cryptopan(family="ipv5")}
+  |                                             ^^^^^^
+  |
+  = usage: decrypt_cryptopan(x:ip, [seed=string, family=string])
+  = docs: https://tenzir.com/docs/reference/functions/decrypt_cryptopan

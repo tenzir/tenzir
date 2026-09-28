@@ -1,0 +1,12 @@
+{
+  x: 192.0.2.1,
+  roundtrip: 192.0.2.1,
+}
+{
+  x: null,
+  roundtrip: null,
+}
+{
+  x: 2001:db8::1,
+  roundtrip: 2001:db8::1,
+}
