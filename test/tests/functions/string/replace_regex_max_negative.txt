@@ -4,3 +4,5 @@ error: `max` must be at least 0, but got -1
 9 | x = x.replace_regex("[0-9a-f]{2}", "??", max=-1)
   |                                              ^^
   |
+  = usage: replace_regex(x:string, pattern:string, replacement:string, [max=int])
+  = docs: https://tenzir.com/docs/reference/functions/replace_regex

@@ -102,7 +102,7 @@ public:
     inline auto length() const noexcept -> Index;
     inline auto true_count() const noexcept -> Index;
     inline auto get(Index i) const -> bool;
-    inline auto set(Index i, bool value) -> void;
+    inline auto set(Index i, bool value) -> bool;
     inline auto copy_from(BitMap const& other) -> void;
     inline auto finish() && -> BitMap;
     inline auto operator|=(const BitMap& other) -> Mutable&;
@@ -603,7 +603,7 @@ inline auto BitMap::Mutable::get(Index i) const -> bool {
   return (data_.begin()[i >> word_shift] & (Word{1} << (i & bit_mask))) != 0;
 }
 
-inline auto BitMap::Mutable::set(Index i, bool value) -> void {
+inline auto BitMap::Mutable::set(Index i, bool value) -> bool {
   TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
   TENZIR_ASSERT_LT_EXPENSIVE(i, length_);
   auto& word = data_.begin()[i >> word_shift];
@@ -619,6 +619,7 @@ inline auto BitMap::Mutable::set(Index i, bool value) -> void {
   } else if (not value and was_set) {
     --true_count_;
   }
+  return true;
 }
 
 inline auto BitMap::Mutable::copy_from(BitMap const& other) -> void {

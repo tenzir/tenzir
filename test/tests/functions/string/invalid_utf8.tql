@@ -1,0 +1,22 @@
+// Converting a blob does not validate UTF-8. Functions that decode the
+// characters of such a string null its row with a warning, even when the
+// invalid bytes follow the characters that decide the result, while the
+// other rows remain unaffected.
+from {b: b"x\x80y"}, {b: b"ok"}
+x = string(b)
+select bytes = x.length_bytes(),
+  chars = x.length_chars(),
+  alnum = x.is_alnum(),
+  alpha = x.is_alpha(),
+  lower = x.is_lower(),
+  numeric = x.is_numeric(),
+  printable = x.is_printable(),
+  title = x.is_title(),
+  upper = x.is_upper(),
+  trim = x.trim().length_bytes(),
+  trim_start = x.trim_start().length_bytes(),
+  trim_end = x.trim_end().length_bytes(),
+  trim_chars = x.trim("b").length_bytes(),
+  reverse = x.reverse().length_bytes(),
+  pad_start = x.pad_start(8).length_bytes(),
+  pad_end = x.pad_end(8).length_bytes()

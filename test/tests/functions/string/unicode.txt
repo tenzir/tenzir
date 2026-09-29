@@ -1,0 +1,135 @@
+{
+  s: "ǅemal ǈubljana",
+  upper: "ǄEMAL ǇUBLJANA",
+  lower: "ǆemal ǉubljana",
+  title: "Ǆemal Ǉubljana",
+  capitalized: "Ǆemal ǉubljana",
+  reversed: "anajlbuǈ lameǅ",
+  trimmed: "ǅemal ǈubljana",
+  alpha: false,
+  numeric: false,
+  is_title: true,
+  printable: true,
+  chars: 14,
+  bytes: 16,
+}
+{
+  s: "straße ẞ",
+  upper: "STRAẞE ẞ",
+  lower: "straße ß",
+  title: "Straße ẞ",
+  capitalized: "Straße ß",
+  reversed: "ẞ eßarts",
+  trimmed: "straße ẞ",
+  alpha: false,
+  numeric: false,
+  is_title: false,
+  printable: true,
+  chars: 8,
+  bytes: 11,
+}
+{
+  s: "İstanbul ıi",
+  upper: "İSTANBUL II",
+  lower: "istanbul ıi",
+  title: "İstanbul Ii",
+  capitalized: "İstanbul ıi",
+  reversed: "iı lubnatsİ",
+  trimmed: "İstanbul ıi",
+  alpha: false,
+  numeric: false,
+  is_title: false,
+  printable: true,
+  chars: 11,
+  bytes: 13,
+}
+{
+  s: "ΟΔΥΣΣΕΥΣ",
+  upper: "ΟΔΥΣΣΕΥΣ",
+  lower: "οδυσσευσ",
+  title: "Οδυσσευσ",
+  capitalized: "Οδυσσευσ",
+  reversed: "ΣΥΕΣΣΥΔΟ",
+  trimmed: "ΟΔΥΣΣΕΥΣ",
+  alpha: true,
+  numeric: false,
+  is_title: false,
+  printable: true,
+  chars: 8,
+  bytes: 16,
+}
+{
+  s: "éclair",
+  upper: "ÉCLAIR",
+  lower: "éclair",
+  title: "ÉClair",
+  capitalized: "Éclair",
+  reversed: "rialće",
+  trimmed: "éclair",
+  alpha: false,
+  numeric: false,
+  is_title: false,
+  printable: true,
+  chars: 7,
+  bytes: 8,
+}
+{
+  s: "𐐨𐐀 𐐩",
+  upper: "𐐀𐐀 𐐁",
+  lower: "𐐨𐐨 𐐩",
+  title: "𐐀𐐨 𐐁",
+  capitalized: "𐐀𐐨 𐐩",
+  reversed: "𐐩 𐐀𐐨",
+  trimmed: "𐐨𐐀 𐐩",
+  alpha: false,
+  numeric: false,
+  is_title: false,
+  printable: true,
+  chars: 4,
+  bytes: 13,
+}
+{
+  s: "　  ⅫⅦ ",
+  upper: "　  ⅫⅦ ",
+  lower: "　  ⅻⅶ ",
+  title: "　  Ⅻⅶ ",
+  capitalized: "　  ⅻⅶ ",
+  reversed: " ⅦⅫ  　",
+  trimmed: "ⅫⅦ",
+  alpha: false,
+  numeric: false,
+  is_title: false,
+  printable: false,
+  chars: 7,
+  bytes: 17,
+}
+{
+  s: "١٢٣",
+  upper: "١٢٣",
+  lower: "١٢٣",
+  title: "١٢٣",
+  capitalized: "١٢٣",
+  reversed: "٣٢١",
+  trimmed: "١٢٣",
+  alpha: false,
+  numeric: true,
+  is_title: false,
+  printable: true,
+  chars: 3,
+  bytes: 6,
+}
+{
+  s: "",
+  upper: "",
+  lower: "",
+  title: "",
+  capitalized: "",
+  reversed: "",
+  trimmed: "",
+  alpha: false,
+  numeric: false,
+  is_title: false,
+  printable: true,
+  chars: 0,
+  bytes: 0,
+}

@@ -46,6 +46,41 @@
 
 using namespace tenzir::nova;
 
+TEST("byte storage rejects oversized writes before accessing their bytes") {
+  // A synthetic view exercises the size guard without a multi-gigabyte
+  // allocation. Its iterators must only be accessed for the real payload.
+  struct SizedView {
+    std::string_view bytes;
+    size_t reported_size;
+
+    auto size() const -> size_t {
+      return reported_size;
+    }
+    auto begin() const -> char const* {
+      REQUIRE_EQUAL(reported_size, bytes.size());
+      return bytes.begin();
+    }
+    auto end() const -> char const* {
+      REQUIRE_EQUAL(reported_size, bytes.size());
+      return bytes.end();
+    }
+  };
+  auto storage = storage::DenseOffsetBytesStorage<char, SizedView>::Mutable{2};
+  auto const max
+    = static_cast<size_t>(std::numeric_limits<storage::Index>::max());
+  CHECK(not storage.set(0, SizedView{"", max + 1}));
+  CHECK(storage.set(0, SizedView{"a", 1}));
+  CHECK(not storage.set(0, SizedView{"", max}));
+  CHECK(storage.set(1, SizedView{"bc", 2}));
+  auto result = std::move(storage).finish();
+  CHECK_EQUAL(result.data().length(), 3);
+  CHECK_EQUAL(std::string_view(result.data().begin(), 3), "abc");
+  CHECK_EQUAL(result.span(0).begin, 0);
+  CHECK_EQUAL(result.span(0).end, 1);
+  CHECK_EQUAL(result.span(1).begin, 1);
+  CHECK_EQUAL(result.span(1).end, 3);
+}
+
 namespace {
 
 /// Builds an array for `Tag` from `values` via `.data(v)` and checks that

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <string_view>
 #include <type_traits>
 
@@ -57,6 +58,13 @@ public:
 
     auto length() const noexcept -> Index {
       return length_;
+    }
+
+    auto set(Index i, ViewType) -> bool {
+      TENZIR_UNUSED(i);
+      TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
+      TENZIR_ASSERT_LT_EXPENSIVE(i, length_);
+      return true;
     }
 
     auto finish() const -> NullStorage {
@@ -217,10 +225,11 @@ public:
       return data_[i];
     }
 
-    auto set(Index i, T value) -> void {
+    auto set(Index i, T value) -> bool {
       TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
       TENZIR_ASSERT_LT_EXPENSIVE(i, data_.length());
       data_[i] = std::move(value);
+      return true;
     }
 
     /// Raw access to the `length()` elements, for tight loops that have
@@ -309,11 +318,12 @@ public:
       return offsets_.length();
     }
 
-    auto set(Index i, T value) -> void {
+    auto set(Index i, T value) -> bool {
       TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
       TENZIR_ASSERT_LT_EXPENSIVE(i, offsets_.length());
       data_.emplace_back(std::move(value));
       offsets_[i] = data_.size() - 1;
+      return true;
     }
 
     auto finish() && -> DenseOffsetStorage {
@@ -412,12 +422,18 @@ public:
       }
     }
 
-    auto set(Index i, View value) -> void {
+    /// Returns false without changing the storage if the bytes do not fit.
+    [[nodiscard]] auto set(Index i, View value) -> bool {
       TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
       TENZIR_ASSERT_LT_EXPENSIVE(i, ranges_.length());
       const auto begin = data_builder_.size();
+      if (value.size()
+          > static_cast<size_t>(std::numeric_limits<Index>::max() - begin)) {
+        return false;
+      }
       data_builder_.move_append(value.begin(), value.end());
       ranges_[i] = Span{begin, begin + static_cast<Index>(value.size())};
+      return true;
     }
 
     auto set_same_as(Index destination, Index source) -> void {

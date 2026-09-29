@@ -4,3 +4,5 @@ error: `pad_start` expected single character for padding, but got `ab` with leng
 7 |   multi_pad: "test".pad_start(10, "ab")
   |                                   ^^^^
   |
+  = usage: pad_start(x:string, length:int, [pad_char:string])
+  = docs: https://tenzir.com/docs/reference/functions/pad_start

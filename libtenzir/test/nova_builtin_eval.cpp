@@ -426,6 +426,80 @@ TEST("has on a non-record column warns with the type") {
   CHECK_EQUAL(diags[0].message, "expected `record`, got `int`");
 }
 
+TEST("trimming rewrites spans while sharing the input characters") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::string{"  alpha  "});
+  builder.record().field("x").data(std::string{" beta "});
+  auto events = make_events(builder.finish());
+  auto input = events.data.field("x")->data.get_alternative<String>();
+  REQUIRE(input);
+  auto const& storage
+    = as<storage::DenseStringOffsetStorage>(input->data.storage());
+  for (auto name : {"trim", "trim_start", "trim_end"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call(name, {root_field("x")}), events, events.mask, dh);
+    auto strings = result.get_alternative<String>();
+    REQUIRE(strings);
+    auto const& output
+      = as<storage::DenseStringOffsetStorage>(strings->data.storage());
+    CHECK_EQUAL(output.data().begin(), storage.data().begin());
+    CHECK_EQUAL(output.data().length(), storage.data().length());
+    CHECK_EQUAL(string_at(result, 0), std::string_view{name} == "trim" ? "alpha"
+                                      : std::string_view{name} == "trim_start"
+                                        ? "alpha  "
+                                        : "  alpha");
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("trimming a constant retains a constant result under a sparse mask") {
+  auto events = make_mixed_string_events();
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("trim", {str_const("  x  ")}), events,
+                     bitmap({false, true, false}), dh);
+  auto strings = result.get_alternative<String>();
+  REQUIRE(strings);
+  CHECK((is<storage::ConstantStorage<std::string, std::string_view>>(
+    strings->data.storage())));
+  CHECK_EQUAL(string_at(result, 1), "x");
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("string transformations discard invalid row bytes and honor sparse "
+     "masks") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::string{"ab\x80"});
+  builder.record().field("x").data(std::string{"\xc3\xa4Z"});
+  builder.record().field("x").data(Int{42});
+  builder.record().field("x").null();
+  builder.record().field("x").data(std::string{});
+  auto events = make_events(builder.finish());
+  for (auto name :
+       {"to_upper", "to_lower", "capitalize", "to_title", "reverse"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call(name, {root_field("x")}), events,
+                       bitmap({true, true, false, true, true}), dh);
+    CHECK(is_null_at(result, 0));
+    CHECK(is_null_at(result, 3));
+    CHECK_EQUAL(string_at(result, 4), "");
+    auto const expected = std::string_view{name} == "to_upper"   ? "\xc3\x84Z"
+                          : std::string_view{name} == "to_lower" ? "\xc3\xa4z"
+                          : std::string_view{name} == "reverse"  ? "Z\xc3\xa4"
+                                                                 : "\xc3\x84z";
+    CHECK_EQUAL(string_at(result, 1), expected);
+    auto strings = result.get_alternative<String>();
+    REQUIRE(strings);
+    auto const& output
+      = as<storage::DenseStringOffsetStorage>(strings->data.storage());
+    CHECK_EQUAL(output.data().length(), 3);
+    CHECK_EQUAL(output.span(1).begin, 0);
+    auto diagnostics = std::move(dh).collect();
+    REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+    CHECK_EQUAL(diagnostics[0].message,
+                fmt::format("`{}` expected valid UTF-8", name));
+  }
+}
+
 TEST("split propagates null silently and warns once for a non-string row") {
   auto events = make_mixed_string_events();
   auto dh = collecting_diagnostic_handler{};
@@ -806,14 +880,22 @@ TEST("join concatenates strings and nulls rows with null elements") {
     list.null();
   }
   builder.record().field("xs").null();
+  builder.record().field("xs").list().data(std::string_view{"z"});
   auto events = make_events(builder.finish());
   auto dh = collecting_diagnostic_handler{};
   auto result = eval(call("join", {root_field("xs"), str_const("-")}), events,
-                     storage::BitMap{4, true}, dh);
+                     storage::BitMap{5, true}, dh);
   CHECK_EQUAL(string_at(result, 0), Option<std::string>{"a-b"});
   CHECK_EQUAL(string_at(result, 1), Option<std::string>{""});
   CHECK(is_null_at(result, 2));
   CHECK(is_null_at(result, 3));
+  CHECK_EQUAL(string_at(result, 4), "z");
+  auto strings = result.get_alternative<String>();
+  REQUIRE(strings);
+  auto const& output
+    = as<storage::DenseStringOffsetStorage>(strings->data.storage());
+  CHECK_EQUAL(output.data().length(), 4);
+  CHECK_EQUAL(output.span(4).begin, 3);
   auto diags = std::move(dh).collect();
   REQUIRE_EQUAL(diags.size(), size_t{1});
   CHECK_EQUAL(diags[0].message, "found `null` in list passed to `join`");

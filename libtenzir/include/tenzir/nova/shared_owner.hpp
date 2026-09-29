@@ -13,8 +13,11 @@
 #include "tenzir/nova/storage_fwd.hpp"
 #include "tenzir/type_traits.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <utility>
 
@@ -138,6 +141,15 @@ auto reallocate(Control<T, AllocFn>* control, Index new_capacity)
   auto result = layout<T, AllocFn>(storage, new_capacity);
   result.control->capacity = result.actual_capacity;
   return result;
+}
+
+/// Returns the capacity to grow to for `target` elements: half beyond it,
+/// computed in 64 bits and capped at the range of `Index`, so that targets
+/// beyond a third of it do not overflow.
+constexpr auto grow_capacity(Index target) -> Index {
+  auto const three_halves = int64_t{target} * 3 / 2 + 1;
+  return static_cast<Index>(
+    std::min(three_halves, int64_t{std::numeric_limits<Index>::max()}));
 }
 
 } // namespace _
@@ -430,7 +442,7 @@ public:
       if (count == 0) {
         return;
       }
-      reserve_at_least(size() + count);
+      reserve_at_least(size_after(count));
       std::uninitialized_fill_n(owner_.end(), count, value);
       owner_.control_->element_count += count;
     }
@@ -441,7 +453,7 @@ public:
       if (count == 0) {
         return;
       }
-      reserve_at_least(size() + static_cast<Index>(count));
+      reserve_at_least(size_after(count));
       std::uninitialized_move(begin, end, owner_.end());
       owner_.control_->element_count += count;
     }
@@ -452,7 +464,7 @@ public:
       if (count == 0) {
         return;
       }
-      reserve_at_least(size() + static_cast<Index>(count));
+      reserve_at_least(size_after(count));
       // Unlike the legacy algorithm, ranges::iter_move also handles iterators
       // that return prvalues, such as transform_view's, without dangling.
       std::ranges::uninitialized_move(begin, end, owner_.end(),
@@ -505,31 +517,20 @@ public:
     }
 
     auto reserve_exact(Index N) -> void {
+      TENZIR_ASSERT_GEQ_EXPENSIVE(N, 0);
       if (N <= capacity_) {
         return;
       }
-      if constexpr (_::can_reallocate<T>) {
-        if (capacity_ > 0) {
-          const auto element_count = owner_.control_->element_count;
-          auto [control_ptr, data_ptr, actual_capacity]
-            = _::reallocate<T, AllocFn>(owner_.control_, N);
-          control_ptr->element_count = element_count;
-          owner_.control_ = control_ptr;
-          owner_.data_ = data_ptr;
-          capacity_ = actual_capacity;
-          return;
-        }
-      }
-      auto new_alloc = SharedOwner::make_uninitialized(N);
-      new_alloc.move_append(owner_.data_, owner_.data_ + owner_.length());
-      *this = std::move(new_alloc);
+      reserve_impl(N);
+      TENZIR_ASSERT_EQ_EXPENSIVE(capacity_, N);
     }
 
     auto reserve_at_least(Index N) -> void {
-      if (N <= capacity_) {
-        return;
+      TENZIR_ASSERT_GEQ_EXPENSIVE(N, 0);
+      if (N > capacity_) {
+        reserve_impl(_::grow_capacity(N));
       }
-      reserve_exact(grow_size(N));
+      TENZIR_ASSERT_GEQ_EXPENSIVE(capacity_, N);
     }
 
     Builder() = default;
@@ -547,6 +548,24 @@ public:
     ~Builder() = default;
 
   private:
+    auto reserve_impl(Index capacity) -> void {
+      if constexpr (_::can_reallocate<T>) {
+        if (capacity_ > 0) {
+          const auto element_count = owner_.control_->element_count;
+          auto [control_ptr, data_ptr, actual_capacity]
+            = _::reallocate<T, AllocFn>(owner_.control_, capacity);
+          control_ptr->element_count = element_count;
+          owner_.control_ = control_ptr;
+          owner_.data_ = data_ptr;
+          capacity_ = actual_capacity;
+          return;
+        }
+      }
+      auto new_alloc = SharedOwner::make_uninitialized(capacity);
+      new_alloc.move_append(owner_.data_, owner_.data_ + owner_.length());
+      *this = std::move(new_alloc);
+    }
+
     auto shrink_to_fit() -> void {
       const auto element_count = size();
       if (element_count == capacity_) {
@@ -570,20 +589,23 @@ public:
       *this = std::move(result);
     }
 
-    auto grow_size(Index target) -> Index {
-      auto const three_halves = (target * 3) / 2 + 1;
-      return three_halves;
+    /// Returns the size after appending `count` elements, which must stay
+    /// within the range of `Index`.
+    auto size_after(std::ptrdiff_t count) const -> Index {
+      TENZIR_ASSERT_LEQ(count, std::numeric_limits<Index>::max() - size());
+      return size() + static_cast<Index>(count);
     }
 
     auto maybe_grow() -> void {
       if (size() < capacity_) {
         return;
       }
+      TENZIR_ASSERT_LT(size(), std::numeric_limits<Index>::max());
       if (capacity_ == 0) {
         reserve_exact(1);
         return;
       }
-      reserve_exact(grow_size(capacity_));
+      reserve_exact(_::grow_capacity(capacity_));
     }
 
     Builder(SharedOwner owner, Index capacity)

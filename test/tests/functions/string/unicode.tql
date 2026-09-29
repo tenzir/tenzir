@@ -1,0 +1,23 @@
+// Case conversion, classification, and trimming across scripts, titlecase
+// digraphs, the sharp s, astral letters, and Unicode whitespace.
+from {s: "ǅemal ǈubljana"},
+  {s: "straße ẞ"},
+  {s: "İstanbul ıi"},
+  {s: "ΟΔΥΣΣΕΥΣ"},
+  {s: "e\u0301clair"},
+  {s: "𐐨𐐀 𐐩"},
+  {s: "\u3000\u2028 ⅫⅦ\u00a0\u0085"},
+  {s: "١٢٣"},
+  {s: ""}
+upper = s.to_upper()
+lower = s.to_lower()
+title = s.to_title()
+capitalized = s.capitalize()
+reversed = s.reverse()
+trimmed = s.trim()
+alpha = s.is_alpha()
+numeric = s.is_numeric()
+is_title = s.is_title()
+printable = s.is_printable()
+chars = s.length_chars()
+bytes = s.length_bytes()

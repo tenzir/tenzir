@@ -1,0 +1,105 @@
+warning: to_upper does not accept the argument type `int`
+ --> tests/functions/string/mixed_types.tql:4:9
+  |
+4 | upper = s.to_upper()
+  |         ~~~~~~~~~~~~
+  |
+
+warning: trim does not accept the argument type `int`
+ --> tests/functions/string/mixed_types.tql:5:11
+  |
+5 | trimmed = s.trim()
+  |           ~~~~~~~~
+  |
+
+warning: is_alnum does not accept the argument type `int`
+ --> tests/functions/string/mixed_types.tql:6:9
+  |
+6 | alnum = s.is_alnum()
+  |         ~~~~~~~~~~~~
+  |
+
+warning: length_chars does not accept the argument type `int`
+ --> tests/functions/string/mixed_types.tql:7:9
+  |
+7 | chars = s.length_chars()
+  |         ~~~~~~~~~~~~~~~~
+  |
+
+warning: pad_start does not accept the argument type combination `(int, int)`
+ --> tests/functions/string/mixed_types.tql:8:10
+  |
+8 | padded = s.pad_start(8, "·")
+  |          ~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: equals does not accept the argument type combination `(int, string)`
+ --> tests/functions/string/mixed_types.tql:9:8
+  |
+9 | same = equals(s, "hello", ignore_case=true)
+  |        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: replace_regex does not accept the argument type `int`
+  --> tests/functions/string/mixed_types.tql:10:9
+   |
+10 | regex = s.replace_regex("[lö]", "_")
+   |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: expected `string`, got a different type
+  --> tests/functions/string/mixed_types.tql:11:9
+   |
+11 | parts = s.split_regex("l+")
+   |         ~
+   |
+{
+  s: "Hello",
+  upper: "HELLO",
+  trimmed: "Hello",
+  alnum: true,
+  chars: 5,
+  padded: "···Hello",
+  same: true,
+  regex: "He__o",
+  parts: [
+    "He",
+    "o",
+  ],
+}
+{
+  s: null,
+  upper: null,
+  trimmed: null,
+  alnum: null,
+  chars: null,
+  padded: null,
+  same: false,
+  regex: null,
+  parts: null,
+}
+{
+  s: 42,
+  upper: null,
+  trimmed: null,
+  alnum: null,
+  chars: null,
+  padded: null,
+  same: null,
+  regex: null,
+  parts: null,
+}
+{
+  s: "  Wörld  ",
+  upper: "  WÖRLD  ",
+  trimmed: "Wörld",
+  alnum: false,
+  chars: 9,
+  padded: "  Wörld  ",
+  same: false,
+  regex: "  W_r_d  ",
+  parts: [
+    "  Wör",
+    "d  ",
+  ],
+}

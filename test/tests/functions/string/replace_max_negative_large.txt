@@ -4,3 +4,5 @@ error: `max` must be at least 0, but got -100
 9 | x = x.replace(":", "", max=-100)
   |                            ^^^^
   |
+  = usage: replace(x:string, pattern:string, replacement:string, [max=int, ignore_case=bool])
+  = docs: https://tenzir.com/docs/reference/functions/replace

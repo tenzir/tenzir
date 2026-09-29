@@ -210,11 +210,13 @@ auto ArrayMerger::merge_fundamental(MaskedArray<Array<Tag>> old,
               if (new_same_as) {
                 output.set_same_as(new_row, *new_same_as);
               } else {
-                output.set(new_row, new_storage.get(new_row));
+                auto const fits = output.set(new_row, new_storage.get(new_row));
+                TENZIR_ASSERT(fits);
                 new_same_as.emplace(new_row);
               }
             } else {
-              output.set(new_row, new_storage.get(new_row));
+              auto const fits = output.set(new_row, new_storage.get(new_row));
+              TENZIR_ASSERT(fits);
             }
           }
         } else {
@@ -227,11 +229,13 @@ auto ArrayMerger::merge_fundamental(MaskedArray<Array<Tag>> old,
               if (same_as) {
                 output.set_same_as(row, *same_as);
               } else {
-                output.set(row, source.get(row));
+                auto const fits = output.set(row, source.get(row));
+                TENZIR_ASSERT(fits);
                 same_as.emplace(row);
               }
             } else {
-              output.set(row, source.get(row));
+              auto const fits = output.set(row, source.get(row));
+              TENZIR_ASSERT(fits);
             }
           };
           for (auto [old_row, new_row] :
@@ -251,31 +255,36 @@ auto ArrayMerger::merge_fundamental(MaskedArray<Array<Tag>> old,
     };
   } else {
     auto output = typename Type<Tag>::PrimaryPhysicalStorage::Mutable{length};
-    match(
-      std::tie(old.data.storage(), new_.data.storage()),
-      [&](auto const& old_storage, auto const& new_storage) {
-        using OldStorage = std::remove_cvref_t<decltype(old_storage)>;
-        using PrimaryStorage = Type<Tag>::PrimaryPhysicalStorage;
-        if constexpr (std::same_as<OldStorage, PrimaryStorage>) {
-          output.copy_from(old_storage);
-          for (auto new_row : storage::true_bits(new_.present)) {
-            output.set(new_row, static_cast<typename Type<Tag>::ViewType>(
-                                  new_storage.get(new_row)));
-          }
-        } else {
-          for (auto [old_row, new_row] :
-               std::views::zip(storage::bitmap_iteration(old.present),
-                               storage::bitmap_iteration(new_.present))) {
-            if (new_row) {
-              output.set(*new_row, static_cast<typename Type<Tag>::ViewType>(
-                                     new_storage.get(*new_row)));
-            } else if (old_row) {
-              output.set(*old_row, static_cast<typename Type<Tag>::ViewType>(
-                                     old_storage.get(*old_row)));
+    match(std::tie(old.data.storage(), new_.data.storage()),
+          [&](auto const& old_storage, auto const& new_storage) {
+            using OldStorage = std::remove_cvref_t<decltype(old_storage)>;
+            using PrimaryStorage = Type<Tag>::PrimaryPhysicalStorage;
+            if constexpr (std::same_as<OldStorage, PrimaryStorage>) {
+              output.copy_from(old_storage);
+              for (auto new_row : storage::true_bits(new_.present)) {
+                auto const fits = output.set(
+                  new_row, static_cast<typename Type<Tag>::ViewType>(
+                             new_storage.get(new_row)));
+                TENZIR_ASSERT(fits);
+              }
+            } else {
+              for (auto [old_row, new_row] :
+                   std::views::zip(storage::bitmap_iteration(old.present),
+                                   storage::bitmap_iteration(new_.present))) {
+                if (new_row) {
+                  auto const fits = output.set(
+                    *new_row, static_cast<typename Type<Tag>::ViewType>(
+                                new_storage.get(*new_row)));
+                  TENZIR_ASSERT(fits);
+                } else if (old_row) {
+                  auto const fits = output.set(
+                    *old_row, static_cast<typename Type<Tag>::ViewType>(
+                                old_storage.get(*old_row)));
+                  TENZIR_ASSERT(fits);
+                }
+              }
             }
-          }
-        }
-      });
+          });
     return {
       .data = Array<Tag>{std::move(output).finish()},
       .present = std::move(present),

@@ -1,0 +1,97 @@
+{
+  s: "aaa",
+  anchored: "baa",
+  anchored_max: "baa",
+  empty: "-a-a-a-",
+  empty_max: "-a-aa",
+  swapped: "aaa",
+  rewritten: "<aa\\><aa\\>a",
+  optional_capture: "aaa",
+  split_anchored: [
+    "",
+    "aa",
+  ],
+  split_empty: [
+    "",
+    "a",
+    "a",
+    "a",
+    "",
+  ],
+  split_reverse: [
+    "aaa",
+  ],
+  split_reverse_none: [
+    "aaa",
+  ],
+  split_reverse_all: [
+    "aaa",
+  ],
+}
+{
+  s: "abc",
+  anchored: "bbc",
+  anchored_max: "bbc",
+  empty: "-a-b-c-",
+  empty_max: "-a-bc",
+  swapped: "bac",
+  rewritten: "<aa\\><bb\\>c",
+  optional_capture: "a-bc",
+  split_anchored: [
+    "",
+    "bc",
+  ],
+  split_empty: [
+    "",
+    "a",
+    "b",
+    "c",
+    "",
+  ],
+  split_reverse: [
+    "abc",
+  ],
+  split_reverse_none: [
+    "abc",
+  ],
+  split_reverse_all: [
+    "abc",
+  ],
+}
+{
+  s: "a,b,,c",
+  anchored: "b,b,,c",
+  anchored_max: "b,b,,c",
+  empty: "-a-,-b-,-,-c-",
+  empty_max: "-a-,b,,c",
+  swapped: "a,b,,c",
+  rewritten: "<aa\\>,<bb\\>,,c",
+  optional_capture: "a,-b,,c",
+  split_anchored: [
+    "",
+    ",b,,c",
+  ],
+  split_empty: [
+    "",
+    "a",
+    ",",
+    "b",
+    ",",
+    ",",
+    "c",
+    "",
+  ],
+  split_reverse: [
+    "a,b,",
+    "c",
+  ],
+  split_reverse_none: [
+    "a,b,,c",
+  ],
+  split_reverse_all: [
+    "a",
+    "b",
+    "",
+    "c",
+  ],
+}

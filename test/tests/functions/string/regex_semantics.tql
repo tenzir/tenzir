@@ -1,0 +1,16 @@
+// Matches see the whole string, so anchors hold with `max` too. An empty match
+// right after the previous one advances by one code point instead of looping,
+// and `reverse` keeps the rightmost splits, up to all of them.
+from {s: "aaa"}, {s: "abc"}, {s: "a,b,,c"}
+anchored = s.replace_regex("^a", "b")
+anchored_max = s.replace_regex("^a", "b", max=2)
+empty = s.replace_regex("x*", "-")
+empty_max = s.replace_regex("x*", "-", max=2)
+swapped = s.replace_regex("(\\w)(\\w)", "\\2\\1")
+rewritten = s.replace_regex("(\\w)", "<\\0\\1\\\\>", max=2)
+optional_capture = s.replace_regex("(a)?(b)", "\\1-\\2")
+split_anchored = s.split_regex("^.")
+split_empty = s.split_regex("x*")
+split_reverse = s.split_regex(",", max=1, reverse=true)
+split_reverse_none = s.split_regex(",", max=0, reverse=true)
+split_reverse_all = s.split_regex(",", max=5, reverse=true)

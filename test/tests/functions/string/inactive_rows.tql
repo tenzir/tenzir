@@ -1,0 +1,6 @@
+// Functions only see the rows that an expression selects, so the integer in
+// the unselected row produces no warning.
+from {s: "abc", convert: true}, {s: "def", convert: false}, {s: 1, convert: false}
+upper = s.to_upper() if convert else s
+trimmed = s.trim("a") if convert else s
+padded = s.pad_end(5, "-") if convert else s

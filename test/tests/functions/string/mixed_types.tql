@@ -1,0 +1,11 @@
+// String functions evaluate the string rows of a column that also holds
+// nulls and other types. Nulls stay null silently; other types warn once.
+from {s: "Hello"}, {s: null}, {s: 42}, {s: "  Wörld  "}
+upper = s.to_upper()
+trimmed = s.trim()
+alnum = s.is_alnum()
+chars = s.length_chars()
+padded = s.pad_start(8, "·")
+same = equals(s, "hello", ignore_case=true)
+regex = s.replace_regex("[lö]", "_")
+parts = s.split_regex("l+")

@@ -1,0 +1,10 @@
+warning: `pad_start` result exceeds maximum string size
+ --> tests/functions/string/pad_too_large.tql:2:22
+  |
+2 | padded = x.pad_start(3000000000)
+  |                      ~~~~~~~~~~
+  |
+{
+  x: "x",
+  padded: null,
+}

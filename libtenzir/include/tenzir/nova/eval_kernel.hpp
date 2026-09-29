@@ -151,7 +151,7 @@ warn_rejected_kernel_types(diagnostic_handler& dh, std::string_view name,
 /// invocation can write into via `set`. An entry's own present-mask starts
 /// all-`false` (a row is only ever *added* to a given tag's result, never
 /// pre-assumed present) and is built up by `set` itself: a row is present in
-/// this entry's result iff `set` was actually called for it. This matters
+/// this entry's result iff `set` succeeded for it. This matters
 /// because a kernel's result tag can vary per row: each `Entry<Tag>` only
 /// "owns" the subset of rows that actually resolved to `Tag`, which is not
 /// the same subset for every entry, so no entry can borrow a single combined
@@ -163,12 +163,15 @@ public:
   explicit Entry(storage::Index length) : present_{length} {
   }
 
-  auto set(storage::Index i, typename Type<Tag>::ViewType v) -> void {
-    present_.set(i, true);
+  auto set(storage::Index i, typename Type<Tag>::ViewType v) -> bool {
     if (not mutable_) {
       mutable_.emplace(present_.length());
     }
-    mutable_->set(i, v);
+    if (not mutable_->set(i, v)) {
+      return false;
+    }
+    present_.set(i, true);
+    return true;
   }
 
   /// Whether `set` was ever called on this entry.
@@ -205,8 +208,8 @@ inline auto make_entries(storage::Index length) -> EntriesTuple {
 
 /// Owns one `Entry<Tag>` per fundamental tag plus the `UnionArray`
 /// alternative-index bookkeeping needed once a kernel's result tag can vary
-/// per row. `set<Tag>` records both the value (via the matching `Entry`) and
-/// the row's chosen alternative (via `alternative_indices_`) unconditionally
+/// per row. On success, `set<Tag>` records both the value (via the matching
+/// `Entry`) and the row's chosen alternative (via `alternative_indices_`)
 /// -- `finish` decides afterwards whether that bookkeeping was actually
 /// needed. Today `apply_kernel` only ever calls `set` with a
 /// single compile-time-fixed `Tag` for the whole call, so `finish` always
@@ -219,10 +222,13 @@ public:
   }
 
   template <fundamental_type Tag>
-  auto set(storage::Index i, typename Type<Tag>::ViewType v) -> void {
+  auto set(storage::Index i, typename Type<Tag>::ViewType v) -> bool {
     constexpr auto tag_index = fundamental_type_list::unique_index_of<Tag>;
-    std::get<tag_index>(entries_).set(i, v);
+    if (not std::get<tag_index>(entries_).set(i, v)) {
+      return false;
+    }
     alternative_indices_.set(i, tag_index);
+    return true;
   }
 
   /// Marks row `i` as an explicit `Null`, engaging the `Null` entry if this
@@ -457,7 +463,9 @@ private:
 /// completion, so rejected suffixes are walked at runtime by
 /// `resolve_rejected_tags` instead of instantiating their Cartesian product.
 /// One dispatch path for any arity `K` (1 for unary, 2 for binary, ...); no
-/// special case per arity.
+/// special case per arity. Results of variable-length types such as strings
+/// share one buffer with 32-bit offsets, so the rows whose results would
+/// exceed it become null with a single warning.
 template <std::size_t K, class Kernel>
 inline auto apply_kernel(EvalFrame frame, std::string_view name,
                          std::array<Array<Data>, K> args, location loc,
@@ -470,6 +478,7 @@ inline auto apply_kernel(EvalFrame frame, std::string_view name,
   // single accumulator for this call's output, populated via `set` as a side
   // effect rather than threaded back through return values.
   auto results = Results{length};
+  auto warn_too_large = WarnOnce{};
   auto reject = [&](std::array<std::size_t, K> const& tags,
                     storage::BitMap const& rejected_mask) {
     if (not rejected_mask.any()) {
@@ -506,10 +515,15 @@ inline auto apply_kernel(EvalFrame frame, std::string_view name,
         if (resolved_mask.get(i)) {
           auto result = kernel(frame, kernel_arg(std::get<Pos>(arrays), i)...);
           if (result.is_some()) {
-            results.template set<ResultTag>(i, *std::move(result));
-          } else {
-            results.set_null(i);
+            if (results.template set<ResultTag>(i, *std::move(result))) {
+              continue;
+            }
+            warn_too_large(frame, diagnostic::warning(
+                                    "{} result exceeds maximum {} array size",
+                                    name, Type<ResultTag>::static_name)
+                                    .primary(loc));
           }
+          results.set_null(i);
         }
       }
     }(std::make_index_sequence<K>());

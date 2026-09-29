@@ -1,0 +1,21 @@
+{
+  s: "abc",
+  convert: true,
+  upper: "ABC",
+  trimmed: "bc",
+  padded: "abc--",
+}
+{
+  s: "def",
+  convert: false,
+  upper: "def",
+  trimmed: "def",
+  padded: "def",
+}
+{
+  s: 1,
+  convert: false,
+  upper: 1,
+  trimmed: 1,
+  padded: 1,
+}

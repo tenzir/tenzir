@@ -4,3 +4,5 @@ error: `base` must be 10 or 16
 9 | raw = raw.replace(int("1", base=2), "x")
   |                                 ^
   |
+  = usage: int(x:number|string, [base=int])
+  = docs: https://tenzir.com/docs/reference/functions/int
