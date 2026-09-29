@@ -459,14 +459,15 @@ auto make_file_events_nova(files_args args, diagnostic_handler& dh)
         event.field("group").null();
       }
       auto error = std::error_code{};
-      auto file_size = entry.file_size(error);
+      auto file_size = detail::narrow<nova::UInt>(entry.file_size(error));
       if (not error) {
         event.field("file_size").data(file_size);
       } else {
         event.field("file_size").null();
       }
       error.clear();
-      auto hard_link_count = entry.hard_link_count(error);
+      auto hard_link_count
+        = detail::narrow<nova::UInt>(entry.hard_link_count(error));
       if (not error) {
         event.field("hard_link_count").data(hard_link_count);
       } else {
