@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def command(pipeline: str) -> list[str]:
-    return [*shlex.split(os.environ["TENZIR_BINARY"]), pipeline]
+    return [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", pipeline]
 
 
 def state() -> dict:

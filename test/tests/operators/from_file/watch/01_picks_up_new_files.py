@@ -44,7 +44,7 @@ def main() -> None:
         "| select name | to_stdout { write_ndjson }"
     )
     proc = subprocess.Popen(
-        [*tenzir, "--bare-mode", "--console-verbosity=error", pipeline],
+        [*tenzir, "--nova=true", "--bare-mode", "--console-verbosity=error", pipeline],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

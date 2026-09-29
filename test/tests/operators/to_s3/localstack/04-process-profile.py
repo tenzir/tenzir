@@ -57,7 +57,7 @@ def main() -> None:
         env["AWS_CONFIG_FILE"] = str(config)
         env["AWS_EC2_METADATA_DISABLED"] = "true"
         bucket = env["LOCALSTACK_S3_BUCKET"]
-        tenzir = shlex.split(env["TENZIR_BINARY"])
+        tenzir = [*shlex.split(env["TENZIR_BINARY"]), "--nova=true"]
 
         default_env = env.copy()
         default_env["AWS_PROFILE"] = "process-profile"
