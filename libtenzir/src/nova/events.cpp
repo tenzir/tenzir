@@ -12,6 +12,8 @@
 #include "tenzir/nova/bitz.hpp"
 #include "tenzir/try.hpp"
 
+#include <algorithm>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -34,7 +36,13 @@ auto decode_events(std::span<std::byte const> payload)
   if (payload.empty()) {
     return Events{};
   }
-  TRY(auto batch, bitz::decode(payload));
+  // CAF has already received this payload in full. Keep Bitz's structural
+  // limits, but allow actor batches larger than the format's file-reader cap.
+  auto limits = bitz::default_decode_limits;
+  limits.max_frame_bytes = payload.size();
+  limits.max_decoded_bytes
+    = std::max(limits.max_decoded_bytes, std::uint64_t{payload.size()} * 4);
+  TRY(auto batch, bitz::decode(payload, limits));
   auto records = std::move(batch.data).try_as<Record>();
   if (not records) {
     return Err{"Nova event batch root must be a record array"};

@@ -3634,6 +3634,22 @@ TEST("Nova event serialization retains an all-inactive batch") {
   CHECK(not restored.mask.get(0));
 }
 
+TEST("Nova event transport accepts a frame larger than 64 MiB") {
+  auto large = String(65u << 20, 'x');
+  auto events = export_events(Record{{"payload", large}});
+  auto bytes = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{bytes};
+  REQUIRE(serializer.apply(events));
+  auto restored = Events{};
+  auto deserializer = caf::binary_deserializer{bytes};
+  REQUIRE(deserializer.apply(restored));
+  REQUIRE_EQUAL(restored.length(), 1);
+  auto row = restored.data.get(0);
+  auto [name, value] = *row.begin();
+  CHECK_EQUAL(name, "payload");
+  CHECK_EQUAL(as_string(value), large);
+}
+
 TEST("import conversion preserves per-row import timestamps") {
   auto builder = ArrayBuilder<Record>{};
   append_export_row(builder, Record{{"x", Int{1}}});
