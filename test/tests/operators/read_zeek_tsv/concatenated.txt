@@ -1,0 +1,19 @@
+{
+  id: {
+    orig_h: 192.0.2.1,
+    orig_p: 80,
+  },
+  schema: "zeek.first",
+}
+{
+  flag: true,
+  values: [
+    1,
+    2,
+  ],
+  schema: "zeek.second",
+}
+{
+  message: "last",
+  schema: "zeek.third",
+}

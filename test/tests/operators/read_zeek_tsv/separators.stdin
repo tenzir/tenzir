@@ -1,0 +1,11 @@
+#separator \x7c
+#set_separator|;
+#empty_field|EMPTY
+#unset_field|UNSET
+#path|custom
+#fields|text|values|flag
+#types|string|vector[string]|bool
+hello\x7cworld|a\x3bb;c|T
+EMPTY|EMPTY|UNSET
+EMPTYsuffix|UNSET|F
+UNSETsuffix|EMPTYsuffix;UNSETsuffix|EMPTY

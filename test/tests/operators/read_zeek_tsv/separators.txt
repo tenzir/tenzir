@@ -1,0 +1,26 @@
+{
+  text: "hello|world",
+  values: [
+    "a;b",
+    "c",
+  ],
+  flag: true,
+}
+{
+  text: "",
+  values: [],
+  flag: null,
+}
+{
+  text: "EMPTYsuffix",
+  values: null,
+  flag: false,
+}
+{
+  text: "UNSETsuffix",
+  values: [
+    "EMPTYsuffix",
+    "UNSETsuffix",
+  ],
+  flag: false,
+}

@@ -1,0 +1,28 @@
+warning: invalid Zeek header: #unknown	header
+ --> tests/operators/read_zeek_tsv/warnings.tql:2:3
+  |
+2 |   read_zeek_tsv
+  |   ~~~~~~~~~~~~~
+  |
+  = note: line 3
+
+warning: failed to parse Zeek type `unsupported`
+ --> tests/operators/read_zeek_tsv/warnings.tql:2:3
+  |
+2 |   read_zeek_tsv
+  |   ~~~~~~~~~~~~~
+  |
+  = note: line 6
+  = note: falling back to `string`
+
+warning: unparsed values at end of Zeek line: `	extra`
+ --> tests/operators/read_zeek_tsv/warnings.tql:2:3
+  |
+2 |   read_zeek_tsv
+  |   ~~~~~~~~~~~~~
+  |
+  = note: line 6
+{
+  text: "123",
+  value: 42,
+}

@@ -1,0 +1,17 @@
+#separator \x09
+#path	first
+#fields	id.orig_h	id.orig_p
+#types	addr	port
+192.0.2.1	80
+#close	2026-01-01-00-00-00
+#separator \x7c
+#set_separator|;
+#path|second
+#fields|flag|values
+#types|bool|vector[int]
+T|1;2
+#separator \x09
+#path	third
+#fields	message
+#types	string
+last

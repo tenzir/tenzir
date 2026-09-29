@@ -1,0 +1,4 @@
+from_stdin {
+  read_zeek_tsv
+}
+schema = @name

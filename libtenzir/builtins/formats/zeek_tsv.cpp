@@ -28,6 +28,7 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
@@ -52,6 +53,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -907,6 +909,379 @@ private:
   bool log_has_body_ = false;
 };
 
+/// Appends a value produced by the Zeek grammar without inferring string types.
+auto append_zeek_value(auto out, auto const& value) -> void {
+  using T = std::remove_cvref_t<decltype(value)>;
+  if constexpr (std::same_as<T, std::string>) {
+    out.data(std::string_view{value});
+  } else if constexpr (std::same_as<T, list>) {
+    auto elements = out.list();
+    for (auto const& element : value) {
+      match(element, [&](auto const& item) {
+        append_zeek_value(elements, item);
+      });
+    }
+  } else if constexpr (requires { out.data(value); }) {
+    out.data(value);
+  } else {
+    // The Zeek grammar only produces scalars and lists of scalars.
+    TENZIR_UNREACHABLE();
+  }
+}
+
+class ReadZeekTsvEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadZeekTsvEvents(ReadZeekTsvArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
+      if (args_.operator_location and not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{},
+                                   args_.operator_location);
+      }
+      return d;
+    });
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (not failed_) {
+      co_await maybe_emit_ready(push);
+    }
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      co_await maybe_emit_ready(push);
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        co_await process_line({begin, current}, push);
+      } else {
+        buffer_.append(begin, current);
+        co_await process_line(buffer_, push);
+        buffer_.clear();
+      }
+      if (failed_) {
+        co_return;
+      }
+      co_await maybe_emit_ready(push);
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    co_await maybe_emit_ready(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (not failed_ and not buffer_.empty()) {
+      co_await process_line(buffer_, push);
+      buffer_.clear();
+    }
+    if (not failed_) {
+      co_await emit_finished(push);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (not failed_) {
+      co_await emit_finished(push);
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_nr", line_nr_);
+    serde("failed", failed_);
+    serde("log_has_body", log_has_body_);
+    serde("log", log_);
+    if (serde.is_loading()) {
+      // Recreate the parsers and empty builder from the saved header.
+      event_ = None{};
+      parsers_.clear();
+      builder_ = None{};
+      timeout_.reset();
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return failed_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto emit_finished(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and builder_->length() > 0) {
+      auto events = builder_->finish();
+      timeout_.reset();
+      co_await push(std::move(events));
+    }
+  }
+
+  auto maybe_emit_ready(Push<nova::Events>& push) -> Task<void> {
+    auto const rows
+      = builder_ ? static_cast<size_t>(builder_->length()) : size_t{0};
+    if (rows >= defaults::import::table_slice_size or timeout_.poll(rows)) {
+      co_await emit_finished(push);
+    }
+  }
+
+  auto reset_log() -> void {
+    event_ = None{};
+    parsers_.clear();
+    builder_ = None{};
+    log_ = {};
+    log_has_body_ = false;
+  }
+
+  auto process_line(std::string_view line, Push<nova::Events>& push)
+    -> Task<void> {
+    ++line_nr_;
+    if (line.empty()) {
+      co_return;
+    }
+    auto& dh = **dh_;
+    if (line.starts_with('#')) {
+      auto header = line.substr(1);
+      auto const separator = ignore(parsers::chr{log_.separator});
+      auto const unescaped_str
+        = (+(parsers::any - separator)).then([](std::string value) {
+            return detail::byte_unescape(value);
+          });
+      auto const close_parser = "close" >> separator >> unescaped_str;
+      if (close_parser(header, unused)) {
+        if (log_has_body_) {
+          co_await emit_finished(push);
+          reset_log();
+        }
+        co_return;
+      }
+      if (log_has_body_) {
+        co_await emit_finished(push);
+        reset_log();
+      }
+      // clang-format off
+      auto const header_parser
+        = ("separator" >> ignore(+parsers::space) >> unescaped_str)
+            .with([](std::string value) {
+              return value.length() == 1;
+            })
+            .then([&](std::string value) {
+              log_.separator = value[0];
+            })
+        | ("set_separator" >> separator >> unescaped_str)
+            .then([&](std::string value) {
+              log_.set_separator = std::move(value);
+            })
+        | ("empty_field" >> separator >> unescaped_str)
+            .then([&](std::string value) {
+              log_.empty_field = std::move(value);
+            })
+        | ("unset_field" >> separator >> unescaped_str)
+            .then([&](std::string value) {
+              log_.unset_field = std::move(value);
+            })
+        | ("path" >> separator >> unescaped_str)
+            .then([&](std::string value) {
+              log_.path = std::move(value);
+            })
+        | ("open" >> separator >> unescaped_str)
+            .then([](std::string) {})
+        | ("fields" >> separator >> (unescaped_str % separator))
+            .then([&](std::vector<std::string> fields) {
+              log_.fields = std::move(fields);
+            })
+        | ("types" >> separator >> (unescaped_str % separator))
+            .then([&](std::vector<std::string> types) {
+              log_.types = std::move(types);
+            });
+      // clang-format on
+      if (not header_parser(header, unused)) {
+        diagnostic::warning("invalid Zeek header: {}", line)
+          .note("line {}", line_nr_)
+          .emit(dh);
+      }
+      auto sorted_fields = log_.fields;
+      std::ranges::sort(sorted_fields);
+      if (auto it = std::ranges::adjacent_find(sorted_fields);
+          it != sorted_fields.end()) {
+        diagnostic::error(
+          "failed to parse Zeek log: duplicate #field name `{}`", *it)
+          .note("line {}", line_nr_)
+          .emit(dh);
+        failed_ = true;
+      }
+      co_return;
+    }
+    if (not ensure_log_builder(dh)) {
+      co_return;
+    }
+    auto f = line.begin();
+    auto const l = line.end();
+    auto const separator = ignore(parsers::chr{log_.separator});
+    event_ = builder_->event();
+    for (auto i = size_t{0}; i < parsers_.size(); ++i) {
+      auto added = false;
+      if (not parsers_[i](f, l, added)) {
+        diagnostic::error("failed to parse Zeek value at index {} in `{}`", i,
+                          line)
+          .note("line {}", line_nr_)
+          .emit(dh);
+        failed_ = true;
+        event_ = None{};
+        co_return;
+      }
+      TENZIR_ASSERT_EXPENSIVE(added);
+      if (i + 1 < parsers_.size() and not separator(f, l, unused)) {
+        diagnostic::error("failed to parse Zeek separator at index {} in `{}`",
+                          i, line)
+          .note("line {}", line_nr_)
+          .emit(dh);
+        failed_ = true;
+        event_ = None{};
+        co_return;
+      }
+    }
+    if (f != l) {
+      diagnostic::warning("unparsed values at end of Zeek line: `{}`",
+                          std::string_view{f, l})
+        .note("line {}", line_nr_)
+        .emit(dh);
+    }
+    event_ = None{};
+  }
+
+  auto ensure_log_builder(diagnostic_handler& dh) -> bool {
+    if (builder_) {
+      return true;
+    }
+    if (log_.path.empty()) {
+      diagnostic::error("failed to parse Zeek log: missing #path")
+        .note("line {}", line_nr_)
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    if (log_.fields.empty()) {
+      diagnostic::error("failed to parse Zeek log: missing #fields")
+        .note("line {}", line_nr_)
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    if (log_.fields.size() != log_.types.size()) {
+      diagnostic::error("failed to parse Zeek log: mismatching number "
+                        "#fields and #types")
+        .note("found {} #fields", log_.fields.size())
+        .note("found {} #types", log_.types.size())
+        .note("line {}", line_nr_)
+        .emit(dh);
+      failed_ = true;
+      return false;
+    }
+    parsers_.clear();
+    parsers_.reserve(log_.fields.size());
+    for (auto const& [field, zeek_type] :
+         std::views::zip(log_.fields, log_.types)) {
+      auto parsed_type = parse_type(zeek_type);
+      if (not parsed_type) {
+        diagnostic::warning("failed to parse Zeek type `{}`", zeek_type)
+          .note("line {}", line_nr_)
+          .note("falling back to `string`")
+          .emit(dh);
+        parsed_type = type{string_type{}};
+      }
+      auto const unset_parser
+        = ignore(parsers::str{log_.unset_field}
+                 >> &(parsers::chr{log_.separator} | parsers::eoi))
+            .then([this, field]() {
+              event_->field(field).null();
+              return true;
+            });
+      auto make_field_parser
+        = [&]<concrete_type Type>(
+            Type const& type) -> rule<std::string_view::const_iterator, bool> {
+        if constexpr (std::same_as<Type, map_type>) {
+          TENZIR_UNREACHABLE();
+        } else {
+          auto empty_parser
+            = ignore(parsers::str{log_.empty_field}
+                     >> &(parsers::chr{log_.separator} | parsers::eoi))
+                .then([this, field, empty = type.construct()]() {
+                  append_zeek_value(event_->field(field), empty);
+                  return true;
+                });
+          return unset_parser | empty_parser
+                 | zeek_parser<Type>{}(type, log_.separator,
+                                       std::same_as<Type, list_type>
+                                         ? log_.set_separator
+                                         : std::string{})
+                     .then([this, field](type_to_data_t<Type> value) {
+                       append_zeek_value(event_->field(field), value);
+                       return true;
+                     });
+        }
+      };
+      parsers_.push_back(match(*parsed_type, make_field_parser));
+    }
+    auto builder = nova::EventBuilder::make(
+      {.raw = true,
+       .unflatten_separator = ".",
+       .default_schema_name = fmt::format("zeek.{}", log_.path)},
+      dh);
+    if (not builder) {
+      failed_ = true;
+      return false;
+    }
+    builder_ = std::move(builder).unwrap();
+    log_has_body_ = true;
+    return true;
+  }
+
+  ReadZeekTsvArgs args_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  zeek_log_state log_;
+  Option<nova::EventBuilder> builder_;
+  Option<nova::EventBuilder::Record> event_;
+  std::vector<rule<std::string_view::const_iterator, bool>> parsers_;
+  BatchTimeout timeout_{defaults::import::batch_timeout};
+  size_t line_nr_ = 0;
+  bool failed_ = false;
+  bool log_has_body_ = false;
+};
+
 class WriteZeekTsv final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteZeekTsv(WriteZeekTsvArgs args) : args_{std::move(args)} {
@@ -1561,7 +1936,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadZeekTsvArgs, ReadZeekTsv>{};
+    auto d = Describer<ReadZeekTsvArgs, ReadZeekTsv, ReadZeekTsvEvents>{};
     d.operator_location(&ReadZeekTsvArgs::operator_location);
     return d.without_optimize();
   }

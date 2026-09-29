@@ -1,0 +1,6 @@
+#separator \x09
+#path	types
+#fields	ts	flag	signed	count	real	elapsed	id.orig_h	id.orig_p	net	text	enum	file	pattern	ints	counts	addrs	strings
+#types	time	bool	int	count	double	interval	addr	port	subnet	string	enum	file	pattern	vector[int]	set[count]	set[addr]	table[string]
+1609459200.5	T	-42	18446744073709551615	1.5	0.25	192.0.2.1	443	2001:db8::/32	192.0.2.1	tcp	00123	a.*b	-1,2	0,42	192.0.2.1,2001:db8::1	a\x2cb,c\x09d
+-	F	(empty)	(empty)	(empty)	(empty)	-	-	-	(empty)	-	-	-	(empty)	-	(empty)	(empty)

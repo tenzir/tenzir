@@ -1,0 +1,6 @@
+#separator \x09
+#path	warnings
+#unknown	header
+#fields	text	value
+#types	unsupported	count
+123	42	extra

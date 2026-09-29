@@ -1,0 +1,56 @@
+{
+  ts: 2021-01-01T00:00:00.500Z,
+  flag: true,
+  signed: -42,
+  count: 18446744073709551615,
+  real: 1.5,
+  elapsed: 250ms,
+  id: {
+    orig_h: 192.0.2.1,
+    orig_p: 443,
+  },
+  net: 2001:db8::/32,
+  text: "192.0.2.1",
+  enum: "tcp",
+  file: "00123",
+  pattern: "a.*b",
+  ints: [
+    -1,
+    2,
+  ],
+  counts: [
+    0,
+    42,
+  ],
+  addrs: [
+    192.0.2.1,
+    2001:db8::1,
+  ],
+  strings: [
+    "a,b",
+    "c\td",
+  ],
+  schema: "zeek.types",
+}
+{
+  ts: null,
+  flag: false,
+  signed: 0,
+  count: 0,
+  real: 0.0,
+  elapsed: 0ns,
+  id: {
+    orig_h: null,
+    orig_p: null,
+  },
+  net: null,
+  text: "",
+  enum: null,
+  file: null,
+  pattern: null,
+  ints: [],
+  counts: null,
+  addrs: [],
+  strings: [],
+  schema: "zeek.types",
+}
