@@ -1080,10 +1080,10 @@ private:
   detail::heterogeneous_string_hashset prefixes_;
 };
 
-/// Writes Nova events as Zeek TSV.
+/// Writes events as Zeek TSV.
 ///
 /// A Zeek TSV header fixes the path, the flattened field names, and their
-/// types, whereas the rows of a Nova batch may differ in all three. We
+/// types, whereas the rows of a batch may differ in all three. We
 /// therefore split the active rows into consecutive blocks that share one
 /// header, and start a new header whenever a row does not fit the current one:
 ///

@@ -400,7 +400,7 @@ auto ArrowExportBuilder::accept(table_slice slice,
                                 diagnostic_handler& dh, location loc)
   -> failure_or<void> {
   // A table_slice may carry a schema override that is not reflected in its
-  // underlying RecordBatch (notably Nova's internal-event attribute).
+  // underlying RecordBatch (notably the internal-event attribute).
   auto batch = to_record_batch(slice)->ReplaceSchemaMetadata(
     slice.schema().to_arrow_schema()->metadata());
   if (schema_) {

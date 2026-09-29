@@ -40,7 +40,7 @@ struct context_parameter_map
 struct context_update_args {
   ast::expression key = {};
   Option<ast::expression> value = None{};
-  /// The Nova adapter supplies the original event as an implicit `value`.
+  /// The event adapter supplies the original event as an implicit `value`.
   bool implicit_value = false;
   Option<located<duration>> create_timeout = None{};
   Option<located<duration>> write_timeout = None{};
