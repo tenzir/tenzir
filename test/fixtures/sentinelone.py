@@ -42,6 +42,14 @@ class SentinelOneAssertions:
 # Special floating-point values that cannot be expressed in JSON are encoded
 # as single-key objects: {"special": "NaN"}, {"special": "+infinity"}, etc.
 _STATIC_RESPONSES: dict[str, object] = {
+    "select_batch_boundary": {
+        "columns": [{"name": "n"}],
+        "values": [[i] for i in range(8193)],
+    },
+    "select_mixed_column": {
+        "columns": [{"name": "value"}],
+        "values": [[1], ["two"], [None]],
+    },
     # Basic two-row response for smoke-test purposes.
     "select_basic": {
         "columns": [
