@@ -105,6 +105,11 @@ public:
   /// Inspects the context.
   virtual auto show() const -> record = 0;
 
+  /// Whether a newly created context is ready without an initial update.
+  virtual auto ready_on_creation() const -> bool {
+    return false;
+  }
+
   /// Dumps the context's contents.
   virtual auto dump() -> generator<table_slice> = 0;
 

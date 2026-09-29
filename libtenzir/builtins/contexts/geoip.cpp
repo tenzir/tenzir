@@ -481,6 +481,10 @@ public:
     return {};
   }
 
+  auto ready_on_creation() const -> bool override {
+    return true;
+  }
+
   auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
                     current_dump* current_dump) -> generator<table_slice> {
     if (current_dump->visited.contains(node_number)) {
