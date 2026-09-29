@@ -3603,7 +3603,9 @@ TEST("import transport rejects malformed and non-record Bitz payloads") {
                                storage::BitMap{1, true},
                                Events::Meta::make_empty(1, "events")});
   REQUIRE(payload);
-  CHECK(not decode_events(std::move(payload).unwrap()));
+  auto decoded = decode_events(std::move(payload).unwrap());
+  REQUIRE(not decoded);
+  CHECK_EQUAL(decoded.unwrap_err(), "event batch root must be a record array");
   auto sentinel = decode_events(std::vector<std::byte>{});
   REQUIRE(sentinel);
   CHECK_EQUAL(sentinel.unwrap().active_count(), 0u);
@@ -3648,6 +3650,21 @@ TEST("Nova event transport accepts a frame larger than 64 MiB") {
   auto [name, value] = *row.begin();
   CHECK_EQUAL(name, "payload");
   CHECK_EQUAL(as_string(value), large);
+}
+
+TEST("event transport accepts more than one million rows") {
+  auto const rows = storage::Index{(1 << 20) + 1};
+  auto events
+    = Events{Array<Record>::make_empty(rows), storage::BitMap{rows, true},
+             Events::Meta::make_empty(rows, "events")};
+  auto bytes = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{bytes};
+  REQUIRE(serializer.apply(events));
+  auto restored = Events{};
+  auto deserializer = caf::binary_deserializer{bytes};
+  REQUIRE(deserializer.apply(restored));
+  CHECK_EQUAL(restored.length(), rows);
+  CHECK_EQUAL(restored.active_count(), rows);
 }
 
 TEST("import conversion preserves per-row import timestamps") {

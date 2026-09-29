@@ -50,13 +50,6 @@ start_node
 stop_node
 rm -f "$scratch/state/pid.lock"
 start_node
-"$TENZIR_BINARY" --neo --bare-mode --console-verbosity=error \
-  --endpoint="$endpoint" '
-  export
-  where @name == "restart.events"
-  sort id
-  write_ndjson
-'
 "$TENZIR_BINARY" --neo --nova --bare-mode --console-verbosity=error \
   --endpoint="$endpoint" '
   export

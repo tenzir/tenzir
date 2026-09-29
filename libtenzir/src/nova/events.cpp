@@ -12,8 +12,8 @@
 #include "tenzir/nova/bitz.hpp"
 #include "tenzir/try.hpp"
 
-#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -28,7 +28,11 @@ auto encode_events(Events const& events)
   if (events.length() == 0) {
     return std::vector<std::byte>{};
   }
-  return bitz::encode(bitz::Batch{events.data, events.mask, events.meta});
+  auto options = bitz::EncodeOptions{};
+  options.max_rows = std::numeric_limits<storage::Index>::max();
+  options.max_array_length = options.max_rows;
+  return bitz::encode(bitz::Batch{events.data, events.mask, events.meta},
+                      options);
 }
 
 auto decode_events(std::span<std::byte const> payload)
@@ -36,16 +40,18 @@ auto decode_events(std::span<std::byte const> payload)
   if (payload.empty()) {
     return Events{};
   }
-  // CAF has already received this payload in full. Keep Bitz's structural
-  // limits, but allow actor batches larger than the format's file-reader cap.
+  // CAF has already received this trusted actor payload in full. Keep Bitz's
+  // structural limits, but not its external file-reader size limits.
   auto limits = bitz::default_decode_limits;
   limits.max_frame_bytes = payload.size();
-  limits.max_decoded_bytes
-    = std::max(limits.max_decoded_bytes, std::uint64_t{payload.size()} * 4);
+  limits.max_rows = std::numeric_limits<storage::Index>::max();
+  limits.max_array_length = limits.max_rows;
+  limits.max_logical_slots = std::numeric_limits<std::uint64_t>::max();
+  limits.max_decoded_bytes = std::numeric_limits<std::uint64_t>::max();
   TRY(auto batch, bitz::decode(payload, limits));
   auto records = std::move(batch.data).try_as<Record>();
   if (not records) {
-    return Err{"Nova event batch root must be a record array"};
+    return Err{"event batch root must be a record array"};
   }
   return Events{std::move(*records), std::move(batch.mask),
                 std::move(batch.meta)};

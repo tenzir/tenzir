@@ -63,6 +63,8 @@ inline constexpr auto native_scalar_byte_order = [] {
 
 struct EncodeOptions {
   ScalarByteOrder scalar_byte_order = native_scalar_byte_order;
+  std::uint32_t max_rows = default_decode_limits.max_rows;
+  std::uint32_t max_array_length = default_decode_limits.max_array_length;
 };
 
 /// The stable logical type identifiers used by the Bitz v2 payload codec.
