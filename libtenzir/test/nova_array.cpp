@@ -11,7 +11,6 @@
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/import_conversion.hpp"
 #include "tenzir/import_routing.hpp"
-#include "tenzir/import_wire.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -33,6 +32,7 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <arrow/util/key_value_metadata.h>
+#include <caf/binary_serializer.hpp>
 
 #include <array>
 #include <chrono>
@@ -3574,20 +3574,22 @@ TEST("import transport preserves selected values, order, and metadata") {
                        Events::Meta::make_empty(2, "events")};
   events.meta.import_time = Array<Time>{
     storage::ConstantStorage<Time>{2, tenzir::time{std::chrono::seconds{7}}}};
-  auto wire = tenzir::to_import_wire(events);
-  REQUIRE(wire);
-  auto restored = tenzir::from_import_wire(wire.unwrap());
-  REQUIRE(restored);
-  CHECK_EQUAL(restored.unwrap().length(), 2);
-  CHECK_EQUAL(restored.unwrap().active_count(), 1u);
-  CHECK(not restored.unwrap().mask.get(0));
-  CHECK_EQUAL(*restored.unwrap().meta.name.get(1), "events");
-  CHECK_EQUAL(*restored.unwrap().meta.import_time.get(1),
+  auto bytes = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{bytes};
+  REQUIRE(serializer.apply(events));
+  auto restored = Events{};
+  auto deserializer = caf::binary_deserializer{bytes};
+  REQUIRE(deserializer.apply(restored));
+  CHECK_EQUAL(restored.length(), 2);
+  CHECK_EQUAL(restored.active_count(), 1u);
+  CHECK(not restored.mask.get(0));
+  CHECK_EQUAL(*restored.meta.name.get(1), "events");
+  CHECK_EQUAL(*restored.meta.import_time.get(1),
               tenzir::time{std::chrono::seconds{7}});
-  CHECK_EQUAL(record_field_names(restored.unwrap().data.get(1)),
+  CHECK_EQUAL(record_field_names(restored.data.get(1)),
               (std::vector<std::string>{"b", "a"}));
   CHECK_GREATER(events.approx_bytes(), size_t{0});
-  CHECK_EQUAL(materialize_legacy(RowView<Data>{restored.unwrap().data.get(1)}),
+  CHECK_EQUAL(materialize_legacy(RowView<Data>{restored.data.get(1)}),
               (tenzir::data{tenzir::record{
                 {"b", tenzir::list{Int{1}, caf::none, Int{2}}},
                 {"a", tenzir::record{{"present", caf::none}}},
@@ -3595,17 +3597,41 @@ TEST("import transport preserves selected values, order, and metadata") {
 }
 
 TEST("import transport rejects malformed and non-record Bitz payloads") {
-  CHECK(not tenzir::from_import_wire(tenzir::ImportWireBatch{{std::byte{0}}}));
+  CHECK(not decode_events(std::vector<std::byte>{std::byte{0}}));
   auto payload
     = bitz::encode(bitz::Batch{Array<Int>{storage::ConstantStorage<Int>{1, 42}},
                                storage::BitMap{1, true},
                                Events::Meta::make_empty(1, "events")});
   REQUIRE(payload);
-  CHECK(not tenzir::from_import_wire(
-    tenzir::ImportWireBatch{std::move(payload).unwrap()}));
-  auto sentinel = tenzir::from_import_wire(tenzir::ImportWireBatch{});
+  CHECK(not decode_events(std::move(payload).unwrap()));
+  auto sentinel = decode_events(std::vector<std::byte>{});
   REQUIRE(sentinel);
   CHECK_EQUAL(sentinel.unwrap().active_count(), 0u);
+}
+
+TEST("empty Nova event message round-trips as end of stream") {
+  auto bytes = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{bytes};
+  auto empty = Events{};
+  REQUIRE(serializer.apply(empty));
+  auto restored = Events{};
+  auto deserializer = caf::binary_deserializer{bytes};
+  REQUIRE(deserializer.apply(restored));
+  CHECK_EQUAL(restored.active_count(), 0u);
+}
+
+TEST("Nova event serialization retains an all-inactive batch") {
+  auto events = export_events(Record{{"x", Int{42}}});
+  events.mask = storage::BitMap{1, false};
+  auto bytes = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{bytes};
+  REQUIRE(serializer.apply(events));
+  auto restored = Events{};
+  auto deserializer = caf::binary_deserializer{bytes};
+  REQUIRE(deserializer.apply(restored));
+  CHECK_EQUAL(restored.length(), 1);
+  CHECK_EQUAL(restored.active_count(), 0u);
+  CHECK(not restored.mask.get(0));
 }
 
 TEST("import conversion preserves per-row import timestamps") {
@@ -3640,7 +3666,7 @@ TEST("import memory accounting charges backing behind sparse selections") {
 
 TEST("Nova import rejects unredacted secrets") {
   auto events = export_events(Record{{"secret", Secret{}}});
-  auto encoded = tenzir::to_import_wire(events);
+  auto encoded = encode_events(events);
   CHECK(not encoded);
   auto conversion = tenzir::ImportConversionBuffer{"events", false};
   CHECK(not conversion.add(events, events.mask));
@@ -3672,13 +3698,13 @@ TEST("import redacts nested secrets while preserving masks and metadata") {
                 {"items", tenzir::list{"***", "plain"}},
                 {"nested", tenzir::record{{"secret", "***"}}},
               }}));
-  auto wire = tenzir::to_import_wire(redacted);
+  auto wire = encode_events(redacted);
   REQUIRE(wire);
-  auto restored = tenzir::from_import_wire(wire.unwrap());
+  auto restored = decode_events(wire.unwrap());
   REQUIRE(restored);
   CHECK_EQUAL(restored.unwrap().active_count(), 1u);
   CHECK(not restored.unwrap().mask.get(0));
-  CHECK(not tenzir::to_import_wire(events));
+  CHECK(not encode_events(events));
 }
 
 TEST("import redaction retains secret-free backing and constant records") {
@@ -3696,7 +3722,7 @@ TEST("import redaction retains secret-free backing and constant records") {
   auto result = tenzir::redact_import_secrets(events);
   CHECK(result.first);
   CHECK(not is<storage::RecordStorage>(result.second.data.storage()));
-  REQUIRE(tenzir::to_import_wire(result.second));
+  REQUIRE(encode_events(result.second));
 }
 
 TEST("import conversion refines null parents and nested empty lists") {

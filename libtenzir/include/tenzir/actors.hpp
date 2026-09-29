@@ -265,7 +265,6 @@ struct importer_actor_traits {
     auto(atom::flush)->caf::result<void>,
     // Import a batch of data.
     auto(table_slice)->caf::result<void>, auto(nova::Events)->caf::result<void>,
-    auto(ImportWireBatch)->caf::result<void>,
     auto(atom::resume, uuid)->caf::result<void>,
     // Conform to the protocol of the STATUS CLIENT actor.
     auto(atom::status, status_verbosity, duration)->caf::result<record>>;
@@ -414,8 +413,6 @@ struct export_bridge_actor_traits {
     // Returns when a new table slice is available.
     auto(atom::get)->caf::result<table_slice>,
     auto(atom::get, atom::internal)->caf::result<nova::Events>,
-    // Serializable delivery for clients in another actor system.
-    auto(atom::get, atom::internal, bool)->caf::result<ImportWireBatch>,
     auto(nova::Events)->caf::result<void>,
     // Insert a new table slice.
     auto(table_slice slice)->caf::result<void>>;
@@ -522,7 +519,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
   TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
   TENZIR_ADD_TYPE_ID((tenzir::nova_active_partition_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::ImportWireBatch))
   TENZIR_ADD_TYPE_ID((tenzir::nova::storage::BitMap))
   TENZIR_ADD_TYPE_ID((tenzir::NovaPersistResult))
   TENZIR_ADD_TYPE_ID((tenzir::recent_snapshot))

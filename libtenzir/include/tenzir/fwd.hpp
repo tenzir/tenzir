@@ -286,8 +286,6 @@ class BitMap;
 } // namespace storage
 } // namespace nova
 
-struct ImportWireBatch;
-
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
 enum class bool_operator : uint8_t;
@@ -579,12 +577,6 @@ CAF_END_TYPE_ID_BLOCK(tenzir_types)
 // meaningful within the process that created them, hence it is not
 // serializable and must not leave the node.
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::SourceMap)
-
-// These have no inspector yet, so they may only travel between actors
-// within one process. Sending them across a network boundary fails at
-// runtime with `sec::unsafe_type` until serialization lands.
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::Events)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<tenzir::nova::Events>)
 
 #undef TENZIR_CAF_ATOM_ALIAS
 #undef TENZIR_ADD_ATOM

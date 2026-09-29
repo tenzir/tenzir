@@ -15,7 +15,6 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/import_conversion.hpp>
-#include <tenzir/import_wire.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -97,7 +96,6 @@ public:
     if (not importer_) {
       co_return;
     }
-    auto wire = Option<ImportWireBatch>{};
     if constexpr (std::same_as<Input, table_slice>) {
       auto has_secrets = false;
       std::tie(has_secrets, input) = replace_secrets(std::move(input));
@@ -132,15 +130,6 @@ public:
       if (input.active_count() == 0) {
         co_return;
       }
-      auto encoded = to_import_wire(input);
-      if (not encoded) {
-        diagnostic::error("failed to encode import batch: {}",
-                          std::move(encoded).unwrap_err())
-          .primary(keyword_)
-          .emit(ctx.dh());
-        co_return;
-      }
-      wire.emplace(std::move(encoded).unwrap());
       auto names = std::unordered_map<std::string, uint64_t>{};
       for (auto i : nova::storage::true_bits(input.mask)) {
         if (not *input.meta.internal.get(i)) {
@@ -171,9 +160,10 @@ public:
         }));
     } else {
       inflight_.push_back(
-        ctx.spawn_task([importer = importer_, batch = std::move(*wire),
+        ctx.spawn_task([importer = importer_, events = std::move(input),
                         diagnostics, keyword]() mutable -> Task<void> {
-          auto result = co_await async_mail(std::move(batch)).request(importer);
+          auto result
+            = co_await async_mail(std::move(events)).request(importer);
           if (not result) {
             diagnostic::error(result.error())
               .primary(keyword)

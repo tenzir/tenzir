@@ -27,7 +27,6 @@
 #include <tenzir/export_bridge.hpp>
 #include <tenzir/import_conversion.hpp>
 #include <tenzir/import_routing.hpp>
-#include <tenzir/import_wire.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
@@ -264,7 +263,6 @@ public:
         fmt::format("failed to spawn export bridge: {}", result.error()));
     }
     bridge_ = std::move(*result);
-    bridge_is_local_ = bridge_->node() == ctx.actor_system().node();
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -274,21 +272,8 @@ public:
       TENZIR_UNREACHABLE();
     }
     if constexpr (std::same_as<Output, nova::Events>) {
-      if (bridge_is_local_) {
-        co_return co_await async_mail(atom::get_v, atom::internal_v)
-          .request(bridge_);
-      }
-      auto wire = co_await async_mail(atom::get_v, atom::internal_v, true)
-                    .request(bridge_);
-      if (not wire) {
-        co_return caf::expected<nova::Events>{wire.error()};
-      }
-      auto events = from_import_wire(*wire);
-      if (not events) {
-        co_return caf::expected<nova::Events>{
-          caf::make_error(ec::type_clash, std::move(events).unwrap_err())};
-      }
-      co_return caf::expected<nova::Events>{std::move(events).unwrap()};
+      co_return co_await async_mail(atom::get_v, atom::internal_v)
+        .request(bridge_);
     } else {
       co_return co_await async_mail(atom::get_v).request(bridge_);
     }
@@ -555,7 +540,6 @@ private:
   ExportArgs args_;
   bool uses_prometheus_shape_ = false;
   export_bridge_actor bridge_;
-  bool bridge_is_local_ = false;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   Option<ast::expression> remainder_ = None{};
   Option<uint64_t> local_limit_ = None{};

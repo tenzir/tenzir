@@ -13,7 +13,6 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
 #include "tenzir/fbs/utils.hpp"
-#include "tenzir/import_wire.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -426,13 +425,10 @@ TEST("export delivers native snapshots and transport without Arrow "
           CHECK(nova::materialize_legacy(batch.data.get(0))
                 == nova::materialize_legacy(events.data.get(0)));
           ++received;
-          self->mail(atom::get_v, atom::internal_v, true)
+          self->mail(atom::get_v, atom::internal_v)
             .request(bridge, caf::infinite)
             .then(
-              [&](ImportWireBatch batch) {
-                auto decoded = from_import_wire(batch);
-                REQUIRE(decoded);
-                auto const& restored = decoded.unwrap();
+              [&](nova::Events restored) {
                 REQUIRE_EQUAL(restored.active_count(), 1);
                 CHECK(nova::materialize_legacy(restored.data.get(0))
                       == nova::materialize_legacy(events.data.get(0)));

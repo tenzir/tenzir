@@ -16,7 +16,6 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/import_conversion.hpp"
 #include "tenzir/import_routing.hpp"
-#include "tenzir/import_wire.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/recent_snapshot.hpp"
@@ -419,14 +418,6 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
     },
     [this](nova::Events& events) -> caf::result<void> {
       return handle_events(std::move(events));
-    },
-    [this](ImportWireBatch& batch) -> caf::result<void> {
-      auto converted = from_import_wire(batch);
-      if (not converted) {
-        return caf::make_error(ec::type_clash,
-                               std::move(converted).unwrap_err());
-      }
-      return handle_events(std::move(converted).unwrap());
     },
     [this](atom::get, receiver_actor<table_slice>& subscriber, bool internal,
            bool live, bool recent,

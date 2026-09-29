@@ -12,7 +12,6 @@
 #include <tenzir/export_bridge.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/import_conversion.hpp>
-#include <tenzir/import_wire.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/partition_paths.hpp>
 #include <tenzir/partition_synopsis.hpp>
@@ -78,7 +77,6 @@ struct bridge_state {
   std::deque<std::pair<nova::Events, caf::typed_response_promise<void>>>
     nova_buffer;
   caf::typed_response_promise<nova::Events> nova_buffer_rp;
-  caf::typed_response_promise<ImportWireBatch> wire_buffer_rp;
 
   auto bind_expr(const type& schema, const expression& expr)
     -> const expression* {
@@ -113,24 +111,11 @@ struct bridge_state {
     if (nova_buffer_rp.pending()) {
       nova_buffer_rp.deliver(nova::Events{});
     }
-    if (wire_buffer_rp.pending()) {
-      wire_buffer_rp.deliver(ImportWireBatch{});
-    }
   }
 
   auto deliver_events(nova::Events events) -> void {
-    if (nova_buffer_rp.pending()) {
-      nova_buffer_rp.deliver(std::move(events));
-    } else {
-      TENZIR_ASSERT(wire_buffer_rp.pending());
-      auto encoded = to_import_wire(events);
-      if (not encoded) {
-        wire_buffer_rp.deliver(
-          caf::make_error(ec::type_clash, std::move(encoded).unwrap_err()));
-        return;
-      }
-      wire_buffer_rp.deliver(std::move(encoded).unwrap());
-    }
+    TENZIR_ASSERT(nova_buffer_rp.pending());
+    nova_buffer_rp.deliver(std::move(events));
   }
 
   auto add_events(nova::Events events, event_source source,
@@ -152,7 +137,7 @@ struct bridge_state {
       }
       return;
     }
-    if (nova_buffer_rp.pending() or wire_buffer_rp.pending()) {
+    if (nova_buffer_rp.pending()) {
       TENZIR_ASSERT(nova_buffer.empty());
       deliver_events(std::move(events));
       if (rp.pending()) {
@@ -376,9 +361,6 @@ struct bridge_state {
     if (nova_buffer_rp.pending()) {
       nova_buffer_rp.deliver(caf::none);
     }
-    if (wire_buffer_rp.pending()) {
-      wire_buffer_rp.deliver(caf::none);
-    }
     for (auto& [_, rp] : nova_buffer) {
       if (rp.pending()) {
         rp.deliver();
@@ -583,8 +565,7 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
     },
     [self](atom::get, atom::internal) -> caf::result<nova::Events> {
       TENZIR_ASSERT(self->state().mode.nova);
-      TENZIR_ASSERT(not self->state().nova_buffer_rp.pending()
-                    and not self->state().wire_buffer_rp.pending());
+      TENZIR_ASSERT(not self->state().nova_buffer_rp.pending());
       if (self->state().is_done()) {
         return nova::Events{};
       }
@@ -594,25 +575,6 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
       self->state().nova_buffer_rp
         = self->make_response_promise<nova::Events>();
       return self->state().nova_buffer_rp;
-    },
-    [self](atom::get, atom::internal, bool) -> caf::result<ImportWireBatch> {
-      TENZIR_ASSERT(self->state().mode.nova);
-      TENZIR_ASSERT(not self->state().nova_buffer_rp.pending()
-                    and not self->state().wire_buffer_rp.pending());
-      if (self->state().is_done()) {
-        return ImportWireBatch{};
-      }
-      if (not self->state().nova_buffer.empty()) {
-        auto encoded = to_import_wire(self->state().pop_events());
-        if (not encoded) {
-          return caf::make_error(ec::type_clash,
-                                 std::move(encoded).unwrap_err());
-        }
-        return std::move(encoded).unwrap();
-      }
-      self->state().wire_buffer_rp
-        = self->make_response_promise<ImportWireBatch>();
-      return self->state().wire_buffer_rp;
     },
     [self](table_slice& slice) -> caf::result<void> {
       TENZIR_ASSERT(self->current_sender());
