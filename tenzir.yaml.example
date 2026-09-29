@@ -284,8 +284,7 @@ tenzir:
   # controls the maximum memory usage when importing events.
   max-buffered-events: 12Mi
 
-  # Maximum estimated bytes retained by buffered, active, and sealing Nova
-  # imports.
+  # Maximum estimated bytes retained by buffered, active, and sealing imports.
   # This is separate from the event limit and rebuild memory budget.
   max-buffered-bytes: 1073741824
 
