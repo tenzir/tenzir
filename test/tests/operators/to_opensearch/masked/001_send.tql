@@ -1,0 +1,6 @@
+from {keep: true, action: "index", target: "first", id: "one", doc: {value: null, items: [1, "two"]}},
+     {keep: false, action: 42, target: false, id: [], doc: "invalid"},
+     {keep: true, action: "upsert", target: "second", id: "two", doc: {value: 2}}
+where keep
+to_elasticsearch env("HTTP_FIXTURE_ENDPOINT"), tls=false,
+  action=action, index=target, id=id, doc=doc, include_nulls=true

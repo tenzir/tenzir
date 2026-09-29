@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/async/bounded_queue.hpp>
 #include <tenzir/async/oneshot.hpp>
 #include <tenzir/async/semaphore.hpp>
@@ -21,6 +23,9 @@
 #include <tenzir/http_server.hpp>
 #include <tenzir/json_parser.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/arrow_import.hpp>
+#include <tenzir/nova/arrow_metadata.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -28,6 +33,7 @@
 #include <tenzir/tls_options.hpp>
 #include <tenzir/variant.hpp>
 
+#include <arrow/record_batch.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/SSLContext.h>
 #include <proxygen/lib/http/HTTPMessage.h>
@@ -316,7 +322,8 @@ struct InFlightRequest {
   bool failed = false;
 };
 
-class AcceptOpenSearch final : public Operator<void, table_slice> {
+template <class Output>
+class AcceptOpenSearch final : public Operator<void, Output> {
 public:
   explicit AcceptOpenSearch(AcceptOpenSearchArgs args)
     : args_{std::move(args)},
@@ -373,7 +380,7 @@ public:
     co_return co_await message_queue_->dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     auto message = std::move(result).as<Message>();
     co_await co_match(
@@ -463,12 +470,12 @@ public:
           if (args_.keep_actions) {
             if (auto rows = slice.rows(); rows > 0) {
               events_read_counter_.add(rows);
-              co_await push(std::move(slice));
+              co_await push_slice(std::move(slice), push, ctx);
             }
           } else {
             if (auto rows = filtered.rows(); rows > 0) {
               events_read_counter_.add(rows);
-              co_await push(std::move(filtered));
+              co_await push_slice(std::move(filtered), push, ctx);
             }
           }
         }
@@ -503,12 +510,12 @@ public:
           if (args_.keep_actions) {
             if (auto rows = slice.rows(); rows > 0) {
               events_read_counter_.add(rows);
-              co_await push(std::move(slice));
+              co_await push_slice(std::move(slice), push, ctx);
             }
           } else {
             if (auto rows = filtered.rows(); rows > 0) {
               events_read_counter_.add(rows);
-              co_await push(std::move(filtered));
+              co_await push_slice(std::move(filtered), push, ctx);
             }
           }
         }
@@ -530,7 +537,7 @@ public:
       });
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<Output>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     if (lifecycle_ == Lifecycle::done) {
@@ -561,6 +568,30 @@ private:
     draining,
     done,
   };
+
+  auto push_slice(table_slice slice, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      auto batch = to_record_batch(slice);
+      auto imported = nova::import_arrow_array(check(batch->ToStructArray()));
+      if (imported.is_err()) {
+        diagnostic::error("failed to import parsed JSON: {}",
+                          std::move(imported).unwrap_err())
+          .primary(args_.url)
+          .emit(ctx);
+        co_return;
+      }
+      auto records
+        = std::move(imported).unwrap().get_alternative<nova::Record>();
+      TENZIR_ASSERT(records);
+      auto meta = nova::ArrowMetadata::from_arrow(*batch->schema())
+                    .to_meta(slice.rows());
+      co_await push(nova::Events{std::move(records->data),
+                                 std::move(records->present), std::move(meta)});
+    } else {
+      co_await push(std::move(slice));
+    }
+  }
 
   static auto get_max_connections() -> uint64_t {
     return 10;
@@ -655,7 +686,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptOpenSearchArgs, AcceptOpenSearch>{};
+    auto d = Describer<AcceptOpenSearchArgs, AcceptOpenSearch<table_slice>,
+                       AcceptOpenSearch<nova::Events>>{};
     auto url_arg = d.positional("url", &AcceptOpenSearchArgs::url);
     d.named("keep_actions", &AcceptOpenSearchArgs::keep_actions);
     auto max_request_size_arg

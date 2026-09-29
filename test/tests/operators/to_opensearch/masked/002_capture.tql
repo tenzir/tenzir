@@ -1,0 +1,2 @@
+from_file env("HTTP_CAPTURE_FILE") { read_lines }
+where line.starts_with("{")

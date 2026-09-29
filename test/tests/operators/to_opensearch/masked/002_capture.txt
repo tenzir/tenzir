@@ -1,0 +1,12 @@
+{
+  line: "{\"index\":{\"_index\":\"first\",\"_id\":\"one\"}}",
+}
+{
+  line: "{\"value\":null,\"items\":[1,\"two\"]}",
+}
+{
+  line: "{\"update\":{\"_index\":\"second\",\"_id\":\"two\"}}",
+}
+{
+  line: "{\"doc\":{\"value\":2},\"doc_as_upsert\":true}",
+}
