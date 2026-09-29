@@ -1,7 +1,3 @@
----
-skip: "`select_matching` and `drop_matching` do not support Nova yet"
----
-
 from {
   events: [
     {

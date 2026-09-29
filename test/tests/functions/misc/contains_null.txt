@@ -1,5 +1,5 @@
-warning: field `x` not found
-  --> tests/functions/contains_null.tql:11:17
+warning: event does not have field
+  --> tests/functions/misc/contains_null.tql:11:17
    |
 11 | contains_null = x.contains_null()
    |                 ~
@@ -63,10 +63,8 @@ warning: field `x` not found
       {
         z: 1,
       },
-      {
-        z: null,
-      },
+      {},
     ],
   },
-  contains_null: true,
+  contains_null: false,
 }

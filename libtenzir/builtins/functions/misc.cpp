@@ -31,8 +31,11 @@
 
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_kernel.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/nova/type_system.hpp"
@@ -412,7 +415,47 @@ public:
   }
 };
 
-class is_empty final : public function_plugin {
+struct IsEmptyArgs {
+  nova::ValueArgument x;
+};
+
+class IsEmptyFunction final {
+public:
+  static auto eval(IsEmptyArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto result = ArrayBuilder<Data>{};
+    auto warn = false;
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        result.skip();
+        continue;
+      }
+      match(args.x.data.get(i), [&]<data_type Tag>(RowView<Tag> value) {
+        if constexpr (std::same_as<Tag, Null>) {
+          result.null();
+        } else if constexpr (std::same_as<Tag, String>) {
+          result.data((*value).empty());
+        } else if constexpr (std::same_as<Tag, List>) {
+          result.data(value.length() == 0);
+        } else if constexpr (std::same_as<Tag, Record>) {
+          result.data(value.begin() == value.end());
+        } else {
+          warn = true;
+          result.null();
+        }
+      });
+    }
+    if (warn) {
+      diagnostic::warning("expected `string`, `list`, or `record`")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    return result.finish();
+  }
+};
+
+class is_empty final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "is_empty";
@@ -420,6 +463,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<IsEmptyArgs, IsEmptyFunction>{};
+    d.positional("x", &IsEmptyArgs::x, "string|list|record");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -481,7 +530,28 @@ public:
   }
 };
 
-class network final : public function_plugin {
+struct NetworkArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+class NetworkFunction final {
+public:
+  static auto eval(NetworkArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    return apply_kernel<1>(
+      frame, "network", {args.x}, args.call,
+      detail::overload{[](diagnostic_handler&, Subnet value) -> Option<Ip> {
+                         return value.network();
+                       },
+                       [](diagnostic_handler&, Null) -> Option<Ip> {
+                         return None{};
+                       }});
+  }
+};
+
+class network final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "network";
@@ -489,6 +559,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<NetworkArgs, NetworkFunction>{};
+    d.positional("x", &NetworkArgs::x, "subnet");
+    d.call_location(&NetworkArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -706,7 +783,53 @@ public:
   }
 };
 
-class contains_null final : public function_plugin {
+struct ContainsNullArgs {
+  nova::ValueArgument x;
+};
+
+class ContainsNullFunction final {
+public:
+  static auto has_null(nova::RowView<nova::Data> value) -> bool {
+    using namespace nova;
+    return match(value, []<data_type Tag>(RowView<Tag> value) {
+      if constexpr (std::same_as<Tag, Null>) {
+        return true;
+      } else if constexpr (std::same_as<Tag, List>) {
+        for (auto element : value) {
+          if (has_null(element)) {
+            return true;
+          }
+        }
+        return false;
+      } else if constexpr (std::same_as<Tag, Record>) {
+        for (auto field : value) {
+          if (has_null(field.second)) {
+            return true;
+          }
+        }
+        return false;
+      } else {
+        return false;
+      }
+    });
+  }
+
+  static auto eval(ContainsNullArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto result = ArrayBuilder<Bool>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (frame.mask().get(i)) {
+        result.data(has_null(args.x.data.get(i)));
+      } else {
+        result.skip();
+      }
+    }
+    return Array<Data>{result.finish()};
+  }
+};
+
+class contains_null final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "contains_null";
@@ -714,6 +837,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ContainsNullArgs, ContainsNullFunction>{};
+    d.positional("x", &ContainsNullArgs::x, "any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -786,7 +915,47 @@ public:
   }
 };
 
-class keys final : public function_plugin {
+struct KeysArgs {
+  nova::ValueArgument x;
+};
+
+class KeysFunction final {
+public:
+  static auto eval(KeysArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto result = ArrayBuilder<Data>{};
+    auto warn = false;
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        result.skip();
+        continue;
+      }
+      match(args.x.data.get(i), [&]<data_type Tag>(RowView<Tag> value) {
+        if constexpr (std::same_as<Tag, Record>) {
+          auto list = result.list();
+          for (auto const& [name, field] : value) {
+            TENZIR_UNUSED(field);
+            list.data(name);
+          }
+        } else if constexpr (std::same_as<Tag, Null>) {
+          result.null();
+        } else {
+          warn = true;
+          result.null();
+        }
+      });
+    }
+    if (warn) {
+      diagnostic::warning("expected `record`")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    return result.finish();
+  }
+};
+
+class keys final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "keys";
@@ -794,6 +963,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<KeysArgs, KeysFunction>{};
+    d.positional("x", &KeysArgs::x, "record");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -840,7 +1015,65 @@ public:
   }
 };
 
-class select_drop_matching final : public function_plugin {
+struct SelectDropMatchingArgs {
+  nova::ValueArgument x;
+  located<std::string> regex;
+  pattern compiled;
+  bool select = false;
+};
+
+class SelectDropMatchingFunction final {
+public:
+  static auto eval(SelectDropMatchingArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto records = args.x.data.get_alternative<Record>();
+    auto valid = storage::BitMap{frame.length(), false};
+    if (records) {
+      valid = records->present;
+    }
+    if (auto nulls = args.x.data.get_alternative<Null>()) {
+      valid = std::move(valid) | nulls->present;
+    }
+    auto invalid = frame.mask().and_not(valid);
+    if (invalid.any()) {
+      diagnostic::warning("expected `record`")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    if (not records) {
+      return args.x.data.null_where(std::move(invalid));
+    }
+    auto removed = std::vector<std::string>{};
+    auto seen = detail::heterogeneous_string_hashset{};
+    auto record_rows = frame.mask() & records->present;
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not record_rows.get(i)) {
+        continue;
+      }
+      for (auto const& [name, field] : records->data.get(i)) {
+        TENZIR_UNUSED(field);
+        if (seen.insert(std::string{name}).second
+            and args.compiled.search(name) != args.select) {
+          removed.emplace_back(name);
+        }
+      }
+    }
+    auto removed_views = std::vector<std::string_view>{};
+    removed_views.reserve(removed.size());
+    for (auto const& name : removed) {
+      removed_views.push_back(name);
+    }
+    return args.x.data
+      .map_alternative<Record>([&](MaskedArray<Array<Record>> records) {
+        return std::move(records.data)
+          .without_fields(removed_views, record_rows & records.present);
+      })
+      .null_where(std::move(invalid));
+  }
+};
+
+class select_drop_matching final : public nova::FunctionPlugin {
 public:
   explicit select_drop_matching(bool select) : select_{select} {
   }
@@ -851,6 +1084,25 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<SelectDropMatchingArgs,
+                                     SelectDropMatchingFunction>{};
+    d.positional("x", &SelectDropMatchingArgs::x, "record");
+    d.positional("regex", &SelectDropMatchingArgs::regex);
+    d.validate([select = select_](auto& args,
+                                  diagnostic_handler& dh) -> failure_or<void> {
+      auto compiled = pattern::make(args.regex.inner);
+      if (not compiled) {
+        diagnostic::error(compiled.error()).primary(args.regex).emit(dh);
+        return failure::promise();
+      }
+      args.compiled = std::move(*compiled);
+      args.select = select;
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -998,7 +1250,108 @@ auto deep_merge_series(series left, series right, size_t depth = 0) -> series {
   return right;
 }
 
-class merge final : public function_plugin {
+struct MergeArgs {
+  nova::ValueArgument x;
+  nova::ValueArgument y;
+};
+
+class MergeFunction final {
+public:
+  template <class Builder>
+  static auto append(Builder&& output, nova::RowView<nova::Data> left,
+                     nova::RowView<nova::Data> right, size_t depth = 0)
+    -> void {
+    using namespace nova;
+    match(left,
+          detail::overload{
+            [&](RowView<Null> left) {
+              TENZIR_UNUSED(left);
+              append_row(output, right);
+            },
+            [&](RowView<Record> left) {
+              match(right,
+                    detail::overload{
+                      [&](RowView<Null> right) {
+                        if (depth == 0) {
+                          TENZIR_UNUSED(right);
+                          append_row(output, left);
+                        } else {
+                          append_row(output, right);
+                        }
+                      },
+                      [&](RowView<Record> right) {
+                        if (depth >= defaults::max_recursion) {
+                          append_row(output, right);
+                          return;
+                        }
+                        auto right_fields
+                          = std::vector<RowView<Record>::value_type>{};
+                        auto right_indices
+                          = std::unordered_map<std::string_view, size_t>{};
+                        for (auto const& field : right) {
+                          right_indices.emplace(field.first,
+                                                right_fields.size());
+                          right_fields.push_back(field);
+                        }
+                        auto matched
+                          = std::vector<bool>(right_fields.size(), false);
+                        auto record = output.record();
+                        for (auto const& [name, left_value] : left) {
+                          auto index = right_indices.find(name);
+                          if (index == right_indices.end()) {
+                            append_row(record.field(name), left_value);
+                            continue;
+                          }
+                          matched[index->second] = true;
+                          append(record.field(name), left_value,
+                                 right_fields[index->second].second, depth + 1);
+                        }
+                        for (auto const& [index, field] :
+                             detail::enumerate(right_fields)) {
+                          if (not matched[index]) {
+                            append_row(record.field(field.first), field.second);
+                          }
+                        }
+                      },
+                      [&](auto right) {
+                        append_row(output, right);
+                      },
+                    });
+            },
+            [&](auto left) {
+              match(right, detail::overload{
+                             [&](RowView<Null> right) {
+                               if (depth == 0) {
+                                 TENZIR_UNUSED(right);
+                                 append_row(output, left);
+                               } else {
+                                 append_row(output, right);
+                               }
+                             },
+                             [&](auto right) {
+                               append_row(output, right);
+                             },
+                           });
+            },
+          });
+  }
+
+  static auto eval(MergeArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto result = ArrayBuilder<Data>{};
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (frame.mask().get(i)) {
+        append(result, args.x.data.get(i), args.y.data.get(i));
+      } else {
+        result.skip();
+      }
+    }
+    return result.finish();
+  }
+};
+
+class merge final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "merge";
@@ -1006,6 +1359,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<MergeArgs, MergeFunction>{};
+    d.positional("x", &MergeArgs::x, "record");
+    d.positional("y", &MergeArgs::y, "record");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -1029,7 +1389,249 @@ public:
   }
 };
 
-class get final : public function_plugin {
+struct GetArgs {
+  nova::ValueArgument x;
+  nova::ValueArgument field;
+  nova::LazyArgument fallback;
+};
+
+class GetFunction final {
+public:
+  static auto eval(GetArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    auto records = args.x.data.get_alternative<Record>();
+    if (records) {
+      auto allowed = records->present;
+      if (auto nulls = args.x.data.get_alternative<Null>()) {
+        allowed = std::move(allowed) | nulls->present;
+      }
+      auto indices = args.field.data.try_as<String>();
+      using ConstantString
+        = storage::ConstantStorage<typename Type<String>::DataType,
+                                   typename Type<String>::ViewType>;
+      auto const* index
+        = indices ? try_as<ConstantString>(indices->storage()) : nullptr;
+      if (not frame.mask().and_not(allowed).any() and index) {
+        auto record_rows = frame.mask() & records->present;
+        auto field = records->data.field(index->get(0));
+        auto value_rows = storage::BitMap{frame.length(), false};
+        if (field) {
+          value_rows = record_rows & field->present;
+          if (auto nulls = field->data.get_alternative<Null>()) {
+            value_rows = value_rows.and_not(nulls->present);
+          }
+        }
+        auto fallback_rows = frame.mask().and_not(value_rows);
+        if (not args.fallback) {
+          if ((not field and record_rows.any())
+              or (field and record_rows.and_not(field->present).any())) {
+            diagnostic::warning("record has no field")
+              .primary(args.field.source)
+              .emit(frame);
+          }
+          if (frame.mask().and_not(records->present).any()) {
+            diagnostic::warning("cannot index into `null`")
+              .primary(args.x.source)
+              .emit(frame);
+          }
+          return field ? field->data.null_where(std::move(fallback_rows))
+                       : frame.null();
+        }
+        auto primary
+          = field ? field->data.null_where(fallback_rows) : frame.null();
+        if (not fallback_rows.any()) {
+          return primary;
+        }
+        auto fallback = frame.narrow(fallback_rows).eval(args.fallback);
+        return with_merged(MaskedArray<Array<Data>>{std::move(primary),
+                                                    std::move(value_rows)},
+                           MaskedArray<Array<Data>>{std::move(fallback.data),
+                                                    std::move(fallback_rows)});
+      }
+    }
+    auto result = ArrayBuilder<Data>{};
+    auto fallback_rows = storage::BitMap::Mutable{frame.length()};
+    auto record_fields
+      = std::unordered_map<std::string, Option<MaskedArray<Array<Data>>>,
+                           detail::heterogeneous_string_hash,
+                           detail::heterogeneous_string_equal>{};
+    auto bad_subject = false;
+    auto bad_index = false;
+    auto out_of_bounds = false;
+    auto record_out_of_bounds = false;
+    auto missing_field = false;
+    auto null_subject = false;
+    auto null_index = false;
+    for (auto i = storage::Index{0}; i < frame.length(); ++i) {
+      if (not frame.mask().get(i)) {
+        result.skip();
+        continue;
+      }
+      auto fallback = [&] {
+        fallback_rows.set(i, true);
+        result.null();
+      };
+      match(args.x.data.get(i), [&](auto subject) {
+        if constexpr (std::same_as<decltype(subject), RowView<List>>) {
+          auto position = Option<int64_t>{};
+          auto index_is_null = false;
+          match(args.field.data.get(i), [&](auto index) {
+            if constexpr (std::same_as<decltype(index), RowView<Int>>) {
+              position = *index < 0 ? subject.length() + *index : *index;
+            } else if constexpr (std::same_as<decltype(index), RowView<UInt>>) {
+              if (*index <= static_cast<uint64_t>(INT64_MAX)) {
+                position = static_cast<int64_t>(*index);
+              } else {
+                out_of_bounds = true;
+              }
+            } else if constexpr (std::same_as<decltype(index), RowView<Null>>) {
+              index_is_null = true;
+              null_index = true;
+            } else {
+              bad_index = true;
+            }
+          });
+          if (position and *position >= 0 and *position < subject.length()) {
+            auto value = subject.get(*position);
+            if (match(value, detail::overload{[](RowView<Null>) {
+                                                return true;
+                                              },
+                                              [](auto) {
+                                                return false;
+                                              }})) {
+              fallback();
+            } else {
+              append_row(result, value);
+            }
+          } else {
+            if (not index_is_null and position) {
+              out_of_bounds = true;
+            }
+            fallback();
+          }
+        } else if constexpr (std::same_as<decltype(subject), RowView<Record>>) {
+          auto found = Option<RowView<Data>>{};
+          auto index_is_null = false;
+          auto index_is_invalid = false;
+          auto index_is_numeric = false;
+          match(args.field.data.get(i), [&](auto index) {
+            if constexpr (std::same_as<decltype(index), RowView<String>>) {
+              TENZIR_ASSERT(records);
+              auto field = record_fields.find(*index);
+              if (field == record_fields.end()) {
+                field
+                  = record_fields
+                      .emplace(std::string{*index}, records->data.field(*index))
+                      .first;
+              }
+              if (field->second and field->second->present.get(i)) {
+                found = field->second->data.get(i);
+              }
+            } else if constexpr (std::same_as<decltype(index), RowView<Int>>
+                                 or std::same_as<decltype(index),
+                                                 RowView<UInt>>) {
+              index_is_numeric = true;
+              auto wanted = static_cast<uint64_t>(*index);
+              auto current = uint64_t{0};
+              for (auto const& [name, value] : subject) {
+                TENZIR_UNUSED(name);
+                if (current++ == wanted) {
+                  found = value;
+                  break;
+                }
+              }
+            } else if constexpr (std::same_as<decltype(index), RowView<Null>>) {
+              index_is_null = true;
+              null_index = true;
+            } else {
+              index_is_invalid = true;
+              bad_index = true;
+            }
+          });
+          if (found) {
+            if (match(*found, detail::overload{[](RowView<Null>) {
+                                                 return true;
+                                               },
+                                               [](auto) {
+                                                 return false;
+                                               }})) {
+              fallback();
+            } else {
+              append_row(result, *found);
+            }
+          } else {
+            if (index_is_numeric) {
+              record_out_of_bounds = true;
+            } else if (not index_is_null and not index_is_invalid) {
+              missing_field = true;
+            }
+            fallback();
+          }
+        } else if constexpr (std::same_as<decltype(subject), RowView<Null>>) {
+          null_subject = true;
+          fallback();
+        } else {
+          bad_subject = true;
+          fallback();
+        }
+      });
+    }
+    if (not args.fallback) {
+      if (out_of_bounds) {
+        diagnostic::warning("list index out of bounds")
+          .primary(args.field.source)
+          .emit(frame);
+      }
+      if (record_out_of_bounds) {
+        diagnostic::warning("index out of bounds")
+          .primary(args.field.source)
+          .emit(frame);
+      }
+      if (missing_field) {
+        diagnostic::warning("record has no field")
+          .primary(args.field.source)
+          .emit(frame);
+      }
+      if (null_subject) {
+        diagnostic::warning("cannot index into `null`")
+          .primary(args.x.source)
+          .emit(frame);
+      }
+      if (null_index) {
+        diagnostic::warning("cannot use `null` as index")
+          .primary(args.field.source)
+          .emit(frame);
+      }
+    }
+    if (bad_subject) {
+      diagnostic::warning("expected `record` or `list`")
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    if (bad_index) {
+      diagnostic::warning("cannot use this value as index")
+        .primary(args.field.source)
+        .emit(frame);
+    }
+    auto primary = result.finish();
+    if (not args.fallback) {
+      return primary;
+    }
+    auto fallback_mask = std::move(fallback_rows).finish();
+    if (not fallback_mask.any()) {
+      return primary;
+    }
+    auto fallback = frame.narrow(fallback_mask).eval(args.fallback);
+    return with_merged(
+      MaskedArray<Array<Data>>{std::move(primary),
+                               frame.mask().and_not(fallback_mask)},
+      MaskedArray<Array<Data>>{std::move(fallback.data),
+                               std::move(fallback_mask)});
+  }
+};
+
+class get final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "get";
@@ -1037,6 +1639,14 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<GetArgs, GetFunction>{};
+    d.positional("x", &GetArgs::x, "record|list");
+    d.positional("field", &GetArgs::field, "string|int|uint");
+    d.optional_positional("fallback", &GetArgs::fallback, "any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

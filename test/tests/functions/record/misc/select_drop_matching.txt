@@ -1,7 +1,7 @@
 {
+  foo: 1,
   moved: {
     bar: 2,
     baz: 3,
   },
-  foo: 1,
 }
