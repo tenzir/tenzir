@@ -27,6 +27,7 @@ namespace tenzir::nova {
 auto to_table_slices(Events const& events) -> std::vector<table_slice> {
   struct Builder {
     ArrowMetadata metadata;
+    time import_time;
     series_builder builder;
   };
   auto builders = std::vector<Builder>{};
@@ -34,23 +35,22 @@ auto to_table_slices(Events const& events) -> std::vector<table_slice> {
     auto value = materialize_legacy(events.data.get(index));
     auto metadata = ArrowMetadata{std::string{*events.meta.name.get(index)},
                                   *events.meta.internal.get(index)};
-    auto it = std::ranges::find_if(builders, [&](auto const& entry) {
-      return entry.metadata.name == metadata.name
-             and entry.metadata.internal == metadata.internal;
-    });
-    if (it == builders.end()) {
-      it = builders.emplace(builders.end(), std::move(metadata),
-                            series_builder{});
+    auto import_time = *events.meta.import_time.get(index);
+    if (builders.empty() or builders.back().metadata.name != metadata.name
+        or builders.back().metadata.internal != metadata.internal
+        or builders.back().import_time != import_time) {
+      builders.emplace_back(std::move(metadata), import_time, series_builder{});
     }
-    it->builder.data(value);
+    builders.back().builder.data(value);
   }
   auto result = std::vector<table_slice>{};
-  for (auto& [metadata, builder] : builders) {
+  for (auto& [metadata, import_time, builder] : builders) {
     auto slices = builder.finish_as_table_slice(metadata.name);
     for (auto& slice : slices) {
       auto schema = metadata.apply(slice.schema()).to_arrow_schema();
       slice = table_slice{
         to_record_batch(slice)->ReplaceSchemaMetadata(schema->metadata())};
+      slice.import_time(import_time);
     }
     result.insert(result.end(), std::make_move_iterator(slices.begin()),
                   std::make_move_iterator(slices.end()));

@@ -3109,6 +3109,32 @@ TEST("nova events retain internal metadata when converting to table slices") {
   CHECK(slices[1].schema().attribute("internal").has_value());
 }
 
+TEST("nova events retain per-row import times in table slices") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::int64_t{1});
+  builder.record().field("x").data(std::int64_t{2});
+  builder.record().field("x").data(std::int64_t{3});
+  auto times = ArrayBuilder<Time>{};
+  auto first = tenzir::time{std::chrono::seconds{1}};
+  auto second = tenzir::time{std::chrono::seconds{2}};
+  times.data(first);
+  times.data(second);
+  times.data(first);
+  auto meta = Events::Meta::make_empty(3, "schema");
+  meta.import_time = times.finish();
+  auto events
+    = Events{builder.finish(), bitmap({true, true, true}), std::move(meta)};
+  auto slices = to_table_slices(events);
+
+  REQUIRE_EQUAL(slices.size(), 3u);
+  CHECK_EQUAL(slices[0].rows(), 1u);
+  CHECK_EQUAL(slices[0].import_time(), first);
+  CHECK_EQUAL(slices[1].rows(), 1u);
+  CHECK_EQUAL(slices[1].import_time(), second);
+  CHECK_EQUAL(slices[2].rows(), 1u);
+  CHECK_EQUAL(slices[2].import_time(), first);
+}
+
 TEST("nova events convert Arrow-compatible heterogeneous lists to table "
      "slices") {
   auto builder = ArrayBuilder<Record>{};
