@@ -44,3 +44,11 @@ TEST("rejected appends do not charge a replacement generation") {
   CHECK_EQUAL(state.buffered_events, 3u);
   CHECK_EQUAL(state.buffered_nova_bytes, 300u);
 }
+
+TEST("publication errors do not leak into later waves") {
+  auto state = index_state{nullptr};
+  state.complete_publication(caf::make_error(ec::logic_error, "failed"));
+  CHECK(not state.publication_error.valid());
+  state.complete_publication(caf::none);
+  CHECK(not state.publication_error.valid());
+}

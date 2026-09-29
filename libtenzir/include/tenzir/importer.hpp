@@ -42,7 +42,7 @@ private:
   void handle_slice(table_slice&& slice);
   auto handle_events(nova::Events events) -> caf::result<void>;
 
-  void flush(Option<type> schema = {});
+  void flush(Option<type> schema = {}, time import_time = {});
   void flush_nova();
   void finish_nova_flush();
   void release_snapshot_barrier(uuid token);

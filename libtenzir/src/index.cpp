@@ -628,9 +628,10 @@ void index_state::complete_publication(caf::error error) {
   if (pending_publications != 0) {
     return;
   }
+  auto result = std::exchange(publication_error, caf::none);
   for (auto& [token, promise] : pending_publication_barriers) {
-    if (publication_error.valid()) {
-      promise.deliver(publication_error);
+    if (result.valid()) {
+      promise.deliver(result);
     } else {
       publication_barriers.insert(token);
       promise.deliver();
@@ -638,10 +639,9 @@ void index_state::complete_publication(caf::error error) {
   }
   pending_publication_barriers.clear();
   if (not flush_waiters.empty()) {
-    auto error = std::exchange(publication_error, caf::none);
     for (auto& waiter : flush_waiters) {
-      if (error.valid()) {
-        waiter.deliver(error);
+      if (result.valid()) {
+        waiter.deliver(result);
       } else {
         waiter.deliver();
       }

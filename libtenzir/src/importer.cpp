@@ -164,7 +164,10 @@ auto importer::handle_events(nova::Events events) -> caf::result<void> {
   return {};
 }
 
-void importer::flush(Option<type> schema) {
+void importer::flush(Option<type> schema, time import_time) {
+  if (import_time == time{}) {
+    import_time = time::clock::now();
+  }
   const auto do_flush = [&](std::vector<table_slice> events,
                             const bool is_internal) {
     auto concat_buffer_size = size_t{0};
@@ -185,7 +188,7 @@ void importer::flush(Option<type> schema) {
       }
       auto events = std::move(*events_result);
       TENZIR_ASSERT(events.rows() > 0);
-      events.import_time(time::clock::now());
+      events.import_time(import_time);
       if (not is_internal) {
         schema_counters[events.schema()] += events.rows();
       }
@@ -472,15 +475,19 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       }
       auto rp = self->make_response_promise<recent_snapshot>();
       auto buffered = std::vector<table_slice>{};
+      auto const snapshot_time = time::clock::now();
       for (auto const& [schema, slices] : unpersisted_events) {
         auto is_internal = schema.attribute("internal").has_value();
         if (is_internal == internal
             and not retention_policy.should_be_persisted(schema.name(),
                                                          is_internal)) {
-          buffered.insert(buffered.end(), slices.begin(), slices.end());
+          for (auto const& slice : slices) {
+            buffered.push_back(slice);
+            buffered.back().import_time(snapshot_time);
+          }
         }
       }
-      flush();
+      flush({}, snapshot_time);
       flush_nova();
       auto token = uuid::random();
       self->mail(atom::pause_v, token)
@@ -531,6 +538,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       }
       auto rp = self->make_response_promise<NovaRecentSnapshot>();
       auto buffered = std::vector<nova::Events>{};
+      auto const snapshot_time = time::clock::now();
       for (auto const& [schema, slices] : unpersisted_events) {
         auto is_internal = schema.attribute("internal").has_value();
         if (is_internal != internal
@@ -539,7 +547,9 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           continue;
         }
         for (auto const& slice : slices) {
-          auto converted = import_table_slice(slice);
+          auto stamped = slice;
+          stamped.import_time(snapshot_time);
+          auto converted = import_table_slice(stamped);
           if (not converted) {
             return caf::make_error(ec::type_clash,
                                    std::move(converted).unwrap_err());
@@ -557,7 +567,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           break;
         }
       }
-      flush();
+      flush({}, snapshot_time);
       flush_nova();
       auto token = uuid::random();
       self->mail(atom::pause_v, token)
