@@ -724,6 +724,50 @@ TEST("type_of reports null as a type and does not inspect inactive rows") {
   CHECK(std::move(dh).collect().empty());
 }
 
+TEST("type_id reflects per-row record shapes") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto x = builder.record().field("x").record();
+    x.field("a").data(Int{42});
+  }
+  {
+    auto x = builder.record().field("x").record();
+    x.field("b").data(Int{42});
+  }
+  {
+    auto x = builder.record().field("x").record();
+    x.field("a").data(Int{7});
+  }
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("type_id", {root_field("x")}), events,
+                     storage::BitMap{3, true}, dh);
+  auto ids = result.try_as<String>();
+  REQUIRE(ids);
+  auto first = *ids->get(0);
+  CHECK_NOT_EQUAL(first, *ids->get(1));
+  CHECK_EQUAL(first, *ids->get(2));
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("env warns once for invalid key types") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("key").data(Int{1});
+  builder.record().field("key").data(Int{2});
+  builder.record().field("key").null();
+  builder.record().field("key").data("TENZIR_MISSING_ENV_TEST_KEY");
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("env", {root_field("key")}), events,
+                     storage::BitMap{4, true}, dh);
+  for (auto row = storage::Index{0}; row < 3; ++row) {
+    CHECK(is_null_at(result, row));
+  }
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+  CHECK_EQUAL(diagnostics[0].severity, severity::warning);
+}
+
 TEST("match_regex matches anywhere and propagates null silently") {
   auto events = make_mixed_string_events();
   auto dh = collecting_diagnostic_handler{};

@@ -1,0 +1,3 @@
+sockets
+where not has(this, "process") or not has(this, "state")
+summarize missing=count()

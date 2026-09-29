@@ -1,0 +1,3 @@
+processes
+where not has(this, "command_line") or not has(this, "vsize") or not has(this, "rsize") or not has(this, "swap") or not has(this, "peak_mem") or not has(this, "open_fds") or not has(this, "utime") or not has(this, "stime")
+summarize missing=count()

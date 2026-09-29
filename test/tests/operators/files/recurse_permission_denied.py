@@ -37,6 +37,7 @@ def main() -> None:
             [
                 *tenzir,
                 "--bare-mode",
+                "--nova=true",
                 "--console-verbosity=quiet",
                 "--multi",
                 "-f",

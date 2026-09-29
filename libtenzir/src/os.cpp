@@ -87,9 +87,13 @@ auto os::current_process() -> process {
   return fetch_processes(pid).at(0);
 }
 
+auto os::process_data() -> std::vector<process> {
+  return fetch_processes();
+}
+
 auto os::processes() -> table_slice {
   auto builder = series_builder{process_type()};
-  for (const auto& proc : fetch_processes()) {
+  for (const auto& proc : process_data()) {
     auto event = builder.record();
     event.field("name", proc.name);
     if (not proc.command_line.empty()) {
@@ -131,9 +135,13 @@ auto os::processes() -> table_slice {
   return builder.finish_assert_one_slice();
 }
 
+auto os::socket_data() -> std::vector<net_socket> {
+  return fetch_sockets();
+}
+
 auto os::sockets() -> table_slice {
   auto builder = series_builder{socket_type()};
-  for (const auto& socket : fetch_sockets()) {
+  for (const auto& socket : socket_data()) {
     auto event = builder.record();
     event.field("pid", static_cast<uint64_t>(socket.pid));
     if (not socket.process_name.empty()) {

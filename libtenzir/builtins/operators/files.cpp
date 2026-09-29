@@ -10,6 +10,8 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -45,6 +47,7 @@ struct files_args {
 };
 
 struct FilesArgs {
+  location self;
   Option<std::string> path = None{};
   bool recurse_directories = {};
   bool follow_directory_symlink = {};
@@ -347,6 +350,157 @@ auto make_file_listing(files_args args, diagnostic_handler& dh)
   co_yield None{};
 }
 
+auto make_file_events_nova(files_args args, diagnostic_handler& dh)
+  -> generator<Option<nova::Events>> {
+  try {
+    auto ec = std::error_code{};
+    auto path = args.path ? std::filesystem::path{*args.path}
+                          : std::filesystem::current_path(ec);
+    if (ec) {
+      diagnostic::error("{}",
+                        std::filesystem::filesystem_error{
+                          "failed to determine current directory", ec}
+                          .what())
+        .emit(dh);
+      co_yield None{};
+      co_return;
+    }
+    auto entries
+      = args.recurse_directories
+          ? list_directory_recursive(std::move(path), directory_options(args),
+                                     args.skip_permission_denied, dh)
+          : list_directory(std::move(path), directory_options(args),
+                           args.skip_permission_denied, dh);
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    constexpr auto max_length
+      = static_cast<nova::storage::Index>(defaults::import::table_slice_size);
+    auto get_time = [](auto value) {
+      return std::chrono::time_point_cast<duration>(
+        std::chrono::file_clock::to_sys(value));
+    };
+    for (const auto& entry : std::move(entries)) {
+      auto status_ec = std::error_code{};
+      auto status = entry.status(status_ec);
+      auto event = builder.record();
+      event.field("path").data(entry.path().string());
+      if (status_ec) {
+        event.field("type").null();
+        event.field("permissions").null();
+      } else {
+        using std::filesystem::file_type;
+        auto type = std::string_view{};
+        switch (status.type()) {
+          case file_type::regular:
+            type = "regular";
+            break;
+          case file_type::directory:
+            type = "directory";
+            break;
+          case file_type::symlink:
+            type = "symlink";
+            break;
+          case file_type::block:
+            type = "block";
+            break;
+          case file_type::character:
+            type = "character";
+            break;
+          case file_type::fifo:
+            type = "fifo";
+            break;
+          case file_type::socket:
+            type = "socket";
+            break;
+          case file_type::unknown:
+            type = "unknown";
+            break;
+          case file_type::not_found:
+            type = "not_found";
+            break;
+          default:
+            break;
+        }
+        if (type.empty()) {
+          event.field("type").null();
+        } else {
+          event.field("type").data(type);
+        }
+        using std::filesystem::perms;
+        auto permissions = event.field("permissions").record();
+        auto has_perm = [perms = status.permissions()](auto perm) {
+          return perms::none != (perms & perm);
+        };
+#define X(name)                                                                \
+  do {                                                                         \
+    auto name = permissions.field(#name).record();                             \
+    name.field("read").data(has_perm(perms::name##_read));                     \
+    name.field("write").data(has_perm(perms::name##_write));                   \
+    name.field("execute").data(has_perm(perms::name##_exec));                  \
+  } while (0)
+        X(owner);
+        X(group);
+        X(others);
+#undef X
+      }
+      struct ::stat stat_buf = {};
+      if (::stat(entry.path().c_str(), &stat_buf) == 0) {
+        if (const auto* pwuid = getpwuid(stat_buf.st_uid)) {
+          event.field("owner").data(pwuid->pw_name);
+        } else {
+          event.field("owner").null();
+        }
+        if (const auto* grgid = getgrgid(stat_buf.st_gid)) {
+          event.field("group").data(grgid->gr_name);
+        } else {
+          event.field("group").null();
+        }
+      } else {
+        event.field("owner").null();
+        event.field("group").null();
+      }
+      auto error = std::error_code{};
+      auto file_size = entry.file_size(error);
+      if (not error) {
+        event.field("file_size").data(file_size);
+      } else {
+        event.field("file_size").null();
+      }
+      error.clear();
+      auto hard_link_count = entry.hard_link_count(error);
+      if (not error) {
+        event.field("hard_link_count").data(hard_link_count);
+      } else {
+        event.field("hard_link_count").null();
+      }
+      error.clear();
+      auto last_write_time = entry.last_write_time(error);
+      if (not error) {
+        event.field("last_write_time").data(get_time(last_write_time));
+      } else {
+        event.field("last_write_time").null();
+      }
+      if (builder.length() >= max_length) {
+        auto output = builder.finish();
+        builder = nova::ArrayBuilder<nova::Record>{};
+        auto rows = output.length();
+        co_yield nova::Events{
+          std::move(output), nova::storage::BitMap{rows, true},
+          nova::Events::Meta::make_empty(rows, "tenzir.file")};
+      }
+    }
+    if (builder.length() > 0) {
+      auto output = builder.finish();
+      auto rows = output.length();
+      co_yield nova::Events{
+        std::move(output), nova::storage::BitMap{rows, true},
+        nova::Events::Meta::make_empty(rows, "tenzir.file")};
+    }
+  } catch (const std::filesystem::filesystem_error& err) {
+    diagnostic::error("{}", err.what()).emit(dh);
+  }
+  co_yield None{};
+}
+
 class Files final : public Operator<void, table_slice> {
 public:
   explicit Files(FilesArgs args) : args_{to_legacy_args(args)} {
@@ -396,6 +550,60 @@ private:
   bool done_ = false;
 };
 
+class FilesEvents final : public Operator<void, nova::Events> {
+public:
+  explicit FilesEvents(FilesArgs args)
+    : args_{to_legacy_args(args)}, self_{args.self} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (ctx.checkpoint_settings()) {
+      done_ = true;
+      diagnostic::error("`files` does not support checkpointing")
+        .primary(self_)
+        .emit(ctx);
+    }
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    if (done_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    if (not listing_) {
+      listing_.emplace(std::in_place, make_file_events_nova(args_, dh));
+    }
+    auto listing = *listing_;
+    co_return co_await spawn_blocking([listing = std::move(listing)]() mutable {
+      auto result = listing->next();
+      return result ? std::move(*result) : Option<nova::Events>{};
+    });
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (auto events = std::move(result).as<Option<nova::Events>>()) {
+      co_await push(std::move(*events));
+    } else {
+      done_ = true;
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+private:
+  files_args args_;
+  location self_;
+  mutable Option<Arc<generator<Option<nova::Events>>>> listing_ = None{};
+  bool done_ = false;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -403,7 +611,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FilesArgs, Files>{};
+    auto d = Describer<FilesArgs, Files, FilesEvents>{};
+    d.operator_location(&FilesArgs::self);
     d.positional("dir", &FilesArgs::path);
     d.named("recurse", &FilesArgs::recurse_directories);
     d.named("follow_symlinks", &FilesArgs::follow_directory_symlink);

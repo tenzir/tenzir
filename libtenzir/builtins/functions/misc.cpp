@@ -38,6 +38,7 @@
 #include "tenzir/nova/eval_kernel.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/type_id.hpp"
 #include "tenzir/nova/type_system.hpp"
 
 #include <ranges>
@@ -46,7 +47,19 @@ namespace tenzir::plugins::misc {
 
 namespace {
 
-class type_id final : public function_plugin {
+struct TypeIdArgs {
+  nova::ValueArgument x;
+};
+
+class TypeIdFunction {
+public:
+  static auto eval(TypeIdArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::Array<nova::Data>{nova::type_id(args.x.data, frame.mask())};
+  }
+};
+
+class type_id final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "type_id";
@@ -54,6 +67,12 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<TypeIdArgs, TypeIdFunction>{};
+    d.positional("x", &TypeIdArgs::x, "any");
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -200,7 +219,49 @@ public:
   }
 };
 
-class env final : public function_plugin {
+struct EnvArgs {
+  nova::ValueArgument key;
+  std::shared_ptr<const detail::heterogeneous_string_hashmap<std::string>> env;
+};
+
+class EnvFunction {
+public:
+  static auto eval(EnvArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto invalid_type = false;
+    for (auto row : nova::storage::bitmap_iteration(frame.mask())) {
+      if (not row) {
+        builder.skip();
+        continue;
+      }
+      match(args.key.data.get(*row),
+            [&]<nova::data_type Tag>(nova::RowView<Tag> x) {
+              if constexpr (std::same_as<Tag, nova::String>) {
+                auto it = args.env->find(*x);
+                if (it == args.env->end()) {
+                  builder.null();
+                } else {
+                  builder.data(it->second);
+                }
+              } else if constexpr (std::same_as<Tag, nova::Null>) {
+                builder.null();
+              } else {
+                invalid_type = true;
+                builder.null();
+              }
+            });
+    }
+    if (invalid_type) {
+      diagnostic::warning("expected `string`")
+        .primary(args.key.source)
+        .emit(frame);
+    }
+    return builder.finish();
+  }
+};
+
+class env final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "env";
@@ -210,14 +271,26 @@ public:
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);
     TENZIR_UNUSED(global_config);
+    auto env = detail::heterogeneous_string_hashmap<std::string>{};
     for (const auto& entry : boost::this_process::environment()) {
-      env_.emplace(entry.get_name(), entry.to_string());
+      env.emplace(entry.get_name(), entry.to_string());
     }
+    env_ = std::make_shared<decltype(env)>(std::move(env));
     return {};
   }
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<EnvArgs, EnvFunction>{};
+    d.positional("key", &EnvArgs::key, "string");
+    d.validate([env = env_](auto& args, diagnostic_handler&) {
+      args.env = env;
+      return failure_or<void>{};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -234,7 +307,7 @@ public:
                             type::infer(key->inner).value_or(type{}).kind())
           .primary(expr)
           .emit(ctx);
-      } else if (auto it = env_.find(*typed_key); it != env_.end()) {
+      } else if (auto it = env_->find(*typed_key); it != env_->end()) {
         value = it->second;
       }
       return function_use::make(
@@ -263,8 +336,8 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                const auto it = env_.find(array.GetView(i));
-                if (it == env_.end()) {
+                const auto it = env_->find(array.GetView(i));
+                if (it == env_->end()) {
                   check(b.AppendNull());
                   continue;
                 }
@@ -289,7 +362,8 @@ public:
   }
 
 private:
-  detail::heterogeneous_string_hashmap<std::string> env_ = {};
+  std::shared_ptr<const detail::heterogeneous_string_hashmap<std::string>> env_
+    = std::make_shared<detail::heterogeneous_string_hashmap<std::string>>();
 };
 
 struct LengthArgs {

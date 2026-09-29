@@ -1,0 +1,3 @@
+nics
+where not has(this, "description")
+summarize missing=count()

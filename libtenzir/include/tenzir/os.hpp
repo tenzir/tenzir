@@ -73,8 +73,14 @@ public:
   /// Provides a snapshot of all currently running processes.
   auto processes() -> table_slice;
 
+  /// Provides the raw data for a process snapshot.
+  auto process_data() -> std::vector<process>;
+
   /// Provides a snapshot of all open sockets.
   auto sockets() -> table_slice;
+
+  /// Provides the raw data for an open-socket snapshot.
+  auto socket_data() -> std::vector<net_socket>;
 
 protected:
   virtual auto current_pid() -> int = 0;

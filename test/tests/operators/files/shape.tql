@@ -1,0 +1,3 @@
+files env("FILES_PERMISSION_ROOT")
+where not has(this, "path") or not has(this, "type") or not has(this, "permissions") or not has(this, "owner") or not has(this, "group") or not has(this, "file_size") or not has(this, "hard_link_count") or not has(this, "last_write_time")
+summarize missing=count()
