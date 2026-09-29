@@ -284,9 +284,10 @@ void importer::finish_nova_flush() {
   if (pending_nova_requests != 0) {
     return;
   }
+  auto error = std::exchange(nova_error, caf::error{});
   for (auto& waiter : nova_accept_waiters) {
-    if (nova_error.valid()) {
-      waiter.deliver(nova_error);
+    if (error.valid()) {
+      waiter.deliver(error);
     } else {
       waiter.deliver();
     }
@@ -299,7 +300,6 @@ void importer::finish_nova_flush() {
     = std::make_shared<std::vector<caf::typed_response_promise<void>>>(
       std::exchange(nova_flush_waiters,
                     std::vector<caf::typed_response_promise<void>>{}));
-  auto error = std::exchange(nova_error, caf::error{});
   self->mail(atom::flush_v)
     .request(index, caf::infinite)
     .then(
