@@ -3805,6 +3805,49 @@ TEST("null field removal keeps constant payloads constant") {
   CHECK_EQUAL(record_field_names(record.get(0)).size(), 3u);
 }
 
+TEST("null field removal refreshes the cached record size") {
+  constexpr auto length = storage::Index{100'000};
+  auto record
+    = Array<Record>{storage::ConstantStorage<Record, RowView<Record>>{
+                      length, Record{{"null", Null{}},
+                                     {"nested", Record{{"null", Null{}},
+                                                       {"keep", Int{1}}}}}}}
+        .to_primary();
+  auto const before = record.approx_bytes();
+  auto const nested_before
+    = record.field("nested")->data.try_as<Record>()->to_primary().approx_bytes();
+  // Removing `null` from every other row turns its constant presence bitmap
+  // into an allocated one, at both levels.
+  auto active = storage::BitMap::Mutable{length};
+  for (auto row = storage::Index{0}; row < length; row += 2) {
+    active.set(row, true);
+  }
+  auto selection = NullFieldSelection{.recursive = true, .children = {}};
+  CHECK(selection.apply(record, std::move(active).finish()));
+  auto const bitmap_bytes = static_cast<std::size_t>(length) / 8;
+  auto const nested_after
+    = record.field("nested")->data.try_as<Record>()->approx_bytes();
+  CHECK_GREATER_EQUAL(nested_after, nested_before + bitmap_bytes);
+  CHECK_GREATER_EQUAL(record.approx_bytes(), before + (2 * bitmap_bytes));
+}
+
+TEST("mapping a union alternative refreshes the cached union size") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.record().field("a").data(Int{1});
+  builder.data(Int{7});
+  auto input = builder.finish();
+  auto const before = input.approx_bytes();
+  auto const text = std::string(65'536, 'x');
+  auto mapped = std::move(input).map_alternative<Record>([&](auto records) {
+    auto replacement = ArrayBuilder<Record>{};
+    for (auto row = storage::Index{0}; row < records.data.length(); ++row) {
+      replacement.record().field("text").data(std::string_view{text});
+    }
+    return replacement.finish();
+  });
+  CHECK_GREATER_EQUAL(mapped.approx_bytes(), before + (2 * text.size()));
+}
+
 TEST("null field removal preserves union alternatives and source records") {
   auto builder = ArrayBuilder<Record>{};
   auto first = builder.record().field("p").record();

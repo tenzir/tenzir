@@ -150,6 +150,7 @@ auto NullFieldSelection::apply(Array<Record>& record,
     if (indices) {
       data.shape_indices = std::move(*indices).finish();
     }
+    data.refresh_approx_bytes();
     return record;
   };
   record = apply(std::move(record), updates, apply);

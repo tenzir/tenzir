@@ -24,6 +24,8 @@ public:
   auto as_unique() const& -> Array;
   auto as_unique() && -> Array;
   auto length() const noexcept -> storage::Index;
+  /// Heap bytes owned by the backing storage.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto get(storage::Index i) const -> RowView<Tag>;
   auto storage() const& -> const storage_t&;
   auto storage() && -> storage_t&&;

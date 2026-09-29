@@ -16,6 +16,7 @@ namespace storage {
 struct ListStorage::Storage {
   Storage(DataOwner<Span[]> spans, Array<Data> values)
     : spans{std::move(spans)}, values{std::move(values)} {
+    approx_bytes = this->spans.approx_bytes() + this->values.approx_bytes();
   }
   Storage(Storage const&) = default;
   Storage(Storage&&) noexcept = default;
@@ -24,6 +25,8 @@ struct ListStorage::Storage {
 
   DataOwner<Span[]> spans;
   Array<Data> values;
+  /// Heap bytes owned by `spans` and `values`, computed on construction.
+  std::size_t approx_bytes = 0;
 };
 
 ListStorage::ListStorage(DataOwner<Span[]> spans, Array<Data> values)
@@ -55,6 +58,10 @@ auto ListStorage::operator*() const -> Storage const& {
 
 auto ListStorage::length() const noexcept -> Index {
   return storage_->spans.length();
+}
+
+auto ListStorage::approx_bytes() const noexcept -> std::size_t {
+  return storage_.allocation_bytes() + storage_->approx_bytes;
 }
 
 auto ListStorage::get(Index i) const -> ViewType {
@@ -126,6 +133,12 @@ auto Array<List>::as_unique() && -> Array {
 auto Array<List>::length() const noexcept -> storage::Index {
   return match(storage(), [](auto const& physical) {
     return physical.length();
+  });
+}
+
+auto Array<List>::approx_bytes() const noexcept -> std::size_t {
+  return match(storage(), [](auto const& physical) {
+    return physical.approx_bytes();
   });
 }
 

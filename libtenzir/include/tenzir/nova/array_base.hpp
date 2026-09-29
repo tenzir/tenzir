@@ -11,6 +11,7 @@
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/type_system.hpp"
 
+#include <cstddef>
 #include <utility>
 
 namespace tenzir::nova {
@@ -44,6 +45,11 @@ template <class Array>
 struct MaskedArray {
   Array data;
   storage::BitMap present;
+
+  /// Heap bytes owned by the data and the presence bitmap.
+  auto approx_bytes() const noexcept -> std::size_t {
+    return data.approx_bytes() + present.approx_bytes();
+  }
 };
 
 } // namespace tenzir::nova

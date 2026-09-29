@@ -26,6 +26,21 @@ RecordStorage::Storage::Storage(IndicesStorage indices, ShapeTable table,
   for (auto const& [name, index] : names) {
     names_by_index[index] = std::string_view{name};
   }
+  refresh_approx_bytes();
+}
+
+auto RecordStorage::Storage::refresh_approx_bytes() noexcept -> void {
+  auto result = shape_indices.approx_bytes() + shape_table.approx_bytes();
+  // Node-based map: one bucket pointer per bucket, and per entry the value
+  // plus an estimated node header. Key string heap is not walked.
+  result += names.bucket_count() * sizeof(void*);
+  result += names.size() * (sizeof(Names::value_type) + (2 * sizeof(void*)));
+  result += arrays.capacity() * sizeof(MaskedArray);
+  for (auto const& field : arrays) {
+    result += field.approx_bytes();
+  }
+  result += names_by_index.capacity() * sizeof(std::string_view);
+  approx_bytes = result;
 }
 
 RecordStorage::Storage::~Storage() = default;
@@ -65,6 +80,10 @@ auto RecordStorage::operator*() const -> Storage const& {
 
 auto RecordStorage::length() const noexcept -> Index {
   return storage_->shape_indices.length();
+}
+
+auto RecordStorage::approx_bytes() const noexcept -> std::size_t {
+  return storage_.allocation_bytes() + storage_->approx_bytes;
 }
 
 auto RecordStorage::get(Index i) const -> ViewType {
@@ -125,6 +144,12 @@ auto Array<Record>::as_unique() && -> Array {
 auto Array<Record>::length() const noexcept -> storage::Index {
   return match(storage(), [](auto const& physical) {
     return physical.length();
+  });
+}
+
+auto Array<Record>::approx_bytes() const noexcept -> std::size_t {
+  return match(storage(), [](auto const& physical) {
+    return physical.approx_bytes();
   });
 }
 
@@ -346,6 +371,7 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
         return table.with_field(id, existing_index, position);
       });
     primary().arrays[it->second] = std::move(value);
+    primary().refresh_approx_bytes();
     return std::move(*this);
   }
   const auto new_index = static_cast<storage::Index>(primary().arrays.size());
@@ -360,6 +386,7 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
     [new_index, position](ShapeTable& table, ShapeTable::ShapeId id) {
       return table.with_field(id, new_index, position);
     });
+  primary().refresh_approx_bytes();
   return std::move(*this);
 }
 
@@ -413,6 +440,7 @@ auto Array<Record>::with_fields(
         return table.with_field(id, field_index);
       });
   }
+  primary().refresh_approx_bytes();
   return std::move(*this);
 }
 
@@ -465,6 +493,7 @@ auto Array<Record>::without_fields(std::span<const std::string_view> names,
     [&removed](ShapeTable& table, ShapeTable::ShapeId id) {
       return table.without_fields(id, removed);
     });
+  primary().refresh_approx_bytes();
   return std::move(*this);
 }
 
@@ -502,6 +531,7 @@ auto Array<Record>::empty_where(storage::BitMap mask) && -> Array {
     data[row] = ShapeTable::empty_shape;
   });
   primary().shape_indices = std::move(indices).finish();
+  primary().refresh_approx_bytes();
   return std::move(*this);
 }
 

@@ -49,6 +49,8 @@ public:
   inline auto as_unique() const& -> BitMap;
   inline auto as_unique() && -> BitMap;
   inline auto length() const noexcept -> Index;
+  /// Heap bytes of the bit storage; zero for an implicit constant bitmap.
+  inline auto approx_bytes() const noexcept -> std::size_t;
   inline auto make_inverted() const& noexcept -> BitMap;
   inline auto make_inverted() && noexcept -> BitMap;
   /// Returns `*this & ~other` without materializing the inverted `other`.
@@ -312,6 +314,10 @@ inline auto BitMap::as_unique() && -> BitMap {
 
 inline auto BitMap::length() const noexcept -> Index {
   return length_;
+}
+
+inline auto BitMap::approx_bytes() const noexcept -> std::size_t {
+  return data_.approx_bytes();
 }
 
 inline auto BitMap::make_inverted() const& noexcept -> BitMap {

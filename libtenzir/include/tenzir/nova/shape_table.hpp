@@ -13,6 +13,7 @@
 
 #include <boost/container/small_vector.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 
@@ -39,6 +40,9 @@ public:
   auto without_fields(ShapeId id, std::span<const storage::Index> fields)
     -> ShapeId;
   auto size() const noexcept -> std::size_t;
+  /// Heap bytes of the node and hash tables, counting only their entries'
+  /// static sizes.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto fields(ShapeId id) const -> std::span<const storage::Index>;
   auto import_shapes(ShapeTable const& source,
                      std::span<const storage::Index> field_remap,

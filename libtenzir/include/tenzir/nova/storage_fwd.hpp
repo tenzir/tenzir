@@ -9,6 +9,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
@@ -39,6 +40,9 @@ concept storage = unique_ownership<Storage>
                   and requires(Storage s, Storage const cs, Index i) {
                         typename Storage::ViewType;
                         { cs.length() } noexcept -> std::same_as<Index>;
+                        {
+                          cs.approx_bytes()
+                        } noexcept -> std::same_as<std::size_t>;
                         {
                           cs.get(i)
                         } -> std::same_as<typename Storage::ViewType>;

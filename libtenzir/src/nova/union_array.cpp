@@ -43,19 +43,37 @@ auto ErasedArray::as_unique() && -> ErasedArray {
   });
 }
 
+auto ErasedArray::approx_bytes() const noexcept -> std::size_t {
+  return match(data_, [](auto const& x) {
+    return x.approx_bytes();
+  });
+}
+
 struct UnionArray::Storage {
   Storage(nova::storage::SparseStorage<nova::storage::Index> alternative_indices,
           nova::storage::Vector<MaskedArray> data)
     : alternative_indices{std::move(alternative_indices)},
       data{std::move(data)} {
+    refresh_approx_bytes();
   }
   Storage(Storage const&) = default;
   Storage(Storage&&) noexcept = default;
   auto operator=(Storage const&) -> Storage& = delete;
   auto operator=(Storage&&) -> Storage& = delete;
 
+  /// Recomputes `approx_bytes` after the members were edited in place.
+  auto refresh_approx_bytes() noexcept -> void {
+    approx_bytes = alternative_indices.approx_bytes()
+                   + (data.capacity() * sizeof(MaskedArray));
+    for (auto const& alternative : data) {
+      approx_bytes += alternative.approx_bytes();
+    }
+  }
+
   nova::storage::SparseStorage<nova::storage::Index> alternative_indices;
   nova::storage::Vector<MaskedArray> data;
+  /// Heap bytes owned by the members above; see `refresh_approx_bytes`.
+  std::size_t approx_bytes = 0;
 };
 
 UnionArray::UnionArray(
@@ -85,6 +103,10 @@ auto UnionArray::as_unique() && -> UnionArray {
 
 auto UnionArray::length() const noexcept -> nova::storage::Index {
   return storage_->alternative_indices.length();
+}
+
+auto UnionArray::approx_bytes() const noexcept -> std::size_t {
+  return storage_.allocation_bytes() + storage_->approx_bytes;
 }
 
 auto UnionArray::fields() const -> const nova::storage::Vector<MaskedArray>& {
@@ -125,6 +147,12 @@ auto Array<Data>::as_unique() const& -> Array {
 auto Array<Data>::as_unique() && -> Array {
   return match(data_, [](auto& x) -> Array {
     return Array{std::move(x).as_unique()};
+  });
+}
+
+auto Array<Data>::approx_bytes() const noexcept -> std::size_t {
+  return match(data_, [](auto const& x) {
+    return x.approx_bytes();
   });
 }
 
@@ -370,6 +398,7 @@ auto UnionArray::map_alternative(
           return ErasedArray{std::move(storage)};
         }
       });
+    storage_->refresh_approx_bytes();
     break;
   }
   return std::move(*this);

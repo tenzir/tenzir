@@ -13,6 +13,8 @@
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova/shared_owner.hpp"
 
+#include <cstddef>
+
 namespace tenzir::nova::storage {
 
 class ListStorage {
@@ -28,6 +30,9 @@ public:
   auto as_unique() const& -> ListStorage;
   auto as_unique() && -> ListStorage;
   auto length() const noexcept -> Index;
+  /// Heap bytes owned by this storage, including the nested values. The sum
+  /// is computed once on construction.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto get(Index i) const -> ViewType;
   auto values() const& -> Array<Data> const&;
   auto values() && -> Array<Data>&&;
@@ -59,6 +64,9 @@ public:
   auto as_unique() const& -> RecordStorage;
   auto as_unique() && -> RecordStorage;
   auto length() const noexcept -> Index;
+  /// Heap bytes owned by this storage, including all fields. The sum is
+  /// computed on construction and refreshed after in-place edits.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto get(Index i) const -> ViewType;
 
   struct Storage {
@@ -70,11 +78,16 @@ public:
     auto operator=(Storage const&) -> Storage& = delete;
     auto operator=(Storage&&) -> Storage& = delete;
 
+    /// Recomputes `approx_bytes` after the members were edited in place.
+    auto refresh_approx_bytes() noexcept -> void;
+
     IndicesStorage shape_indices;
     ShapeTable shape_table;
     Names names;
     MaskedArrays arrays;
     Vector<std::string_view> names_by_index;
+    /// Heap bytes owned by the members above; see `refresh_approx_bytes`.
+    std::size_t approx_bytes = 0;
   };
   auto operator*() const -> Storage const&;
 

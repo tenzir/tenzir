@@ -15,6 +15,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/ref.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -54,6 +55,8 @@ public:
   auto as_unique() const& -> Array;
   auto as_unique() && -> Array;
   auto length() const noexcept -> storage::Index;
+  /// Heap bytes owned by the backing storage, including all fields.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto get(storage::Index i) const -> RowView<Record>;
   auto field(std::string_view name) const -> Option<MaskedArray>;
 

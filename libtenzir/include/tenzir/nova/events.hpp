@@ -51,8 +51,14 @@ struct Events {
     return mask.true_count();
   }
 
-  auto approx_bytes() const noexcept -> size_t {
-    return 0;
+  /// A cheap estimate of this batch's memory footprint. Omits nested heap
+  /// allocations in constants, shape-table overflow, and record field names.
+  /// Unused capacity is only partly included. Shared buffers count once per
+  /// reference.
+  auto approx_bytes() const noexcept -> std::size_t {
+    return sizeof(Events) + data.approx_bytes() + mask.approx_bytes()
+           + meta.name.approx_bytes() + meta.import_time.approx_bytes()
+           + meta.internal.approx_bytes();
   }
 };
 

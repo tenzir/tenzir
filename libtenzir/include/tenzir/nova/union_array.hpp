@@ -18,6 +18,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/variant_traits.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <type_traits>
@@ -52,6 +53,8 @@ public:
 
   auto as_unique() const& -> ErasedArray;
   auto as_unique() && -> ErasedArray;
+  /// Heap bytes owned by the backing storage.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto get(nova::storage::Index i) const -> RowView<Data>;
 };
 
@@ -71,6 +74,8 @@ public:
   [[nodiscard]] auto as_unique() const& -> UnionArray;
   [[nodiscard]] auto as_unique() && -> UnionArray;
   [[nodiscard]] auto length() const noexcept -> storage::Index;
+  /// Heap bytes owned by the backing storage, including all alternatives.
+  [[nodiscard]] auto approx_bytes() const noexcept -> std::size_t;
   [[nodiscard]] auto get(storage::Index i) const -> RowView<Data>;
 
   template <data_type Tag>
@@ -157,6 +162,8 @@ public:
 
   auto as_unique() const& -> Array;
   auto as_unique() && -> Array;
+  /// Heap bytes owned by the backing storage.
+  [[nodiscard]] auto approx_bytes() const noexcept -> std::size_t;
   /// Gets a view into the i-th row
   [[nodiscard]] auto get(nova::storage::Index i) const -> RowView<Data>;
   /// Creates a new array that is null where `to_null` is true

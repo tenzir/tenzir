@@ -24,6 +24,13 @@ auto Array<Tag>::length() const noexcept -> storage::Index {
 }
 
 template <fundamental_type Tag>
+auto Array<Tag>::approx_bytes() const noexcept -> std::size_t {
+  return match(storage_, [](const auto& storage) {
+    return storage.approx_bytes();
+  });
+}
+
+template <fundamental_type Tag>
 auto Array<Tag>::get(storage::Index i) const -> RowView<Tag> {
   return match(storage_, [i](const auto& storage) {
     return RowView<Tag>{static_cast<ViewType>(storage.get(i))};

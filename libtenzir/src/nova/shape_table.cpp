@@ -112,6 +112,13 @@ auto ShapeTable::size() const noexcept -> std::size_t {
   return nodes_.size();
 }
 
+auto ShapeTable::approx_bytes() const noexcept -> std::size_t {
+  // Static entry sizes only: per-node overflow vectors are not walked.
+  return (nodes_.capacity() * sizeof(ShapeNode))
+         + (ids_by_hash_.bucket_count()
+            * sizeof(decltype(ids_by_hash_)::value_type));
+}
+
 auto ShapeTable::fields(ShapeId id) const -> std::span<const storage::Index> {
   TENZIR_ASSERT_LEQ_EXPENSIVE(0, id);
   TENZIR_ASSERT_LT_EXPENSIVE(id, static_cast<ShapeId>(nodes_.size()));

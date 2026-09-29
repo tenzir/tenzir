@@ -12,6 +12,7 @@
 #include "tenzir/nova/structured_storage.hpp"
 #include "tenzir/ref.hpp"
 
+#include <cstddef>
 #include <memory>
 
 namespace tenzir::nova {
@@ -43,6 +44,8 @@ public:
   auto as_unique() const& -> Array;
   auto as_unique() && -> Array;
   auto length() const noexcept -> storage::Index;
+  /// Heap bytes owned by the backing storage, including nested values.
+  auto approx_bytes() const noexcept -> std::size_t;
   auto get(storage::Index i) const -> RowView<List>;
 
 private:

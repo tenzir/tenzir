@@ -31,6 +31,9 @@ struct Control {
   std::atomic<size_t> strong_reference_count = 0;
   std::atomic<size_t> weak_reference_count = 0;
   ptrdiff_t element_count = 0;
+  /// Elements the combined block was allocated for, so that the requested
+  /// allocation size can be recomputed after the builder is gone.
+  ptrdiff_t capacity = 0;
   Deleter* storage_deleter = nullptr;
 
   struct Deleter {
@@ -107,6 +110,7 @@ auto allocate(Index capacity) -> Allocation<T, AllocFn> {
   std::construct_at(result.control);
   result.control->strong_reference_count.store(1, std::memory_order_relaxed);
   result.control->element_count = 0;
+  result.control->capacity = result.actual_capacity;
   return result;
 }
 
@@ -131,7 +135,9 @@ auto reallocate(Control<T, AllocFn>* control, Index new_capacity)
   auto* storage
     = AllocFn().reallocate(control, allocation_size<T, AllocFn>(new_capacity));
   TENZIR_ASSERT(storage);
-  return layout<T, AllocFn>(storage, new_capacity);
+  auto result = layout<T, AllocFn>(storage, new_capacity);
+  result.control->capacity = result.actual_capacity;
+  return result;
 }
 
 } // namespace _
@@ -201,6 +207,22 @@ public:
     return data_;
   }
 
+  /// The requested size of the owned allocation: the combined block of control
+  /// and elements at its full capacity, or -- for adopted storage -- the
+  /// control block, its deleter, and the externally allocated elements.
+  auto allocation_bytes() const noexcept -> std::size_t {
+    if (not control_) {
+      return 0;
+    }
+    if (control_->storage_deleter) {
+      return sizeof(control_type) + sizeof(typename control_type::Deleter)
+             + (static_cast<std::size_t>(control_->element_count)
+                * sizeof(std::remove_const_t<T>));
+    }
+    return _::allocation_size<std::remove_const_t<T>, AllocFn>(
+      static_cast<Index>(control_->capacity));
+  }
+
   auto as_unique() const& -> SharedOwner
     requires std::copy_constructible<T>
   {
@@ -268,6 +290,7 @@ protected:
     auto* control = std::construct_at(static_cast<control_type*>(storage));
     control->strong_reference_count.store(1, std::memory_order_relaxed);
     control->element_count = count;
+    control->capacity = count;
     // NOLINTNEXTLINE
     control->storage_deleter
       = new ExternalDeleter{std::forward<Deleter>(deleter)};
@@ -324,9 +347,16 @@ class SharedOwner<T[], AllocFn> : private SharedOwner<T, AllocFn> {
 public:
   using base::base;
   using base::operator bool;
+  using base::allocation_bytes;
   using base::reset;
 
   SharedOwner() = default;
+
+  /// Heap bytes owned by this array: the requested size of its allocation,
+  /// including the control block and any unused capacity.
+  auto approx_bytes() const noexcept -> std::size_t {
+    return allocation_bytes();
+  }
 
   /// Ownership of the allocation passes to the returned SharedOwner. No
   /// external pointer, reference, or view into the allocation remains valid for

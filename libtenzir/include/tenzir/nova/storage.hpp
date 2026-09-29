@@ -36,6 +36,10 @@ public:
     return length_;
   }
 
+  auto approx_bytes() const noexcept -> std::size_t {
+    return 0;
+  }
+
   auto get(Index i) const -> std::monostate {
     TENZIR_UNUSED(i);
     TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
@@ -95,6 +99,19 @@ public:
 
   auto length() const noexcept -> Index {
     return length_;
+  }
+
+  /// The constant's own size plus the static size of its entries when it is a
+  /// container. Heap owned by those entries is deliberately not walked.
+  auto approx_bytes() const noexcept -> std::size_t {
+    auto result = sizeof(StorageT);
+    if constexpr (requires {
+                    value_.size();
+                    typename StorageT::value_type;
+                  }) {
+      result += value_.size() * sizeof(typename StorageT::value_type);
+    }
+    return result;
   }
 
   auto get(Index i) const -> ViewType {
@@ -159,6 +176,10 @@ public:
 
   auto length() const noexcept -> Index {
     return data_.length();
+  }
+
+  auto approx_bytes() const noexcept -> std::size_t {
+    return data_.approx_bytes();
   }
 
   auto get(Index i) const -> T {
@@ -257,6 +278,10 @@ public:
     return offsets_ ? offsets_.length() : data_.length();
   }
 
+  auto approx_bytes() const noexcept -> std::size_t {
+    return data_.approx_bytes() + offsets_.approx_bytes();
+  }
+
   auto get(Index i) const -> T {
     TENZIR_ASSERT_LEQ_EXPENSIVE(0, i);
     if (not offsets_) {
@@ -330,6 +355,10 @@ public:
 
   auto length() const noexcept -> Index {
     return ranges_ ? ranges_.length() : data_.length();
+  }
+
+  auto approx_bytes() const noexcept -> std::size_t {
+    return data_.approx_bytes() + ranges_.approx_bytes();
   }
 
   auto get(Index i) const -> View {
