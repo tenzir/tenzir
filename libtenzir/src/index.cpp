@@ -629,8 +629,12 @@ void index_state::complete_publication(caf::error error) {
     return;
   }
   for (auto& [token, promise] : pending_publication_barriers) {
-    publication_barriers.insert(token);
-    promise.deliver();
+    if (publication_error.valid()) {
+      promise.deliver(publication_error);
+    } else {
+      publication_barriers.insert(token);
+      promise.deliver();
+    }
   }
   pending_publication_barriers.clear();
   if (not flush_waiters.empty()) {

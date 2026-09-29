@@ -20,16 +20,7 @@ for workload in homogeneous nullheavy conflict; do
     @name = \"buffered.$workload\"
     import
   "
-  "$TENZIR_BINARY" --bare-mode --console-verbosity=error \
-    --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" "
-    remote {
-      partitions
-      where schema == \"buffered.$workload\"
-      summarize partitions=count(), events=sum(events)
-      write_ndjson
-    }
-  "
-  "$TENZIR_BINARY" --bare-mode --console-verbosity=error \
+  "$TENZIR_BINARY" --nova --bare-mode --console-verbosity=error \
     --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" "
     export
     where @name == \"buffered.$workload\"
