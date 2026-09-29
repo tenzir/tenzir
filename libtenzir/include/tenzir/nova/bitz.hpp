@@ -98,22 +98,21 @@ struct Batch {
 
 /// Encodes one unframed, uncompressed Bitz v2 payload.
 ///
-/// The encoding is canonical and recursively columnar. Structural values are
-/// little-endian. Fixed-width scalar array bodies use the configured byte
-/// order, which defaults to the host's native order. Physical array encodings
-/// are deliberately not retained. Visibility is propagated through nested
-/// arrays, and inaccessible positions receive placeholders without changing
-/// physical row or child-array positions. The
-/// encoder first calculates the exact payload size, then allocates the result
-/// once and writes directly into it.
+/// The encoding is recursively columnar. Structural values are little-endian.
+/// Fixed-width scalar array bodies use the configured byte order, which
+/// defaults to the host's native order. Each type selects a physical encoding
+/// without requiring the decoder to retain it. Visibility is propagated
+/// through nested arrays, and inaccessible positions receive placeholders
+/// without changing physical row or child-array positions. The encoder first
+/// calculates the exact payload size, then allocates the result once and
+/// writes directly into it.
 [[nodiscard]] auto encode(Batch const& batch, EncodeOptions const& options = {})
   -> Result<std::vector<std::byte>, std::string>;
 
 /// Decodes exactly one unframed, uncompressed Bitz v2 payload.
 ///
 /// Rejects trailing bytes, malformed lengths, unknown type identifiers, and
-/// excessive nesting. The returned arrays use their canonical builder-chosen
-/// physical representations.
+/// excessive nesting. Decoding does not promise to retain the wire encoding.
 [[nodiscard]] auto decode(std::span<std::byte const> payload,
                           DecodeLimits const& limits = default_decode_limits)
   -> Result<Batch, std::string>;

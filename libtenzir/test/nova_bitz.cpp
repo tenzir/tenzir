@@ -35,6 +35,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -79,7 +80,8 @@ auto append_integer(std::vector<std::byte>& bytes, T value) -> void {
 
 class WireReader {
 public:
-  explicit WireReader(std::span<std::byte const> bytes) : bytes_{bytes} {
+  explicit WireReader(std::span<std::byte const> bytes)
+    : bytes_{bytes}, original_size_{bytes.size()} {
   }
 
   template <std::unsigned_integral T>
@@ -94,19 +96,44 @@ public:
     return result;
   }
 
-  auto scalar(bitz::ScalarByteOrder byte_order) -> std::uint64_t {
-    REQUIRE_GREATER_EQUAL(bytes_.size(), sizeof(std::uint64_t));
+  auto scalar(bitz::ScalarByteOrder byte_order, std::size_t width = 8)
+    -> std::uint64_t {
+    REQUIRE_GREATER_EQUAL(bytes_.size(), width);
     auto result = std::uint64_t{0};
-    for (auto i = std::size_t{0}; i < sizeof(result); ++i) {
-      auto const offset = byte_order == bitz::ScalarByteOrder::little
-                            ? i
-                            : sizeof(result) - i - 1;
+    for (auto i = std::size_t{0}; i < width; ++i) {
+      auto const offset
+        = byte_order == bitz::ScalarByteOrder::little ? i : width - i - 1;
       result |= static_cast<std::uint64_t>(
                   std::to_integer<std::uint8_t>(bytes_[offset]))
                 << (i * 8);
     }
-    bytes_ = bytes_.subspan(sizeof(result));
+    bytes_ = bytes_.subspan(width);
     return result;
+  }
+
+  auto position() const -> std::size_t {
+    return original_size_ - bytes_.size();
+  }
+
+  auto bitmap(std::size_t length) -> std::uint8_t {
+    auto encoding = integer<std::uint8_t>();
+    switch (encoding) {
+      case 0:
+        skip((length + 7) / 8);
+        break;
+      case 1:
+      case 2:
+        break;
+      case 3:
+      case 4: {
+        auto count = integer<std::uint32_t>();
+        skip(static_cast<std::size_t>(count) * 4);
+        break;
+      }
+      default:
+        FAIL("unexpected bitmap encoding");
+    }
+    return encoding;
   }
 
   auto string() -> std::string {
@@ -125,6 +152,7 @@ public:
 
 private:
   std::span<std::byte const> bytes_;
+  std::size_t original_size_;
 };
 
 template <data_type Tag>
@@ -158,20 +186,19 @@ auto check_dense_numeric_roundtrip(
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(byte_order));
   CHECK_EQUAL(wire.integer<std::uint32_t>(), 2u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 3u);
+  CHECK_EQUAL(wire.bitmap(2), 2u);
   CHECK_EQUAL(wire.integer<std::uint8_t>(), static_cast<std::uint8_t>(type));
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
-  CHECK_EQUAL(wire.scalar(byte_order), expected[0]);
-  CHECK_EQUAL(wire.scalar(byte_order), expected[1]);
+  auto const narrow = std::same_as<Tag, Int>;
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), narrow ? 1u : 0u);
+  CHECK_EQUAL(wire.scalar(byte_order, narrow ? 1 : 8),
+              narrow ? expected[0] & 0xff : expected[0]);
+  CHECK_EQUAL(wire.scalar(byte_order, narrow ? 1 : 8), expected[1]);
   auto decoded = bitz::decode(encoded.unwrap());
   REQUIRE(decoded);
   auto concrete = decoded.unwrap().data.template try_as<Tag>();
   REQUIRE(concrete);
-  REQUIRE(is<storage::SparseStorage<Value>>(concrete->storage()));
-  auto const& physical = as<storage::SparseStorage<Value>>(concrete->storage());
-  CHECK_EQUAL(scalar_bits<Tag>(physical.data()[0]), expected[0]);
-  CHECK_EQUAL(scalar_bits<Tag>(physical.data()[1]), expected[1]);
+  CHECK_EQUAL(scalar_bits<Tag>(*concrete->get(0)), expected[0]);
+  CHECK_EQUAL(scalar_bits<Tag>(*concrete->get(1)), expected[1]);
 }
 
 } // namespace
@@ -208,8 +235,7 @@ TEST("bitz v2 round-trips all Nova logical types and nested values") {
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::native_scalar_byte_order));
   CHECK_EQUAL(wire.integer<std::uint32_t>(), 1u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+  CHECK_EQUAL(wire.bitmap(1), 2u);
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::TypeId::list));
   CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
@@ -218,7 +244,7 @@ TEST("bitz v2 round-trips all Nova logical types and nested values") {
   CHECK_EQUAL(wire.integer<std::uint32_t>(), 13u);
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::TypeId::union_));
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
   CHECK_EQUAL(wire.integer<std::uint32_t>(), 13u);
   auto decoded = bitz::decode(encoded.unwrap());
   REQUIRE(decoded);
@@ -226,6 +252,181 @@ TEST("bitz v2 round-trips all Nova logical types and nested values") {
   CHECK(decoded.unwrap().mask.get(0));
   CHECK(equal(original.get(0), decoded.unwrap().data.get(0)));
   CHECK_EQUAL(*decoded.unwrap().meta.name.get(0), "root");
+}
+
+TEST("bitz v2 derives union masks from tags and enclosing visibility") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(std::int64_t{7});
+  builder.data(String{"x"});
+  builder.data(std::int64_t{9});
+  auto encoded = bitz::encode(bitz::Batch{
+    builder.finish(), mask({true, true, false}), Events::Meta::make_empty(3)});
+  REQUIRE(encoded);
+  auto wire = WireReader{encoded.unwrap()};
+  wire.skip(1 + 4);
+  CHECK_EQUAL(wire.bitmap(3), 0u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(),
+              static_cast<std::uint8_t>(bitz::TypeId::union_));
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+  CHECK_EQUAL(wire.integer<std::uint32_t>(), 2u);
+  auto const tags_offset = wire.position();
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
+  // The first alternative follows the IDs directly, without a bitmap.
+  CHECK_EQUAL(wire.integer<std::uint8_t>(),
+              static_cast<std::uint8_t>(bitz::TypeId::integer));
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order, 1), 7u);
+  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order, 1), 0u);
+  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order, 1), 0u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(),
+              static_cast<std::uint8_t>(bitz::TypeId::string));
+  auto decoded = bitz::decode(encoded.unwrap());
+  REQUIRE(decoded);
+  auto const& result = decoded.unwrap().data;
+  auto ints = result.get_alternative<Int>();
+  auto strings = result.get_alternative<String>();
+  REQUIRE(ints);
+  REQUIRE(strings);
+  CHECK(ints->present.get(0));
+  CHECK(not ints->present.get(1));
+  CHECK(not ints->present.get(2));
+  CHECK(not strings->present.get(0));
+  CHECK(strings->present.get(1));
+  CHECK(not strings->present.get(2));
+  CHECK(equal(result.get(0), RowView<Data>{Data{std::int64_t{7}}}));
+  CHECK(equal(result.get(1), RowView<Data>{Data{String{"x"}}}));
+  auto invalid_visible_tag = encoded.unwrap();
+  invalid_visible_tag[tags_offset] = std::byte{2};
+  CHECK(not bitz::decode(invalid_visible_tag));
+  auto invalid_hidden_tag = encoded.unwrap();
+  invalid_hidden_tag[tags_offset + 2] = std::byte{1};
+  CHECK(not bitz::decode(invalid_hidden_tag));
+  auto truncated_tags = encoded.unwrap();
+  truncated_tags.resize(tags_offset + 2);
+  CHECK(not bitz::decode(truncated_tags));
+  // The decoder also accepts the original fixed-width tag representation.
+  auto wide_tags = encoded.unwrap();
+  wide_tags[tags_offset - 5] = std::byte{0};
+  for (auto row = 3; row-- > 0;) {
+    wide_tags.insert(wide_tags.begin() + tags_offset + row + 1, 3,
+                     std::byte{0});
+  }
+  auto wide_decoded = bitz::decode(wide_tags);
+  REQUIRE(wide_decoded);
+  CHECK(
+    equal(wide_decoded.unwrap().data.get(1), RowView<Data>{Data{String{"x"}}}));
+}
+
+TEST("bitz v2 selects packed, constant, and sparse bitmap encodings") {
+  for (auto byte_order :
+       {bitz::ScalarByteOrder::little, bitz::ScalarByteOrder::big}) {
+    for (auto [length, true_positions, expected_encoding] : {
+           std::tuple{16, std::vector<int>{0, 2, 4, 6, 8, 10, 12, 14}, 0u},
+           std::tuple{16, std::vector<int>{}, 1u},
+           std::tuple{16,
+                      std::vector<int>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                                       13, 14, 15},
+                      2u},
+           std::tuple{128, std::vector<int>{3, 121}, 3u},
+           std::tuple{128, std::vector<int>{}, 4u},
+         }) {
+      auto active = storage::BitMap::Builder{};
+      for (auto row = 0; row < length; ++row) {
+        auto selected
+          = std::ranges::find(true_positions, row) != true_positions.end();
+        active.emplace_back(expected_encoding == 4 ? row != 3 and row != 121
+                                                   : selected);
+      }
+      auto encoded = bitz::encode(
+        bitz::Batch{Array<Data>{Array<Null>{storage::NullStorage{length}}},
+                    active.finish(), Events::Meta::make_empty(length)},
+        {.scalar_byte_order = byte_order});
+      REQUIRE(encoded);
+      auto wire = WireReader{encoded.unwrap()};
+      CHECK_EQUAL(wire.integer<std::uint8_t>(),
+                  static_cast<std::uint8_t>(byte_order));
+      CHECK_EQUAL(wire.integer<std::uint32_t>(),
+                  static_cast<std::uint32_t>(length));
+      auto const bitmap_offset = wire.position();
+      CHECK_EQUAL(wire.integer<std::uint8_t>(), expected_encoding);
+      if (expected_encoding == 0) {
+        CHECK_EQUAL(wire.integer<std::uint8_t>(), 0x55u);
+        CHECK_EQUAL(wire.integer<std::uint8_t>(), 0x55u);
+      } else if (expected_encoding >= 3) {
+        CHECK_EQUAL(wire.integer<std::uint32_t>(), 2u);
+        CHECK_EQUAL(wire.integer<std::uint32_t>(), 3u);
+        CHECK_EQUAL(wire.integer<std::uint32_t>(), 121u);
+        // Sparse positions and counts are structural, not scalar-endian.
+        CHECK_EQUAL(encoded.unwrap()[bitmap_offset + 1], std::byte{2});
+      }
+      auto decoded = bitz::decode(encoded.unwrap());
+      REQUIRE(decoded);
+      for (auto row = 0; row < length; ++row) {
+        CHECK_EQUAL(decoded.unwrap().mask.get(row),
+                    expected_encoding == 4
+                      ? row != 3 and row != 121
+                      : std::ranges::find(true_positions, row)
+                          != true_positions.end());
+      }
+      if (expected_encoding >= 3) {
+        auto malformed = encoded.unwrap();
+        // Count and ordered u32 positions follow the encoding byte.
+        malformed[bitmap_offset + 5] = std::byte{0xff};
+        CHECK(not bitz::decode(malformed));
+        malformed = encoded.unwrap();
+        malformed[bitmap_offset + 9] = std::byte{3};
+        CHECK(not bitz::decode(malformed));
+        malformed = encoded.unwrap();
+        malformed.erase(malformed.begin() + bitmap_offset + 9, malformed.end());
+        CHECK(not bitz::decode(malformed));
+      }
+    }
+  }
+}
+
+TEST("bitz v2 encodes boolean columns with bitmap encodings") {
+  auto builder = ArrayBuilder<Bool>{};
+  for (auto row = 0; row < 128; ++row) {
+    builder.data(row == 73);
+  }
+  auto encoded = bitz::encode(bitz::Batch{Array<Data>{builder.finish()},
+                                          storage::BitMap{128, true},
+                                          Events::Meta::make_empty(128)});
+  REQUIRE(encoded);
+  auto wire = WireReader{encoded.unwrap()};
+  wire.skip(5);
+  CHECK_EQUAL(wire.bitmap(128), 2u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(),
+              static_cast<std::uint8_t>(bitz::TypeId::boolean));
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 3u);
+  CHECK_EQUAL(wire.integer<std::uint32_t>(), 1u);
+  CHECK_EQUAL(wire.integer<std::uint32_t>(), 73u);
+  auto decoded = bitz::decode(encoded.unwrap());
+  REQUIRE(decoded);
+  auto booleans = decoded.unwrap().data.try_as<Bool>();
+  REQUIRE(booleans);
+  for (auto row = 0; row < 128; ++row) {
+    CHECK_EQUAL(*booleans->get(row), row == 73);
+  }
+}
+
+TEST("bitz v2 derives nested union masks from list visibility") {
+  auto builder = ArrayBuilder<Data>{};
+  append_data(builder, Data{List{Data{std::int64_t{7}}, Data{String{"x"}}}});
+  append_data(builder, Data{List{Data{String{"hidden"}}}});
+  auto encoded = bitz::encode(bitz::Batch{builder.finish(), mask({true, false}),
+                                          Events::Meta::make_empty(2)});
+  REQUIRE(encoded);
+  auto decoded = bitz::decode(encoded.unwrap());
+  REQUIRE(decoded);
+  auto lists = decoded.unwrap().data.try_as<List>();
+  REQUIRE(lists);
+  auto visible_row = lists->get(0);
+  CHECK_EQUAL(visible_row.length(), 2);
+  CHECK(equal(visible_row.get(0), RowView<Data>{Data{std::int64_t{7}}}));
+  CHECK(equal(visible_row.get(1), RowView<Data>{Data{String{"x"}}}));
 }
 
 TEST("bitz v2 refuses to encode secret data") {
@@ -263,6 +464,127 @@ TEST("bitz v2 scalar columns preserve both wire byte orders") {
   }
 }
 
+TEST("bitz v2 selects narrow integer encodings in both byte orders") {
+  for (auto byte_order :
+       {bitz::ScalarByteOrder::little, bitz::ScalarByteOrder::big}) {
+    for (auto [values, encoding, width, bits] : {
+           std::tuple{std::array<std::int64_t, 2>{-128, 127}, 1u, 1u,
+                      std::array<std::uint64_t, 2>{0x80, 0x7f}},
+           std::tuple{std::array<std::int64_t, 2>{-129, 32767}, 2u, 2u,
+                      std::array<std::uint64_t, 2>{0xff7f, 0x7fff}},
+           std::tuple{std::array<std::int64_t, 2>{-32769, 2147483647}, 3u, 4u,
+                      std::array<std::uint64_t, 2>{0xffff7fff, 0x7fffffff}},
+           std::tuple{std::array<std::int64_t, 2>{-2147483649, 0}, 0u, 8u,
+                      std::array<std::uint64_t, 2>{0xffffffff7fffffff, 0}},
+         }) {
+      auto builder = ArrayBuilder<Int>{};
+      for (auto value : values) {
+        builder.data(value);
+      }
+      auto encoded = bitz::encode(bitz::Batch{Array<Data>{builder.finish()},
+                                              mask({true, true}),
+                                              Events::Meta::make_empty(2)},
+                                  {.scalar_byte_order = byte_order});
+      REQUIRE(encoded);
+      auto wire = WireReader{encoded.unwrap()};
+      wire.skip(5);
+      CHECK_EQUAL(wire.bitmap(2), 2u);
+      CHECK_EQUAL(wire.integer<std::uint8_t>(),
+                  static_cast<std::uint8_t>(bitz::TypeId::integer));
+      CHECK_EQUAL(wire.integer<std::uint8_t>(), encoding);
+      for (auto value : bits) {
+        CHECK_EQUAL(wire.scalar(byte_order, width), value);
+      }
+      auto decoded = bitz::decode(encoded.unwrap());
+      REQUIRE(decoded);
+      auto ints = decoded.unwrap().data.try_as<Int>();
+      REQUIRE(ints);
+      for (auto i = std::size_t{0}; i < values.size(); ++i) {
+        CHECK_EQUAL(*ints->get(static_cast<storage::Index>(i)), values[i]);
+      }
+    }
+    for (auto [values, encoding, width] : {
+           std::tuple{std::array<std::uint64_t, 2>{0, 255}, 1u, 1u},
+           std::tuple{std::array<std::uint64_t, 2>{256, 65535}, 2u, 2u},
+           std::tuple{std::array<std::uint64_t, 2>{65536, 0xffffffff}, 3u, 4u},
+           std::tuple{std::array<std::uint64_t, 2>{0x100000000, 1}, 0u, 8u},
+         }) {
+      auto builder = ArrayBuilder<UInt>{};
+      for (auto value : values) {
+        builder.data(value);
+      }
+      auto encoded = bitz::encode(bitz::Batch{Array<Data>{builder.finish()},
+                                              mask({true, true}),
+                                              Events::Meta::make_empty(2)},
+                                  {.scalar_byte_order = byte_order});
+      REQUIRE(encoded);
+      auto wire = WireReader{encoded.unwrap()};
+      wire.skip(5);
+      CHECK_EQUAL(wire.bitmap(2), 2u);
+      CHECK_EQUAL(wire.integer<std::uint8_t>(),
+                  static_cast<std::uint8_t>(bitz::TypeId::unsigned_integer));
+      CHECK_EQUAL(wire.integer<std::uint8_t>(), encoding);
+      for (auto value : values) {
+        CHECK_EQUAL(wire.scalar(byte_order, width), value);
+      }
+      auto decoded = bitz::decode(encoded.unwrap());
+      REQUIRE(decoded);
+      auto ints = decoded.unwrap().data.try_as<UInt>();
+      REQUIRE(ints);
+      for (auto i = std::size_t{0}; i < values.size(); ++i) {
+        CHECK_EQUAL(*ints->get(static_cast<storage::Index>(i)), values[i]);
+      }
+    }
+  }
+}
+
+TEST("bitz v2 uses binary32 only for lossless floating-point values") {
+  for (auto byte_order :
+       {bitz::ScalarByteOrder::little, bitz::ScalarByteOrder::big}) {
+    for (auto [values, encoding, width, bits] : {
+           std::tuple{std::array{1.5, -2.25}, 1u, 4u,
+                      std::array<std::uint64_t, 2>{0x3fc00000, 0xc0100000}},
+           std::tuple{std::array{1.1, -0.0}, 0u, 8u,
+                      std::array<std::uint64_t, 2>{
+                        std::bit_cast<std::uint64_t>(1.1), 0x8000000000000000}},
+           std::tuple{std::array{std::bit_cast<double>(
+                                   std::uint64_t{0x7ff8000000000042}),
+                                 1.5},
+                      0u, 8u,
+                      std::array<std::uint64_t, 2>{0x7ff8000000000042,
+                                                   0x3ff8000000000000}},
+         }) {
+      auto builder = ArrayBuilder<Float>{};
+      for (auto value : values) {
+        builder.data(value);
+      }
+      auto encoded = bitz::encode(bitz::Batch{Array<Data>{builder.finish()},
+                                              mask({true, true}),
+                                              Events::Meta::make_empty(2)},
+                                  {.scalar_byte_order = byte_order});
+      REQUIRE(encoded);
+      auto wire = WireReader{encoded.unwrap()};
+      wire.skip(5);
+      CHECK_EQUAL(wire.bitmap(2), 2u);
+      CHECK_EQUAL(wire.integer<std::uint8_t>(),
+                  static_cast<std::uint8_t>(bitz::TypeId::floating_point));
+      CHECK_EQUAL(wire.integer<std::uint8_t>(), encoding);
+      for (auto value : bits) {
+        CHECK_EQUAL(wire.scalar(byte_order, width), value);
+      }
+      auto decoded = bitz::decode(encoded.unwrap());
+      REQUIRE(decoded);
+      auto floats = decoded.unwrap().data.try_as<Float>();
+      REQUIRE(floats);
+      for (auto i = std::size_t{0}; i < values.size(); ++i) {
+        CHECK_EQUAL(std::bit_cast<std::uint64_t>(
+                      *floats->get(static_cast<storage::Index>(i))),
+                    std::bit_cast<std::uint64_t>(values[i]));
+      }
+    }
+  }
+}
+
 TEST("bitz v2 keeps structural values little-endian") {
   auto const value = std::uint64_t{0x0123'4567'89ab'cdef};
   auto const little = std::array{
@@ -290,11 +612,18 @@ TEST("bitz v2 keeps structural values little-endian") {
     CHECK(std::ranges::equal(
       std::span{payload}.subspan(1, 4),
       (std::array{std::byte{1}, std::byte{0}, std::byte{0}, std::byte{0}})));
-    CHECK(std::ranges::equal(std::span{payload}.subspan(9, 8), expected));
+    auto wire = WireReader{payload};
+    wire.skip(5);
+    CHECK_EQUAL(wire.bitmap(1), 2u);
+    CHECK_EQUAL(wire.integer<std::uint8_t>(),
+                static_cast<std::uint8_t>(bitz::TypeId::unsigned_integer));
+    CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
+    CHECK(std::ranges::equal(std::span{payload}.subspan(wire.position(), 8),
+                             expected));
   }
 }
 
-TEST("bitz v2 sanitizes hidden canonical dense numeric values") {
+TEST("bitz v2 sanitizes hidden dense numeric values") {
   for (auto byte_order :
        {bitz::ScalarByteOrder::little, bitz::ScalarByteOrder::big}) {
     auto storage = storage::SparseStorage<std::int64_t>::Mutable{2};
@@ -307,9 +636,13 @@ TEST("bitz v2 sanitizes hidden canonical dense numeric values") {
                      {.scalar_byte_order = byte_order});
     REQUIRE(encoded);
     auto wire = WireReader{encoded.unwrap()};
-    wire.skip(1 + 4 + 2 + 2);
-    CHECK_EQUAL(wire.scalar(byte_order), 11u);
-    CHECK_EQUAL(wire.scalar(byte_order), 0u);
+    wire.skip(1 + 4);
+    CHECK_EQUAL(wire.bitmap(2), 0u);
+    CHECK_EQUAL(wire.integer<std::uint8_t>(),
+                static_cast<std::uint8_t>(bitz::TypeId::integer));
+    CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+    CHECK_EQUAL(wire.scalar(byte_order, 1), 11u);
+    CHECK_EQUAL(wire.scalar(byte_order, 1), 0u);
   }
 }
 
@@ -324,13 +657,12 @@ TEST("bitz v2 preserves masks and metadata with physical placeholders") {
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::native_scalar_byte_order));
   CHECK_EQUAL(wire.integer<std::uint32_t>(), 2u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+  CHECK_EQUAL(wire.bitmap(2), 0u);
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::TypeId::integer));
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
-  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order), 11u);
-  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order), 0u);
+  CHECK_EQUAL(wire.integer<std::uint8_t>(), 1u);
+  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order, 1), 11u);
+  CHECK_EQUAL(wire.scalar(bitz::native_scalar_byte_order, 1), 0u);
   auto decoded = bitz::decode(encoded.unwrap());
   REQUIRE(decoded);
   CHECK(decoded.unwrap().mask.get(0));
@@ -363,8 +695,7 @@ TEST("bitz v2 record directory preserves absence and field order") {
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::native_scalar_byte_order));
   CHECK_EQUAL(wire.integer<std::uint32_t>(), 2u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
-  CHECK_EQUAL(wire.integer<std::uint8_t>(), 3u);
+  CHECK_EQUAL(wire.bitmap(2), 2u);
   CHECK_EQUAL(wire.integer<std::uint8_t>(),
               static_cast<std::uint8_t>(bitz::TypeId::record));
   CHECK_EQUAL(wire.integer<std::uint8_t>(), 0u);
@@ -579,13 +910,16 @@ TEST("bitz v2 decoder bounds nested array lengths") {
     bitz::Batch{builder.finish(), mask({true}), Events::Meta::make_empty(1)});
   REQUIRE(encoded);
   auto malicious = encoded.unwrap();
-  // Scalar byte order (1), batch length (4), mask encoding and body (2), list
-  // header (2), and span (8).
-  REQUIRE_GREATER_EQUAL(malicious.size(), 21u);
-  malicious[17] = std::byte{0xff};
-  malicious[18] = std::byte{0xff};
-  malicious[19] = std::byte{0xff};
-  malicious[20] = std::byte{0x7f};
+  auto wire = WireReader{malicious};
+  wire.skip(5);
+  wire.bitmap(1);
+  wire.skip(2 + 8);
+  auto const child_length_offset = wire.position();
+  REQUIRE_GREATER_EQUAL(malicious.size(), child_length_offset + 4);
+  for (auto i = std::size_t{0}; i < 4; ++i) {
+    malicious[child_length_offset + i]
+      = std::byte{static_cast<std::uint8_t>(i == 3 ? 0x7f : 0xff)};
+  }
   CHECK(not bitz::decode(malicious));
 }
 
@@ -603,12 +937,14 @@ TEST("bitz v2 decoder rejects malformed payloads") {
   CHECK(not bitz::decode(unknown_scalar_byte_order));
   auto unknown_bitmap_encoding = encoded.unwrap();
   // The active-row bitmap follows the marker and batch length.
-  unknown_bitmap_encoding[5] = std::byte{1};
+  unknown_bitmap_encoding[5] = std::byte{0xff};
   CHECK(not bitz::decode(unknown_bitmap_encoding));
   auto unknown_array_encoding = encoded.unwrap();
-  // Marker (1), batch length (4), root mask encoding and body (2), and type
-  // (1).
-  unknown_array_encoding[8] = std::byte{1};
+  auto wire = WireReader{unknown_array_encoding};
+  wire.skip(5);
+  wire.bitmap(1);
+  wire.skip(1); // Root type.
+  unknown_array_encoding[wire.position()] = std::byte{1};
   CHECK(not bitz::decode(unknown_array_encoding));
   auto trailing = encoded.unwrap();
   trailing.push_back(std::byte{0});

@@ -47,7 +47,19 @@
 namespace tenzir::nova::bitz {
 namespace {
 
-constexpr auto canonical_encoding = std::uint8_t{0};
+constexpr auto packed_bitmap_encoding = std::uint8_t{0};
+constexpr auto dense_64_encoding = std::uint8_t{0};
+constexpr auto float_64_encoding = std::uint8_t{0};
+constexpr auto union_u32_encoding = std::uint8_t{0};
+constexpr auto constant_false_encoding = std::uint8_t{1};
+constexpr auto constant_true_encoding = std::uint8_t{2};
+constexpr auto sparse_true_encoding = std::uint8_t{3};
+constexpr auto sparse_false_encoding = std::uint8_t{4};
+constexpr auto dense_8_encoding = std::uint8_t{1};
+constexpr auto dense_16_encoding = std::uint8_t{2};
+constexpr auto dense_32_encoding = std::uint8_t{3};
+constexpr auto float_32_encoding = std::uint8_t{1};
+constexpr auto union_u8_encoding = std::uint8_t{1};
 constexpr auto max_encode_nesting
   = std::size_t{default_decode_limits.max_nesting};
 
@@ -83,8 +95,9 @@ public:
     position_ += value.size();
   }
 
-  auto scalar(std::uint64_t bits) -> void {
-    auto bytes = std::array<std::byte, sizeof(bits)>{};
+  template <std::unsigned_integral T>
+  auto scalar(T bits) -> void {
+    auto bytes = std::array<std::byte, sizeof(T)>{};
     for (auto i = std::size_t{0}; i < bytes.size(); ++i) {
       auto const offset = scalar_byte_order_ == ScalarByteOrder::little
                             ? i
@@ -149,16 +162,16 @@ public:
     return result;
   }
 
-  auto scalar() -> Result<std::uint64_t, std::string> {
-    TRY(auto raw, bytes(sizeof(std::uint64_t)));
-    auto result = std::uint64_t{0};
+  template <std::unsigned_integral T>
+  auto scalar() -> Result<T, std::string> {
+    TRY(auto raw, bytes(sizeof(T)));
+    auto result = T{0};
     for (auto i = std::size_t{0}; i < raw.size(); ++i) {
       auto const offset = scalar_byte_order_ == ScalarByteOrder::little
                             ? i
                             : raw.size() - i - 1;
-      result
-        |= static_cast<std::uint64_t>(std::to_integer<std::uint8_t>(raw[offset]))
-           << (i * 8);
+      result |= static_cast<T>(std::to_integer<std::uint8_t>(raw[offset]))
+                << (i * 8);
     }
     return result;
   }
@@ -288,7 +301,43 @@ private:
   std::uint64_t decoded_bytes_ = 0;
 };
 
-auto write_bitmap_body(Writer& writer, storage::BitMap const& bitmap) -> void {
+auto bitmap_encoding(storage::BitMap const& bitmap) -> std::uint8_t {
+  auto const true_count = static_cast<std::size_t>(bitmap.true_count());
+  auto const length = static_cast<std::size_t>(bitmap.length());
+  if (true_count == 0) {
+    return constant_false_encoding;
+  }
+  if (true_count == length) {
+    return constant_true_encoding;
+  }
+  auto const packed_bytes = (length + 7) / 8;
+  if (4 + true_count * 4 < packed_bytes) {
+    return sparse_true_encoding;
+  }
+  if (4 + (length - true_count) * 4 < packed_bytes) {
+    return sparse_false_encoding;
+  }
+  return packed_bitmap_encoding;
+}
+
+auto write_bitmap_body(Writer& writer, storage::BitMap const& bitmap,
+                       std::uint8_t encoding) -> void {
+  if (encoding == constant_false_encoding
+      or encoding == constant_true_encoding) {
+    return;
+  }
+  if (encoding == sparse_true_encoding or encoding == sparse_false_encoding) {
+    auto const exceptions = encoding == sparse_true_encoding
+                              ? bitmap.true_count()
+                              : bitmap.length() - bitmap.true_count();
+    writer.integer(static_cast<std::uint32_t>(exceptions));
+    for (auto i = storage::Index{0}; i < bitmap.length(); ++i) {
+      if (bitmap.get(i) == (encoding == sparse_true_encoding)) {
+        writer.integer(static_cast<std::uint32_t>(i));
+      }
+    }
+    return;
+  }
   auto byte = std::uint8_t{0};
   for (auto i = storage::Index{0}; i < bitmap.length(); ++i) {
     if (bitmap.get(i)) {
@@ -305,14 +354,42 @@ auto write_bitmap_body(Writer& writer, storage::BitMap const& bitmap) -> void {
 }
 
 auto write_bitmap(Writer& writer, storage::BitMap const& bitmap) -> void {
-  writer.integer(canonical_encoding);
-  write_bitmap_body(writer, bitmap);
+  auto const encoding = bitmap_encoding(bitmap);
+  writer.integer(encoding);
+  write_bitmap_body(writer, bitmap, encoding);
 }
 
 static auto
 read_bitmap_body(Reader& reader, storage::Index length, std::uint8_t encoding)
   -> Result<storage::BitMap, std::string> {
-  if (encoding != canonical_encoding) {
+  if (encoding == constant_false_encoding
+      or encoding == constant_true_encoding) {
+    return storage::BitMap{length, encoding == constant_true_encoding};
+  }
+  if (encoding == sparse_true_encoding or encoding == sparse_false_encoding) {
+    TRY(auto count, reader.integer<std::uint32_t>());
+    if (count > static_cast<std::uint32_t>(length)
+        or count > reader.remaining() / sizeof(std::uint32_t)) {
+      return Err{"invalid Bitz sparse bitmap count"};
+    }
+    TRY(reader.charge_decoded(((static_cast<std::uint64_t>(length) + 7) / 8)
+                              + 64));
+    auto bitmap = storage::BitMap::Mutable{
+      storage::BitMap{length, encoding == sparse_false_encoding}};
+    auto previous = storage::Index{-1};
+    for (auto i = std::uint32_t{0}; i < count; ++i) {
+      TRY(auto raw, reader.integer<std::uint32_t>());
+      if (raw >= static_cast<std::uint32_t>(length)
+          or (previous >= 0 and raw <= static_cast<std::uint32_t>(previous))) {
+        return Err{"invalid Bitz sparse bitmap position"};
+      }
+      auto const position = static_cast<storage::Index>(raw);
+      bitmap.set(position, encoding == sparse_true_encoding);
+      previous = position;
+    }
+    return std::move(bitmap).finish();
+  }
+  if (encoding != packed_bitmap_encoding) {
     return Err{"unsupported Bitz bitmap encoding"};
   }
   auto byte_count = (static_cast<std::size_t>(length) + 7) / 8;
@@ -424,9 +501,56 @@ auto scalar_value(std::uint64_t bits) -> typename Type<Tag>::ViewType {
   }
 }
 
-auto write_header(Writer& writer, TypeId id) -> void {
+auto write_header(Writer& writer, TypeId id, std::uint8_t encoding) -> void {
   writer.integer(static_cast<std::uint8_t>(id));
-  writer.integer(canonical_encoding);
+  writer.integer(encoding);
+}
+
+template <class Tag>
+  requires(std::same_as<Tag, Int> or std::same_as<Tag, UInt>)
+auto integer_encoding(Array<Tag> const& array, storage::BitMap const& visible)
+  -> std::uint8_t {
+  auto fits = [&](auto width) {
+    using Narrow = decltype(width);
+    for (auto i = storage::Index{0}; i < array.length(); ++i) {
+      if (visible.get(i)) {
+        auto const value = *array.get(i);
+        if (value < std::numeric_limits<Narrow>::min()
+            or value > std::numeric_limits<Narrow>::max()) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  if (fits(std::conditional_t<std::same_as<Tag, Int>, std::int8_t,
+                              std::uint8_t>{})) {
+    return dense_8_encoding;
+  }
+  if (fits(std::conditional_t<std::same_as<Tag, Int>, std::int16_t,
+                              std::uint16_t>{})) {
+    return dense_16_encoding;
+  }
+  if (fits(std::conditional_t<std::same_as<Tag, Int>, std::int32_t,
+                              std::uint32_t>{})) {
+    return dense_32_encoding;
+  }
+  return dense_64_encoding;
+}
+
+auto float_encoding(Array<Float> const& array, storage::BitMap const& visible)
+  -> std::uint8_t {
+  for (auto i = storage::Index{0}; i < array.length(); ++i) {
+    if (visible.get(i)) {
+      auto const value = *array.get(i);
+      if (std::bit_cast<std::uint64_t>(
+            static_cast<double>(static_cast<float>(value)))
+          != std::bit_cast<std::uint64_t>(value)) {
+        return float_64_encoding;
+      }
+    }
+  }
+  return float_32_encoding;
 }
 
 auto write_array(Writer& writer, Array<Data> const& array,
@@ -450,22 +574,33 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
   if constexpr (std::same_as<Tag, Secret>) {
     return Err{"Bitz cannot encode secret data"};
   }
-  write_header(writer, type_id<Tag>);
-  if constexpr (std::same_as<Tag, Null>) {
-    return {};
-  } else if constexpr (std::same_as<Tag, Bool>) {
+  auto encoding = std::uint8_t{0};
+  if constexpr (std::same_as<Tag, Bool>) {
     auto values = storage::BitMap::Builder{};
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       values.emplace_back(visible.get(i) ? *array.get(i) : false);
     }
-    write_bitmap_body(writer, values.finish());
+    auto bitmap = values.finish();
+    encoding = bitmap_encoding(bitmap);
+    write_header(writer, type_id<Tag>, encoding);
+    write_bitmap_body(writer, bitmap, encoding);
+    return {};
+  } else if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
+    encoding = integer_encoding(array, visible);
+  } else if constexpr (std::same_as<Tag, Float>) {
+    encoding = float_encoding(array, visible);
+  }
+  write_header(writer, type_id<Tag>, encoding);
+  if constexpr (std::same_as<Tag, Null>) {
+    return {};
   } else if constexpr (fixed_width_scalar<Tag>) {
     using Value = Type<Tag>::ViewType;
     using Primary = storage::SparseStorage<Value>;
     static_assert(sizeof(Value) == sizeof(std::uint64_t));
     if constexpr (bulk_copy_scalar<Tag>) {
       static_assert(std::is_trivially_copyable_v<Value>);
-      if (writer.scalar_byte_order() == native_scalar_byte_order
+      if (encoding == dense_64_encoding
+          and writer.scalar_byte_order() == native_scalar_byte_order
           and visible.true_count() == visible.length()
           and is<Primary>(array.storage())) {
         auto const& values = as<Primary>(array.storage());
@@ -479,7 +614,27 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
       if (visible.get(i)) {
         bits = scalar_bits<Tag>(*array.get(i));
       }
-      writer.scalar(bits);
+      if constexpr (std::same_as<Tag, Float>) {
+        if (encoding == float_32_encoding) {
+          auto const value
+            = visible.get(i) ? static_cast<float>(*array.get(i)) : 0.0f;
+          writer.scalar(std::bit_cast<std::uint32_t>(value));
+        } else {
+          writer.scalar(bits);
+        }
+      } else if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
+        if (encoding == dense_8_encoding) {
+          writer.scalar(static_cast<std::uint8_t>(bits));
+        } else if (encoding == dense_16_encoding) {
+          writer.scalar(static_cast<std::uint16_t>(bits));
+        } else if (encoding == dense_32_encoding) {
+          writer.scalar(static_cast<std::uint32_t>(bits));
+        } else {
+          writer.scalar(bits);
+        }
+      } else {
+        writer.scalar(bits);
+      }
     }
   } else if constexpr (std::same_as<Tag, String> or std::same_as<Tag, Blob>) {
     auto byte_count = std::uint32_t{0};
@@ -659,7 +814,7 @@ auto write_array(Writer& writer, Array<Data> const& array,
                            default_decode_limits.max_array_length)) {
         return Err{"Bitz array length exceeds the resource limit"};
       }
-      write_header(writer, TypeId::union_);
+      write_header(writer, TypeId::union_, union_u8_encoding);
       auto const& fields = union_.fields();
       if (fields.empty()
           or fields.size() > std::numeric_limits<std::uint32_t>::max()) {
@@ -674,7 +829,7 @@ auto write_array(Writer& writer, Array<Data> const& array,
                   row))) {
           return Err{"visible union row has an invalid alternative"};
         }
-        writer.integer(static_cast<std::uint32_t>(index));
+        writer.integer(static_cast<std::uint8_t>(index));
       }
       for (auto field_index = std::size_t{0}; field_index < fields.size();
            ++field_index) {
@@ -690,7 +845,6 @@ auto write_array(Writer& writer, Array<Data> const& array,
                                and field.present.get(row));
         }
         auto present_mask = present.finish();
-        write_bitmap(writer, present_mask);
         TRY(match(field.data, [&](auto const& concrete) {
           return write_concrete(writer, concrete, present_mask, depth + 1);
         }));
@@ -707,14 +861,64 @@ struct DecodedArray {
   TypeId type;
 };
 
+template <class Tag, std::unsigned_integral Bits>
+auto read_narrow_scalar(Reader& reader, storage::Index length, TypeId type)
+  -> Result<DecodedArray, std::string> {
+  using Value = std::conditional_t<
+    std::same_as<Tag, Float>, float,
+    std::conditional_t<std::same_as<Tag, Int>, std::make_signed_t<Bits>, Bits>>;
+  TRY(
+    reader.charge_decoded(static_cast<std::uint64_t>(length) * sizeof(Value)));
+  auto values = typename storage::SparseStorage<Value>::Mutable{length};
+  for (auto i = storage::Index{0}; i < length; ++i) {
+    TRY(auto bits, reader.scalar<Bits>());
+    values.set(i, std::bit_cast<Value>(bits));
+  }
+  return DecodedArray{Array<Tag>{std::move(values).finish()}, type};
+}
+
 template <fixed_width_scalar Tag>
 auto read_dense_scalar(Reader& reader, storage::Index length, TypeId type,
-                       std::string_view truncated)
+                       std::uint8_t encoding, std::string_view truncated)
   -> Result<DecodedArray, std::string> {
   using Value = Type<Tag>::ViewType;
   static_assert(sizeof(Value) == sizeof(std::uint64_t));
-  if (static_cast<std::size_t>(length) > reader.remaining() / sizeof(Value)) {
+  auto width = std::size_t{8};
+  if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
+    if (encoding == dense_8_encoding) {
+      width = 1;
+    } else if (encoding == dense_16_encoding) {
+      width = 2;
+    } else if (encoding == dense_32_encoding) {
+      width = 4;
+    } else if (encoding != dense_64_encoding) {
+      return Err{"unsupported Bitz array encoding"};
+    }
+  } else if constexpr (std::same_as<Tag, Float>) {
+    if (encoding == float_32_encoding) {
+      width = 4;
+    } else if (encoding != float_64_encoding) {
+      return Err{"unsupported Bitz array encoding"};
+    }
+  } else if (encoding != 0) {
+    return Err{"unsupported Bitz array encoding"};
+  }
+  if (static_cast<std::size_t>(length) > reader.remaining() / width) {
     return Err{std::string{truncated}};
+  }
+  if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
+    if (width == 1) {
+      return read_narrow_scalar<Tag, std::uint8_t>(reader, length, type);
+    }
+    if (width == 2) {
+      return read_narrow_scalar<Tag, std::uint16_t>(reader, length, type);
+    }
+  }
+  if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>
+                or std::same_as<Tag, Float>) {
+    if (width == 4) {
+      return read_narrow_scalar<Tag, std::uint32_t>(reader, length, type);
+    }
   }
   TRY(
     reader.charge_decoded(static_cast<std::uint64_t>(length) * sizeof(Value)));
@@ -733,7 +937,7 @@ auto read_dense_scalar(Reader& reader, storage::Index length, TypeId type,
   }
   auto values = typename storage::SparseStorage<Value>::Mutable{length};
   for (auto i = storage::Index{0}; i < length; ++i) {
-    TRY(auto bits, reader.scalar());
+    TRY(auto bits, reader.scalar<std::uint64_t>());
     values.set(i, scalar_value<Tag>(bits));
   }
   return DecodedArray{Array<Tag>{std::move(values).finish()}, type};
@@ -750,15 +954,22 @@ auto erased(DecodedArray decoded) -> Result<ErasedArray, std::string> {
     });
 }
 
-auto read_array(Reader& reader, storage::Index length, std::size_t depth)
+auto read_array(Reader& reader, storage::Index length,
+                storage::BitMap const& visible, std::size_t depth)
   -> Result<DecodedArray, std::string> {
+  if (visible.length() != length) {
+    return Err{"Bitz array visibility length mismatch"};
+  }
   TRY(reader.enter_array(length, depth));
   TRY(auto raw_type, reader.integer<std::uint8_t>());
   TRY(auto encoding, reader.integer<std::uint8_t>());
-  if (encoding != canonical_encoding) {
+  auto type = static_cast<TypeId>(raw_type);
+  if (type != TypeId::boolean and type != TypeId::integer
+      and type != TypeId::unsigned_integer and type != TypeId::floating_point
+      and type != TypeId::union_ and type != TypeId::time
+      and type != TypeId::duration and encoding != 0) {
     return Err{"unsupported Bitz array encoding"};
   }
-  auto type = static_cast<TypeId>(raw_type);
   switch (type) {
     case TypeId::null:
       return DecodedArray{Array<Null>{storage::NullStorage{length}}, type};
@@ -767,13 +978,13 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
       return DecodedArray{Array<Bool>{std::move(values)}, type};
     }
     case TypeId::integer:
-      return read_dense_scalar<Int>(reader, length, type,
+      return read_dense_scalar<Int>(reader, length, type, encoding,
                                     "truncated integer column");
     case TypeId::unsigned_integer:
-      return read_dense_scalar<UInt>(reader, length, type,
+      return read_dense_scalar<UInt>(reader, length, type, encoding,
                                      "truncated unsigned integer column");
     case TypeId::floating_point:
-      return read_dense_scalar<Float>(reader, length, type,
+      return read_dense_scalar<Float>(reader, length, type, encoding,
                                       "truncated floating-point column");
     case TypeId::string:
     case TypeId::blob: {
@@ -851,10 +1062,10 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
       return DecodedArray{builder.finish(), type};
     }
     case TypeId::time:
-      return read_dense_scalar<Time>(reader, length, type,
+      return read_dense_scalar<Time>(reader, length, type, encoding,
                                      "truncated time column");
     case TypeId::duration:
-      return read_dense_scalar<Duration>(reader, length, type,
+      return read_dense_scalar<Duration>(reader, length, type, encoding,
                                          "truncated duration column");
     case TypeId::list: {
       if (static_cast<std::size_t>(length) > reader.remaining() / 8) {
@@ -875,13 +1086,33 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
       }
       TRY(auto raw_child_length, reader.integer<std::uint32_t>());
       TRY(auto child_length, reader.checked_array_length(raw_child_length));
-      TRY(auto child, read_array(reader, child_length, depth + 1));
       auto owned_spans = spans.finish();
-      for (auto const& span : owned_spans) {
-        if (span.end > child.data.length()) {
+      auto child_visible = storage::BitMap::Builder{};
+      auto ranges = std::vector<storage::Span>{};
+      ranges.reserve(static_cast<std::size_t>(visible.true_count()));
+      for (auto row = storage::Index{0}; row < length; ++row) {
+        auto const span = owned_spans[row];
+        if (span.end > child_length) {
           return Err{"Bitz list span exceeds its child array"};
         }
+        if (visible.get(row)) {
+          ranges.push_back(span);
+        }
       }
+      std::ranges::sort(ranges, {}, &storage::Span::begin);
+      TRY(reader.charge_decoded(
+        (static_cast<std::uint64_t>(ranges.size()) * sizeof(storage::Span))
+        + ((static_cast<std::uint64_t>(child_length) + 7) / 8) + 64));
+      auto covered_until = storage::Index{0};
+      for (auto const span : ranges) {
+        child_visible.append_n(false, std::max(span.begin - covered_until, 0));
+        child_visible.append_n(
+          true, std::max(span.end - std::max(span.begin, covered_until), 0));
+        covered_until = std::max(covered_until, span.end);
+      }
+      child_visible.append_n(false, child_length - covered_until);
+      TRY(auto child,
+          read_array(reader, child_length, child_visible.finish(), depth + 1));
       return DecodedArray{
         Array<List>{std::move(owned_spans), std::move(child.data)}, type};
     }
@@ -972,7 +1203,8 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
       fields.reserve(static_cast<std::size_t>(field_count));
       for (auto i = storage::Index{0}; i < field_count; ++i) {
         TRY(auto present, read_bitmap(reader, length));
-        TRY(auto field, read_array(reader, length, depth + 1));
+        TRY(auto field,
+            read_array(reader, length, visible & present, depth + 1));
         fields.push_back({std::move(field.data), std::move(present)});
       }
       return DecodedArray{Array<Record>{std::move(indices), std::move(table),
@@ -980,12 +1212,16 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
                           type};
     }
     case TypeId::union_: {
+      if (encoding != union_u32_encoding and encoding != union_u8_encoding) {
+        return Err{"unsupported Bitz array encoding"};
+      }
       TRY(auto raw_count, reader.integer<std::uint32_t>());
       TRY(auto count, reader.checked_index(raw_count));
       if (count < 2 or std::cmp_greater(count, data_type_list::size)) {
         return Err{"invalid Bitz union alternative count"};
       }
-      if (static_cast<std::size_t>(length) > reader.remaining() / 4
+      auto const tag_width = encoding == union_u8_encoding ? 1u : 4u;
+      if (static_cast<std::size_t>(length) > reader.remaining() / tag_width
           or static_cast<std::size_t>(count) > reader.remaining()) {
         return Err{"truncated Bitz union"};
       }
@@ -998,8 +1234,16 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
         auto mutable_indices
           = storage::SparseStorage<storage::Index>::Mutable{length};
         for (auto row = storage::Index{0}; row < length; ++row) {
-          TRY(auto raw_index, reader.integer<std::uint32_t>());
-          if (raw_index >= raw_count) {
+          auto raw_index = std::uint32_t{0};
+          if (encoding == union_u8_encoding) {
+            TRY(auto tag, reader.integer<std::uint8_t>());
+            raw_index = tag;
+          } else {
+            TRY(auto tag, reader.integer<std::uint32_t>());
+            raw_index = tag;
+          }
+          if (raw_index >= raw_count
+              or (not visible.get(row) and raw_index != 0)) {
             return Err{"Bitz union row has an invalid alternative"};
           }
           mutable_indices.set(row, static_cast<storage::Index>(raw_index));
@@ -1008,15 +1252,17 @@ auto read_array(Reader& reader, storage::Index length, std::size_t depth)
       }
       auto alternatives = storage::Vector<UnionArray::MaskedArray>{};
       alternatives.reserve(static_cast<std::size_t>(count));
-      auto covered = storage::BitMap{length, false};
       auto seen_types = std::array<bool, data_type_list::size>{};
       for (auto i = storage::Index{0}; i < count; ++i) {
-        TRY(auto present, read_bitmap(reader, length));
-        if ((covered & present).any()) {
-          return Err{"Bitz union alternative masks overlap"};
+        TRY(reader.charge_decoded(((static_cast<std::uint64_t>(length) + 7) / 8)
+                                  + 64));
+        auto present_builder = storage::BitMap::Builder{};
+        for (auto row = storage::Index{0}; row < length; ++row) {
+          present_builder.emplace_back(visible.get(row)
+                                       and indices.get(row) == i);
         }
-        covered = std::move(covered) | present;
-        TRY(auto alternative, read_array(reader, length, depth + 1));
+        auto present = present_builder.finish();
+        TRY(auto alternative, read_array(reader, length, present, depth + 1));
         if (alternative.type == TypeId::union_) {
           return Err{"invalid Bitz union alternative"};
         }
@@ -1164,7 +1410,8 @@ validate_visibility(Reader& reader, Array<Data> const& array,
 static auto
 read_typed_meta(Reader& reader, storage::Index length, TypeId expected)
   -> Result<Array<Data>, std::string> {
-  TRY(auto decoded, read_array(reader, length, 0));
+  TRY(auto decoded,
+      read_array(reader, length, storage::BitMap{length, true}, 0));
   if (decoded.type != expected) {
     return Err{"metadata column has the wrong type"};
   }
@@ -1234,7 +1481,7 @@ auto decode(std::span<std::byte const> payload, DecodeLimits const& limits)
     TRY(reader.check_rows(raw_length));
     TRY(auto length, reader.checked_array_length(raw_length));
     TRY(auto mask, read_bitmap(reader, length));
-    TRY(auto root, read_array(reader, length, 0));
+    TRY(auto root, read_array(reader, length, mask, 0));
     TRY(validate_visibility(reader, root.data, mask, 0));
     TRY(auto raw_names, read_typed_meta(reader, length, TypeId::string));
     TRY(auto raw_times, read_typed_meta(reader, length, TypeId::time));
