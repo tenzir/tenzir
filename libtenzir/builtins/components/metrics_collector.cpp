@@ -9,7 +9,11 @@
 #include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/node.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/type.hpp>
@@ -36,6 +40,7 @@ struct metrics_collector_state {
   struct instance {
     std::string name = {};
     series_builder builder = {};
+    nova::ArrayBuilder<nova::Record> nova_builder = {};
     metrics_plugin::collector collector = {};
 
     auto run() -> caf::expected<void> {
@@ -43,10 +48,20 @@ struct metrics_collector_state {
       if (not result) {
         return std::move(result.error());
       }
-      auto event = builder.record();
-      event.field("timestamp", time::clock::now());
-      for (const auto& [name, data] : *result) {
-        event.field(name, data);
+      auto now = time::clock::now();
+      if (nova_enabled()) {
+        auto event = nova_builder.record();
+        event.field("timestamp").data(now);
+        auto dh = null_diagnostic_handler{};
+        for (auto const& [name, value] : *result) {
+          nova::append_legacy_data(event.field(name), value, dh);
+        }
+      } else {
+        auto event = builder.record();
+        event.field("timestamp", now);
+        for (auto const& [name, value] : *result) {
+          event.field(name, value);
+        }
       }
       return {};
     }
@@ -71,8 +86,26 @@ struct metrics_collector_state {
       [this] {
         TENZIR_TRACE("{} sends out metrics", *self);
         for (auto& instance : instances) {
-          for (auto&& slice : instance.builder.finish_as_table_slice()) {
-            self->mail(std::move(slice)).send(importer);
+          if (nova_enabled()) {
+            if (instance.nova_builder.length() == 0) {
+              continue;
+            }
+            auto data = instance.nova_builder.finish();
+            instance.nova_builder = nova::ArrayBuilder<nova::Record>{};
+            auto length = data.length();
+            auto meta = nova::Events::Meta::make_empty(
+              length, fmt::format("tenzir.metrics.{}", instance.name));
+            meta.internal
+              = nova::Array<nova::Bool>{nova::storage::BitMap{length, true}};
+            self
+              ->mail(nova::Events{std::move(data),
+                                  nova::storage::BitMap{length, true},
+                                  std::move(meta)})
+              .send(importer);
+          } else {
+            for (auto&& slice : instance.builder.finish_as_table_slice()) {
+              self->mail(std::move(slice)).send(importer);
+            }
           }
         }
       },
@@ -100,7 +133,8 @@ struct metrics_collector_state {
     const auto index = instances.size();
     instances.push_back({
       .name = plugin.name(),
-      .builder = series_builder{std::move(schema)},
+      .builder
+      = nova_enabled() ? series_builder{} : series_builder{std::move(schema)},
       .collector = std::move(*collector),
     });
     detail::weak_run_delayed_loop(

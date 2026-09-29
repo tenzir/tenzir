@@ -15,12 +15,16 @@
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/io/save.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
+#include "tenzir/recent_snapshot.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/test/test.hpp"
@@ -29,6 +33,7 @@
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/test/fixture/deterministic.hpp>
@@ -327,11 +332,17 @@ TEST("export releases unbound schemas while other candidates remain queued") {
       },
     };
   });
-  auto importer = f.sys.spawn([]() -> importer_actor::behavior_type {
+  auto barrier = uuid::random();
+  auto resumed = false;
+  auto importer = f.sys.spawn([&]() -> importer_actor::behavior_type {
     return {caf::partial_behavior_init,
-            [](atom::get, const receiver_actor<table_slice>&, bool, bool, bool,
-               bool) {
-              return std::vector<table_slice>{};
+            [&](atom::get, atom::snapshot, const receiver_actor<table_slice>&,
+                bool, bool, bool, bool) -> recent_snapshot {
+              return {{}, barrier};
+            },
+            [&](atom::resume, uuid token) {
+              CHECK_EQUAL(token, barrier);
+              resumed = true;
             }};
   });
   auto fs = f.sys.spawn([]() -> filesystem_actor::behavior_type {
@@ -350,12 +361,112 @@ TEST("export releases unbound schemas while other candidates remain queued") {
     f.sys, expr, mode, fs, std::make_unique<null_diagnostic_handler>());
   f.dispatch_messages();
   CHECK_NOT_EQUAL(lease, uuid{});
+  CHECK(resumed);
   CHECK_EQUAL(released, std::vector{skipped});
   CHECK(not released_all);
   f.inject_exit(bridge);
   f.inject_exit(catalog);
   f.inject_exit(importer);
   f.inject_exit(fs);
+}
+
+TEST("export delivers native snapshots and transport without Arrow "
+     "conversion") {
+  auto f = caf::test::fixture::deterministic{};
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  auto values = builder.record().field("values").list();
+  values.data(int64_t{1});
+  values.data(std::string_view{"two"});
+  auto events = nova::Events{builder.finish(), nova::storage::BitMap{1, true},
+                             nova::Events::Meta::make_empty(1, "test")};
+  auto barrier = uuid::random();
+  auto resumed = false;
+  auto importer = f.sys.spawn([&]() -> importer_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [&](atom::get, atom::snapshot, receiver_actor<nova::Events> const&,
+                bool, bool, bool, bool) -> NovaRecentSnapshot {
+              return {{events, events}, barrier};
+            },
+            [&](atom::resume, uuid token) {
+              CHECK_EQUAL(token, barrier);
+              resumed = true;
+            }};
+  });
+  auto catalog = f.sys.spawn([&]() -> catalog_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [&](atom::candidates, query_context const&) {
+              CHECK(not resumed);
+              return catalog_lookup_result{};
+            },
+            [](atom::release, uuid const&) {}};
+  });
+  auto fs = f.sys.spawn([]() -> filesystem_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [](atom::erase, std::filesystem::path const&) {
+              return atom::done_v;
+            }};
+  });
+  f.sys.registry().put("tenzir.catalog", catalog);
+  f.sys.registry().put("tenzir.importer", importer);
+  auto mode = export_mode{};
+  mode.nova = true;
+  mode.internal = true;
+  auto bridge
+    = spawn_export_bridge(f.sys, trivially_true_expression(), mode, fs,
+                          std::make_unique<null_diagnostic_handler>());
+  auto received = size_t{0};
+  auto ended = false;
+  auto client = f.sys.spawn([&](caf::event_based_actor* self) {
+    self->mail(atom::get_v, atom::internal_v)
+      .request(bridge, caf::infinite)
+      .then(
+        [&, self](nova::Events batch) {
+          REQUIRE_EQUAL(batch.active_count(), 1);
+          CHECK(nova::materialize_legacy(batch.data.get(0))
+                == nova::materialize_legacy(events.data.get(0)));
+          ++received;
+          self->mail(atom::get_v, atom::internal_v)
+            .request(bridge, caf::infinite)
+            .then(
+              [&](nova::Events restored) {
+                REQUIRE_EQUAL(restored.active_count(), 1);
+                CHECK(nova::materialize_legacy(restored.data.get(0))
+                      == nova::materialize_legacy(events.data.get(0)));
+                CHECK_EQUAL(*restored.meta.name.get(0), "test");
+                ++received;
+              },
+              [](caf::error const& error) {
+                FAIL("transport export failed: {}", error);
+              });
+        },
+        [](caf::error const& error) {
+          FAIL("native export failed: {}", error);
+        });
+    return caf::behavior{};
+  });
+  f.dispatch_messages();
+  CHECK(resumed);
+  CHECK_EQUAL(received, 2u);
+  auto finisher = f.sys.spawn([&](caf::event_based_actor* self) {
+    self->mail(atom::get_v, atom::internal_v)
+      .request(bridge, caf::infinite)
+      .then(
+        [&](nova::Events batch) {
+          ended = batch.active_count() == 0;
+        },
+        [](caf::error const& error) {
+          FAIL("export termination failed: {}", error);
+        });
+    return caf::behavior{};
+  });
+  f.dispatch_messages();
+  CHECK(ended);
+  f.inject_exit(bridge);
+  f.inject_exit(catalog);
+  f.inject_exit(importer);
+  f.inject_exit(fs);
+  f.inject_exit(client);
+  f.inject_exit(finisher);
 }
 
 TEST("marker finalization retains claims through failed writes") {

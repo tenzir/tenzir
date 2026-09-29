@@ -12,6 +12,9 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/plugin/metrics.hpp"
 #include "tenzir/series.hpp"
@@ -30,8 +33,11 @@
 #include <fmt/format.h>
 
 #include <chrono>
+#include <concepts>
+#include <ranges>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace tenzir::detail {
@@ -541,9 +547,10 @@ auto shape_value(std::vector<table_slice>& result, std::string_view source,
 
 auto shape_record(std::vector<table_slice>& result, std::string_view source,
                   basic_series<record_type> const& record,
-                  shape_context const& ctx, value_path path) -> void {
+                  record_type const& layout, shape_context const& ctx,
+                  value_path path) -> void {
   auto scoped_ctx = ctx;
-  for (auto const& field : record.type.fields()) {
+  for (auto const& field : layout.fields()) {
     if (prometheus_role_of(field.type) != prometheus_role::label) {
       continue;
     }
@@ -551,7 +558,7 @@ auto shape_record(std::vector<table_slice>& result, std::string_view source,
       add_label(scoped_ctx.labels, field.name, std::move(*field_series));
     }
   }
-  for (auto const& field : record.type.fields()) {
+  for (auto const& field : layout.fields()) {
     auto const role = prometheus_role_of(field.type);
     if (role == prometheus_role::ignore or role == prometheus_role::label) {
       continue;
@@ -571,12 +578,19 @@ auto shape_value(std::vector<table_slice>& result, std::string_view source,
     return;
   }
   if (auto record = value.as<record_type>()) {
-    shape_record(result, source, *record, ctx, std::move(path));
+    if (auto layout = try_as<record_type>(&field_type)) {
+      shape_record(result, source, *record, *layout, ctx, std::move(path));
+    }
     return;
   }
   if (auto list = value.as<list_type>()) {
-    auto const value_type = list->type.value_type();
-    if (not try_as<record_type>(&value_type)) {
+    auto list_layout = try_as<list_type>(&field_type);
+    if (not list_layout) {
+      return;
+    }
+    auto value_layout = list_layout->value_type();
+    auto layout = try_as<record_type>(&value_layout);
+    if (not layout or not is<record_type>(list->type.value_type())) {
       return;
     }
     auto list_array = std::static_pointer_cast<arrow::ListArray>(list->array);
@@ -585,7 +599,7 @@ auto shape_value(std::vector<table_slice>& result, std::string_view source,
     auto list_values = take_list_values(value, *value_indices);
     auto records = list_values.as<record_type>();
     TENZIR_ASSERT(records);
-    shape_record(result, source, *records, list_ctx, path.list());
+    shape_record(result, source, *records, *layout, list_ctx, path.list());
     return;
   }
   if (role != prometheus_role::metric) {
@@ -595,6 +609,157 @@ auto shape_value(std::vector<table_slice>& result, std::string_view source,
   if (output.rows() > 0) {
     result.push_back(std::move(output));
   }
+}
+
+struct nova_shape_context {
+  Option<time> timestamp;
+  sample_labels labels;
+};
+
+struct nova_metric_group {
+  std::string path;
+  std::vector<metric_sample> samples;
+};
+
+auto find_nova_field(nova::RowView<nova::Record> const& record,
+                     std::string_view name)
+  -> Option<nova::RowView<nova::Data>> {
+  for (auto [key, value] : record) {
+    if (key == name) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+auto stringify_nova_label(nova::RowView<nova::Data> const& value)
+  -> Option<std::string> {
+  return match(value, []<class T>(nova::RowView<T> row) -> Option<std::string> {
+    if constexpr (std::same_as<T, nova::Bool>) {
+      return *row ? std::string{"true"} : std::string{"false"};
+    } else if constexpr (std::same_as<T, nova::Int>
+                         or std::same_as<T, nova::UInt>
+                         or std::same_as<T, nova::Float>
+                         or std::same_as<T, nova::String>
+                         or std::same_as<T, nova::Time>
+                         or std::same_as<T, nova::Duration>
+                         or std::same_as<T, nova::Ip>
+                         or std::same_as<T, nova::Subnet>) {
+      return fmt::format("{}", *row);
+    } else {
+      return None{};
+    }
+  });
+}
+
+auto nova_metric_value(nova::RowView<nova::Data> const& value)
+  -> Option<double> {
+  return match(value, []<class T>(nova::RowView<T> row) -> Option<double> {
+    if constexpr (std::same_as<T, nova::Int> or std::same_as<T, nova::UInt>
+                  or std::same_as<T, nova::Float>) {
+      return static_cast<double>(*row);
+    } else if constexpr (std::same_as<T, nova::Duration>) {
+      return std::chrono::duration_cast<double_seconds>(*row).count();
+    } else {
+      return None{};
+    }
+  });
+}
+
+auto shape_nova_value(std::vector<nova_metric_group>& result,
+                      std::string_view source,
+                      nova::RowView<nova::Data> const& value,
+                      type const& field_type, nova_shape_context const& ctx,
+                      value_path path) -> void;
+
+auto shape_nova_record(std::vector<nova_metric_group>& result,
+                       std::string_view source,
+                       nova::RowView<nova::Record> const& record,
+                       record_type const& layout, nova_shape_context const& ctx,
+                       value_path path) -> void {
+  auto scoped = ctx;
+  for (auto const& field : layout.fields()) {
+    if (prometheus_role_of(field.type) != prometheus_role::label) {
+      continue;
+    }
+    if (auto value = find_nova_field(record, field.name)) {
+      if (auto text = stringify_nova_label(*value)) {
+        add_label(scoped.labels, field.name, std::move(*text));
+      }
+    }
+  }
+  for (auto const& field : layout.fields()) {
+    auto role = prometheus_role_of(field.type);
+    if (role == prometheus_role::ignore or role == prometheus_role::label) {
+      continue;
+    }
+    if (auto value = find_nova_field(record, field.name)) {
+      shape_nova_value(result, source, *value, field.type, scoped,
+                       path.field(field.name));
+    }
+  }
+}
+
+auto shape_nova_value(std::vector<nova_metric_group>& result,
+                      std::string_view source,
+                      nova::RowView<nova::Data> const& value,
+                      type const& field_type, nova_shape_context const& ctx,
+                      value_path path) -> void {
+  auto role = prometheus_role_of(field_type);
+  if (role == prometheus_role::ignore) {
+    return;
+  }
+  match(
+    value,
+    [&](nova::RowView<nova::Record> const& record) {
+      if (auto layout = try_as<record_type>(&field_type)) {
+        shape_nova_record(result, source, record, *layout, ctx,
+                          std::move(path));
+      }
+    },
+    [&](nova::RowView<nova::List> const& list) {
+      auto layout = try_as<list_type>(&field_type);
+      if (not layout) {
+        return;
+      }
+      auto value_layout = layout->value_type();
+      auto record_layout = try_as<record_type>(&value_layout);
+      if (not record_layout) {
+        return;
+      }
+      for (auto item : list) {
+        match(
+          item,
+          [&](nova::RowView<nova::Record> const& record) {
+            shape_nova_record(result, source, record, *record_layout, ctx,
+                              path.list());
+          },
+          [](auto const&) {});
+      }
+    },
+    [&](auto const&) {
+      if (role != prometheus_role::metric) {
+        return;
+      }
+      auto number = nova_metric_value(value);
+      if (not number) {
+        return;
+      }
+      auto descriptor = descriptor_of(field_type);
+      auto key = fmt::format("{}", path);
+      auto group = std::ranges::find_if(result, [&](auto const& item) {
+        return item.path == key;
+      });
+      if (group == result.end()) {
+        group
+          = result.insert(result.end(), nova_metric_group{std::move(key), {}});
+      }
+      std::ignore = add_metric_sample(
+        group->samples,
+        metric_sample{make_metric_name(source, path, descriptor), *number,
+                      ctx.timestamp, ctx.labels, descriptor.type,
+                      descriptor.unit});
+    });
 }
 
 } // namespace
@@ -614,8 +779,60 @@ auto prometheus_metric_shaper::shape(table_slice const& input) const
     .timestamp = make_timestamp_series(record),
     .labels = {},
   };
-  shape_record(result, metric_source(schema_.name()), record, ctx,
-               value_path{});
+  shape_record(result, metric_source(schema_.name()), record,
+               as<record_type>(schema_), ctx, value_path{});
+  return result;
+}
+
+auto prometheus_metric_shaper::shape(nova::Events const& input) const
+  -> std::vector<nova::Events> {
+  if (input.active_count() == 0 or not is<record_type>(schema_)) {
+    return {};
+  }
+  auto groups = std::vector<nova_metric_group>{};
+  for (auto row : nova::storage::true_bits(input.mask)) {
+    auto record = input.data.get(row);
+    auto ctx = nova_shape_context{};
+    if (auto timestamp = find_nova_field(record, "timestamp")) {
+      match(
+        *timestamp,
+        [&](nova::RowView<nova::Time> value) {
+          ctx.timestamp = *value;
+        },
+        [](auto const&) {});
+    }
+    shape_nova_record(groups, metric_source(schema_.name()), record,
+                      as<record_type>(schema_), ctx, value_path{});
+  }
+  auto result = std::vector<nova::Events>{};
+  result.reserve(groups.size());
+  for (auto& group : groups) {
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    for (auto const& sample : group.samples) {
+      auto row = builder.record();
+      row.field("metric").data(sample.metric);
+      row.field("value").data(sample.value);
+      if (sample.timestamp) {
+        row.field("timestamp").data(*sample.timestamp);
+      } else {
+        row.field("timestamp").null();
+      }
+      auto labels = row.field("labels").record();
+      for (auto const& label : sample.metric_labels) {
+        labels.field(label.key).data(label.value);
+      }
+      row.field("type").data(sample.type);
+      row.field("unit").data(sample.unit);
+    }
+    auto data = builder.finish();
+    auto length = data.length();
+    auto meta
+      = nova::Events::Meta::make_empty(length, "tenzir.metrics.prometheus");
+    meta.internal
+      = nova::Array<nova::Bool>{nova::storage::BitMap{length, true}};
+    result.emplace_back(std::move(data), nova::storage::BitMap{length, true},
+                        std::move(meta));
+  }
   return result;
 }
 

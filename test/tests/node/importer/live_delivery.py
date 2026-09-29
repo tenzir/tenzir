@@ -1,8 +1,9 @@
-"""Verify that regular live exports retain flush-time delivery."""
+# timeout: 180
+
+"""Check buffered live delivery, active snapshots, and internal events."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import json
 import os
 import select
@@ -11,153 +12,198 @@ import subprocess
 import time
 
 
-line_buffers: dict[int, bytearray] = {}
+def command(env: dict[str, str], pipeline: str) -> list[str]:
+    return [
+        *shlex.split(env["TENZIR_NODE_CLIENT_BINARY"]),
+        "--neo",
+        "--nova=true",
+        "--bare-mode",
+        "--console-verbosity=error",
+        f"--endpoint={env['TENZIR_NODE_CLIENT_ENDPOINT']}",
+        pipeline,
+    ]
 
 
-def start_pipeline(env: dict[str, str], source: str) -> subprocess.Popen[str]:
-    return subprocess.Popen(
-        [
-            *shlex.split(env["TENZIR_NODE_CLIENT_BINARY"]),
-            "--bare-mode",
-            "--console-verbosity=warning",
-            "--multi",
-            f"--endpoint={env['TENZIR_NODE_CLIENT_ENDPOINT']}",
-            source,
-        ],
+def import_event(env: dict[str, str], number: int) -> None:
+    value = "null" if number == 1 else '"concrete"'
+    result = subprocess.run(
+        command(
+            env,
+            f'from {{id: {number}, value: {value}}}\n@name = "live-delivery"\nimport',
+        ),
+        capture_output=True,
+        check=False,
+        timeout=45,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+
+
+def read_event(process: subprocess.Popen[bytes], timeout: float) -> dict[str, object]:
+    assert process.stdout is not None
+    deadline = time.monotonic() + timeout
+    buffer = bytearray()
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        readable, _, _ = select.select([process.stdout], [], [], remaining)
+        if not readable:
+            break
+        chunk = os.read(process.stdout.fileno(), 4096)
+        if not chunk:
+            break
+        buffer.extend(chunk)
+        if b"\n" in buffer:
+            line, _, remainder = buffer.partition(b"\n")
+            assert not remainder, f"unexpected extra event: {remainder!r}"
+            return json.loads(line)
+    raise AssertionError("timed out waiting for Nova export event")
+
+
+node = acquire_fixture("node")
+node.start()
+live: subprocess.Popen[bytes] | None = None
+streaming_import: subprocess.Popen[bytes] | None = None
+internal_live: subprocess.Popen[bytes] | None = None
+special_live: list[subprocess.Popen[bytes]] = []
+try:
+    import_event(node.env, 1)
+    live = subprocess.Popen(
+        command(
+            node.env,
+            'export live=true, retro=true\nwhere @name == "live-delivery"\n'
+            "to_stdout { write_ndjson }",
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert read_event(live, 45) == {"id": 1, "value": None}
+    seed = subprocess.run(
+        command(
+            node.env,
+            'from {id: 0}\n@name = "native-ready"\n@internal = true\nimport',
+        ),
+        capture_output=True,
+        check=False,
+        timeout=45,
+    )
+    assert seed.returncode == 0, seed.stderr.decode()
+    internal_live = subprocess.Popen(
+        command(
+            node.env,
+            "export internal=true, live=true, retro=true\n"
+            'where @name == "native-ready" or '
+            '@name == "tenzir.metrics.operator.native-test"\n'
+            "to_stdout { write_ndjson }",
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert read_event(internal_live, 45) == {"id": 0}
+    streaming_import = subprocess.Popen(
+        command(
+            node.env,
+            "from_stdin { read_json _batch_size=1 }\n"
+            "@name = schema\n@internal = internal\ndrop schema, internal\nimport",
+        ),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
     )
-
-
-def read_line(process: subprocess.Popen[str], timeout: float) -> str | None:
-    assert process.stdout is not None
-    buffer = line_buffers.setdefault(process.pid, bytearray())
-    deadline = time.monotonic() + timeout
-    while True:
-        if (newline := buffer.find(b"\n")) >= 0:
-            line = bytes(buffer[: newline + 1])
-            del buffer[: newline + 1]
-            return line.decode()
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return None
-        readable, _, _ = select.select([process.stdout], [], [], remaining)
-        if not readable:
-            return None
-        if not (chunk := os.read(process.stdout.fileno(), 4096)):
-            return None
-        buffer.extend(chunk)
-
-
-def stop(process: subprocess.Popen[str]) -> None:
-    line_buffers.pop(process.pid, None)
-    if process.poll() is None:
+    assert streaming_import.stdin is not None
+    streaming_import.stdin.write(
+        b'{"schema":"tenzir.metrics.operator.native-test","internal":true,'
+        b'"id":3,"values":[1,"two"]}\n'
+    )
+    streaming_import.stdin.flush()
+    assert read_event(internal_live, 45) == {"id": 3, "values": [1, "two"]}
+    # The sentinel confirms both the importer and its live subscription are ready.
+    streaming_import.stdin.write(
+        b'{"schema":"live-delivery","internal":false,"id":2,"value":"concrete"}\n'
+    )
+    streaming_import.stdin.flush()
+    assert live.stdout is not None
+    assert not select.select([live.stdout], [], [], 0.5)[0], (
+        "live export bypassed the import buffer"
+    )
+    assert read_event(live, 45) == {"id": 2, "value": "concrete"}
+    snapshot = subprocess.run(
+        command(
+            node.env,
+            'export\nwhere @name == "live-delivery" and id == 2\nhead 1\nwrite_ndjson',
+        ),
+        capture_output=True,
+        check=False,
+        timeout=45,
+    )
+    assert snapshot.returncode == 0, snapshot.stderr.decode()
+    assert [json.loads(line) for line in snapshot.stdout.splitlines()] == [
+        {"id": 2, "value": "concrete"}
+    ]
+    empty = subprocess.run(
+        command(node.env, "export live=true\nhead 0\nwrite_ndjson"),
+        capture_output=True,
+        check=False,
+        timeout=15,
+    )
+    assert empty.returncode == 0, empty.stderr.decode()
+    assert not empty.stdout
+    assert live.stdout is not None
+    assert not select.select([live.stdout], [], [], 1)[0], "duplicate live event"
+    for schema, source in [
+        ("tenzir.metrics.import-test", 'metrics "import-test",'),
+        ("tenzir.diagnostic", "diagnostics"),
+    ]:
+        seed = subprocess.run(
+            command(
+                node.env,
+                f"from {{id: 4}}\n@name = {json.dumps(schema)}\n"
+                "@internal = true\nimport",
+            ),
+            capture_output=True,
+            check=False,
+            timeout=45,
+        )
+        assert seed.returncode == 0, seed.stderr.decode()
+        process = subprocess.Popen(
+            command(
+                node.env,
+                f"{source} live=true, retro=true\nwhere id == 4 or id == 5\n"
+                "head 2\nto_stdout { write_ndjson }",
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        special_live.append(process)
+        assert read_event(process, 45) == {"id": 4}
+        seed = subprocess.run(
+            command(
+                node.env,
+                f"from {{id: 5}}\n@name = {json.dumps(schema)}\n"
+                "@internal = true\nimport",
+            ),
+            capture_output=True,
+            check=False,
+            timeout=45,
+        )
+        assert seed.returncode == 0, seed.stderr.decode()
+        assert read_event(process, 45) == {"id": 5}
+        assert process.wait(timeout=45) == 0
+    print("ok: buffered live delivery, active snapshots, and internal events")
+finally:
+    if streaming_import is not None:
+        assert streaming_import.stdin is not None
+        streaming_import.stdin.close()
+        try:
+            streaming_import.wait(timeout=45)
+        except subprocess.TimeoutExpired:
+            streaming_import.kill()
+            streaming_import.wait()
+    for process in [internal_live, live, *special_live]:
+        if process is None:
+            continue
         process.terminate()
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-
-
-def write_event(process: subprocess.Popen[str], event: dict[str, object]) -> None:
-    assert process.stdin is not None
-    process.stdin.write(json.dumps(event) + "\n")
-    process.stdin.flush()
-
-
-def activity_sentinel(pipeline_id: str, timestamp: datetime) -> dict[str, object]:
-    return {
-        "schema": "tenzir.metrics.pipeline",
-        "internal": True,
-        "pipeline_id": pipeline_id,
-        "timestamp": timestamp.isoformat().replace("+00:00", "Z"),
-        "ingress": {"internal": True, "bytes": 0},
-        "egress": {"internal": True, "bytes": 0},
-    }
-
-
-def wait_for_activity(
-    process: subprocess.Popen[str], pipeline_id: str, timeout: float
-) -> bool:
-    deadline = time.monotonic() + timeout
-    while (remaining := deadline - time.monotonic()) > 0:
-        line = read_line(process, remaining)
-        if line and json.loads(line)["pipelines"]["id"] == pipeline_id:
-            return True
-    return False
-
-
-node = acquire_fixture("node")
-node.start()
-processes: list[subprocess.Popen[str]] = []
-
-try:
-    seed = start_pipeline(
-        node.env,
-        'from {value: "ready"}\n@name = "live-delivery"\nimport\n',
-    )
-    _, stderr = seed.communicate(timeout=5)
-    assert seed.returncode == 0, stderr
-
-    live = start_pipeline(
-        node.env,
-        'export live=true, retro=true\nwhere @name == "live-delivery"\nto_stdout { write_ndjson }\n',
-    )
-    activity = start_pipeline(
-        node.env,
-        "pipeline_activity range=10s, interval=10s\nunroll pipelines\nto_stdout { write_ndjson }\n",
-    )
-    processes.extend([live, activity])
-    ready = read_line(live, 5)
-    assert ready and json.loads(ready)["value"] == "ready"
-
-    importer = start_pipeline(
-        node.env,
-        "from_stdin { read_ndjson }\n"
-        "timestamp = time(timestamp)\n"
-        "ingress.bytes = ingress.bytes.uint()\n"
-        "egress.bytes = egress.bytes.uint()\n"
-        "@name = schema\n"
-        "@internal = internal\n"
-        "drop schema, internal\n"
-        "import\n",
-    )
-    processes.append(importer)
-    timestamp = datetime.now(UTC) + timedelta(seconds=20)
-    for attempt in range(10):
-        ready_id = f"live-delivery-ready-{attempt}"
-        write_event(importer, activity_sentinel(ready_id, timestamp))
-        if wait_for_activity(activity, ready_id, 0.5):
-            break
-        timestamp += timedelta(seconds=20)
-    else:
-        raise AssertionError("pipeline activity subscriber did not become ready")
-
-    write_event(
-        importer,
-        {
-            "schema": "live-delivery",
-            "internal": False,
-            "value": "live",
-        },
-    )
-    acknowledgement_id = "live-delivery-ack"
-    write_event(
-        importer,
-        activity_sentinel(acknowledgement_id, timestamp + timedelta(seconds=20)),
-    )
-
-    assert wait_for_activity(activity, acknowledgement_id, 5), (
-        "importer did not acknowledge the event"
-    )
-    assert read_line(live, 0.5) is None, "live export bypassed the import buffer"
-    event = read_line(live, 10)
-    assert event and json.loads(event)["value"] == "live"
-    print("ok: regular live exports retain flush-time delivery")
-finally:
-    for process in reversed(processes):
-        stop(process)
     node.stop()

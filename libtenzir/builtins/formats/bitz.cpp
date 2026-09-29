@@ -27,7 +27,7 @@
 #include <tenzir/nova/bitz.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
-#include <tenzir/plugin.hpp>
+#include <tenzir/plugin/register.hpp>
 #include <tenzir/read_detection.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/table_slice.hpp>

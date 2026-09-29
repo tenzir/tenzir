@@ -37,10 +37,14 @@
 #include "tenzir/fbs/uuid.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/ids.hpp"
+#include "tenzir/import_routing.hpp"
 #include "tenzir/io/read.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/shape_table.hpp"
+#include "tenzir/nova_active_partition.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/plugin/store.hpp"
@@ -64,6 +68,7 @@
 #include <ctime>
 #include <deque>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <span>
@@ -93,6 +98,74 @@
 // that shall be removed. This is done by the `atom::erase` handler.
 //
 // clang-format on
+
+namespace tenzir {
+
+auto ImportShapeKeyHash::operator()(ImportShapeKey const& key) const -> size_t {
+  auto result = std::hash<std::string>{}(key.name);
+  auto combine = [&](size_t value) {
+    result ^= value + 0x9e3779b9 + (result << 6) + (result >> 2);
+  };
+  combine(std::hash<bool>{}(key.internal));
+  for (auto const& field : key.fields) {
+    combine(std::hash<std::string>{}(field));
+  }
+  return result;
+}
+
+auto group_import_shapes(nova::Events const& events)
+  -> Result<std::vector<ImportShapeGroup>, std::string> {
+  if (events.mask.length() != events.length()
+      or events.meta.name.length() != events.length()
+      or events.meta.internal.length() != events.length()) {
+    return Err{"event metadata or mask has the wrong length"};
+  }
+  auto primary = events.data.to_primary();
+  auto const& record_storage
+    = *as<nova::storage::RecordStorage>(primary.storage());
+  auto fields_by_shape
+    = std::unordered_map<nova::ShapeTable::ShapeId, std::vector<std::string>>{};
+  auto index_by_key
+    = std::unordered_map<ImportShapeKey, size_t, ImportShapeKeyHash>{};
+  auto keys = std::vector<ImportShapeKey>{};
+  auto assignments = std::vector<size_t>(events.length(), size_t{0});
+  for (auto row : nova::storage::true_bits(events.mask)) {
+    auto shape = record_storage.shape_indices.get(row);
+    if (shape < 0) {
+      return Err{"selected row has no record shape"};
+    }
+    auto [fields, inserted] = fields_by_shape.try_emplace(shape);
+    if (inserted) {
+      for (auto field : record_storage.shape_table.fields(shape)) {
+        fields->second.emplace_back(record_storage.names_by_index[field]);
+      }
+    }
+    auto key = ImportShapeKey{std::string{*events.meta.name.get(row)},
+                              *events.meta.internal.get(row), fields->second};
+    auto [it, new_group] = index_by_key.try_emplace(key, keys.size());
+    if (new_group) {
+      keys.push_back(std::move(key));
+    }
+    assignments[row] = it->second;
+  }
+  auto masks = std::vector<nova::storage::BitMap::Mutable>{};
+  masks.reserve(keys.size());
+  for (auto i = size_t{0}; i < keys.size(); ++i) {
+    masks.emplace_back(events.length());
+  }
+  for (auto row : nova::storage::true_bits(events.mask)) {
+    masks[assignments[row]].set(row, true);
+  }
+  auto result = std::vector<ImportShapeGroup>{};
+  result.reserve(keys.size());
+  for (auto i = size_t{0}; i < keys.size(); ++i) {
+    result.push_back(
+      ImportShapeGroup{std::move(keys[i]), std::move(masks[i]).finish()});
+  }
+  return result;
+}
+
+} // namespace tenzir
 
 namespace tenzir {
 
@@ -155,21 +228,253 @@ void index_state::handle_slice(table_slice x) {
   // events at a time. Another strategy to try here would be LRU, but that could
   // potentially require flushing many smaller partitions before dropping below
   // the limit.
+  enforce_buffer_limit();
+}
+
+auto index_state::handle_events(nova::Events events) -> caf::result<void> {
+  auto grouped = group_import_shapes(events);
+  if (not grouped) {
+    return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
+  }
+  auto rp = self->make_response_promise<void>();
+  auto const retained_bytes = events.approx_bytes();
+  auto pending = std::make_shared<size_t>(1);
+  auto first_error = std::make_shared<caf::error>();
+  auto finish = [this, pending, first_error, rp]() mutable {
+    if (--*pending != 0) {
+      return;
+    }
+    if (first_error->valid()) {
+      rp.deliver(*first_error);
+    } else if (buffered_nova_bytes > max_buffered_nova_bytes) {
+      nova_pressure_waiters.push_back(rp);
+    } else {
+      rp.deliver();
+    }
+  };
+  for (auto& group : grouped.unwrap()) {
+    if (group.key.fields.empty()) {
+      continue;
+    }
+    auto remaining = std::move(group.mask);
+    while (remaining.any()) {
+      auto it = nova_active_partitions.find(group.key);
+      if (it == nova_active_partitions.end()) {
+        auto created = create_nova_active_partition(group.key);
+        if (not created) {
+          if (not first_error->valid()) {
+            *first_error = created.error();
+          }
+          finish();
+          return rp;
+        }
+        it = *created;
+      }
+      auto room = partition_capacity - it->second.events;
+      TENZIR_ASSERT_GT(room, 0u);
+      auto part = remaining.keep_first(static_cast<nova::storage::Index>(
+        std::min<size_t>(room,
+                         static_cast<size_t>(
+                           std::numeric_limits<nova::storage::Index>::max()))));
+      auto count = static_cast<size_t>(part.true_count());
+      it->second.events += count;
+      it->second.bytes += retained_bytes;
+      buffered_nova_bytes += retained_bytes;
+      buffered_events += count;
+      auto generation = it->second.generation;
+      remaining = remaining.and_not(part);
+      ++*pending;
+      self->mail(events, std::move(part))
+        .request(it->second.actor, caf::infinite)
+        .then(
+          [finish]() mutable {
+            finish();
+          },
+          [this, key = group.key, generation, count, retained_bytes, finish,
+           first_error](caf::error const& error) mutable {
+            rollback_nova_append(key, generation, count, retained_bytes);
+            if (not first_error->valid()) {
+              *first_error = error;
+            }
+            finish();
+          });
+      if (it->second.events >= partition_capacity) {
+        decommission_nova_active_partition(group.key, {});
+      }
+    }
+  }
+  enforce_buffer_limit();
+  finish();
+  return rp;
+}
+
+void index_state::enforce_buffer_limit() {
   while (buffered_events > max_buffered_events) {
-    TENZIR_ASSERT(not active_partitions.empty());
-    auto max = std::ranges::max_element(active_partitions, std::less<>{},
+    auto old = std::ranges::max_element(active_partitions, std::less<>{},
                                         [](auto& entry) {
                                           return entry.second.events;
                                         });
-    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events due to "
-                   "{}/{} buffered events",
-                   *self, max->first, max->second.events, partition_capacity,
-                   buffered_events, max_buffered_events);
-    decommission_active_partition(max->first, {});
+    auto nova = std::ranges::max_element(nova_active_partitions, std::less<>{},
+                                         [](auto& entry) {
+                                           return entry.second.events;
+                                         });
+    if (nova != nova_active_partitions.end()
+        and (old == active_partitions.end()
+             or nova->second.events > old->second.events)) {
+      decommission_nova_active_partition(nova->first, {});
+    } else {
+      TENZIR_ASSERT(old != active_partitions.end());
+      decommission_active_partition(old->first, {});
+    }
+  }
+  while (buffered_nova_bytes > max_buffered_nova_bytes
+         and not nova_active_partitions.empty()) {
+    auto largest = std::ranges::max_element(
+      nova_active_partitions, std::less<>{}, [](auto const& entry) {
+        return entry.second.bytes;
+      });
+    decommission_nova_active_partition(largest->first, {});
   }
 }
 
+void index_state::release_nova_pressure() {
+  if (buffered_nova_bytes > max_buffered_nova_bytes) {
+    return;
+  }
+  for (auto& waiter : nova_pressure_waiters) {
+    waiter.deliver();
+  }
+  nova_pressure_waiters.clear();
+}
+
+void index_state::rollback_nova_append(ImportShapeKey const& key,
+                                       uuid const& generation, size_t events,
+                                       size_t bytes) {
+  if (auto it = nova_active_partitions.find(key);
+      it != nova_active_partitions.end()
+      and it->second.generation == generation) {
+    TENZIR_ASSERT_GEQ(it->second.events, events);
+    TENZIR_ASSERT_GEQ(it->second.bytes, bytes);
+    TENZIR_ASSERT_GEQ(buffered_events, events);
+    it->second.events -= events;
+    it->second.bytes -= bytes;
+    buffered_events -= events;
+  } else if (auto it = nova_unpersisted.find(generation);
+             it != nova_unpersisted.end()) {
+    // Sealing already released the row reservation, but retains the bytes.
+    TENZIR_ASSERT_GEQ(it->second.bytes, bytes);
+    it->second.bytes -= bytes;
+  } else {
+    // Retirement already released this generation's entire reservation.
+    return;
+  }
+  TENZIR_ASSERT_GEQ(buffered_nova_bytes, bytes);
+  buffered_nova_bytes -= bytes;
+  release_nova_pressure();
+}
+
 // -- partition handling -----------------------------------------------------
+
+auto index_state::create_nova_active_partition(ImportShapeKey const& key)
+  -> caf::expected<std::unordered_map<
+    ImportShapeKey, nova_active_partition_info, ImportShapeKeyHash>::iterator> {
+  auto generation = uuid::random();
+  auto actor = self->spawn(nova_active_partition, key.name, key.internal, paths,
+                           filesystem, index_opts, synopsis_opts,
+                           store_actor_plugin, taxonomies);
+  if (not actor) {
+    return caf::make_error(ec::logic_error,
+                           "failed to spawn active import partition");
+  }
+  auto [it, inserted] = nova_active_partitions.try_emplace(
+    key, nova_active_partition_info{actor, 0, 0, generation});
+  TENZIR_ASSERT(inserted);
+  detail::weak_run_delayed(self, active_partition_timeout,
+                           [this, key, generation] {
+                             auto it = nova_active_partitions.find(key);
+                             if (it != nova_active_partitions.end()
+                                 and it->second.generation == generation) {
+                               decommission_nova_active_partition(key, {});
+                             }
+                           });
+  return it;
+}
+
+void index_state::decommission_nova_active_partition(
+  ImportShapeKey key, std::function<void(caf::error const&)> completion) {
+  auto it = nova_active_partitions.find(key);
+  TENZIR_ASSERT(it != nova_active_partitions.end());
+  TENZIR_ASSERT(buffered_events >= it->second.events);
+  buffered_events -= it->second.events;
+  auto generation = it->second.generation;
+  auto actor = it->second.actor;
+  nova_unpersisted.emplace(generation, nova_unpersisted_partition_info{
+                                         .actor = actor,
+                                         .internal = key.internal,
+                                         .bytes = it->second.bytes,
+                                         .ref_count = 1,
+                                         .visible_for_recent = true,
+                                       });
+  nova_active_partitions.erase(it);
+  ++pending_publications;
+  auto done = [this, generation, completion](caf::error error) {
+    retire_nova_partition(generation, error);
+    complete_publication(error);
+    if (completion) {
+      completion(error);
+    }
+  };
+  self->mail(atom::persist_v)
+    .request(actor, caf::infinite)
+    .then(
+      [this, actor, done](NovaPersistResult result) {
+        struct Publication {
+          size_t remaining;
+          caf::error first_error;
+        };
+        auto publication = std::make_shared<Publication>(
+          Publication{result.outputs.size(), caf::none});
+        if (publication->remaining == 0) {
+          done(publication->first_error);
+          return;
+        }
+        auto finish_one = [publication, done](caf::error error) {
+          if (error.valid() and not publication->first_error.valid()) {
+            publication->first_error = std::move(error);
+          }
+          if (--publication->remaining == 0) {
+            done(publication->first_error);
+          }
+        };
+        for (auto& output : result.outputs) {
+          if (output.failure.valid()) {
+            finish_one(std::move(output.failure));
+            continue;
+          }
+          auto schema = output.synopsis->schema;
+          publish_or_defer([this, actor, schema, finish_one,
+                            output = std::move(output)]() mutable {
+            self
+              ->mail(atom::merge_v,
+                     std::vector<partition_synopsis_pair>{
+                       {output.uuid, std::move(output.synopsis)}})
+              .urgent()
+              .request(catalog, caf::infinite)
+              .then(
+                [this, actor, schema, finish_one](atom::ok) {
+                  self->mail(atom::update_v, schema).send(actor);
+                  finish_one(caf::none);
+                },
+                [finish_one](caf::error error) {
+                  finish_one(std::move(error));
+                });
+          });
+        }
+      },
+      [done](caf::error error) {
+        done(std::move(error));
+      });
+}
 
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
 index_state::create_active_partition(const type& schema) {
@@ -232,6 +537,7 @@ void index_state::decommission_active_partition(
   // Persist active partition asynchronously.
   const auto part_path = paths.partition(id);
   const auto synopsis_path = paths.synopsis(id);
+  ++pending_publications;
   TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
   self->mail(atom::persist_v, part_path, synopsis_path)
@@ -244,30 +550,34 @@ void index_state::decommission_active_partition(
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
         // down.
-        auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
-        self->mail(atom::merge_v, std::move(apsv))
-          .urgent()
-          .request(catalog, caf::infinite)
-          .then(
-            [=, this](atom::ok) {
-              TENZIR_TRACE("{} inserted partition {} {} to the catalog", *self,
-                           schema, id);
-              retire_partition(id, caf::exit_reason::normal);
-              if (completion) {
-                completion(caf::none);
-              }
-            },
-            [=, this](const caf::error& err) {
-              TENZIR_ERROR("{} failed to commit partition {} {} to the "
-                           "catalog, "
-                           "the contained data will not be available for "
-                           "queries: {}",
-                           *self, schema, id, err);
-              retire_partition(id, err);
-              if (completion) {
-                completion(err);
-              }
-            });
+        publish_or_defer([=, this] {
+          auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
+          self->mail(atom::merge_v, std::move(apsv))
+            .urgent()
+            .request(catalog, caf::infinite)
+            .then(
+              [=, this](atom::ok) {
+                TENZIR_TRACE("{} inserted partition {} {} to the catalog",
+                             *self, schema, id);
+                retire_partition(id, caf::exit_reason::normal);
+                complete_publication(caf::none);
+                if (completion) {
+                  completion(caf::none);
+                }
+              },
+              [=, this](const caf::error& err) {
+                TENZIR_ERROR("{} failed to commit partition {} {} to the "
+                             "catalog, "
+                             "the contained data will not be available for "
+                             "queries: {}",
+                             *self, schema, id, err);
+                retire_partition(id, err);
+                complete_publication(err);
+                if (completion) {
+                  completion(err);
+                }
+              });
+        });
       },
       [=, this](caf::error& err) {
         TENZIR_ERROR("{} failed to persist partition {} {} and evicts data "
@@ -275,6 +585,7 @@ void index_state::decommission_active_partition(
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
         retire_partition(id, err);
+        complete_publication(err);
         if (completion) {
           completion(err);
         }
@@ -282,43 +593,81 @@ void index_state::decommission_active_partition(
 }
 
 auto index_state::flush() -> caf::typed_response_promise<void> {
-  // If we've got nothing to flush we can just exit immediately.
   auto rp = self->make_response_promise<void>();
-  if (active_partitions.empty()) {
-    rp.deliver();
-    return rp;
-  }
-  auto counter = detail::make_fanout_counter(
-    active_partitions.size(),
-    [rp]() mutable {
-      rp.deliver();
-    },
-    [rp](caf::error error) mutable {
-      rp.deliver(std::move(error));
-    });
-  // We gather the schemas first before we call decomission active partition
-  // on every active partition to avoid iterator invalidation.
+  flush_waiters.push_back(rp);
+  // Gather keys before decommissioning invalidates map iterators.
   auto schemas = std::vector<type>{};
   schemas.reserve(active_partitions.size());
   for (const auto& [schema, _] : active_partitions) {
     schemas.push_back(schema);
   }
   for (const auto& schema : schemas) {
-    decommission_active_partition(schema,
-                                  [counter](const caf::error& err) mutable {
-                                    if (err.valid()) {
-                                      counter->receive_error(err);
-                                    } else {
-                                      counter->receive_success();
-                                    }
-                                  });
+    decommission_active_partition(schema, {});
+  }
+  auto nova_keys = std::vector<ImportShapeKey>{};
+  nova_keys.reserve(nova_active_partitions.size());
+  for (auto const& [key, _] : nova_active_partitions) {
+    nova_keys.push_back(key);
+  }
+  for (auto const& key : nova_keys) {
+    decommission_nova_active_partition(key, {});
+  }
+  if (pending_publications == 0) {
+    complete_publication(caf::none);
   }
   return rp;
+}
+
+void index_state::complete_publication(caf::error error) {
+  if (error.valid() and not publication_error.valid()) {
+    publication_error = std::move(error);
+  }
+  if (pending_publications > 0) {
+    --pending_publications;
+  }
+  if (pending_publications != 0) {
+    return;
+  }
+  auto result = std::exchange(publication_error, caf::none);
+  for (auto& [token, promise] : pending_publication_barriers) {
+    if (result.valid()) {
+      promise.deliver(result);
+    } else {
+      publication_barriers.insert(token);
+      promise.deliver();
+    }
+  }
+  pending_publication_barriers.clear();
+  if (not flush_waiters.empty()) {
+    for (auto& waiter : flush_waiters) {
+      if (result.valid()) {
+        waiter.deliver(result);
+      } else {
+        waiter.deliver();
+      }
+    }
+    flush_waiters.clear();
+  }
+}
+
+void index_state::publish_or_defer(std::function<void()> action) {
+  if (publication_barriers.empty()) {
+    action();
+  } else {
+    deferred_publications.push_back(std::move(action));
+  }
 }
 
 void index_state::pin_recent_partition(const uuid& id) {
   const auto it = unpersisted.find(id);
   TENZIR_ASSERT(it != unpersisted.end());
+  TENZIR_ASSERT(it->second.visible_for_recent);
+  ++it->second.ref_count;
+}
+
+void index_state::pin_recent_nova_partition(const uuid& id) {
+  auto it = nova_unpersisted.find(id);
+  TENZIR_ASSERT(it != nova_unpersisted.end());
   TENZIR_ASSERT(it->second.visible_for_recent);
   ++it->second.ref_count;
 }
@@ -341,6 +690,24 @@ void index_state::unpin_recent_partition(const uuid& id) {
   unpersisted.erase(it);
 }
 
+void index_state::unpin_recent_nova_partition(const uuid& id) {
+  auto it = nova_unpersisted.find(id);
+  TENZIR_ASSERT(it != nova_unpersisted.end());
+  TENZIR_ASSERT_GT(it->second.ref_count, 0u);
+  if (--it->second.ref_count != 0) {
+    return;
+  }
+  if (not it->second.exit_sent) {
+    self->send_exit(it->second.actor, it->second.exit_reason.valid()
+                                        ? it->second.exit_reason
+                                        : caf::exit_reason::normal);
+  }
+  TENZIR_ASSERT_GEQ(buffered_nova_bytes, it->second.bytes);
+  buffered_nova_bytes -= it->second.bytes;
+  nova_unpersisted.erase(it);
+  release_nova_pressure();
+}
+
 void index_state::retire_partition(const uuid& id, caf::error reason) {
   const auto it = unpersisted.find(id);
   TENZIR_ASSERT(it != unpersisted.end());
@@ -361,6 +728,14 @@ void index_state::retire_partition(const uuid& id, caf::error reason) {
   unpersisted.erase(it);
 }
 
+void index_state::retire_nova_partition(const uuid& id, caf::error reason) {
+  auto it = nova_unpersisted.find(id);
+  TENZIR_ASSERT(it != nova_unpersisted.end());
+  it->second.visible_for_recent = false;
+  it->second.exit_reason = std::move(reason);
+  unpin_recent_nova_partition(id);
+}
+
 void index_state::drain_retired_partitions(caf::error reason) {
   for (auto& [_, partition] : unpersisted) {
     partition.visible_for_recent = false;
@@ -372,6 +747,15 @@ void index_state::drain_retired_partitions(caf::error reason) {
       self->send_exit(partition.actor, caf::exit_reason::normal);
       partition.exit_reason = caf::exit_reason::normal;
     }
+    partition.exit_sent = true;
+  }
+  for (auto& [_, partition] : nova_unpersisted) {
+    partition.visible_for_recent = false;
+    auto shutdown_reason = reason.valid() ? reason : partition.exit_reason;
+    self->send_exit(partition.actor, shutdown_reason.valid()
+                                       ? shutdown_reason
+                                       : caf::exit_reason::normal);
+    partition.exit_reason = shutdown_reason;
     partition.exit_sent = true;
   }
 }
@@ -386,6 +770,14 @@ std::size_t index_state::memusage() const {
   for (const auto& [id, partition] : unpersisted) {
     usage += sizeof(id) + as_bytes(partition.schema).size() + sizeof(partition);
   }
+  for (auto const& [key, info] : nova_active_partitions) {
+    usage += sizeof(info) + key.name.size();
+    for (auto const& field : key.fields) {
+      usage += field.size();
+    }
+  }
+  usage += nova_unpersisted.size()
+           * sizeof(std::pair<const uuid, nova_unpersisted_partition_info>);
   return usage;
 }
 
@@ -394,7 +786,7 @@ index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
-      duration active_partition_timeout,
+      size_t max_buffered_nova_bytes, duration active_partition_timeout,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   TENZIR_TRACE("index {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
@@ -438,6 +830,7 @@ index(index_actor::stateful_pointer<index_state> self,
   };
   self->state().partition_capacity = partition_capacity;
   self->state().max_buffered_events = max_buffered_events;
+  self->state().max_buffered_nova_bytes = max_buffered_nova_bytes;
   self->state().active_partition_timeout = active_partition_timeout;
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
@@ -460,6 +853,9 @@ index(index_actor::stateful_pointer<index_state> self,
   return {
     [self](table_slice& slice) {
       self->state().handle_slice(std::move(slice));
+    },
+    [self](nova::Events& events) -> caf::result<void> {
+      return self->state().handle_events(std::move(events));
     },
     [self](atom::get, bool internal) -> caf::result<std::vector<table_slice>> {
       auto rp = self->make_response_promise<std::vector<table_slice>>();
@@ -543,13 +939,91 @@ index(index_actor::stateful_pointer<index_state> self,
       finish();
       return rp;
     },
+    [self](atom::get, atom::internal,
+           bool internal) -> caf::result<std::vector<nova::Events>> {
+      auto rp = self->make_response_promise<std::vector<nova::Events>>();
+      auto result = std::make_shared<std::vector<nova::Events>>();
+      auto pending = std::make_shared<size_t>(1);
+      auto first_error = std::make_shared<caf::error>();
+      auto pinned = std::make_shared<std::vector<uuid>>();
+      auto finish = [rp, result, pending, first_error, pinned,
+                     &state = self->state()]() mutable {
+        if (--*pending != 0) {
+          return;
+        }
+        for (auto const& id : *pinned) {
+          state.unpin_recent_nova_partition(id);
+        }
+        if (first_error->valid()) {
+          rp.deliver(*first_error);
+        } else {
+          rp.deliver(std::move(*result));
+        }
+      };
+      auto collect = [self, result, pending, first_error,
+                      finish](nova_active_partition_actor actor) {
+        ++*pending;
+        self->mail(atom::get_v)
+          .request(actor, caf::infinite)
+          .then(
+            [result, finish](std::vector<nova::Events> events) mutable {
+              result->insert(result->end(),
+                             std::make_move_iterator(events.begin()),
+                             std::make_move_iterator(events.end()));
+              finish();
+            },
+            [first_error, finish](caf::error error) mutable {
+              if (not first_error->valid()) {
+                *first_error = std::move(error);
+              }
+              finish();
+            });
+      };
+      for (auto const& [key, info] : self->state().nova_active_partitions) {
+        if (key.internal == internal) {
+          collect(info.actor);
+        }
+      }
+      for (auto const& [id, info] : self->state().nova_unpersisted) {
+        if (info.visible_for_recent and info.internal == internal) {
+          self->state().pin_recent_nova_partition(id);
+          pinned->push_back(id);
+          collect(info.actor);
+        }
+      }
+      finish();
+      return rp;
+    },
     [self](atom::flush) -> caf::result<void> {
       TENZIR_DEBUG("{} got a flush request from {}", *self,
                    self->current_sender());
-      if (self->state().active_partitions.empty()) {
-        return {};
-      }
       return self->state().flush();
+    },
+    [self](atom::pause, uuid token) -> caf::result<void> {
+      auto rp = self->make_response_promise<void>();
+      auto& state = self->state();
+      if (state.publication_barriers.empty()
+          and state.pending_publications > 0) {
+        state.pending_publication_barriers.emplace_back(token, rp);
+      } else {
+        state.publication_barriers.insert(token);
+        rp.deliver();
+      }
+      return rp;
+    },
+    [self](atom::resume, uuid token) -> caf::result<void> {
+      auto& state = self->state();
+      if (state.publication_barriers.erase(token) == 0) {
+        return caf::make_error(ec::logic_error, "unknown publication barrier");
+      }
+      if (state.publication_barriers.empty()) {
+        auto deferred = std::exchange(state.deferred_publications,
+                                      std::vector<std::function<void()>>{});
+        for (auto& publish : deferred) {
+          publish();
+        }
+      }
+      return {};
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) -> record {
@@ -558,6 +1032,18 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](const caf::exit_msg& msg) {
       TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
                      msg.source, msg.reason);
+      auto& state = self->state();
+      for (auto& [_, promise] : state.pending_publication_barriers) {
+        promise.deliver(
+          caf::make_error(ec::logic_error, "index is shutting down"));
+      }
+      state.pending_publication_barriers.clear();
+      state.publication_barriers.clear();
+      auto deferred = std::exchange(state.deferred_publications,
+                                    std::vector<std::function<void()>>{});
+      for (auto& publish : deferred) {
+        publish();
+      }
       auto perform_shutdown = [self](auto reason) {
         self->state().drain_retired_partitions(reason);
         shutdown<policy::parallel>(self, std::vector<caf::actor>{}, reason);

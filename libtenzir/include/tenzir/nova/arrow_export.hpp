@@ -7,11 +7,20 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/result.hpp"
 #include "tenzir/table_slice.hpp"
 
+#include <span>
 #include <vector>
 
 namespace tenzir::nova {
+
+/// Converts selected rows column by column using an already discovered schema.
+/// Nulls may inhabit any target type; concrete types and record shapes must
+/// match. The schema supplies the output name and attributes.
+auto to_arrow_record_batch(Array<Record> const& records, type const& schema,
+                           std::span<storage::Index const> rows)
+  -> Result<std::shared_ptr<arrow::RecordBatch>, std::string>;
 
 /// Converts selected Nova events to Arrow-backed table slices, grouping by
 /// schema name and internal status and splitting incompatible row shapes.

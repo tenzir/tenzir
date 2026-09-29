@@ -8,14 +8,18 @@
 
 #pragma once
 
+#include "tenzir/error.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/fundamental_array.hpp"
 #include "tenzir/nova/record_array.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/result.hpp"
 
 #include <cstddef>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace tenzir::nova {
 
@@ -61,6 +65,39 @@ struct Events {
            + meta.internal.approx_bytes();
   }
 };
+
+/// Bitz is only materialized when an inspector serializes an event message.
+auto encode_events(Events const& events)
+  -> Result<std::vector<std::byte>, std::string>;
+auto decode_events(std::span<std::byte const> payload)
+  -> Result<Events, std::string>;
+
+template <class Inspector>
+auto inspect(Inspector& f, Events& events) -> bool {
+  auto payload = std::vector<std::byte>{};
+  if constexpr (not Inspector::is_loading) {
+    auto encoded = encode_events(events);
+    if (not encoded) {
+      f.set_error(caf::make_error(ec::serialization_error,
+                                  std::move(encoded).unwrap_err()));
+      return false;
+    }
+    payload = std::move(encoded).unwrap();
+  }
+  if (not f.object(events).fields(f.field("payload", payload))) {
+    return false;
+  }
+  if constexpr (Inspector::is_loading) {
+    auto decoded = decode_events(payload);
+    if (not decoded) {
+      f.set_error(caf::make_error(ec::serialization_error,
+                                  std::move(decoded).unwrap_err()));
+      return false;
+    }
+    events = std::move(decoded).unwrap();
+  }
+  return true;
+}
 
 /// Returns the physical row range `[begin, end)`, including inactive rows and
 /// their metadata.

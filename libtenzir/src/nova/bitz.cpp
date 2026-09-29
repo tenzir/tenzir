@@ -65,12 +65,15 @@ constexpr auto max_encode_nesting
 
 class Writer {
 public:
-  explicit Writer(ScalarByteOrder scalar_byte_order)
-    : scalar_byte_order_{scalar_byte_order} {
+  explicit Writer(EncodeOptions const& options)
+    : scalar_byte_order_{options.scalar_byte_order},
+      max_array_length_{options.max_array_length} {
   }
 
-  Writer(std::span<std::byte> output, ScalarByteOrder scalar_byte_order)
-    : output_{output}, scalar_byte_order_{scalar_byte_order} {
+  Writer(std::span<std::byte> output, EncodeOptions const& options)
+    : output_{output},
+      scalar_byte_order_{options.scalar_byte_order},
+      max_array_length_{options.max_array_length} {
   }
 
   template <std::unsigned_integral T>
@@ -117,6 +120,10 @@ public:
     return scalar_byte_order_;
   }
 
+  auto max_array_length() const -> std::uint32_t {
+    return max_array_length_;
+  }
+
   auto size() const -> std::size_t {
     return position_;
   }
@@ -128,6 +135,7 @@ public:
 private:
   std::span<std::byte> output_;
   ScalarByteOrder scalar_byte_order_;
+  std::uint32_t max_array_length_;
   std::size_t position_ = 0;
   bool overflow_ = false;
 };
@@ -557,7 +565,13 @@ auto write_array(Writer& writer, Array<Data> const& array,
                  storage::BitMap const& visible, std::size_t depth)
   -> Result<void, std::string>;
 
+auto write_concrete(Writer&, Array<Secret> const&, storage::BitMap const&,
+                    std::size_t) -> Result<void, std::string> {
+  return Err{"secrets cannot be serialized by Bitz"};
+}
+
 template <data_type Tag>
+  requires(not std::same_as<Tag, Secret>)
 auto write_concrete(Writer& writer, Array<Tag> const& array,
                     storage::BitMap const& visible, std::size_t depth)
   -> Result<void, std::string> {
@@ -567,8 +581,7 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
   if (array.length() != visible.length()) {
     return Err{"Bitz array visibility length mismatch"};
   }
-  if (std::cmp_greater(array.length(),
-                       default_decode_limits.max_array_length)) {
+  if (std::cmp_greater(array.length(), writer.max_array_length())) {
     return Err{"Bitz array length exceeds the resource limit"};
   }
   if constexpr (std::same_as<Tag, Secret>) {
@@ -810,8 +823,7 @@ auto write_array(Writer& writer, Array<Data> const& array,
       if (union_.length() != visible.length()) {
         return Err{"Bitz union visibility length mismatch"};
       }
-      if (std::cmp_greater(union_.length(),
-                           default_decode_limits.max_array_length)) {
+      if (std::cmp_greater(union_.length(), writer.max_array_length())) {
         return Err{"Bitz array length exceeds the resource limit"};
       }
       write_header(writer, TypeId::union_, union_u8_encoding);
@@ -1431,7 +1443,7 @@ auto encode(Batch const& batch, EncodeOptions const& options)
     return Err{"unsupported Bitz scalar byte order"};
   }
   auto length = batch.length();
-  if (length < 0 or std::cmp_greater(length, default_decode_limits.max_rows)
+  if (length < 0 or std::cmp_greater(length, options.max_rows)
       or batch.mask.length() != length or batch.meta.name.length() != length
       or batch.meta.import_time.length() != length
       or batch.meta.internal.length() != length) {
@@ -1450,10 +1462,10 @@ auto encode(Batch const& batch, EncodeOptions const& options)
     }
     return {};
   };
-  auto sizer = Writer{options.scalar_byte_order};
+  auto sizer = Writer{options};
   TRY(write(sizer));
   auto result = std::vector<std::byte>(sizer.size());
-  auto writer = Writer{result, options.scalar_byte_order};
+  auto writer = Writer{result, options};
   TRY(write(writer));
   TENZIR_ASSERT_EQ(writer.size(), result.size());
   return result;

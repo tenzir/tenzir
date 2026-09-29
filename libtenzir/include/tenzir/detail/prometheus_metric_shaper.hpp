@@ -23,6 +23,7 @@ public:
   explicit prometheus_metric_shaper(type schema);
 
   auto shape(table_slice const& input) const -> std::vector<table_slice>;
+  auto shape(nova::Events const& input) const -> std::vector<nova::Events>;
 
 private:
   type schema_;

@@ -41,7 +41,8 @@ public:
     = Index{std::countr_zero(static_cast<unsigned>(word_bits))};
   static constexpr auto bit_mask = word_bits - Index{1};
 
-  inline BitMap() = delete;
+  inline BitMap() : BitMap{0, false} {
+  }
   inline BitMap(Index length, DataOwner<Word[]> data,
                 Option<Index> true_count = None{});
   inline BitMap(Index length, bool value);

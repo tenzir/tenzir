@@ -11,11 +11,13 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/export_bridge.hpp>
 #include <tenzir/expression.hpp>
+#include <tenzir/import_conversion.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/partition_paths.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/query_context.hpp>
+#include <tenzir/recent_snapshot.hpp>
 #include <tenzir/shared_diagnostic_handler.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/taxonomies.hpp>
@@ -35,6 +37,7 @@ struct bridge_state {
   export_bridge_actor::pointer self = {};
 
   caf::actor_addr importer_address = {};
+  uuid importer_barrier = {};
   tenzir::taxonomies taxonomies = {};
   expression expr = {};
   std::unordered_map<type, caf::expected<expression>> bound_exprs = {};
@@ -46,6 +49,7 @@ struct bridge_state {
   size_t open_partitions = {};
   std::queue<std::pair<partition_info, query_context>> queued_partitions = {};
   Option<std::vector<table_slice>> unpersisted_events = None{};
+  std::vector<nova::Events> unpersisted_nova_events;
 
   filesystem_actor filesystem = {};
 
@@ -70,6 +74,9 @@ struct bridge_state {
 
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> buffer;
   caf::typed_response_promise<table_slice> buffer_rp;
+  std::deque<std::pair<nova::Events, caf::typed_response_promise<void>>>
+    nova_buffer;
+  caf::typed_response_promise<nova::Events> nova_buffer_rp;
 
   auto bind_expr(const type& schema, const expression& expr)
     -> const expression* {
@@ -86,11 +93,71 @@ struct bridge_state {
 
   auto is_done() const -> bool {
     if (mode.limit == uint64_t{0}) {
-      return buffer.empty();
+      return buffer.empty() and nova_buffer.empty();
     }
-    return not mode.live and buffer.empty() and inflight_partitions == 0
-           and open_partitions == 0 and checked_candidates
-           and queued_partitions.empty() and not unpersisted_events;
+    return not mode.live and buffer.empty() and nova_buffer.empty()
+           and inflight_partitions == 0 and open_partitions == 0
+           and checked_candidates and queued_partitions.empty()
+           and not unpersisted_events;
+  }
+
+  auto finish_pending() -> void {
+    if (not is_done()) {
+      return;
+    }
+    if (buffer_rp.pending()) {
+      buffer_rp.deliver(table_slice{});
+    }
+    if (nova_buffer_rp.pending()) {
+      nova_buffer_rp.deliver(nova::Events{});
+    }
+  }
+
+  auto deliver_events(nova::Events events) -> void {
+    TENZIR_ASSERT(nova_buffer_rp.pending());
+    nova_buffer_rp.deliver(std::move(events));
+  }
+
+  auto add_events(nova::Events events, event_source source,
+                  caf::typed_response_promise<void> rp) -> void {
+    if (events.active_count() == 0
+        or (source == event_source::live and not mode.live)) {
+      if (rp.pending()) {
+        rp.deliver();
+      }
+      return;
+    }
+    if (source == event_source::live
+        and num_queued_total
+              >= (mode.parallel + 1) * defaults::max_partition_size) {
+      diagnostic::warning("export failed to keep up and dropped events")
+        .emit(*diagnostics_handler);
+      if (rp.pending()) {
+        rp.deliver();
+      }
+      return;
+    }
+    if (nova_buffer_rp.pending()) {
+      TENZIR_ASSERT(nova_buffer.empty());
+      deliver_events(std::move(events));
+      if (rp.pending()) {
+        rp.deliver();
+      }
+      return;
+    }
+    num_queued_total += events.active_count();
+    nova_buffer.emplace_back(std::move(events), std::move(rp));
+  }
+
+  auto pop_events() -> nova::Events {
+    auto [events, rp] = std::move(nova_buffer.front());
+    nova_buffer.pop_front();
+    num_queued_total -= events.active_count();
+    try_pop_partition();
+    if (rp.pending()) {
+      rp.deliver();
+    }
+    return events;
   }
 
   /// Hands one partition back to the catalog, now that we are done with it.
@@ -116,6 +183,18 @@ struct bridge_state {
     self->mail(atom::release_v, std::exchange(lease, {})).send(catalog);
   }
 
+  auto release_importer_barrier() -> void {
+    if (importer_barrier == uuid{}) {
+      return;
+    }
+    auto importer
+      = self->system().registry().get<importer_actor>("tenzir.importer");
+    if (importer) {
+      self->mail(atom::resume_v, std::exchange(importer_barrier, {}))
+        .send(importer);
+    }
+  }
+
   auto try_pop_partition() -> void {
     const auto size_threshold = defaults::max_partition_size * mode.parallel;
     if (num_queued_total >= size_threshold) {
@@ -137,9 +216,7 @@ struct bridge_state {
         --open_partitions;
       }
       release_candidates();
-      if (buffer_rp.pending() and is_done()) {
-        buffer_rp.deliver(table_slice{});
-      }
+      finish_pending();
       return;
     }
     // Now, open one partition.
@@ -189,6 +266,20 @@ struct bridge_state {
 
   auto add_events(table_slice slice, event_source source,
                   caf::typed_response_promise<void> rp) -> void {
+    if (mode.nova) {
+      auto events = import_table_slice(slice);
+      if (not events) {
+        auto error
+          = diagnostic::error("{}", std::move(events).unwrap_err()).to_error();
+        if (rp.pending()) {
+          rp.deliver(error);
+        }
+        self->quit(std::move(error));
+        return;
+      }
+      add_events(std::move(events).unwrap(), source, std::move(rp));
+      return;
+    }
     if (slice.rows() == 0 or mode.limit == uint64_t{0}) {
       if (rp.pending()) {
         rp.deliver();
@@ -267,6 +358,14 @@ struct bridge_state {
     for (auto& [_, rp] : buffer) {
       rp.deliver();
     }
+    if (nova_buffer_rp.pending()) {
+      nova_buffer_rp.deliver(caf::none);
+    }
+    for (auto& [_, rp] : nova_buffer) {
+      if (rp.pending()) {
+        rp.deliver();
+      }
+    }
   }
 };
 
@@ -294,117 +393,189 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
   TENZIR_ASSERT(importer);
   self->state().importer_address = importer->address();
   self->state().unpersisted_events.emplace();
-  auto on_subscribed
-    = [self, mode](std::vector<table_slice>& unpersisted_events) {
-        TENZIR_DEBUG("{} subscribed to importer", *self);
-        if (mode.retro) {
-          TENZIR_ASSERT(self->state().unpersisted_events);
-          TENZIR_ASSERT(self->state().unpersisted_events->empty());
-          *self->state().unpersisted_events = std::move(unpersisted_events);
-        }
-      };
+  auto start_lookup = std::make_shared<std::function<void()>>();
+  auto on_subscribed = [self, start_lookup](recent_snapshot snapshot) {
+    TENZIR_DEBUG("{} subscribed to importer", *self);
+    TENZIR_ASSERT(self->state().unpersisted_events);
+    self->state().importer_barrier = snapshot.barrier;
+    *self->state().unpersisted_events = std::move(snapshot.events);
+    (*start_lookup)();
+  };
   auto on_subscribe_error = [self](const caf::error& err) {
     self->quit(diagnostic::error(err)
                  .note("{} failed to subscribe to importer", *self)
                  .to_error());
   };
-  auto subscribe = [&](auto mailer) {
-    std::move(mailer)
-      .request(importer, caf::infinite)
-      .await(std::move(on_subscribed), std::move(on_subscribe_error));
-  };
-  if (self->state().mode.high_priority) {
-    subscribe(self
-                ->mail(atom::get_v,
-                       caf::actor_cast<receiver_actor<table_slice>>(self),
-                       self->state().mode.internal,
-                       /*live=*/self->state().mode.live,
-                       /*recent=*/self->state().mode.retro,
-                       /*eager=*/self->state().mode.eager)
-                .urgent());
-  } else {
-    subscribe(self->mail(atom::get_v,
-                         caf::actor_cast<receiver_actor<table_slice>>(self),
-                         self->state().mode.internal,
-                         /*live=*/self->state().mode.live,
-                         /*recent=*/self->state().mode.retro,
-                         /*eager=*/self->state().mode.eager));
-  }
-  // If we're retro, then we can query the catalog immediately.
-  if (mode.retro) {
-    const auto catalog
-      = self->system().registry().get<catalog_actor>("tenzir.catalog");
-    TENZIR_ASSERT(catalog);
-    auto query_context
-      = tenzir::query_context::make_extract("export", self, self->state().expr);
-    query_context.id = uuid::random();
-    self->state().lease = query_context.id;
-    TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
-                 "expression {}",
-                 query_context.id, self->state().expr);
-    auto on_candidates = [self, query_context](catalog_lookup_result& result) {
-      self->state().checked_candidates = true;
-      auto max_import_time = time::min();
-      for (auto& [type, info] : result.candidate_infos) {
-        if (info.partition_infos.empty()) {
-          continue;
-        }
-        const auto* bound_expr = self->state().bind_expr(type, info.exp);
-        if (not bound_expr) {
-          // Failing to bind is not an error, but these candidates will never
-          // be read. Unrelated queued schemas must not keep their files pinned.
-          for (const auto& partition : info.partition_infos) {
-            self->state().release_candidate(partition.uuid);
-          }
-          continue;
-        }
-        auto ctx = query_context;
-        ctx.expr = *bound_expr;
-        for (auto& partition_info : info.partition_infos) {
-          max_import_time
-            = std::max(max_import_time, partition_info.max_import_time);
-          self->state().queued_partitions.emplace(std::move(partition_info),
-                                                  ctx);
-        }
-        while (self->state().open_partitions < self->state().mode.parallel) {
-          ++self->state().open_partitions;
-          detail::weak_run_delayed(self, duration::zero(), [self] {
-            self->state().pop_partition();
-          });
-        }
+  auto receiver = caf::actor_cast<receiver_actor<table_slice>>(self);
+  if (mode.nova) {
+    auto receiver = caf::actor_cast<receiver_actor<nova::Events>>(self);
+    if (mode.retro) {
+      auto subscribe = [&](auto mailer) {
+        std::move(mailer)
+          .request(importer, caf::infinite)
+          .await(
+            [self, start_lookup](NovaRecentSnapshot snapshot) {
+              self->state().importer_barrier = snapshot.barrier;
+              self->state().unpersisted_nova_events
+                = std::move(snapshot.events);
+              (*start_lookup)();
+            },
+            on_subscribe_error);
+      };
+      if (mode.high_priority) {
+        subscribe(self
+                    ->mail(atom::get_v, atom::snapshot_v, receiver,
+                           mode.internal, mode.live, true, mode.eager)
+                    .urgent());
+      } else {
+        subscribe(self->mail(atom::get_v, atom::snapshot_v, receiver,
+                             mode.internal, mode.live, true, mode.eager));
       }
-      TENZIR_ASSERT(self->state().unpersisted_events);
-      for (auto& slice : *self->state().unpersisted_events) {
-        if (slice.import_time() > max_import_time) {
+    } else {
+      self->state().unpersisted_events.reset();
+      auto subscribe = [&](auto mailer) {
+        std::move(mailer)
+          .request(importer, caf::infinite)
+          .await([](std::vector<nova::Events>) {}, on_subscribe_error);
+      };
+      if (mode.high_priority) {
+        subscribe(self
+                    ->mail(atom::get_v, atom::internal_v, receiver,
+                           mode.internal, mode.live, false, mode.eager)
+                    .urgent());
+      } else {
+        subscribe(self->mail(atom::get_v, atom::internal_v, receiver,
+                             mode.internal, mode.live, false, mode.eager));
+      }
+    }
+  } else if (mode.retro) {
+    auto subscribe = [&](auto mailer) {
+      std::move(mailer)
+        .request(importer, caf::infinite)
+        .await(on_subscribed, on_subscribe_error);
+    };
+    if (mode.high_priority) {
+      subscribe(self
+                  ->mail(atom::get_v, atom::snapshot_v, receiver, mode.internal,
+                         mode.live, true, mode.eager)
+                  .urgent());
+    } else {
+      subscribe(self->mail(atom::get_v, atom::snapshot_v, receiver,
+                           mode.internal, mode.live, true, mode.eager));
+    }
+  } else {
+    auto subscribe = [&](auto mailer) {
+      std::move(mailer)
+        .request(importer, caf::infinite)
+        .await([](std::vector<table_slice>) {}, on_subscribe_error);
+    };
+    if (mode.high_priority) {
+      subscribe(self
+                  ->mail(atom::get_v, receiver, mode.internal, mode.live, false,
+                         mode.eager)
+                  .urgent());
+    } else {
+      subscribe(self->mail(atom::get_v, receiver, mode.internal, mode.live,
+                           false, mode.eager));
+    }
+  }
+  if (mode.retro) {
+    *start_lookup = [self] {
+      const auto catalog
+        = self->system().registry().get<catalog_actor>("tenzir.catalog");
+      TENZIR_ASSERT(catalog);
+      auto query_context = tenzir::query_context::make_extract(
+        "export", self, self->state().expr);
+      query_context.id = uuid::random();
+      self->state().lease = query_context.id;
+      TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
+                   "expression {}",
+                   query_context.id, self->state().expr);
+      auto on_candidates = [self,
+                            query_context](catalog_lookup_result& result) {
+        self->state().release_importer_barrier();
+        self->state().checked_candidates = true;
+        for (auto& [type, info] : result.candidate_infos) {
+          if (info.partition_infos.empty()) {
+            continue;
+          }
+          const auto* bound_expr = self->state().bind_expr(type, info.exp);
+          if (not bound_expr) {
+            // Failing to bind is not an error, but these candidates will never
+            // be read. Unrelated queued schemas must not keep their files pinned.
+            for (const auto& partition : info.partition_infos) {
+              self->state().release_candidate(partition.uuid);
+            }
+            continue;
+          }
+          auto ctx = query_context;
+          ctx.expr = *bound_expr;
+          for (auto& partition_info : info.partition_infos) {
+            self->state().queued_partitions.emplace(std::move(partition_info),
+                                                    ctx);
+          }
+          while (self->state().open_partitions < self->state().mode.parallel) {
+            ++self->state().open_partitions;
+            detail::weak_run_delayed(self, duration::zero(), [self] {
+              self->state().pop_partition();
+            });
+          }
+        }
+        TENZIR_ASSERT(self->state().unpersisted_events);
+        for (auto& slice : *self->state().unpersisted_events) {
           self->state().add_events(std::move(slice), event_source::unpersisted,
                                    caf::typed_response_promise<void>{});
         }
+        self->state().unpersisted_events.reset();
+        for (auto& events : self->state().unpersisted_nova_events) {
+          self->state().add_events(std::move(events), event_source::unpersisted,
+                                   caf::typed_response_promise<void>{});
+        }
+        self->state().unpersisted_nova_events.clear();
+        self->state().release_candidates();
+        // In case we get zero partitions back from the catalog we need to
+        // already signal that we're done here.
+        self->state().finish_pending();
+      };
+      auto on_candidates_error = [self](const caf::error& err) {
+        self->state().release_importer_barrier();
+        self->quit(
+          diagnostic::error(err)
+            .note("{} failed to retrieve candidates from catalog", *self)
+            .to_error());
+      };
+      auto lookup = [&](auto mailer) {
+        std::move(mailer)
+          .request(catalog, caf::infinite)
+          .then(std::move(on_candidates), std::move(on_candidates_error));
+      };
+      if (self->state().mode.high_priority) {
+        lookup(self->mail(atom::candidates_v, query_context).urgent());
+      } else {
+        lookup(self->mail(atom::candidates_v, query_context));
       }
-      self->state().unpersisted_events.reset();
-      self->state().release_candidates();
-      // In case we get zero partitions back from the catalog we need to
-      // already signal that we're done here.
-      if (self->state().buffer_rp.pending() and self->state().is_done()) {
-        self->state().buffer_rp.deliver(table_slice{});
-      }
     };
-    auto on_candidates_error = [self](const caf::error& err) {
-      self->quit(diagnostic::error(err)
-                   .note("{} failed to retrieve candidates from catalog", *self)
-                   .to_error());
-    };
-    auto lookup = [&](auto mailer) {
-      std::move(mailer)
-        .request(catalog, caf::infinite)
-        .then(std::move(on_candidates), std::move(on_candidates_error));
-    };
-    if (self->state().mode.high_priority) {
-      lookup(self->mail(atom::candidates_v, query_context).urgent());
-    } else {
-      lookup(self->mail(atom::candidates_v, query_context));
-    }
   }
   return {
+    [self](nova::Events& events) -> caf::result<void> {
+      TENZIR_ASSERT(self->state().mode.nova);
+      auto rp = self->make_response_promise<void>();
+      self->state().add_events(std::move(events), event_source::live, rp);
+      return rp;
+    },
+    [self](atom::get, atom::internal) -> caf::result<nova::Events> {
+      TENZIR_ASSERT(self->state().mode.nova);
+      TENZIR_ASSERT(not self->state().nova_buffer_rp.pending());
+      if (self->state().is_done()) {
+        return nova::Events{};
+      }
+      if (not self->state().nova_buffer.empty()) {
+        return self->state().pop_events();
+      }
+      self->state().nova_buffer_rp
+        = self->make_response_promise<nova::Events>();
+      return self->state().nova_buffer_rp;
+    },
     [self](table_slice& slice) -> caf::result<void> {
       TENZIR_ASSERT(self->current_sender());
       // Calling `current_sender()` after `make_response_promise` is broken in
