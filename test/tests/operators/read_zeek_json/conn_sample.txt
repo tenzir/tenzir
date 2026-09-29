@@ -1,4 +1,9 @@
-warning: zeek_json parser: event did not contain selector field
+warning: event did not contain selector field
+ --> tests/operators/read_zeek_json/conn_sample.tql:2:3
+  |
+2 |   read_zeek_json
+  |   ~~~~~~~~~~~~~~
+  |
   = note: selector field `_path` was not found
 {
   ts: 1056991898.930123,

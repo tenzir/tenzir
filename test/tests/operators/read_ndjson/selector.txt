@@ -1,0 +1,22 @@
+warning: event did not contain selector field
+ --> tests/operators/read_ndjson/selector.tql:2:3
+  |
+2 |   read_ndjson selector="event_type:suricata"
+  |   ~~~~~~~~~~~
+  |
+  = note: selector field `event_type` was not found
+{
+  schema: "suricata.alert",
+  event_type: "alert",
+  dest_port: 80,
+}
+{
+  schema: "suricata.dns",
+  event_type: "dns",
+  dest_port: 53,
+}
+{
+  schema: "tenzir.unknown",
+  event_type: null,
+  dest_port: 443,
+}

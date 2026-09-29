@@ -14,7 +14,7 @@
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder.hpp>
-#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -374,11 +374,10 @@ auto append_expression(ast::expression const& expr, auto&& out, size_t depth)
   return append_result::unsupported_expression;
 }
 
-/// Appends a top-level record expression as one row of `builder`, leaving the
-/// builder untouched if the expression cannot be represented.
+/// Appends a top-level record expression as one event of `builder`, leaving
+/// the builder untouched if the expression cannot be represented.
 auto add_record_expression(ast::expression const& expr,
-                           nova::ArrayBuilder<nova::Record>& builder)
-  -> append_result {
+                           nova::EventBuilder& builder) -> append_result {
   auto const* record_expr = try_as<ast::record>(expr);
   if (not record_expr) {
     return append_result::not_record;
@@ -387,7 +386,7 @@ auto add_record_expression(ast::expression const& expr,
   if (status != append_result::success) {
     return status;
   }
-  status = append_record(*record_expr, builder.record(), 0);
+  status = append_record(*record_expr, builder.event(), 0);
   TENZIR_ASSERT(status == append_result::success);
   return status;
 }
@@ -559,6 +558,17 @@ public:
     : opts_{std::move(args.msb_options)}, timeout_{opts_.settings.timeout} {
   }
 
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, nova::Events>::start(ctx);
+    auto builder
+      = nova::EventBuilder::make(nova::event_builder_settings(opts_), ctx.dh());
+    if (not builder) {
+      done_ = true;
+      co_return;
+    }
+    builder_ = std::move(builder).unwrap();
+  }
+
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     co_await timeout_.wait();
@@ -594,6 +604,9 @@ public:
 
   auto finalize(Push<nova::Events>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
+    if (not builder_) {
+      co_return FinalizeBehavior::done;
+    }
     co_await process_buffer(push, ctx, true);
     co_await flush(push);
     co_return FinalizeBehavior::done;
@@ -616,21 +629,16 @@ public:
 
 private:
   auto rows() const -> size_t {
-    return static_cast<size_t>(builder_.length());
+    return builder_ ? static_cast<size_t>(builder_->length()) : 0;
   }
 
   auto flush(Push<nova::Events>& push) -> Task<void> {
     if (rows() == 0) {
       co_return;
     }
-    auto data = builder_.finish();
-    builder_ = nova::ArrayBuilder<nova::Record>{};
+    auto events = builder_->finish();
     timeout_.reset();
-    auto const length = data.length();
-    co_await push(nova::Events{std::move(data),
-                               nova::storage::BitMap{length, true},
-                               nova::Events::Meta::make_empty(
-                                 length, opts_.settings.default_schema_name)});
+    co_await push(std::move(events));
   }
 
   /// Removes already-processed data at the front of the buffer.
@@ -671,7 +679,7 @@ private:
         break;
       }
       for (auto const& expr : parsed->expressions) {
-        switch (add_record_expression(expr, builder_)) {
+        switch (add_record_expression(expr, *builder_)) {
           case append_result::success:
             break;
           case append_result::not_record:
@@ -706,7 +714,8 @@ private:
   BatchTimeout timeout_;
   size_t buffer_offset_ = 0;
   std::string buffer_;
-  nova::ArrayBuilder<nova::Record> builder_;
+  /// Absent if the settings are invalid.
+  Option<nova::EventBuilder> builder_;
   bool done_ = false;
 };
 
@@ -724,11 +733,10 @@ public:
       if (not nova_enabled()) {
         return {};
       }
-      // The default implementation keeps every record as written and does not
-      // implement the schema policies yet.
+      nova::validate_event_builder_options(msb, ctx);
       auto reject = [&](auto const& arg, std::string_view name) {
         if (auto loc = ctx.get_location(arg)) {
-          diagnostic::error("`{}` is not supported with `--nova` yet", name)
+          diagnostic::error("`{}` is not supported with `--nova`", name)
             .primary(*loc)
             .emit(ctx);
         }
@@ -736,8 +744,6 @@ public:
       reject(msb.schema, "schema");
       reject(msb.selector, "selector");
       reject(msb.schema_only, "schema_only");
-      reject(msb.merge, "merge");
-      reject(msb.unflatten_separator, "unflatten_separator");
       return {};
     });
     return d.without_optimize();

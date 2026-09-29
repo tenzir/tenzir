@@ -1,0 +1,19 @@
+type builder.common = record{
+  first: int64,
+  text: string,
+}
+
+type builder.a = record{
+  kind: string,
+  common: builder.common,
+  payload: string,
+  nested: record{first: int64, second: string},
+  items: list<record{first: int64, second: string}>,
+  missing: record{value: int64},
+}
+
+type builder.b = record{
+  kind: string,
+  common: builder.common,
+  other: string,
+}

@@ -1,6 +1,5 @@
 {
   foo: 1,
-  bar: null,
 }
 {
   foo: 2,

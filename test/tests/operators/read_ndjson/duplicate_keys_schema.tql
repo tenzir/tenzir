@@ -1,0 +1,4 @@
+from_stdin {
+  read_ndjson schema="suricata.dns"
+}
+select schema=@name, dest_port, extra

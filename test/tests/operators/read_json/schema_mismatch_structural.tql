@@ -1,0 +1,4 @@
+from_stdin {
+  read_json schema="suricata.dns"
+}
+select dest_port, dns, src_port

@@ -189,9 +189,9 @@ public:
         builder.null();
         continue;
       }
-      // FieldBuilder merges repeated writes (including lists and records).
       // Resolve duplicates first to keep last-value-wins semantics and the
-      // first occurrence's field order without materializing input values.
+      // first occurrence's field order without writing values that a later
+      // duplicate replaces.
       auto result = CollectedRecord<RowView<Data>>{};
       if (ys) {
         for (auto i = storage::Index{0}; i < xs.length(); ++i) {

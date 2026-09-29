@@ -1,0 +1,32 @@
+warning: parsed field `dest_port` contains `record`, but the schema expects `uint64`
+ --> tests/operators/read_json/schema_mismatch_structural.tql:2:3
+  |
+2 |   read_json schema="suricata.dns"
+  |   ~~~~~~~~~
+  |
+
+warning: parsed field `dns` contains `list`, but the schema expects `record`
+ --> tests/operators/read_json/schema_mismatch_structural.tql:2:3
+  |
+2 |   read_json schema="suricata.dns"
+  |   ~~~~~~~~~
+  |
+
+warning: parsed field `src_port` contains `list`, but the schema expects `uint64`
+ --> tests/operators/read_json/schema_mismatch_structural.tql:2:3
+  |
+2 |   read_json schema="suricata.dns"
+  |   ~~~~~~~~~
+  |
+{
+  dest_port: {
+    x: 1,
+  },
+  dns: [
+    1,
+    2,
+  ],
+  src_port: [
+    3,
+  ],
+}

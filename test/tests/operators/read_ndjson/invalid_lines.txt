@@ -1,0 +1,63 @@
+warning: line did not contain a single valid JSON object
+ --> tests/operators/read_ndjson/invalid_lines.tql:2:3
+  |
+2 |   read_ndjson
+  |   ~~~~~~~~~~~
+  |
+  = note: line 2
+  = note: skipped invalid JSON
+
+warning: expected a JSON object
+ --> tests/operators/read_ndjson/invalid_lines.tql:2:3
+  |
+2 |   read_ndjson
+  |   ~~~~~~~~~~~
+  |
+  = note: line 3 column 0
+  = note: skipped invalid JSON
+  = note: context:
+          [1]
+          ^
+  = note: total buffer size: 3
+
+warning: more than one JSON object in line
+ --> tests/operators/read_ndjson/invalid_lines.tql:2:3
+  |
+2 |   read_ndjson
+  |   ~~~~~~~~~~~
+  |
+  = note: line 4
+  = note: encountered a total of 2 objects
+  = note: context:
+          {"a":2} {"a":3}
+          ^
+  = note: total buffer size: 15
+
+warning: skipped remaining invalid JSON bytes
+ --> tests/operators/read_ndjson/invalid_lines.tql:2:3
+  |
+2 |   read_ndjson
+  |   ~~~~~~~~~~~
+  |
+  = note: line 5
+  = note: 7 bytes remained
+  = note: skipped invalid JSON
+  = note: context:
+          {"b":1} {"trunc
+                  ^
+  = note: total buffer size: 15
+{
+  a: 1,
+}
+{
+  a: 2,
+}
+{
+  a: 3,
+}
+{
+  b: 1,
+}
+{
+  c: 1,
+}

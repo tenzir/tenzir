@@ -3006,95 +3006,26 @@ TEST("take_last pops a union, a list, and a nested record") {
   CHECK(not a->present.get(1));
 }
 
-TEST("record builder joins repeated scalar keys into a list") {
+TEST("record builder keeps the last value of a repeated key") {
   auto builder = ArrayBuilder<Record>{};
   auto row = builder.record();
   row.field("a").data(std::int64_t{1});
-  row.field("a").data(std::int64_t{2});
-  row.field("a").data(std::string_view{"three"});
+  row.field("b").list().data(std::int64_t{1});
+  row.field("a").data(std::string_view{"two"});
+  row.field("b").record().field("x").data(std::int64_t{2});
+  row.field("c").record().field("x").data(std::int64_t{3});
+  row.field("c").null();
   builder.record().field("a").data(std::int64_t{3});
   auto array = builder.finish();
   REQUIRE_EQUAL(array.length(), 2);
-  CHECK_EQUAL(field_value(array, "a", 0),
-              (tenzir::data{tenzir::list{std::int64_t{1}, std::int64_t{2},
-                                         std::string{"three"}}}));
+  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{std::string{"two"}}));
+  CHECK_EQUAL(field_value(array, "b", 0),
+              (tenzir::data{tenzir::record{{"x", std::int64_t{2}}}}));
+  CHECK_EQUAL(field_value(array, "c", 0), (tenzir::data{caf::none}));
   CHECK_EQUAL(field_value(array, "a", 1), (tenzir::data{std::int64_t{3}}));
-  CHECK_EQUAL(record_field_names(array.get(0)).size(), 1u);
-}
-
-TEST("record builder merges repeated record keys") {
-  auto builder = ArrayBuilder<Record>{};
-  auto row = builder.record();
-  row.field("a").record().field("x").data(std::int64_t{1});
-  auto again = row.field("a").record();
-  again.field("x").data(std::int64_t{2});
-  again.field("y").data(std::int64_t{3});
-  auto array = builder.finish();
-  CHECK_EQUAL(field_value(array, "a", 0),
-              (tenzir::data{tenzir::record{
-                {"x", tenzir::list{std::int64_t{1}, std::int64_t{2}}},
-                {"y", std::int64_t{3}},
-              }}));
-}
-
-TEST("record builder moves a scalar under the empty key when a record "
-     "follows") {
-  auto builder = ArrayBuilder<Record>{};
-  auto row = builder.record();
-  row.field("a").data(std::int64_t{1});
-  row.field("a").record().field("b").data(std::int64_t{2});
-  auto array = builder.finish();
-  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{tenzir::record{
-                                            {"", std::int64_t{1}},
-                                            {"b", std::int64_t{2}},
-                                          }}));
-}
-
-TEST("record builder adds a scalar under the empty key of an existing record") {
-  auto builder = ArrayBuilder<Record>{};
-  auto row = builder.record();
-  row.field("a").record().field("b").data(std::int64_t{2});
-  row.field("a").data(std::int64_t{1});
-  auto array = builder.finish();
-  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{tenzir::record{
-                                            {"b", std::int64_t{2}},
-                                            {"", std::int64_t{1}},
-                                          }}));
-}
-
-TEST("record builder concatenates repeated lists and nests others") {
-  auto builder = ArrayBuilder<Record>{};
-  auto row = builder.record();
-  row.field("a").list().data(std::int64_t{1});
-  auto more = row.field("a").list();
-  more.data(std::int64_t{2});
-  more.data(std::int64_t{3});
-  row.field("b").data(std::int64_t{1});
-  row.field("b").list().data(std::int64_t{2});
-  row.field("c").list().data(std::int64_t{1});
-  row.field("c").null();
-  auto array = builder.finish();
-  CHECK_EQUAL(field_value(array, "a", 0),
-              (tenzir::data{tenzir::list{std::int64_t{1}, std::int64_t{2},
-                                         std::int64_t{3}}}));
-  CHECK_EQUAL(field_value(array, "b", 0),
-              (tenzir::data{
-                tenzir::list{std::int64_t{1}, tenzir::list{std::int64_t{2}}}}));
-  CHECK_EQUAL(field_value(array, "c", 0),
-              (tenzir::data{tenzir::list{std::int64_t{1}, caf::none}}));
-}
-
-TEST("record builder replaces a null on a repeated key") {
-  auto builder = ArrayBuilder<Record>{};
-  auto row = builder.record();
-  row.field("a").null();
-  row.field("a").data(std::int64_t{1});
-  row.field("b").data(std::int64_t{1});
-  row.field("b").null();
-  auto array = builder.finish();
-  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{std::int64_t{1}}));
-  CHECK_EQUAL(field_value(array, "b", 0),
-              (tenzir::data{tenzir::list{std::int64_t{1}, caf::none}}));
+  // The field keeps the position of its first occurrence.
+  CHECK_EQUAL(record_field_names(array.get(0)),
+              (std::vector<std::string>{"a", "b", "c"}));
 }
 
 TEST("nova Arrow schema metadata roundtrips independently of import time") {

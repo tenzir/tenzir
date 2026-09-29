@@ -23,6 +23,12 @@ public:
     return data_builder_;
   }
 
+  /// Returns the builder of the last row, which must be present, without
+  /// appending a row.
+  [[nodiscard]] auto last_value() -> Builder& {
+    return data_builder_;
+  }
+
   auto skip() -> void {
     data_builder_.skip();
     bit_builder_.emplace_back(false);

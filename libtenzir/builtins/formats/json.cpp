@@ -12,6 +12,7 @@
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/type_system.hpp"
 
@@ -469,6 +470,7 @@ struct printer_args {
 
 struct ReadJsonArgs {
   std::string parser_name = "json";
+  location operator_location = location::unknown;
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
@@ -540,45 +542,13 @@ namespace nova_json {
 constexpr auto initial_batch_size = size_t{10 * 1024 * 1024};
 constexpr auto max_batch_size = size_t{2ull * 1024 * 1024 * 1024};
 
-/// Parses a JSON string as one of the strong types supported by the legacy
-/// JSON parser and writes it to `out`. Returns whether parsing succeeded.
-auto parse_strong_type(std::string_view input, auto& out) -> bool {
-  auto parsed
-    = detail::data_builder::non_number_parser(input, nullptr, value_path{});
-  if (not parsed.data) {
-    return false;
-  }
-  return match(
-    *parsed.data,
-    [&](bool value) {
-      out.data(value);
-      return true;
-    },
-    [&](time value) {
-      out.data(value);
-      return true;
-    },
-    [&](duration value) {
-      out.data(value);
-      return true;
-    },
-    [&](subnet value) {
-      out.data(value);
-      return true;
-    },
-    [&](ip value) {
-      out.data(value);
-      return true;
-    },
-    [](auto const&) {
-      return false;
-    });
-}
+auto parse_object(simdjson::ondemand::object object,
+                  nova::EventBuilder::Record row, diagnostic_handler& dh)
+  -> void;
 
-/// Recursively writes a single simdjson value into a nova field/list-element
-/// builder slot. Emits warnings on malformed values and falls back to `null`.
-auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh, bool raw)
-  -> void {
+/// Recursively writes a single simdjson value into an event builder field or
+/// list. Emits warnings on malformed values and falls back to `null`.
+auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh) -> void {
   auto type = val.type();
   if (type.error()) {
     diagnostic::warning("failed to parse a JSON value").emit(dh);
@@ -635,10 +605,7 @@ auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh, bool raw)
         out.null();
         return;
       }
-      auto const value = str.value_unsafe();
-      if (raw or not parse_strong_type(value, out)) {
-        out.data(value);
-      }
+      out.data_unparsed(str.value_unsafe());
       return;
     }
     case simdjson::ondemand::json_type::array: {
@@ -655,7 +622,7 @@ auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh, bool raw)
           elements.null();
           continue;
         }
-        parse_value(element.value_unsafe(), elements, dh, raw);
+        parse_value(element.value_unsafe(), elements, dh);
       }
       return;
     }
@@ -666,25 +633,7 @@ auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh, bool raw)
         out.null();
         return;
       }
-      auto row = out.record();
-      for (auto pair : obj.value_unsafe()) {
-        if (pair.error()) {
-          diagnostic::warning("failed to parse a JSON key-value pair").emit(dh);
-          continue;
-        }
-        auto key = pair.unescaped_key();
-        if (key.error()) {
-          diagnostic::warning("failed to parse a JSON key").emit(dh);
-          continue;
-        }
-        auto value = pair.value();
-        if (value.error()) {
-          diagnostic::warning("failed to parse a JSON object value").emit(dh);
-          continue;
-        }
-        parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh,
-                    raw);
-      }
+      parse_object(obj.value_unsafe(), out.record(), dh);
       return;
     }
     case simdjson::ondemand::json_type::unknown: {
@@ -696,6 +645,215 @@ auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh, bool raw)
   TENZIR_UNREACHABLE();
 }
 
+/// Writes the fields of a JSON object into `row`.
+auto parse_object(simdjson::ondemand::object object,
+                  nova::EventBuilder::Record row, diagnostic_handler& dh)
+  -> void {
+  for (auto pair : object) {
+    if (pair.error()) {
+      diagnostic::warning("failed to parse a JSON key-value pair").emit(dh);
+      continue;
+    }
+    auto key = pair.unescaped_key();
+    if (key.error()) {
+      diagnostic::warning("failed to parse a JSON key").emit(dh);
+      continue;
+    }
+    auto value = pair.value();
+    if (value.error()) {
+      diagnostic::warning("failed to parse a JSON object value").emit(dh);
+      continue;
+    }
+    parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh);
+  }
+}
+
+/// Points diagnostics without a location to the operator.
+auto make_operator_dh(location operator_location, diagnostic_handler& dh)
+  -> std::unique_ptr<transforming_diagnostic_handler> {
+  return std::make_unique<transforming_diagnostic_handler>(
+    dh, [operator_location](diagnostic d) {
+      if (operator_location and not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{}, operator_location);
+      }
+      return d;
+    });
+}
+
+/// Parses one JSON document per line (or frame) into events, and cuts them
+/// into batches of the desired size.
+class LineParser {
+public:
+  /// Fails if the builder settings are invalid.
+  static auto make(ReadJsonArgs const& args, diagnostic_handler& dh)
+    -> Option<LineParser> {
+    auto parser_dh = make_operator_dh(args.operator_location, dh);
+    auto builder = nova::EventBuilder::make(
+      nova::event_builder_settings(args.msb_options), *parser_dh);
+    if (not builder) {
+      return None{};
+    }
+    return LineParser{std::move(parser_dh), std::move(builder).unwrap(),
+                      args.msb_options.settings.desired_batch_size};
+  }
+
+  auto parse(simdjson::padded_string_view line) -> void {
+    ++lines_;
+    auto& dh = *dh_;
+    auto source = std::string_view{line.data(), line.size()};
+    auto stream = simdjson::ondemand::document_stream{};
+    if (auto err = parser_
+                     .iterate_many(line.data(), line.size(),
+                                   std::max(line.size(), initial_batch_size))
+                     .get(stream)) {
+      diagnostic::warning("{}", error_message(err)).emit(dh);
+      return;
+    }
+    auto objects = size_t{0};
+    auto failed = false;
+    for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
+      if (auto err = doc_it.error()) {
+        with_surrounding_bytes(diagnostic::warning("{}", error_message(err))
+                                 .note("line {}", lines_)
+                                 .note("skipped invalid JSON at index {}",
+                                       doc_it.current_index()),
+                               source, source.data() + doc_it.current_index())
+          .emit(dh);
+        failed = true;
+        break;
+      }
+      auto doc = *doc_it;
+      auto object = doc.get_object();
+      if (auto err = object.error()) {
+        auto loc = doc.current_location();
+        auto message = err == simdjson::INCORRECT_TYPE
+                         ? std::string{"expected a JSON object"}
+                         : std::string{error_message(err)};
+        auto column
+          = loc.error()
+              ? size_t{0}
+              : static_cast<size_t>(loc.value_unsafe() - source.data());
+        with_surrounding_bytes(diagnostic::warning("{}", message)
+                                 .note("line {} column {}", lines_, column)
+                                 .note("skipped invalid JSON"),
+                               source, loc)
+          .emit(dh);
+        failed = true;
+        break;
+      }
+      parse_object(object.value_unsafe(), builder_.event(), dh);
+      ++objects;
+      if (length() >= batch_size_) {
+        flush();
+      }
+    }
+    if (objects == 0 and not failed) {
+      with_surrounding_bytes(diagnostic::warning("line did not contain a "
+                                                 "single valid JSON object")
+                               .note("line {}", lines_)
+                               .note("skipped invalid JSON"),
+                             source, source.data())
+        .emit(dh);
+    } else if (objects > 1) {
+      with_surrounding_bytes(
+        diagnostic::warning("more than one JSON object in line")
+          .note("line {}", lines_)
+          .note("encountered a total of {} objects", objects),
+        source, source.data())
+        .emit(dh);
+    }
+    if (auto truncated = stream.truncated_bytes();
+        truncated > 0 and objects > 0) {
+      with_surrounding_bytes(diagnostic::warning("skipped remaining invalid "
+                                                 "JSON bytes")
+                               .note("line {}", lines_)
+                               .note("{} bytes remained", truncated)
+                               .note("skipped invalid JSON"),
+                             source, source.data() + source.size() - truncated)
+        .emit(dh);
+    }
+  }
+
+  /// Parses `line`, reserving the padding simdjson needs.
+  auto parse(std::string& line) -> void {
+    line.reserve(line.size() + simdjson::SIMDJSON_PADDING);
+    parse(simdjson::padded_string_view{line});
+  }
+
+  /// Returns the number of events not yet cut into a batch.
+  auto length() const -> size_t {
+    return static_cast<size_t>(builder_.length());
+  }
+
+  /// Cuts the pending events into a batch.
+  auto flush() -> void {
+    if (builder_.length() > 0) {
+      ready_.push_back(builder_.finish());
+    }
+  }
+
+  /// Returns the batches cut so far.
+  auto take_ready() -> std::vector<nova::Events> {
+    return std::exchange(ready_, {});
+  }
+
+private:
+  LineParser(std::unique_ptr<transforming_diagnostic_handler> dh,
+             nova::EventBuilder builder, size_t batch_size)
+    : dh_{std::move(dh)},
+      builder_{std::move(builder)},
+      batch_size_{std::max(batch_size, size_t{1})} {
+  }
+
+  /// Pointer stable because `builder_` holds a reference to it.
+  std::unique_ptr<transforming_diagnostic_handler> dh_;
+  nova::EventBuilder builder_;
+  size_t batch_size_;
+  simdjson::ondemand::parser parser_;
+  size_t lines_ = 0;
+  std::vector<nova::Events> ready_;
+};
+
+/// Splits `data` at the delimiters of `mode` and parses every complete frame.
+/// The unterminated rest is appended to `carry`, which also holds the start of
+/// the first frame. In newline mode, `\r\n` counts as one delimiter, even when
+/// split across calls through `ended_on_carriage_return`.
+auto split_frames(split_at mode, std::string_view data, std::string& carry,
+                  bool& ended_on_carriage_return, LineParser& parser) -> void {
+  auto const newline = mode == split_at::newline;
+  auto const* begin = data.data();
+  auto const* const end = begin + data.size();
+  if (newline and ended_on_carriage_return and begin != end
+      and *begin == '\n') {
+    ++begin;
+  }
+  ended_on_carriage_return = false;
+  for (auto const* current = begin; current != end; ++current) {
+    if (newline ? *current != '\n' and *current != '\r' : *current != '\0') {
+      continue;
+    }
+    auto const size = static_cast<size_t>(current - begin);
+    auto const capacity = static_cast<size_t>(end - begin);
+    if (carry.empty() and capacity >= size + simdjson::SIMDJSON_PADDING) {
+      parser.parse(simdjson::padded_string_view{begin, size, capacity});
+    } else {
+      carry.append(begin, current);
+      parser.parse(carry);
+      carry.clear();
+    }
+    if (newline and *current == '\r') {
+      auto const* next = current + 1;
+      if (next == end) {
+        ended_on_carriage_return = true;
+      } else if (*next == '\n') {
+        ++current;
+      }
+    }
+    begin = current + 1;
+  }
+  carry.append(begin, end);
+}
+
 } // namespace nova_json
 
 class ReadJsonEvents final : public Operator<chunk_ptr, nova::Events> {
@@ -704,10 +862,25 @@ public:
     : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
   }
 
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, nova::Events>::start(ctx);
+    builder_dh_
+      = nova_json::make_operator_dh(args_.operator_location, ctx.dh());
+    auto builder = nova::EventBuilder::make(
+      nova::event_builder_settings(args_.msb_options), *builder_dh_);
+    if (builder) {
+      builder_ = std::move(builder).unwrap();
+    }
+  }
+
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     co_await timeout_.wait();
     co_return {};
+  }
+
+  auto state() -> OperatorState override {
+    return builder_ ? OperatorState::normal : OperatorState::done;
   }
 
   auto process_task(Any, Push<nova::Events>& push, OpCtx&)
@@ -719,24 +892,14 @@ public:
 
   auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
+    TENZIR_UNUSED(ctx);
+    if (not builder_ or not input or input->size() == 0) {
       co_return;
     }
-    auto& dh = ctx.dh();
+    auto& dh = *builder_dh_;
     buffer_.append(
       {reinterpret_cast<const char*>(input->data()), input->size()});
-    auto const batch_size = args_.msb_options.settings.desired_batch_size;
-    while (true) {
-      auto const limit = batch_size - rows();
-      auto const appended = parse_buffer(builder_, limit, dh);
-      if (rows() >= batch_size) {
-        co_await flush(push);
-      }
-      if (appended < limit) {
-        // Buffer exhausted (or a parse error dropped it).
-        break;
-      }
-    }
+    co_await parse_buffer(*builder_, push, dh);
     if (timeout_.poll(rows())) {
       co_await flush(push);
     }
@@ -744,9 +907,12 @@ public:
 
   auto finalize(Push<nova::Events>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    auto& dh = ctx.dh();
+    TENZIR_UNUSED(ctx);
+    if (not builder_) {
+      co_return FinalizeBehavior::done;
+    }
     if (not buffer_.view().empty()) {
-      diagnostic::error("read_json: input ended with incomplete JSON").emit(dh);
+      diagnostic::error("input ended with incomplete JSON").emit(*builder_dh_);
     }
     if (rows() > 0) {
       co_await flush(push);
@@ -763,29 +929,23 @@ public:
 private:
   /// Number of rows currently accumulated in `builder_`.
   auto rows() const -> size_t {
-    return static_cast<size_t>(builder_.length());
+    return builder_ ? static_cast<size_t>(builder_->length()) : 0;
   }
 
   /// Emits the rows accumulated in `builder_` as a single batch.
   auto flush(Push<nova::Events>& push) -> Task<void> {
-    auto result = builder_.finish();
-    builder_ = nova::ArrayBuilder<nova::Record>{};
+    TENZIR_ASSERT(builder_);
+    auto result = builder_->finish();
     timeout_.reset();
-    auto const length = result.length();
-    auto mask = nova::storage::BitMap{length, true};
-    co_await push(nova::Events{std::move(result), std::move(mask),
-                               nova::Events::Meta::make_empty(length)});
+    co_await push(std::move(result));
   }
 
-  /// Parses complete documents currently in `buffer_` into `builder`, up to
-  /// `limit` rows, retaining any unparsed or truncated trailing bytes for the
-  /// next call. Returns the number of rows appended.
-  auto parse_buffer(nova::ArrayBuilder<nova::Record>& builder, size_t limit,
-                    diagnostic_handler& dh) -> size_t {
-    if (limit == 0) {
-      return 0;
-    }
-    auto rows = size_t{0};
+  /// Parses complete documents currently in `buffer_` into `builder`,
+  /// emitting every full batch right away and retaining any truncated
+  /// trailing bytes for the next call.
+  auto parse_buffer(nova::EventBuilder& builder, Push<nova::Events>& push,
+                    diagnostic_handler& dh) -> Task<void> {
+    auto const batch_size = args_.msb_options.settings.desired_batch_size;
     auto retry = false;
     auto completed = size_t{0};
     do {
@@ -796,10 +956,10 @@ private:
                    .get(stream);
       if (err) {
         buffer_.reset();
-        diagnostic::warning("read_json: {}", simdjson::error_message(err))
+        diagnostic::warning("{}", simdjson::error_message(err))
           .note("failed to parse")
           .emit(dh);
-        return rows;
+        co_return;
       }
       auto current = size_t{0};
       for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
@@ -809,11 +969,6 @@ private:
           continue;
         }
         ++current;
-        if (rows == limit) {
-          auto offset = doc_it.current_index();
-          buffer_.truncate(view.size() - offset);
-          return rows;
-        }
         auto doc = (*doc_it).get_value();
         if (auto derr = doc.error()) {
           if (derr == simdjson::CAPACITY) {
@@ -823,44 +978,61 @@ private:
               break;
             }
           }
-          diagnostic::error("read_json: {}", simdjson::error_message(derr))
+          diagnostic::error("{}", simdjson::error_message(derr))
             .note("found invalid JSON")
             .emit(dh);
           buffer_.reset();
-          return rows;
+          co_return;
         }
         ++completed;
-        auto type = doc.value_unsafe().type();
-        if (type.error()
-            or type.value_unsafe() != simdjson::ondemand::json_type::object) {
-          diagnostic::error("read_json: expected a JSON object").emit(dh);
+        if (args_.arrays_of_objects) {
+          co_await parse_array(doc.value_unsafe(), builder, push, dh);
           continue;
         }
-        auto row = builder.record();
-        for (auto pair : doc.value_unsafe().get_object().value_unsafe()) {
-          if (pair.error()) {
-            diagnostic::warning("read_json: failed to parse a key-value pair")
-              .emit(dh);
-            continue;
-          }
-          auto key = pair.unescaped_key();
-          auto value = pair.value();
-          if (key.error() or value.error()) {
-            diagnostic::warning("read_json: failed to parse an object entry")
-              .emit(dh);
-            continue;
-          }
-          nova_json::parse_value(value.value_unsafe(),
-                                 row.field(key.value_unsafe()), dh,
-                                 args_.msb_options.settings.raw);
+        auto object = doc.value_unsafe().get_object();
+        if (object.error()) {
+          diagnostic::error("expected a JSON object").emit(dh);
+          continue;
         }
-        ++rows;
+        nova_json::parse_object(object.value_unsafe(), builder.event(), dh);
+        if (static_cast<size_t>(builder.length()) >= batch_size) {
+          co_await flush(push);
+        }
       }
       if (not retry) {
         handle_truncated(stream);
       }
     } while (retry);
-    return rows;
+  }
+
+  /// Parses every object of a JSON array into its own event, emitting every
+  /// full batch right away.
+  auto parse_array(simdjson::ondemand::value doc, nova::EventBuilder& builder,
+                   Push<nova::Events>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    auto const batch_size = args_.msb_options.settings.desired_batch_size;
+    auto array = doc.get_array();
+    if (array.error()) {
+      diagnostic::error("expected an array of objects").emit(dh);
+      co_return;
+    }
+    for (auto element : array.value_unsafe()) {
+      if (element.error()) {
+        diagnostic::warning("failed to parse a JSON array element").emit(dh);
+        break;
+      }
+      auto object = element.value_unsafe().get_object();
+      if (object.error()) {
+        diagnostic::warning("expected an array of objects")
+          .note("skipped an element that is not an object")
+          .emit(dh);
+        continue;
+      }
+      nova_json::parse_object(object.value_unsafe(), builder.event(), dh);
+      if (static_cast<size_t>(builder.length()) >= batch_size) {
+        co_await flush(push);
+      }
+    }
   }
 
   auto handle_truncated(simdjson::ondemand::document_stream& stream) -> void {
@@ -881,7 +1053,11 @@ private:
 
   ReadJsonArgs args_;
   BatchTimeout timeout_;
-  nova::ArrayBuilder<nova::Record> builder_;
+  /// Pointer stable because `builder_` holds a reference to it. Also receives
+  /// the diagnostics of the parser.
+  std::unique_ptr<transforming_diagnostic_handler> builder_dh_;
+  /// Absent if the settings are invalid.
+  Option<nova::EventBuilder> builder_;
   detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'> buffer_;
   simdjson::ondemand::parser parser_;
   size_t batch_size_ = nova_json::initial_batch_size;
@@ -1250,6 +1426,364 @@ private:
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
 };
 
+class ReadNdjsonEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadNdjsonEvents(ReadJsonArgs args)
+    : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, nova::Events>::start(ctx);
+    if (args_.jobs > 0 and args_.optimization.order != EventOrder::unordered) {
+      diagnostic::error("`_jobs` requires unordered downstream")
+        .primary(args_.operator_location)
+        .hint("wrap this operator in `unordered { ... }`")
+        .emit(ctx.dh());
+      done_ = true;
+      co_return;
+    }
+    if (args_.jobs == 0) {
+      parser_ = nova_json::LineParser::make(args_, ctx.dh());
+      done_ = not parser_;
+      co_return;
+    }
+    // Parallel mode: every worker owns a parser. Create them all up front so
+    // that invalid settings fail before any worker starts.
+    auto parsers = std::vector<nova_json::LineParser>{};
+    for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+      auto parser = nova_json::LineParser::make(args_, ctx.dh());
+      if (not parser) {
+        done_ = true;
+        co_return;
+      }
+      parsers.push_back(std::move(*parser));
+    }
+    auto capacity = static_cast<uint32_t>(args_.jobs * 2);
+    read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
+    read_output_queue_ = std::make_shared<ReadOutputQueue>();
+    output_ready_ = std::make_shared<SignalQueue>();
+    resume_ = std::make_shared<SignalQueue>();
+    for (auto& parser : parsers) {
+      ctx.spawn_task(read_worker_loop(std::move(parser)));
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (output_ready_) {
+      // Only wait here: taking the output is left to the main loop, so that
+      // `prepare_snapshot` sees all of it.
+      co_await output_ready_->dequeue();
+      co_return {};
+    }
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto state() -> OperatorState override {
+    if (done_) {
+      return OperatorState::done;
+    }
+    if (not draining_) {
+      return OperatorState::normal;
+    }
+    return finished_workers_ == args_.jobs ? OperatorState::done
+                                           : OperatorState::normal;
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    if (args_.jobs > 0) {
+      while (auto next = read_output_queue_->try_dequeue()) {
+        TENZIR_ASSERT(not is<Flushed>(*next));
+        co_await handle_output(std::move(*next), push);
+      }
+      co_return;
+    }
+    if (parser_) {
+      co_await push_ready(push);
+    }
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (done_ or not input or input->size() == 0) {
+      co_return;
+    }
+    if (args_.jobs > 0) {
+      co_await process_parallel(std::move(input));
+      co_return;
+    }
+    TENZIR_ASSERT(parser_);
+    nova_json::split_frames(args_.split_mode, as_string_view(input), buffer_,
+                            ended_on_carriage_return_, *parser_);
+    co_await push_ready(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    draining_ = true;
+    if (done_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (args_.jobs > 0) {
+      // The executor may call finalize() again after all workers have finished
+      // and state() returned done. In that case we are truly done.
+      if (finished_workers_ >= args_.jobs) {
+        co_return FinalizeBehavior::done;
+      }
+      // Send any remaining buffered data to a worker.
+      if (not buffer_.empty()) {
+        auto batch = make_padded_chunk(buffer_, {});
+        buffer_.clear();
+        co_await read_input_queue_->enqueue(std::move(batch));
+      }
+      // Close the input queue and drain until all workers signaled completion.
+      co_await read_input_queue_->enqueue(Stop{});
+      co_return FinalizeBehavior::continue_;
+    }
+    TENZIR_ASSERT(parser_);
+    if (not buffer_.empty()) {
+      parser_->parse(buffer_);
+      buffer_.clear();
+    }
+    parser_->flush();
+    co_await push_ready(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (parser_) {
+      parser_->flush();
+      co_await push_ready(push);
+      co_return;
+    }
+    if (not read_input_queue_ or finished_workers_ == args_.jobs) {
+      co_return;
+    }
+    if (draining_) {
+      // The workers are already finishing. Wait until all of them are done.
+      while (finished_workers_ < args_.jobs) {
+        co_await handle_output(co_await read_output_queue_->dequeue(), push);
+      }
+      co_return;
+    }
+    // Ask every worker to emit what it holds. The flushes queue up behind all
+    // accepted input, and a worker waits after its flush, so that each one
+    // receives exactly one of them.
+    for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+      co_await read_input_queue_->enqueue(Flush{});
+    }
+    auto flushed = uint64_t{0};
+    while (flushed < args_.jobs) {
+      auto next = co_await read_output_queue_->dequeue();
+      if (is<Flushed>(next)) {
+        ++flushed;
+        continue;
+      }
+      co_await handle_output(std::move(next), push);
+    }
+    for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+      resume_->enqueue(Empty{});
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+  }
+
+private:
+  /// Asks a worker to emit everything it holds and to wait for `resume_`.
+  struct Flush {};
+  /// Asks the workers to finish.
+  struct Stop {};
+  using WorkerInput = variant<chunk_ptr, Flush, Stop>;
+  /// A worker emitted everything it held after a `Flush`.
+  struct Flushed {};
+  /// A worker finished after a `Stop`.
+  struct Finished {};
+  using WorkerOutput = variant<nova::Events, Flushed, Finished>;
+
+  using ReadInputQueue = folly::coro::BoundedQueue<WorkerInput>;
+  /// Unbounded for the same reason as in `ReadNdjson`.
+  using ReadOutputQueue = folly::coro::UnboundedQueue<WorkerOutput>;
+  using SignalQueue = folly::coro::UnboundedQueue<Empty>;
+
+  static auto as_string_view(chunk_ptr const& input) -> std::string_view {
+    return {reinterpret_cast<char const*>(input->data()), input->size()};
+  }
+
+  /// Handles one output of the workers other than `Flushed`.
+  auto handle_output(WorkerOutput output, Push<nova::Events>& push)
+    -> Task<void> {
+    if (auto* events = try_as<nova::Events>(output)) {
+      co_await push(std::move(*events));
+      co_return;
+    }
+    TENZIR_ASSERT(is<Finished>(output));
+    ++finished_workers_;
+  }
+
+  /// Pushes the batches that the sequential parser has cut.
+  auto push_ready(Push<nova::Events>& push) -> Task<void> {
+    TENZIR_ASSERT(parser_);
+    auto ready = parser_->take_ready();
+    if (not ready.empty()) {
+      timeout_.reset();
+    }
+    if (timeout_.poll(parser_->length())) {
+      parser_->flush();
+      for (auto& events : parser_->take_ready()) {
+        ready.push_back(std::move(events));
+      }
+    }
+    for (auto& events : ready) {
+      co_await push(std::move(events));
+    }
+  }
+
+  /// Creates a chunk with simdjson padding from a prefix + data.
+  static auto make_padded_chunk(std::string_view prefix, std::string_view data)
+    -> chunk_ptr {
+    auto total = prefix.size() + data.size();
+    auto buffer = std::vector<std::byte>(total + simdjson::SIMDJSON_PADDING);
+    std::memcpy(buffer.data(), prefix.data(), prefix.size());
+    std::memcpy(buffer.data() + prefix.size(), data.data(), data.size());
+    return chunk::make(std::move(buffer),
+                       chunk_metadata{.content_type = "application/x-ndjson"})
+      ->slice(0, total);
+  }
+
+  /// Splits at delimiter boundaries and dispatches complete frames to workers.
+  auto process_parallel(chunk_ptr input) -> Task<void> {
+    auto data = as_string_view(input);
+    auto const newline = args_.split_mode == split_at::newline;
+    // Handle case where previous chunk ended on carriage return.
+    if (newline and ended_on_carriage_return_ and not data.empty()
+        and data.front() == '\n') {
+      data.remove_prefix(1);
+    }
+    ended_on_carriage_return_ = false;
+    // Find the last delimiter in the new data (buffer_ never contains one).
+    auto last_delim = newline ? data.find_last_of("\r\n") : data.rfind('\0');
+    if (last_delim == std::string_view::npos) {
+      // No complete frame yet; keep buffering.
+      buffer_.append(data);
+      co_return;
+    }
+    auto complete = data.substr(0, last_delim + 1);
+    auto tail = data.substr(last_delim + 1);
+    if (newline and data[last_delim] == '\r') {
+      if (tail.empty()) {
+        ended_on_carriage_return_ = true;
+      } else if (tail.front() == '\n') {
+        tail.remove_prefix(1);
+      }
+    }
+    // Build padded chunk from buffered prefix + complete frames (one copy).
+    auto batch = make_padded_chunk(buffer_, complete);
+    buffer_.assign(tail.data(), tail.size());
+    co_await read_input_queue_->enqueue(std::move(batch));
+  }
+
+  /// Worker coroutine that parses chunks of complete frames on the CPU
+  /// executor. The diagnostic handler of `parser` must be thread-safe.
+  auto read_worker_loop(nova_json::LineParser parser) const -> Task<void> {
+    co_await folly::coro::co_reschedule_on_current_executor;
+    auto ct = co_await folly::coro::co_current_cancellation_token;
+    auto timeout = BatchTimeout{args_.msb_options.settings.timeout};
+    auto emit = [&](WorkerOutput output) {
+      read_output_queue_->enqueue(std::move(output));
+      output_ready_->enqueue(Empty{});
+    };
+    auto flush_ready = [&] {
+      auto ready = parser.take_ready();
+      if (not ready.empty()) {
+        timeout.reset();
+      }
+      for (auto& events : ready) {
+        emit(std::move(events));
+      }
+    };
+    auto carry = std::string{};
+    try {
+      while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
+        // Use a timed dequeue so that we periodically flush buffered events
+        // even when input is slow.
+        auto next = Option<WorkerInput>{};
+        try {
+          next = co_await read_input_queue_->co_try_dequeue_for(
+            std::chrono::duration_cast<folly::Duration>(
+              args_.msb_options.settings.timeout));
+        } catch (folly::OperationCancelled const&) {
+          if (ct.isCancellationRequested()) {
+            throw; // real shutdown — let outer catch handle it
+          }
+          parser.flush();
+          flush_ready();
+          continue;
+        }
+        if (is<Stop>(*next)) {
+          // Pass the stop sentinel to the next worker.
+          co_await read_input_queue_->enqueue(Stop{});
+          break;
+        }
+        if (is<Flush>(*next)) {
+          parser.flush();
+          flush_ready();
+          timeout.reset();
+          emit(Flushed{});
+          co_await resume_->dequeue();
+          continue;
+        }
+        // Every chunk ends at a frame boundary, except for the final rest.
+        auto ended_on_carriage_return = false;
+        nova_json::split_frames(args_.split_mode,
+                                as_string_view(as<chunk_ptr>(*next)), carry,
+                                ended_on_carriage_return, parser);
+        if (not carry.empty()) {
+          parser.parse(carry);
+          carry.clear();
+        }
+        if (timeout.poll(parser.length())) {
+          parser.flush();
+        }
+        flush_ready();
+      }
+    } catch (folly::OperationCancelled const&) {
+    }
+    parser.flush();
+    flush_ready();
+    emit(Finished{});
+  }
+
+  ReadJsonArgs args_;
+  BatchTimeout timeout_;
+  /// Set if the operator cannot run, e.g., because of invalid settings.
+  bool done_ = false;
+  bool draining_ = false;
+  size_t finished_workers_ = 0;
+  // Sequential mode state:
+  Option<nova_json::LineParser> parser_;
+  // Shared state:
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  // Parallel mode state:
+  std::shared_ptr<ReadInputQueue> read_input_queue_;
+  std::shared_ptr<ReadOutputQueue> read_output_queue_;
+  /// Receives one signal per worker output.
+  std::shared_ptr<SignalQueue> output_ready_;
+  /// Receives one signal per worker that may continue after a `Flush`.
+  std::shared_ptr<SignalQueue> resume_;
+};
+
 class read_json_plugin final : public virtual operator_factory_plugin,
                                public virtual ReadOperatorPlugin {
 public:
@@ -1259,9 +1793,14 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadJson, ReadJsonEvents>{};
+    d.operator_location(&ReadJsonArgs::operator_location);
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
     d.optimization(&ReadJsonArgs::optimization);
-    d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
+    auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
+    d.validate([msb](DescribeCtx& ctx) -> Empty {
+      msb(ctx);
+      return nova::validate_event_builder_options(msb, ctx);
+    });
     return d.without_optimize();
   }
 
@@ -1293,10 +1832,11 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadJsonArgs, ReadNdjson>{
+    auto d = Describer<ReadJsonArgs, ReadNdjson, ReadNdjsonEvents>{
       ReadJsonArgs{.parser_name = "ndjson",
                    .split_mode = split_at::newline,
                    .msb_options = {}}};
+    d.operator_location(&ReadJsonArgs::operator_location);
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.optimization(&ReadJsonArgs::optimization);
@@ -1307,7 +1847,7 @@ public:
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
-      return {};
+      return nova::validate_event_builder_options(msb, ctx);
     });
     return d.without_optimize();
   }
@@ -1336,11 +1876,12 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadJsonArgs, ReadNdjson>{ReadJsonArgs{
+    auto d = Describer<ReadJsonArgs, ReadNdjson, ReadNdjsonEvents>{ReadJsonArgs{
       .parser_name = "gelf",
       .split_mode = split_at::null,
       .msb_options = {.settings = {.default_schema_name = "gelf"}},
     }};
+    d.operator_location(&ReadJsonArgs::operator_location);
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.optimization(&ReadJsonArgs::optimization);
@@ -1351,7 +1892,7 @@ public:
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
-      return {};
+      return nova::validate_event_builder_options(msb, ctx);
     });
     return d.without_optimize();
   }
@@ -1382,7 +1923,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadJsonArgs, ReadNdjson>{ReadJsonArgs{
+    auto d = Describer<ReadJsonArgs, ReadNdjson, ReadNdjsonEvents>{ReadJsonArgs{
       .parser_name = std::string{Name.str()},
       .split_mode = split_at::newline,
       .msb_options =
@@ -1398,6 +1939,7 @@ public:
             },
         },
     }};
+    d.operator_location(&ReadJsonArgs::operator_location);
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options,
                                     {.merge = merge_option::no,
                                      .add_schema = false,

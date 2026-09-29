@@ -1,0 +1,5 @@
+{
+  schema: "suricata.dns",
+  dest_port: 2,
+  extra: 2,
+}

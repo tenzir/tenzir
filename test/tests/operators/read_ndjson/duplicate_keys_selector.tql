@@ -1,0 +1,4 @@
+from_stdin {
+  read_ndjson selector="event_type:suricata"
+}
+select schema=@name, dest_port, extra

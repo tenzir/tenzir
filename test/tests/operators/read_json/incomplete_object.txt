@@ -1,1 +1,6 @@
-error: json parser: parser input ended with incomplete object
+error: input ended with incomplete JSON
+ --> tests/operators/read_json/incomplete_object.tql:5:3
+  |
+5 |   read_json
+  |   ^^^^^^^^^
+  |

@@ -1,0 +1,5 @@
+from_stdin {
+  read_json arrays_of_objects=true, _batch_size=2
+}
+measure
+select events

@@ -1,9 +1,7 @@
-warning: ndjson parser: type mismatch between list elements
-  = note: field `x`
 {
   x: [
-    "0",
-    "1",
+    0,
+    1,
     "2",
     "3",
   ],

@@ -1,0 +1,9 @@
+type unit.a = record{
+  kind: string,
+  ts: time #unit=s,
+}
+
+type unit.b = record{
+  kind: string,
+  ts: time #unit=ms,
+}

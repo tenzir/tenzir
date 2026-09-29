@@ -21,6 +21,19 @@ auto UnionArrayBuilder::list() -> ArrayBuilder<List>::ListBuilder {
   return switch_builder<List>().list();
 }
 
+auto UnionArrayBuilder::open_record()
+  -> Option<ArrayBuilder<Record>::RecordBuilder> {
+  constexpr auto type_index = data_type_list::unique_index_of<Record>;
+  const auto vector_index = type_to_vector_index_[type_index];
+  if (vector_index < 0 or alternative_index_builder_.size() == 0
+      or alternative_index_builder_.back() != vector_index) {
+    return None{};
+  }
+  auto& builder = std::get<MaskedArrayBuilder<ArrayBuilder<Record>>>(
+    builders_[static_cast<std::size_t>(vector_index)]);
+  return builder.last_value().reopen();
+}
+
 auto UnionArrayBuilder::skip() -> void {
   // The alternatives catch up lazily, see `switch_builder`.
   alternative_index_builder_.emplace_back(-1);
@@ -155,121 +168,21 @@ auto append_data(FieldBuilder builder, const Data& value) -> void {
   append_data_impl(builder, value);
 }
 
-namespace {
-
-/// Re-appends the fields of `previous` into a fresh record row of `builder`.
-auto reopen_record(ArrayBuilder<Data>& builder, const Record& previous)
-  -> ArrayBuilder<Record>::RecordBuilder {
-  auto record = builder.record();
-  for (const auto& [name, field] : previous) {
-    append_data(record.field(name), field);
-  }
-  return record;
-}
-
-/// Re-appends the elements of `previous` into a fresh list row of `builder`.
-auto reopen_list(ArrayBuilder<Data>& builder, const List& previous)
-  -> ArrayBuilder<List>::ListBuilder {
-  auto list = builder.list();
-  for (const auto& element : previous) {
-    append_data(list, element);
-  }
-  return list;
-}
-
-} // namespace
-
 template <fundamental_view_type V>
 auto FieldBuilder::data(V v) -> void {
-  if (not repeated_) {
-    slot_->value().data(v);
-    return;
-  }
-  const auto previous = slot_->take_last();
-  auto& builder = slot_->value();
-  match(
-    previous,
-    [&](Null) {
-      builder.data(v);
-    },
-    [&](const Record& r) {
-      reopen_record(builder, r).field("").data(v);
-    },
-    [&](const List& l) {
-      reopen_list(builder, l).data(v);
-    },
-    [&](const auto&) {
-      auto list = builder.list();
-      append_data(list, previous);
-      list.data(v);
-    });
+  slot_->value().data(v);
 }
 
 auto FieldBuilder::null() -> void {
-  if (not repeated_) {
-    slot_->value().null();
-    return;
-  }
-  const auto previous = slot_->take_last();
-  auto& builder = slot_->value();
-  match(
-    previous,
-    [&](Null) {
-      builder.null();
-    },
-    [&](const List& l) {
-      reopen_list(builder, l).null();
-    },
-    [&](const auto&) {
-      auto list = builder.list();
-      append_data(list, previous);
-      list.null();
-    });
+  slot_->value().null();
 }
 
 auto FieldBuilder::record() -> ArrayBuilder<Record>::RecordBuilder {
-  if (not repeated_) {
-    return slot_->value().record();
-  }
-  const auto previous = slot_->take_last();
-  auto& builder = slot_->value();
-  return match(
-    previous,
-    [&](Null) {
-      return builder.record();
-    },
-    [&](const Record& r) {
-      return reopen_record(builder, r);
-    },
-    [&](const List& l) {
-      return reopen_list(builder, l).record();
-    },
-    [&](const auto&) {
-      auto record = builder.record();
-      append_data(record.field(""), previous);
-      return record;
-    });
+  return slot_->value().record();
 }
 
 auto FieldBuilder::list() -> ArrayBuilder<List>::ListBuilder {
-  if (not repeated_) {
-    return slot_->value().list();
-  }
-  const auto previous = slot_->take_last();
-  auto& builder = slot_->value();
-  return match(
-    previous,
-    [&](Null) {
-      return builder.list();
-    },
-    [&](const List& l) {
-      return reopen_list(builder, l);
-    },
-    [&](const auto&) {
-      auto list = builder.list();
-      append_data(list, previous);
-      return list.list();
-    });
+  return slot_->value().list();
 }
 
 template auto FieldBuilder::data(bool) -> void;

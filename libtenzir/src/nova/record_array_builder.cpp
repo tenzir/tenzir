@@ -58,6 +58,14 @@ auto ArrayBuilder<Record>::record() -> RecordBuilder {
 
 auto ArrayBuilder<Record>::RecordBuilder::field(std::string_view name)
   -> FieldBuilder {
+  auto previous = Option<Data>{};
+  return take_field(name, previous);
+}
+
+auto ArrayBuilder<Record>::RecordBuilder::take_field(std::string_view name,
+                                                     Option<Data>& previous)
+  -> FieldBuilder {
+  previous = None{};
   auto& storage = *parent_->storage_;
   const auto position = storage.current_row_indices.size();
   auto field_index = storage::Index{-1};
@@ -84,15 +92,36 @@ auto ArrayBuilder<Record>::RecordBuilder::field(std::string_view name)
   auto& builder = storage.field_builders[static_cast<std::size_t>(field_index)];
   const auto finished_rows = storage.shape_index_builder.size();
   if (builder.size() > finished_rows) {
-    // The open row already holds this field.
-    return FieldBuilder{&builder, true};
+    previous = builder.take_last();
+    return FieldBuilder{&builder};
   }
   if (const auto missing = finished_rows - builder.size(); missing > 0) {
     builder.skip_n(missing);
   }
   storage.current_row_indices.push_back(field_index);
   storage.current_row_names.push_back(stored_name);
-  return FieldBuilder{&builder, false};
+  return FieldBuilder{&builder};
+}
+
+auto ArrayBuilder<Record>::RecordBuilder::open_record_field(
+  std::string_view name) -> Option<RecordBuilder> {
+  auto& storage = *parent_->storage_;
+  const auto it = storage.names.find(name);
+  if (it == storage.names.end()) {
+    return None{};
+  }
+  auto& builder = storage.field_builders[it->second];
+  if (builder.size() <= storage.shape_index_builder.size()) {
+    return None{};
+  }
+  return builder.last_value().open_record();
+}
+
+auto ArrayBuilder<Record>::reopen() -> Option<RecordBuilder> {
+  if (not storage_->row_open) {
+    return None{};
+  }
+  return RecordBuilder{this};
 }
 
 auto ArrayBuilder<Record>::finish_last_row() -> void {
@@ -157,11 +186,14 @@ auto ArrayBuilder<Record>::finish() -> Array<Record> {
   auto arrays = Array<Record>::MaskedArrays{};
   arrays.reserve(storage_->field_builders.size());
   for (auto& field : storage_->field_builders) {
+    TENZIR_ASSERT_LEQ(field.size(), rows);
     if (const auto missing = rows - field.size(); missing > 0) {
       field.skip_n(missing);
     }
+    TENZIR_ASSERT_EQ(field.size(), rows);
     arrays.push_back(field.finish());
   }
+  TENZIR_ASSERT_EQ(storage_->shape_index_builder.size(), rows);
   return Array<Record>{storage::SparseStorage<storage::Index>{
                          storage_->shape_index_builder.finish()},
                        std::move(storage_->shape_table),

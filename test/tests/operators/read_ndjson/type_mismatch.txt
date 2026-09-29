@@ -1,5 +1,11 @@
-warning: ndjson parser: input type does not match given schema
-  = note: input is `int64`, but the schema expects `time`
+warning: could not parse value as `time`
+ --> tests/operators/read_ndjson/type_mismatch.tql:2:3
+  |
+2 |   read_ndjson schema_only=true, schema="suricata.component.common"
+  |   ~~~~~~~~~~~
+  |
+  = note: the value was read as a number, but the schema does not specify a unit
+  = note: field `timestamp`
 {
   timestamp: null,
   flow_id: null,

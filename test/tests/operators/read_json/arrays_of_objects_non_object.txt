@@ -1,0 +1,16 @@
+warning: expected an array of objects
+ --> tests/operators/read_json/arrays_of_objects_non_object.tql:2:3
+  |
+2 |   read_json arrays_of_objects=true
+  |   ~~~~~~~~~
+  |
+  = note: skipped an element that is not an object
+{
+  x: 1,
+}
+{
+  x: 3,
+}
+{
+  x: 4,
+}

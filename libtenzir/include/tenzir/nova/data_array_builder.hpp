@@ -37,6 +37,8 @@ public:
 
   auto record() -> ArrayBuilder<Record>::RecordBuilder;
   auto list() -> ArrayBuilder<List>::ListBuilder;
+  /// Returns the record in the last row if it is still being built.
+  auto open_record() -> Option<ArrayBuilder<Record>::RecordBuilder>;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
   auto length() const -> storage::Index;
@@ -93,6 +95,7 @@ public:
   using UnionArrayBuilder::length;
   using UnionArrayBuilder::list;
   using UnionArrayBuilder::null;
+  using UnionArrayBuilder::open_record;
   using UnionArrayBuilder::record;
   using UnionArrayBuilder::skip;
   using UnionArrayBuilder::skip_n;
@@ -101,11 +104,7 @@ public:
   auto finish() -> Array<Data>;
 };
 
-/// The slot of one field in the open row of an `ArrayBuilder<Record>`. When
-/// the row already holds the field, the incoming value is merged into the
-/// existing one: values join into a list, lists concatenate, records merge
-/// field by field, and a scalar meeting a record lives under the key `""`.
-/// An existing `null` is simply replaced.
+/// The slot of one field in the open row of an `ArrayBuilder<Record>`.
 class FieldBuilder {
 public:
   template <fundamental_view_type V>
@@ -127,11 +126,10 @@ private:
   friend class ArrayBuilder<Record>;
   using Slot = MaskedArrayBuilder<ArrayBuilder<Data>>;
 
-  FieldBuilder(Slot* slot, bool repeated) : slot_{slot}, repeated_{repeated} {
+  explicit FieldBuilder(Slot* slot) : slot_{slot} {
   }
 
   Slot* slot_ = nullptr;
-  bool repeated_ = false;
 };
 
 extern template auto FieldBuilder::data(bool) -> void;
