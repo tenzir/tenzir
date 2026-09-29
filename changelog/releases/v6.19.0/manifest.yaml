@@ -1,0 +1,12 @@
+created: 2026-09-29
+title: ClickHouse catch-all columns and Avro encoding
+intro: >-
+  The
+    `to_clickhouse` operator now keeps fields that have no matching column in a native
+  JSON catch-all column, so events fit into existing tables
+    without losing data. The new `print_avro` function encodes events as Avro binary
+  for message sinks such as Kafka. This release also makes Parquet
+    reads faster and bounded in memory, and makes pipeline shutdown more reliable.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.18.0
