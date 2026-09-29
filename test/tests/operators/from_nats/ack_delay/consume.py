@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import time
+
+ACK_TIMEOUT = 60.0
+ACK_POLL_INTERVAL = 0.2
 
 
 def _resolve_tenzir_binary() -> str:
@@ -42,6 +46,40 @@ def _run_nats_cli(
             f"stderr:\n{result.stderr}"
         )
     return result
+
+
+def _ack_floor() -> int:
+    info = _run_nats_cli(
+        [
+            "consumer",
+            "info",
+            os.environ["NATS_STREAM"],
+            os.environ["NATS_DURABLE"],
+            "--json",
+        ],
+        check=False,
+    )
+    if info.returncode != 0:
+        return 0
+    return int(json.loads(info.stdout)["ack_floor"]["stream_seq"])
+
+
+def _wait_for_ack(proc: subprocess.Popen[str]) -> None:
+    """Block until tenzir has acknowledged the first message."""
+    deadline = time.monotonic() + ACK_TIMEOUT
+    while time.monotonic() < deadline:
+        if _ack_floor() >= 1:
+            return
+        if proc.poll() is not None:
+            stdout, stderr = proc.communicate(timeout=5)
+            raise RuntimeError(
+                f"from_nats exited with code {proc.returncode} before "
+                "acknowledging the first message\n"
+                f"stdout:\n{stdout}\n"
+                f"stderr:\n{stderr}"
+            )
+        time.sleep(ACK_POLL_INTERVAL)
+    raise RuntimeError("timed out waiting for the first message to be acknowledged")
 
 
 def _terminate(proc: subprocess.Popen[str]) -> tuple[str, str]:
@@ -101,12 +139,12 @@ discard
     stdout = ""
     stderr = ""
     try:
-        time.sleep(1)
+        _wait_for_ack(proc)
         stdout, stderr = _terminate(proc)
     finally:
         if proc.poll() is None:
             stdout, stderr = _terminate(proc)
-    if proc.returncode not in {0, -15}:
+    if proc.returncode != 0:
         raise RuntimeError(
             f"from_nats failed with exit code {proc.returncode}\n"
             f"stdout:\n{stdout}\n"
@@ -129,7 +167,7 @@ discard
     )
     if "message-0001" in remaining.stdout:
         raise RuntimeError(
-            "message was redelivered after the ACK grace period\n"
+            "message-0001 was redelivered after shutdown\n"
             f"stdout:\n{remaining.stdout}\n"
             f"stderr:\n{remaining.stderr}"
         )
