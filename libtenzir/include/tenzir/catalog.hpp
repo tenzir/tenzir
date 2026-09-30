@@ -903,8 +903,13 @@ public:
   /// A pressure episode stays active until usage reaches the low water mark.
   bool evicting = false;
 
-  /// Physical usage estimate: live, pending deletion, and reconciled overhead.
+  /// Physical usage estimate, or the last custom check's value in its own units.
   Option<uint64_t> dbdir_size = None{};
+
+  /// A custom check authorizes at most one eviction batch. Its units need not
+  /// be bytes, so only another check can tell how much that batch reclaimed.
+  Option<uint64_t> custom_space_measurement = None{};
+  bool recheck_custom_space = false;
 
   /// How many partitions the budget loop has evicted.
   size_t evicted = 0;

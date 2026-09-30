@@ -42,12 +42,10 @@ struct disk_monitor_config {
 caf::error validate(const disk_monitor_config&);
 
 struct disk_usage {
+  /// Bytes for the built-in scan, or a custom check's value in its own units.
   uint64_t bytes = 0;
   /// Partition files included in the measurement, including unadmitted ingest.
   std::unordered_map<uuid, uint64_t> partition_bytes = {};
-  /// External commands have no file inventory. Reject their measurements if
-  /// the partition inventory changed between the surrounding directory walks.
-  bool stable = true;
 };
 
 /// Computes the size of the database directory and its partition inventory.
