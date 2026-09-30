@@ -354,6 +354,40 @@ public:
     return builder.finish();
   }
 
+  auto apply_data(const std::vector<data>& keys, session ctx)
+    -> std::vector<data> override {
+    TENZIR_UNUSED(ctx);
+    auto result = std::vector<data>{};
+    result.reserve(keys.size());
+    const auto now = time::clock::now();
+    for (const auto& key : keys) {
+      while (true) {
+        if (auto it = context_entries.find(key); it != context_entries.end()) {
+          if (it->second.is_expired(now)) {
+            context_entries.erase(it);
+            continue;
+          }
+          it.value().refresh_read_timeout(now);
+          result.push_back(it->second.raw_data);
+          break;
+        }
+        auto [subnet, entry] = subnet_lookup(make_view(key));
+        if (entry and entry->is_expired(now)) {
+          subnet_entries.erase(subnet);
+          continue;
+        }
+        if (entry) {
+          entry->refresh_read_timeout(now);
+          result.push_back(entry->raw_data);
+        } else {
+          result.emplace_back();
+        }
+        break;
+      }
+    }
+    return result;
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     // There's no size() function for the PATRICIA trie, so we walk the tree
@@ -619,6 +653,60 @@ public:
     };
   }
 
+  auto
+  update_data(const std::vector<data>& keys, const std::vector<data>& values,
+              const context_update_args& args, session ctx)
+    -> failure_or<context_update_result> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(keys.size() == values.size());
+    auto key_values_list = list{};
+    key_values_list.reserve(keys.size());
+    const auto now = time::clock::now();
+    for (auto i = size_t{0}; i < keys.size(); ++i) {
+      auto update_entry = [&](bool created, value_data& entry) {
+        entry.raw_data = values[i];
+        if (created and args.create_timeout) {
+          entry.create_timeout = now + args.create_timeout->inner;
+        }
+        if (args.write_timeout) {
+          entry.write_timeout = now + args.write_timeout->inner;
+        }
+        if (args.read_timeout) {
+          entry.read_timeout = now + args.read_timeout->inner;
+          entry.read_timeout_duration = args.read_timeout->inner;
+        }
+      };
+      if (auto network = try_as<tenzir::subnet>(&keys[i])) {
+        auto created = subnet_entries.insert(*network, value_data{});
+        auto* entry = subnet_entries.lookup(*network);
+        TENZIR_ASSERT(entry);
+        update_entry(created, *entry);
+      } else {
+        auto [entry, created] = context_entries.emplace(keys[i], value_data{});
+        update_entry(created, entry.value());
+      }
+      key_values_list.push_back(keys[i]);
+    }
+    auto make_query
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
+    return context_update_result{.make_query = std::move(make_query)};
+  }
+
   auto erase(const table_slice& events, const context_erase_args& args,
              session ctx) -> failure_or<void> override {
     auto keys = eval(args.key, events, ctx);
@@ -640,6 +728,22 @@ public:
           continue;
         }
         context_entries.erase(materialize(x));
+      }
+    }
+    return {};
+  }
+
+  auto erase_data(const std::vector<data>& keys, session ctx)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(ctx);
+    for (const auto& key : keys) {
+      if (is<caf::none_t>(key)) {
+        continue;
+      }
+      if (auto network = try_as<tenzir::subnet>(&key)) {
+        subnet_entries.erase(*network);
+      } else {
+        context_entries.erase(key);
       }
     }
     return {};

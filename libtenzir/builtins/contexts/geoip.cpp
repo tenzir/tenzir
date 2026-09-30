@@ -476,13 +476,31 @@ public:
     return builder.finish();
   }
 
+  auto apply_data(const std::vector<data>& keys, session ctx)
+    -> std::vector<data> override {
+    auto builder = series_builder{};
+    for (const auto& key : keys) {
+      builder.data(key);
+    }
+    auto result = std::vector<data>{};
+    result.reserve(keys.size());
+    for (const auto& input : builder.finish()) {
+      for (const auto& output : apply(input, ctx)) {
+        for (auto value : output.values()) {
+          result.push_back(materialize(value));
+        }
+      }
+    }
+    return result;
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     return {};
   }
 
   auto ready_on_creation() const -> bool override {
-    return true;
+    return mmdb_ != nullptr;
   }
 
   auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
@@ -592,9 +610,26 @@ public:
     return failure::promise();
   }
 
+  auto
+  update_data(const std::vector<data>& keys, const std::vector<data>& values,
+              const context_update_args& args, session ctx)
+    -> failure_or<context_update_result> override {
+    TENZIR_UNUSED(keys, values, args);
+    diagnostic::error("geoip context cannot be updated").emit(ctx);
+    return failure::promise();
+  }
+
   auto erase(const table_slice& events, const context_erase_args& args,
              session ctx) -> failure_or<void> override {
     TENZIR_UNUSED(events, args);
+    diagnostic::error("geoip context does not support erasing entries")
+      .emit(ctx);
+    return failure::promise();
+  }
+
+  auto erase_data(const std::vector<data>& keys, session ctx)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(keys);
     diagnostic::error("geoip context does not support erasing entries")
       .emit(ctx);
     return failure::promise();

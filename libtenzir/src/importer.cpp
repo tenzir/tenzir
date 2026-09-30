@@ -124,6 +124,47 @@ auto importer::handle_events(nova::Events events) -> caf::result<void> {
   if (not grouped) {
     return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
   }
+  for (auto internal : {false, true}) {
+    auto eager_table = std::ranges::any_of(subscribers, [=](auto const& sub) {
+      return sub.eager and sub.internal == internal;
+    });
+    auto eager_nova
+      = std::ranges::any_of(nova_subscribers, [=](auto const& sub) {
+          return sub.eager and sub.internal == internal;
+        });
+    // Keep subscriber batches in source order before routing by shape.
+    auto selected = events;
+    auto mask = nova::storage::BitMap::Mutable{events.length()};
+    for (auto const& group : grouped.unwrap()) {
+      if (group.key.fields.empty() or group.key.internal != internal) {
+        continue;
+      }
+      for (auto row : nova::storage::true_bits(group.mask)) {
+        mask.set(row, true);
+      }
+    }
+    selected.mask = std::move(mask).finish();
+    if (not selected.mask.any()) {
+      continue;
+    }
+    unpersisted_nova_input_events.push_back(selected);
+    if (eager_table) {
+      for (auto& slice : nova::to_table_slices(selected)) {
+        for (auto const& subscriber : subscribers) {
+          if (subscriber.eager and subscriber.internal == internal) {
+            self->mail(slice).send(subscriber.receiver);
+          }
+        }
+      }
+    }
+    if (eager_nova) {
+      for (auto const& subscriber : nova_subscribers) {
+        if (subscriber.eager and subscriber.internal == internal) {
+          self->mail(selected).send(subscriber.receiver);
+        }
+      }
+    }
+  }
   for (auto& group : grouped.unwrap()) {
     if (group.key.fields.empty()) {
       continue;
@@ -133,22 +174,6 @@ auto importer::handle_events(nova::Events events) -> caf::result<void> {
     }
     auto selected = events;
     selected.mask = std::move(group.mask);
-    for (auto const& subscriber : nova_subscribers) {
-      if (subscriber.eager and subscriber.internal == group.key.internal) {
-        self->mail(selected).send(subscriber.receiver);
-      }
-    }
-    if (std::ranges::any_of(subscribers, [&](auto const& subscriber) {
-          return subscriber.eager and subscriber.internal == group.key.internal;
-        })) {
-      for (auto& slice : nova::to_table_slices(selected)) {
-        for (auto const& subscriber : subscribers) {
-          if (subscriber.eager and subscriber.internal == group.key.internal) {
-            self->mail(slice).send(subscriber.receiver);
-          }
-        }
-      }
-    }
     if (unpersisted_nova_events.empty()
         and import_buffer_timeout != duration::zero()) {
       auto generation = nova_buffer_generation;
@@ -260,12 +285,12 @@ void importer::flush_nova() {
   ++nova_buffer_generation;
   auto buffered
     = std::exchange(unpersisted_nova_events, std::vector<nova::Events>{});
+  auto source_order
+    = std::exchange(unpersisted_nova_input_events, std::vector<nova::Events>{});
   unpersisted_nova_bytes = 0;
-  for (auto& events : buffered) {
-    auto first = std::string{};
+  for (auto& events : source_order) {
     auto internal = false;
     for (auto row : nova::storage::true_bits(events.mask)) {
-      first = std::string{*events.meta.name.get(row)};
       internal = *events.meta.internal.get(row);
       break;
     }
@@ -284,6 +309,15 @@ void importer::flush_nova() {
           }
         }
       }
+    }
+  }
+  for (auto& events : buffered) {
+    auto first = std::string{};
+    auto internal = false;
+    for (auto row : nova::storage::true_bits(events.mask)) {
+      first = std::string{*events.meta.name.get(row)};
+      internal = *events.meta.internal.get(row);
+      break;
     }
     if (not retention_policy.should_be_persisted(first, internal)) {
       continue;
@@ -470,6 +504,16 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
               self->mail(events).send(subscribers.back().receiver);
             }
           }
+          for (auto const& batch : unpersisted_nova_input_events) {
+            for (auto row : nova::storage::true_bits(batch.mask)) {
+              if (*batch.meta.internal.get(row) == internal) {
+                for (auto& slice : nova::to_table_slices(batch)) {
+                  self->mail(std::move(slice)).send(subscribers.back().receiver);
+                }
+              }
+              break;
+            }
+          }
         }
       }
       // We must call the index ourselves here in order to return a consistent
@@ -510,21 +554,22 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           }
         }
       }
-      for (auto const& events : unpersisted_nova_events) {
+      for (auto const& events : unpersisted_nova_input_events) {
+        auto selected = events;
+        auto mask = nova::storage::BitMap::Mutable{events.length()};
         for (auto row : nova::storage::true_bits(events.mask)) {
-          auto name = *events.meta.name.get(row);
-          auto is_internal = *events.meta.internal.get(row);
-          if (is_internal == internal
-              and not retention_policy.should_be_persisted(name, is_internal)) {
-            auto slices = nova::to_table_slices(events);
-            for (auto& slice : slices) {
-              slice.import_time(snapshot_time);
-            }
-            buffered.insert(buffered.end(),
-                            std::make_move_iterator(slices.begin()),
-                            std::make_move_iterator(slices.end()));
+          if (*events.meta.internal.get(row) == internal
+              and not retention_policy.should_be_persisted(
+                *events.meta.name.get(row), internal)) {
+            mask.set(row, true);
           }
-          break;
+        }
+        selected.mask = std::move(mask).finish();
+        if (selected.mask.any()) {
+          auto slices = nova::to_table_slices(selected);
+          buffered.insert(buffered.end(),
+                          std::make_move_iterator(slices.begin()),
+                          std::make_move_iterator(slices.end()));
         }
       }
       flush({}, snapshot_time);
@@ -628,14 +673,19 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           buffered.push_back(std::move(converted).unwrap());
         }
       }
-      for (auto const& events : unpersisted_nova_events) {
+      for (auto const& events : unpersisted_nova_input_events) {
+        auto selected = events;
+        auto mask = nova::storage::BitMap::Mutable{events.length()};
         for (auto row : nova::storage::true_bits(events.mask)) {
           if (*events.meta.internal.get(row) == internal
               and not retention_policy.should_be_persisted(
                 *events.meta.name.get(row), internal)) {
-            buffered.push_back(events);
+            mask.set(row, true);
           }
-          break;
+        }
+        selected.mask = std::move(mask).finish();
+        if (selected.mask.any()) {
+          buffered.push_back(std::move(selected));
         }
       }
       flush({}, snapshot_time);
@@ -740,7 +790,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
         });
         nova_subscribers.emplace_back(std::move(subscriber), internal, eager);
         if (eager) {
-          for (auto const& batch : unpersisted_nova_events) {
+          for (auto const& batch : unpersisted_nova_input_events) {
             for (auto row : nova::storage::true_bits(batch.mask)) {
               if (*batch.meta.internal.get(row) == internal) {
                 self->mail(batch).send(nova_subscribers.back().receiver);
@@ -772,7 +822,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
         caf::error error = caf::none;
       };
       auto snapshot = std::make_shared<Snapshot>();
-      for (auto const& batch : unpersisted_nova_events) {
+      for (auto const& batch : unpersisted_nova_input_events) {
         for (auto row : nova::storage::true_bits(batch.mask)) {
           if (*batch.meta.internal.get(row) == internal) {
             snapshot->events.push_back(batch);

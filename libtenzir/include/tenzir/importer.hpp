@@ -60,6 +60,8 @@ private:
 
   /// Buffered events waiting to be flushed.
   std::unordered_map<type, std::vector<table_slice>> unpersisted_events = {};
+  /// Source-order batches for live subscribers and recent snapshots.
+  std::vector<nova::Events> unpersisted_nova_input_events = {};
   std::vector<nova::Events> unpersisted_nova_events = {};
   size_t unpersisted_nova_bytes = 0;
   size_t max_unpersisted_nova_bytes = size_t{16} * 1024 * 1024;

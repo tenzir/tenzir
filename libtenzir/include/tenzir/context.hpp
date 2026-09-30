@@ -101,6 +101,10 @@ public:
     = 0;
   virtual auto apply(const series& array, session ctx) -> std::vector<series>
     = 0;
+  /// Applies a context without forcing values through Arrow.
+  virtual auto apply_data(const std::vector<data>& keys, session ctx)
+    -> std::vector<data>
+    = 0;
 
   /// Inspects the context.
   virtual auto show() const -> record = 0;
@@ -122,10 +126,20 @@ public:
                       const context_update_args& args, session ctx)
     -> failure_or<context_update_result>
     = 0;
+  /// Updates a context from evaluated values without an Arrow conversion.
+  virtual auto
+  update_data(const std::vector<data>& keys, const std::vector<data>& values,
+              const context_update_args& args, session ctx)
+    -> failure_or<context_update_result>
+    = 0;
 
   /// Removes events from the context.
   virtual auto
   erase(const table_slice& events, const context_erase_args& args, session ctx)
+    -> failure_or<void>
+    = 0;
+  /// Erases evaluated keys without an Arrow conversion.
+  virtual auto erase_data(const std::vector<data>& keys, session ctx)
     -> failure_or<void>
     = 0;
 
