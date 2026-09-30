@@ -515,9 +515,8 @@ public:
       d.message = fmt::format("yaml parser: {}", d.message);
       return d;
     });
-    auto settings = nova::event_builder_settings(args_.msb_options);
-    settings.merge_structural = true;
-    auto builder = nova::EventBuilder::make(std::move(settings), **dh_);
+    auto builder = nova::EventBuilder::make(
+      nova::event_builder_settings(args_.msb_options), **dh_);
     if (builder) {
       builder_ = std::move(builder).unwrap();
     }

@@ -1,1 +1,1 @@
-schema, selector, raw, schema_only, and structural merging: ok
+schema, selector, raw, schema_only, and duplicate keys: ok

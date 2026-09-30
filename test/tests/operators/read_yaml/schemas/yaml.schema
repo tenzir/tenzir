@@ -5,7 +5,7 @@ type yaml.first = record{
   src: ip,
 }
 
-type yaml.merging = record{
+type yaml.duplicates = record{
   kind: string,
   a: record{x: int64, y: int64},
   l: list<int64>,

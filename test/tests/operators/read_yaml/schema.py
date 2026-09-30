@@ -41,9 +41,9 @@ for policy in ('schema="yaml.first"', 'selector="kind:yaml"'):
                 "src_type": "ip",
             }, (policy, schema_only, raw, actual)
 
-# Fixed schema-only readers overwrite repeated structures. Selectors first
-# structurally merge the raw input, then apply the selected schema in either mode.
-source = b"""kind: merging
+# Both schema and selector policies follow the standard builder behavior:
+# the last value of a repeated key wins, independently of schema_only.
+source = b"""kind: duplicates
 a: {x: 1}
 a: {y: 2}
 l: [1]
@@ -58,23 +58,22 @@ scalar.b: 2
 reverse.b: 2
 reverse: 1
 """
-for policy in ('schema="yaml.merging"', 'selector="kind:yaml"'):
+for policy in ('schema="yaml.duplicates"', 'selector="kind:yaml"'):
     for schema_only in (False, True):
         for raw in (False, True):
             for batch_size in (1, 7):
-                overwrite = schema_only and policy.startswith("schema=")
                 event = {
-                    "kind": "merging",
-                    "a": {"x": None if overwrite else 1, "y": 2},
-                    "l": [2, 3] if overwrite else [1, 2, 3],
+                    "kind": "duplicates",
+                    "a": {"x": None, "y": 2},
+                    "l": [2, 3],
                     "text": "123",
                     "src": "192.0.2.1",
                 }
                 if not schema_only:
                     event.update(
-                        extra={"b": 2, "": [None, None]},
-                        scalar={"": 1, "b": 2},
-                        reverse={"b": 2, "": 1},
+                        extra=None,
+                        scalar={"b": 2},
+                        reverse=1,
                     )
                 result = subprocess.run(
                     [
@@ -94,8 +93,8 @@ for policy in ('schema="yaml.merging"', 'selector="kind:yaml"'):
                 actual = [json.loads(line) for line in result.stdout.splitlines()]
                 assert (
                     actual
-                    == [{"event": event, "schema": "yaml.merging", "src_type": "ip"}]
+                    == [{"event": event, "schema": "yaml.duplicates", "src_type": "ip"}]
                     * 3
                 ), (policy, schema_only, raw, batch_size, actual)
 
-print("schema, selector, raw, schema_only, and structural merging: ok")
+print("schema, selector, raw, schema_only, and duplicate keys: ok")
