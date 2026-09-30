@@ -75,13 +75,12 @@ auto scan_files(const partition_paths& paths) -> caf::expected<disk_usage> {
 caf::expected<disk_usage>
 compute_dbdir_size(const partition_paths& paths,
                    const disk_monitor_config& config) {
-  auto result = scan_files(paths);
-  if (not result) {
-    return result.error();
-  }
   if (not config.scan_binary) {
-    return result;
+    return scan_files(paths);
   }
+  // Custom checks may report percentages or filesystem-specific units. Their
+  // result is authoritative and cannot be reconciled with partition bytes.
+  auto result = disk_usage{};
   const auto& command
     = fmt::format("{} {}", *config.scan_binary, paths.database_dir);
   TENZIR_VERBOSE("executing command '{}' to determine size of state_directory",
@@ -93,17 +92,12 @@ compute_dbdir_size(const partition_paths& paths,
   if (not cmd_output->empty() and cmd_output->back() == '\n') {
     cmd_output->pop_back();
   }
-  if (not parsers::count(*cmd_output, result->bytes)) {
+  if (not parsers::count(*cmd_output, result.bytes)) {
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to interpret output "
                                        "'{}' of command '{}'",
                                        *cmd_output, command));
   }
-  auto after = scan_files(paths);
-  if (not after) {
-    return after.error();
-  }
-  result->stable = result->partition_bytes == after->partition_bytes;
   return result;
 }
 

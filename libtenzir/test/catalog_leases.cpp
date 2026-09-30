@@ -130,12 +130,15 @@ struct fixture {
       = nullptr;
     synopsis.unshared().min_import_time = time::min();
     synopsis.unshared().max_import_time = time::min();
-    synopsis.unshared().indexes_file = {
-      .url = fmt::format("file://{}", paths.partition(id).string()), .size = 0};
-    synopsis.unshared().sketches_file = {
-      .url = fmt::format("file://{}", paths.synopsis(id).string()), .size = 0};
+    synopsis.unshared().indexes_file
+      = {.url = fmt::format("file://{}", paths.partition(id).string()),
+         .size = std::filesystem::file_size(paths.partition(id))};
+    synopsis.unshared().sketches_file
+      = {.url = fmt::format("file://{}", paths.synopsis(id).string()),
+         .size = std::filesystem::file_size(paths.synopsis(id))};
     synopsis.unshared().store_file
-      = {.url = fmt::format("file://{}", store_of(id).string()), .size = 0};
+      = {.url = fmt::format("file://{}", store_of(id).string()),
+         .size = std::filesystem::file_size(store_of(id))};
     auto self = caf::scoped_actor{sys};
     auto merged = false;
     self
@@ -297,6 +300,126 @@ TEST("a disk scan exits without its catalog processing the response") {
       return catalog_actor::behavior_type::make_empty_behavior();
     });
   CHECK(f.await_shutdown());
+}
+
+TEST("custom disk checks preserve files below their percentage budget") {
+  auto maintenance = maintenance_options{};
+  maintenance.space.high_water_mark = 95;
+  maintenance.space.low_water_mark = 90;
+  maintenance.space.step_size = 2;
+  maintenance.space.scan_interval = 1s;
+  // Report pressure only after all six partitions have been admitted, and
+  // stop reporting it after one batch has actually disappeared from disk.
+  maintenance.space.scan_binary
+    = "check() { if [ -e \"$1/pressure\" ]; then "
+      "set -- \"$1\"/archive/*.feather; "
+      "if [ \"$#\" -gt 4 ]; then printf 96; return; fi; "
+      "fi; printf 1; }; check";
+  auto f = fixture{duration::zero(), std::move(maintenance)};
+  auto ids = std::vector<uuid>{};
+  for (auto i = 0; i < 6; ++i) {
+    ids.push_back(f.add_partition());
+  }
+  {
+    auto self = caf::scoped_actor{f.sys};
+    auto await_measurement = [&](uint64_t evicted) {
+      const auto deadline = std::chrono::steady_clock::now() + timeout;
+      while (std::chrono::steady_clock::now() < deadline) {
+        auto settled = false;
+        self->mail(atom::status_v, status_verbosity::info, duration::zero())
+          .request(f.catalog, timeout)
+          .receive(
+            [&](const record& status) {
+              const auto* size = get_if<uint64_t>(&status, "space.dbdir-size");
+              const auto* count = get_if<uint64_t>(&status, "space.evicted");
+              const auto* evicting = get_if<bool>(&status, "space.evicting");
+              settled = size and *size == 1 and count and *count == evicted
+                        and evicting and not *evicting;
+            },
+            [](const caf::error& error) {
+              FAIL("catalog status failed: {}", error);
+            });
+        if (settled) {
+          return true;
+        }
+        std::this_thread::sleep_for(10ms);
+      }
+      return false;
+    };
+    REQUIRE(await_measurement(0));
+    for (const auto& id : ids) {
+      for (const auto& path : f.files_of(id)) {
+        CHECK(std::filesystem::exists(path));
+      }
+    }
+    std::ofstream{f.dbdir / "pressure"};
+    REQUIRE(await_measurement(2));
+    CHECK_EQUAL(std::ranges::count_if(ids,
+                                      [&](const auto& id) {
+                                        return f.files_exist(id);
+                                      }),
+                4);
+  }
+  CHECK(f.await_shutdown());
+}
+
+TEST("custom disk checks discard unstable storage measurements") {
+  for (const auto transforming : {false, true}) {
+    auto f = fixture{};
+    auto scanner
+      = f.sys.spawn([paths = f.paths, transforming](
+                      catalog_actor::stateful_pointer<catalog_state> self)
+                      -> catalog_actor::behavior_type {
+          auto& state = self->state();
+          state.self = self;
+          state.paths = paths;
+          state.maintenance.space.scan_binary = "printf 96; #";
+          if (transforming) {
+            state.in_transformation.insert(uuid::random());
+          }
+          state.measure_space();
+          if (transforming) {
+            // A transform that began before the scan can finish without merging
+            // any outputs. Its temporary files still invalidate the measurement.
+            state.in_transformation.clear();
+          } else {
+            // Complete a storage change before the detached worker's reply can
+            // be handled, with no retiring or deleting partitions left to wait
+            // for.
+            ++state.storage_generation;
+          }
+          return {caf::partial_behavior_init,
+                  [self](atom::status, status_verbosity, duration) -> record {
+                    const auto& state = self->state();
+                    return {{"measuring", state.measuring_space},
+                            {"accepted", state.dbdir_size.has_value()},
+                            {"recheck", state.recheck_custom_space}};
+                  }};
+        });
+    {
+      auto self = caf::scoped_actor{f.sys};
+      auto finished = false;
+      const auto deadline = std::chrono::steady_clock::now() + timeout;
+      while (not finished and std::chrono::steady_clock::now() < deadline) {
+        self->mail(atom::status_v, status_verbosity::info, duration::zero())
+          .request(scanner, timeout)
+          .receive(
+            [&](const record& status) {
+              if (not *get_if<bool>(&status, "measuring")) {
+                finished = true;
+                CHECK(not *get_if<bool>(&status, "accepted"));
+                CHECK(*get_if<bool>(&status, "recheck"));
+              }
+            },
+            [](const caf::error& error) {
+              FAIL("scan status failed: {}", error);
+            });
+      }
+      CHECK(finished);
+    }
+    caf::anon_send_exit(scanner, caf::exit_reason::user_shutdown);
+    CHECK(f.await_shutdown());
+  }
 }
 
 TEST("export releases unbound schemas while other candidates remain queued") {
