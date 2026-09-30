@@ -17,7 +17,7 @@ source = (
 expected = [
     {"first": 42, "second": "hello"},
     {"second": 7, "first": [1, "two", None, {"nested": True}]},
-    {"key": [42, "hello", [True, None]]},
+    {"key": [42, "hello", True, None]},
     {"outer": {"inner": "192.0.2.1"}},
 ]
 for batch_size in (1, 7):

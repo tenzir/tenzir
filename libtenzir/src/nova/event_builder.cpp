@@ -704,7 +704,11 @@ auto EventBuilder::Field::data(V v) -> void {
     return;
   }
   if (previous_) {
-    repeat().data(v);
+    if (parent_->settings_.merge_structural and is<nova::Record>(*previous_)) {
+      record().field("").data(v);
+    } else {
+      repeat().data(v);
+    }
     return;
   }
   if (not seed_) {
@@ -739,7 +743,11 @@ auto EventBuilder::Field::null() -> void {
     return;
   }
   if (previous_) {
-    repeat().null();
+    if (parent_->settings_.merge_structural and is<nova::Record>(*previous_)) {
+      record().field("").null();
+    } else {
+      repeat().null();
+    }
     return;
   }
   inner_->null();
@@ -750,6 +758,21 @@ auto EventBuilder::Field::record() -> Record {
     return Record{*parent_, None{}, type{}, path_};
   }
   if (previous_) {
+    if (parent_->settings_.merge_structural
+        and not is<nova::List>(*previous_)) {
+      auto previous = std::move(*previous_);
+      previous_ = None{};
+      auto record = inner_->record();
+      if (auto const* fields = try_as<nova::Record>(previous)) {
+        for (auto const& [name, value] : *fields) {
+          append_data(record.field(name), value);
+        }
+      } else {
+        append_data(record.field(""), previous);
+      }
+      return Record{*parent_, std::move(record), seed_, path_,
+                    Record::State::reopened};
+    }
     return repeat().record();
   }
   if (seed_ and not is<record_type>(seed_)) {
@@ -768,7 +791,8 @@ auto EventBuilder::Field::list() -> List {
     return List{*parent_, None{}, type{}, path_};
   }
   if (previous_) {
-    return repeat().list();
+    auto list = repeat();
+    return parent_->settings_.merge_structural ? std::move(list) : list.list();
   }
   if (seed_ and not is<list_type>(seed_)) {
     emit_mismatch(*parent_->dh_, path_, type_kind::of<list_type>, seed_);
@@ -1002,6 +1026,10 @@ auto EventBuilder::take(ArrayBuilder<nova::Record>::RecordBuilder& record,
     return slot;
   }
   if (previous) {
+    if (settings_.merge_structural) {
+      extend = is<nova::List>(*previous);
+      return slot;
+    }
     auto key = RepeatedKey{record.parent_, record.parent_->length() - 1,
                            std::string{name}};
     extend = std::ranges::find(repeated_, key) != repeated_.end();

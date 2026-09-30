@@ -71,6 +71,10 @@ public:
     /// Other strings stay strings. Empty keeps the default non-number
     /// inference. Schema declarations and `raw` take precedence.
     std::string infer_unparsed_under = {};
+    /// Merges repeated records and concatenates repeated lists. Parsed scalars
+    /// colliding with records are preserved under an empty field name.
+    /// Applies only without a schema policy; otherwise the last value wins.
+    bool merge_structural = false;
   };
 
   class Field;
@@ -138,7 +142,7 @@ public:
     value_path path_;
     /// The value that the record already held for a repeated key.
     Option<Data> previous_;
-    /// Whether `previous_` is the list of an already repeated key's values.
+    /// Whether to extend `previous_` as a list rather than keep it as an element.
     bool extend_ = false;
   };
 
@@ -199,10 +203,10 @@ private:
 
   /// Returns the record schema named `name`, looked up once.
   auto schema(std::string const& name) -> Option<type> const&;
-  /// Returns the slot for `name` in `record`. Without a policy, a repeated key
-  /// collects its values into a list: then this stores the value it held in
-  /// `previous`, and whether that value is already the list of the key's
-  /// values in `extend`. With a policy, the last value wins.
+  /// Returns the slot for `name` in `record`. Without a policy, preserves a
+  /// repeated key's value in `previous` for collection or structural merging.
+  /// `extend` determines whether to extend that value as a list or keep it as
+  /// an element. With a policy, the last value wins.
   auto take(ArrayBuilder<nova::Record>::RecordBuilder& record,
             std::string_view name, Option<Data>& previous, bool& extend)
     -> FieldBuilder;

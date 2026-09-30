@@ -156,6 +156,95 @@ TEST("event builder scopes selector inference to unparsed fields") {
   }
 }
 
+TEST("event builder structurally merges repeated records when enabled") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.unflatten_separator = {}, .merge_structural = true});
+  auto event = builder.event();
+  event.field("r").record().field("nested").record().field("a").data(
+    int64_t{1});
+  event.field("r").record().field("nested").record().field("b").data(
+    int64_t{2});
+  event.field("r").record().field("nested").record().field("a").data(
+    int64_t{3});
+  // A structurally merged record is not a collected list, even after repeats.
+  event.field("r").data(int64_t{4});
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0], (data{record{
+                           {"r",
+                            record{
+                              {"nested",
+                               record{
+                                 {"a", list{int64_t{1}, int64_t{3}}},
+                                 {"b", int64_t{2}},
+                               }},
+                              {"", int64_t{4}},
+                            }},
+                         }}));
+}
+
+TEST("event builder preserves structural scalar collisions in either order") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.unflatten_separator = ".", .merge_structural = true});
+  auto event = builder.event();
+  event.field("first").data(int64_t{1});
+  event.field("first.b").data(int64_t{2});
+  event.field("last.b").data(int64_t{2});
+  event.field("last").data(int64_t{1});
+  event.field("null.b").data(int64_t{2});
+  event.field("null").null();
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0],
+              (data{record{
+                {"first", record{{"", int64_t{1}}, {"b", int64_t{2}}}},
+                {"last", record{{"b", int64_t{2}}, {"", int64_t{1}}}},
+                {"null", record{{"b", int64_t{2}}, {"", caf::none}}},
+              }}));
+}
+
+TEST("event builder structurally concatenates repeated lists when enabled") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.unflatten_separator = {}, .merge_structural = true});
+  auto event = builder.event();
+  event.field("l").list().list().data(int64_t{1});
+  event.field("l").list().data(int64_t{2});
+  event.field("l").data(int64_t{3});
+  event.field("s").data(int64_t{1});
+  event.field("s").list().data(int64_t{2});
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0],
+              (data{record{
+                {"l", list{list{int64_t{1}}, int64_t{2}, int64_t{3}}},
+                {"s", list{int64_t{1}, int64_t{2}}},
+              }}));
+}
+
+TEST("event builder schema policies override structural merging") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {
+                         .policy = EventBuilder::SchemaPolicy{"missing"},
+                         .unflatten_separator = {},
+                         .merge_structural = true,
+                       });
+  auto event = builder.event();
+  event.field("r").record().field("a").data(int64_t{1});
+  event.field("r").record().field("b").data(int64_t{2});
+  event.field("l").list().data(int64_t{1});
+  event.field("l").list().data(int64_t{2});
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0], (data{record{
+                           {"r", record{{"b", int64_t{2}}}},
+                           {"l", list{int64_t{2}}},
+                         }}));
+}
+
 TEST("event builder unflattens keys that share a prefix into one record") {
   auto dh = null_diagnostic_handler{};
   auto builder = make_builder(dh, {.unflatten_separator = "."});
