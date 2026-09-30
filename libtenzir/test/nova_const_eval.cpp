@@ -19,6 +19,7 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/tql2/registry.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -124,6 +125,20 @@ TEST("const_eval evaluates nested records and lists in order") {
   REQUIRE(b);
   CHECK_EQUAL(*a, std::int64_t{1});
   CHECK_EQUAL(*b, "x");
+}
+
+TEST("const_eval preserves blobs in nested constants") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = registry{};
+  auto bytes = blob{std::byte{0x01}, std::byte{0xff}};
+  auto value = record{
+    {"blob", bytes},
+    {"list", list{bytes, record{{"nested", bytes}}}},
+  };
+  auto result = const_eval(constant(value), InstantiateCtx{dh, reg});
+  REQUIRE(result);
+  CHECK_EQUAL(materialize_legacy(*result), data{value});
+  CHECK(std::move(dh).collect().empty());
 }
 
 TEST("const_eval evaluates unary and binary kernels over the scratch input") {

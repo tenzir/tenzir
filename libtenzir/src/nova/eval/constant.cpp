@@ -97,7 +97,16 @@ auto eval_data_constant(diagnostic_handler& dh, const auto& v,
       }
       return Array<Data>{builder.finish()};
     },
-    [&](const auto&) -> Array<Data> {
+    [&](tenzir::pattern const&) -> Array<Data> {
+      TENZIR_UNREACHABLE();
+    },
+    [&](tenzir::enumeration) -> Array<Data> {
+      TENZIR_UNREACHABLE();
+    },
+    [&](tenzir::map const&) -> Array<Data> {
+      TENZIR_UNREACHABLE();
+    },
+    [&](tenzir::secret const&) -> Array<Data> {
       diagnostic::warning("eval not implemented yet for this constant type")
         .emit(dh);
       return Array<Data>{Array<Null>{storage::NullStorage{length}}};

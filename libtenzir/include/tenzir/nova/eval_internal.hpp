@@ -16,7 +16,6 @@
 #include "tenzir/any.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
@@ -131,14 +130,29 @@ private:
   auto eval(const ast::meta&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::resolved_secret&, EvalFrame frame) -> Array<Data>;
 
-  template <class T>
-    requires(::tenzir::detail::tl_contains<ast::expression_kinds, T>::value)
-  auto eval(T const& x, EvalFrame frame) -> Array<Data> {
-    diagnostic::warning("eval not implemented yet for: {:?}",
-                        use_default_formatter<T>(x))
-      .primary(x)
-      .emit(ctx_);
-    return frame.null();
+  auto eval(ast::pipeline_expr const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::assignment const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::underscore const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::unpack const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::dollar_var const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::pkg_dollar_var const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::type_expr const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
+  }
+  auto eval(ast::lambda_expr const&, EvalFrame) -> Array<Data> {
+    TENZIR_UNREACHABLE();
   }
 
   friend class nova::Evaluator;
