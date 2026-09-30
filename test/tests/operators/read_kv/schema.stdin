@@ -1,0 +1,2 @@
+dest_port=53 ignored=yes
+dest_port=5353 ignored=no

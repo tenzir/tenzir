@@ -64,13 +64,17 @@ public:
     bool schema_only = false;
     /// Keeps unparsed strings as strings unless a schema says otherwise.
     bool raw = false;
+    /// Infers numbers in unparsed strings for formats without numeric types.
+    bool infer_numbers = false;
     /// Splits keys at this separator into nested records, if not empty.
     std::string unflatten_separator;
     std::string default_schema_name = "tenzir.unknown";
     /// Restricts inference to this top-level field and enables number parsing.
-    /// Other strings stay strings. Empty keeps the default non-number
-    /// inference. Schema declarations and `raw` take precedence.
+    /// Other strings stay strings. Empty leaves inference unrestricted.
+    /// Schema declarations and `raw` take precedence.
     std::string infer_unparsed_under = {};
+    /// Retains repeated values even when a schema policy is active.
+    bool merge_structural = false;
   };
 
   class Field;
@@ -202,10 +206,11 @@ private:
   /// Returns the slot for `name` in `record`. Without a policy, a repeated key
   /// collects its values into a list: then this stores the value it held in
   /// `previous`, and whether that value is already the list of the key's
-  /// values in `extend`. With a policy, the last value wins.
+  /// values in `extend`. With a policy, the last value wins unless structural
+  /// merging is enabled.
   auto take(ArrayBuilder<nova::Record>::RecordBuilder& record,
-            std::string_view name, Option<Data>& previous, bool& extend)
-    -> FieldBuilder;
+            std::string_view name, Option<Data>& previous, bool& extend,
+            bool record_prefix = false) -> FieldBuilder;
   auto open_record(ArrayBuilder<nova::Record>::RecordBuilder& record,
                    std::string_view name)
     -> Option<ArrayBuilder<nova::Record>::RecordBuilder>;

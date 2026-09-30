@@ -1,0 +1,5 @@
+k=1 k.x=2 k.y=3
+nested.k=4 nested.k.x=5
+repeated=6 repeated=7 repeated.x=8
+null= null.x=9
+k=1 k.x=2 k=3

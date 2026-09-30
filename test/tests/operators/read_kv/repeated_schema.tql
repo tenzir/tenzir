@@ -1,0 +1,3 @@
+from_stdin { read_kv schema="suricata.dns", unflatten_separator="." }
+select extra, dest_port, k?
+write_json

@@ -1,0 +1,53 @@
+warning: parsed field `dest_port` contains `list`, but the schema expects `uint64`
+ --> tests/operators/read_kv/repeated_selector.tql:1:14
+  |
+1 | from_stdin { read_kv selector="kind", unflatten_separator="." }
+  |              ~~~~~~~
+  |
+{
+  "extra": [
+    1,
+    2
+  ],
+  "dest_port": 53,
+  "k": {
+    "": 1,
+    "x": 2
+  }
+}
+{
+  "extra": [
+    null,
+    2
+  ],
+  "dest_port": 54,
+  "k": null
+}
+{
+  "extra": [
+    1,
+    2,
+    3
+  ],
+  "dest_port": 55,
+  "k": null
+}
+{
+  "extra": [
+    1,
+    2
+  ],
+  "dest_port": null,
+  "k": {
+    "": 1,
+    "x": 2
+  }
+}
+{
+  "extra": [
+    1,
+    2
+  ],
+  "dest_port": 56,
+  "k": null
+}

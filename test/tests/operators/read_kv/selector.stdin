@@ -1,0 +1,2 @@
+event_type=dns dest_port=53 extra=7
+event_type=flow dest_port=443 extra=8

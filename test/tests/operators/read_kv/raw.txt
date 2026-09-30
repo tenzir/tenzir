@@ -1,0 +1,9 @@
+{
+  nested: {
+    number: "42",
+    flag: "true",
+    ip: "192.0.2.1",
+  },
+  "null": null,
+  text: "quoted value",
+}
