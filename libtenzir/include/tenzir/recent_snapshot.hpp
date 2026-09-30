@@ -29,6 +29,12 @@ struct recent_snapshot {
 struct NovaRecentSnapshot {
   std::vector<nova::Events> events;
   uuid barrier;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, NovaRecentSnapshot& x) -> bool {
+    return f.object(x).fields(f.field("events", x.events),
+                              f.field("barrier", x.barrier));
+  }
 };
 
 } // namespace tenzir

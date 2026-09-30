@@ -21,6 +21,7 @@
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/partition_paths.hpp"
 #include "tenzir/store.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/uuid.hpp"
@@ -521,12 +522,10 @@ auto store_plugin::make_store(filesystem_actor fs,
                                                  "single uuid");
   }
   const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
-  auto db_dir = std::filesystem::path{
-    caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
-                defaults::state_directory.data())};
-  std::error_code err{};
-  const auto abs_dir = std::filesystem::absolute(db_dir, err);
-  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
+  // The filesystem actor may belong to a remote node, whose root differs from
+  // this actor system's state directory.
+  auto path = partition_paths::relative().archive_dir
+              / fmt::format("{}.{}", id, name());
   return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
                                                  std::move(*store), fs,
                                                  std::move(path), name(),

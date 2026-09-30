@@ -3089,7 +3089,7 @@ TEST("record builder keeps the last value of a repeated key") {
               (std::vector<std::string>{"a", "b", "c"}));
 }
 
-TEST("nova Arrow schema metadata roundtrips independently of import time") {
+TEST("Arrow schema metadata roundtrips independently of import time") {
   for (auto internal : {false, true}) {
     auto metadata = ArrowMetadata{"schema.test", internal};
     auto schema = metadata.apply(tenzir::type{tenzir::record_type{}});
@@ -3103,7 +3103,7 @@ TEST("nova Arrow schema metadata roundtrips independently of import time") {
   }
 }
 
-TEST("nova Arrow schema metadata supports defaults and legacy names") {
+TEST("Arrow schema metadata supports defaults and legacy names") {
   auto empty = arrow::schema({});
   CHECK_EQUAL(ArrowMetadata::from_arrow(*empty).name, "");
   CHECK_EQUAL(ArrowMetadata::from_arrow(*empty, "undefined").name, "undefined");
@@ -3114,7 +3114,7 @@ TEST("nova Arrow schema metadata supports defaults and legacy names") {
               "legacy.schema");
 }
 
-TEST("nova events convert active rows to table slices") {
+TEST("events convert active rows to table slices") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").data(std::int64_t{1});
   builder.record().field("x").data(std::int64_t{2});
@@ -3132,7 +3132,7 @@ TEST("nova events convert active rows to table slices") {
   CHECK_EQUAL(layout.field(0).type, tenzir::int64_type{});
 }
 
-TEST("nova events retain schema names when converting to table slices") {
+TEST("events retain schema names when converting to table slices") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").data(std::int64_t{1});
   builder.record().field("x").data(std::int64_t{2});
@@ -3149,7 +3149,7 @@ TEST("nova events retain schema names when converting to table slices") {
   CHECK_EQUAL(slices[1].schema().name(), "schema.two");
 }
 
-TEST("nova events retain internal metadata when converting to table slices") {
+TEST("events retain internal metadata when converting to table slices") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").data(std::int64_t{1});
   builder.record().field("x").data(std::int64_t{2});
@@ -3166,7 +3166,33 @@ TEST("nova events retain internal metadata when converting to table slices") {
   CHECK(slices[1].schema().attribute("internal").has_value());
 }
 
-TEST("nova events convert Arrow-compatible heterogeneous lists to table "
+TEST("events retain per-row import times in table slices") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::int64_t{1});
+  builder.record().field("x").data(std::int64_t{2});
+  builder.record().field("x").data(std::int64_t{3});
+  auto times = ArrayBuilder<Time>{};
+  auto first = tenzir::time{std::chrono::seconds{1}};
+  auto second = tenzir::time{std::chrono::seconds{2}};
+  times.data(first);
+  times.data(second);
+  times.data(first);
+  auto meta = Events::Meta::make_empty(3, "schema");
+  meta.import_time = times.finish();
+  auto events
+    = Events{builder.finish(), bitmap({true, true, true}), std::move(meta)};
+  auto slices = to_table_slices(events);
+
+  REQUIRE_EQUAL(slices.size(), 3u);
+  CHECK_EQUAL(slices[0].rows(), 1u);
+  CHECK_EQUAL(slices[0].import_time(), first);
+  CHECK_EQUAL(slices[1].rows(), 1u);
+  CHECK_EQUAL(slices[1].import_time(), second);
+  CHECK_EQUAL(slices[2].rows(), 1u);
+  CHECK_EQUAL(slices[2].import_time(), first);
+}
+
+TEST("events convert Arrow-compatible heterogeneous lists to table "
      "slices") {
   auto builder = ArrayBuilder<Record>{};
   auto list = builder.record().field("xs").list();
@@ -3189,7 +3215,7 @@ TEST("nova events convert Arrow-compatible heterogeneous lists to table "
               }}));
 }
 
-TEST("nova events stringify heterogeneous lists when converting to table "
+TEST("events stringify heterogeneous lists when converting to table "
      "slices") {
   auto builder = ArrayBuilder<Record>{};
   auto list = builder.record().field("xs").list();
@@ -3210,7 +3236,7 @@ TEST("nova events stringify heterogeneous lists when converting to table "
               }}));
 }
 
-TEST("nova events preserve compatible numeric lists when converting to table "
+TEST("events preserve compatible numeric lists when converting to table "
      "slices") {
   auto builder = ArrayBuilder<Record>{};
   auto list = builder.record().field("xs").list();
@@ -3230,7 +3256,7 @@ TEST("nova events preserve compatible numeric lists when converting to table "
     }}));
 }
 
-TEST("nova events stringify nested list conflicts when converting to table "
+TEST("events stringify nested list conflicts when converting to table "
      "slices") {
   auto builder = ArrayBuilder<Record>{};
   auto row = builder.record();
@@ -3599,7 +3625,7 @@ TEST("import transport rejects malformed and non-record Bitz payloads") {
   CHECK_EQUAL(sentinel.unwrap().active_count(), 0u);
 }
 
-TEST("empty Nova event message round-trips as end of stream") {
+TEST("empty event message round-trips as end of stream") {
   auto bytes = caf::byte_buffer{};
   auto serializer = caf::binary_serializer{bytes};
   auto empty = Events{};
@@ -3610,7 +3636,7 @@ TEST("empty Nova event message round-trips as end of stream") {
   CHECK_EQUAL(restored.active_count(), 0u);
 }
 
-TEST("Nova event serialization retains an all-inactive batch") {
+TEST("event serialization retains an all-inactive batch") {
   auto events = export_events(Record{{"x", Int{42}}});
   events.mask = storage::BitMap{1, false};
   auto bytes = caf::byte_buffer{};
@@ -3624,7 +3650,7 @@ TEST("Nova event serialization retains an all-inactive batch") {
   CHECK(not restored.mask.get(0));
 }
 
-TEST("Nova event transport accepts a frame larger than 64 MiB") {
+TEST("event transport accepts a frame larger than 64 MiB") {
   auto large = String(65u << 20, 'x');
   auto events = export_events(Record{{"payload", large}});
   auto bytes = caf::byte_buffer{};
@@ -3685,7 +3711,7 @@ TEST("import memory accounting charges backing behind sparse selections") {
   CHECK_GREATER(events.approx_bytes(), size_t{4096});
 }
 
-TEST("Nova import rejects unredacted secrets") {
+TEST("event import rejects unredacted secrets") {
   auto events = export_events(Record{{"secret", Secret{}}});
   auto encoded = encode_events(events);
   CHECK(not encoded);

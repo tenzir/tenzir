@@ -160,8 +160,8 @@ auto append_data(FieldBuilder builder, const Data& value) -> void;
 auto to_data(const RowView<Data>& row) -> Data;
 
 /// Appends a legacy `tenzir::data` value, recursing into records and lists.
-/// Alternatives without a counterpart here (`pattern`, `enumeration`,
-/// `map`, `secret`) warn through `dh` and append a null.
+/// Patterns and enumerations become strings. Maps and secrets become null.
+/// Other unsupported alternatives warn through `dh` and become null.
 auto append_legacy_data(ArrayBuilder<Data>& builder, const data& value,
                         diagnostic_handler& dh) -> void;
 auto append_legacy_data(ArrayBuilder<List>::ListBuilder& builder,

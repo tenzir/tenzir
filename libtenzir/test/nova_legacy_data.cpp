@@ -103,3 +103,23 @@ TEST("append_legacy_data reaches the same result through a record field") {
   };
   CHECK_EQUAL(round_trip_field(value), data{value});
 }
+
+TEST("append_legacy_data converts context legacy alternatives") {
+  auto expression = pattern::make("^example$");
+  REQUIRE(expression);
+  CHECK_EQUAL(round_trip(*expression), data{std::string{"^example$"}});
+  CHECK_EQUAL(round_trip(enumeration{7}), data{std::string{"7"}});
+  CHECK_EQUAL(round_trip(map{}), data{});
+  CHECK_EQUAL(round_trip(secret::make_literal("hidden")), data{});
+  auto nested = record{
+    {"pattern", *expression},
+    {"enum", enumeration{3}},
+    {"map", map{}},
+    {"secret", secret::make_literal("hidden")},
+  };
+  auto expected = data{record{{"pattern", std::string{"^example$"}},
+                              {"enum", std::string{"3"}},
+                              {"map", data{}},
+                              {"secret", data{}}}};
+  CHECK_EQUAL(round_trip_field(nested), expected);
+}

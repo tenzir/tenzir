@@ -40,12 +40,15 @@ struct context_parameter_map
 struct context_update_args {
   ast::expression key = {};
   Option<ast::expression> value = None{};
+  /// The event adapter supplies the original event as an implicit `value`.
+  bool implicit_value = false;
   Option<located<duration>> create_timeout = None{};
   Option<located<duration>> write_timeout = None{};
   Option<located<duration>> read_timeout = None{};
 
   friend auto inspect(auto& f, context_update_args& x) -> bool {
     return f.object(x).fields(f.field("key", x.key), f.field("value", x.value),
+                              f.field("implicit_value", x.implicit_value),
                               f.field("create_timeout", x.create_timeout),
                               f.field("update_timeout", x.write_timeout),
                               f.field("read_timeout", x.read_timeout));
@@ -98,9 +101,18 @@ public:
     = 0;
   virtual auto apply(const series& array, session ctx) -> std::vector<series>
     = 0;
+  /// Applies a context without forcing values through Arrow.
+  virtual auto apply_data(const std::vector<data>& keys, session ctx)
+    -> std::vector<data>
+    = 0;
 
   /// Inspects the context.
   virtual auto show() const -> record = 0;
+
+  /// Whether a newly created context is ready without an initial update.
+  virtual auto ready_on_creation() const -> bool {
+    return false;
+  }
 
   /// Dumps the context's contents.
   virtual auto dump() -> generator<table_slice> = 0;
@@ -114,10 +126,20 @@ public:
                       const context_update_args& args, session ctx)
     -> failure_or<context_update_result>
     = 0;
+  /// Updates a context from evaluated values without an Arrow conversion.
+  virtual auto
+  update_data(const std::vector<data>& keys, const std::vector<data>& values,
+              const context_update_args& args, session ctx)
+    -> failure_or<context_update_result>
+    = 0;
 
   /// Removes events from the context.
   virtual auto
   erase(const table_slice& events, const context_erase_args& args, session ctx)
+    -> failure_or<void>
+    = 0;
+  /// Erases evaluated keys without an Arrow conversion.
+  virtual auto erase_data(const std::vector<data>& keys, session ctx)
     -> failure_or<void>
     = 0;
 

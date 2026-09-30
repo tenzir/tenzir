@@ -90,6 +90,18 @@ public:
     return builder.finish();
   }
 
+  auto apply_data(const std::vector<data>& keys, session ctx)
+    -> std::vector<data> override {
+    TENZIR_UNUSED(ctx);
+    auto result = std::vector<data>{};
+    result.reserve(keys.size());
+    for (const auto& key : keys) {
+      result.emplace_back(bloom_filter_.lookup(make_view(key)) ? data{true}
+                                                               : data{});
+    }
+    return result;
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     return record{
@@ -200,7 +212,7 @@ public:
           .emit(ctx);
       }
     }
-    if (args.value) {
+    if (args.value and not args.implicit_value) {
       diagnostic::warning("unsupported option for bloom-filter context")
         .primary(*args.value)
         .emit(ctx);
@@ -234,9 +246,61 @@ public:
     };
   }
 
+  auto
+  update_data(const std::vector<data>& keys, const std::vector<data>& values,
+              const context_update_args& args, session ctx)
+    -> failure_or<context_update_result> override {
+    TENZIR_UNUSED(values);
+    for (const auto& timeout :
+         {args.create_timeout, args.write_timeout, args.read_timeout}) {
+      if (timeout) {
+        diagnostic::warning("unsupported option for bloom-filter context")
+          .primary(*timeout)
+          .emit(ctx);
+      }
+    }
+    if (args.value and not args.implicit_value) {
+      diagnostic::warning("unsupported option for bloom-filter context")
+        .primary(*args.value)
+        .emit(ctx);
+    }
+    auto key_values_list = list{};
+    key_values_list.reserve(keys.size());
+    for (const auto& key : keys) {
+      bloom_filter_.add(make_view(key));
+      key_values_list.push_back(key);
+    }
+    auto make_query
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
+    return context_update_result{.make_query = std::move(make_query)};
+  }
+
   auto erase(const table_slice& events, const context_erase_args& args,
              session ctx) -> failure_or<void> override {
     TENZIR_UNUSED(events, args);
+    diagnostic::error("bloom-filter context does not support erasing entries")
+      .emit(ctx);
+    return failure::promise();
+  }
+
+  auto erase_data(const std::vector<data>& keys, session ctx)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(keys);
     diagnostic::error("bloom-filter context does not support erasing entries")
       .emit(ctx);
     return failure::promise();

@@ -540,7 +540,6 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transformer_result)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::nova::storage::BitMap)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaPersistResult)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::NovaRecentSnapshot)
 #undef tenzir_uuid_synopsis_map
 
 #undef TENZIR_ADD_TYPE_ID
