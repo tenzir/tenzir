@@ -4,7 +4,6 @@ warning: parsed field `dest_port` contains `list`, but the schema expects `uint6
 1 | from_stdin { read_kv schema="suricata.dns", unflatten_separator="." }
   |              ~~~~~~~
   |
-  = note: line 4
 {
   "extra": [
     1,
@@ -43,4 +42,12 @@ warning: parsed field `dest_port` contains `list`, but the schema expects `uint6
     "": 1,
     "x": 2
   }
+}
+{
+  "extra": [
+    1,
+    2
+  ],
+  "dest_port": 56,
+  "k": null
 }

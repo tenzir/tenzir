@@ -609,8 +609,10 @@ public:
         d.annotations.emplace_back(true, std::string{},
                                    args_.operator_location);
       }
-      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
-                      fmt::format("line {}", line_counter_));
+      if (not finishing_) {
+        d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                        fmt::format("line {}", line_counter_));
+      }
       return d;
     });
     auto settings = nova::event_builder_settings(args_.msb_options);
@@ -740,7 +742,10 @@ private:
     if (rows() == 0) {
       co_return;
     }
+    // Deferred coercion may diagnose any row, not just the latest line.
+    finishing_ = true;
     auto events = builder_->finish();
+    finishing_ = false;
     timeout_.reset();
     co_await push(std::move(events));
   }
@@ -805,6 +810,7 @@ private:
   bool ended_on_carriage_return_ = false;
   size_t line_counter_ = 0;
   bool done_ = false;
+  bool finishing_ = false;
   Option<Box<transforming_diagnostic_handler>> dh_;
   Option<nova::EventBuilder> builder_;
 };
