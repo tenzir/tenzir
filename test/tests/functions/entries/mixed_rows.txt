@@ -1,0 +1,59 @@
+{
+  entries: [
+    {
+      key: "a",
+      value: 1,
+    },
+  ],
+}
+{
+  entries: [
+    {
+      key: "a",
+      value: "one",
+    },
+  ],
+}
+{
+  entries: [
+    {
+      key: "a",
+      value: [
+        1,
+      ],
+    },
+  ],
+}
+{
+  entries: [
+    {
+      key: "a",
+      value: {
+        b: 1,
+      },
+    },
+  ],
+}
+{
+  entries: [
+    {
+      key: "a",
+      value: null,
+    },
+  ],
+}
+{
+  entries: [
+    {
+      key: "b",
+      value: 1,
+    },
+    {
+      key: "a",
+      value: 2.5,
+    },
+  ],
+}
+{
+  entries: [],
+}

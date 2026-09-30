@@ -1,0 +1,8 @@
+from {keep: false, x: 42},
+     {keep: true, x: {a: 1, b: "s"}},
+     {keep: true, x: {b: true, a: null, c: [1]}},
+     {keep: false, x: "ignored"},
+     {keep: true, x: null},
+     {keep: true, x: {}}
+where keep
+select entries=x.entries(), constant=entries({k: 1})

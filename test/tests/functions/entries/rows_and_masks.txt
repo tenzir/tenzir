@@ -1,0 +1,60 @@
+{
+  entries: [
+    {
+      key: "a",
+      value: 1,
+    },
+    {
+      key: "b",
+      value: "s",
+    },
+  ],
+  constant: [
+    {
+      key: "k",
+      value: 1,
+    },
+  ],
+}
+{
+  entries: [
+    {
+      key: "b",
+      value: true,
+    },
+    {
+      key: "a",
+      value: null,
+    },
+    {
+      key: "c",
+      value: [
+        1,
+      ],
+    },
+  ],
+  constant: [
+    {
+      key: "k",
+      value: 1,
+    },
+  ],
+}
+{
+  entries: null,
+  constant: [
+    {
+      key: "k",
+      value: 1,
+    },
+  ],
+}
+{
+  entries: [],
+  constant: [
+    {
+      key: "k",
+      value: 1,
+    },
+  ],
+}

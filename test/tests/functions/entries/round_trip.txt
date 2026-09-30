@@ -1,0 +1,50 @@
+{
+  same: true,
+  back: {
+    a: 1,
+    b: "two",
+    c: null,
+    d: [
+      1,
+      "x",
+      null,
+    ],
+    e: {
+      f: {
+        g: true,
+      },
+    },
+  },
+}
+{
+  same: true,
+  back: {
+    "h.i": 1.5,
+    "": 2,
+    "日本語": 3,
+  },
+}
+{
+  same: true,
+  back: {
+    ip: 192.0.2.1,
+    time: 2026-01-01T00:00:00Z,
+    duration: 1s,
+    blob: b"abc",
+  },
+}
+{
+  same: true,
+  back: {
+    key: "k",
+    value: "v",
+  },
+}
+{
+  same: true,
+  back: {},
+}
+{
+  same: true,
+  back: null,
+}

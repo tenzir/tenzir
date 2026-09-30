@@ -1,0 +1,10 @@
+// `keys` and `values` together are the inverse of the two-argument form of
+// `collect_record`.
+from {x: {a: 1, b: "two", c: null, d: [1, "x", null], e: {f: {g: true}}}},
+     {x: {"h.i": 1.5, "": 2, "日本語": 3}},
+     {x: {ip: 192.0.2.1, time: 2026-01-01, duration: 1s, blob: b"abc"}},
+     {x: {key: "k", value: "v"}},
+     {x: {}},
+     {x: null}
+select same=(string(x) == string(collect_record(x.keys(), x.values()))),
+  back=collect_record(x.keys(), x.values())

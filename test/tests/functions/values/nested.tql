@@ -1,0 +1,9 @@
+// Only top-level fields contribute values. Nested records and lists stay
+// intact instead of being flattened.
+from {
+  x: {
+    record: {a: {b: 1}, c: [1, 2]},
+    list: [{k: 1}, {k: 2, l: null}],
+  },
+}
+select values=x.values(), length=x.values().length()

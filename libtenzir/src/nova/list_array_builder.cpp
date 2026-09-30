@@ -78,6 +78,15 @@ auto ArrayBuilder<List>::take_last() -> Data {
   return Data{std::move(result)};
 }
 
+auto ArrayBuilder<List>::open_last_record()
+  -> Option<ArrayBuilder<Record>::RecordBuilder> {
+  if (not storage_->list_open
+      or storage_->values_builder->length() == storage_->open_begin) {
+    return None{};
+  }
+  return storage_->values_builder->open_record();
+}
+
 auto ArrayBuilder<List>::finish() -> Array<List> {
   finish_last_row();
   return {storage_->span_builder.finish(), storage_->values_builder->finish()};

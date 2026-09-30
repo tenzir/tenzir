@@ -1,0 +1,17 @@
+warning: expected `record`, got `int`
+ --> tests/functions/entries/non_record_scalar.tql:2:15
+  |
+2 | select column=x.entries(), constant=entries("text")
+  |               ~
+  |
+
+warning: expected `record`, got `string`
+ --> tests/functions/entries/non_record_scalar.tql:2:45
+  |
+2 | select column=x.entries(), constant=entries("text")
+  |                                             ~~~~~~
+  |
+{
+  column: null,
+  constant: null,
+}

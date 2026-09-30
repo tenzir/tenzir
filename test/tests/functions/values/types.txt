@@ -1,0 +1,17 @@
+{
+  kinds: [
+    "int",
+    "uint",
+    "float",
+    "string",
+    "bool",
+    "null",
+    "ip",
+    "subnet",
+    "time",
+    "duration",
+    "blob",
+    "list",
+    "record",
+  ],
+}

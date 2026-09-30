@@ -1,0 +1,3 @@
+// Dots in field names do not split the record into paths.
+from {x: {"a.b": 1, c: {"d.e": 2}, "f.g.h": 3}}
+select values=x.values(), keys=x.keys()

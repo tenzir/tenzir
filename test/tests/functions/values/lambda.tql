@@ -1,0 +1,3 @@
+from {xs: [{p: 1}, {q: 2, r: 3}, {}]}
+select nested=xs.map(r => r.values()),
+  counts=xs.map(r => r.values().length())

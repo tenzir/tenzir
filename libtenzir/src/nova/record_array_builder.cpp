@@ -117,6 +117,20 @@ auto ArrayBuilder<Record>::RecordBuilder::open_record_field(
   return builder.last_value().open_record();
 }
 
+auto ArrayBuilder<Record>::RecordBuilder::open_list_record_field(
+  std::string_view name) -> Option<RecordBuilder> {
+  auto& storage = *parent_->storage_;
+  const auto it = storage.names.find(name);
+  if (it == storage.names.end()) {
+    return None{};
+  }
+  auto& builder = storage.field_builders[it->second];
+  if (builder.size() <= storage.shape_index_builder.size()) {
+    return None{};
+  }
+  return builder.last_value().open_list_record();
+}
+
 auto ArrayBuilder<Record>::reopen() -> Option<RecordBuilder> {
   if (not storage_->row_open) {
     return None{};

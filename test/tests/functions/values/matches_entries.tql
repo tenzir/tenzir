@@ -1,0 +1,5 @@
+// `values` agrees with the `value` field of `entries`.
+from {x: {a: 1, b: "two", c: null, d: [1], e: {f: 2}}},
+     {x: {}},
+     {x: null}
+select same=(string(x.values()) == string(x.entries().map(e => e.value)))

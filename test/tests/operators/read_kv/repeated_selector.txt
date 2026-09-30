@@ -10,10 +10,12 @@ warning: parsed field `dest_port` contains `list`, but the schema expects `uint6
     2
   ],
   "dest_port": 53,
-  "k": {
-    "": 1,
-    "x": 2
-  }
+  "k": [
+    1,
+    {
+      "x": 2
+    }
+  ]
 }
 {
   "extra": [
@@ -38,10 +40,12 @@ warning: parsed field `dest_port` contains `list`, but the schema expects `uint6
     2
   ],
   "dest_port": null,
-  "k": {
-    "": 1,
-    "x": 2
-  }
+  "k": [
+    1,
+    {
+      "x": 2
+    }
+  ]
 }
 {
   "extra": [

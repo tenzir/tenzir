@@ -1,0 +1,2 @@
+from {name: "alice", age: 42, admin: true}
+select method=this.entries(), call=entries(this)

@@ -1,0 +1,43 @@
+warning: expected `record`, got `int`
+ --> tests/functions/entries/non_record.tql:7:16
+  |
+7 | select entries=x.entries()
+  |                ~
+  |
+
+warning: expected `record`, got `string`
+ --> tests/functions/entries/non_record.tql:7:16
+  |
+7 | select entries=x.entries()
+  |                ~
+  |
+
+warning: expected `record`, got `list`
+ --> tests/functions/entries/non_record.tql:7:16
+  |
+7 | select entries=x.entries()
+  |                ~
+  |
+{
+  entries: null,
+}
+{
+  entries: null,
+}
+{
+  entries: null,
+}
+{
+  entries: [
+    {
+      key: "a",
+      value: 1,
+    },
+  ],
+}
+{
+  entries: null,
+}
+{
+  entries: null,
+}

@@ -1,0 +1,33 @@
+{
+  values: [
+    1,
+    "s",
+  ],
+  constant: [
+    1,
+  ],
+}
+{
+  values: [
+    true,
+    null,
+    [
+      1,
+    ],
+  ],
+  constant: [
+    1,
+  ],
+}
+{
+  values: null,
+  constant: [
+    1,
+  ],
+}
+{
+  values: [],
+  constant: [
+    1,
+  ],
+}

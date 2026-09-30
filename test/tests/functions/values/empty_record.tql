@@ -1,0 +1,2 @@
+from {x: {}}
+select values=x.values(), length=x.values().length()

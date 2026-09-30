@@ -1,0 +1,12 @@
+{
+  method: [
+    "alice",
+    42,
+    true,
+  ],
+  call: [
+    "alice",
+    42,
+    true,
+  ],
+}

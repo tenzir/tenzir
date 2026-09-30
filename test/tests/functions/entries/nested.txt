@@ -1,0 +1,32 @@
+{
+  entries: [
+    {
+      key: "record",
+      value: {
+        a: {
+          b: 1,
+        },
+        c: [
+          1,
+          2,
+        ],
+      },
+    },
+    {
+      key: "list",
+      value: [
+        {
+          k: 1,
+        },
+        {
+          k: 2,
+          l: null,
+        },
+      ],
+    },
+  ],
+  keys: [
+    "record",
+    "list",
+  ],
+}

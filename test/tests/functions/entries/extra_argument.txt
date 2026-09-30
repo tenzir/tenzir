@@ -1,0 +1,8 @@
+error: too many positional arguments
+ --> tests/functions/entries/extra_argument.tql:5:27
+  |
+5 | select result=entries({}, {})
+  |                           ^^
+  |
+  = usage: entries(x:record)
+  = docs: https://tenzir.com/docs/reference/functions/entries

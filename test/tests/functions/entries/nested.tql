@@ -1,0 +1,8 @@
+// Only top-level fields become entries. Nested records and lists stay intact.
+from {
+  x: {
+    record: {a: {b: 1}, c: [1, 2]},
+    list: [{k: 1}, {k: 2, l: null}],
+  },
+}
+select entries=x.entries(), keys=x.entries().map(e => e.key)

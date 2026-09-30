@@ -34,6 +34,19 @@ auto UnionArrayBuilder::open_record()
   return builder.last_value().reopen();
 }
 
+auto UnionArrayBuilder::open_list_record()
+  -> Option<ArrayBuilder<Record>::RecordBuilder> {
+  constexpr auto type_index = data_type_list::unique_index_of<List>;
+  const auto vector_index = type_to_vector_index_[type_index];
+  if (vector_index < 0 or alternative_index_builder_.size() == 0
+      or alternative_index_builder_.back() != vector_index) {
+    return None{};
+  }
+  auto& builder = std::get<MaskedArrayBuilder<ArrayBuilder<List>>>(
+    builders_[static_cast<std::size_t>(vector_index)]);
+  return builder.last_value().open_last_record();
+}
+
 auto UnionArrayBuilder::skip() -> void {
   // The alternatives catch up lazily, see `switch_builder`.
   alternative_index_builder_.emplace_back(-1);
