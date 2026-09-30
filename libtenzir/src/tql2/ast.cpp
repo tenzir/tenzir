@@ -12,8 +12,10 @@
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/view.hpp"
 
@@ -21,6 +23,7 @@
 #include <caf/detail/type_list.hpp>
 
 #include <algorithm>
+#include <ranges>
 #include <type_traits>
 #include <unordered_set>
 #include <vector>
@@ -232,6 +235,252 @@ auto collect_refs(const expression& expr) -> Option<ExprRefs> {
     return None{};
   }
   return std::move(visitor).result();
+}
+
+namespace {
+
+/// Returns, for every argument of `call`, whether the function reads it as a
+/// field path rather than as a value. Only functions with a Nova description
+/// can declare such arguments.
+auto selector_arguments(ast::function_call const& call, registry const& reg)
+  -> Option<std::vector<bool>> {
+  if (not call.fn.ref.resolved()) {
+    return None{};
+  }
+  auto const* plugin
+    = dynamic_cast<nova::FunctionPlugin const*>(&reg.get(call));
+  if (not plugin) {
+    return std::vector<bool>(call.args.size(), false);
+  }
+  return plugin->describe().selector_arguments(call);
+}
+
+/// Detects metadata references such as `@name`.
+class MetaFinder final : public ast::visitor<MetaFinder> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::meta&) -> void {
+    found = true;
+  }
+
+  bool found = false;
+};
+
+auto reads_metadata(ast::expression const& expr) -> bool {
+  auto finder = MetaFinder{};
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+  finder.visit(const_cast<ast::expression&>(expr));
+  return finder.found;
+}
+
+/// Substitutes the field and metadata references of an expression in place.
+class RefSubstitutor {
+public:
+  RefSubstitutor(registry const& reg, FieldSubstitution const& fields,
+                 MetaSubstitution const& meta)
+    : reg_{reg}, fields_{fields}, meta_{meta} {
+  }
+
+  /// Substitutes the references in `x` and returns whether all of them have
+  /// a replacement.
+  auto substitute(ast::expression& x) -> bool {
+    if (auto* meta = try_as<ast::meta>(x)) {
+      return substitute_meta(x, *meta);
+    }
+    if (is<ast::this_>(x) or is<ast::root_field>(x) or is<ast::field_access>(x)
+        or is<ast::index_expr>(x)) {
+      if (auto path = ast::field_path::try_from(x)) {
+        return substitute_field(x, *path);
+      }
+    }
+    return x.match(
+      [](ast::this_&) -> bool {
+        TENZIR_UNREACHABLE();
+      },
+      [](ast::root_field&) -> bool {
+        TENZIR_UNREACHABLE();
+      },
+      [&](ast::field_access& y) {
+        return substitute(y.left);
+      },
+      [&](ast::index_expr& y) {
+        return substitute(y.expr) and substitute(y.index);
+      },
+      [&](ast::binary_expr& y) {
+        return substitute(y.left) and substitute(y.right);
+      },
+      [&](ast::unary_expr& y) {
+        return substitute(y.expr);
+      },
+      [&](ast::function_call& y) {
+        auto selectors = selector_arguments(y, reg_);
+        if (not selectors) {
+          return false;
+        }
+        TENZIR_ASSERT_EQ(selectors->size(), y.args.size());
+        for (auto [arg, selector] : std::views::zip(y.args, *selectors)) {
+          // A selector names a field relative to another argument, so it is
+          // not a reference to the event.
+          if (not selector and not substitute(arg)) {
+            return false;
+          }
+        }
+        return true;
+      },
+      [&](ast::lambda_expr& y) {
+        auto size = bound_.size();
+        for (auto const& param : y.params) {
+          bound_.push_back(param.name);
+        }
+        auto result = substitute(y.body);
+        bound_.resize(size);
+        return result;
+      },
+      [&](ast::record& y) {
+        return std::ranges::all_of(y.items, [&](ast::record::item& item) {
+          return item.match(
+            [&](ast::record::field& field) {
+              return substitute(field.expr);
+            },
+            [&](ast::spread& spread) {
+              return substitute(spread.expr);
+            });
+        });
+      },
+      [&](ast::list& y) {
+        return std::ranges::all_of(y.items, [&](ast::list::item& item) {
+          return item.match(
+            [&](ast::expression& expr) {
+              return substitute(expr);
+            },
+            [&](ast::spread& spread) {
+              return substitute(spread.expr);
+            });
+        });
+      },
+      [&](ast::unpack& y) {
+        return substitute(y.expr);
+      },
+      [&](ast::assignment& y) {
+        // The left side of a named argument is a label, not a field.
+        return substitute(y.right);
+      },
+      [&](ast::format_expr& y) {
+        return std::ranges::all_of(
+          y.segments, [&](ast::format_expr::segment& segment) {
+            auto* replacement = try_as<ast::format_expr::replacement>(segment);
+            return not replacement or substitute(replacement->expr);
+          });
+      },
+      [](ast::meta&) -> bool {
+        TENZIR_UNREACHABLE();
+      },
+      [](ast::pipeline_expr&) {
+        return false;
+      },
+      [](ast::constant&) {
+        return true;
+      },
+      [](ast::dollar_var&) {
+        return true;
+      },
+      [](ast::pkg_dollar_var&) {
+        return true;
+      },
+      [](ast::type_expr&) {
+        return true;
+      },
+      [](ast::resolved_secret&) {
+        return true;
+      },
+      [](ast::underscore&) {
+        return true;
+      });
+  }
+
+private:
+  auto substitute_meta(ast::expression& x, ast::meta const& meta) -> bool {
+    if (not meta_) {
+      return true;
+    }
+    auto replacement = meta_(meta);
+    if (not replacement) {
+      return false;
+    }
+    if (not bound_.empty()) {
+      // Within a lambda body, the executors disagree on whose metadata a
+      // reference reads, so only an unchanged reference is exact.
+      auto const* unchanged = try_as<ast::meta>(*replacement);
+      return unchanged and unchanged->kind == meta.kind;
+    }
+    x = std::move(*replacement);
+    return true;
+  }
+
+  auto substitute_field(ast::expression& x, ast::field_path const& path)
+    -> bool {
+    if (not bound_.empty()) {
+      // Within a lambda body, `this` does not refer to the event.
+      if (path.has_this() or path.path().empty()) {
+        return false;
+      }
+      if (is_bound(path.path().front().id.name)) {
+        return true;
+      }
+    }
+    auto replacement = fields_(path);
+    if (not replacement) {
+      return false;
+    }
+    if (not bound_.empty() and not capturable(*replacement)) {
+      return false;
+    }
+    x = std::move(*replacement);
+    return true;
+  }
+
+  auto is_bound(std::string_view name) const -> bool {
+    return std::ranges::contains(bound_, name);
+  }
+
+  /// Returns whether a lambda body may read `expr`, which a lambda evaluates
+  /// against its parameters and the top-level fields it captures by name.
+  auto capturable(ast::expression const& expr) const -> bool {
+    auto refs = collect_refs(expr);
+    if (not refs) {
+      return false;
+    }
+    for (auto const& ref : refs->field_paths) {
+      if (ref.has_this() or ref.path().empty()
+          or is_bound(ref.path().front().id.name)) {
+        return false;
+      }
+    }
+    return not reads_metadata(expr);
+  }
+
+  registry const& reg_;
+  FieldSubstitution const& fields_;
+  MetaSubstitution const& meta_;
+  /// The parameters of the enclosing lambdas.
+  std::vector<std::string> bound_;
+};
+
+} // namespace
+
+auto substitute_refs(expression const& expr, registry const& reg,
+                     FieldSubstitution const& fields,
+                     MetaSubstitution const& meta) -> Option<expression> {
+  auto result = expr;
+  auto substitutor = RefSubstitutor{reg, fields, meta};
+  if (not substitutor.substitute(result)) {
+    return None{};
+  }
+  return result;
 }
 
 auto expression::get_location() const -> location {

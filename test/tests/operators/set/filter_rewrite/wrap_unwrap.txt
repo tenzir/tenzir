@@ -1,0 +1,51 @@
+warning: event does not have field
+ --> tests/operators/set/filter_rewrite/wrap_unwrap.tql:4:38
+  |
+4 | ocsf.device = {hostname: move source.host}
+  |                                      ~~~~
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record does not have field
+ --> tests/operators/set/filter_rewrite/wrap_unwrap.tql:4:31
+  |
+4 | ocsf.device = {hostname: move source.host}
+  |                               ~~~~~~
+  ⋮
+4 | ocsf.device = {hostname: move source.host}
+  |                                      ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+{
+  device: {
+    hostname: "a",
+  },
+  dst_endpoint: {
+    hostname: "a",
+  },
+  unmapped: {
+    id: 1,
+  },
+}
+{
+  device: {
+    hostname: null,
+  },
+  dst_endpoint: {
+    hostname: null,
+  },
+  unmapped: {
+    id: 2,
+  },
+}
+{
+  device: {
+    hostname: null,
+  },
+  dst_endpoint: {
+    hostname: null,
+  },
+  unmapped: {
+    id: 3,
+  },
+}

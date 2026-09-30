@@ -40,6 +40,28 @@
 +        
 +      ]
 +    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `domain` @ [1]:43..49 from 0,
++            has_question_mark: false
++          },
++          op: "neq",
++          right: constant none_t {} @ [1]:97..101 from 0,
++          location: [1]:85..101 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
      SetIr {
        assignments: [
          {
@@ -56,16 +78,28 @@
        ],
        order: "ordered"
      },
-     where_ir {
-       op: {
-         path: [
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:50..55 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:101..101 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
 +          
          ],
 -        ref: std::where/op
-+        ref: unresolved
++        named_args: [
++          
++        ]
        },
-       args: [
+-      args: [
 -        expression binary_expr {
 -          left: root_field {
 -            id: `domain` @ [1]:56..62 from 0,
@@ -75,7 +109,9 @@
 -          right: constant string "tenzir.com" @ [1]:66..78 from 0,
 -          location: [1]:56..78 from 0
 -        }
--      ],
++      filter: [
++        
+       ],
 -      named_args: [
 -        
 -      ]
@@ -89,39 +125,18 @@
 -      },
 -      args: [
 -        expression binary_expr {
-+        Incomplete binary_expr {
-           left: root_field {
-             id: `resolved` @ [1]:85..93 from 0,
-             has_question_mark: false
-           },
-           op: "neq",
-           right: constant none_t {} @ [1]:97..101 from 0,
-           location: [1]:85..101 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:101..101 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
+-          left: root_field {
+-            id: `resolved` @ [1]:85..93 from 0,
+-            has_question_mark: false
+-          },
+-          op: "neq",
+-          right: constant none_t {} @ [1]:97..101 from 0,
+-          location: [1]:85..101 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
 +      order: "ordered"
      }
    ]

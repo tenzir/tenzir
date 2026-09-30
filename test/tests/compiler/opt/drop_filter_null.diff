@@ -1,0 +1,111 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: constant none_t {} @ [1]:22..29 from 0,
++          op: "eq",
++          right: constant none_t {} @ [1]:33..37 from 0,
++          location: [1]:22..37 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "drop",
+       store: {
+         op: {
+           path: [
+             `drop` @ [1]:7..11 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: root_field {
+               id: `foo` @ [1]:12..15 from 0,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `foo` @ [1]:12..15 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:16..21 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:37..37 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `foo` @ [1]:22..25 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `bar` @ [1]:26..29 from 0,
+-            location: [1]:22..29 from 0
+-          },
+-          op: "eq",
+-          right: constant none_t {} @ [1]:33..37 from 0,
+-          location: [1]:22..37 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ]
+ }

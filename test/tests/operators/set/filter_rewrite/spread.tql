@@ -1,0 +1,5 @@
+// The spread supplies all fields except the ones after it.
+from {x: {a: 1, b: 2}, y: 3}, {x: {a: 2}, y: 4}, {x: null, y: 5}, {x: 5, y: 6}, {y: 7}
+z = {...x, b: move y}
+where z.a == 1 or z.a == null
+where z.b > 3 or z.a == 1

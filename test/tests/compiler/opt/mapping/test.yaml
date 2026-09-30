@@ -1,0 +1,3 @@
+fixtures: [packages]
+package-dirs:
+  - ../../../../inputs/package-roots/pushdown-mapping

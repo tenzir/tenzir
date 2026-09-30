@@ -20,7 +20,21 @@
          ]
        },
        filter: [
-         
+-        
++        binary_expr {
++          left: field_access {
++            left: root_field {
++              id: `a` @ [1]:14..15 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `x` @ [1]:24..25 from 0,
++            location: [1]:14..25 from 0
++          },
++          op: "gt",
++          right: constant int64 1 @ [1]:28..29 from 0,
++          location: [1]:22..29 from 0
++        }
        ],
 -      order: "ordered"
 +      order: "ordered",
@@ -67,36 +81,10 @@
        ],
        order: "ordered"
      },
-     where_ir {
-       op: {
-         path: [
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:16..21 from 0
-+          
-         ],
--        ref: std::where/op
-+        ref: unresolved
-       },
-       args: [
--        expression binary_expr {
-+        Incomplete binary_expr {
-           left: field_access {
-             left: root_field {
-               id: `a` @ [1]:22..23 from 0,
-               has_question_mark: false
-             },
-             has_question_mark: false,
-             name: `x` @ [1]:24..25 from 0,
-             location: [1]:22..25 from 0
-           },
-           op: "gt",
-           right: constant int64 1 @ [1]:28..29 from 0,
-           location: [1]:22..29 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
-+    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
@@ -108,14 +96,33 @@
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        ref: std::where/op
 +        named_args: [
 +          
 +        ]
-+      },
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `a` @ [1]:22..23 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `x` @ [1]:24..25 from 0,
+-            location: [1]:22..25 from 0
+-          },
+-          op: "gt",
+-          right: constant int64 1 @ [1]:28..29 from 0,
+-          location: [1]:22..29 from 0
+-        }
 +      filter: [
 +        
-+      ],
+       ],
+-      named_args: [
+-        
+-      ]
 +      order: "ordered"
      }
    ]

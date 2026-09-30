@@ -1,0 +1,16 @@
+warning: event does not have field
+ --> tests/operators/set/filter_rewrite/move.tql:3:10
+  |
+3 | y = move x
+  |          ~
+  |
+  = hint: append `?` to suppress this warning
+{
+  y: 1,
+}
+{
+  y: null,
+}
+{
+  y: null,
+}

@@ -20,9 +20,25 @@
          ]
        },
        filter: [
-         
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `x` @ [1]:15..16 from 0,
++              has_question_mark: false
++            },
++            op: "add",
++            right: constant int64 1 @ [1]:19..20 from 0,
++            location: [1]:15..20 from 0
++          },
++          op: "gt",
++          right: constant int64 1 @ [1]:31..32 from 0,
++          location: [1]:27..32 from 0
++        }
        ],
-       order: "ordered"
+-      order: "ordered"
++      order: "ordered",
++      limit: 5
      },
      SetIr {
        assignments: [
@@ -45,31 +61,28 @@
        ],
        order: "ordered"
      },
-     where_ir {
-       op: {
-         path: [
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:21..26 from 0
-+          
-         ],
+-        ],
 -        ref: std::where/op
-+        ref: unresolved
-       },
-       args: [
+-      },
+-      args: [
 -        expression binary_expr {
-+        Incomplete binary_expr {
-           left: root_field {
-             id: `y` @ [1]:27..28 from 0,
-             has_question_mark: false
-           },
-           op: "gt",
-           right: constant int64 1 @ [1]:31..32 from 0,
-           location: [1]:27..32 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
-     },
+-          left: root_field {
+-            id: `y` @ [1]:27..28 from 0,
+-            has_question_mark: false
+-          },
+-          op: "gt",
+-          right: constant int64 1 @ [1]:31..32 from 0,
+-          location: [1]:27..32 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
      GenericIr {
        desc: "head",
        store: {

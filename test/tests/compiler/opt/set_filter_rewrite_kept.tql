@@ -1,0 +1,14 @@
+// Predicates without an exact equivalent stay behind their assignment, and so
+// does the limit.
+export
+t = now()
+where t > 2020-01-01
+z = {a: y, ...x}
+where z.a == 1
+r.b = 1
+where r == {b: 1}
+v = x
+where xs.where(x => x == v).length() > 0
+@internal = flag
+where @internal
+head 5

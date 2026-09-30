@@ -10,6 +10,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -27,6 +28,7 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/set.hpp"
 
 #include <algorithm>
@@ -720,21 +722,291 @@ auto ir::SetIr::spawn(element_type_tag input) const -> AnyOperator {
 
 namespace {
 
-auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
-  -> Option<std::vector<ast::field_path>> {
-  auto result = std::vector<ast::field_path>{};
-  for (const auto& assignment : assignments) {
-    auto [resolved, moved_fields] = resolve_move_keyword(assignment);
-    std::ranges::move(moved_fields, std::back_inserter(result));
-    auto left = ast::selector::try_from(resolved.left);
-    const auto* path = left ? try_as<ast::field_path>(&*left) : nullptr;
-    if (path == nullptr or path->path().empty()) {
+using Segments = std::span<ast::field_path::segment const>;
+
+/// Returns whether `prefix` is a prefix of `path`, comparing segment names.
+auto is_prefix(Segments prefix, Segments path) -> bool {
+  if (prefix.size() > path.size()) {
+    return false;
+  }
+  auto const name = [](ast::field_path::segment const& segment) {
+    return std::string_view{segment.id.name};
+  };
+  return std::ranges::equal(prefix, path.first(prefix.size()), {}, name, name);
+}
+
+auto make_null(location source) -> ast::expression {
+  return ast::constant{caf::none, source};
+}
+
+/// Appends field accesses for `path` to `base`.
+auto append_path(ast::expression base, Segments path) -> ast::expression {
+  for (auto const& segment : path) {
+    base = ast::field_access{
+      std::move(base),
+      segment.id.location,
+      segment.has_question_mark,
+      segment.id,
+    };
+  }
+  return base;
+}
+
+auto access_field(ast::expression const& base, Segments path)
+  -> Option<ast::expression>;
+
+/// Returns an expression for the field `path` of the value of a record
+/// literal, or `None` if the value depends on the evaluator.
+auto access_record_field(ast::record const& record, Segments path)
+  -> Option<ast::expression> {
+  TENZIR_ASSERT(not path.empty());
+  auto const& name = path.front().id.name;
+  auto field = Option<size_t>{};
+  auto spread = Option<size_t>{};
+  for (auto [index, item] : detail::enumerate(record.items)) {
+    if (auto* x = try_as<ast::record::field>(item)) {
+      if (x->name.name == name) {
+        field = index;
+      }
+      continue;
+    }
+    if (spread) {
+      // Several spreads do not define a single field order.
       return None{};
     }
-    result.push_back(*path);
+    spread = index;
   }
-  return result;
+  if (field) {
+    // The legacy evaluator applies the items in order, but the Nova evaluator
+    // applies literal fields over the spread. Both agree only if the spread
+    // comes first.
+    if (spread and *spread > *field) {
+      return None{};
+    }
+    return access_field(as<ast::record::field>(record.items[*field]).expr,
+                        path.subspan(1));
+  }
+  if (spread) {
+    return access_field(as<ast::spread>(record.items[*spread]).expr, path);
+  }
+  // Reading a field that the literal does not define yields `null`.
+  return make_null(path.front().id.location);
 }
+
+/// Returns an expression for the field `path` of the value of `base`, or
+/// `None` if there is no exact equivalent.
+auto access_field(ast::expression const& base, Segments path)
+  -> Option<ast::expression> {
+  if (path.empty()) {
+    return base;
+  }
+  if (auto* record = try_as<ast::record>(base)) {
+    return access_record_field(*record, path);
+  }
+  if (is<ast::this_>(base)) {
+    auto const& first = path.front();
+    return append_path(ast::root_field{first.id, first.has_question_mark},
+                       path.subspan(1));
+  }
+  if (auto* constant = try_as<ast::constant>(base);
+      constant and is<caf::none_t>(constant->value)) {
+    return make_null(path.front().id.location);
+  }
+  return append_path(base, path);
+}
+
+/// Detects a `move` that `resolve_move_keyword` left in place, such as one
+/// within a lambda.
+class MoveFinder final : public ast::visitor<MoveFinder> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::unary_expr& x) -> void {
+    found = found or x.op == ast::unary_op::move;
+    enter(x);
+  }
+
+  bool found = false;
+};
+
+/// Resolves the fields and metadata of a `set`'s output to expressions over
+/// its input.
+///
+/// Every right-hand side reads the original input. The fields that a `move`
+/// reads are dropped before the first assignment, and the assignments then
+/// apply in order. So the last assignment whose target covers a field
+/// determines the field's value.
+class SetRewrite {
+public:
+  explicit SetRewrite(std::vector<ast::assignment> const& assignments)
+    : registry_{global_registry()} {
+    for (auto const& assignment : assignments) {
+      auto [resolved, moved] = resolve_move_keyword(assignment);
+      auto target = make_assignment_target(resolved.left);
+      auto entry = Entry{.right = std::move(resolved.right)};
+      if (not target) {
+        // Substitution validates the targets, so this is merely defensive.
+        entry.dynamic = true;
+        entry.path.emplace();
+      } else if (auto* selector = try_as<ast::selector>(&*target)) {
+        if (auto* path = try_as<ast::field_path>(&*selector)) {
+          entry.path.emplace(path->path().begin(), path->path().end());
+        } else {
+          entry.meta = as<ast::meta>(*selector).kind;
+        }
+      } else {
+        // A dynamic target writes a computed field below its static prefix.
+        entry.dynamic = true;
+        entry.path.emplace();
+        for (auto const& segment : as<DynamicPath>(*target).segments) {
+          auto* field = try_as<ast::field_path::segment>(segment);
+          if (not field) {
+            break;
+          }
+          entry.path->push_back(*field);
+        }
+      }
+      for (auto& field : moved) {
+        moved_.push_back(Moved{
+          .path = {field.path().begin(), field.path().end()},
+          // A dynamic assignment only moves for rows with valid indexes, and
+          // `move this` does not drop anything.
+          .conditional = entry.dynamic or field.path().empty(),
+        });
+      }
+      entries_.push_back(std::move(entry));
+    }
+  }
+
+  auto resolve_meta(ast::meta const& meta) const -> Option<ast::expression> {
+    for (auto const& entry : std::views::reverse(entries_)) {
+      if (entry.meta == meta.kind) {
+        return assigned_meta(meta, entry.right);
+      }
+    }
+    return ast::expression{meta};
+  }
+
+  auto resolve(ast::field_path const& field) const -> Option<ast::expression> {
+    auto path = field.path();
+    for (auto const& entry : std::views::reverse(entries_)) {
+      if (not entry.path) {
+        continue;
+      }
+      auto target = Segments{*entry.path};
+      if (entry.dynamic) {
+        if (is_prefix(target, path) or is_prefix(path, target)) {
+          return None{};
+        }
+        continue;
+      }
+      if (is_prefix(target, path)) {
+        // An assignment to `this` turns values other than records into empty
+        // records, so only its fields have a direct equivalent.
+        if (path.empty()) {
+          return None{};
+        }
+        auto result = access_field(entry.right, path.subspan(target.size()));
+        if (not result or not substitutable(*result)) {
+          return None{};
+        }
+        return result;
+      }
+      if (is_prefix(path, target)) {
+        // The assignment changes part of the field.
+        return None{};
+      }
+    }
+    auto dropped = std::ranges::any_of(moved_, [&](Moved const& moved) {
+      return not moved.conditional and is_prefix(moved.path, path);
+    });
+    if (dropped) {
+      return make_null(field.get_location());
+    }
+    auto overlaps = std::ranges::any_of(moved_, [&](Moved const& moved) {
+      return is_prefix(moved.path, path) or is_prefix(path, moved.path);
+    });
+    if (overlaps) {
+      return None{};
+    }
+    return field.inner();
+  }
+
+private:
+  struct Entry {
+    /// The target path, or its static prefix for a dynamic target. `None` for
+    /// metadata targets.
+    Option<std::vector<ast::field_path::segment>> path = None{};
+    /// The metadata target, if any.
+    Option<ast::meta_kind> meta = None{};
+    bool dynamic = false;
+    ast::expression right = {};
+  };
+
+  /// Returns the value of `meta` after assigning `right` to it, if both
+  /// executors agree on it for every event. Only constants qualify, because
+  /// the executors keep or reset metadata on values of the wrong type.
+  static auto assigned_meta(ast::meta const& meta, ast::expression const& right)
+    -> Option<ast::expression> {
+    auto const* constant = try_as<ast::constant>(right);
+    if (not constant) {
+      return None{};
+    }
+    auto result = *constant;
+    result.source = meta.source;
+    switch (meta.kind) {
+      case ast::meta::name: {
+        // A value other than a string keeps the previous name. The executors
+        // disagree on an empty name.
+        auto const* name = try_as<std::string>(constant->value);
+        if (not name or name->empty()) {
+          return None{};
+        }
+        return result;
+      }
+      case ast::meta::import_time: {
+        // A value other than a time resets the import time to `null`, and so
+        // does the epoch, which marks `null`.
+        auto const* value = try_as<time>(constant->value);
+        if (not value or *value == time{}) {
+          return make_null(meta.source);
+        }
+        return result;
+      }
+      case ast::meta::internal:
+        // A value other than a bool keeps the previous flag.
+        if (not is<bool>(constant->value)) {
+          return None{};
+        }
+        return result;
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  struct Moved {
+    std::vector<ast::field_path::segment> path;
+    bool conditional = false;
+  };
+
+  /// Returns whether the predicate may evaluate `expr` in place of the
+  /// assignment, which requires the same value and no side effects.
+  auto substitutable(ast::expression const& expr) const -> bool {
+    if (not expr.is_deterministic(*registry_)) {
+      return false;
+    }
+    auto finder = MoveFinder{};
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    finder.visit(const_cast<ast::expression&>(expr));
+    return not finder.found;
+  }
+
+  std::shared_ptr<registry const> registry_;
+  std::vector<Entry> entries_;
+  std::vector<Moved> moved_;
+};
 
 /// Computes the projection to push upstream of a `set` from the projection
 /// that downstream needs. Assignments are walked in reverse: a field that
@@ -799,15 +1071,17 @@ auto projection_for_set(const std::vector<ast::assignment>& assignments,
 auto ir::SetIr::optimize(ir::OptimizeRequest req,
                          const ir::OptimizeCtx& octx) && -> ir::OptimizeResult {
   TENZIR_UNUSED(octx);
-  auto filter = std::move(req.filter);
   order_ = weaker_event_order(order_, req.order);
-  auto touched_paths = touched_fields_for_set(assignments_);
-  auto split = touched_paths
-                 ? ir::split_filter_by_dependents(
-                     std::move(filter),
-                     ast::ExprRefs{.field_paths = std::move(*touched_paths)})
-                 : ir::split_filter_result{{}, std::move(filter)};
-  auto [filter_upstream, filter_self] = std::move(split);
+  // Predicates that we can rewrite over our input move upstream.
+  auto rewrite = SetRewrite{assignments_};
+  auto [filter_upstream, filter_self] = ir::split_filter_by_substitution(
+    std::move(req.filter),
+    [&](ast::field_path const& field) {
+      return rewrite.resolve(field);
+    },
+    [&](ast::meta const& meta) {
+      return rewrite.resolve_meta(meta);
+    });
   // A carried limit counts events after the whole filter chain. If we keep
   // predicates behind us, upstream can no longer honor it.
   auto limit = filter_self.empty() ? req.limit : Option<uint64_t>{};

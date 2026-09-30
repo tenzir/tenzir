@@ -18,6 +18,25 @@
        ],
        self: [1]:0..4 from 0
      },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: constant int64 2 @ [1]:23..24 from 0,
++          op: "eq",
++          right: constant int64 2 @ [1]:37..38 from 0,
++          location: [1]:32..38 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
      SetIr {
        assignments: [
          {
@@ -36,32 +55,29 @@
          }
        ],
 -      order: "ordered"
-+      order: "unordered"
-     },
-     where_ir {
-       op: {
-         path: [
+-    },
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:26..31 from 0
-+          
-         ],
+-        ],
 -        ref: std::where/op
-+        ref: unresolved
-       },
-       args: [
+-      },
+-      args: [
 -        expression binary_expr {
-+        Incomplete binary_expr {
-           left: root_field {
-             id: `x` @ [1]:32..33 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: constant int64 2 @ [1]:37..38 from 0,
-           location: [1]:32..38 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
+-          left: root_field {
+-            id: `x` @ [1]:32..33 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 2 @ [1]:37..38 from 0,
+-          location: [1]:32..38 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
++      order: "unordered"
      },
      GenericIr {
        desc: "discard",

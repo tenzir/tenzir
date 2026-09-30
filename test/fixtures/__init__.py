@@ -32,6 +32,7 @@ from . import nic  # noqa: F401
 from . import openai_responses  # noqa: F401
 from . import otlp_grpc  # noqa: F401
 from . import package_http  # noqa: F401
+from . import packages  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401
@@ -86,6 +87,7 @@ __all__ = [
     "nic",
     "openai_responses",
     "otlp_grpc",
+    "packages",
     "platform_ws",
     "prometheus",
     "prometheus_remote_write_mock",

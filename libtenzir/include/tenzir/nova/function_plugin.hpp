@@ -105,6 +105,12 @@ public:
   /// e.g. `split(x:string, pattern:string, [max=int, reverse=bool])`.
   auto usage(std::string_view name) const -> std::string;
 
+  /// Returns, for every argument of `call`, whether the function reads it as
+  /// a field path rather than evaluating it, like the fields that
+  /// `drop_null_fields(x, a.b)` removes from `x`.
+  auto selector_arguments(ast::function_call const& call) const
+    -> std::vector<bool>;
+
 private:
   template <class Args, FunctionImpl<Args> Impl>
   friend class FunctionDescriber;
@@ -126,6 +132,8 @@ private:
     std::string name;
     std::string type;
     Prepare prepare;
+    /// Whether the argument is a field path rather than a value.
+    bool selector = false;
   };
 
   struct Named {
@@ -133,6 +141,8 @@ private:
     std::string type;
     bool required = false;
     Prepare prepare;
+    /// Whether the argument is a field path rather than a value.
+    bool selector = false;
   };
 
   std::function<auto()->Any> make_args_;
@@ -385,7 +395,7 @@ public:
   auto positional(std::string name, T Args::* ptr, std::string type = "")
     -> void {
     add_positional(std::move(name), type_or_default<T>(std::move(type)),
-                   prepare_member(ptr), false);
+                   prepare_member(ptr), false, is_selector<T>);
   }
 
   /// Registers an optional constant argument.
@@ -394,7 +404,7 @@ public:
   positional(std::string name, Option<T> Args::* ptr, std::string type = "")
     -> void {
     add_positional(std::move(name), type_or_default<T>(std::move(type)),
-                   prepare_member(ptr), true);
+                   prepare_member(ptr), true, is_selector<T>);
   }
 
   /// Registers an optional constant argument whose member keeps its default
@@ -404,7 +414,7 @@ public:
   optional_positional(std::string name, T Args::* ptr, std::string type = "")
     -> void {
     add_positional(std::move(name), type_or_default<T>(std::move(type)),
-                   prepare_member(ptr), true);
+                   prepare_member(ptr), true, is_selector<T>);
   }
 
   /// Registers a variadic constant argument that requires at least one value.
@@ -413,7 +423,7 @@ public:
   variadic(std::string name, std::vector<T> Args::* ptr, std::string type = "")
     -> void {
     add_variadic(std::move(name), type_or_default<T>(std::move(type)),
-                 prepare_element(ptr), false);
+                 prepare_element(ptr), false, is_selector<T>);
   }
 
   /// Registers a variadic constant argument that accepts zero or more values.
@@ -421,7 +431,7 @@ public:
   auto optional_variadic(std::string name, std::vector<T> Args::* ptr,
                          std::string type = "") -> void {
     add_variadic(std::move(name), type_or_default<T>(std::move(type)),
-                 prepare_element(ptr), true);
+                 prepare_element(ptr), true, is_selector<T>);
   }
 
   /// Registers a required named constant argument. A bare `T` member makes
@@ -430,7 +440,7 @@ public:
   template <ArgType T>
   auto named(std::string name, T Args::* ptr, std::string type = "") -> void {
     add_named({std::move(name)}, type_or_default<T>(std::move(type)),
-              prepare_member(ptr), true);
+              prepare_member(ptr), true, is_selector<T>);
   }
 
   /// Registers a required named constant argument with multiple aliases. A
@@ -440,7 +450,7 @@ public:
   named(std::vector<std::string> names, T Args::* ptr, std::string type = "")
     -> void {
     add_named(std::move(names), type_or_default<T>(std::move(type)),
-              prepare_member(ptr), true);
+              prepare_member(ptr), true, is_selector<T>);
   }
 
   /// Registers an optional named constant argument. An `Option<T>` member
@@ -449,7 +459,7 @@ public:
   auto named(std::string name, Option<T> Args::* ptr, std::string type = "")
     -> void {
     add_named({std::move(name)}, type_or_default<T>(std::move(type)),
-              prepare_member(ptr), false);
+              prepare_member(ptr), false, is_selector<T>);
   }
 
   /// Registers an optional named constant argument whose member keeps its
@@ -458,7 +468,7 @@ public:
   auto named_optional(std::string name, T Args::* ptr, std::string type = "")
     -> void {
     add_named({std::move(name)}, type_or_default<T>(std::move(type)),
-              prepare_member(ptr), false);
+              prepare_member(ptr), false, is_selector<T>);
   }
 
   /// Registers an optional boolean flag.
@@ -594,8 +604,11 @@ private:
     };
   }
 
+  template <class T>
+  static constexpr auto is_selector = std::same_as<T, ast::field_path>;
+
   auto add_positional(std::string name, std::string type, Prepare prepare,
-                      bool optional) -> void {
+                      bool optional, bool selector = false) -> void {
     if (desc_.variadic_index_) {
       panic("cannot add positional argument after variadic argument");
     }
@@ -607,11 +620,11 @@ private:
       panic("cannot have required positional after optional positional");
     }
     desc_.positional_.push_back(
-      {std::move(name), std::move(type), std::move(prepare)});
+      {std::move(name), std::move(type), std::move(prepare), selector});
   }
 
   auto add_variadic(std::string name, std::string type, Prepare prepare,
-                    bool optional) -> void {
+                    bool optional, bool selector = false) -> void {
     if (desc_.variadic_index_) {
       panic("cannot have multiple variadic positional arguments");
     }
@@ -624,14 +637,15 @@ private:
     }
     desc_.variadic_index_ = desc_.positional_.size();
     desc_.positional_.push_back(
-      {std::move(name), type + "...", std::move(prepare)});
+      {std::move(name), type + "...", std::move(prepare), selector});
   }
 
   auto add_named(std::vector<std::string> names, std::string type,
-                 Prepare prepare, bool required) -> void {
+                 Prepare prepare, bool required, bool selector = false)
+    -> void {
     TENZIR_ASSERT(not names.empty());
-    desc_.named_.push_back(
-      {std::move(names), std::move(type), required, std::move(prepare)});
+    desc_.named_.push_back({std::move(names), std::move(type), required,
+                            std::move(prepare), selector});
   }
 
   FunctionDescription desc_;

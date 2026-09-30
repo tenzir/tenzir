@@ -1,0 +1,27 @@
+---
+description: |
+  Normalizes a successful Windows logon (EID 4624) to OCSF Authentication, in
+  the style of the library mappings: wrap the event, move fields into record
+  literals, and unwrap the OCSF event. The mapping lives in a single file so
+  that source locations stay deterministic.
+args:
+  positional:
+    - name: event
+      description: The Windows event.
+      type: field
+      default: this
+  named:
+    - name: into
+      description: The field that receives the OCSF event.
+      type: field
+      default: this
+---
+
+$into = {source: $event, ocsf: {}}
+$into.ocsf.class_uid = 3002
+$into.ocsf.src_endpoint = {
+  ip: (move $into.source.EventData.IpAddress).ip(),
+  port: (move $into.source.EventData.IpPort).int(),
+}
+$into.ocsf.unmapped = move $into.source
+$into = move $into.ocsf

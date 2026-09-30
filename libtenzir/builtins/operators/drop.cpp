@@ -117,18 +117,48 @@ public:
       }
       return {};
     });
-    // Fields other than the dropped ones pass through unchanged, so the
-    // downstream projection remains valid upstream. The dropped fields stay
-    // projected: `drop` resolves them and warns when they are missing, so
-    // upstream must still materialize them.
-    return d.field_local(
-      [=](DescribeCtx& ctx) -> Option<std::vector<ast::field_path>> {
-        auto touched_fields = std::vector<ast::field_path>{};
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto dropped = std::vector<ast::field_path>{};
         for (auto& field : ctx.get_all(fields)) {
           TENZIR_ASSERT(field);
-          touched_fields.push_back(std::move(*field));
+          dropped.push_back(std::move(*field));
         }
-        return touched_fields;
+        // Fields other than the dropped ones pass through unchanged, so the
+        // downstream projection remains valid upstream. The dropped fields stay
+        // projected: `drop` resolves them and warns when they are missing, so
+        // upstream must still materialize them.
+        auto projection = std::move(req.projection);
+        for (auto const& path : dropped) {
+          ir::add_to_projection(projection, path);
+        }
+        // A dropped field reads as `null` downstream. A record that contains a
+        // dropped field has no equivalent upstream.
+        auto split = ir::split_filter_by_substitution(
+          std::move(req.filter),
+          [&](ast::field_path const& field) -> Option<ast::expression> {
+            for (auto const& path : dropped) {
+              if (ir::is_field_path_prefix(path, field)) {
+                return ast::constant{caf::none, field.get_location()};
+              }
+            }
+            for (auto const& path : dropped) {
+              if (ir::is_field_path_prefix(field, path)) {
+                return None{};
+              }
+            }
+            return field.inner();
+          });
+        // A carried limit counts events after the whole filter chain. If we
+        // keep predicates behind us, upstream can no longer honor it.
+        auto limit = split.dependent.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(split.independent),
+          .filter_self = std::move(split.dependent),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
       });
   }
 };

@@ -52,6 +52,22 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   return result;
 }
 
+auto ir::split_filter_by_substitution(OptimizeFilter filter,
+                                      ast::FieldSubstitution const& fields,
+                                      ast::MetaSubstitution const& meta)
+  -> split_filter_result {
+  auto const reg = global_registry();
+  auto result = split_filter_result{};
+  for (auto& expr : filter) {
+    if (auto substituted = ast::substitute_refs(expr, *reg, fields, meta)) {
+      result.independent.push_back(std::move(*substituted));
+    } else {
+      result.dependent.push_back(std::move(expr));
+    }
+  }
+  return result;
+}
+
 auto ir::is_field_path_prefix(const ast::field_path& prefix,
                               const ast::field_path& path) -> bool {
   const auto lhs = prefix.path();

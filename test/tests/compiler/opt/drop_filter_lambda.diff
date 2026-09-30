@@ -36,6 +36,66 @@
          }
        ],
        self: [1]:0..4 from 0
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete unary_expr {
++          op: "not_",
++          expr: function_call {
++            fn: {
++              path: [
++                `is_empty` @ [1]:81..89 from 0
++              ],
++              ref: std::is_empty/fn
++            },
++            args: [
++              function_call {
++                fn: {
++                  path: [
++                    `where` @ [1]:56..61 from 0
++                  ],
++                  ref: std::where/fn
++                },
++                args: [
++                  root_field {
++                    id: `xs` @ [1]:53..55 from 0,
++                    has_question_mark: false
++                  },
++                  lambda_expr {
++                    params: [
++                      `x` @ [1]:62..63 from 0
++                    ],
++                    body: binary_expr {
++                      left: root_field {
++                        id: `x` @ [1]:67..68 from 0,
++                        has_question_mark: false
++                      },
++                      op: "eq",
++                      right: constant none_t {} @ [1]:72..79 from 0,
++                      location: [1]:67..79 from 0
++                    },
++                    location: [1]:62..79 from 0
++                  }
++                ],
++                method: true,
++                location: [1]:53..80 from 0
++              }
++            ],
++            method: true,
++            location: [1]:53..91 from 0
++          },
++          location: [1]:49..91 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
      },
      GenericIr {
        desc: "drop",
@@ -79,77 +139,10 @@
        ],
        order: "ordered"
      },
-     where_ir {
-       op: {
-         path: [
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:43..48 from 0
-+          
-         ],
--        ref: std::where/op
-+        ref: unresolved
-       },
-       args: [
--        expression unary_expr {
-+        Incomplete unary_expr {
-           op: "not_",
-           expr: function_call {
-             fn: {
-               path: [
-                 `is_empty` @ [1]:81..89 from 0
-               ],
-               ref: std::is_empty/fn
-             },
-             args: [
-               function_call {
-                 fn: {
-                   path: [
-                     `where` @ [1]:56..61 from 0
-                   ],
-                   ref: std::where/fn
-                 },
-                 args: [
-                   root_field {
-                     id: `xs` @ [1]:53..55 from 0,
-                     has_question_mark: false
-                   },
-                   lambda_expr {
-                     params: [
-                       `x` @ [1]:62..63 from 0
-                     ],
-                     body: binary_expr {
-                       left: root_field {
-                         id: `x` @ [1]:67..68 from 0,
-                         has_question_mark: false
-                       },
-                       op: "eq",
-                       right: field_access {
-                         left: root_field {
-                           id: `foo` @ [1]:72..75 from 0,
-                           has_question_mark: false
-                         },
-                         has_question_mark: false,
-                         name: `bar` @ [1]:76..79 from 0,
-                         location: [1]:72..79 from 0
-                       },
-                       location: [1]:67..79 from 0
-                     },
-                     location: [1]:62..79 from 0
-                   }
-                 ],
-                 method: true,
-                 location: [1]:53..80 from 0
-               }
-             ],
-             method: true,
-             location: [1]:53..91 from 0
-           },
-           location: [1]:49..91 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
-+    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
@@ -161,14 +154,74 @@
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        ref: std::where/op
 +        named_args: [
 +          
 +        ]
-+      },
+       },
+-      args: [
+-        expression unary_expr {
+-          op: "not_",
+-          expr: function_call {
+-            fn: {
+-              path: [
+-                `is_empty` @ [1]:81..89 from 0
+-              ],
+-              ref: std::is_empty/fn
+-            },
+-            args: [
+-              function_call {
+-                fn: {
+-                  path: [
+-                    `where` @ [1]:56..61 from 0
+-                  ],
+-                  ref: std::where/fn
+-                },
+-                args: [
+-                  root_field {
+-                    id: `xs` @ [1]:53..55 from 0,
+-                    has_question_mark: false
+-                  },
+-                  lambda_expr {
+-                    params: [
+-                      `x` @ [1]:62..63 from 0
+-                    ],
+-                    body: binary_expr {
+-                      left: root_field {
+-                        id: `x` @ [1]:67..68 from 0,
+-                        has_question_mark: false
+-                      },
+-                      op: "eq",
+-                      right: field_access {
+-                        left: root_field {
+-                          id: `foo` @ [1]:72..75 from 0,
+-                          has_question_mark: false
+-                        },
+-                        has_question_mark: false,
+-                        name: `bar` @ [1]:76..79 from 0,
+-                        location: [1]:72..79 from 0
+-                      },
+-                      location: [1]:67..79 from 0
+-                    },
+-                    location: [1]:62..79 from 0
+-                  }
+-                ],
+-                method: true,
+-                location: [1]:53..80 from 0
+-              }
+-            ],
+-            method: true,
+-            location: [1]:53..91 from 0
+-          },
+-          location: [1]:49..91 from 0
+-        }
 +      filter: [
 +        
-+      ],
+       ],
+-      named_args: [
+-        
+-      ]
 +      order: "ordered"
      }
    ]

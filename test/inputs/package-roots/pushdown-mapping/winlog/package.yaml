@@ -1,0 +1,3 @@
+id: winlog
+name: Windows Logon Mapping
+description: A Windows logon to OCSF mapping in the style of the library packages.

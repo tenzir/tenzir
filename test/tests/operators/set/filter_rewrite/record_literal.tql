@@ -1,0 +1,5 @@
+// A path that the record literal does not define reads as `null`.
+from {a: "203.0.113.7", b: 80}, {a: "198.51.100.1"}, {b: 443}, {a: null, b: null}
+src_endpoint = {ip: (move a).ip(), port: move b}
+where src_endpoint.hostname == null
+where src_endpoint.ip == 203.0.113.7 or src_endpoint.port == null

@@ -1,0 +1,15 @@
+// Every predicate moves in front of the assignment it reads.
+export
+y = x
+where y == 42
+src_endpoint = {ip: move a, port: move b}
+where src_endpoint.ip == 203.0.113.7 and src_endpoint.hostname == null
+where a == null
+z = {...w, b: y}
+where z.a == 1 and z.b == 2
+r.b = 1
+where r.c == 2
+v = x
+where xs.where(e => e == v).length() > 0
+set @name = "ocsf.authentication", @internal = true
+where @name == "ocsf.authentication" and @import_time != null and @internal

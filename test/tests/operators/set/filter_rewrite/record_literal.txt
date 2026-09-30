@@ -1,0 +1,35 @@
+warning: event does not have field
+ --> tests/operators/set/filter_rewrite/record_literal.tql:3:47
+  |
+3 | src_endpoint = {ip: (move a).ip(), port: move b}
+  |                                               ~
+  |
+  = hint: did you mean `a`?
+  = hint: append `?` to suppress this warning
+
+warning: event does not have field
+ --> tests/operators/set/filter_rewrite/record_literal.tql:3:27
+  |
+3 | src_endpoint = {ip: (move a).ip(), port: move b}
+  |                           ~
+  |
+  = hint: did you mean `b`?
+  = hint: append `?` to suppress this warning
+{
+  src_endpoint: {
+    ip: 203.0.113.7,
+    port: 80,
+  },
+}
+{
+  src_endpoint: {
+    ip: 198.51.100.1,
+    port: null,
+  },
+}
+{
+  src_endpoint: {
+    ip: null,
+    port: null,
+  },
+}

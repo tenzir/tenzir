@@ -1,0 +1,30 @@
+warning: record does not have field
+ --> tests/operators/set/filter_rewrite/drop.tql:5:7
+  |
+5 | where foo.baz != 3
+  |       ~~~
+  ⋮
+5 | where foo.baz != 3
+  |           --- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: event does not have field
+ --> tests/operators/set/filter_rewrite/drop.tql:5:7
+  |
+5 | where foo.baz != 3
+  |       ~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  foo: {
+    baz: 2,
+  },
+}
+{
+  foo: null,
+}
+{
+  foo: 4,
+}
+{}

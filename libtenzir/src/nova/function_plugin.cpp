@@ -91,6 +91,32 @@ auto _::default_type_name(type_kind kind) -> std::string {
     });
 }
 
+auto FunctionDescription::selector_arguments(
+  ast::function_call const& call) const -> std::vector<bool> {
+  // This mirrors how `instantiate` matches arguments to parameters.
+  auto result = std::vector<bool>{};
+  result.reserve(call.args.size());
+  auto positional_idx = size_t{0};
+  for (auto const& arg : call.args) {
+    if (auto const* assignment = try_as<ast::assignment>(arg)) {
+      auto const* field = try_as<ast::root_field>(assignment->left);
+      auto it = std::ranges::find_if(named_, [&](Named const& candidate) {
+        return field and std::ranges::contains(candidate.names, field->id.name);
+      });
+      result.push_back(it != named_.end() and it->selector);
+      continue;
+    }
+    auto is_variadic = variadic_index_ and positional_idx == *variadic_index_;
+    result.push_back(positional_idx < positional_.size()
+                     and positional_[positional_idx].selector);
+    // Everything from the variadic position onwards belongs to it.
+    if (not is_variadic) {
+      ++positional_idx;
+    }
+  }
+  return result;
+}
+
 auto FunctionDescription::usage(std::string_view name) const -> std::string {
   auto result = std::string{};
   auto has_previous = false;

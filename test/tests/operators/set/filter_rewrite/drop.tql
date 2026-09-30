@@ -1,0 +1,5 @@
+// A dropped field reads as `null`.
+from {foo: {bar: 1, baz: 2}}, {foo: {baz: 3}}, {foo: null}, {foo: 4}, {}
+drop foo.bar
+where foo.bar == null and foo.bar.qux == null
+where foo.baz != 3

@@ -1,0 +1,12 @@
+{
+  class_uid: 3002,
+  src_endpoint: {
+    ip: 203.0.113.7,
+    port: 49152,
+  },
+  unmapped: {
+    EventData: {
+      TargetUserName: "alice",
+    },
+  },
+}

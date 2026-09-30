@@ -1,0 +1,290 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `ip` @ [2]:674..676 from 1
++              ],
++              ref: std::ip/fn
++            },
++            args: [
++              field_access {
++                left: root_field {
++                  id: `EventData` @ [2]:653..662 from 1,
++                  has_question_mark: false
++                },
++                has_question_mark: false,
++                name: `IpAddress` @ [2]:663..672 from 1,
++                location: [2]:653..672 from 1
++              }
++            ],
++            method: true,
++            location: [2]:635..678 from 1
++          },
++          op: "eq",
++          right: constant ip 203.0.113.7 @ [1]:56..67 from 0,
++          location: [1]:37..67 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [2]:404..408 from 1,
+           right: record {
+             begin: [2]:545..546 from 1,
+             items: [
+               field {
+                 name: `source` @ [2]:546..552 from 1,
+                 expr: this_ [2]:404..408 from 1
+               },
+               field {
+                 name: `ocsf` @ [2]:562..566 from 1,
+                 expr: record {
+                   begin: [2]:568..569 from 1,
+                   items: [
+                     
+                   ],
+                   end: [2]:569..570 from 1
+                 }
+               }
+             ],
+             end: [2]:570..571 from 1
+           },
+           location: [2]:537..571 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: field_access {
+               left: this_ [2]:404..408 from 1,
+               has_question_mark: false,
+               name: `ocsf` @ [2]:578..582 from 1,
+               location: [2]:572..582 from 1
+             },
+             has_question_mark: false,
+             name: `class_uid` @ [2]:583..592 from 1,
+             location: [2]:572..592 from 1
+           },
+           right: constant int64 3002 @ [2]:595..599 from 1,
+           location: [2]:572..599 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: field_access {
+               left: this_ [2]:404..408 from 1,
+               has_question_mark: false,
+               name: `ocsf` @ [2]:606..610 from 1,
+               location: [2]:600..610 from 1
+             },
+             has_question_mark: false,
+             name: `src_endpoint` @ [2]:611..623 from 1,
+             location: [2]:600..623 from 1
+           },
+           right: record {
+             begin: [2]:626..627 from 1,
+             items: [
+               field {
+                 name: `ip` @ [2]:630..632 from 1,
+                 expr: function_call {
+                   fn: {
+                     path: [
+                       `ip` @ [2]:674..676 from 1
+                     ],
+                     ref: std::ip/fn
+                   },
+                   args: [
+                     unary_expr {
+                       op: "move",
+                       expr: field_access {
+                         left: field_access {
+                           left: field_access {
+                             left: this_ [2]:404..408 from 1,
+                             has_question_mark: false,
+                             name: `source` @ [2]:646..652 from 1,
+                             location: [2]:640..652 from 1
+                           },
+                           has_question_mark: false,
+                           name: `EventData` @ [2]:653..662 from 1,
+                           location: [2]:640..662 from 1
+                         },
+                         has_question_mark: false,
+                         name: `IpAddress` @ [2]:663..672 from 1,
+                         location: [2]:640..672 from 1
+                       },
+                       location: [2]:635..672 from 1
+                     }
+                   ],
+                   method: true,
+                   location: [2]:635..678 from 1
+                 }
+               },
+               field {
+                 name: `port` @ [2]:682..686 from 1,
+                 expr: function_call {
+                   fn: {
+                     path: [
+                       `int` @ [2]:725..728 from 1
+                     ],
+                     ref: std::int/fn
+                   },
+                   args: [
+                     unary_expr {
+                       op: "move",
+                       expr: field_access {
+                         left: field_access {
+                           left: field_access {
+                             left: this_ [2]:404..408 from 1,
+                             has_question_mark: false,
+                             name: `source` @ [2]:700..706 from 1,
+                             location: [2]:694..706 from 1
+                           },
+                           has_question_mark: false,
+                           name: `EventData` @ [2]:707..716 from 1,
+                           location: [2]:694..716 from 1
+                         },
+                         has_question_mark: false,
+                         name: `IpPort` @ [2]:717..723 from 1,
+                         location: [2]:694..723 from 1
+                       },
+                       location: [2]:689..723 from 1
+                     }
+                   ],
+                   method: true,
+                   location: [2]:689..730 from 1
+                 }
+               }
+             ],
+             end: [2]:732..733 from 1
+           },
+           location: [2]:600..733 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: field_access {
+               left: this_ [2]:404..408 from 1,
+               has_question_mark: false,
+               name: `ocsf` @ [2]:740..744 from 1,
+               location: [2]:734..744 from 1
+             },
+             has_question_mark: false,
+             name: `unmapped` @ [2]:745..753 from 1,
+             location: [2]:734..753 from 1
+           },
+           right: unary_expr {
+             op: "move",
+             expr: field_access {
+               left: this_ [2]:404..408 from 1,
+               has_question_mark: false,
+               name: `source` @ [2]:767..773 from 1,
+               location: [2]:761..773 from 1
+             },
+             location: [2]:756..773 from 1
+           },
+           location: [2]:734..773 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [2]:404..408 from 1,
+           right: unary_expr {
+             op: "move",
+             expr: field_access {
+               left: this_ [2]:404..408 from 1,
+               has_question_mark: false,
+               name: `ocsf` @ [2]:793..797 from 1,
+               location: [2]:787..797 from 1
+             },
+             location: [2]:782..797 from 1
+           },
+           location: [2]:774..797 from 1
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:31..36 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:67..67 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `src_endpoint` @ [1]:37..49 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `ip` @ [1]:50..52 from 0,
+-            location: [1]:37..52 from 0
+-          },
+-          op: "eq",
+-          right: constant ip 203.0.113.7 @ [1]:56..67 from 0,
+-          location: [1]:37..67 from 0
+-        }
+-      ],
+-      named_args: [
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
+     }
+   ]
+ }

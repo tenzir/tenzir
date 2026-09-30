@@ -324,6 +324,14 @@ auto split_filter_by_dependents(ir::OptimizeFilter filter,
                                 const ast::ExprRefs& touched)
   -> split_filter_result;
 
+/// Splits a filter chain by substituting the references of every predicate,
+/// as in `ast::substitute_refs`. The substituted predicates are independent.
+/// The others stay dependent and unchanged.
+auto split_filter_by_substitution(OptimizeFilter filter,
+                                  ast::FieldSubstitution const& fields,
+                                  ast::MetaSubstitution const& meta = {})
+  -> split_filter_result;
+
 /// Returns whether `prefix` is a prefix of `path` (or equal to it), comparing
 /// segment names. An empty `prefix` is a prefix of every path.
 auto is_field_path_prefix(const ast::field_path& prefix,

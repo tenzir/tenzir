@@ -18,6 +18,25 @@
        ],
        self: [1]:0..4 from 0
      },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: constant string "foo" @ [1]:32..37 from 0,
++          op: "eq",
++          right: constant string "foo" @ [1]:41..46 from 0,
++          location: [1]:32..46 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
      SetIr {
        assignments: [
          {
@@ -30,32 +49,29 @@
          }
        ],
 -      order: "ordered"
-+      order: "unordered"
-     },
-     where_ir {
-       op: {
-         path: [
+-    },
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:26..31 from 0
-+          
-         ],
+-        ],
 -        ref: std::where/op
-+        ref: unresolved
-       },
-       args: [
+-      },
+-      args: [
 -        expression binary_expr {
-+        Incomplete binary_expr {
-           left: meta {
-             kind: "name",
-             source: [1]:32..37 from 0
-           },
-           op: "eq",
-           right: constant string "foo" @ [1]:41..46 from 0,
-           location: [1]:32..46 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
+-          left: meta {
+-            kind: "name",
+-            source: [1]:32..37 from 0
+-          },
+-          op: "eq",
+-          right: constant string "foo" @ [1]:41..46 from 0,
+-          location: [1]:32..46 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
++      order: "unordered"
      },
      GenericIr {
        desc: "discard",

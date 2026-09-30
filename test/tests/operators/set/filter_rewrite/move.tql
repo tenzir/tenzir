@@ -1,0 +1,4 @@
+// A moved field reads as `null`, and its destination as the moved value.
+from {x: 1}, {x: 2}, {x: null}, {}
+y = move x
+where x == null and y != 2

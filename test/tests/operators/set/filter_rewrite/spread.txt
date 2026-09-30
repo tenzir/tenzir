@@ -1,0 +1,64 @@
+warning: record does not have field
+ --> tests/operators/set/filter_rewrite/spread.tql:3:9
+  |
+3 | z = {...x, b: move y}
+  |         ~
+  ⋮
+4 | where z.a == 1 or z.a == null
+  |         - field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record does not have field
+ --> tests/operators/set/filter_rewrite/spread.tql:3:9
+  |
+3 | z = {...x, b: move y}
+  |         ~
+  ⋮
+4 | where z.a == 1 or z.a == null
+  |                     - field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: expected `record`
+ --> tests/operators/set/filter_rewrite/spread.tql:3:9
+  |
+3 | z = {...x, b: move y}
+  |         ~
+  |
+
+warning: event does not have field
+ --> tests/operators/set/filter_rewrite/spread.tql:3:9
+  |
+3 | z = {...x, b: move y}
+  |         ~
+  |
+  = hint: did you mean `y`?
+  = hint: append `?` to suppress this warning
+{
+  x: {
+    a: 1,
+    b: 2,
+  },
+  z: {
+    a: 1,
+    b: 3,
+  },
+}
+{
+  x: null,
+  z: {
+    b: 5,
+  },
+}
+{
+  x: 5,
+  z: {
+    b: 6,
+  },
+}
+{
+  z: {
+    b: 7,
+  },
+}

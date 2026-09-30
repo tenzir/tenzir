@@ -1,0 +1,9 @@
+// Filters cross the wrapping into `source` and the unwrapping of `ocsf`.
+from {id: 1, host: "a"}, {id: 2, host: null}, {id: 3}
+this = {source: this, ocsf: {}}
+ocsf.device = {hostname: move source.host}
+ocsf.dst_endpoint = {hostname: ocsf.device.hostname}
+ocsf.unmapped = move source
+this = move this.ocsf
+where dst_endpoint.hostname == "a" or device.hostname == null
+where source == null and unmapped.id >= 1

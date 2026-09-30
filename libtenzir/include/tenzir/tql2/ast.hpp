@@ -21,6 +21,7 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
+#include <functional>
 #include <iterator>
 #include <span>
 #include <type_traits>
@@ -415,6 +416,28 @@ struct ExprRefs {
 /// Collect all references (field paths and let bindings) from an expression.
 /// Returns `None` when the expression contains ambiguous field accesses.
 auto collect_refs(const expression& expr) -> Option<ExprRefs>;
+
+/// Returns the replacement for a field reference, or `None` if there is none.
+using FieldSubstitution
+  = std::function<auto(field_path const&)->Option<expression>>;
+
+/// Returns the replacement for a metadata reference such as `@name`, or `None`
+/// if there is none.
+using MetaSubstitution = std::function<auto(meta const&)->Option<expression>>;
+
+/// Replaces every field reference in `expr` with its replacement from
+/// `fields`, and every metadata reference with its replacement from `meta`. An
+/// empty `meta` keeps metadata references as they are. Returns `None` if a
+/// reference has no replacement.
+///
+/// References to lambda parameters and arguments that a function reads as
+/// field paths, like the fields that `drop_null_fields(x, a.b)` removes from
+/// `x`, stay as they are. Within a lambda body, a replacement may only read
+/// top-level fields that the lambda does not shadow, because the lambda
+/// captures fields by name.
+auto substitute_refs(expression const& expr, registry const& reg,
+                     FieldSubstitution const& fields,
+                     MetaSubstitution const& meta = {}) -> Option<expression>;
 
 /// A selector is something that can be assigned.
 ///

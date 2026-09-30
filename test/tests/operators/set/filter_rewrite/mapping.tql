@@ -1,0 +1,6 @@
+// The filter moves in front of the mapping and reads `EventData.IpAddress`.
+from {EventData: {IpAddress: "203.0.113.7", IpPort: "49152", TargetUserName: "alice"}},
+     {EventData: {IpAddress: "198.51.100.1", IpPort: "443", TargetUserName: "bob"}},
+     {EventData: {IpAddress: null, IpPort: null, TargetUserName: "carol"}}
+winlog::ocsf::normalize
+where src_endpoint.ip == 203.0.113.7

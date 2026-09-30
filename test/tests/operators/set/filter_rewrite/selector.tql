@@ -1,0 +1,4 @@
+// `drop_null_fields` reads `z` as a field of `r`, so the rewrite keeps it.
+from {r: {z: 5, x: null}, x: 1}, {r: {z: null, x: null}, x: 2}
+z = x
+where drop_null_fields(r, z).keys().length() == 2

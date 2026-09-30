@@ -1,0 +1,6 @@
+// Metadata reads as the constant that the assignment sets.
+from {x: 1, flag: true}, {x: 2, flag: false}, {x: 3, flag: true}
+set @name = "ocsf.authentication", @internal = flag
+where @name == "ocsf.authentication" and x != 2
+where @internal
+select x, name = @name
