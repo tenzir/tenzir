@@ -1,0 +1,15 @@
+warning: expected `string` or `blob`, got `null`
+ --> tests/operators/to_amazon_kinesis/masked/01_publish.tql:9:27
+  |
+9 |                   message=message,
+  |                           ~~~~~~~
+  |
+  = note: event is skipped
+
+warning: expected `string`, got `null`
+  --> tests/operators/to_amazon_kinesis/masked/01_publish.tql:10:33
+   |
+10 |                   partition_key=key
+   |                                 ~~~
+   |
+   = note: event is skipped

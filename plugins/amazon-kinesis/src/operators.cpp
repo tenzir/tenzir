@@ -15,6 +15,9 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -57,17 +60,6 @@ constexpr auto max_put_records_entries = size_t{500};
 constexpr auto max_partition_key_size = size_t{256};
 constexpr auto put_records_attempts = size_t{5};
 constexpr auto throttle_backoff = 1s;
-
-struct ReadRecord {
-  blob message;
-  std::string stream;
-  std::string shard_id;
-  std::string sequence_number;
-  std::string partition_key;
-  Option<time> arrival_time;
-  std::string encryption_type;
-  duration behind_latest = {};
-};
 
 /// A successful `GetRecords` response for a shard.
 struct ShardPage {
@@ -113,7 +105,7 @@ struct ShardInfo {
 };
 
 struct PutRecordsResult {
-  std::vector<ToAmazonKinesis::PendingRecord> failed_records;
+  std::vector<PendingRecord> failed_records;
   Option<std::string> error;
 };
 
@@ -364,9 +356,9 @@ auto append_partition_keys(std::vector<Option<std::string>>& out,
 /// this. Writing the body directly lifted sink throughput by 15-20% across
 /// record sizes (562-byte records: 266 to 307 MB/s) and cut send-path CPU by
 /// about 3x, leaving SigV4 payload hashing as the dominant remaining cost.
-auto make_put_records_body(
-  std::string_view escaped_stream,
-  std::span<const ToAmazonKinesis::PendingRecord> records) -> std::string {
+auto make_put_records_body(std::string_view escaped_stream,
+                           std::span<const PendingRecord> records)
+  -> std::string {
   auto size = escaped_stream.size() + 32;
   for (const auto& record : records) {
     size += detail::base64::encoded_size(record.message.size())
@@ -395,8 +387,7 @@ auto make_put_records_body(
 }
 
 auto put_records(amazon::SignedHttpClient& client, std::string stream,
-                 std::vector<ToAmazonKinesis::PendingRecord> records)
-  -> Task<PutRecordsResult> {
+                 std::vector<PendingRecord> records) -> Task<PutRecordsResult> {
   const auto escaped_stream = detail::json_escape(stream);
   for (auto attempt = size_t{0}; attempt < put_records_attempts; ++attempt) {
     auto aws_result = co_await kinesis_api_call(
@@ -415,7 +406,7 @@ auto put_records(amazon::SignedHttpClient& client, std::string stream,
     if (result.GetFailedRecordCount() == 0) {
       co_return PutRecordsResult{};
     }
-    auto retry = std::vector<ToAmazonKinesis::PendingRecord>{};
+    auto retry = std::vector<PendingRecord>{};
     const auto& statuses = result.GetRecords();
     for (auto i = size_t{0}; i < records.size() and i < statuses.size(); ++i) {
       if (statuses[i].ErrorCodeHasBeenSet()) {
@@ -488,7 +479,9 @@ auto make_kinesis_http_client(Option<located<std::string>> const& aws_region,
   co_return nullptr;
 }
 
-FromAmazonKinesis::FromAmazonKinesis(FromAmazonKinesisArgs args)
+// --- KinesisReader ---
+
+KinesisReader::KinesisReader(FromAmazonKinesisArgs args)
   : args_{std::move(args)} {
   limit_ = args_.count ? args_.count->inner : 0;
   records_per_call_ = args_.records_per_call
@@ -497,7 +490,7 @@ FromAmazonKinesis::FromAmazonKinesis(FromAmazonKinesisArgs args)
   poll_idle_ = args_.poll_idle ? args_.poll_idle->inner : 1s;
 }
 
-auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
+auto KinesisReader::start(OpCtx& ctx) -> Task<void> {
   client_ = co_await make_kinesis_http_client(args_.aws_region, args_.aws_iam,
                                               args_.endpoint, ctx);
   if (not client_) {
@@ -546,7 +539,7 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                        MetricsUnit::events);
 }
 
-auto FromAmazonKinesis::recreate_shard_iterator(const ShardState& shard)
+auto KinesisReader::recreate_shard_iterator(const ShardState& shard)
   -> Task<Result<std::string, KinesisApiError>> {
   using Aws::Kinesis::Model::ShardIteratorType;
   auto request = Aws::Kinesis::Model::GetShardIteratorRequest{};
@@ -586,7 +579,7 @@ auto FromAmazonKinesis::recreate_shard_iterator(const ShardState& shard)
   co_return amazon::from_aws_string(result.GetShardIterator());
 }
 
-auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
+auto KinesisReader::shard_loop(ShardState shard) -> Task<void> {
   auto iterator = std::string{};
   while (true) {
     if (iterator.empty()) {
@@ -648,14 +641,14 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
   }
 }
 
-auto FromAmazonKinesis::parents_closed(const ShardState& shard) const -> bool {
+auto KinesisReader::parents_closed(const ShardState& shard) const -> bool {
   return std::ranges::all_of(shard.parents, [&](const std::string& parent) {
     auto it = std::ranges::find(shards_, parent, &ShardState::id);
     return it == shards_.end() or it->closed;
   });
 }
 
-auto FromAmazonKinesis::spawn_ready_loops(OpCtx& ctx) -> void {
+auto KinesisReader::spawn_ready_loops(OpCtx& ctx) -> void {
   for (auto& shard : shards_) {
     if (shard.closed or shard.caught_up or shard.loop_running
         or not parents_closed(shard)) {
@@ -666,7 +659,7 @@ auto FromAmazonKinesis::spawn_ready_loops(OpCtx& ctx) -> void {
   }
 }
 
-auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
+auto KinesisReader::discover_new_shards(OpCtx& ctx) -> Task<void> {
   // List without the AT_LATEST filter: descendants of a consumed shard may
   // themselves have closed again before discovery runs, and the latest-only
   // view would skip them and lose their records. For latest-start pipelines,
@@ -709,20 +702,19 @@ auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
-  TENZIR_UNUSED(dh);
+auto KinesisReader::next() const -> Task<Any> {
   co_return co_await results_->dequeue();
 }
 
-auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
-                                     OpCtx& ctx) -> Task<void> {
+auto KinesisReader::handle(Any result, OpCtx& ctx)
+  -> Task<std::vector<ReadRecord>> {
   auto report = std::move(result).as<ShardReport>();
   if (report.is_err()) {
     diagnostic::error("{}", report.unwrap_err().message)
       .primary(args_.stream.source)
       .emit(ctx);
     done_ = true;
-    co_return;
+    co_return {};
   }
   auto batch = std::move(report).unwrap();
   if (auto it = std::ranges::find(shards_, batch.shard_id, &ShardState::id);
@@ -739,7 +731,7 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
       it->loop_running = false;
       co_await discover_new_shards(ctx);
       if (done_) {
-        co_return;
+        co_return {};
       }
       spawn_ready_loops(ctx);
     }
@@ -748,39 +740,15 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
     if (args_.exit) {
       done_ = all_shards_finished();
     }
-    co_return;
+    co_return {};
   }
-  auto opts = multi_series_builder::options{};
-  opts.settings.ordered = true;
-  opts.settings.raw = true;
-  opts.settings.default_schema_name = "tenzir.amazon_kinesis";
-  auto msb = multi_series_builder{std::move(opts), ctx.dh()};
+  if (limit_ != 0 and batch.records.size() > limit_ - emitted_) {
+    batch.records.resize(limit_ - emitted_);
+  }
   for (const auto& record : batch.records) {
-    if (limit_ != 0 and emitted_ >= limit_) {
-      done_ = true;
-      break;
-    }
     bytes_read_counter_.add(record.message.size());
-    auto event = msb.record();
-    event.field("message").data(record.message);
-    event.field("stream").data(record.stream);
-    event.field("shard_id").data(record.shard_id);
-    event.field("sequence_number").data(record.sequence_number);
-    event.field("partition_key").data(record.partition_key);
-    if (record.arrival_time) {
-      event.field("arrival_time").data(*record.arrival_time);
-    }
-    if (not record.encryption_type.empty()) {
-      event.field("encryption_type").data(record.encryption_type);
-    }
-    event.field("behind_latest").data(record.behind_latest);
-    ++emitted_;
   }
-  for (auto&& slice : msb.finalize_as_table_slice()) {
-    auto const rows = slice.rows();
-    co_await push(std::move(slice));
-    events_read_counter_.add(rows);
-  }
+  emitted_ += batch.records.size();
   if (limit_ != 0 and emitted_ >= limit_) {
     done_ = true;
   }
@@ -789,9 +757,14 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   if (args_.exit and not done_) {
     done_ = all_shards_finished();
   }
+  co_return std::move(batch.records);
 }
 
-auto FromAmazonKinesis::all_shards_finished() const -> bool {
+auto KinesisReader::count_events(uint64_t count) -> void {
+  events_read_counter_.add(count);
+}
+
+auto KinesisReader::all_shards_finished() const -> bool {
   // Exit once every shard has either closed or caught up with the stream
   // tip. Both flags are monotone and only set when the shard's own loop has
   // already terminated, and the results queue is FIFO, so by the time the
@@ -802,35 +775,44 @@ auto FromAmazonKinesis::all_shards_finished() const -> bool {
   });
 }
 
-auto FromAmazonKinesis::state() -> OperatorState {
+auto KinesisReader::state() -> OperatorState {
   return done_ ? OperatorState::done : OperatorState::normal;
 }
 
-auto FromAmazonKinesis::snapshot(Serde& serde) -> void {
+auto KinesisReader::snapshot(Serde& serde) -> void {
   serde("shards", shards_);
   serde("emitted", emitted_);
   serde("done", done_);
 }
 
-ToAmazonKinesis::ToAmazonKinesis(ToAmazonKinesisArgs args)
-  : args_{std::move(args)} {
+// --- KinesisWriter ---
+
+KinesisWriter::KinesisWriter(ToAmazonKinesisArgs const& args)
+  : stream_{args.stream},
+    message_location_{args.message.get_location()},
+    partition_key_location_{
+      args.partition_key ? Option<location>{args.partition_key->get_location()}
+                         : None{}},
+    aws_region_{args.aws_region},
+    aws_iam_{args.aws_iam},
+    endpoint_{args.endpoint} {
   batch_size_
-    = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
-  batch_timeout_ = args_.batch_timeout ? args_.batch_timeout->inner : 1s;
+    = args.batch_size ? detail::narrow<size_t>(args.batch_size->inner) : 500;
+  batch_timeout_ = args.batch_timeout ? args.batch_timeout->inner : 1s;
   request_slots_ = Semaphore{
-    detail::narrow<size_t>(args_.parallel ? args_.parallel->inner : 1)};
+    detail::narrow<size_t>(args.parallel ? args.parallel->inner : 1)};
 }
 
-auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
-  client_ = co_await make_kinesis_http_client(args_.aws_region, args_.aws_iam,
-                                              args_.endpoint, ctx);
+auto KinesisWriter::start(OpCtx& ctx) -> Task<void> {
+  client_
+    = co_await make_kinesis_http_client(aws_region_, aws_iam_, endpoint_, ctx);
   if (not client_) {
     failed_ = true;
     co_return;
   }
   auto request = Aws::Kinesis::Model::DescribeStreamSummaryRequest{};
   request.SetStreamName(
-    Aws::String{args_.stream.inner.data(), args_.stream.inner.size()});
+    Aws::String{stream_.inner.data(), stream_.inner.size()});
   auto aws_result
     = co_await kinesis_api_call(*client_, "DescribeStreamSummary", request);
   if (aws_result.is_ok()) {
@@ -843,7 +825,7 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
           : default_stream_record_size;
   } else if (is_error(aws_result.unwrap_err(), "ResourceNotFoundException")) {
     diagnostic::error("{}", aws_result.unwrap_err().message)
-      .primary(args_.stream.source)
+      .primary(stream_.source)
       .emit(ctx);
     failed_ = true;
     co_return;
@@ -861,73 +843,55 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                        MetricsUnit::events);
 }
 
-auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
-  if (failed_ or input.rows() == 0) {
+auto KinesisWriter::failed() const -> bool {
+  return failed_;
+}
+
+auto KinesisWriter::add(blob message, Option<std::string> partition_key,
+                        OpCtx& ctx) -> Task<void> {
+  if (failed_) {
     co_return;
   }
-  auto messages = std::vector<Option<blob>>{};
-  append_messages(messages, args_.message, input, ctx.dh());
-  auto partition_keys = std::vector<Option<std::string>>{};
-  if (args_.partition_key) {
-    append_partition_keys(partition_keys, *args_.partition_key, input,
-                          ctx.dh());
+  auto key = std::string{};
+  if (partition_key) {
+    TENZIR_ASSERT(partition_key_location_);
+    key = std::move(*partition_key);
+    if (not validate_partition_key(key, *partition_key_location_, ctx.dh())) {
+      co_return;
+    }
+  } else {
+    key = fmt::to_string(uuid::random());
   }
-  for (auto i = size_t{0}; i < messages.size(); ++i) {
-    auto& message = messages[i];
-    if (not message) {
-      continue;
+  if (message.size() + key.size() > max_record_size_) {
+    diagnostic::warning("Kinesis record payload and partition key must be at "
+                        "most {} bytes for this stream",
+                        max_record_size_)
+      .primary(message_location_)
+      .note("event is skipped")
+      .emit(ctx);
+    co_return;
+  }
+  const auto was_empty = batch_.empty();
+  const auto now = std::chrono::steady_clock::now();
+  batch_.push_back(PendingRecord{std::move(message), std::move(key)});
+  if (was_empty) {
+    batch_deadline_ = now + batch_timeout_;
+    if (not timer_armed_) {
+      arm_flush_timer(ctx);
     }
-    auto key = std::string{};
-    if (args_.partition_key) {
-      if (i >= partition_keys.size() or not partition_keys[i]) {
-        continue;
-      }
-      key = std::move(*partition_keys[i]);
-      if (not validate_partition_key(key, args_.partition_key->get_location(),
-                                     ctx.dh())) {
-        continue;
-      }
-    } else {
-      key = fmt::to_string(uuid::random());
-    }
-    if (message->size() + key.size() > max_record_size_) {
-      diagnostic::warning("Kinesis record payload and partition key must be at "
-                          "most {} bytes for this stream",
-                          max_record_size_)
-        .primary(args_.message)
-        .note("event is skipped")
-        .emit(ctx);
-      continue;
-    }
-    const auto was_empty = batch_.empty();
-    const auto now = std::chrono::steady_clock::now();
-    batch_.push_back(PendingRecord{std::move(*message), std::move(key)});
-    if (was_empty) {
-      batch_deadline_ = now + batch_timeout_;
-      if (not timer_armed_) {
-        arm_flush_timer(ctx);
-      }
-    }
-    if (batch_.size() >= batch_size_) {
-      co_await flush(ctx);
-      if (failed_) {
-        co_return;
-      }
-    } else {
-      co_await flush_if_timed_out(ctx);
-      if (failed_) {
-        co_return;
-      }
-    }
+  }
+  if (batch_.size() >= batch_size_) {
+    co_await flush(ctx);
+  } else {
+    co_await flush_if_timed_out(ctx);
   }
 }
 
-auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
-  TENZIR_UNUSED(dh);
+auto KinesisWriter::next() const -> Task<Any> {
   co_return co_await wakeup_queue_->dequeue();
 }
 
-auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
+auto KinesisWriter::handle(Any result, OpCtx& ctx) -> Task<void> {
   if (failed_) {
     co_return;
   }
@@ -945,7 +909,7 @@ auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ToAmazonKinesis::arm_flush_timer(OpCtx& ctx) -> void {
+auto KinesisWriter::arm_flush_timer(OpCtx& ctx) -> void {
   TENZIR_ASSERT(batch_deadline_);
   timer_armed_ = true;
   ctx.spawn_task([queue = wakeup_queue_,
@@ -955,7 +919,7 @@ auto ToAmazonKinesis::arm_flush_timer(OpCtx& ctx) -> void {
   });
 }
 
-auto ToAmazonKinesis::flush_if_timed_out(OpCtx& ctx) -> Task<void> {
+auto KinesisWriter::flush_if_timed_out(OpCtx& ctx) -> Task<void> {
   if (failed_ or batch_.empty()) {
     batch_deadline_ = None{};
     co_return;
@@ -966,7 +930,7 @@ auto ToAmazonKinesis::flush_if_timed_out(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
+auto KinesisWriter::flush(OpCtx& ctx) -> Task<void> {
   if (failed_ or batch_.empty() or not client_) {
     batch_deadline_ = None{};
     co_return;
@@ -1006,7 +970,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
       co_return;
     }
     ++pending_reports_;
-    ctx.spawn_task([client = client_, stream = args_.stream.inner,
+    ctx.spawn_task([client = client_, stream = stream_.inner,
                     records = std::move(chunks[index]), queue = send_queue_,
                     wakeup = wakeup_queue_,
                     permit = std::move(*permit)]() mutable -> Task<void> {
@@ -1032,8 +996,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ToAmazonKinesis::handle_send_report(SendReport report, OpCtx& ctx)
-  -> void {
+auto KinesisWriter::handle_send_report(SendReport report, OpCtx& ctx) -> void {
   bytes_write_counter_.add(report.bytes);
   events_write_counter_.add(report.events);
   TENZIR_ASSERT(pending_reports_ > 0);
@@ -1041,7 +1004,7 @@ auto ToAmazonKinesis::handle_send_report(SendReport report, OpCtx& ctx)
   if (not report.errors.empty()) {
     failed_ = true;
     diagnostic::error("failed to write records to Kinesis")
-      .primary(args_.stream.source)
+      .primary(stream_.source)
       .note("{}", fmt::join(report.errors, "; "))
       .emit(ctx);
   }
@@ -1050,49 +1013,339 @@ auto ToAmazonKinesis::handle_send_report(SendReport report, OpCtx& ctx)
   std::ranges::move(report.failed_records, std::back_inserter(batch_));
 }
 
-auto ToAmazonKinesis::drain_send_reports(OpCtx& ctx) -> void {
+auto KinesisWriter::drain_send_reports(OpCtx& ctx) -> void {
   while (auto report = send_queue_->try_dequeue()) {
     handle_send_report(std::move(*report), ctx);
   }
 }
 
-auto ToAmazonKinesis::wait_for_requests(OpCtx& ctx) -> Task<void> {
+auto KinesisWriter::wait_for_requests(OpCtx& ctx) -> Task<void> {
   while (pending_reports_ > 0) {
     auto report = co_await send_queue_->dequeue();
     handle_send_report(std::move(report), ctx);
   }
 }
 
-auto ToAmazonKinesis::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+auto KinesisWriter::flush_all(OpCtx& ctx) -> Task<void> {
   co_await flush(ctx);
   co_await wait_for_requests(ctx);
   fail_if_unsent(ctx);
-  co_return;
 }
 
-auto ToAmazonKinesis::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
-  co_await flush(ctx);
-  co_await wait_for_requests(ctx);
-  fail_if_unsent(ctx);
-  co_return FinalizeBehavior::done;
-}
-
-auto ToAmazonKinesis::state() -> OperatorState {
+auto KinesisWriter::state() -> OperatorState {
   return failed_ ? OperatorState::done : OperatorState::normal;
 }
 
-auto ToAmazonKinesis::fail_if_unsent(OpCtx& ctx) -> void {
+auto KinesisWriter::fail_if_unsent(OpCtx& ctx) -> void {
   if (batch_.empty()) {
     return;
   }
   failed_ = true;
   diagnostic::error("failed to write all records to Kinesis")
-    .primary(args_.stream.source)
+    .primary(stream_.source)
     .note("{} records remain unsent", batch_.size())
     .emit(ctx);
   // Clearing the batch makes the report idempotent if both a snapshot and
   // finalization observe the same failure.
   batch_.clear();
+}
+
+namespace {
+
+/// Writes the fields of `record` into `event`.
+auto build_event(nova::ArrayBuilder<nova::Record>::RecordBuilder event,
+                 ReadRecord const& record) -> void {
+  event.field("message").data(blob_view{std::span{record.message}});
+  event.field("stream").data(record.stream);
+  event.field("shard_id").data(record.shard_id);
+  event.field("sequence_number").data(record.sequence_number);
+  event.field("partition_key").data(record.partition_key);
+  if (record.arrival_time) {
+    event.field("arrival_time").data(*record.arrival_time);
+  }
+  if (not record.encryption_type.empty()) {
+    event.field("encryption_type").data(record.encryption_type);
+  }
+  event.field("behind_latest").data(record.behind_latest);
+}
+
+} // namespace
+
+// --- FromAmazonKinesis ---
+
+FromAmazonKinesis::FromAmazonKinesis(FromAmazonKinesisArgs args)
+  : reader_{std::move(args)} {
+}
+
+auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
+  co_await reader_.start(ctx);
+}
+
+auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return reader_.next();
+}
+
+auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
+                                     OpCtx& ctx) -> Task<void> {
+  auto records = co_await reader_.handle(std::move(result), ctx);
+  if (records.empty()) {
+    co_return;
+  }
+  auto opts = multi_series_builder::options{};
+  opts.settings.ordered = true;
+  opts.settings.raw = true;
+  opts.settings.default_schema_name = "tenzir.amazon_kinesis";
+  auto msb = multi_series_builder{std::move(opts), ctx.dh()};
+  for (const auto& record : records) {
+    auto event = msb.record();
+    event.field("message").data(record.message);
+    event.field("stream").data(record.stream);
+    event.field("shard_id").data(record.shard_id);
+    event.field("sequence_number").data(record.sequence_number);
+    event.field("partition_key").data(record.partition_key);
+    if (record.arrival_time) {
+      event.field("arrival_time").data(*record.arrival_time);
+    }
+    if (not record.encryption_type.empty()) {
+      event.field("encryption_type").data(record.encryption_type);
+    }
+    event.field("behind_latest").data(record.behind_latest);
+  }
+  for (auto&& slice : msb.finalize_as_table_slice()) {
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    reader_.count_events(rows);
+  }
+}
+
+auto FromAmazonKinesis::state() -> OperatorState {
+  return reader_.state();
+}
+
+auto FromAmazonKinesis::snapshot(Serde& serde) -> void {
+  reader_.snapshot(serde);
+}
+
+// --- FromAmazonKinesisEvents ---
+
+FromAmazonKinesisEvents::FromAmazonKinesisEvents(FromAmazonKinesisArgs args)
+  : reader_{std::move(args)} {
+}
+
+auto FromAmazonKinesisEvents::start(OpCtx& ctx) -> Task<void> {
+  co_await reader_.start(ctx);
+}
+
+auto FromAmazonKinesisEvents::await_task(diagnostic_handler& dh) const
+  -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return reader_.next();
+}
+
+auto FromAmazonKinesisEvents::process_task(Any result, Push<nova::Events>& push,
+                                           OpCtx& ctx) -> Task<void> {
+  auto records = co_await reader_.handle(std::move(result), ctx);
+  if (records.empty()) {
+    co_return;
+  }
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (const auto& record : records) {
+    build_event(builder.record(), record);
+  }
+  auto data = builder.finish();
+  auto const rows = data.length();
+  co_await push(nova::Events{
+    std::move(data), nova::storage::BitMap{rows, true},
+    nova::Events::Meta::make_empty(rows, "tenzir.amazon_kinesis")});
+  reader_.count_events(detail::narrow<uint64_t>(rows));
+}
+
+auto FromAmazonKinesisEvents::state() -> OperatorState {
+  return reader_.state();
+}
+
+auto FromAmazonKinesisEvents::snapshot(Serde& serde) -> void {
+  reader_.snapshot(serde);
+}
+
+// --- ToAmazonKinesis ---
+
+ToAmazonKinesis::ToAmazonKinesis(ToAmazonKinesisArgs args)
+  : args_{std::move(args)}, writer_{args_} {
+}
+
+auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
+  co_await writer_.start(ctx);
+}
+
+auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
+  if (writer_.failed() or input.rows() == 0) {
+    co_return;
+  }
+  auto messages = std::vector<Option<blob>>{};
+  append_messages(messages, args_.message, input, ctx.dh());
+  auto partition_keys = std::vector<Option<std::string>>{};
+  if (args_.partition_key) {
+    append_partition_keys(partition_keys, *args_.partition_key, input,
+                          ctx.dh());
+  }
+  for (auto i = size_t{0}; i < messages.size(); ++i) {
+    auto& message = messages[i];
+    if (not message) {
+      continue;
+    }
+    auto key = Option<std::string>{};
+    if (args_.partition_key) {
+      if (i >= partition_keys.size() or not partition_keys[i]) {
+        continue;
+      }
+      key = std::move(partition_keys[i]);
+    }
+    co_await writer_.add(std::move(*message), std::move(key), ctx);
+    if (writer_.failed()) {
+      co_return;
+    }
+  }
+}
+
+auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return writer_.next();
+}
+
+auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
+  co_await writer_.handle(std::move(result), ctx);
+}
+
+auto ToAmazonKinesis::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+  co_await writer_.flush_all(ctx);
+}
+
+auto ToAmazonKinesis::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+  co_await writer_.flush_all(ctx);
+  co_return FinalizeBehavior::done;
+}
+
+auto ToAmazonKinesis::state() -> OperatorState {
+  return writer_.state();
+}
+
+// --- ToAmazonKinesisEvents ---
+
+ToAmazonKinesisEvents::ToAmazonKinesisEvents(ToAmazonKinesisArgs args)
+  : args_{std::move(args)}, writer_{args_} {
+}
+
+auto ToAmazonKinesisEvents::start(OpCtx& ctx) -> Task<void> {
+  co_await writer_.start(ctx);
+  if (writer_.failed()) {
+    co_return;
+  }
+  auto message = co_await nova::Evaluator::make(args_.message, ctx);
+  if (not message) {
+    co_return;
+  }
+  // Only accept input once every expression is prepared. Without its
+  // partition key, a record would silently fall back to a random one.
+  if (args_.partition_key) {
+    auto partition_key
+      = co_await nova::Evaluator::make(*args_.partition_key, ctx);
+    if (not partition_key) {
+      co_return;
+    }
+    partition_key_.emplace(std::move(*partition_key));
+  }
+  message_.emplace(std::move(*message));
+}
+
+auto ToAmazonKinesisEvents::process(nova::Events input, OpCtx& ctx)
+  -> Task<void> {
+  if (writer_.failed() or not message_ or not input.mask.any()) {
+    co_return;
+  }
+  auto& dh = ctx.dh();
+  auto messages = message_->eval(input, nova::EvalCtx{dh});
+  auto keys = Option<nova::Array<nova::Data>>{};
+  if (partition_key_) {
+    keys = partition_key_->eval(input, nova::EvalCtx{dh});
+  }
+  auto warn_message_null = nova::WarnOnce{};
+  auto warn_message_type = nova::WarnOnce{};
+  auto warn_key_null = nova::WarnOnce{};
+  auto warn_key_type = nova::WarnOnce{};
+  for (auto row : nova::storage::true_bits(input.mask)) {
+    auto message = Option<blob>{};
+    auto value = messages.get(row);
+    if (auto text = try_as<nova::RowView<nova::String>>(value)) {
+      message = blob{as_bytes(**text)};
+    } else if (auto bytes = try_as<nova::RowView<nova::Blob>>(value)) {
+      message = blob{**bytes};
+    } else if (is<nova::RowView<nova::Null>>(value)) {
+      warn_message_null(dh, diagnostic::warning("expected `string` or `blob`, "
+                                                "got `null`")
+                              .primary(args_.message)
+                              .note("event is skipped"));
+    } else {
+      match(value, [&]<class T>(nova::RowView<T> const&) {
+        warn_message_type(dh, diagnostic::warning("expected `string` or "
+                                                  "`blob`, got `{}`",
+                                                  nova::Type<T>::static_name)
+                                .primary(args_.message)
+                                .note("events are skipped"));
+      });
+    }
+    auto key = Option<std::string>{};
+    if (keys) {
+      auto value = keys->get(row);
+      if (auto text = try_as<nova::RowView<nova::String>>(value)) {
+        key = std::string{**text};
+      } else if (is<nova::RowView<nova::Null>>(value)) {
+        warn_key_null(dh, diagnostic::warning("expected `string`, got `null`")
+                            .primary(*args_.partition_key)
+                            .note("event is skipped"));
+        continue;
+      } else {
+        match(value, [&]<class T>(nova::RowView<T> const&) {
+          warn_key_type(dh, diagnostic::warning("expected `string`, got `{}`",
+                                                nova::Type<T>::static_name)
+                              .primary(*args_.partition_key)
+                              .note("events are skipped"));
+        });
+        continue;
+      }
+    }
+    if (not message) {
+      continue;
+    }
+    co_await writer_.add(std::move(*message), std::move(key), ctx);
+    if (writer_.failed()) {
+      co_return;
+    }
+  }
+}
+
+auto ToAmazonKinesisEvents::await_task(diagnostic_handler& dh) const
+  -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return writer_.next();
+}
+
+auto ToAmazonKinesisEvents::process_task(Any result, OpCtx& ctx) -> Task<void> {
+  co_await writer_.handle(std::move(result), ctx);
+}
+
+auto ToAmazonKinesisEvents::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+  co_await writer_.flush_all(ctx);
+}
+
+auto ToAmazonKinesisEvents::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+  co_await writer_.flush_all(ctx);
+  co_return FinalizeBehavior::done;
+}
+
+auto ToAmazonKinesisEvents::state() -> OperatorState {
+  return writer_.state();
 }
 
 } // namespace tenzir::plugins::amazon_kinesis

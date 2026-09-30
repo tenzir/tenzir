@@ -1,0 +1,13 @@
+// Rows removed by `where` must neither be sent nor produce diagnostics.
+from {keep: true, message: "{\"id\": 21}"},
+     {keep: false, message: 42},
+     {keep: true, message: null},
+     {keep: true, message: "{\"id\": 22}"}
+where keep
+to_amazon_sqs env("LOCALSTACK_SQS_QUEUE_SAVE"),
+  message=message,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1"
+  }

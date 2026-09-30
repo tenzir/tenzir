@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
@@ -59,7 +60,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromAmazonKinesisArgs, FromAmazonKinesis>{};
+    auto d = Describer<FromAmazonKinesisArgs, FromAmazonKinesis,
+                       FromAmazonKinesisEvents>{};
     d.operator_location(&FromAmazonKinesisArgs::operator_location);
     auto stream = d.positional("stream", &FromAmazonKinesisArgs::stream);
     auto start = d.named("start", &FromAmazonKinesisArgs::start);
@@ -121,7 +123,8 @@ public:
     auto initial = ToAmazonKinesisArgs{};
     initial.message = default_message_expression();
     auto d
-      = Describer<ToAmazonKinesisArgs, ToAmazonKinesis>{std::move(initial)};
+      = Describer<ToAmazonKinesisArgs, ToAmazonKinesis, ToAmazonKinesisEvents>{
+        std::move(initial)};
     d.operator_location(&ToAmazonKinesisArgs::operator_location);
     auto stream = d.positional("stream", &ToAmazonKinesisArgs::stream);
     d.named_optional("message", &ToAmazonKinesisArgs::message, "blob|string");
@@ -166,7 +169,11 @@ public:
     // therefore land in their shard out of input order. Parallelism waives
     // that per-key ordering by design — routing affects placement, not
     // correctness.
-    d.parallelizable();
+    // TODO(TNZ-1409): The executor cannot yet route events across multiple
+    // lanes, so the event implementation must run as a single instance.
+    d.parallelizable([](const ToAmazonKinesisArgs&) {
+      return not nova_enabled();
+    });
     return d.without_optimize();
   }
 };

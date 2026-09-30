@@ -1,0 +1,10 @@
+from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                    start="trim_horizon",
+                    exit=true
+where partition_key == "masked"
+this = {
+  message: string(message),
+  stream_ok: stream == env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+  has_sequence_number: sequence_number != "",
+}
+sort message

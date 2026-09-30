@@ -10,11 +10,14 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <cstddef>
 #include <memory>
+#include <span>
 
 #include "async_sqs_queue.hpp"
 
@@ -49,6 +52,54 @@ struct ToSqsArgs {
 /// (`print_ndjson(this)`).
 auto default_to_amazon_sqs_message_expression() -> ast::expression;
 
+/// Receives messages from SQS for `from_amazon_sqs`, independent of the event
+/// representation.
+class SqsReceiver {
+public:
+  auto start(FromSqsArgs const& args, OpCtx& ctx) -> Task<void>;
+
+  /// Receives the next batch of messages as `Aws::Vector<Message>`.
+  auto receive() const -> Task<Any>;
+
+  /// Accounts for the bytes of the received `messages`.
+  auto count_bytes(Aws::Vector<Aws::SQS::Model::Message> const& messages)
+    -> void;
+
+  /// Accounts for `count` emitted events.
+  auto count_events(uint64_t count) -> void;
+
+  /// Deletes `messages` from the queue, unless the messages should be kept.
+  auto acknowledge(Aws::Vector<Aws::SQS::Model::Message> const& messages,
+                   OpCtx& ctx) -> Task<void>;
+
+private:
+  size_t batch_size_ = 1;
+  std::chrono::seconds poll_time_ = default_poll_time;
+  Option<std::chrono::seconds> visibility_timeout_;
+  bool keep_messages_ = false;
+  std::shared_ptr<AsyncSqsQueue> queue_;
+  MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
+};
+
+/// Sends messages to SQS for `to_amazon_sqs`, independent of the event
+/// representation.
+class SqsSender {
+public:
+  auto start(ToSqsArgs const& args, OpCtx& ctx) -> Task<void>;
+
+  /// Returns whether the queue is ready to send messages.
+  auto ready() const -> bool;
+
+  /// Sends one message.
+  auto send(std::span<std::byte const> bytes) -> Task<void>;
+
+private:
+  std::shared_ptr<AsyncSqsQueue> queue_;
+  MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
+};
+
 class FromSqs final : public Operator<void, table_slice> {
 public:
   explicit FromSqs(FromSqsArgs args);
@@ -60,12 +111,21 @@ public:
 
 private:
   FromSqsArgs args_;
-  size_t batch_size_ = 1;
-  std::chrono::seconds poll_time_ = default_poll_time;
-  Option<std::chrono::seconds> visibility_timeout_;
-  std::shared_ptr<AsyncSqsQueue> queue_;
-  MetricsCounter bytes_read_counter_;
-  MetricsCounter events_read_counter_;
+  SqsReceiver receiver_;
+};
+
+class FromSqsEvents final : public Operator<void, nova::Events> {
+public:
+  explicit FromSqsEvents(FromSqsArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void> override;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override;
+
+private:
+  FromSqsArgs args_;
+  SqsReceiver receiver_;
 };
 
 class ToSqs final : public Operator<table_slice, void> {
@@ -78,9 +138,21 @@ public:
 
 private:
   ToSqsArgs args_;
-  std::shared_ptr<AsyncSqsQueue> queue_;
-  MetricsCounter bytes_write_counter_;
-  MetricsCounter events_write_counter_;
+  SqsSender sender_;
+};
+
+class ToSqsEvents final : public Operator<nova::Events, void> {
+public:
+  explicit ToSqsEvents(ToSqsArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void> override;
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override;
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
+
+private:
+  ToSqsArgs args_;
+  SqsSender sender_;
+  Option<nova::Evaluator> message_;
 };
 
 } // namespace tenzir::plugins::sqs

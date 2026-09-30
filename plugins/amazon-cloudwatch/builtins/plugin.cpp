@@ -8,6 +8,7 @@
 
 #include "cloudwatch/operators.hpp"
 
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
@@ -142,7 +143,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromCloudWatchArgs, FromCloudWatch>{};
+    auto d
+      = Describer<FromCloudWatchArgs, FromCloudWatch, FromCloudWatchEvents>{};
     d.operator_location(&FromCloudWatchArgs::operator_location);
     auto group = d.positional("group", &FromCloudWatchArgs::group,
                               "string|list<string>");
@@ -387,7 +389,8 @@ public:
 
   auto describe() const -> Description override {
     auto initial = initial_to_cloudwatch_args("put");
-    auto d = Describer<ToCloudWatchArgs, ToCloudWatch>{std::move(initial)};
+    auto d = Describer<ToCloudWatchArgs, ToCloudWatch, ToCloudWatchEvents>{
+      std::move(initial)};
     d.operator_location(&ToCloudWatchArgs::operator_location);
     auto group = d.positional("group", &ToCloudWatchArgs::log_group);
     auto stream = d.named("stream", &ToCloudWatchArgs::log_stream);
@@ -488,7 +491,11 @@ public:
     // requires sequence tokens, so concurrent writers to the same log stream
     // are safe; events from different instances may interleave out of input
     // order, which parallelism waives by design.
-    d.parallelizable();
+    // TODO(TNZ-1409): The executor cannot yet route events across multiple
+    // lanes, so the event implementation must run as a single instance.
+    d.parallelizable([](const ToCloudWatchArgs&) {
+      return not nova_enabled();
+    });
     return d.without_optimize();
   }
 };

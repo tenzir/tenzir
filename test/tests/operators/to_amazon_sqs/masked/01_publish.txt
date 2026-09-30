@@ -1,0 +1,6 @@
+warning: expected `string` or `blob`, got `null`
+ --> tests/operators/to_amazon_sqs/masked/01_publish.tql:8:11
+  |
+8 |   message=message,
+  |           ~~~~~~~
+  |

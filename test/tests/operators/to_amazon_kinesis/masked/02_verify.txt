@@ -1,0 +1,10 @@
+{
+  message: "masked-1",
+  stream_ok: true,
+  has_sequence_number: true,
+}
+{
+  message: "masked-3",
+  stream_ok: true,
+  has_sequence_number: true,
+}

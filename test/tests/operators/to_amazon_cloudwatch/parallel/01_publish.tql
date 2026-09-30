@@ -1,4 +1,6 @@
 // parallelism: 4
+// TODO(TNZ-1409): Run this directory on Nova once the executor routes Nova
+// events across multiple lanes.
 // Each instance opens its own CloudWatch client; together they publish every
 // event exactly once. Events from different instances may interleave in the
 // log stream out of input order.

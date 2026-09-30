@@ -13,6 +13,8 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -130,24 +132,39 @@ struct ToCloudWatchSendReport {
   bool failed = false;
 };
 
-/// Wakeup messages delivered to `ToCloudWatch::await_task()` through the
+/// Wakeup messages delivered to `CloudWatchWriter::next()` through the
 /// wakeup queue.
 struct ToCloudWatchFlushTimeout {};
 struct ToCloudWatchReportReady {};
 
 auto default_to_amazon_cloudwatch_message_expression() -> ast::expression;
 
-class FromCloudWatch final : public Operator<void, table_slice> {
-public:
-  explicit FromCloudWatch(FromCloudWatchArgs args);
+/// A log event waiting to be written to CloudWatch Logs.
+struct PendingEvent {
+  time timestamp;
+  std::string message;
+};
 
-  auto start(OpCtx& ctx) -> Task<void> override;
-  auto snapshot(Serde& serde) -> void override;
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override;
-  auto state() -> OperatorState override;
-  auto stop(OpCtx& ctx) -> Task<void> override;
+/// Reads log events for `from_amazon_cloudwatch`, independent of the event
+/// representation.
+class CloudWatchReader {
+public:
+  explicit CloudWatchReader(FromCloudWatchArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void>;
+
+  /// Reads the next page of log events as a `SourceResult`.
+  auto next() const -> Task<Any>;
+
+  /// Applies a result from `next()` and returns the log events to emit.
+  auto handle(Any result, OpCtx& ctx) -> std::vector<CloudWatchEvent>;
+
+  /// Accounts for `count` emitted events.
+  auto count_events(uint64_t count) -> void;
+
+  auto snapshot(Serde& serde) -> void;
+  auto state() -> OperatorState;
+  auto stop() -> void;
 
 private:
   FromCloudWatchArgs args_;
@@ -163,23 +180,30 @@ private:
   MetricsCounter events_read_counter_;
 };
 
-class ToCloudWatch final : public Operator<table_slice, void> {
+/// Batches and writes log events for `to_amazon_cloudwatch`, independent of
+/// the event representation.
+class CloudWatchWriter {
 public:
-  explicit ToCloudWatch(ToCloudWatchArgs args);
+  explicit CloudWatchWriter(ToCloudWatchArgs const& args);
 
-  auto start(OpCtx& ctx) -> Task<void> override;
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override;
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override;
-  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override;
-  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
-  auto state() -> OperatorState override;
+  auto start(OpCtx& ctx) -> Task<void>;
 
-public:
-  struct Event {
-    time timestamp;
-    std::string message;
-  };
+  /// Whether the writer is done and drops all further log events.
+  auto done() const -> bool;
+
+  /// Adds a log event to the current batch. Skips the event with a warning if
+  /// it exceeds the maximum size.
+  auto add(time timestamp, std::string message, OpCtx& ctx) -> Task<void>;
+
+  /// Waits for the next wakeup message.
+  auto next() const -> Task<Any>;
+
+  /// Handles a wakeup message from `next()`.
+  auto handle(Any result, OpCtx& ctx) -> Task<void>;
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void>;
+  auto finalize(OpCtx& ctx) -> Task<void>;
+  auto state() -> OperatorState;
 
 private:
   auto flush(OpCtx& ctx) -> Task<void>;
@@ -195,7 +219,7 @@ private:
   ToMethod method_ = ToMethod::put;
   std::shared_ptr<amazon::SignedHttpClient> client_;
   std::string token_;
-  std::vector<Event> batch_;
+  std::vector<PendingEvent> batch_;
   uint64_t batch_size_ = 1000;
   duration batch_timeout_ = std::chrono::seconds{1};
   Option<std::chrono::steady_clock::time_point> next_timeout_;
@@ -203,11 +227,10 @@ private:
   /// timer tasks to one; a timer that fires for an already-flushed batch
   /// re-arms itself for the deadline of the batch that replaced it.
   bool timer_armed_ = false;
-  /// Wakeup messages for `await_task()`. Helper tasks enqueue, only the
-  /// operator driver dequeues and updates state; operator members are never
-  /// touched from concurrently running tasks. The capacity only bounds
-  /// buffering: a full queue suspends the producing helper task until the
-  /// driver drains it.
+  /// Wakeup messages for `next()`. Helper tasks enqueue, only the operator
+  /// driver dequeues and updates state; members are never touched from
+  /// concurrently running tasks. The capacity only bounds buffering: a full
+  /// queue suspends the producing helper task until the driver drains it.
   mutable Arc<folly::coro::BoundedQueue<Any>> wakeup_queue_{std::in_place, 16};
   mutable Option<Arc<folly::coro::BoundedQueue<ToCloudWatchSendReport>>>
     send_queue_;
@@ -217,6 +240,74 @@ private:
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
   bool done_ = false;
+};
+
+class FromCloudWatch final : public Operator<void, table_slice> {
+public:
+  explicit FromCloudWatch(FromCloudWatchArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void> override;
+  auto snapshot(Serde& serde) -> void override;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override;
+  auto state() -> OperatorState override;
+  auto stop(OpCtx& ctx) -> Task<void> override;
+
+private:
+  CloudWatchReader reader_;
+};
+
+class FromCloudWatchEvents final : public Operator<void, nova::Events> {
+public:
+  explicit FromCloudWatchEvents(FromCloudWatchArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void> override;
+  auto snapshot(Serde& serde) -> void override;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override;
+  auto state() -> OperatorState override;
+  auto stop(OpCtx& ctx) -> Task<void> override;
+
+private:
+  CloudWatchReader reader_;
+};
+
+class ToCloudWatch final : public Operator<table_slice, void> {
+public:
+  explicit ToCloudWatch(ToCloudWatchArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void> override;
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override;
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override;
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
+  auto state() -> OperatorState override;
+
+private:
+  ToCloudWatchArgs args_;
+  CloudWatchWriter writer_;
+};
+
+class ToCloudWatchEvents final : public Operator<nova::Events, void> {
+public:
+  explicit ToCloudWatchEvents(ToCloudWatchArgs args);
+
+  auto start(OpCtx& ctx) -> Task<void> override;
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override;
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override;
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override;
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
+  auto state() -> OperatorState override;
+
+private:
+  ToCloudWatchArgs args_;
+  CloudWatchWriter writer_;
+  Option<nova::Evaluator> payload_;
+  Option<nova::Evaluator> timestamp_;
 };
 
 } // namespace tenzir::plugins::cloudwatch

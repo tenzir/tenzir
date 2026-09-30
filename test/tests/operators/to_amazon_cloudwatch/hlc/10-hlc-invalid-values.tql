@@ -1,0 +1,28 @@
+---
+assertions:
+  fixtures:
+    cloudwatch:
+      hlc:
+        ok_request_count: 6
+        messages:
+          - pre-epoch
+          - hlc-split-1
+          - hlc-split-2
+          - hlc-split-3
+          - hlc-masked-1
+          - hlc-masked-2
+          - hlc-valid-1
+          - hlc-valid-2
+---
+
+from {message: null, timestamp: from_epoch(3s)},
+     {message: 42, timestamp: from_epoch(3s)},
+     {message: "hlc-valid-1", timestamp: "invalid"},
+     {message: "hlc-valid-2", timestamp: null}
+to_amazon_cloudwatch "ignored",
+  stream="ignored",
+  method="hlc",
+  payload=message,
+  timestamp=timestamp,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ENDPOINT")
