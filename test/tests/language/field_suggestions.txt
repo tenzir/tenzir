@@ -1,4 +1,4 @@
-warning: field `src_i` not found
+warning: event does not have field
   --> tests/language/field_suggestions.tql:19:17
    |
 19 |   root_close1 = src_i,
@@ -7,7 +7,7 @@ warning: field `src_i` not found
    = hint: did you mean `src_ip`?
    = hint: append `?` to suppress this warning
 
-warning: field `dest_por` not found
+warning: event does not have field
   --> tests/language/field_suggestions.tql:20:17
    |
 20 |   root_close2 = dest_por,
@@ -16,7 +16,7 @@ warning: field `dest_por` not found
    = hint: did you mean `dest_port`?
    = hint: append `?` to suppress this warning
 
-warning: field `message_conten` not found
+warning: event does not have field
   --> tests/language/field_suggestions.tql:21:17
    |
 21 |   root_close3 = message_conten,
@@ -25,7 +25,7 @@ warning: field `message_conten` not found
    = hint: did you mean `message_content`?
    = hint: append `?` to suppress this warning
 
-warning: field `xyz` not found
+warning: event does not have field
   --> tests/language/field_suggestions.tql:24:19
    |
 24 |   root_distant1 = xyz,
@@ -33,7 +33,7 @@ warning: field `xyz` not found
    |
    = hint: append `?` to suppress this warning
 
-warning: field `completely_different` not found
+warning: event does not have field
   --> tests/language/field_suggestions.tql:25:19
    |
 25 |   root_distant2 = completely_different,
@@ -41,101 +41,103 @@ warning: field `completely_different` not found
    |
    = hint: append `?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:28:23
+warning: record does not have field
+  --> tests/language/field_suggestions.tql:28:18
    |
 28 |   field_close1 = user.usernam,
-   |                       ~~~~~~~
+   |                  ~~~~
+   ⋮
+28 |   field_close1 = user.usernam,
+   |                       ------- field does not exist
    |
-   = note: field name is `usernam`
    = hint: did you mean `username`?
    = hint: append `?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:29:23
+warning: record does not have field
+  --> tests/language/field_suggestions.tql:29:18
    |
 29 |   field_close2 = user.email_addres,
-   |                       ~~~~~~~~~~~~
+   |                  ~~~~
+   ⋮
+29 |   field_close2 = user.email_addres,
+   |                       ------------ field does not exist
    |
-   = note: field name is `email_addres`
    = hint: did you mean `email_address`?
    = hint: append `?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:32:25
+warning: record does not have field
+  --> tests/language/field_suggestions.tql:32:20
    |
 32 |   field_distant1 = user.abc,
-   |                         ~~~
+   |                    ~~~~
+   ⋮
+32 |   field_distant1 = user.abc,
+   |                         --- field does not exist
    |
-   = note: field name is `abc`
    = hint: append `?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:33:25
+warning: record does not have field
+  --> tests/language/field_suggestions.tql:33:20
    |
 33 |   field_distant2 = user.qwerty,
-   |                         ~~~~~~
+   |                    ~~~~
+   ⋮
+33 |   field_distant2 = user.qwerty,
+   |                         ------ field does not exist
    |
-   = note: field name is `qwerty`
    = hint: append `?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:36:23
+warning: record has no field `src_i`
+  --> tests/language/field_suggestions.tql:36:18
    |
 36 |   index_close1 = this["src_i"],
-   |                       ~~~~~~~
+   |                  ~~~~~~~~~~~~~
    |
-   = note: field name is `src_i`
    = hint: did you mean `src_ip`?
-   = hint: append `?` to suppress this warning
+   = hint: use `[…]?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:37:23
+warning: record has no field `dest_por`
+  --> tests/language/field_suggestions.tql:37:18
    |
 37 |   index_close2 = this["dest_por"],
-   |                       ~~~~~~~~~~
+   |                  ~~~~~~~~~~~~~~~~
    |
-   = note: field name is `dest_por`
    = hint: did you mean `dest_port`?
-   = hint: append `?` to suppress this warning
+   = hint: use `[…]?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:38:23
+warning: record has no field `usernam`
+  --> tests/language/field_suggestions.tql:38:18
    |
 38 |   index_close3 = user["usernam"],
-   |                       ~~~~~~~~~
+   |                  ~~~~~~~~~~~~~~~
    |
-   = note: field name is `usernam`
    = hint: did you mean `username`?
-   = hint: append `?` to suppress this warning
+   = hint: use `[…]?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:39:23
+warning: record has no field `email_addres`
+  --> tests/language/field_suggestions.tql:39:18
    |
 39 |   index_close4 = user["email_addres"],
-   |                       ~~~~~~~~~~~~~~
+   |                  ~~~~~~~~~~~~~~~~~~~~
    |
-   = note: field name is `email_addres`
    = hint: did you mean `email_address`?
-   = hint: append `?` to suppress this warning
+   = hint: use `[…]?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:42:25
+warning: record has no field `xyz`
+  --> tests/language/field_suggestions.tql:42:20
    |
 42 |   index_distant1 = this["xyz"],
-   |                         ~~~~~
+   |                    ~~~~~~~~~~~
    |
-   = note: field name is `xyz`
-   = hint: append `?` to suppress this warning
+   = hint: use `[…]?` to suppress this warning
 
-warning: record does not have this field
-  --> tests/language/field_suggestions.tql:43:25
+warning: record has no field `abc123`
+  --> tests/language/field_suggestions.tql:43:20
    |
 43 |   index_distant2 = user["abc123"],
-   |                         ~~~~~~~~
+   |                    ~~~~~~~~~~~~~~
    |
-   = note: field name is `abc123`
-   = hint: append `?` to suppress this warning
+   = hint: use `[…]?` to suppress this warning
 {
   root_close1: null,
   root_close2: null,

@@ -1,0 +1,40 @@
+warning: expected `blob` to contain valid UTF-8 data
+  --> tests/functions/collect_record/invalid_blob_keys.tql:12:31
+   |
+12 | select entries=collect_record(entries),
+   |                               ~~~~~~~
+   |
+
+warning: expected `blob` to contain valid UTF-8 data
+  --> tests/functions/collect_record/invalid_blob_keys.tql:13:24
+   |
+13 |   pairs=collect_record(entries.map(e => [e.key, e.value])),
+   |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: expected `blob` to contain valid UTF-8 data
+  --> tests/functions/collect_record/invalid_blob_keys.tql:14:27
+   |
+14 |   separate=collect_record(entries.map(e => e.key), entries.map(e => e.value))
+   |                           ~~~~~~~~~~~~~~~~~~~~~~~
+   |
+{
+  entries: {
+    "null": "kept",
+    "héllo": "valid",
+    "": "empty",
+    "42": "number",
+  },
+  pairs: {
+    "null": "kept",
+    "héllo": "valid",
+    "": "empty",
+    "42": "number",
+  },
+  separate: {
+    "null": "kept",
+    "héllo": "valid",
+    "": "empty",
+    "42": "number",
+  },
+}

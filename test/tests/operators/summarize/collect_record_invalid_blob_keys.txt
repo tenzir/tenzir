@@ -1,0 +1,40 @@
+warning: expected `blob` to contain valid UTF-8 data
+ --> tests/operators/summarize/collect_record_invalid_blob_keys.tql:4:34
+  |
+4 | summarize entries=collect_record({key: key, value: value}),
+  |                                  ~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: expected `blob` to contain valid UTF-8 data
+ --> tests/operators/summarize/collect_record_invalid_blob_keys.tql:5:24
+  |
+5 |   pairs=collect_record([key, value]), separate=collect_record(key, value)
+  |                        ~~~~~~~~~~~~
+  |
+
+warning: expected `blob` to contain valid UTF-8 data
+ --> tests/operators/summarize/collect_record_invalid_blob_keys.tql:5:63
+  |
+5 |   pairs=collect_record([key, value]), separate=collect_record(key, value)
+  |                                                               ~~~
+  |
+{
+  entries: {
+    "null": "kept",
+    "héllo": "valid",
+    "": "empty",
+    "42": "number",
+  },
+  pairs: {
+    "null": "kept",
+    "héllo": "valid",
+    "": "empty",
+    "42": "number",
+  },
+  separate: {
+    "null": "kept",
+    "héllo": "valid",
+    "": "empty",
+    "42": "number",
+  },
+}

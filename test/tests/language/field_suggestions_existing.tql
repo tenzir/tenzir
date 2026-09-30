@@ -1,0 +1,8 @@
+// A known field missing from one active shape is not a misspelling.
+from {rows: [
+  {src_ip: 1, user: {src_ip: 1}, index: "src_ip"},
+  {src_id: 2, user: {src_id: 2}, index: "src_ip"},
+]}
+unroll rows
+this = rows
+select root=src_ip, nested=user.src_ip, indexed=user[index]

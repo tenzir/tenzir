@@ -2248,8 +2248,9 @@ public:
         .emit(frame);
     }
     auto subject = args.x;
-    // `stringify` renders every row of the frame's mask, nulls included.
-    return Array<Data>{stringify(subject.data, frame.mask())};
+    auto result = stringify(subject.data, frame.mask(), args.x.source, frame);
+    return Array<Data>{std::move(result.data)}.null_where(
+      frame.mask().and_not(result.present));
   }
 };
 

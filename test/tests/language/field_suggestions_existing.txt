@@ -1,0 +1,36 @@
+warning: event does not have field
+ --> tests/language/field_suggestions_existing.tql:8:13
+  |
+8 | select root=src_ip, nested=user.src_ip, indexed=user[index]
+  |             ~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record does not have field
+ --> tests/language/field_suggestions_existing.tql:8:28
+  |
+8 | select root=src_ip, nested=user.src_ip, indexed=user[index]
+  |                            ~~~~
+  ⋮
+8 | select root=src_ip, nested=user.src_ip, indexed=user[index]
+  |                                 ------ field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record has no field `src_ip`
+ --> tests/language/field_suggestions_existing.tql:8:49
+  |
+8 | select root=src_ip, nested=user.src_ip, indexed=user[index]
+  |                                                 ~~~~~~~~~~~
+  |
+  = hint: use `[…]?` to suppress this warning
+{
+  root: 1,
+  nested: 1,
+  indexed: 1,
+}
+{
+  root: null,
+  nested: null,
+  indexed: null,
+}

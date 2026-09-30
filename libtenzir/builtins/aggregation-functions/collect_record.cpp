@@ -79,7 +79,14 @@ public:
         result.put(*key, value);
       },
       [&](auto const&) {
-        result.put(stringify(key), value);
+        auto converted = stringify(key);
+        if (not converted) {
+          bad_key_(dh_, diagnostic::warning("expected `blob` to contain valid "
+                                            "UTF-8 data")
+                          .primary(source_));
+          return;
+        }
+        result.put(*converted, value);
       });
   }
 
@@ -127,6 +134,7 @@ private:
   diagnostic_handler& dh_;
   WarnOnce bad_pair_;
   WarnOnce bad_entry_;
+  WarnOnce bad_key_;
 };
 
 class CollectRecordFunction {

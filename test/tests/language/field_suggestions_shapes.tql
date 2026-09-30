@@ -1,0 +1,4 @@
+// Missing rows do not suggest a field to itself.
+from {src_ip: "192.0.2.1", user: {username: "a"}, index: "username"},
+     {other: 42, user: {other: 42}, index: "username"}
+select root=src_ip, nested=user.username, indexed=user[index]

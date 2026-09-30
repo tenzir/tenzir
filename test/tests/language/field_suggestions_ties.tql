@@ -1,0 +1,3 @@
+// Ties are resolved consistently in field encounter order.
+from {src_ip: 1, src_id: 2}
+select src_i

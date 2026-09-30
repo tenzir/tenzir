@@ -156,6 +156,9 @@ series or slice first, then iterate only when row-wise access is necessary.
 
 ### Style
 
+Include project headers with fully scoped paths from CMake-registered `include/`
+directories, including internal helper headers; do not use relative includes.
+
 - [coding-conventions.md](.agents/references/coding-conventions.md): Formatting, structure, and idioms
 - [naming-conventions.md](.agents/references/naming-conventions.md): Naming patterns
 

@@ -1,0 +1,2 @@
+from {value: b"\xff"}, {value: b"\xfe"}
+select formatted=f"<{value}>", converted=string(value)

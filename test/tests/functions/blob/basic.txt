@@ -1,12 +1,12 @@
 {
-  value: "b\"hello\"",
+  value: "hello",
   kind: "blob",
 }
 {
-  value: "null",
+  value: null,
   kind: "null",
 }
 {
-  value: "b\"🚀\"",
+  value: "🚀",
   kind: "blob",
 }

@@ -1,0 +1,5 @@
+from {key: null, value: "kept"}, {key: b"\xff", value: "bad1"},
+  {key: b"\xfe", value: "bad2"}, {key: b"héllo", value: "valid"},
+  {key: b"", value: "empty"}, {key: 42, value: "number"}
+summarize entries=collect_record({key: key, value: value}),
+  pairs=collect_record([key, value]), separate=collect_record(key, value)

@@ -4,6 +4,7 @@ warning: event does not have field
 4 | summarize g, all=collect(x), total=sum(x)
   |           ~
   |
+  = hint: did you mean `x`?
   = hint: append `?` to suppress this warning
 {
   g: "a",

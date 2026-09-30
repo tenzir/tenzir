@@ -1,0 +1,52 @@
+{
+  formatted: "<null>",
+  converted: null,
+}
+{
+  formatted: "<true>",
+  converted: "true",
+}
+{
+  formatted: "<42>",
+  converted: "42",
+}
+{
+  formatted: "<-2>",
+  converted: "-2",
+}
+{
+  formatted: "<1.5>",
+  converted: "1.5",
+}
+{
+  formatted: "<hello>",
+  converted: "hello",
+}
+{
+  formatted: "<héllo>",
+  converted: "héllo",
+}
+{
+  formatted: "<192.0.2.1>",
+  converted: "192.0.2.1",
+}
+{
+  formatted: "<192.0.2.0/24>",
+  converted: "192.0.2.0/24",
+}
+{
+  formatted: "<2026-01-02T03:04:05Z>",
+  converted: "2026-01-02T03:04:05Z",
+}
+{
+  formatted: "<1s>",
+  converted: "1s",
+}
+{
+  formatted: "<[1,\"two\",null,b\"blob\"]>",
+  converted: "[1,\"two\",null,b\"blob\"]",
+}
+{
+  formatted: "<{b:2,a:\"one\"}>",
+  converted: "{b:2,a:\"one\"}",
+}

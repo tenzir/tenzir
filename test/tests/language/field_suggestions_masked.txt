@@ -1,0 +1,31 @@
+warning: event does not have field
+ --> tests/language/field_suggestions_masked.tql:6:8
+  |
+6 | root = closest_nam
+  |        ~~~~~~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record does not have field
+ --> tests/language/field_suggestions_masked.tql:7:16
+  |
+7 | nested_value = nested.closest_nam
+  |                ~~~~~~
+  ⋮
+7 | nested_value = nested.closest_nam
+  |                       ----------- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record has no field `closest_nam`
+ --> tests/language/field_suggestions_masked.tql:9:15
+  |
+9 | index_value = nested[index_name]
+  |               ~~~~~~~~~~~~~~~~~~
+  |
+  = hint: use `[…]?` to suppress this warning
+{
+  root: null,
+  nested_value: null,
+  index_value: null,
+}

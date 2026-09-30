@@ -32,6 +32,7 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <arrow/util/key_value_metadata.h>
+#include <arrow/util/utf8.h>
 #include <caf/binary_serializer.hpp>
 
 #include <array>
@@ -2517,6 +2518,27 @@ TEST("constant record removal preserves unselected rows") {
   CHECK(not removed.field("z")->present.get(1));
   CHECK(removed.field("z")->present.get(2));
   CHECK_EQUAL(record_field_names(source.get(1)), original_names);
+}
+
+TEST("row stringification distinguishes invalid blobs from nulls") {
+  arrow::util::InitializeUTF8();
+  auto check = [](Data value, std::string_view expected) {
+    auto result = stringify(RowView<Data>{value});
+    REQUIRE(result);
+    CHECK_EQUAL(*result, expected);
+  };
+  check(Null{}, "null");
+  check(String{"null"}, "null");
+  check(Int{42}, "42");
+  check(Blob{}, "");
+  check(Blob{std::byte{0x6f}, std::byte{0x6b}}, "ok");
+  check(Blob{std::byte{0xc3}, std::byte{0xa9}}, "é");
+  check(List{Int{1}, Bool{true}}, "[1,true]");
+  for (auto blob :
+       {Blob{std::byte{0xff}}, Blob{std::byte{0xc3}}, Blob{std::byte{0x80}}}) {
+    auto value = Data{std::move(blob)};
+    CHECK(not stringify(RowView<Data>{value}));
+  }
 }
 
 TEST("constant structured materialization and formatting match primary "

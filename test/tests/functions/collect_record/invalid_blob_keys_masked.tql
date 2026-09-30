@@ -1,0 +1,4 @@
+from {keep: false, key: b"\xff"}, {keep: true, key: b"ok"},
+  {keep: false, key: b"\xfe"}
+where keep
+select result=collect_record([[key, "kept"]])

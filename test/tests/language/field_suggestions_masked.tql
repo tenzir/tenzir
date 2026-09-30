@@ -1,0 +1,10 @@
+// Only fields in active rows should be suggested, including nested records
+// and dynamic indices. A field missing from one shape must not suggest itself.
+from {keep: false, closest_name: 1, nested: {closest_name: 1}},
+     {keep: true, distant: 2, nested: {distant: 2}}
+where keep
+root = closest_nam
+nested_value = nested.closest_nam
+index_name = "closest_nam"
+index_value = nested[index_name]
+select root, nested_value, index_value

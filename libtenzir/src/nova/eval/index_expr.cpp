@@ -2,6 +2,7 @@
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/eval_internal.hpp"
+#include "tenzir/nova/field_suggestions.hpp"
 #include "tenzir/nova/union_array.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -23,7 +24,8 @@ struct IndexDiagnostics {
   bool bad_index = false;
   Option<std::string> missing_field;
 
-  auto emit(ast::index_expr const& x, EvalFrame const& frame) const -> void {
+  auto emit(ast::index_expr const& x, EvalFrame const& frame,
+            Option<MaskedArray<Array<Record>>> records = None{}) const -> void {
     if (not x.has_question_mark) {
       auto const hint = x.is_get
                           ? "provide a fallback value to suppress this warning"
@@ -43,6 +45,15 @@ struct IndexDiagnostics {
       if (missing_field) {
         diagnostic::warning("record has no field `{}`", *missing_field)
           .primary(x)
+          .compose([&](auto builder) {
+            auto suggestion
+              = records ? _::suggest_field_name(*missing_field, records->data,
+                                                frame.mask() & records->present)
+                        : None{};
+            return suggestion ? std::move(builder).hint("did you mean `{}`?",
+                                                        *suggestion)
+                              : std::move(builder);
+          })
           .hint(hint)
           .emit(frame);
       }
@@ -119,14 +130,14 @@ auto eval_constant_field(MaskedArray<Array<Record>> const& records,
     if (records_mask.any()) {
       diagnostics.missing_field = std::string{name};
     }
-    diagnostics.emit(x, frame);
+    diagnostics.emit(x, frame, records);
     return frame.null();
   }
   field->present = std::move(field->present) & records.present;
   if (records_mask.and_not(field->present).any()) {
     diagnostics.missing_field = std::string{name};
   }
-  diagnostics.emit(x, frame);
+  diagnostics.emit(x, frame, records);
   return std::move(field->data).null_where(frame.mask().and_not(field->present));
 }
 
@@ -168,7 +179,7 @@ auto eval_record_index(MaskedArray<Array<Record>> const& records,
       append_row(builder, field->data.get(row));
     }
   }
-  diagnostics.emit(x, frame);
+  diagnostics.emit(x, frame, records);
   return builder.finish();
 }
 
@@ -321,7 +332,7 @@ auto eval_index_rows(ast::index_expr const& x, Array<Data> const& subject,
         builder.null();
       });
   }
-  diagnostics.emit(x, frame);
+  diagnostics.emit(x, frame, subject.get_alternative<Record>());
   return builder.finish();
 }
 

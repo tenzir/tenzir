@@ -1,109 +1,11 @@
-warning: `length_chars` expected valid UTF-8
- --> tests/functions/string/invalid_utf8.tql:8:11
+warning: expected `blob` to contain valid UTF-8 data
+ --> tests/functions/string/invalid_utf8.tql:4:12
   |
-8 |   chars = x.length_chars(),
-  |           ~
+4 | x = string(b)
+  |            ~
   |
-
-warning: `is_alnum` expected valid UTF-8
- --> tests/functions/string/invalid_utf8.tql:9:11
-  |
-9 |   alnum = x.is_alnum(),
-  |           ~
-  |
-
-warning: `is_alpha` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:10:11
-   |
-10 |   alpha = x.is_alpha(),
-   |           ~
-   |
-
-warning: `is_lower` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:11:11
-   |
-11 |   lower = x.is_lower(),
-   |           ~
-   |
-
-warning: `is_numeric` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:12:13
-   |
-12 |   numeric = x.is_numeric(),
-   |             ~
-   |
-
-warning: `is_printable` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:13:15
-   |
-13 |   printable = x.is_printable(),
-   |               ~
-   |
-
-warning: `is_title` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:14:11
-   |
-14 |   title = x.is_title(),
-   |           ~
-   |
-
-warning: `is_upper` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:15:11
-   |
-15 |   upper = x.is_upper(),
-   |           ~
-   |
-
-warning: `trim` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:16:10
-   |
-16 |   trim = x.trim().length_bytes(),
-   |          ~
-   |
-
-warning: `trim_start` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:17:16
-   |
-17 |   trim_start = x.trim_start().length_bytes(),
-   |                ~
-   |
-
-warning: `trim_end` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:18:14
-   |
-18 |   trim_end = x.trim_end().length_bytes(),
-   |              ~
-   |
-
-warning: `trim` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:19:16
-   |
-19 |   trim_chars = x.trim("b").length_bytes(),
-   |                ~
-   |
-
-warning: `reverse` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:20:13
-   |
-20 |   reverse = x.reverse().length_bytes(),
-   |             ~
-   |
-
-warning: `pad_start` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:21:15
-   |
-21 |   pad_start = x.pad_start(8).length_bytes(),
-   |               ~
-   |
-
-warning: `pad_end` expected valid UTF-8
-  --> tests/functions/string/invalid_utf8.tql:22:13
-   |
-22 |   pad_end = x.pad_end(8).length_bytes()
-   |             ~
-   |
 {
-  bytes: 6,
+  bytes: null,
   chars: null,
   alnum: null,
   alpha: null,
@@ -121,20 +23,20 @@ warning: `pad_end` expected valid UTF-8
   pad_end: null,
 }
 {
-  bytes: 5,
-  chars: 5,
-  alnum: false,
-  alpha: false,
+  bytes: 2,
+  chars: 2,
+  alnum: true,
+  alpha: true,
   lower: true,
   numeric: false,
   printable: true,
   title: false,
   upper: false,
-  trim: 5,
-  trim_start: 5,
-  trim_end: 5,
-  trim_chars: 4,
-  reverse: 5,
+  trim: 2,
+  trim_start: 2,
+  trim_end: 2,
+  trim_chars: 2,
+  reverse: 2,
   pad_start: 8,
   pad_end: 8,
 }

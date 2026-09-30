@@ -1,0 +1,11 @@
+warning: event does not have field
+ --> tests/language/field_suggestions_ties.tql:3:8
+  |
+3 | select src_i
+  |        ~~~~~
+  |
+  = hint: did you mean `src_ip`?
+  = hint: append `?` to suppress this warning
+{
+  src_i: null,
+}

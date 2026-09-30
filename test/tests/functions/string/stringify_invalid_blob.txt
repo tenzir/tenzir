@@ -1,0 +1,21 @@
+warning: expected `blob` to contain valid UTF-8 data
+ --> tests/functions/string/stringify_invalid_blob.tql:2:22
+  |
+2 | select formatted=f"<{value}>", converted=string(value)
+  |                      ~~~~~
+  |
+
+warning: expected `blob` to contain valid UTF-8 data
+ --> tests/functions/string/stringify_invalid_blob.tql:2:49
+  |
+2 | select formatted=f"<{value}>", converted=string(value)
+  |                                                 ~~~~~
+  |
+{
+  formatted: "<null>",
+  converted: null,
+}
+{
+  formatted: "<null>",
+  converted: null,
+}

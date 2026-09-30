@@ -1,0 +1,36 @@
+warning: event does not have field
+ --> tests/language/field_suggestions_shapes.tql:4:13
+  |
+4 | select root=src_ip, nested=user.username, indexed=user[index]
+  |             ~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record does not have field
+ --> tests/language/field_suggestions_shapes.tql:4:28
+  |
+4 | select root=src_ip, nested=user.username, indexed=user[index]
+  |                            ~~~~
+  ⋮
+4 | select root=src_ip, nested=user.username, indexed=user[index]
+  |                                 -------- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: record has no field `username`
+ --> tests/language/field_suggestions_shapes.tql:4:51
+  |
+4 | select root=src_ip, nested=user.username, indexed=user[index]
+  |                                                   ~~~~~~~~~~~
+  |
+  = hint: use `[…]?` to suppress this warning
+{
+  root: "192.0.2.1",
+  nested: "a",
+  indexed: "a",
+}
+{
+  root: null,
+  nested: null,
+  indexed: null,
+}

@@ -1,0 +1,9 @@
+// An exact name in inactive shapes must not suppress a valid active hint.
+from {rows: [
+  {keep: false, src_ip: 1, user: {src_ip: 1}, index: "src_ip"},
+  {keep: true, src_id: 2, user: {src_id: 2}, index: "src_ip"},
+]}
+unroll rows
+this = rows
+where keep
+select root=src_ip, nested=user.src_ip, indexed=user[index]

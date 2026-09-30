@@ -1,0 +1,3 @@
+from {keep: false, value: b"\xff"}, {keep: true, value: b"héllo"}
+where keep
+select formatted=f"<{value}>", converted=string(value)

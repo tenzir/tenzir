@@ -1,16 +1,26 @@
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/eval_internal.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/nova/field_suggestions.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 namespace tenzir::nova {
 
 auto _::EvalRun::eval(const ast::root_field& x, EvalFrame frame)
   -> Array<Data> {
-  const auto maybe_warn = [&x, &frame]() {
+  const auto maybe_warn = [this, &x, &frame]() {
     if (not x.has_question_mark) {
       diagnostic::warning("event does not have field")
         .primary(x.get_location())
+        .compose([&](auto builder) {
+          auto suggestion
+            = input_
+                ? _::suggest_field_name(x.id.name, input_->data, frame.mask())
+                : None{};
+          return suggestion
+                   ? std::move(builder).hint("did you mean `{}`?", *suggestion)
+                   : std::move(builder);
+        })
         .hint("append `?` to suppress this warning")
         .emit(frame);
     }

@@ -58,7 +58,9 @@ auto _::EvalRun::eval(ast::format_expr const& x, EvalFrame frame)
           text_mask = mask.and_not(secrets->present);
         }
         segments.emplace_back(Replacement{
-          .text = stringify(value, text_mask),
+          .text
+          = stringify(value, text_mask, replacement.expr.get_location(), frame)
+              .data,
           .secrets = std::move(secrets),
         });
       });

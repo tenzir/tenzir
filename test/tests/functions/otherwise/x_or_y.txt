@@ -4,6 +4,7 @@ warning: event does not have field
 19 | z = x.otherwise(y)
    |     ~
    |
+   = hint: did you mean `z`?
    = hint: append `?` to suppress this warning
 
 warning: event does not have field
@@ -12,6 +13,7 @@ warning: event does not have field
 19 | z = x.otherwise(y)
    |                 ~
    |
+   = hint: did you mean `z`?
    = hint: append `?` to suppress this warning
 {
   x: 1,

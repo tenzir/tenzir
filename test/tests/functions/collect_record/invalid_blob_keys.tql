@@ -1,0 +1,14 @@
+// Invalid blobs must not overwrite the real null key. Each call warns once.
+from {
+  entries: [
+    {key: null, value: "kept"},
+    {key: b"\xff", value: "bad1"},
+    {key: b"\xfe", value: "bad2"},
+    {key: b"héllo", value: "valid"},
+    {key: b"", value: "empty"},
+    {key: 42, value: "number"},
+  ],
+}
+select entries=collect_record(entries),
+  pairs=collect_record(entries.map(e => [e.key, e.value])),
+  separate=collect_record(entries.map(e => e.key), entries.map(e => e.value))

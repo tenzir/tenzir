@@ -1,0 +1,14 @@
+from {value: null},
+     {value: true},
+     {value: 42},
+     {value: -2},
+     {value: 1.5},
+     {value: "hello"},
+     {value: b"héllo"},
+     {value: 192.0.2.1},
+     {value: 192.0.2.0/24},
+     {value: 2026-01-02T03:04:05Z},
+     {value: 1s},
+     {value: [1, "two", null, b"blob"]},
+     {value: {b: 2, a: "one"}}
+select formatted=f"<{value}>", converted=string(value)

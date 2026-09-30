@@ -1,7 +1,5 @@
-// Converting a blob does not validate UTF-8. Functions that decode the
-// characters of such a string null its row with a warning, even when the
-// invalid bytes follow the characters that decide the result, while the
-// other rows remain unaffected.
+// Blob conversion rejects invalid UTF-8 before character-oriented functions
+// see it. The other rows remain unaffected.
 from {b: b"x\x80y"}, {b: b"ok"}
 x = string(b)
 select bytes = x.length_bytes(),

@@ -14,7 +14,7 @@
     "192.0.2.0/24": "value",
     "2026-01-01T00:00:00Z": "value",
     "1s": "value",
-    "b\"abc\"": "value",
+    abc: "value",
     "[1,true]": "value",
     "{x:1}": "value",
     "[]": "value",
