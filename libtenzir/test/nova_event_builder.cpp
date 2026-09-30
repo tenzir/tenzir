@@ -198,6 +198,41 @@ TEST("event builder scopes selector inference to unparsed fields") {
   }
 }
 
+TEST("event builder can retain repeated keys with a schema policy") {
+  for (auto merge_structural : {false, true}) {
+    for (auto selector : {false, true}) {
+      for (auto raw : {false, true}) {
+        auto dh = null_diagnostic_handler{};
+        auto settings = EventBuilder::Settings{};
+        settings.policy
+          = selector
+              ? EventBuilder::Policy{EventBuilder::SelectorPolicy{"schema",
+                                                                  None{}}}
+              : EventBuilder::Policy{EventBuilder::SchemaPolicy{"missing"}};
+        settings.raw = raw;
+        settings.infer_numbers = true;
+        settings.unflatten_separator = ".";
+        settings.merge_structural = merge_structural;
+        auto builder = make_builder(dh, std::move(settings));
+        auto event = builder.event();
+        event.field("schema").data(std::string_view{"missing"});
+        event.field("extra").data_unparsed("1");
+        event.field("extra").null();
+        event.field("extra").data_unparsed("2");
+        auto events = finish(builder);
+        REQUIRE_EQUAL(events.size(), 1u);
+        auto first = raw ? data{"1"} : data{int64_t{1}};
+        auto last = raw ? data{"2"} : data{int64_t{2}};
+        auto expected = merge_structural
+                          ? data{list{std::move(first), caf::none, last}}
+                          : last;
+        CHECK_EQUAL(events[0], (data{record{{"schema", "missing"},
+                                            {"extra", std::move(expected)}}}));
+      }
+    }
+  }
+}
+
 TEST("event builder promotes unflattened scalar prefixes into records") {
   auto dh = null_diagnostic_handler{};
   auto builder

@@ -615,6 +615,7 @@ public:
     });
     auto settings = nova::event_builder_settings(args_.msb_options);
     settings.infer_numbers = true;
+    settings.merge_structural = true;
     auto builder = nova::EventBuilder::make(std::move(settings), **dh_);
     if (not builder) {
       done_ = true;

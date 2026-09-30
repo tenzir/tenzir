@@ -73,6 +73,8 @@ public:
     /// Other strings stay strings. Empty leaves inference unrestricted.
     /// Schema declarations and `raw` take precedence.
     std::string infer_unparsed_under = {};
+    /// Retains repeated values even when a schema policy is active.
+    bool merge_structural = false;
   };
 
   class Field;
@@ -204,10 +206,11 @@ private:
   /// Returns the slot for `name` in `record`. Without a policy, a repeated key
   /// collects its values into a list: then this stores the value it held in
   /// `previous`, and whether that value is already the list of the key's
-  /// values in `extend`. With a policy, the last value wins.
+  /// values in `extend`. With a policy, the last value wins unless structural
+  /// merging is enabled.
   auto take(ArrayBuilder<nova::Record>::RecordBuilder& record,
-            std::string_view name, Option<Data>& previous, bool& extend)
-    -> FieldBuilder;
+            std::string_view name, Option<Data>& previous, bool& extend,
+            bool record_prefix = false) -> FieldBuilder;
   auto open_record(ArrayBuilder<nova::Record>::RecordBuilder& record,
                    std::string_view name)
     -> Option<ArrayBuilder<nova::Record>::RecordBuilder>;

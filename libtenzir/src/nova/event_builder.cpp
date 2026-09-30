@@ -295,7 +295,7 @@ auto append_coerced(Out& out, V value, type const& seed, value_path const& path,
 /// schema are not rebuilt.
 class Retyper {
 public:
-  enum class Mode { full, common_fields_only };
+  enum class Mode { full, common_fields_only, merge_structural };
 
   Retyper(bool schema_only, bool infer, diagnostic_handler& dh,
           bool infer_numbers = false, Mode mode = Mode::full,
@@ -544,14 +544,14 @@ private:
         builder.null();
       } else if constexpr (std::same_as<Tag, Record>) {
         emit_mismatch(*dh_, path, type_kind::of<record_type>, seed);
-        if (schema_only_) {
+        if (schema_only_ or mode_ == Mode::merge_structural) {
           builder.null();
         } else {
           append_row(builder, row);
         }
       } else if constexpr (std::same_as<Tag, List>) {
         emit_mismatch(*dh_, path, type_kind::of<list_type>, seed);
-        if (schema_only_) {
+        if (schema_only_ or mode_ == Mode::merge_structural) {
           builder.null();
         } else {
           append_row(builder, row);
@@ -935,6 +935,10 @@ auto EventBuilder::make(Settings settings, diagnostic_handler& dh)
     // Strings stay unparsed until the selected schema is known.
     result.raw_ = true;
   }
+  if (s.merge_structural and is<SchemaPolicy>(s.policy)) {
+    // Apply the schema after repeated values have formed lists.
+    result.raw_ = true;
+  }
   return result;
 }
 
@@ -965,7 +969,10 @@ auto event_builder_settings(multi_series_builder::options const& options)
 
 auto EventBuilder::event() -> Record {
   repeated_.clear();
-  return Record{*this, builder_.record(), seed_, value_path{}};
+  auto const defer_schema
+    = settings_.merge_structural and is<SchemaPolicy>(settings_.policy);
+  return Record{*this, builder_.record(), defer_schema ? type{} : seed_,
+                value_path{}};
 }
 
 auto EventBuilder::length() const -> storage::Index {
@@ -979,6 +986,15 @@ auto EventBuilder::finish() -> Events {
   }
   auto const length = array.length();
   auto rows = storage::BitMap{length, true};
+  if (settings_.merge_structural and is<SchemaPolicy>(settings_.policy)) {
+    array = Retyper{settings_.schema_only,
+                    not settings_.raw,
+                    *dh_,
+                    settings_.infer_numbers,
+                    Retyper::Mode::merge_structural,
+                    settings_.infer_unparsed_under}
+              .record(std::move(array), rows, seed_, value_path{});
+  }
   return Events{std::move(array), std::move(rows),
                 Events::Meta::make_empty(length, name_)};
 }
@@ -997,14 +1013,14 @@ auto EventBuilder::schema(std::string const& name) -> Option<type> const& {
 
 auto EventBuilder::take(ArrayBuilder<nova::Record>::RecordBuilder& record,
                         std::string_view name, Option<Data>& previous,
-                        bool& extend) -> FieldBuilder {
+                        bool& extend, bool record_prefix) -> FieldBuilder {
   auto slot = record.take_field(name, previous);
-  if (not is<NoPolicy>(settings_.policy)) {
-    // The input follows a schema, which does not expect repeated keys.
+  if (not is<NoPolicy>(settings_.policy) and not settings_.merge_structural) {
+    // Other readers keep the last value when a schema policy is active.
     previous = None{};
     return slot;
   }
-  if (previous) {
+  if (previous and not record_prefix) {
     auto key = RepeatedKey{record.parent_, record.parent_->length() - 1,
                            std::string{name}};
     extend = std::ranges::find(repeated_, key) != repeated_.end();
@@ -1021,11 +1037,12 @@ auto EventBuilder::open_record(
   if (auto opened = record.open_record_field(name)) {
     return opened;
   }
-  if (not is<NoPolicy>(settings_.policy)) {
+  if (not is<NoPolicy>(settings_.policy) and not settings_.merge_structural) {
     return None{};
   }
   auto previous = Option<Data>{};
-  auto slot = record.take_field(name, previous);
+  auto extend = false;
+  auto slot = take(record, name, previous, extend, true);
   if (previous and (is<nova::Record>(*previous) or is<nova::List>(*previous))) {
     append_data(slot, *previous);
     return None{};
@@ -1180,13 +1197,15 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
           .emit(*dh_);
       }
       if (infer) {
-        array = Retyper{false,
-                        true,
-                        *dh_,
-                        settings_.infer_numbers,
-                        Retyper::Mode::full,
-                        settings_.infer_unparsed_under}
-                  .record(std::move(array), rows, type{}, value_path{});
+        array
+          = Retyper{false,
+                    true,
+                    *dh_,
+                    settings_.infer_numbers,
+                    settings_.merge_structural ? Retyper::Mode::merge_structural
+                                               : Retyper::Mode::full,
+                    settings_.infer_unparsed_under}
+              .record(std::move(array), rows, type{}, value_path{});
       }
       continue;
     }
@@ -1194,7 +1213,8 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
                     infer,
                     *dh_,
                     settings_.infer_numbers,
-                    Retyper::Mode::full,
+                    settings_.merge_structural ? Retyper::Mode::merge_structural
+                                               : Retyper::Mode::full,
                     settings_.infer_unparsed_under}
               .record(std::move(array), rows, *selected, value_path{});
   }
