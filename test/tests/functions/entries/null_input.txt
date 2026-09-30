@@ -1,0 +1,17 @@
+{
+  entries: null,
+  constant: null,
+}
+{
+  entries: [
+    {
+      key: "a",
+      value: 1,
+    },
+  ],
+  constant: null,
+}
+{
+  entries: null,
+  constant: null,
+}

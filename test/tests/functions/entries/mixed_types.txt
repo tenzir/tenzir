@@ -1,0 +1,62 @@
+{
+  entries: [
+    {
+      key: "int",
+      value: -1,
+    },
+    {
+      key: "uint",
+      value: 2,
+    },
+    {
+      key: "float",
+      value: 3.5,
+    },
+    {
+      key: "string",
+      value: "four",
+    },
+    {
+      key: "bool",
+      value: true,
+    },
+    {
+      key: "nothing",
+      value: null,
+    },
+    {
+      key: "ip",
+      value: 192.0.2.1,
+    },
+    {
+      key: "subnet",
+      value: 10.0.0.0/8,
+    },
+    {
+      key: "time",
+      value: 2026-01-01T00:00:00Z,
+    },
+    {
+      key: "duration",
+      value: 1s,
+    },
+    {
+      key: "blob",
+      value: b"abc",
+    },
+    {
+      key: "list",
+      value: [
+        1,
+        "two",
+        null,
+      ],
+    },
+    {
+      key: "record",
+      value: {
+        nested: true,
+      },
+    },
+  ],
+}

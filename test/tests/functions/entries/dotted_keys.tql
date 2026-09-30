@@ -1,0 +1,5 @@
+// A dot in a field name stays part of one key.
+from {x: {"a.b": 1, c: {"d.e": 2}, "f.g.h": 3}}
+select entries=x.entries(),
+  keys=x.entries().map(e => e.key),
+  same_keys=(string(x.entries().map(e => e.key)) == string(x.keys()))

@@ -1,0 +1,24 @@
+{
+  entries: [
+    {
+      key: "a.b",
+      value: 1,
+    },
+    {
+      key: "c",
+      value: {
+        "d.e": 2,
+      },
+    },
+    {
+      key: "f.g.h",
+      value: 3,
+    },
+  ],
+  keys: [
+    "a.b",
+    "c",
+    "f.g.h",
+  ],
+  same_keys: true,
+}

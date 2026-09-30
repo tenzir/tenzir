@@ -1,0 +1,7 @@
+from {x: 1},
+     {x: "text"},
+     {x: [1]},
+     {x: {a: 1}},
+     {x: null},
+     {x: "again"}
+select entries=x.entries()

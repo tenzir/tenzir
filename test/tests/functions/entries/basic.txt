@@ -1,0 +1,30 @@
+{
+  method: [
+    {
+      key: "name",
+      value: "alice",
+    },
+    {
+      key: "age",
+      value: 42,
+    },
+    {
+      key: "admin",
+      value: true,
+    },
+  ],
+  call: [
+    {
+      key: "name",
+      value: "alice",
+    },
+    {
+      key: "age",
+      value: 42,
+    },
+    {
+      key: "admin",
+      value: true,
+    },
+  ],
+}

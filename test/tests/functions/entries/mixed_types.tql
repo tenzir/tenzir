@@ -1,0 +1,20 @@
+// One record with values of many types, then one column whose type changes
+// from row to row.
+from {
+  x: {
+    int: -1,
+    uint: uint(2),
+    float: 3.5,
+    string: "four",
+    bool: true,
+    nothing: null,
+    ip: 192.0.2.1,
+    subnet: 10.0.0.0/8,
+    time: 2026-01-01,
+    duration: 1s,
+    blob: b"abc",
+    list: [1, "two", null],
+    record: {nested: true},
+  },
+}
+select entries=x.entries()

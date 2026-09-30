@@ -1,0 +1,4 @@
+from {x: {a: 1, b: "two", c: [3]}, xs: [{p: 1}, {q: 2, r: 3}, {}]}
+select keys=x.entries().map(e => e.key),
+  values=x.entries().map(e => e.value),
+  nested=xs.map(r => r.entries())

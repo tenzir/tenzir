@@ -1,0 +1,4 @@
+from {x: null},
+     {x: {a: 1}},
+     {x: null}
+select entries=x.entries(), constant=entries(null)
