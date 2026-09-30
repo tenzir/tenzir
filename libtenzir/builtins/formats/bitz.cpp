@@ -715,26 +715,22 @@ public:
 
   auto process(nova::Events input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto result = nova::bitz::encode(
-      nova::bitz::Batch{nova::Array<nova::Data>{std::move(input.data)},
-                        std::move(input.mask), std::move(input.meta)});
-    if (not result) {
-      report(diagnostic::error("failed to encode BITZ v2 message")
-               .note("{}", result.unwrap_err()),
-             ctx.dh());
-      co_return;
+    for (auto&& result : nova::bitz::encode_batches(
+           nova::bitz::Batch{nova::Array<nova::Data>{std::move(input.data)},
+                             std::move(input.mask), std::move(input.meta)})) {
+      if (not result) {
+        report(diagnostic::error("failed to encode BITZ v2 message")
+                 .note("{}", result.unwrap_err()),
+               ctx.dh());
+        co_return;
+      }
+      auto payload = std::move(result).unwrap();
+      auto message_length
+        = to_little_endian(detail::narrow<message_length_type>(payload.size()));
+      co_await push(chunk::copy(BITZ_V2_MAGIC.data(), BITZ_V2_MAGIC.size()));
+      co_await push(chunk::copy(&message_length, sizeof(message_length)));
+      co_await push(chunk::copy(payload.data(), payload.size()));
     }
-    auto payload = std::move(result).unwrap();
-    if (payload.size() > nova::bitz::default_decode_limits.max_frame_bytes) {
-      report(diagnostic::error("BITZ message exceeds the frame-size limit"),
-             ctx.dh());
-      co_return;
-    }
-    auto message_length
-      = to_little_endian(detail::narrow<message_length_type>(payload.size()));
-    co_await push(chunk::copy(BITZ_V2_MAGIC.data(), BITZ_V2_MAGIC.size()));
-    co_await push(chunk::copy(&message_length, sizeof(message_length)));
-    co_await push(chunk::copy(payload.data(), payload.size()));
   }
 
 private:

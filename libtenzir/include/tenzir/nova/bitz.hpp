@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/generator.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/result.hpp"
@@ -65,6 +66,9 @@ struct EncodeOptions {
   ScalarByteOrder scalar_byte_order = native_scalar_byte_order;
   std::uint32_t max_rows = default_decode_limits.max_rows;
   std::uint32_t max_array_length = default_decode_limits.max_array_length;
+  std::uint64_t max_frame_bytes = default_decode_limits.max_frame_bytes;
+  std::uint64_t max_logical_slots = default_decode_limits.max_logical_slots;
+  std::uint64_t max_decoded_bytes = default_decode_limits.max_decoded_bytes;
 };
 
 /// The stable logical type identifiers used by the Bitz v2 payload codec.
@@ -107,9 +111,23 @@ struct Batch {
 /// through nested arrays, and inaccessible positions receive placeholders
 /// without changing physical row or child-array positions. The encoder first
 /// calculates the exact payload size, then allocates the result once and
-/// writes directly into it.
+/// writes directly into it. The sizing pass enforces the default decoder's
+/// resource limits, including cumulative budgets and visibility validation
+/// memory, before allocating the output. Trusted callers can explicitly raise
+/// size limits in `options`, but must use matching decoder limits.
 [[nodiscard]] auto encode(Batch const& batch, EncodeOptions const& options = {})
   -> Result<std::vector<std::byte>, std::string>;
+
+/// Encodes a batch as one or more unframed, uncompressed Bitz v2 payloads.
+///
+/// Batches that exceed a decoder budget are lazily compacted and split into
+/// contiguous row ranges until each payload fits. Row order, selection, and
+/// visible metadata are preserved. Splitting projects column indices instead
+/// of rebuilding event rows.
+/// A single event that cannot fit, or any non-resource encoding error, stops
+/// the stream with an error. Earlier payloads may already have been yielded.
+[[nodiscard]] auto encode_batches(Batch batch, EncodeOptions options = {})
+  -> generator<Result<std::vector<std::byte>, std::string>>;
 
 /// Decodes exactly one unframed, uncompressed Bitz v2 payload.
 ///

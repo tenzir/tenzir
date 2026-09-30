@@ -67,6 +67,8 @@ struct Events {
 };
 
 /// Bitz is only materialized when an inspector serializes an event message.
+/// Messages carry an unframed payload, or a sequence of TNZ2 frames when the
+/// batch needs splitting. Decoding reassembles frames into one event batch.
 auto encode_events(Events const& events)
   -> Result<std::vector<std::byte>, std::string>;
 auto decode_events(std::span<std::byte const> payload)

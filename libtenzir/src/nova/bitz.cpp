@@ -41,6 +41,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -60,20 +61,144 @@ constexpr auto dense_16_encoding = std::uint8_t{2};
 constexpr auto dense_32_encoding = std::uint8_t{3};
 constexpr auto float_32_encoding = std::uint8_t{1};
 constexpr auto union_u8_encoding = std::uint8_t{1};
-constexpr auto max_encode_nesting
-  = std::size_t{default_decode_limits.max_nesting};
+// Both codec directions account for the resources needed to decode a payload.
+class ResourceBudget {
+public:
+  explicit ResourceBudget(DecodeLimits const& limits) : limits_{limits} {
+  }
 
-class Writer {
+  static auto checked_index(std::uint32_t raw)
+    -> Result<storage::Index, std::string> {
+    if (raw > static_cast<std::uint32_t>(
+          std::numeric_limits<storage::Index>::max())) {
+      return Err{"Bitz index exceeds the supported index range"};
+    }
+    return static_cast<storage::Index>(raw);
+  }
+
+  auto checked_array_length(std::uint32_t raw)
+    -> Result<storage::Index, std::string> {
+    TRY(auto result, checked_index(raw));
+    if (raw > limits_.max_array_length) {
+      return limit_error("Bitz array length exceeds the resource limit");
+    }
+    return result;
+  }
+
+  auto check_rows(std::uint32_t rows) -> Result<void, std::string> {
+    if (rows > limits_.max_rows) {
+      return limit_error("Bitz row count exceeds the resource limit");
+    }
+    return {};
+  }
+
+  auto check_depth(std::size_t depth) -> Result<void, std::string> {
+    if (depth > limits_.max_nesting) {
+      return limit_error("Bitz array exceeds the nesting limit");
+    }
+    return {};
+  }
+
+  auto enter_array(storage::Index length, std::size_t depth)
+    -> Result<void, std::string> {
+    TRY(check_depth(depth));
+    TRY(charge(array_nodes_, 1, limits_.max_array_nodes,
+               "Bitz payload has too many arrays"));
+    TRY(charge(logical_slots_, static_cast<std::uint64_t>(length),
+               limits_.max_logical_slots,
+               "Bitz payload exceeds the logical value limit"));
+    return {};
+  }
+
+  auto check_field_count(std::uint32_t count)
+    -> Result<storage::Index, std::string> {
+    if (count > limits_.max_fields_per_record) {
+      return limit_error("Bitz record field count exceeds the resource limit");
+    }
+    return checked_index(count);
+  }
+
+  auto check_shape_count(std::uint32_t count)
+    -> Result<storage::Index, std::string> {
+    if (count > limits_.max_shapes_per_record) {
+      return limit_error("Bitz record shape count exceeds the resource limit");
+    }
+    return checked_index(count);
+  }
+
+  auto charge_field_name(std::size_t size) -> Result<void, std::string> {
+    if (size > limits_.max_field_name_bytes) {
+      return limit_error("Bitz record field name exceeds the resource limit");
+    }
+    TRY(charge(total_name_bytes_, size, limits_.max_total_name_bytes,
+               "Bitz record field names exceed the resource limit"));
+    return charge_decoded(size + field_entry_overhead);
+  }
+
+  auto charge_shape_entries(std::uint32_t count) -> Result<void, std::string> {
+    TRY(charge(shape_entries_, count, limits_.max_shape_entries,
+               "Bitz record shapes exceed the resource limit"));
+    return charge_decoded(
+      (static_cast<std::uint64_t>(count) * sizeof(storage::Index))
+      + shape_entry_overhead);
+  }
+
+  auto charge_decoded(std::uint64_t bytes) -> Result<void, std::string> {
+    return charge(decoded_bytes_, bytes, limits_.max_decoded_bytes,
+                  "Bitz decoded data exceeds the memory limit");
+  }
+
+  auto charge_bitmap(storage::Index length) -> Result<void, std::string> {
+    return charge_decoded(((static_cast<std::uint64_t>(length) + 7) / 8) + 64);
+  }
+
+  auto limit_error(char const* message) -> Err<std::string> {
+    limit_exceeded_ = true;
+    return Err{std::string{message}};
+  }
+
+  auto limit_exceeded() const -> bool {
+    return limit_exceeded_;
+  }
+
+private:
+  bool limit_exceeded_ = false;
+  static constexpr auto field_entry_overhead = std::uint64_t{128};
+  static constexpr auto shape_entry_overhead = std::uint64_t{256};
+
+  auto charge(std::uint64_t& current, std::uint64_t amount, std::uint64_t limit,
+              char const* message) -> Result<void, std::string> {
+    if (amount > limit or current > limit - amount) {
+      return limit_error(message);
+    }
+    current += amount;
+    return {};
+  }
+
+  DecodeLimits limits_;
+  std::uint64_t array_nodes_ = 0;
+  std::uint64_t logical_slots_ = 0;
+  std::uint64_t shape_entries_ = 0;
+  std::uint64_t total_name_bytes_ = 0;
+  std::uint64_t decoded_bytes_ = 0;
+};
+
+class Writer : public ResourceBudget {
 public:
   explicit Writer(EncodeOptions const& options)
-    : scalar_byte_order_{options.scalar_byte_order},
-      max_array_length_{options.max_array_length} {
+    : ResourceBudget{DecodeLimits{
+        .max_frame_bytes = options.max_frame_bytes,
+        .max_rows = options.max_rows,
+        .max_array_length = options.max_array_length,
+        .max_logical_slots = options.max_logical_slots,
+        .max_decoded_bytes = options.max_decoded_bytes,
+      }},
+      scalar_byte_order_{options.scalar_byte_order} {
   }
 
   Writer(std::span<std::byte> output, EncodeOptions const& options)
-    : output_{output},
-      scalar_byte_order_{options.scalar_byte_order},
-      max_array_length_{options.max_array_length} {
+    : Writer{options} {
+    output_ = output;
   }
 
   template <std::unsigned_integral T>
@@ -120,10 +245,6 @@ public:
     return scalar_byte_order_;
   }
 
-  auto max_array_length() const -> std::uint32_t {
-    return max_array_length_;
-  }
-
   auto size() const -> std::size_t {
     return position_;
   }
@@ -135,15 +256,14 @@ public:
 private:
   std::span<std::byte> output_;
   ScalarByteOrder scalar_byte_order_;
-  std::uint32_t max_array_length_;
   std::size_t position_ = 0;
   bool overflow_ = false;
 };
 
-class Reader {
+class Reader : public ResourceBudget {
 public:
   explicit Reader(std::span<std::byte const> bytes, DecodeLimits const& limits)
-    : bytes_{bytes}, limits_{limits} {
+    : ResourceBudget{limits}, bytes_{bytes} {
   }
 
   template <std::unsigned_integral T>
@@ -194,12 +314,7 @@ public:
 
   auto field_name() -> Result<std::string, std::string> {
     TRY(auto size, integer<std::uint32_t>());
-    if (size > limits_.max_field_name_bytes) {
-      return Err{"Bitz record field name exceeds the resource limit"};
-    }
-    TRY(charge(total_name_bytes_, size, limits_.max_total_name_bytes,
-               "Bitz record field names exceed the resource limit"));
-    TRY(charge_decoded(size + field_entry_overhead));
+    TRY(charge_field_name(size));
     TRY(auto value, bytes(size));
     return std::string{reinterpret_cast<char const*>(value.data()),
                        value.size()};
@@ -213,100 +328,9 @@ public:
     return bytes_.size();
   }
 
-  static auto checked_index(std::uint32_t raw)
-    -> Result<storage::Index, std::string> {
-    if (raw > static_cast<std::uint32_t>(
-          std::numeric_limits<storage::Index>::max())) {
-      return Err{"Bitz index exceeds the supported index range"};
-    }
-    return static_cast<storage::Index>(raw);
-  }
-
-  auto checked_array_length(std::uint32_t raw) const
-    -> Result<storage::Index, std::string> {
-    TRY(auto result, checked_index(raw));
-    if (raw > limits_.max_array_length) {
-      return Err{"Bitz array length exceeds the resource limit"};
-    }
-    return result;
-  }
-
-  auto check_rows(std::uint32_t rows) const -> Result<void, std::string> {
-    if (rows > limits_.max_rows) {
-      return Err{"Bitz row count exceeds the resource limit"};
-    }
-    return {};
-  }
-
-  auto check_depth(std::size_t depth) const -> Result<void, std::string> {
-    if (depth > limits_.max_nesting) {
-      return Err{"Bitz array exceeds the nesting limit"};
-    }
-    return {};
-  }
-
-  auto enter_array(storage::Index length, std::size_t depth)
-    -> Result<void, std::string> {
-    TRY(check_depth(depth));
-    TRY(charge(array_nodes_, 1, limits_.max_array_nodes,
-               "Bitz payload has too many arrays"));
-    TRY(charge(logical_slots_, static_cast<std::uint64_t>(length),
-               limits_.max_logical_slots,
-               "Bitz payload exceeds the logical value limit"));
-    return {};
-  }
-
-  auto check_field_count(std::uint32_t count) const
-    -> Result<storage::Index, std::string> {
-    if (count > limits_.max_fields_per_record) {
-      return Err{"Bitz record field count exceeds the resource limit"};
-    }
-    return checked_index(count);
-  }
-
-  auto check_shape_count(std::uint32_t count) const
-    -> Result<storage::Index, std::string> {
-    if (count > limits_.max_shapes_per_record) {
-      return Err{"Bitz record shape count exceeds the resource limit"};
-    }
-    return checked_index(count);
-  }
-
-  auto charge_shape_entries(std::uint32_t count) -> Result<void, std::string> {
-    TRY(charge(shape_entries_, count, limits_.max_shape_entries,
-               "Bitz record shapes exceed the resource limit"));
-    return charge_decoded(
-      (static_cast<std::uint64_t>(count) * sizeof(storage::Index))
-      + shape_entry_overhead);
-  }
-
-  auto charge_decoded(std::uint64_t bytes) -> Result<void, std::string> {
-    return charge(decoded_bytes_, bytes, limits_.max_decoded_bytes,
-                  "Bitz decoded data exceeds the memory limit");
-  }
-
 private:
-  static constexpr auto field_entry_overhead = std::uint64_t{128};
-  static constexpr auto shape_entry_overhead = std::uint64_t{256};
-
-  static auto charge(std::uint64_t& current, std::uint64_t amount,
-                     std::uint64_t limit, char const* message)
-    -> Result<void, std::string> {
-    if (amount > limit or current > limit - amount) {
-      return Err{message};
-    }
-    current += amount;
-    return {};
-  }
-
   std::span<std::byte const> bytes_;
-  DecodeLimits const& limits_;
   ScalarByteOrder scalar_byte_order_ = ScalarByteOrder::little;
-  std::uint64_t array_nodes_ = 0;
-  std::uint64_t logical_slots_ = 0;
-  std::uint64_t shape_entries_ = 0;
-  std::uint64_t total_name_bytes_ = 0;
-  std::uint64_t decoded_bytes_ = 0;
 };
 
 auto bitmap_encoding(storage::BitMap const& bitmap) -> std::uint8_t {
@@ -329,11 +353,12 @@ auto bitmap_encoding(storage::BitMap const& bitmap) -> std::uint8_t {
 }
 
 auto write_bitmap_body(Writer& writer, storage::BitMap const& bitmap,
-                       std::uint8_t encoding) -> void {
+                       std::uint8_t encoding) -> Result<void, std::string> {
   if (encoding == constant_false_encoding
       or encoding == constant_true_encoding) {
-    return;
+    return {};
   }
+  TRY(writer.charge_bitmap(bitmap.length()));
   if (encoding == sparse_true_encoding or encoding == sparse_false_encoding) {
     auto const exceptions = encoding == sparse_true_encoding
                               ? bitmap.true_count()
@@ -344,7 +369,7 @@ auto write_bitmap_body(Writer& writer, storage::BitMap const& bitmap,
         writer.integer(static_cast<std::uint32_t>(i));
       }
     }
-    return;
+    return {};
   }
   auto byte = std::uint8_t{0};
   for (auto i = storage::Index{0}; i < bitmap.length(); ++i) {
@@ -359,12 +384,14 @@ auto write_bitmap_body(Writer& writer, storage::BitMap const& bitmap,
   if (bitmap.length() % 8 != 0) {
     writer.integer(byte);
   }
+  return {};
 }
 
-auto write_bitmap(Writer& writer, storage::BitMap const& bitmap) -> void {
+auto write_bitmap(Writer& writer, storage::BitMap const& bitmap)
+  -> Result<void, std::string> {
   auto const encoding = bitmap_encoding(bitmap);
   writer.integer(encoding);
-  write_bitmap_body(writer, bitmap, encoding);
+  return write_bitmap_body(writer, bitmap, encoding);
 }
 
 static auto
@@ -514,10 +541,112 @@ auto write_header(Writer& writer, TypeId id, std::uint8_t encoding) -> void {
   writer.integer(encoding);
 }
 
+// A lazy gather: list children may consist of several disjoint source ranges.
+// Keeping ranges instead of copied values also bounds work for large constants.
+class RowSelection {
+public:
+  explicit RowSelection(storage::Index length = 0, bool compact = false)
+    : compact{compact} {
+    append({0, length});
+  }
+
+  auto append(storage::Span span) -> void {
+    TENZIR_ASSERT_LEQ(span.begin, span.end);
+    if (span.begin == span.end) {
+      return;
+    }
+    TENZIR_ASSERT_LEQ(span.end - span.begin,
+                      std::numeric_limits<storage::Index>::max() - length());
+    ranges_.push_back({span.begin, length() + (span.end - span.begin)});
+  }
+
+  auto length() const -> storage::Index {
+    return ranges_.empty() ? 0 : ranges_.back().end;
+  }
+
+  auto index(storage::Index row) const -> storage::Index {
+    TENZIR_ASSERT(row >= 0 and row < length());
+    auto const it = std::ranges::upper_bound(ranges_, row, {}, &Range::end);
+    auto const begin = it == ranges_.begin() ? 0 : std::prev(it)->end;
+    return it->source + (row - begin);
+  }
+
+  // Only used for sorted, disjoint list-child ranges.
+  auto offset(storage::Index source) const -> storage::Index {
+    auto const end
+      = std::ranges::upper_bound(ranges_, source, {}, &Range::source);
+    TENZIR_ASSERT(end != ranges_.begin());
+    auto const it = std::prev(end);
+    auto const begin = it == ranges_.begin() ? 0 : std::prev(it)->end;
+    return begin + (source - it->source);
+  }
+
+  bool compact;
+
+private:
+  struct Range {
+    storage::Index source;
+    storage::Index end;
+  };
+  std::vector<Range> ranges_;
+};
+
+template <data_type Tag>
+struct SelectedArray {
+  Array<Tag> const& source;
+  RowSelection const& selection;
+
+  auto length() const -> storage::Index {
+    return selection.length();
+  }
+
+  auto get(storage::Index row) const -> RowView<Tag> {
+    return source.get(selection.index(row));
+  }
+
+  auto storage() const -> decltype(auto) {
+    return source.storage();
+  }
+
+  auto to_primary() const -> Array<Tag> {
+    return source.to_primary();
+  }
+};
+
+auto encodes_null(Array<Data> const& array, RowSelection const& selection)
+  -> bool {
+  if (array.try_as<Null>()) {
+    return true;
+  }
+  if (not selection.compact) {
+    return false;
+  }
+  auto const* union_ = try_as<UnionArray>(array);
+  if (not union_) {
+    return false;
+  }
+  auto const& fields = union_->fields();
+  auto const null = std::ranges::find_if(fields, [](auto const& field) {
+    return match(field.data, []<data_type Tag>(Array<Tag> const&) {
+      return std::same_as<Tag, Null>;
+    });
+  });
+  if (null == fields.end()) {
+    return false;
+  }
+  auto const index = static_cast<storage::Index>(null - fields.begin());
+  for (auto row = storage::Index{0}; row < selection.length(); ++row) {
+    if (union_->alternative_index_at(selection.index(row)) != index) {
+      return false;
+    }
+  }
+  return true;
+}
+
 template <class Tag>
   requires(std::same_as<Tag, Int> or std::same_as<Tag, UInt>)
-auto integer_encoding(Array<Tag> const& array, storage::BitMap const& visible)
-  -> std::uint8_t {
+auto integer_encoding(SelectedArray<Tag> const& array,
+                      storage::BitMap const& visible) -> std::uint8_t {
   auto fits = [&](auto width) {
     using Narrow = decltype(width);
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
@@ -546,8 +675,8 @@ auto integer_encoding(Array<Tag> const& array, storage::BitMap const& visible)
   return dense_64_encoding;
 }
 
-auto float_encoding(Array<Float> const& array, storage::BitMap const& visible)
-  -> std::uint8_t {
+auto float_encoding(SelectedArray<Float> const& array,
+                    storage::BitMap const& visible) -> std::uint8_t {
   for (auto i = storage::Index{0}; i < array.length(); ++i) {
     if (visible.get(i)) {
       auto const value = *array.get(i);
@@ -562,31 +691,25 @@ auto float_encoding(Array<Float> const& array, storage::BitMap const& visible)
 }
 
 auto write_array(Writer& writer, Array<Data> const& array,
-                 storage::BitMap const& visible, std::size_t depth)
-  -> Result<void, std::string>;
+                 storage::BitMap const& visible, std::size_t depth,
+                 RowSelection const& selection) -> Result<void, std::string>;
 
-auto write_concrete(Writer&, Array<Secret> const&, storage::BitMap const&,
-                    std::size_t) -> Result<void, std::string> {
+auto write_concrete(Writer&, SelectedArray<Secret> const&,
+                    storage::BitMap const&, std::size_t)
+  -> Result<void, std::string> {
   return Err{"secrets cannot be serialized by Bitz"};
 }
 
 template <data_type Tag>
   requires(not std::same_as<Tag, Secret>)
-auto write_concrete(Writer& writer, Array<Tag> const& array,
+auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
                     storage::BitMap const& visible, std::size_t depth)
   -> Result<void, std::string> {
-  if (depth > max_encode_nesting) {
-    return Err{"Bitz array exceeds the nesting limit"};
-  }
   if (array.length() != visible.length()) {
     return Err{"Bitz array visibility length mismatch"};
   }
-  if (std::cmp_greater(array.length(), writer.max_array_length())) {
-    return Err{"Bitz array length exceeds the resource limit"};
-  }
-  if constexpr (std::same_as<Tag, Secret>) {
-    return Err{"Bitz cannot encode secret data"};
-  }
+  TRY(writer.checked_array_length(static_cast<std::uint32_t>(array.length())));
+  TRY(writer.enter_array(array.length(), depth));
   auto encoding = std::uint8_t{0};
   if constexpr (std::same_as<Tag, Bool>) {
     auto values = storage::BitMap::Builder{};
@@ -596,8 +719,7 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
     auto bitmap = values.finish();
     encoding = bitmap_encoding(bitmap);
     write_header(writer, type_id<Tag>, encoding);
-    write_bitmap_body(writer, bitmap, encoding);
-    return {};
+    return write_bitmap_body(writer, bitmap, encoding);
   } else if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
     encoding = integer_encoding(array, visible);
   } else if constexpr (std::same_as<Tag, Float>) {
@@ -610,9 +732,21 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
     using Value = Type<Tag>::ViewType;
     using Primary = storage::SparseStorage<Value>;
     static_assert(sizeof(Value) == sizeof(std::uint64_t));
+    auto width = std::uint64_t{8};
+    if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
+      if (encoding != dense_64_encoding) {
+        width = std::uint64_t{1} << (encoding - 1);
+      }
+    } else if constexpr (std::same_as<Tag, Float>) {
+      if (encoding == float_32_encoding) {
+        width = 4;
+      }
+    }
+    TRY(writer.charge_decoded(static_cast<std::uint64_t>(array.length())
+                              * width));
     if constexpr (bulk_copy_scalar<Tag>) {
       static_assert(std::is_trivially_copyable_v<Value>);
-      if (encoding == dense_64_encoding
+      if (not array.selection.compact and encoding == dense_64_encoding
           and writer.scalar_byte_order() == native_scalar_byte_order
           and visible.true_count() == visible.length()
           and is<Primary>(array.storage())) {
@@ -657,13 +791,18 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
         auto value = *array.get(i);
         if (value.size()
             > std::numeric_limits<std::uint32_t>::max() - byte_count) {
-          return Err{"string or blob data exceeds the Bitz size limit"};
+          return writer.limit_error(
+            "string or blob data exceeds the Bitz size limit");
         }
         byte_count += static_cast<std::uint32_t>(value.size());
       }
       writer.integer(byte_count);
     }
     writer.integer(byte_count);
+    TRY(writer.charge_decoded(
+      ((static_cast<std::uint64_t>(array.length()) + 1) * sizeof(std::uint32_t))
+      + (static_cast<std::uint64_t>(array.length()) * sizeof(storage::Span))
+      + byte_count));
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       if (not visible.get(i)) {
         continue;
@@ -676,11 +815,13 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
       }
     }
   } else if constexpr (std::same_as<Tag, Ip>) {
+    TRY(writer.charge_decoded(static_cast<std::uint64_t>(array.length()) * 16));
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       auto value = visible.get(i) ? *array.get(i) : Ip{};
       writer.bytes(as_bytes(value));
     }
   } else if constexpr (std::same_as<Tag, Subnet>) {
+    TRY(writer.charge_decoded(static_cast<std::uint64_t>(array.length()) * 17));
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       auto value = visible.get(i) ? *array.get(i) : Subnet{};
       writer.bytes(as_bytes(value.network()));
@@ -689,36 +830,95 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
   } else if constexpr (std::same_as<Tag, List>) {
     auto primary = array.to_primary();
     auto const& physical = as<storage::ListStorage>(primary.storage());
-    auto const& spans = physical.spans();
-    auto const child_length = physical.values().length();
+    auto const& source_spans = physical.spans();
+    auto children = RowSelection{0, array.selection.compact};
+    auto spans = std::vector<storage::Span>{};
+    // Project spans without materializing their values. Invisible lists have no
+    // children in a compacted frame; overlapping spans keep sharing children.
+    auto live_ranges = std::vector<storage::Span>{};
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
-      auto span = spans[i];
-      if (span.begin < 0 or span.end < span.begin or span.end > child_length) {
+      auto span = source_spans[array.selection.index(i)];
+      if (span.begin < 0 or span.end < span.begin
+          or span.end > physical.values().length()) {
         if (visible.get(i)) {
           return Err{"invalid visible list span"};
         }
         span = {0, 0};
       }
+      if (array.selection.compact) {
+        if (not visible.get(i)) {
+          span = {0, 0};
+        } else if (span.begin != span.end) {
+          live_ranges.push_back(span);
+        }
+      }
+      spans.push_back(span);
+    }
+    if (array.selection.compact) {
+      std::ranges::sort(live_ranges, {}, &storage::Span::begin);
+      auto merged = storage::Span{0, 0};
+      for (auto span : live_ranges) {
+        if (span.begin > merged.end) {
+          children.append(merged);
+          merged = span;
+        } else {
+          if (merged.begin == merged.end) {
+            merged.begin = span.begin;
+          }
+          merged.end = std::max(merged.end, span.end);
+        }
+      }
+      children.append(merged);
+      TRY(writer.checked_array_length(
+        static_cast<std::uint32_t>(children.length())));
+      for (auto& span : spans) {
+        if (span.begin == span.end) {
+          span = {0, 0};
+        } else {
+          auto const begin = children.offset(span.begin);
+          span = {begin, begin + (span.end - span.begin)};
+        }
+      }
+    } else {
+      children = RowSelection{physical.values().length()};
+    }
+    auto const child_length = children.length();
+    TRY(
+      writer.charge_decoded((static_cast<std::uint64_t>(array.length())
+                             + static_cast<std::uint64_t>(visible.true_count()))
+                            * sizeof(storage::Span)));
+    TRY(writer.charge_bitmap(child_length));
+    // Visibility validation revisits non-null children after decoding. Empty
+    // children are encoded as Null below, regardless of their input type, so
+    // they need neither validation spans nor a second visibility bitmap.
+    if (child_length > 0 and not encodes_null(physical.values(), children)) {
+      TRY(writer.charge_decoded(static_cast<std::uint64_t>(visible.true_count())
+                                * sizeof(storage::Span)));
+      TRY(writer.charge_bitmap(child_length));
+    }
+    for (auto i = storage::Index{0}; i < array.length(); ++i) {
+      auto const span = spans[static_cast<std::size_t>(i)];
       writer.integer(static_cast<std::uint32_t>(span.begin));
       writer.integer(static_cast<std::uint32_t>(span.end));
     }
     writer.integer(static_cast<std::uint32_t>(child_length));
     if (child_length == 0) {
-      TRY(write_concrete(writer, Array<Null>{storage::NullStorage{0}},
-                         storage::BitMap{0, false}, depth + 1));
+      TRY(write_concrete(
+        writer, SelectedArray{Array<Null>{storage::NullStorage{0}}, children},
+        storage::BitMap{0, false}, depth + 1));
     } else {
       auto child_visible = storage::BitMap::Mutable{child_length};
       for (auto i = storage::Index{0}; i < array.length(); ++i) {
         if (not visible.get(i)) {
           continue;
         }
-        auto const span = spans[i];
+        auto const span = spans[static_cast<std::size_t>(i)];
         for (auto child = span.begin; child < span.end; ++child) {
           child_visible.set(child, true);
         }
       }
       TRY(write_array(writer, physical.values(),
-                      std::move(child_visible).finish(), depth + 1));
+                      std::move(child_visible).finish(), depth + 1, children));
     }
   } else if constexpr (std::same_as<Tag, Record>) {
     auto primary = array.to_primary();
@@ -727,6 +927,47 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
     if (data.names_by_index.size() != data.arrays.size()) {
       return Err{"record field names and arrays have different sizes"};
     }
+    auto shapes = std::vector<ShapeTable::ShapeId>{};
+    auto shape_remap
+      = std::unordered_map<ShapeTable::ShapeId, storage::Index>{};
+    auto live_fields
+      = std::vector<bool>(data.arrays.size(), not array.selection.compact);
+    auto add_shape
+      = [&](ShapeTable::ShapeId shape) -> Result<void, std::string> {
+      if (shape < 0 or std::cmp_greater_equal(shape, data.shape_table.size())) {
+        return Err{"visible record row has an invalid shape"};
+      }
+      if (shape_remap.contains(shape)) {
+        return {};
+      }
+      TRY(writer.check_shape_count(
+        static_cast<std::uint32_t>(shapes.size() + 1)));
+      shape_remap.emplace(shape, static_cast<storage::Index>(shapes.size()));
+      shapes.push_back(shape);
+      if (array.selection.compact) {
+        for (auto field : data.shape_table.fields(shape)) {
+          if (field < 0 or std::cmp_greater_equal(field, data.arrays.size())) {
+            return Err{"record shape refers to an invalid field"};
+          }
+          live_fields[static_cast<std::size_t>(field)] = true;
+        }
+      }
+      return {};
+    };
+    if (array.selection.compact) {
+      TRY(add_shape(ShapeTable::empty_shape));
+      for (auto i = storage::Index{0}; i < array.length(); ++i) {
+        if (visible.get(i)) {
+          TRY(add_shape(data.shape_indices.get(array.selection.index(i))));
+        }
+      }
+    } else {
+      TRY(writer.check_shape_count(
+        static_cast<std::uint32_t>(data.shape_table.size())));
+      for (auto i = std::size_t{0}; i < data.shape_table.size(); ++i) {
+        TRY(add_shape(static_cast<ShapeTable::ShapeId>(i)));
+      }
+    }
     auto field_remap
       = std::vector<storage::Index>(data.arrays.size(), storage::Index{-1});
     auto field_count = std::uint32_t{0};
@@ -734,14 +975,14 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
          ++index) {
       auto const name = data.names_by_index[index];
       auto const registered = data.names.find(name);
-      if (registered == data.names.end() or registered->second != index) {
+      if (not live_fields[index] or registered == data.names.end()
+          or registered->second != index) {
         continue;
       }
-      if (name.size() > std::numeric_limits<std::uint32_t>::max()) {
-        return Err{"record field name exceeds the Bitz size limit"};
-      }
+      TRY(writer.charge_field_name(name.size()));
       field_remap[index] = static_cast<storage::Index>(field_count++);
     }
+    TRY(writer.check_field_count(field_count));
     writer.integer(field_count);
     for (auto index = std::size_t{0}; index < data.names_by_index.size();
          ++index) {
@@ -749,10 +990,16 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
         writer.string(data.names_by_index[index]);
       }
     }
-    writer.integer(static_cast<std::uint32_t>(data.shape_table.size()));
-    for (auto shape = std::size_t{0}; shape < data.shape_table.size();
-         ++shape) {
-      auto fields = data.shape_table.fields(static_cast<storage::Index>(shape));
+    auto const shape_count = static_cast<std::uint32_t>(shapes.size());
+    TRY(writer.check_shape_count(shape_count));
+    TRY(writer.charge_decoded(
+      (static_cast<std::uint64_t>(field_count) * (128 + sizeof(std::uint32_t)))
+      + (static_cast<std::uint64_t>(shape_count) * sizeof(ShapeTable::ShapeId))
+      + (static_cast<std::uint64_t>(array.length()) * sizeof(storage::Index))));
+    writer.integer(shape_count);
+    auto shape_membership = std::vector<std::vector<storage::Index>>{};
+    for (auto shape : shapes) {
+      auto fields = data.shape_table.fields(shape);
       auto live_count = std::uint32_t{0};
       for (auto field : fields) {
         if (field < 0
@@ -761,110 +1008,160 @@ auto write_concrete(Writer& writer, Array<Tag> const& array,
         }
         live_count += field_remap[static_cast<std::size_t>(field)] >= 0;
       }
+      TRY(writer.charge_shape_entries(live_count));
+      // The decoder also builds shape membership during visibility validation.
+      // Remapping removed fields can collapse shapes, so this is an upper bound.
+      TRY(writer.charge_decoded(static_cast<std::uint64_t>(live_count)
+                                * sizeof(storage::Index)));
+      auto& membership = shape_membership.emplace_back();
       writer.integer(live_count);
       for (auto field : fields) {
         auto const mapped = field_remap[static_cast<std::size_t>(field)];
         if (mapped >= 0) {
           writer.integer(static_cast<std::uint32_t>(mapped));
+          membership.push_back(field);
         }
       }
+      std::ranges::sort(membership);
     }
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
-      auto shape
-        = visible.get(i) ? data.shape_indices.get(i) : ShapeTable::empty_shape;
+      auto shape = visible.get(i)
+                     ? data.shape_indices.get(array.selection.index(i))
+                     : ShapeTable::empty_shape;
       if (shape < 0
           or static_cast<std::size_t>(shape) >= data.shape_table.size()) {
         return Err{"visible record row has an invalid shape"};
       }
-      writer.integer(static_cast<std::uint32_t>(shape));
+      writer.integer(static_cast<std::uint32_t>(shape_remap.at(shape)));
     }
-    TRY(auto shape_membership,
-        make_shape_membership(data.shape_table,
-                              static_cast<storage::Index>(data.arrays.size())));
     for (auto field_index = std::size_t{0}; field_index < data.arrays.size();
          ++field_index) {
       if (field_remap[field_index] < 0) {
         continue;
       }
       auto const& field = data.arrays[field_index];
-      if (field.data.length() != array.length()
-          or field.present.length() != array.length()) {
+      if (field.data.length() != array.source.length()
+          or field.present.length() != array.source.length()) {
         return Err{"record field length does not match its record array"};
       }
       auto present = storage::BitMap::Builder{};
       for (auto row = storage::Index{0}; row < array.length(); ++row) {
         auto selected = false;
         if (visible.get(row)) {
-          auto const shape = data.shape_indices.get(row);
+          auto const source_row = array.selection.index(row);
+          auto const shape = shape_remap.at(data.shape_indices.get(source_row));
           selected = std::ranges::binary_search(
                        shape_membership[static_cast<std::size_t>(shape)],
                        static_cast<storage::Index>(field_index))
-                     and field.present.get(row);
+                     and field.present.get(source_row);
         }
         present.emplace_back(selected);
       }
       auto present_mask = present.finish();
-      write_bitmap(writer, present_mask);
-      TRY(write_array(writer, field.data, present_mask, depth + 1));
+      TRY(write_bitmap(writer, present_mask));
+      TRY(write_array(writer, field.data, present_mask, depth + 1,
+                      array.selection));
     }
   }
   return {};
 }
 
 auto write_array(Writer& writer, Array<Data> const& array,
-                 storage::BitMap const& visible, std::size_t depth)
-  -> Result<void, std::string> {
+                 storage::BitMap const& visible, std::size_t depth,
+                 RowSelection const& selection) -> Result<void, std::string> {
   return match(
     array,
     [&](UnionArray const& union_) -> Result<void, std::string> {
-      if (depth > max_encode_nesting) {
-        return Err{"Bitz array exceeds the nesting limit"};
-      }
-      if (union_.length() != visible.length()) {
+      auto const length = selection.length();
+      if (length != visible.length()) {
         return Err{"Bitz union visibility length mismatch"};
       }
-      if (std::cmp_greater(union_.length(), writer.max_array_length())) {
-        return Err{"Bitz array length exceeds the resource limit"};
+      if (selection.compact and not visible.any()) {
+        return write_concrete(
+          writer,
+          SelectedArray{Array<Null>{storage::NullStorage{length}},
+                        RowSelection{length}},
+          visible, depth);
       }
-      write_header(writer, TypeId::union_, union_u8_encoding);
+      TRY(writer.checked_array_length(static_cast<std::uint32_t>(length)));
       auto const& fields = union_.fields();
-      if (fields.empty()
-          or fields.size() > std::numeric_limits<std::uint32_t>::max()) {
+      if (fields.size() < 2 or fields.size() > data_type_list::size) {
         return Err{"invalid Bitz union alternative count"};
       }
-      writer.integer(static_cast<std::uint32_t>(fields.size()));
-      for (auto row = storage::Index{0}; row < union_.length(); ++row) {
-        auto index = visible.get(row) ? union_.alternative_index_at(row) : 0;
-        if (index < 0 or static_cast<std::size_t>(index) >= fields.size()
-            or (visible.get(row)
-                and not fields[static_cast<std::size_t>(index)].present.get(
-                  row))) {
+      auto remap = std::vector<storage::Index>(fields.size(), -1);
+      for (auto row = storage::Index{0}; row < length; ++row) {
+        if (not visible.get(row)) {
+          continue;
+        }
+        auto const source = selection.index(row);
+        auto const index = union_.alternative_index_at(source);
+        if (index < 0 or std::cmp_greater_equal(index, fields.size())
+            or not fields[static_cast<std::size_t>(index)].present.get(
+              source)) {
           return Err{"visible union row has an invalid alternative"};
         }
+        remap[static_cast<std::size_t>(index)] = 0;
+      }
+      auto count = storage::Index{0};
+      for (auto& index : remap) {
+        if (not selection.compact or index >= 0) {
+          index = count++;
+        }
+      }
+      // A projected union can become monomorphic. The wire format requires at
+      // least two union alternatives, so encode its remaining concrete type.
+      if (count == 1) {
+        auto const index = static_cast<std::size_t>(std::ranges::find(remap, 0)
+                                                    - remap.begin());
+        return match(fields[index].data, [&](auto const& concrete) {
+          return write_concrete(writer, SelectedArray{concrete, selection},
+                                visible, depth);
+        });
+      }
+      TRY(writer.enter_array(length, depth));
+      write_header(writer, TypeId::union_, union_u8_encoding);
+      TRY(writer.charge_decoded(
+        (static_cast<std::uint64_t>(length) * sizeof(storage::Index))
+        + (static_cast<std::uint64_t>(count) * 64)));
+      TRY(writer.charge_bitmap(length));
+      writer.integer(static_cast<std::uint32_t>(count));
+      for (auto row = storage::Index{0}; row < length; ++row) {
+        auto const index
+          = visible.get(row)
+              ? remap[static_cast<std::size_t>(
+                  union_.alternative_index_at(selection.index(row)))]
+              : 0;
         writer.integer(static_cast<std::uint8_t>(index));
       }
       for (auto field_index = std::size_t{0}; field_index < fields.size();
            ++field_index) {
+        if (remap[field_index] < 0) {
+          continue;
+        }
         auto const& field = fields[field_index];
+        TRY(writer.charge_bitmap(length));
         if (field.present.length() != union_.length()) {
           return Err{"union alternative mask length mismatch"};
         }
         auto present = storage::BitMap::Builder{};
-        for (auto row = storage::Index{0}; row < union_.length(); ++row) {
+        for (auto row = storage::Index{0}; row < length; ++row) {
+          auto const source = selection.index(row);
           present.emplace_back(visible.get(row)
-                               and union_.alternative_index_at(row)
+                               and union_.alternative_index_at(source)
                                      == static_cast<storage::Index>(field_index)
-                               and field.present.get(row));
+                               and field.present.get(source));
         }
         auto present_mask = present.finish();
         TRY(match(field.data, [&](auto const& concrete) {
-          return write_concrete(writer, concrete, present_mask, depth + 1);
+          return write_concrete(writer, SelectedArray{concrete, selection},
+                                present_mask, depth + 1);
         }));
       }
       return {};
     },
     [&](auto const& concrete) {
-      return write_concrete(writer, concrete, visible, depth);
+      return write_concrete(writer, SelectedArray{concrete, selection}, visible,
+                            depth);
     });
 }
 
@@ -1434,41 +1731,120 @@ read_typed_meta(Reader& reader, storage::Index length, TypeId expected)
   return std::move(decoded.data);
 }
 
-} // namespace
-
-auto encode(Batch const& batch, EncodeOptions const& options)
+auto encode_selected(Batch const& batch, EncodeOptions const& options,
+                     RowSelection const& selection, bool& limit_exceeded)
   -> Result<std::vector<std::byte>, std::string> {
+  limit_exceeded = false;
   if (options.scalar_byte_order != ScalarByteOrder::little
       and options.scalar_byte_order != ScalarByteOrder::big) {
     return Err{"unsupported Bitz scalar byte order"};
   }
   auto length = batch.length();
-  if (length < 0 or std::cmp_greater(length, options.max_rows)
-      or batch.mask.length() != length or batch.meta.name.length() != length
+  if (length < 0 or batch.mask.length() != length
+      or batch.meta.name.length() != length
       or batch.meta.import_time.length() != length
       or batch.meta.internal.length() != length) {
     return Err{"inconsistent Bitz batch column lengths"};
   }
   auto write = [&](Writer& writer) -> Result<void, std::string> {
+    auto const length = selection.length();
+    TRY(writer.check_rows(static_cast<std::uint32_t>(length)));
+    TRY(writer.checked_array_length(static_cast<std::uint32_t>(length)));
+    auto mask = batch.mask;
+    if (selection.compact) {
+      auto builder = storage::BitMap::Builder{};
+      for (auto row = storage::Index{0}; row < length; ++row) {
+        builder.emplace_back(batch.mask.get(selection.index(row)));
+      }
+      mask = builder.finish();
+    }
     writer.integer(static_cast<std::uint8_t>(options.scalar_byte_order));
     writer.integer(static_cast<std::uint32_t>(length));
-    write_bitmap(writer, batch.mask);
-    TRY(write_array(writer, batch.data, batch.mask, 0));
-    TRY(write_concrete(writer, batch.meta.name, batch.mask, 0));
-    TRY(write_concrete(writer, batch.meta.import_time, batch.mask, 0));
-    TRY(write_concrete(writer, batch.meta.internal, batch.mask, 0));
+    TRY(write_bitmap(writer, mask));
+    TRY(write_array(writer, batch.data, mask, 0, selection));
+    // Each typed metadata column gets a validation visibility bitmap.
+    for (auto i = 0; i < 3; ++i) {
+      TRY(writer.charge_bitmap(length));
+    }
+    TRY(write_concrete(writer, SelectedArray{batch.meta.name, selection}, mask,
+                       0));
+    TRY(write_concrete(writer, SelectedArray{batch.meta.import_time, selection},
+                       mask, 0));
+    TRY(write_concrete(writer, SelectedArray{batch.meta.internal, selection},
+                       mask, 0));
     if (not writer.valid()) {
-      return Err{"Bitz payload size exceeds the platform limit"};
+      return writer.limit_error("Bitz payload size exceeds the platform limit");
     }
     return {};
   };
   auto sizer = Writer{options};
-  TRY(write(sizer));
+  auto sized = write(sizer);
+  limit_exceeded = sizer.limit_exceeded();
+  TRY(std::move(sized));
+  if (sizer.size() > options.max_frame_bytes) {
+    limit_exceeded = true;
+    return Err{"Bitz frame exceeds the resource limit"};
+  }
   auto result = std::vector<std::byte>(sizer.size());
   auto writer = Writer{result, options};
   TRY(write(writer));
   TENZIR_ASSERT_EQ(writer.size(), result.size());
   return result;
+}
+
+} // namespace
+
+auto encode(Batch const& batch, EncodeOptions const& options)
+  -> Result<std::vector<std::byte>, std::string> {
+  if (batch.length() < 0) {
+    return Err{"inconsistent Bitz batch column lengths"};
+  }
+  auto limit_exceeded = false;
+  return encode_selected(batch, options, RowSelection{batch.length()},
+                         limit_exceeded);
+}
+
+auto encode_batches(Batch batch, EncodeOptions options)
+  -> generator<Result<std::vector<std::byte>, std::string>> {
+  if (batch.length() < 0) {
+    co_yield Err{"inconsistent Bitz batch column lengths"};
+    co_return;
+  }
+  auto limit_exceeded = false;
+  auto original = encode_selected(batch, options, RowSelection{batch.length()},
+                                  limit_exceeded);
+  if (original or not limit_exceeded) {
+    co_yield std::move(original);
+    co_return;
+  }
+  // Compact before splitting: unused fields, shapes, and children may be the
+  // only reason a batch exceeds a budget. Split by projecting column indices,
+  // not by rebuilding event rows.
+  auto pending = std::vector<storage::Span>{{0, batch.length()}};
+  while (not pending.empty()) {
+    auto const range = pending.back();
+    pending.pop_back();
+    auto selection = RowSelection{0, true};
+    selection.append(range);
+    auto result = encode_selected(batch, options, selection, limit_exceeded);
+    if (result) {
+      co_yield std::move(result);
+      continue;
+    }
+    auto const length = range.end - range.begin;
+    if (not limit_exceeded or length <= 1) {
+      if (limit_exceeded and length == 1) {
+        co_yield Err{std::string{"single event exceeds Bitz resource limits: "}
+                     + result.unwrap_err()};
+      } else {
+        co_yield std::move(result);
+      }
+      co_return;
+    }
+    auto const middle = range.begin + length / 2;
+    pending.push_back({middle, range.end});
+    pending.push_back({range.begin, middle});
+  }
 }
 
 auto decode(std::span<std::byte const> payload, DecodeLimits const& limits)

@@ -1,0 +1,9 @@
+// Two individually encodable values exceed the 64 MiB frame limit together.
+let $payload = "x".repeat(33554432)
+from {id: [1, 2]}
+unroll id
+payload = $payload
+write_bitz
+read_bitz
+assert payload == $payload
+drop payload
