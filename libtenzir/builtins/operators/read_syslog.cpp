@@ -508,6 +508,7 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (args_.octet_counting) {
+      co_await finish_and_flush(push);
       if (remaining_message_length_ > 0) {
         diagnostic::error(
           "unexpected end of input in octet-counted syslog message")
@@ -869,6 +870,7 @@ private:
         auto first = buffer_.cbegin();
         if (not syslog::octet_length_parser(first, buffer_.cend(),
                                             remaining_message_length_)) {
+          co_await finish_and_flush(push);
           diagnostic::error("failed to parse octet-counting length prefix")
             .emit(*dh_);
           done_ = true;
@@ -876,6 +878,7 @@ private:
         }
         buffer_.clear();
         if (remaining_message_length_ > syslog::max_syslog_message_size) {
+          co_await finish_and_flush(push);
           diagnostic::error(
             "octet-counted message length {} exceeds maximum {}",
             remaining_message_length_, syslog::max_syslog_message_size)
@@ -884,11 +887,13 @@ private:
           co_return;
         }
       } else if (byte < '0' or byte > '9') {
+        co_await finish_and_flush(push);
         diagnostic::error("failed to parse octet-counting length prefix")
           .emit(*dh_);
         done_ = true;
         co_return;
       } else if (buffer_.size() == max_prefix_bytes) {
+        co_await finish_and_flush(push);
         diagnostic::error("octet-counting length prefix exceeds {} bytes "
                           "without delimiter",
                           max_prefix_bytes)
@@ -899,6 +904,12 @@ private:
         buffer_.push_back(byte);
       }
     }
+  }
+
+  auto finish_and_flush(Push<nova::Events>& push) -> Task<void> {
+    // Error diagnostics cancel the pipeline, so publish accepted frames first.
+    finish_pending();
+    co_await flush(push);
   }
 
   auto flush(Push<nova::Events>& push) -> Task<void> {
