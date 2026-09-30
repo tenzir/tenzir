@@ -301,7 +301,7 @@ public:
   Retyper(bool schema_only, bool infer, diagnostic_handler& dh,
           bool infer_numbers = false, Mode mode = Mode::full,
           std::string_view unparsed_field = {},
-          std::span<std::string const> string_fields = {})
+          std::span<std::vector<std::string> const> string_fields = {})
     : schema_only_{schema_only},
       infer_{infer},
       infer_numbers_{infer_numbers or not unparsed_field.empty()},
@@ -358,8 +358,11 @@ public:
         changed = true;
         continue;
       }
-      if (auto result
-          = this->column(column, selected, *field_seed, path.field(name))) {
+      field_path_.push_back(name);
+      auto result
+        = this->column(column, selected, *field_seed, path.field(name));
+      field_path_.pop_back();
+      if (result) {
         column = std::move(*result);
         changed = true;
       }
@@ -472,17 +475,9 @@ private:
     // Explicit capture conversions stay strings unless a schema says otherwise.
     auto infer = infer_ and in_inference_scope(unparsed_field_, path);
     if (infer and not string_fields_.empty()) {
-      auto name = fmt::format("{}", path);
-      while (true) {
-        if (std::ranges::find(string_fields_, name) != string_fields_.end()) {
-          infer = false;
-          break;
-        }
-        if (not name.ends_with("[]")) {
-          break;
-        }
-        name.resize(name.size() - 2);
-      }
+      infer = not std::ranges::any_of(string_fields_, [&](auto const& field) {
+        return std::ranges::equal(field, field_path_);
+      });
     }
     // Rebuild the values whose type changes.
     auto replace = storage::BitMap{length, false};
@@ -590,7 +585,8 @@ private:
   Ref<diagnostic_handler> dh_;
   Mode mode_;
   std::string_view unparsed_field_;
-  std::span<std::string const> string_fields_;
+  std::span<std::vector<std::string> const> string_fields_;
+  std::vector<std::string_view> field_path_;
 };
 
 /// Returns the seed of the field `name` of a record seeded with `seed`, or

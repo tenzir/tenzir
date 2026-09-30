@@ -577,18 +577,21 @@ public:
   }
 
   auto string_fields(std::string_view unflatten_separator) const
-    -> std::vector<std::string> {
-    auto result = std::vector<std::string>{};
+    -> std::vector<std::vector<std::string>> {
+    auto result = std::vector<std::vector<std::string>>{};
     for (auto const& [name, type] : input_pattern_.named_captures) {
       if (type != capture_type::string) {
         continue;
       }
+      auto path = std::vector<std::string>{};
       if (unflatten_separator.empty()) {
-        result.push_back(name);
+        path.push_back(name);
       } else {
-        result.push_back(fmt::to_string(
-          fmt::join(detail::split(name, unflatten_separator), ".")));
+        for (auto segment : detail::split(name, unflatten_separator)) {
+          path.emplace_back(segment);
+        }
       }
+      result.push_back(std::move(path));
     }
     return result;
   }
