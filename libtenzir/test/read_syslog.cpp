@@ -8,6 +8,7 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/syslog.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -159,6 +160,52 @@ TEST("Syslog publishes accepted frames before incomplete-input diagnostics") {
     folly::coro::blockingWait(reader->finalize(output, ctx));
     check_diagnostics(diagnostics, error);
     CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+  }
+}
+
+TEST("Syslog publishes accepted messages before rejecting oversized lines") {
+  auto accepted
+    = std::string{"<165>1 2023-01-01T00:00:00Z host app 123 - - First\n"
+                  "<165>1 2023-01-01T00:00:00Z host app 123 - - Second\n"};
+  auto oversized
+    = std::string(plugins::syslog::max_syslog_message_size + 1, 'x');
+  for (auto delimiter : {"", "\n", "\r\n"}) {
+    auto input = accepted + oversized + delimiter;
+    for (auto split :
+         {size_t{0},
+          accepted.size() + plugins::syslog::max_syslog_message_size}) {
+      auto output = CollectEvents{};
+      auto diagnostics = collecting_diagnostic_handler{};
+      auto dh = transforming_diagnostic_handler{
+        diagnostics, [&](diagnostic diag) {
+          if (diag.severity == severity::error) {
+            CHECK_EQUAL(output.messages,
+                        (std::vector<data>{"First", "Second"}));
+          }
+          return diag;
+        }};
+      auto reg = registry{};
+      auto ctx = test::NovaOpCtx{dh, reg};
+      auto reader = make_reader(false);
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(reader->process(
+        chunk::copy(std::string_view{input}.substr(0, split)), output, ctx));
+      CHECK_EQUAL(reader->state(), OperatorState::normal);
+      check_diagnostics(diagnostics);
+      folly::coro::blockingWait(reader->process(
+        chunk::copy(std::string_view{input}.substr(split)), output, ctx));
+      CHECK_EQUAL(reader->state(), OperatorState::done);
+      check_diagnostics(diagnostics,
+                        fmt::format("syslog message exceeds maximum {} bytes",
+                                    plugins::syslog::max_syslog_message_size));
+      CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+      folly::coro::blockingWait(reader->process(
+        chunk::copy("<165>1 2023-01-01T00:00:00Z host app 123 - - Third\n"),
+        output, ctx));
+      folly::coro::blockingWait(reader->finalize(output, ctx));
+      check_diagnostics(diagnostics);
+      CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+    }
   }
 }
 

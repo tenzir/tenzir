@@ -744,6 +744,7 @@ private:
       co_return;
     }
     if (line.size() > syslog::max_syslog_message_size) {
+      co_await finish_and_flush(push);
       diagnostic::error("syslog message exceeds maximum {} bytes",
                         syslog::max_syslog_message_size)
         .emit(*dh_);
@@ -796,16 +797,18 @@ private:
     }
   }
 
-  auto append_buffer(std::string_view bytes) -> bool {
+  auto append_buffer(std::string_view bytes, Push<nova::Events>& push)
+    -> Task<bool> {
     if (bytes.size() > syslog::max_syslog_message_size - buffer_.size()) {
+      co_await finish_and_flush(push);
       diagnostic::error("syslog message exceeds maximum {} bytes",
                         syslog::max_syslog_message_size)
         .emit(*dh_);
       done_ = true;
-      return false;
+      co_return false;
     }
     buffer_.append(bytes);
-    return true;
+    co_return true;
   }
 
   auto process_lines(std::string_view bytes, Push<nova::Events>& push)
@@ -823,7 +826,7 @@ private:
       if (buffer_.empty()) {
         co_await process_one_line({begin, current}, push);
       } else {
-        if (not append_buffer({begin, current})) {
+        if (not co_await append_buffer({begin, current}, push)) {
           co_return;
         }
         co_await process_one_line(buffer_, push);
@@ -841,7 +844,7 @@ private:
       }
       begin = current + 1;
     }
-    std::ignore = append_buffer({begin, end});
+    std::ignore = co_await append_buffer({begin, end}, push);
   }
 
   auto process_octet(std::string_view bytes, Push<nova::Events>& push)
