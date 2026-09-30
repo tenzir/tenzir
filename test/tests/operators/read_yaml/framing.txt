@@ -1,1 +1,4 @@
-document markers, chunk boundaries, CRLF, UTF-8, and EOF: ok
+{}
+{"value":"héllo"}
+{"value":[1,"two",null]}
+{"value":"last"}

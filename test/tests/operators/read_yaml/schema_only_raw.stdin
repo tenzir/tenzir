@@ -1,0 +1,5 @@
+kind: first
+value: 42
+text: 123
+src: 192.0.2.1
+extra: yes

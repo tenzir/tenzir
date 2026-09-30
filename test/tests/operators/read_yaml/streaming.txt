@@ -1,1 +1,3 @@
-complete documents flush before EOF; partial documents wait: ok
+{
+  value: 42,
+}

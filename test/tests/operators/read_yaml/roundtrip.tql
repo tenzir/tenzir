@@ -1,0 +1,6 @@
+from_stdin {
+  read_yaml
+}
+write_yaml
+read_yaml
+write_ndjson

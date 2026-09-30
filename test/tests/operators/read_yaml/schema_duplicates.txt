@@ -1,0 +1,3 @@
+{"event":{"kind":"duplicates","a":{"x":null,"y":2},"l":[2,3],"text":"123","src":"192.0.2.1","extra":null,"scalar":{"b":2},"reverse":1},"schema":"yaml.duplicates","src_type":"ip"}
+{"event":{"kind":"duplicates","a":{"x":null,"y":2},"l":[2,3],"text":"123","src":"192.0.2.1","extra":null,"scalar":{"b":2},"reverse":1},"schema":"yaml.duplicates","src_type":"ip"}
+{"event":{"kind":"duplicates","a":{"x":null,"y":2},"l":[2,3],"text":"123","src":"192.0.2.1","extra":null,"scalar":{"b":2},"reverse":1},"schema":"yaml.duplicates","src_type":"ip"}

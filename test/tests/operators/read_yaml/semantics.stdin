@@ -1,0 +1,11 @@
+first: 42
+second: hello
+...
+second: 7
+first: [1, two, null, {nested: true}]
+...
+key: 42
+key: hello
+key: [true, null]
+...
+outer.inner: 192.0.2.1

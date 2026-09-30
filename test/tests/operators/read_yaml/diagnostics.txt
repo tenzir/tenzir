@@ -1,1 +1,15 @@
-invalid documents are skipped without partial events: ok
+warning: yaml parser: document is not a map
+
+warning: yaml parser: failed to load YAML document: yaml-cpp: error at line 2, column 1: end of sequence flow not found
+
+warning: yaml parser: failed to load YAML document: yaml-cpp: error at line 3, column 5: bad conversion
+
+warning: yaml parser: document nesting exceeds limit of 64 levels
+{"before":1}
+{"after":2}
+{"before":1}
+{"after":2}
+{"before":1}
+{"after":2}
+{"before":1}
+{"after":2}

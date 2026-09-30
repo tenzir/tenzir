@@ -1,0 +1,7 @@
+flag: true
+integer: -42
+unsigned: 18446744073709551615
+real: 1.5
+ip: 192.0.2.1
+duration: 1s
+time: 2024-01-02T03:04:05Z

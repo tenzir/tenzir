@@ -1,0 +1,6 @@
+from_stdin {
+  split_bytes 1
+  read_yaml schema="yaml.duplicates", unflatten_separator=".", _batch_size=7
+}
+select event=this, schema=@name, src_type=type_of(src).kind
+write_ndjson

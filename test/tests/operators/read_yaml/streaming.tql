@@ -1,0 +1,12 @@
+---
+timeout: 10
+---
+
+// The source emits once immediately, then keeps the byte stream open.
+// Without a timeout flush, head cannot receive an event or stop the pipeline.
+every 1h {
+  from {data: b"value: 42\n...\nvalue: last"}
+}
+write_chunks
+read_yaml _batch_timeout=100ms
+head 1
