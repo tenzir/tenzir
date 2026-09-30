@@ -652,7 +652,7 @@ private:
     auto record = event();
     match(
       *pending_,
-      [&](syslog::message const& message) {
+      [&](syslog::message& message) {
         record.exact_field("facility").data(uint64_t{message.hdr.facility});
         record.exact_field("severity").data(uint64_t{message.hdr.severity});
         record.exact_field("version").data(uint64_t{message.hdr.version});
@@ -661,6 +661,7 @@ private:
         add_optional(record, "app_name", message.hdr.app_name);
         add_optional(record, "process_id", message.hdr.process_id);
         add_optional(record, "message_id", message.hdr.msg_id);
+        syslog::merge_duplicate_sd_ids(message.data);
         add_structured_data(record, message.data);
         add_optional(record, "message", message.msg);
       },

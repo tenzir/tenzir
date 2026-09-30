@@ -1,0 +1,17 @@
+{
+  structured_data: {
+    "sd@1": {
+      a: 1,
+      b: 2,
+    },
+  },
+}
+{
+  structured_data: {
+    "sd@1": {
+      a: 3,
+      b: 2,
+      c: true,
+    },
+  },
+}
