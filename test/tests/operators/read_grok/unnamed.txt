@@ -1,0 +1,5 @@
+{
+  WORD: "foo",
+  value: 42,
+  BASE10NUM: 42,
+}

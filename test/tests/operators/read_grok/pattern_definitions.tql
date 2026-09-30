@@ -1,0 +1,1 @@
+from_stdin { read_grok "%{PAIR:pair}", pattern_definitions={PAIR: "%{WORD:key}=%{NUMBER:value}"} }

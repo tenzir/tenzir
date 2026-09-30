@@ -1,0 +1,1 @@
+from_stdin { read_grok "%{WORD:x} %{NUMBER:n:int} %{NUMBER:f:float}", raw=true }

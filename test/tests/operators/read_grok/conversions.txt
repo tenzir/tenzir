@@ -1,0 +1,12 @@
+{
+  text: "42",
+  integer: -3,
+  real: 1.5,
+  auto: true,
+}
+{
+  text: "foo",
+  integer: null,
+  real: null,
+  auto: false,
+}

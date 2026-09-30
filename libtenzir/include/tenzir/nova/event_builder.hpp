@@ -66,6 +66,8 @@ public:
     bool raw = false;
     /// Infers numbers in unparsed strings for formats without numeric types.
     bool infer_numbers = false;
+    /// Paths of explicitly string-typed fields; selectors do not infer them.
+    std::vector<std::string> string_fields = {};
     /// Splits keys at this separator into nested records, if not empty.
     std::string unflatten_separator;
     std::string default_schema_name = "tenzir.unknown";

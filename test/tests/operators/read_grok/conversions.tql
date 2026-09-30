@@ -1,0 +1,1 @@
+from_stdin { read_grok "%{WORD:text:string} %{DATA:integer:int} %{DATA:real:float} %{WORD:auto:infer}" }

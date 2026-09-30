@@ -1,0 +1,16 @@
+{
+  kind: "first",
+  value: 42,
+}
+{
+  kind: "second",
+  value: "text",
+}
+{
+  kind: "third",
+  value: true,
+}
+{
+  kind: "fourth",
+  value: 192.0.2.1,
+}

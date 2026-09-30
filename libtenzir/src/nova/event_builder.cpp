@@ -24,6 +24,7 @@
 #include <concepts>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -299,13 +300,15 @@ public:
 
   Retyper(bool schema_only, bool infer, diagnostic_handler& dh,
           bool infer_numbers = false, Mode mode = Mode::full,
-          std::string_view unparsed_field = {})
+          std::string_view unparsed_field = {},
+          std::span<std::string const> string_fields = {})
     : schema_only_{schema_only},
       infer_{infer},
       infer_numbers_{infer_numbers or not unparsed_field.empty()},
       dh_{dh},
       mode_{mode},
-      unparsed_field_{unparsed_field} {
+      unparsed_field_{unparsed_field},
+      string_fields_{string_fields} {
   }
 
   /// Converts the records in `rows` to `seed`, which is a `record_type` or a
@@ -466,11 +469,26 @@ private:
         changed = true;
       }
     }
+    // Explicit capture conversions stay strings unless a schema says otherwise.
+    auto infer = infer_ and in_inference_scope(unparsed_field_, path);
+    if (infer and not string_fields_.empty()) {
+      auto name = fmt::format("{}", path);
+      while (true) {
+        if (std::ranges::find(string_fields_, name) != string_fields_.end()) {
+          infer = false;
+          break;
+        }
+        if (not name.ends_with("[]")) {
+          break;
+        }
+        name.resize(name.size() - 2);
+      }
+    }
     // Rebuild the values whose type changes.
     auto replace = storage::BitMap{length, false};
     [&]<std::size_t... Is>(std::index_sequence<Is...>) {
       auto check = [&]<class Tag>() {
-        if (not needs_replacement<Tag>(seed, path)) {
+        if (not needs_replacement<Tag>(seed, infer)) {
           return;
         }
         if (auto alternative = data.template get_alternative<Tag>()) {
@@ -520,8 +538,7 @@ private:
   }
 
   template <class Tag>
-  auto needs_replacement(type const& seed, value_path const& path) const
-    -> bool {
+  auto needs_replacement(type const& seed, bool infer) const -> bool {
     if constexpr (std::same_as<Tag, Null>) {
       return false;
     } else if constexpr (std::same_as<Tag, Record>) {
@@ -530,8 +547,7 @@ private:
       return seed and not is<list_type>(seed);
     } else {
       if (not seed) {
-        return std::same_as<Tag, String> and infer_
-               and in_inference_scope(unparsed_field_, path);
+        return std::same_as<Tag, String> and infer;
       }
       return not conforms<typename Type<Tag>::ViewType>(seed);
     }
@@ -574,6 +590,7 @@ private:
   Ref<diagnostic_handler> dh_;
   Mode mode_;
   std::string_view unparsed_field_;
+  std::span<std::string const> string_fields_;
 };
 
 /// Returns the seed of the field `name` of a record seeded with `seed`, or
@@ -992,7 +1009,8 @@ auto EventBuilder::finish() -> Events {
                     *dh_,
                     settings_.infer_numbers,
                     Retyper::Mode::merge_structural,
-                    settings_.infer_unparsed_under}
+                    settings_.infer_unparsed_under,
+                    settings_.string_fields}
               .record(std::move(array), rows, seed_, value_path{});
   }
   return Events{std::move(array), std::move(rows),
@@ -1204,7 +1222,8 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
                     settings_.infer_numbers,
                     settings_.merge_structural ? Retyper::Mode::merge_structural
                                                : Retyper::Mode::full,
-                    settings_.infer_unparsed_under}
+                    settings_.infer_unparsed_under,
+                    settings_.string_fields}
               .record(std::move(array), rows, type{}, value_path{});
       }
       continue;
@@ -1215,7 +1234,8 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
                     settings_.infer_numbers,
                     settings_.merge_structural ? Retyper::Mode::merge_structural
                                                : Retyper::Mode::full,
-                    settings_.infer_unparsed_under}
+                    settings_.infer_unparsed_under,
+                    settings_.string_fields}
               .record(std::move(array), rows, *selected, value_path{});
   }
   auto meta = Events::Meta::make_empty(length);

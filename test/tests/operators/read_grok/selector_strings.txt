@@ -1,0 +1,16 @@
+{
+  name: "suricata.dns",
+  dest_port: 53,
+  text: "123",
+  nested: {
+    value: "true",
+  },
+}
+{
+  name: "suricata.flow",
+  dest_port: 443,
+  text: "false",
+  nested: {
+    value: "456",
+  },
+}

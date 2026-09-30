@@ -1,0 +1,8 @@
+{
+  word: "foo",
+  number: 42,
+}
+{
+  word: "bar",
+  number: null,
+}
