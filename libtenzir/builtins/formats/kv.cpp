@@ -23,6 +23,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/view3.hpp>
 
 #include <arrow/api.h>
@@ -39,6 +40,8 @@
 namespace tenzir::plugins::kv {
 
 namespace {
+
+using namespace tenzir::si_literals;
 
 constexpr auto docs = "https://tenzir.com/docs/formats/kv";
 
@@ -647,10 +650,15 @@ public:
       if (*current != '\n' and *current != '\r') {
         continue;
       }
+      auto line = std::string_view{begin, current};
+      if (line.size() > max_record_size - buffer_.size()) {
+        co_await reject_oversized_record(push);
+        co_return;
+      }
       if (buffer_.empty()) {
-        process_line({begin, current});
+        process_line(line);
       } else {
-        buffer_.append(begin, current);
+        buffer_.append(line);
         process_line(buffer_);
         buffer_.clear();
       }
@@ -669,7 +677,12 @@ public:
       }
       begin = current + 1;
     }
-    buffer_.append(begin, end);
+    auto rest = std::string_view{begin, end};
+    if (rest.size() > max_record_size - buffer_.size()) {
+      co_await reject_oversized_record(push);
+      co_return;
+    }
+    buffer_.append(rest);
     if (timeout_.poll(rows())) {
       co_await flush(push);
     }
@@ -677,7 +690,7 @@ public:
 
   auto finalize(Push<nova::Events>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
-    if (not builder_) {
+    if (done_ or not builder_) {
       co_return FinalizeBehavior::done;
     }
     if (not buffer_.empty()) {
@@ -705,6 +718,19 @@ public:
   }
 
 private:
+  static constexpr auto max_record_size = size_t{16_Mi};
+
+  auto reject_oversized_record(Push<nova::Events>& push) -> Task<void> {
+    buffer_.clear();
+    // Publish accepted rows before the diagnostic cancels the pipeline.
+    co_await flush(push);
+    ++line_counter_;
+    done_ = true;
+    diagnostic::error("key-value record exceeds maximum {} bytes",
+                      max_record_size)
+      .emit(**dh_);
+  }
+
   auto rows() const -> size_t {
     return builder_ ? static_cast<size_t>(builder_->length()) : 0;
   }
