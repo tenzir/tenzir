@@ -1,0 +1,6 @@
+type yaml.first = record{
+  kind: string,
+  value: int64,
+  text: string,
+  src: ip,
+}

@@ -1,0 +1,1 @@
+invalid documents are skipped without partial events: ok
