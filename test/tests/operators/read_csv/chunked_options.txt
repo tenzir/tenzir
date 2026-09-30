@@ -1,0 +1,10 @@
+{
+  a: 1,
+  b: "two",
+  unnamed1: 3,
+}
+{
+  a: 4,
+  b: null,
+  unnamed1: null,
+}

@@ -1,0 +1,8 @@
+{
+  schema: "suricata.alert",
+  dest_port: 80,
+}
+{
+  schema: "suricata.dns",
+  dest_port: 53,
+}

@@ -1,0 +1,5 @@
+{
+  schema: "suricata.component.common",
+  dest_port: 80,
+  unknown: null,
+}

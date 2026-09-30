@@ -1,0 +1,13 @@
+warning: csv parser: duplicate field name `x` in header
+ --> tests/operators/read_csv/duplicate_header.tql:3:1
+  |
+3 | read_csv
+  | ~~~~~~~~
+  |
+  = note: line 1
+{
+  x: [
+    1,
+    2,
+  ],
+}

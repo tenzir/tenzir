@@ -20,6 +20,7 @@
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/read_detection.hpp"
@@ -109,7 +110,6 @@ auto warn_on_duplicate_fields(std::vector<std::string> fields, location loc,
        it = std::ranges::adjacent_find(std::next(it), fields.end())) {
     diagnostic::warning("duplicate field name `{}` in header", *it)
       .primary(loc)
-      .note("later values will overwrite earlier ones")
       .emit(dh);
   }
 }
@@ -376,7 +376,7 @@ struct ReadXsvArgs {
   bool schema_only = false;
   bool raw = false;
   Option<located<std::string>> unflatten_separator;
-  bool merge = true;
+  Option<located<bool>> merge;
   Option<duration> batch_timeout;
   Option<uint64_t> batch_size;
   // Internal: used in diagnostic messages; set at Describer construction time.
@@ -624,6 +624,13 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
                 const xsv_parser_options& args, const size_t line_counter,
                 const detail::quoting_escaping_policy& quoting,
                 diagnostic_handler& dh) -> void {
+  auto field_at = [&](size_t index) {
+    if constexpr (std::same_as<decltype(builder), nova::EventBuilder::Record>) {
+      return builder.field(fields[index]);
+    } else {
+      return builder.unflattened_field(fields[index]);
+    }
+  };
   auto field_idx = size_t{0};
   auto field_text = std::string_view{};
   auto trailing_empty_field = false;
@@ -641,7 +648,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
                   "`null`")
             .emit(dh);
         }
-        builder.unflattened_field(fields[field_idx]).null();
+        field_at(field_idx).null();
         continue;
       } else {
         break;
@@ -675,7 +682,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
         break;
       }
     }
-    auto field = builder.unflattened_field(fields[field_idx]);
+    auto field = field_at(field_idx);
     if (auto split = quoting.split_at_unquoted(line, args.field_separator)) {
       std::tie(field_text, line) = *split;
       trailing_empty_field = line.empty();
@@ -713,7 +720,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
     }
   }
   for (; field_idx < fields.size(); ++field_idx) {
-    builder.unflattened_field(fields[field_idx]).null();
+    field_at(field_idx).null();
   }
 }
 
@@ -1045,9 +1052,18 @@ private:
 
 // ── ReadXsv ─────────────────────────────────────────────────────────────────
 
-class ReadXsv final : public Operator<chunk_ptr, table_slice> {
+template <class Output>
+class ReadXsv final : public Operator<chunk_ptr, Output> {
 public:
-  explicit ReadXsv(ReadXsvArgs args) : args_{std::move(args)} {
+  explicit ReadXsv(ReadXsvArgs args)
+    : args_{std::move(args)}, pusher_{[&] {
+        if constexpr (std::same_as<Output, nova::Events>) {
+          return BatchTimeout{args_.batch_timeout.value_or(
+            multi_series_builder::options{}.settings.timeout)};
+        } else {
+          return SeriesPusher{};
+        }
+      }()} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -1056,12 +1072,19 @@ public:
       .backslashes_escape = true,
       .doubled_quotes_escape = true,
     };
+    if constexpr (std::same_as<Output, nova::Events>) {
+      if (args_.merge) {
+        diagnostic::warning("`merge` has no effect with `--nova`")
+          .primary(args_.merge->source)
+          .emit(ctx.dh());
+      }
+    }
     // ── Build multi_series_builder options from args_ ─────────────────────────
     auto msb_opts = multi_series_builder::options{};
     msb_opts.settings.default_schema_name
       = fmt::format("tenzir.{}", args_.name);
     msb_opts.settings.schema_only = args_.schema_only;
-    msb_opts.settings.merge = args_.merge;
+    msb_opts.settings.merge = args_.merge ? args_.merge->inner : true;
     msb_opts.settings.raw = args_.raw;
     if (args_.unflatten_separator) {
       msb_opts.settings.unnest_separator = args_.unflatten_separator->inner;
@@ -1078,20 +1101,22 @@ public:
       co_return;
     }
     if (args_.schema) {
-      auto schema = modules::get_schema(args_.schema->inner);
-      if (not schema) {
-        if (args_.schema_only) {
-          diagnostic::error("schema `{}` does not exist, but `schema_only` "
-                            "was specified",
-                            args_.schema->inner)
+      if constexpr (std::same_as<Output, table_slice>) {
+        auto schema = modules::get_schema(args_.schema->inner);
+        if (not schema) {
+          if (args_.schema_only) {
+            diagnostic::error("schema `{}` does not exist, but `schema_only` "
+                              "was specified",
+                              args_.schema->inner)
+              .primary(args_.schema->source)
+              .emit(ctx.dh());
+            co_return;
+          }
+          diagnostic::warning("schema `{}` does not exist", args_.schema->inner)
             .primary(args_.schema->source)
+            .hint("if you know the input's shape, define the schema")
             .emit(ctx.dh());
-          co_return;
         }
-        diagnostic::warning("schema `{}` does not exist", args_.schema->inner)
-          .primary(args_.schema->source)
-          .hint("if you know the input's shape, define the schema")
-          .emit(ctx.dh());
       }
       msb_opts.policy
         = multi_series_builder::policy_schema{args_.schema->inner};
@@ -1175,6 +1200,14 @@ public:
     // ── Build diagnostic handler and MSB ─────────────────────────────────────
     dh_ = std::make_unique<transforming_diagnostic_handler>(
       ctx.dh(), [this](diagnostic d) {
+        if (line_counter_ == 0) {
+          if (not d.has_location()) {
+            d.annotations.emplace_back(true, std::string{},
+                                       args_.schema ? args_.schema->source
+                                                    : args_.operator_location);
+          }
+          return d;
+        }
         d.message = fmt::format("{} parser: {}", opts_.name, d.message);
         d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
                         fmt::format("line {}", line_counter_));
@@ -1184,7 +1217,17 @@ public:
         }
         return d;
       });
-    msb_ = multi_series_builder(opts_.builder_options, *dh_);
+    if constexpr (std::same_as<Output, nova::Events>) {
+      auto settings = nova::event_builder_settings(opts_.builder_options);
+      settings.infer_numbers = true;
+      auto builder = nova::EventBuilder::make(std::move(settings), *dh_);
+      if (not builder) {
+        co_return;
+      }
+      msb_ = std::move(*builder);
+    } else {
+      msb_ = multi_series_builder(opts_.builder_options, *dh_);
+    }
     co_return;
   }
 
@@ -1193,15 +1236,14 @@ public:
     co_return {};
   }
 
-  auto process_task(Any, Push<table_slice>& push, OpCtx&)
-    -> Task<void> override {
+  auto process_task(Any, Push<Output>& push, OpCtx&) -> Task<void> override {
     if (not msb_) {
       co_return;
     }
-    co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
+    co_await push_ready(push);
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (not msb_) {
@@ -1226,7 +1268,7 @@ public:
         process_line(buffer_, dh);
         buffer_.clear();
       }
-      co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+      co_await push_ready(push, now);
       if (*current == '\r') {
         if (current + 1 == end) {
           ended_on_carriage_return_ = true;
@@ -1237,11 +1279,10 @@ public:
       begin = current + 1;
     }
     buffer_.append(begin, end);
-    co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+    co_await push_ready(push, now);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx&)
-    -> Task<FinalizeBehavior> override {
+  auto finalize(Push<Output>& push, OpCtx&) -> Task<FinalizeBehavior> override {
     if (not msb_) {
       co_return FinalizeBehavior::done;
     }
@@ -1249,23 +1290,45 @@ public:
       process_line(buffer_, *dh_);
       buffer_.clear();
     }
-    for (auto& slice : msb_->finalize_as_table_slice()) {
-      co_await push(std::move(slice));
-    }
+    co_await flush(push);
     co_return FinalizeBehavior::done;
   }
 
-  auto prepare_snapshot(Push<table_slice>& push, OpCtx&)
-    -> Task<void> override {
+  auto prepare_snapshot(Push<Output>& push, OpCtx&) -> Task<void> override {
     if (not msb_) {
       co_return;
     }
-    for (auto& slice : msb_->finalize_as_table_slice()) {
-      co_await push(std::move(slice));
-    }
+    co_await flush(push);
   }
 
 private:
+  auto flush(Push<Output>& push) -> Task<void> {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      pusher_.reset();
+      if (msb_->length() > 0) {
+        co_await push(msb_->finish());
+      }
+    } else {
+      for (auto& slice : msb_->finalize_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
+    }
+  }
+
+  auto push_ready(Push<Output>& push,
+                  multi_series_builder::clock::time_point now
+                  = multi_series_builder::clock::now()) -> Task<void> {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      if (std::cmp_greater_equal(
+            msb_->length(), opts_.builder_options.settings.desired_batch_size)
+          or pusher_.poll(msb_->length(), now)) {
+        co_await flush(push);
+      }
+    } else {
+      co_await pusher_.push(msb_->yield_ready_as_table_slice(now), push);
+    }
+  }
+
   auto process_line(std::string_view line, diagnostic_handler& dh) -> void {
     ++line_counter_;
     if (line.empty()) {
@@ -1284,7 +1347,13 @@ private:
       opts_.header = *header_;
       return;
     }
-    auto r = msb_->record();
+    auto r = [&] {
+      if constexpr (std::same_as<Output, nova::Events>) {
+        return msb_->event();
+      } else {
+        return msb_->record();
+      }
+    }();
     parse_line(line, *header_, *original_field_count_, r, opts_, line_counter_,
                quoting_, dh);
   }
@@ -1298,8 +1367,12 @@ private:
   xsv_parser_options opts_;
   detail::quoting_escaping_policy quoting_;
   std::unique_ptr<transforming_diagnostic_handler> dh_;
-  Option<multi_series_builder> msb_;
-  SeriesPusher pusher_;
+  Option<std::conditional_t<std::same_as<Output, nova::Events>,
+                            nova::EventBuilder, multi_series_builder>>
+    msb_;
+  std::conditional_t<std::same_as<Output, nova::Events>, BatchTimeout,
+                     SeriesPusher>
+    pusher_;
 };
 
 class read_xsv : public virtual OperatorPlugin {
@@ -1309,7 +1382,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadXsvArgs, ReadXsv>{};
+    auto d
+      = Describer<ReadXsvArgs, ReadXsv<table_slice>, ReadXsv<nova::Events>>{};
     auto field_sep = d.named("field_separator", &ReadXsvArgs::field_separator);
     auto list_sep = d.named("list_separator", &ReadXsvArgs::list_separator);
     auto null_val = d.named("null_value", &ReadXsvArgs::null_value);
@@ -1351,7 +1425,9 @@ public:
     defaults.list_separator = {std::string{ListSep}, location::unknown};
     defaults.null_value = {std::string{Null}, location::unknown};
     defaults.name = std::string{Name};
-    auto d = Describer<ReadXsvArgs, ReadXsv>{std::move(defaults)};
+    auto d
+      = Describer<ReadXsvArgs, ReadXsv<table_slice>, ReadXsv<nova::Events>>{
+        std::move(defaults)};
     auto list_sep
       = d.named_optional("list_separator", &ReadXsvArgs::list_separator);
     auto null_val = d.named_optional("null_value", &ReadXsvArgs::null_value);
