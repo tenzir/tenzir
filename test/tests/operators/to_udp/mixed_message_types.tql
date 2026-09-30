@@ -1,0 +1,13 @@
+---
+fixtures:
+  - udp: {}
+assertions:
+  fixtures:
+    udp:
+      # One datagram per event, in order: a string, a blob, and a record.
+      server_received_contains: 'ab{"k":1}'
+timeout: 60
+---
+
+from {message: "a"}, {message: b"b"}, {message: {k: 1}}
+to_udp env("UDP_ENDPOINT"), message=message

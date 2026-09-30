@@ -1,0 +1,5 @@
+{
+  data: "hello-from-from_udp-hostname",
+  has_hostname: true,
+  ip: 127.0.0.1,
+}

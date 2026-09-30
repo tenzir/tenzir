@@ -14,6 +14,10 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
@@ -23,9 +27,13 @@
 #include <folly/SocketAddress.h>
 #include <folly/io/async/AsyncUDPSocket.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <iterator>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace tenzir::plugins::to_udp {
 
@@ -47,6 +55,8 @@ struct SendBatch {
   std::vector<chunk_ptr> payloads;
   Sender<SendBatchResult> reply_to;
 };
+
+namespace legacy {
 
 class ToUdp final : public Operator<table_slice, void> {
 public:
@@ -255,6 +265,221 @@ private:
   MetricsCounter events_write_counter_;
 };
 
+} // namespace legacy
+
+class ToUdp final : public Operator<nova::Events, void> {
+public:
+  explicit ToUdp(ToUdpArgs args)
+    : ToUdp{std::move(args), channel<SendBatch>(request_queue_capacity)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto expression
+      = args_.message ? *args_.message : ast::expression{ast::this_{}};
+    auto evaluator = co_await nova::Evaluator::make(std::move(expression), ctx);
+    if (not evaluator) {
+      write_sender_ = None{};
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+    evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
+    auto endpoint = tenzir::Endpoint{};
+    auto parsed = parsers::endpoint(args_.endpoint.inner, endpoint)
+                  and endpoint.port and not endpoint.host.empty();
+    TENZIR_ASSERT(parsed);
+    auto address
+      = co_await forward_dns_.resolve_socket_address(std::move(endpoint));
+    if (address.is_err()) {
+      diagnostic::error("failed to resolve remote endpoint")
+        .primary(args_.endpoint)
+        .note("reason: {}", std::move(address).unwrap_err())
+        .emit(ctx);
+      write_sender_ = None{};
+      co_return;
+    }
+    // A truly label-free counter is not possible with the current metrics API:
+    // `make_counter` always requires exactly one label pair.
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    auto [startup_sender, startup_receiver]
+      = channel<diagnostic>(request_queue_capacity);
+    TENZIR_ASSERT(write_sender_);
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      evb_, write_loop(*evb_, std::move(address).unwrap(), args_.self,
+                       std::move(write_receiver_), std::move(startup_sender),
+                       bytes_write_counter_, events_write_counter_)));
+    // Successful startup is signaled by closing the channel without errors.
+    auto failed = false;
+    while (auto diagnostic = co_await startup_receiver.recv()) {
+      std::move(*diagnostic).modify().emit(ctx);
+      failed = true;
+    }
+    if (failed) {
+      // The writer has exited, so there is nothing left to send to.
+      write_sender_ = None{};
+    }
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (not write_sender_ or input.active_count() == 0) {
+      co_return;
+    }
+    auto values = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto message_location
+      = args_.message ? args_.message->get_location() : args_.self;
+    auto payloads = std::vector<chunk_ptr>{};
+    auto warned_null = false;
+    auto warned_types = std::vector<std::string_view>{};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      match(values.get(row), [&]<class T>(nova::RowView<T> const& view) {
+        if constexpr (std::same_as<T, nova::String>) {
+          auto text = *view;
+          payloads.emplace_back(chunk::copy(text.data(), text.size()));
+        } else if constexpr (std::same_as<T, nova::Blob>) {
+          payloads.emplace_back(chunk::copy(*view));
+        } else if constexpr (std::same_as<T, nova::Record>) {
+          printer_.print(view);
+          payloads.emplace_back(chunk::copy(printer_.bytes()));
+        } else if constexpr (std::same_as<T, nova::Null>) {
+          if (not std::exchange(warned_null, true)) {
+            diagnostic::warning("`message` evaluated to `null`, skipping event")
+              .primary(message_location)
+              .emit(ctx);
+          }
+        } else {
+          // Warn once per type and batch to not flood the output.
+          constexpr auto name = nova::Type<T>::static_name;
+          if (std::ranges::find(warned_types, name) == warned_types.end()) {
+            warned_types.push_back(name);
+            diagnostic::warning(
+              "expected `blob`, `record`, or `string`, got `{}`", name)
+              .primary(message_location)
+              .emit(ctx);
+          }
+        }
+      });
+    }
+    if (payloads.empty()) {
+      co_return;
+    }
+    auto [reply_sender, reply_receiver] = channel<SendBatchResult>(1);
+    // We currently use a one-shot channel to confirm that the data has been
+    // completely sent. That might not be ideal, but it simplifies the code for
+    // now that we don't have to wait for the queue to be drained. As a result,
+    // the writer channel can be capacity one and writing always succeeds.
+    auto write_result = write_sender_->try_send(
+      SendBatch{std::move(payloads), std::move(reply_sender)});
+    TENZIR_ASSERT(write_result.is_ok());
+    auto result = co_await reply_receiver.recv();
+    TENZIR_ASSERT(result);
+    for (auto& diagnostic : result->diagnostics) {
+      std::move(diagnostic).modify().emit(ctx);
+    }
+  }
+
+  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
+    write_sender_ = None{};
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return write_sender_ ? OperatorState::normal : OperatorState::done;
+  }
+
+private:
+  explicit ToUdp(ToUdpArgs args,
+                 std::tuple<Sender<SendBatch>, Receiver<SendBatch>> ch)
+    : args_{std::move(args)},
+      write_sender_{std::move(std::get<0>(ch))},
+      write_receiver_{std::move(std::get<1>(ch))} {
+  }
+
+  static auto write_loop(folly::EventBase& evb, folly::SocketAddress address,
+                         location self, Receiver<SendBatch> write_receiver,
+                         Sender<diagnostic> startup_sender,
+                         MetricsCounter bytes_write_counter,
+                         MetricsCounter events_write_counter) -> Task<void> {
+    auto socket = folly::AsyncUDPSocket{&evb};
+    auto startup_diagnostics = collecting_diagnostic_handler{};
+    try {
+      socket.connect(address);
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to connect UDP socket")
+        .primary(self)
+        .note("{}", ex.what())
+        .emit(startup_diagnostics);
+    }
+    auto startup_result = std::move(startup_diagnostics).collect();
+    for (auto& diagnostic : startup_result) {
+      co_await startup_sender.send(std::move(diagnostic));
+    }
+    {
+      // Let the caller know that startup is complete by dropping the channel.
+      auto _ = std::move(startup_sender);
+    }
+    if (not startup_result.empty()) {
+      co_return;
+    }
+    while (true) {
+      auto batch = co_await write_receiver.recv();
+      if (not batch) {
+        co_return;
+      }
+      auto diagnostics = collecting_diagnostic_handler{};
+      for (auto const& payload : batch->payloads) {
+        auto iov = iovec{
+          const_cast<std::byte*>(payload->data()),
+          payload->size(),
+        };
+        auto num_sent = socket.writev(address, &iov, 1);
+        if (num_sent < 0) {
+          auto builder = diagnostic::warning("failed to send UDP datagram")
+                           .primary(self, detail::describe_errno());
+          if (errno == EMSGSIZE) {
+            builder = std::move(builder).hint(
+              "ensure the payload fits into a single UDP datagram");
+          }
+          std::move(builder).emit(diagnostics);
+          continue;
+        }
+        if (num_sent != detail::narrow_cast<ssize_t>(payload->size())) {
+          diagnostic::warning("failed to send complete UDP datagram")
+            .primary(self)
+            .note("sent {} of {} bytes", num_sent, payload->size())
+            .emit(diagnostics);
+          continue;
+        }
+        bytes_write_counter.add(payload->size());
+        events_write_counter.add(1);
+      }
+      // This single-shot channel of capacity 1 can always be written to since
+      // we don't reuse it.
+      auto reply_result = batch->reply_to.try_send(
+        SendBatchResult{std::move(diagnostics).collect()});
+      TENZIR_ASSERT(reply_result.is_ok());
+    }
+  }
+
+  ToUdpArgs args_;
+  Option<nova::Evaluator> evaluator_;
+  nova::json_printer printer_{json_printer_options{
+    .style = no_style(),
+    .oneline = true,
+  }};
+  folly::Executor::KeepAlive<folly::EventBase> evb_;
+  ForwardDnsResolver forward_dns_;
+  Option<Sender<SendBatch>> write_sender_;
+  Receiver<SendBatch> write_receiver_;
+  MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
+};
+
 class ToUdpPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -262,7 +487,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToUdpArgs, ToUdp>{};
+    auto d = Describer<ToUdpArgs, legacy::ToUdp, ToUdp>{};
     d.operator_location(&ToUdpArgs::self);
     auto endpoint_arg = d.positional("endpoint", &ToUdpArgs::endpoint);
     d.named("message", &ToUdpArgs::message, "any");

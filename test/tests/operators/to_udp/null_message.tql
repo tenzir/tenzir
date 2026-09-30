@@ -1,0 +1,8 @@
+---
+fixtures:
+  - udp: {}
+timeout: 60
+---
+
+from {message: null}
+to_udp env("UDP_ENDPOINT"), message=message

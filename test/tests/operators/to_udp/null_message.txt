@@ -1,0 +1,6 @@
+warning: `message` evaluated to `null`, skipping event
+ --> tests/operators/to_udp/null_message.tql:8:37
+  |
+8 | to_udp env("UDP_ENDPOINT"), message=message
+  |                                     ~~~~~~~
+  |

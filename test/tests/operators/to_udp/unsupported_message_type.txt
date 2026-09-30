@@ -1,0 +1,6 @@
+warning: expected `blob`, `record`, or `string`, got `int`
+ --> tests/operators/to_udp/unsupported_message_type.tql:8:37
+  |
+8 | to_udp env("UDP_ENDPOINT"), message=message
+  |                                     ~~~~~~~
+  |

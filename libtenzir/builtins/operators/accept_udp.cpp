@@ -16,6 +16,8 @@
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/nova/event_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -37,6 +39,7 @@
 #include <chrono>
 #include <deque>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::accept_udp {
@@ -182,6 +185,8 @@ struct SocketReadCallback final : folly::AsyncUDPSocket::ReadCallback {
 private:
   std::array<std::byte, udp_buffer_size> buffer_;
 };
+
+namespace legacy {
 
 class AcceptUdp final : public Operator<void, table_slice> {
 public:
@@ -498,6 +503,317 @@ private:
   bool peer_resolution_warning_emitted_ = false;
 };
 
+} // namespace legacy
+
+class AcceptUdp final : public Operator<void, nova::Events> {
+public:
+  explicit AcceptUdp(AcceptUdpArgs args)
+    : AcceptUdp{std::move(args), channel<Message>(message_queue_capacity)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto settings = nova::EventBuilder::Settings{};
+    settings.default_schema_name = "tenzir.accept_udp";
+    auto builder = nova::EventBuilder::make(std::move(settings), ctx.dh());
+    if (not builder) {
+      message_sender_ = None{};
+      co_return;
+    }
+    builder_ = std::move(builder).unwrap();
+    // Pin to one specific EventBase from the IO pool: the socket and the
+    // coroutine must run on the same thread so that AsyncUDPSocket's
+    // `dcheckIsInEventBaseThread` holds and access to `SocketReadCallback`'s
+    // members needs no synchronization.
+    evb_ = folly::getKeepAliveToken(ctx.io_executor()->getEventBase());
+    auto bind_endpoint = Endpoint{};
+    auto parsed = parsers::endpoint(args_.endpoint.inner, bind_endpoint)
+                  and bind_endpoint.port;
+    TENZIR_ASSERT(parsed);
+    auto bind_address
+      = co_await forward_dns_.resolve_bind_address(std::move(bind_endpoint));
+    if (bind_address.is_err()) {
+      diagnostic::error("failed to resolve listen address")
+        .primary(args_.endpoint)
+        .note("reason: {}", std::move(bind_address).unwrap_err())
+        .emit(ctx);
+      message_sender_ = None{};
+      co_return;
+    }
+    if (args_.resolve_hostnames) {
+      if (auto error = reverse_dns_.startup_error()) {
+        diagnostic::error("failed to initialize DNS resolver")
+          .primary(args_.endpoint, "reason: {}", error->error)
+          .emit(ctx);
+        message_sender_ = None{};
+        co_return;
+      }
+    }
+    // A truly label-free counter is not possible with the current metrics API:
+    // `make_counter` always requires exactly one label pair.
+    auto bytes_read_counter
+      = ctx.make_counter(MetricsLabel{"operator", "accept_udp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_udp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    TENZIR_ASSERT(message_sender_);
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      evb_, read_loop(*evb_, std::move(bind_address).unwrap(), *message_sender_,
+                      std::move(bytes_read_counter))));
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    auto message = co_await message_receiver_.recv();
+    if (not message) {
+      // The sender side can be dropped after `await_task()` was already
+      // enqueued. We cannot safely read `done_` here, so park this stale await
+      // until the executor observes `state() == done` and cancels it.
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return std::move(*message);
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](DatagramBatch batch) -> Task<void> {
+        for (auto& datagram : batch.datagrams) {
+          auto hostname = Option<std::string>{};
+          if (args_.resolve_hostnames) {
+            auto reverse_dns = co_await reverse_dns_.resolve(datagram.peer_ip);
+            if (reverse_dns->is_err()) {
+              if (not peer_resolution_warning_emitted_) {
+                diagnostic::warning("{}", reverse_dns->unwrap_err().error)
+                  .note("failed to resolve peer hostname for {}",
+                        datagram.peer_ip)
+                  .note("set `resolve_hostnames=false` to disable hostname "
+                        "resolution")
+                  .primary(args_.endpoint)
+                  .emit(ctx);
+                peer_resolution_warning_emitted_ = true;
+              }
+            } else if (auto* resolved
+                       = try_as<ReverseDnsResolved>(&reverse_dns->unwrap())) {
+              hostname = resolved->hostname;
+            }
+          }
+          auto bytes = as_bytes(datagram.payload);
+          auto string = std::string_view{
+            reinterpret_cast<char const*>(bytes.data()), bytes.size()};
+          auto utf8_valid = true;
+          if (not args_.binary) {
+            utf8_valid = arrow::util::ValidateUTF8(string);
+          }
+          if (not utf8_valid) {
+            diagnostic::warning("message is not valid UTF-8")
+              .primary(args_.endpoint)
+              .note("peer: {}", datagram.peer_ip)
+              .hint("use `binary=true` to accept non-UTF8 data")
+              .emit(ctx);
+            continue;
+          }
+          {
+            auto event = builder_->event();
+            if (args_.binary) {
+              event.field("data").data(blob_view{bytes});
+            } else {
+              event.field("data").data(string);
+            }
+            auto peer = event.field("peer").record();
+            peer.field("ip").data(datagram.peer_ip);
+            peer.field("port").data(int64_t{datagram.peer_port});
+            if (hostname) {
+              peer.field("hostname").data(std::string_view{*hostname});
+            } else if (args_.resolve_hostnames) {
+              peer.field("hostname").null();
+            }
+          }
+          if (builder_->length() == 1) {
+            schedule_batch_flush(ctx);
+          }
+          if (std::cmp_greater_equal(builder_->length(),
+                                     defaults::import::table_slice_size)) {
+            co_await flush_builder(push);
+          }
+        }
+      },
+      [&](Flush flush) -> Task<void> {
+        if (builder_->length() == 0 or flush.generation != batch_generation_) {
+          co_return;
+        }
+        co_await flush_builder(push);
+      },
+      [&](Error error) -> Task<void> {
+        cancel_batch_flush();
+        message_sender_ = None{};
+        // No need to flush buffered events on errors as we are shutting down.
+        switch (error.stage) {
+          case ErrorStage::startup:
+            diagnostic::error("failed to start UDP socket")
+              .primary(args_.endpoint)
+              .note("{}", error.detail)
+              .emit(ctx);
+            co_return;
+          case ErrorStage::runtime:
+            diagnostic::error("failed to receive data from socket")
+              .primary(args_.endpoint)
+              .note("{}", error.detail)
+              .emit(ctx);
+            co_return;
+        }
+        TENZIR_UNREACHABLE();
+      });
+  }
+
+  auto stop(OpCtx&) -> Task<void> override {
+    // Hard teardown: we drop any buffered data — datagrams still queued in
+    // `callback.pending`, messages in flight in the channel, and the
+    // unflushed events in `builder_`. UDP is lossy by design, so this is
+    // acceptable on shutdown.
+    cancel_batch_flush();
+    message_sender_ = None{};
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return message_sender_ ? OperatorState::normal : OperatorState::done;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // UDP datagrams in flight are inherently lossy across restarts; nothing
+    // worth serialising here.
+  }
+
+private:
+  explicit AcceptUdp(AcceptUdpArgs args,
+                     std::tuple<Sender<Message>, Receiver<Message>> ch)
+    : args_{std::move(args)},
+      message_sender_{std::move(std::get<0>(ch))},
+      message_receiver_{std::move(std::get<1>(ch))} {
+  }
+
+  static auto
+  read_loop(folly::EventBase& evb, folly::SocketAddress bind_address,
+            Sender<Message> message_sender, MetricsCounter bytes_read_counter)
+    -> Task<void> {
+    auto socket = folly::AsyncUDPSocket{&evb};
+    auto callback = SocketReadCallback{};
+    callback.bytes_read_counter = std::move(bytes_read_counter);
+    callback.socket = &socket;
+    auto socket_guard = detail::scope_guard{[&]() noexcept {
+      socket.pauseRead();
+      socket.close();
+    }};
+    auto startup_error = Option<std::string>{};
+    try {
+      socket.setReuseAddr(true);
+      socket.setRcvBuf(socket_receive_buffer_size);
+      socket.bind(bind_address);
+      socket.resumeRead(&callback);
+    } catch (std::exception const& ex) {
+      startup_error = ex.what();
+    }
+    if (startup_error) {
+      co_await message_sender.send(
+        Error{ErrorStage::startup, std::move(*startup_error)});
+      co_return;
+    }
+    while (true) {
+      while (not callback.pending.empty()) {
+        auto message = Message{DatagramBatch{std::vector<Datagram>{}}};
+        if (auto* error = try_as<Error>(&callback.pending.front())) {
+          message = std::move(*error);
+          callback.pending.pop_front();
+        } else {
+          auto datagrams = std::vector<Datagram>{};
+          datagrams.reserve(
+            std::min(datagram_batch_size, callback.pending.size()));
+          while (not callback.pending.empty()
+                 and datagrams.size() < datagram_batch_size) {
+            auto* datagram = try_as<Datagram>(&callback.pending.front());
+            if (not datagram) {
+              break;
+            }
+            datagrams.push_back(std::move(*datagram));
+            callback.pending.pop_front();
+          }
+          message = DatagramBatch{std::move(datagrams)};
+        }
+        co_await message_sender.send(std::move(message));
+        if (callback.paused and not callback.done
+            and callback.pending.size() <= pending_low_water) {
+          callback.paused = false;
+          socket.resumeRead(&callback);
+        }
+      }
+      if (callback.done) {
+        break;
+      }
+      co_await callback.notify.wait();
+      if (not callback.pending.empty()
+          and not try_as<Error>(&callback.pending.front())
+          and callback.pending.size() < datagram_batch_size) {
+        co_await folly::coro::sleep(datagram_coalesce_delay);
+      }
+    }
+  }
+
+  static auto flush_batch_after(Sender<Message> message_sender,
+                                uint64_t generation) -> Task<void> {
+    co_await folly::coro::sleep(defaults::import::batch_timeout);
+    co_await message_sender.send(Flush{generation});
+  }
+
+  auto schedule_batch_flush(OpCtx& ctx) -> void {
+    cancel_batch_flush();
+    batch_generation_ += 1;
+    batch_flush_cancel_.emplace();
+    auto token = batch_flush_cancel_->getToken();
+    auto generation = batch_generation_;
+    TENZIR_ASSERT(message_sender_);
+    auto message_sender = *message_sender_;
+    ctx.spawn_task(folly::coro::co_withCancellation(
+      token,
+      folly::coro::co_withExecutor(
+        evb_, flush_batch_after(std::move(message_sender), generation))));
+  }
+
+  auto cancel_batch_flush() -> void {
+    if (batch_flush_cancel_) {
+      batch_flush_cancel_->requestCancellation();
+      batch_flush_cancel_.reset();
+    }
+  }
+
+  auto flush_builder(Push<nova::Events>& push) -> Task<void> {
+    if (builder_->length() == 0) {
+      co_return;
+    }
+    cancel_batch_flush();
+    auto events = builder_->finish();
+    auto const rows = events.active_count();
+    co_await push(std::move(events));
+    events_read_counter_.add(rows);
+  }
+
+  AcceptUdpArgs args_;
+  Option<nova::EventBuilder> builder_;
+  ForwardDnsResolver forward_dns_;
+  ReverseDnsResolver reverse_dns_;
+  folly::Executor::KeepAlive<folly::EventBase> evb_;
+  Option<Sender<Message>> message_sender_;
+  mutable Receiver<Message> message_receiver_;
+  Option<folly::CancellationSource> batch_flush_cancel_;
+  MetricsCounter events_read_counter_;
+  uint64_t batch_generation_ = 0;
+  bool peer_resolution_warning_emitted_ = false;
+};
+
 class AcceptUdpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -505,7 +821,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptUdpArgs, AcceptUdp>{};
+    auto d = Describer<AcceptUdpArgs, legacy::AcceptUdp, AcceptUdp>{};
     auto endpoint_arg = d.positional("endpoint", &AcceptUdpArgs::endpoint);
     d.named("resolve_hostnames", &AcceptUdpArgs::resolve_hostnames);
     d.named("binary", &AcceptUdpArgs::binary);

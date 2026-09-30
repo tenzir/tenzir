@@ -1,0 +1,15 @@
+---
+fixtures:
+  - udp: {}
+assertions:
+  fixtures:
+    udp:
+      # The fixture concatenates datagrams in arrival order, so adjacency shows
+      # that the masked row in between was not sent.
+      server_received_contains: "keep-1keep-3"
+timeout: 60
+---
+
+from {message: "keep-1"}, {message: "drop-2"}, {message: "keep-3"}
+where message != "drop-2"
+to_udp env("UDP_ENDPOINT"), message=message
