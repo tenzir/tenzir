@@ -1,0 +1,15 @@
+{
+  app_name: "app",
+  process_id: "123",
+  message_id: "ID",
+  structured_data: {
+    example: {
+      src: {
+        port: 443,
+      },
+    },
+  },
+  original: {
+    raw_message: "<165>1 2023-01-01T00:00:00Z host app 123 ID [example src_port=\"443\"] message",
+  },
+}

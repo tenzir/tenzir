@@ -86,6 +86,8 @@ public:
   class Record {
   public:
     auto field(std::string_view name) -> Field;
+    /// Writes a literal field name, bypassing unflattening.
+    auto exact_field(std::string_view name) -> Field;
 
   private:
     friend class EventBuilder;

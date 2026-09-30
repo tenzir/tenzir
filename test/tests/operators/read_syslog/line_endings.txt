@@ -1,0 +1,12 @@
+{
+  message: "first\nsecond",
+  raw: "<165>1 2023-01-01T00:00:00Z host app 123 - - first\nsecond",
+}
+{
+  message: "third",
+  raw: "<165>1 2023-01-01T00:00:00Z host app 123 - - third",
+}
+{
+  message: "final",
+  raw: "<165>1 2023-01-01T00:00:00Z host app 123 - - final",
+}

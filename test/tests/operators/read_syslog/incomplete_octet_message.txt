@@ -1,0 +1,7 @@
+error: unexpected end of input in octet-counted syslog message
+ --> tests/operators/read_syslog/incomplete_octet_message.tql:4:14
+  |
+4 | from_stdin { read_syslog octet_counting=true }
+  |              -----------
+  |
+  = note: missing 38 of 50 bytes

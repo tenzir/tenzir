@@ -1,0 +1,5 @@
+from_stdin {
+  split_bytes 1
+  read_syslog octet_counting=true, raw_message=raw
+}
+select process_id, message, raw

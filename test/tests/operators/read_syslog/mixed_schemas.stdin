@@ -1,0 +1,6 @@
+unknown
+<165>1 2023-01-01T00:00:00Z host app 123 - - first
+continuation
+<34>Oct 11 22:14:15 host app[456]: second
+<34>Oct 11 22:14:15 host app[456]: [example value="42"] structured
+<165>1 2023-01-01T00:00:00Z host app 123 - - third

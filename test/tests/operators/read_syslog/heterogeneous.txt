@@ -1,0 +1,24 @@
+{
+  structured_data: {
+    example: {
+      value: 42,
+    },
+  },
+  message: "first",
+}
+{
+  structured_data: {
+    example: {
+      value: "text",
+    },
+  },
+  message: "second",
+}
+{
+  structured_data: {
+    example: {
+      value: true,
+    },
+  },
+  message: "third",
+}

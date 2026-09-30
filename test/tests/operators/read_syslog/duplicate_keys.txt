@@ -1,0 +1,8 @@
+{
+  structured_data: {
+    example: {
+      a: 2,
+      b: false,
+    },
+  },
+}

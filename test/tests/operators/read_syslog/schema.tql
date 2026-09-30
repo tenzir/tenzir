@@ -1,0 +1,2 @@
+from_stdin { read_syslog schema="syslog.rfc5424", schema_only=true }
+select name=@name, facility, hostname, structured_data, message

@@ -1,0 +1,26 @@
+{
+  name: "suricata.dns",
+  hostname: "dns",
+  app_name: "42",
+  process_id: "0007",
+  message_id: "true",
+  message: "123",
+  structured_data: {
+    example: {
+      value: 42,
+    },
+  },
+}
+{
+  name: "suricata.flow",
+  hostname: "flow",
+  app_name: "false",
+  process_id: "0008",
+  message_id: "456",
+  message: "true",
+  structured_data: {
+    example: {
+      value: false,
+    },
+  },
+}

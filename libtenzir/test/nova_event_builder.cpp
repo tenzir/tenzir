@@ -120,6 +120,21 @@ TEST("event builder distinguishes literal punctuation in explicit string "
                                       {"array", list{true}}}}));
 }
 
+TEST("event builder keeps literal fields when unflattening") {
+  auto dh = null_diagnostic_handler{};
+  auto settings = EventBuilder::Settings{};
+  settings.unflatten_separator = "_";
+  auto builder = make_builder(dh, std::move(settings));
+  auto event = builder.event();
+  event.exact_field("app_name").data(std::string_view{"app"});
+  event.field("src_port").data(int64_t{443});
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0],
+              (data{record{{"app_name", "app"},
+                           {"src", record{{"port", int64_t{443}}}}}}));
+}
+
 TEST("event builder collects the values of a repeated key into a list") {
   auto dh = null_diagnostic_handler{};
   auto builder = make_builder(dh);

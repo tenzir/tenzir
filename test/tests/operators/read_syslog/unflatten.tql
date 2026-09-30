@@ -1,0 +1,2 @@
+from_stdin { read_syslog unflatten_separator="_", raw_message=original.raw_message }
+select app_name, process_id, message_id, structured_data, original

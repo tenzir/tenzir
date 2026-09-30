@@ -1,0 +1,30 @@
+{
+  name: "tenzir.unknown",
+  message: null,
+  content: null,
+  syslog_message: "unknown",
+}
+{
+  name: "syslog.rfc5424",
+  message: "first\ncontinuation",
+  content: null,
+  syslog_message: null,
+}
+{
+  name: "syslog.rfc3164",
+  message: null,
+  content: "second",
+  syslog_message: null,
+}
+{
+  name: "syslog.rfc3164.structured",
+  message: null,
+  content: "structured",
+  syslog_message: null,
+}
+{
+  name: "syslog.rfc5424",
+  message: "third",
+  content: null,
+  syslog_message: null,
+}

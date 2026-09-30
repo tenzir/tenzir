@@ -1,0 +1,6 @@
+error: `raw_message` must specify a field
+ --> tests/operators/read_syslog/invalid_raw_message.tql:6:25
+  |
+6 | read_syslog raw_message=this
+  |                         ^^^^
+  |

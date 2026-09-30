@@ -1,0 +1,2 @@
+from_stdin { read_syslog _batch_size=1 }
+select name=@name, message?, content?, syslog_message?
