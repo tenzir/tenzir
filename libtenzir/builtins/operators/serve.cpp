@@ -61,6 +61,11 @@
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
+#include <tenzir/nova/arrow_metadata.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -81,6 +86,7 @@
 #include <folly/coro/BoundedQueue.h>
 
 #include <chrono>
+#include <numeric>
 #include <sstream>
 
 namespace tenzir::plugins::serve {
@@ -451,7 +457,9 @@ constexpr auto serve_multi_spec = R"_(
 
 // -- serve manager -----------------------------------------------------------
 
-using serve_response = std::tuple<std::string, std::vector<table_slice>>;
+using serve_results
+  = variant<std::vector<table_slice>, std::vector<nova::Events>>;
+using serve_response = std::tuple<std::string, serve_results>;
 
 using serve_manager_actor = typed_actor_fwd<
   // Register a new serve operator.
@@ -461,11 +469,17 @@ using serve_manager_actor = typed_actor_fwd<
   // Drop all buffered data and complete immediately, without waiting for the
   // data to be drained to the client.
   auto(atom::stop, std::string serve_id, caf::actor source)->caf::result<void>,
+  // On graceful stop, keep buffered events but discard new ones when full.
+  // Only the Nova sink uses this overload.
+  auto(atom::stop, std::string serve_id, caf::actor source, bool retain_buffer)
+    ->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
   auto(atom::shutdown, std::string serve_id, caf::actor source)
     ->caf::result<void>,
-  // Put additional slices into the buffer for the given access token.
+  // Put additional legacy slices into the buffer for the given access token.
   auto(atom::put, std::string serve_id, table_slice)->caf::result<void>,
+  // Put additional events into the buffer for the given access token.
+  auto(atom::put, std::string serve_id, nova::Events)->caf::result<void>,
   // Get slices from the buffer for the given access token, returning the next
   // access token and the desired number of events.
   auto(atom::get, std::string serve_id, std::string continuation_token,
@@ -511,11 +525,17 @@ struct managed_serve_operator {
   bool done = {};
   std::string last_continuation_token = {};
   std::vector<table_slice> last_results = {};
+  std::vector<nova::Events> last_events = {};
 
-  /// The buffered table slice, and the configured buffer size and the number of
-  /// currently requested events (may exceed the buffer size).
+  /// The buffered legacy slices or Nova events. A serve instance uses exactly
+  /// one representation, selected by its first put.
   std::vector<table_slice> buffer = {};
+  std::vector<nova::Events> events = {};
+  bool nova = false;
   uint64_t buffer_size = defaults::api::serve::max_events;
+  /// Stop applying backpressure after a Nova sink begins graceful shutdown.
+  /// The buffer remains bounded and retains its oldest undelivered events.
+  bool discard_when_full = false;
   uint64_t requested = {};
   uint64_t min_events = {};
 
@@ -530,6 +550,53 @@ struct managed_serve_operator {
   caf::typed_response_promise<void> stop_rp = {};
   std::vector<caf::typed_response_promise<serve_response>> get_rps = {};
 
+  static auto take_events(std::vector<nova::Events>& input, uint64_t count)
+    -> std::vector<nova::Events> {
+    auto result = std::vector<nova::Events>{};
+    while (count > 0 and not input.empty()) {
+      auto& events = input.front();
+      const auto active = static_cast<uint64_t>(events.active_count());
+      if (active <= count) {
+        count -= active;
+        result.push_back(std::move(events));
+        input.erase(input.begin());
+        continue;
+      }
+      auto seen = uint64_t{0};
+      auto end = nova::storage::Index{0};
+      for (auto index : nova::storage::true_bits(events.mask)) {
+        if (++seen == count) {
+          end = index + 1;
+          break;
+        }
+      }
+      result.push_back(nova::subslice(events, 0, end));
+      events = nova::subslice(events, end, events.length());
+      count = 0;
+    }
+    return result;
+  }
+
+  auto buffered_rows() const -> uint64_t {
+    if (not nova) {
+      return rows(buffer);
+    }
+    return std::transform_reduce(events.begin(), events.end(), uint64_t{0},
+                                 std::plus<>{}, [](const auto& events) {
+                                   return static_cast<uint64_t>(
+                                     events.active_count());
+                                 });
+  }
+
+  auto empty() const -> bool {
+    return nova ? events.empty() : buffer.empty();
+  }
+
+  auto empty_results() const -> serve_results {
+    return nova ? serve_results{std::vector<nova::Events>{}}
+                : serve_results{std::vector<table_slice>{}};
+  }
+
   /// Attempt to deliver up to the number of requested results.
   /// @param force_underful Return underful result sets instead of failing when
   /// not enough results are buffered.
@@ -538,31 +605,48 @@ struct managed_serve_operator {
     TENZIR_ASSERT(not get_rps.empty());
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
-    if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
+    if (put_rp.pending()
+        and buffered_rows() < std::max(buffer_size, requested)) {
       put_rp.deliver();
     }
     // Avoid delivering too early, i.e., when we don't yet have enough events.
     const auto return_underful = stop_rp.pending() or force_underful;
-    if (not return_underful and rows(buffer) < min_events
-        and rows(buffer) < requested) {
+    if (not return_underful and buffered_rows() < min_events
+        and buffered_rows() < requested) {
       return false;
     }
     // Cut the results buffer.
-    auto results = std::vector<table_slice>{};
-    std::tie(results, buffer) = split(buffer, requested);
-    delivered += rows(results);
+    auto results = empty_results();
+    if (nova) {
+      auto result = take_events(events, requested);
+      delivered += std::transform_reduce(
+        result.begin(), result.end(), uint64_t{0}, std::plus<>{},
+        [](const auto& events) {
+          return static_cast<uint64_t>(events.active_count());
+        });
+      results = std::move(result);
+    } else {
+      auto result = std::vector<table_slice>{};
+      std::tie(result, buffer) = split(buffer, requested);
+      delivered += rows(result);
+      results = std::move(result);
+    }
     // Clear the delayed attempt and the continuation token.
     delayed_attempt.dispose();
     requested = 0;
     TENZIR_DEBUG("clearing continuation token");
     last_continuation_token = std::exchange(continuation_token, {});
-    last_results = results;
+    if (auto* legacy = try_as<std::vector<table_slice>>(&results)) {
+      last_results = *legacy;
+    } else {
+      last_events = as<std::vector<nova::Events>>(results);
+    }
     // Emit the terminal response (null continuation token) once the source is
     // gone and the buffer is drained. `stop_rp.pending()` covers the case
     // where a client drains the buffer before finalization; `done` covers the
     // case where finalization already happened without a waiter and a late
     // client drains the retained buffer afterwards.
-    if ((stop_rp.pending() or done) and buffer.empty()) {
+    if ((stop_rp.pending() or done) and empty()) {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       // Mark the operator done so that a client re-polling with the empty
@@ -582,7 +666,7 @@ struct managed_serve_operator {
     }
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
-    if (put_rp.pending() and rows(buffer) < buffer_size) {
+    if (put_rp.pending() and buffered_rows() < buffer_size) {
       put_rp.deliver();
     }
     continuation_token = fmt::to_string(uuid::random());
@@ -802,6 +886,7 @@ struct serve_manager_state {
     // requests observe a terminal state instead of waiting for a drain that
     // will never happen.
     found->buffer.clear();
+    found->events.clear();
     found->done = true;
     found->requested = 0;
     found->delayed_attempt.dispose();
@@ -817,12 +902,30 @@ struct serve_manager_state {
     found->last_continuation_token
       = std::exchange(found->continuation_token, {});
     for (auto&& get_rp : std::exchange(found->get_rps, {})) {
-      get_rp.deliver(
-        std::make_tuple(std::string{}, std::vector<table_slice>{}));
+      get_rp.deliver(std::make_tuple(std::string{}, found->empty_results()));
     }
     // Unblock a pending stop request, if any.
     if (found->stop_rp.pending()) {
       found->stop_rp.deliver();
+    }
+    return {};
+  }
+
+  auto stop_retaining_buffer(std::string serve_id, caf::actor source)
+    -> caf::result<void> {
+    const auto source_addr = source ? source->address() : caf::actor_addr{};
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id
+             and (not source_addr or op.source == source_addr);
+    });
+    if (found == ops.end()) {
+      return {};
+    }
+    found->discard_when_full = true;
+    // Release a throttled put so the rest of the accepted batch and the
+    // upstream end-of-data can reach the sink even without a polling client.
+    if (found->put_rp.pending()) {
+      found->put_rp.deliver();
     }
     return {};
   }
@@ -844,6 +947,16 @@ struct serve_manager_state {
                                      "promise is still pending",
                                      *self, escape_operator_arg(serve_id)));
     }
+    if (found->nova) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("{} received legacy events for Nova "
+                                         "serve id {}",
+                                         *self, escape_operator_arg(serve_id)));
+    }
+    if (found->discard_when_full
+        and rows(found->buffer) + slice.rows() > found->buffer_size) {
+      return {};
+    }
     found->buffer.push_back(std::move(slice));
     if (not found->get_rps.empty()) {
       const auto delivered = found->try_deliver_results(false);
@@ -852,7 +965,59 @@ struct serve_manager_state {
                      escape_operator_arg(serve_id));
       }
     }
-    if (rows(found->buffer) < std::max(found->requested, found->buffer_size)) {
+    if (found->discard_when_full
+        or rows(found->buffer)
+             < std::max(found->requested, found->buffer_size)) {
+      return {};
+    }
+    found->put_rp = self->make_response_promise<void>();
+    return found->put_rp;
+  }
+
+  auto put(std::string serve_id, nova::Events input) -> caf::result<void> {
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id;
+    });
+    if (found == ops.end()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} received events for unknown serve "
+                                         "id {}",
+                                         *self, escape_operator_arg(serve_id)));
+    }
+    if (found->put_rp.pending()) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("{} received events for serve id {}, "
+                                         "but promise is still pending",
+                                         *self, escape_operator_arg(serve_id)));
+    }
+    if (not found->buffer.empty()) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("{} received Nova events for legacy "
+                                         "serve id {}",
+                                         *self, escape_operator_arg(serve_id)));
+    }
+    found->nova = true;
+    if (found->discard_when_full) {
+      const auto buffered = found->buffered_rows();
+      if (buffered >= found->buffer_size) {
+        return {};
+      }
+      auto batches = std::vector<nova::Events>{};
+      batches.push_back(std::move(input));
+      auto accepted = managed_serve_operator::take_events(
+        batches, found->buffer_size - buffered);
+      found->events.insert(found->events.end(),
+                           std::make_move_iterator(accepted.begin()),
+                           std::make_move_iterator(accepted.end()));
+    } else {
+      found->events.push_back(std::move(input));
+    }
+    if (not found->get_rps.empty()) {
+      std::ignore = found->try_deliver_results(false);
+    }
+    if (found->discard_when_full
+        or found->buffered_rows()
+             < std::max(found->requested, found->buffer_size)) {
       return {};
     }
     found->put_rp = self->make_response_promise<void>();
@@ -878,7 +1043,8 @@ struct serve_manager_state {
         if (is_pipeline_failure(err)) {
           return err;
         }
-        return std::make_tuple(std::string{}, std::vector<table_slice>{});
+        return std::make_tuple(std::string{},
+                               serve_results{std::vector<table_slice>{}});
       }
       // Park a first-page poll that raced the serve operator's startup. A
       // generated token can never become valid through a future registration,
@@ -954,15 +1120,24 @@ struct serve_manager_state {
     // is empty until the first delivery and the request token is never empty.
     if (op.last_continuation_token == request.continuation_token) {
       rp.deliver(
-        std::make_tuple(op.continuation_token,
-                        split(op.last_results, request.max_events).first));
+        op.nova
+          ? std::make_tuple(op.continuation_token,
+                            [&] {
+                              auto events = op.last_events;
+                              return serve_results{
+                                managed_serve_operator::take_events(
+                                  events, request.max_events)};
+                            }())
+          : std::make_tuple(
+              op.continuation_token,
+              serve_results{split(op.last_results, request.max_events).first}));
       return;
     }
     if (op.continuation_token != request.continuation_token) {
       // A done serve reports completion instead of an unknown-token error;
       // every path that terminally clears the continuation token sets `done`.
       if (op.done) {
-        rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
+        rp.deliver(std::make_tuple(std::string{}, op.empty_results()));
         return;
       }
       rp.deliver(caf::make_error(
@@ -972,8 +1147,8 @@ struct serve_manager_state {
                     *self, request.continuation_token, request.serve_id)));
       return;
     }
-    if (op.done and op.buffer.empty()) {
-      rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
+    if (op.done and op.empty()) {
+      rp.deliver(std::make_tuple(std::string{}, op.empty_results()));
       return;
     }
     op.get_rps.push_back(rp);
@@ -1012,8 +1187,9 @@ struct serve_manager_state {
     // Complete parked polls for a not-yet-registered serve id with an empty
     // first page, so a group poll is not held back until their timeout.
     for (auto& get : take_parked(serve_id)) {
-      get.rp.deliver(std::make_tuple(std::string{initial_continuation_token},
-                                     std::vector<table_slice>{}));
+      get.rp.deliver(
+        std::make_tuple(std::string{initial_continuation_token},
+                        serve_results{std::vector<table_slice>{}}));
     }
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
       return op.serve_id == serve_id;
@@ -1035,7 +1211,7 @@ struct serve_manager_state {
                                             ? data{}
                                             : op.continuation_token);
       entry.emplace("buffer_size", op.buffer_size);
-      entry.emplace("num_buffered", rows(op.buffer));
+      entry.emplace("num_buffered", op.buffered_rows());
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
       entry.emplace("lingering", op.continuation_token.empty());
@@ -1051,7 +1227,8 @@ struct serve_manager_state {
                       op.last_continuation_token.empty()
                         ? data{}
                         : op.last_continuation_token);
-        entry.emplace("last_num_results", rows(op.last_results));
+        entry.emplace("last_num_results",
+                      op.nova ? op.last_events.size() : rows(op.last_results));
       }
     }
     return record{
@@ -1074,6 +1251,12 @@ auto serve_manager(
            caf::actor& source) -> caf::result<void> {
       return self->state().stop(std::move(serve_id), std::move(source));
     },
+    [self](atom::stop, std::string& serve_id, caf::actor& source,
+           bool retain_buffer) -> caf::result<void> {
+      TENZIR_ASSERT(retain_buffer);
+      return self->state().stop_retaining_buffer(std::move(serve_id),
+                                                 std::move(source));
+    },
     [self](atom::shutdown, std::string& serve_id,
            caf::actor& source) -> caf::result<void> {
       return self->state().finalize(std::move(serve_id), std::move(source));
@@ -1081,6 +1264,10 @@ auto serve_manager(
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
       return self->state().put(std::move(serve_id), std::move(slice));
+    },
+    [self](atom::put, std::string& serve_id,
+           nova::Events& events) -> caf::result<void> {
+      return self->state().put(std::move(serve_id), std::move(events));
     },
     [self](atom::get, std::string& serve_id, std::string& continuation_token,
            uint64_t min_events, duration timeout,
@@ -1426,6 +1613,99 @@ struct serve_handler_state {
     return result;
   }
 
+  static auto create_response(const std::string& next_continuation_token,
+                              const std::vector<nova::Events>& results,
+                              serve_state state, enum schema schema)
+    -> std::string {
+    auto definitions_printer = json_printer{{
+      .indentation = 0,
+      .oneline = true,
+      .numeric_durations = true,
+    }};
+    auto events_printer = nova::json_printer{{
+      .numeric_durations = true,
+    }};
+    auto result
+      = next_continuation_token.empty()
+          ? fmt::format(
+              R"({{"next_continuation_token":null,"state":"{}","events":[)",
+              state)
+          : fmt::format(
+              R"({{"next_continuation_token":"{}","state":"{}","events":[)",
+              next_continuation_token, state);
+    auto out = std::back_inserter(result);
+    auto seen_types = std::unordered_set<type>{};
+    auto first = true;
+    for (const auto& events : results) {
+      for (auto index : nova::storage::true_bits(events.mask)) {
+        auto builder = series_builder{};
+        builder.data(nova::materialize_legacy(events.data.get(index)));
+        auto array = builder.finish_assert_one_array();
+        auto event_type = std::move(array.type);
+        auto name = std::string{*events.meta.name.get(index)};
+        if (name != event_type.name()) {
+          event_type = type{std::move(name), std::move(event_type)};
+        }
+        event_type = nova::ArrowMetadata{
+          .name = std::string{*events.meta.name.get(index)},
+          .internal = *events.meta.internal.get(index),
+        }.apply(std::move(event_type));
+        seen_types.insert(event_type);
+        if (first) {
+          out = fmt::format_to(out, "{{");
+        } else {
+          out = fmt::format_to(out, "}},{{");
+        }
+        first = false;
+        out = fmt::format_to(out, R"("schema_id":"{}","data":)",
+                             event_type.make_fingerprint());
+        events_printer.print(events.data.get(index));
+        auto bytes = events_printer.bytes();
+        result.append(reinterpret_cast<const char*>(bytes.data()),
+                      bytes.size());
+        out = std::back_inserter(result);
+      }
+    }
+    if (schema == schema::never) {
+      if (not seen_types.empty()) {
+        *out++ = '}';
+      }
+      *out++ = ']';
+      *out++ = '}';
+      return result;
+    }
+    if (seen_types.empty()) {
+      out = fmt::format_to(out, R"(],"schemas":[]}}{})", '\n');
+      return result;
+    }
+    out = fmt::format_to(out, R"(}}],"schemas":[)");
+    for (bool first = true; const auto& event_type : seen_types) {
+      if (first) {
+        out = fmt::format_to(out, "{{");
+      } else {
+        out = fmt::format_to(out, "}},{{");
+      }
+      first = false;
+      out = fmt::format_to(out, R"("schema_id":"{}","definition":)",
+                           event_type.make_fingerprint());
+      const auto ok
+        = definitions_printer.print(out, schema == schema::legacy
+                                           ? event_type.to_legacy_definition()
+                                           : event_type.to_definition());
+      TENZIR_ASSERT(ok);
+    }
+    out = fmt::format_to(out, R"(}}]}})");
+    return result;
+  }
+
+  static auto create_response(const std::string& next_continuation_token,
+                              const serve_results& results, serve_state state,
+                              enum schema schema) -> std::string {
+    return match(results, [&](const auto& xs) {
+      return create_response(next_continuation_token, xs, state, schema);
+    });
+  }
+
   /// Handles a request to /serve by
   /// * "parsing" `params`
   /// * Making a request to the serve-manager for events according to `params`
@@ -1462,7 +1742,7 @@ struct serve_handler_state {
             // rather report that we're done. The user must get the
             // diagnostic from the `diagnostics` operator.
             rp.deliver(rest_response::from_json_string(create_response(
-              {}, {},
+              {}, serve_results{std::vector<table_slice>{}},
               err == caf::exit_reason::user_shutdown ? serve_state::completed
                                                      : serve_state::failed,
               schema)));
@@ -1545,7 +1825,14 @@ struct serve_handler_state {
           [self = self, serve_manager = serve_manager, fan, id = r.serve_id, st,
            effective_schema](serve_response& result) mutable {
             auto& [continuation_token, data] = result;
-            const auto has_events = rows(data) > 0;
+            const auto has_events = match(data, [](const auto& xs) {
+              if constexpr (std::same_as<std::decay_t<decltype(xs)>,
+                                         std::vector<nova::Events>>) {
+                return not xs.empty();
+              } else {
+                return rows(xs) > 0;
+              }
+            });
             const auto state = continuation_token.empty()
                                  ? serve_state::completed
                                  : serve_state::running;
@@ -1807,6 +2094,173 @@ private:
   MetricsCounter events_counter_;
 };
 
+class ServeEvents final : public Operator<nova::Events, void> {
+public:
+  explicit ServeEvents(ServeArgs args) : args_{std::move(args)} {
+  }
+
+  ServeEvents(ServeEvents&&) = default;
+  auto operator=(ServeEvents&&) -> ServeEvents& = default;
+  ServeEvents(const ServeEvents&) = delete;
+  auto operator=(const ServeEvents&) -> ServeEvents& = delete;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve"},
+                         MetricsDirection::write, MetricsVisibility::internal_,
+                         MetricsUnit::bytes);
+    events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve"},
+                         MetricsDirection::write, MetricsVisibility::internal_,
+                         MetricsUnit::events);
+    serve_manager_ = ctx.actor_system().registry().get<serve_manager_actor>(
+      "tenzir.serve-manager");
+    lifetime_actor_
+      = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor* self) {
+          return caf::behavior{
+            [self](atom::done) {
+              // Quit cleanly so the serve-manager's down handler takes the
+              // retention path instead of treating this as a failure.
+              self->quit();
+            },
+            [self](caf::error& reason) {
+              // Quit with the given failure reason so the serve-manager
+              // expires the serve id and reports the failure to clients.
+              self->quit(std::move(reason));
+            },
+          };
+        });
+    auto result = co_await async_mail(atom::start_v, args_.id,
+                                      args_.buffer_size, lifetime_actor_)
+                    .request(serve_manager_);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to register at serve-manager")
+        .emit(ctx);
+      co_return;
+    }
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (input.active_count() == 0) {
+      co_return;
+    }
+    auto const rows = static_cast<uint64_t>(input.active_count());
+    auto const bytes = static_cast<uint64_t>(input.approx_bytes());
+    // Keep draining accepted input during graceful shutdown. The manager
+    // retains buffered rows but may discard subsequent rows when its buffer
+    // fills, allowing the pipeline to complete without a polling client.
+    // Before shutdown, block further input while a put is throttled without
+    // blocking control messages.
+    blocked_ = true;
+    ctx.spawn_task([this, id = args_.id, input = std::move(input), rows,
+                    bytes]() mutable -> Task<void> {
+      auto result = co_await async_mail(atom::put_v, id, std::move(input))
+                      .request(serve_manager_);
+      co_await put_queue_->enqueue(PutDone{std::move(result), rows, bytes});
+    });
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await put_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    auto* done = result.try_as<PutDone>();
+    if (not done) {
+      co_return;
+    }
+    // The in-flight `put` completed; unblock so the executor resumes feeding
+    // input (or delivers the end-of-input signal it withheld while blocked).
+    blocked_ = false;
+    if (not done->result) {
+      diagnostic::error(done->result.error())
+        .note("failed to buffer events at serve-manager")
+        .emit(ctx);
+      co_return;
+    }
+    bytes_counter_.add(done->bytes);
+    events_counter_.add(done->rows);
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    // Apply backpressure without blocking the main loop: while a `put` is in
+    // flight we do not want more input, but control messages (graceful stop)
+    // must still be processed.
+    return blocked_ ? OperatorState::blocked : OperatorState::normal;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    // Preserve the oldest buffered events, but do not wait indefinitely for a
+    // client. Discard excess input once the buffer is full so upstream can
+    // reach end-of-data and finalize() can complete.
+    auto result
+      = co_await async_mail(atom::stop_v, args_.id, lifetime_actor_, true)
+          .request(serve_manager_);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to stop serve-manager")
+        .emit(ctx);
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    auto result
+      = co_await async_mail(atom::shutdown_v, args_.id, lifetime_actor_)
+          .request(serve_manager_);
+    // Terminate the lifetime actor cleanly. The serve-manager then keeps the
+    // final result set available for the retention time so that a client can
+    // still fetch it. Letting the actor die from its handle being dropped
+    // would surface as an `unreachable` error at the serve-manager, which
+    // deletes the serve id immediately and breaks late client requests.
+    caf::anon_mail(atom::done_v).send(lifetime_actor_);
+    lifetime_actor_ = nullptr;
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to deregister at serve-manager")
+        .emit(ctx);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  ~ServeEvents() override {
+    if (lifetime_actor_) {
+      // We did not reach `finalize`, e.g., because the pipeline was
+      // force-killed. Signal a failure to the serve-manager so it expires the
+      // serve id right away. Use a diagnostic error rather than
+      // `user_shutdown`: the `/serve` endpoint maps `user_shutdown` to a
+      // successful completion, which would hide that the pipeline was aborted
+      // before all results were delivered.
+      caf::anon_mail(diagnostic::error("serve pipeline was aborted before all "
+                                       "results were delivered")
+                       .to_error())
+        .send(lifetime_actor_);
+    }
+  }
+
+private:
+  /// The result of an in-flight `put`, handed from the background task that
+  /// awaits the serve-manager response back to the operator's main loop via
+  /// `await_task()` / `process_task()`.
+  struct PutDone {
+    caf::expected<void> result;
+    uint64_t rows = {};
+    uint64_t bytes = {};
+  };
+
+  ServeArgs args_;
+  serve_manager_actor serve_manager_;
+  caf::actor lifetime_actor_;
+  /// Whether a `put` is currently in flight; drives `state()` backpressure.
+  bool blocked_ = false;
+  mutable Box<folly::coro::BoundedQueue<PutDone>> put_queue_{std::in_place, 1};
+  MetricsCounter bytes_counter_;
+  MetricsCounter events_counter_;
+};
+
 // -- serve operator ----------------------------------------------------------
 
 // -- serve plugin ------------------------------------------------------------
@@ -1820,7 +2274,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ServeArgs, ServeImpl>{};
+    auto d = Describer<ServeArgs, ServeImpl, ServeEvents>{};
     d.positional("id", &ServeArgs::id);
     auto bs = d.named_optional("buffer_size", &ServeArgs::buffer_size);
     d.validate([=](DescribeCtx& ctx) -> Empty {

@@ -1,13 +1,10 @@
 {
   s: "Hello World 1",
-  i: null,
 }
 {
   s: "Hiya 1",
-  i: null,
 }
 {
-  s: null,
   i: 42,
 }
 {

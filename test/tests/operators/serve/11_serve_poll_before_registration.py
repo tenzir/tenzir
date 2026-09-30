@@ -136,7 +136,9 @@ def start_web_server(
     return proc, api_url
 
 
-def _launch(api: str, name: str, definition: str, serve_id: str) -> str:
+def _launch(
+    api: str, name: str, definition: str, serve_id: str, buffer_size: int = 1024
+) -> str:
     """Launches a hidden //neo pipeline ending in `serve` and returns its id."""
     status, body = _post(
         api,
@@ -146,6 +148,7 @@ def _launch(api: str, name: str, definition: str, serve_id: str) -> str:
             "name": name,
             "hidden": True,
             "serve_id": serve_id,
+            "serve_buffer_size": buffer_size,
             "ttl": "5m",
             "autostart": {"created": True},
         },
@@ -246,7 +249,7 @@ def check_multi_flush_pending(api: str) -> None:
                     {"serve_id": ghost_id, "continuation_token": NIL_TOKEN},
                 ],
                 "max_events": 8,
-                "min_events": 1,
+                "min_events": 8,
                 "timeout": "10s",
                 "schema": "never",
             },
@@ -267,6 +270,92 @@ def check_multi_flush_pending(api: str) -> None:
         _delete_pipeline(api, pipeline_id)
 
 
+def check_graceful_stop_drains_accepted_rows(api: str) -> None:
+    """A draining client receives the buffered rows and terminal state."""
+    serve_id = f"graceful_{SUFFIX}"
+    expected = list(range(1, 17))
+    pipeline_id = _launch(
+        api,
+        "graceful-drain",
+        "from " + ", ".join(f"{{n: {n}}}" for n in expected),
+        serve_id,
+        buffer_size=1,
+    )
+    try:
+        status, page = _serve(api, serve_id, None, max_events=1, min_events=1)
+        assert status == 200, f"first poll failed ({status}): {page}"
+        received = _payloads(page)
+        token = page["next_continuation_token"]
+        # The source has handed over a batch, but serve cannot finish its puts
+        # until the client drains them. Stop now, before the batch completes.
+        status, body = _post(
+            api, "/pipeline/update", {"id": pipeline_id, "action": "stop"}
+        )
+        assert status == 200, f"stop failed ({status}): {body}"
+        for _ in expected:
+            if not token:
+                break
+            status, page = _serve(api, serve_id, token, max_events=16, min_events=1)
+            assert status == 200, f"drain poll failed ({status}): {page}"
+            received.extend(_payloads(page))
+            token = page["next_continuation_token"]
+        assert not token, "serve did not complete after draining its input"
+        assert received[:2] == expected[:2], f"lost buffered rows: {received}"
+        assert received == sorted(set(received)), f"out-of-order rows: {received}"
+        print("graceful-stop-drains-buffer: True")
+    finally:
+        _delete_pipeline(api, pipeline_id)
+
+
+def check_graceful_stop_without_client(api: str) -> None:
+    """A full buffer must not prevent completion when the client disappears."""
+    serve_id = f"no_client_{SUFFIX}"
+    pipeline_id = _launch(
+        api,
+        "no-client-stop",
+        "from " + ", ".join(f"{{n: {n}}}" for n in range(1, 33)),
+        serve_id,
+        buffer_size=1,
+    )
+    try:
+        status, first = _serve(api, serve_id, None, max_events=1, min_events=1)
+        assert status == 200, f"first poll failed ({status}): {first}"
+        assert _payloads(first) == [1], first
+        token = first["next_continuation_token"]
+        status, body = _post(
+            api, "/pipeline/update", {"id": pipeline_id, "action": "stop"}
+        )
+        assert status == 200, f"stop failed ({status}): {body}"
+        # No more polls until the pipeline stops: with buffer_size=1, the
+        # second put would otherwise remain throttled until force shutdown.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            status, body = _post(api, "/pipeline/update", {"id": pipeline_id})
+            pipeline = body.get("pipeline", {})
+            if status != 200 or pipeline.get("state") == "stopped":
+                break
+            time.sleep(0.1)
+        else:
+            raise AssertionError("serve did not stop without a polling client")
+        status, last = _serve(api, serve_id, token, max_events=32, min_events=1)
+        assert status == 200, f"retained poll failed ({status}): {last}"
+        assert _payloads(last) == [2], f"lost retained buffer: {last}"
+        received = _payloads(last)
+        token = last["next_continuation_token"]
+        for _ in range(32):
+            if not token:
+                break
+            status, last = _serve(api, serve_id, token, min_events=1)
+            assert status == 200, f"terminal poll failed ({status}): {last}"
+            received.extend(_payloads(last))
+            token = last["next_continuation_token"]
+        assert not token, "serve did not complete after retaining its buffer"
+        assert received == sorted(set(received)), f"out-of-order rows: {received}"
+        print("graceful-stop-without-client: True")
+    finally:
+        _delete_pipeline(api, pipeline_id)
+
+
 def check_unknown_id_fails_after_timeout(api: str) -> None:
     """A poll for a never-registered id errors only after the timeout."""
     start = time.monotonic()
@@ -283,6 +372,8 @@ def main() -> None:
     try:
         check_parked_poll_delivers(api)
         check_multi_flush_pending(api)
+        check_graceful_stop_drains_accepted_rows(api)
+        check_graceful_stop_without_client(api)
         check_unknown_id_fails_after_timeout(api)
     finally:
         if proc.poll() is None:

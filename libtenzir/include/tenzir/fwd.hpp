@@ -33,6 +33,11 @@
 // types we need forward-declared here. If this ever diverges between Arrow
 // versions, consider switching to including that file.
 
+namespace tenzir {
+template <class... Ts>
+class variant;
+} // namespace tenzir
+
 namespace arrow {
 
 class Array;
@@ -546,6 +551,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::chunk_ptr>))
   TENZIR_ADD_TYPE_ID(
     (std::tuple<std::string, std::vector<tenzir::table_slice>>))
+  TENZIR_ADD_TYPE_ID((tenzir::variant<std::vector<tenzir::table_slice>,
+                                      std::vector<tenzir::nova::Events>>))
+  TENZIR_ADD_TYPE_ID((
+    std::tuple<std::string, tenzir::variant<std::vector<tenzir::table_slice>,
+                                            std::vector<tenzir::nova::Events>>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::offset>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_info>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::series>))

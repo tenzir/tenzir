@@ -2,20 +2,17 @@
   id: "serve_multi_1",
   data: {
     s: "Hello World 1",
-    i: null,
   },
 }
 {
   id: "serve_multi_1",
   data: {
     s: "Hiya 1",
-    i: null,
   },
 }
 {
   id: "serve_multi_1",
   data: {
-    s: null,
     i: 42,
   },
 }
@@ -30,20 +27,17 @@
   id: "serve_multi_2",
   data: {
     s: "Hello World 2",
-    i: null,
   },
 }
 {
   id: "serve_multi_2",
   data: {
     s: "Hiya 2",
-    i: null,
   },
 }
 {
   id: "serve_multi_2",
   data: {
-    s: null,
     i: 43,
   },
 }

@@ -5,6 +5,8 @@ multi-ghost-events: []
 multi-ghost-state: running
 multi-ghost-token-is-initial: True
 multi-returned-before-timeout: True
+graceful-stop-drains-buffer: True
+graceful-stop-without-client: True
 never-waited-for-timeout: True
 never-mentions-unknown-id: True
 never-has-events: False

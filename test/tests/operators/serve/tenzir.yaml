@@ -1,4 +1,5 @@
 tenzir:
+  nova: true
   pipelines:
     serve-1:
       name: serve 1
@@ -8,6 +9,12 @@ tenzir:
           {i: 42},
           {s: "str 1", i: 0}
         serve "serve-1"
+    serve_masked:
+      name: serve masked
+      definition: |
+        from {kind: "first"}, {discard: true}, {kind: "last"}
+        where kind == "first" or kind == "last"
+        serve "serve_masked"
     serve-2:
       name: serve 2
       definition: |
@@ -43,7 +50,7 @@ tenzir:
     serve_multi_idle:
       name: serve multi idle
       definition: |
-        subscribe "serve_multi_idle_topic"
+        every 1h { from {} | where false }
         serve "serve_multi_idle"
     serve_multi_schema_a:
       name: serve multi schema a

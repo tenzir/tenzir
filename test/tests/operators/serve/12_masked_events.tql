@@ -1,0 +1,12 @@
+// Only active rows reach the endpoint, in their original order.
+api "/serve", {
+  serve_id: "serve_masked",
+  min_events: 2,
+  max_events: 2,
+  timeout: 5s,
+  schema: "never",
+}
+select events
+unroll events
+select events.data
+write_tql

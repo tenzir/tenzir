@@ -1,0 +1,14 @@
+{
+  events: {
+    data: {
+      kind: "first",
+    },
+  },
+}
+{
+  events: {
+    data: {
+      kind: "last",
+    },
+  },
+}
