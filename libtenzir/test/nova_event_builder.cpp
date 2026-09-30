@@ -195,14 +195,16 @@ TEST("event builder preserves structural scalar collisions in either order") {
   event.field("last").data(int64_t{1});
   event.field("null.b").data(int64_t{2});
   event.field("null").null();
+  event.field("null").null();
   auto events = finish(builder);
   REQUIRE_EQUAL(events.size(), 1u);
-  CHECK_EQUAL(events[0],
-              (data{record{
-                {"first", record{{"", int64_t{1}}, {"b", int64_t{2}}}},
-                {"last", record{{"b", int64_t{2}}, {"", int64_t{1}}}},
-                {"null", record{{"b", int64_t{2}}, {"", caf::none}}},
-              }}));
+  CHECK_EQUAL(
+    events[0],
+    (data{record{
+      {"first", record{{"", int64_t{1}}, {"b", int64_t{2}}}},
+      {"last", record{{"b", int64_t{2}}, {"", int64_t{1}}}},
+      {"null", record{{"b", int64_t{2}}, {"", list{caf::none, caf::none}}}},
+    }}));
 }
 
 TEST("event builder structurally concatenates repeated lists when enabled") {
@@ -224,13 +226,12 @@ TEST("event builder structurally concatenates repeated lists when enabled") {
               }}));
 }
 
-TEST("event builder schema policies override structural merging") {
+TEST("event builder schema policies overwrite duplicates by default") {
   auto dh = null_diagnostic_handler{};
   auto builder
     = make_builder(dh, {
                          .policy = EventBuilder::SchemaPolicy{"missing"},
                          .unflatten_separator = {},
-                         .merge_structural = true,
                        });
   auto event = builder.event();
   event.field("r").record().field("a").data(int64_t{1});
@@ -243,6 +244,38 @@ TEST("event builder schema policies override structural merging") {
                            {"r", record{{"b", int64_t{2}}}},
                            {"l", list{int64_t{2}}},
                          }}));
+}
+
+TEST("event builder structurally merges before schema and selector policies") {
+  auto dh = null_diagnostic_handler{};
+  for (auto selector : {false, true}) {
+    auto settings = EventBuilder::Settings{
+      .policy = EventBuilder::SchemaPolicy{"missing"},
+      .unflatten_separator = ".",
+      .merge_structural = true,
+    };
+    if (selector) {
+      settings.policy = EventBuilder::SelectorPolicy{"schema", None{}};
+    }
+    auto builder = make_builder(dh, std::move(settings));
+    auto event = builder.event();
+    event.field("schema").data(std::string_view{"missing"});
+    event.field("r").record().field("a").data(int64_t{1});
+    event.field("r").record().field("b").data(int64_t{2});
+    event.field("l").list().data(int64_t{1});
+    event.field("l").list().data(int64_t{2});
+    event.field("s").data(int64_t{1});
+    event.field("s.b").data(int64_t{2});
+    auto events = finish(builder);
+    REQUIRE_EQUAL(events.size(), 1u);
+    CHECK_EQUAL(events[0],
+                (data{record{
+                  {"schema", "missing"},
+                  {"r", record{{"a", int64_t{1}}, {"b", int64_t{2}}}},
+                  {"l", list{int64_t{1}, int64_t{2}}},
+                  {"s", record{{"", int64_t{1}}, {"b", int64_t{2}}}},
+                }}));
+  }
 }
 
 TEST("event builder unflattens keys that share a prefix into one record") {

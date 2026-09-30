@@ -4,3 +4,11 @@ type yaml.first = record{
   text: string,
   src: ip,
 }
+
+type yaml.merging = record{
+  kind: string,
+  a: record{x: int64, y: int64},
+  l: list<int64>,
+  text: string,
+  src: ip,
+}
