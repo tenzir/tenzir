@@ -198,6 +198,63 @@ TEST("event builder scopes selector inference to unparsed fields") {
   }
 }
 
+TEST("event builder promotes unflattened scalar prefixes into records") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.infer_numbers = true, .unflatten_separator = "."});
+  auto event = builder.event();
+  event.field("k").data_unparsed("1");
+  event.field("k.x").data_unparsed("2");
+  event.field("k.y").data_unparsed("3");
+  event.field("nested.k").data_unparsed("4");
+  event.field("nested.k.x").data_unparsed("5");
+  event.field("repeated").data_unparsed("6");
+  event.field("repeated").data_unparsed("7");
+  event.field("repeated.x").data_unparsed("8");
+  event.field("null").null();
+  event.field("null.x").data_unparsed("9");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(
+    events[0],
+    (data{record{
+      {"k", record{{"", int64_t{1}}, {"x", int64_t{2}}, {"y", int64_t{3}}}},
+      {"nested", record{{"k", record{{"", int64_t{4}}, {"x", int64_t{5}}}}}},
+      {"repeated", list{int64_t{6}, int64_t{7}, record{{"x", int64_t{8}}}}},
+      {"null", record{{"", caf::none}, {"x", int64_t{9}}}},
+    }}));
+}
+
+TEST("event builder can repeat a promoted unflattened prefix") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.infer_numbers = true, .unflatten_separator = "."});
+  auto event = builder.event();
+  event.field("k").data_unparsed("1");
+  event.field("k.x").data_unparsed("2");
+  event.field("k").data_unparsed("3");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(
+    events[0],
+    (data{record{
+      {"k", list{record{{"", int64_t{1}}, {"x", int64_t{2}}}, int64_t{3}}},
+    }}));
+}
+
+TEST("event builder preserves raw values in promoted unflattened prefixes") {
+  auto dh = null_diagnostic_handler{};
+  auto builder = make_builder(
+    dh, {.raw = true, .infer_numbers = true, .unflatten_separator = "."});
+  auto event = builder.event();
+  event.field("k").data_unparsed("001");
+  event.field("k.x").data_unparsed("002");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0],
+              (data{record{{"k", record{{"", "001"}, {"x", "002"}}}}}));
+}
+
 TEST("event builder unflattens keys that share a prefix into one record") {
   auto dh = null_diagnostic_handler{};
   auto builder = make_builder(dh, {.unflatten_separator = "."});
