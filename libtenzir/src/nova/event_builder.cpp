@@ -1048,26 +1048,7 @@ auto EventBuilder::take(ArrayBuilder<nova::Record>::RecordBuilder& record,
 auto EventBuilder::open_record(
   ArrayBuilder<nova::Record>::RecordBuilder& record, std::string_view name)
   -> Option<ArrayBuilder<nova::Record>::RecordBuilder> {
-  if (auto opened = record.open_record_field(name)) {
-    return opened;
-  }
-  if (not is<NoPolicy>(settings_.policy) and not settings_.merge_structural) {
-    return None{};
-  }
-  auto previous = Option<Data>{};
-  auto extend = false;
-  auto slot = take(record, name, previous, extend, true);
-  if (previous and (is<nova::Record>(*previous) or is<nova::List>(*previous))) {
-    append_data(slot, *previous);
-    return None{};
-  }
-  // Unflattening promotes a scalar prefix instead of collecting it with its
-  // descendants in a list. Do not mark this as a repeated key.
-  auto promoted = slot.record();
-  if (previous) {
-    append_data(promoted.field(""), *previous);
-  }
-  return promoted;
+  return record.open_record_field(name);
 }
 
 auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {

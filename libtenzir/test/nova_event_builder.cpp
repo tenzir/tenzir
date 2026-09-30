@@ -278,14 +278,14 @@ TEST("event builder can retain repeated keys with a schema policy") {
   }
 }
 
-TEST("event builder promotes unflattened scalar prefixes into records") {
+TEST("event builder collects an unflattened scalar prefix with its "
+     "descendants") {
   auto dh = null_diagnostic_handler{};
   auto builder
     = make_builder(dh, {.infer_numbers = true, .unflatten_separator = "."});
   auto event = builder.event();
   event.field("k").data_unparsed("1");
   event.field("k.x").data_unparsed("2");
-  event.field("k.y").data_unparsed("3");
   event.field("nested.k").data_unparsed("4");
   event.field("nested.k.x").data_unparsed("5");
   event.field("repeated").data_unparsed("6");
@@ -295,34 +295,43 @@ TEST("event builder promotes unflattened scalar prefixes into records") {
   event.field("null.x").data_unparsed("9");
   auto events = finish(builder);
   REQUIRE_EQUAL(events.size(), 1u);
+  // A scalar and a record cannot share a field, so both are kept in a list, in
+  // the order in which they arrived, rather than hiding the scalar in a field
+  // with an empty name.
   CHECK_EQUAL(
     events[0],
     (data{record{
-      {"k", record{{"", int64_t{1}}, {"x", int64_t{2}}, {"y", int64_t{3}}}},
-      {"nested", record{{"k", record{{"", int64_t{4}}, {"x", int64_t{5}}}}}},
+      {"k", list{int64_t{1}, record{{"x", int64_t{2}}}}},
+      {"nested", record{{"k", list{int64_t{4}, record{{"x", int64_t{5}}}}}}},
       {"repeated", list{int64_t{6}, int64_t{7}, record{{"x", int64_t{8}}}}},
-      {"null", record{{"", caf::none}, {"x", int64_t{9}}}},
+      {"null", list{caf::none, record{{"x", int64_t{9}}}}},
     }}));
 }
 
-TEST("event builder can repeat a promoted unflattened prefix") {
+TEST("event builder keeps scalars and unflattened records in arrival order") {
   auto dh = null_diagnostic_handler{};
   auto builder
     = make_builder(dh, {.infer_numbers = true, .unflatten_separator = "."});
   auto event = builder.event();
-  event.field("k").data_unparsed("1");
-  event.field("k.x").data_unparsed("2");
-  event.field("k").data_unparsed("3");
+  event.field("before").data_unparsed("1");
+  event.field("before.x").data_unparsed("2");
+  event.field("after.x").data_unparsed("3");
+  event.field("after").data_unparsed("4");
+  event.field("between").data_unparsed("5");
+  event.field("between.x").data_unparsed("6");
+  event.field("between").data_unparsed("7");
   auto events = finish(builder);
   REQUIRE_EQUAL(events.size(), 1u);
   CHECK_EQUAL(
     events[0],
     (data{record{
-      {"k", list{record{{"", int64_t{1}}, {"x", int64_t{2}}}, int64_t{3}}},
+      {"before", list{int64_t{1}, record{{"x", int64_t{2}}}}},
+      {"after", list{record{{"x", int64_t{3}}}, int64_t{4}}},
+      {"between", list{int64_t{5}, record{{"x", int64_t{6}}}, int64_t{7}}},
     }}));
 }
 
-TEST("event builder preserves raw values in promoted unflattened prefixes") {
+TEST("event builder preserves raw values in an unflattened scalar prefix") {
   auto dh = null_diagnostic_handler{};
   auto builder = make_builder(
     dh, {.raw = true, .infer_numbers = true, .unflatten_separator = "."});
@@ -332,7 +341,7 @@ TEST("event builder preserves raw values in promoted unflattened prefixes") {
   auto events = finish(builder);
   REQUIRE_EQUAL(events.size(), 1u);
   CHECK_EQUAL(events[0],
-              (data{record{{"k", record{{"", "001"}, {"x", "002"}}}}}));
+              (data{record{{"k", list{"001", record{{"x", "002"}}}}}}));
 }
 
 TEST("event builder unflattens keys that share a prefix into one record") {
