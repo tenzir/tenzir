@@ -1,0 +1,7 @@
+{
+  name: "syslog.rfc5424",
+  facility: 20,
+  hostname: "host",
+  structured_data: {},
+  message: "first",
+}

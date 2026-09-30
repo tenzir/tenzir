@@ -1,0 +1,10 @@
+{
+  process_id: "123",
+  message: "Grüße\nsecond",
+  raw: "<165>1 2023-01-01T00:00:00Z host app 123 - - Grüße\nsecond",
+}
+{
+  process_id: "456",
+  message: "last",
+  raw: "<165>1 2023-01-01T00:00:00Z host app 456 - - last",
+}

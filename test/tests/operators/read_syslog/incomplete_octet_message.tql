@@ -1,0 +1,4 @@
+---
+error: true
+---
+from_stdin { read_syslog octet_counting=true }

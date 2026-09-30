@@ -1,0 +1,2 @@
+<165>1 2023-01-01T00:00:00Z dns 42 0007 true [example value="42"] 123
+<165>1 2023-01-01T00:00:00Z flow false 0008 456 [example value="false"] true

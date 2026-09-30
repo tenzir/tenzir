@@ -1,0 +1,9 @@
+{
+  process_id: "0007",
+  structured_data: {
+    example: {
+      number: "42",
+      boolean: "true",
+    },
+  },
+}

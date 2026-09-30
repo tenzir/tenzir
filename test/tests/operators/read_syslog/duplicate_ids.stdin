@@ -1,0 +1,2 @@
+<165>1 2023-01-01T00:00:00Z host app 123 - [sd@1 a="1"][sd@1 b="2"] message
+<165>1 2023-01-01T00:00:00Z host app 123 - [sd@1 a="1" b="2"][sd@1 a="3" c="true"] message

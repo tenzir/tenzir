@@ -633,6 +633,10 @@ auto EventBuilder::Record::field(std::string_view name) -> Field {
   return descend(name, path);
 }
 
+auto EventBuilder::Record::exact_field(std::string_view name) -> Field {
+  return lookup(name, path_.field(name));
+}
+
 auto EventBuilder::Record::descend(std::string_view key, value_path const& path)
   -> Field {
   auto const& separator = parent_->settings_.unflatten_separator;
