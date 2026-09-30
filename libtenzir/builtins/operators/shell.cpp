@@ -7,193 +7,31 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/subprocess.hpp>
 #include <tenzir/async/unbounded_queue.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/concept/parseable/string/quoted_string.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/detail/preserved_fds.hpp>
-#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
-#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/si_literals.hpp>
-#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <boost/asio.hpp>
 #include <folly/coro/BoundedQueue.h>
-#if __has_include(<boost/process/v1/child.hpp>)
 
-#  include <boost/process/v1/args.hpp>
-#  include <boost/process/v1/async.hpp>
-#  include <boost/process/v1/async_system.hpp>
-#  include <boost/process/v1/child.hpp>
-#  include <boost/process/v1/cmd.hpp>
-#  include <boost/process/v1/env.hpp>
-#  include <boost/process/v1/environment.hpp>
-#  include <boost/process/v1/error.hpp>
-#  include <boost/process/v1/exe.hpp>
-#  include <boost/process/v1/group.hpp>
-#  include <boost/process/v1/handles.hpp>
-#  include <boost/process/v1/io.hpp>
-#  include <boost/process/v1/pipe.hpp>
-#  include <boost/process/v1/search_path.hpp>
-#  include <boost/process/v1/shell.hpp>
-#  include <boost/process/v1/spawn.hpp>
-#  include <boost/process/v1/start_dir.hpp>
-#  include <boost/process/v1/system.hpp>
-
-namespace bp = boost::process::v1;
-
-#else
-
-#  include <boost/process.hpp>
-
-namespace bp = boost::process;
-
-#endif
-
-#include <mutex>
-#include <queue>
-#include <string_view>
+#include <csignal>
 #include <system_error>
-#include <thread>
-#include <unistd.h>
 
 namespace tenzir::plugins::shell {
 namespace {
 
 using namespace tenzir::binary_byte_literals;
 
-/// The block size when reading from the child's stdin.
+/// The block size when reading from the child's stdout.
 constexpr auto block_size = 16_KiB;
-
-enum class stdin_mode { none, inherit, pipe };
-
-/// Wraps the logic for interacting with a child's stdin and stdout.
-class child {
-public:
-  static auto make(std::string command, stdin_mode mode)
-    -> caf::expected<child> {
-    auto result = child{std::move(command)};
-    // We use `/bin/sh -c "${command}"` to interpret the command.
-    auto shell = "/bin/sh";
-    try {
-      auto exit_handler = [](int exit, std::error_code ec) {
-        TENZIR_DEBUG("child exited with code {}: {}", exit, ec.message());
-      };
-      switch (mode) {
-        case stdin_mode::none:
-          result.child_ = bp::child{
-            shell,
-            "-c",
-            result.command_,
-            bp::std_out > result.stdout_,
-            bp::std_in < bp::close,
-            bp::on_exit(exit_handler),
-            detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-            bp::detail::limit_handles_{},
-          };
-          break;
-        case stdin_mode::inherit:
-          result.child_ = bp::child{
-            shell,
-            "-c",
-            result.command_,
-            bp::std_out > result.stdout_,
-            bp::on_exit(exit_handler),
-            detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}},
-            bp::detail::limit_handles_{},
-          };
-          break;
-        case stdin_mode::pipe:
-          result.child_ = bp::child{
-            shell,
-            "-c",
-            result.command_,
-            bp::std_out > result.stdout_,
-            bp::std_in < result.stdin_,
-            bp::on_exit(exit_handler),
-            detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}},
-            bp::detail::limit_handles_{},
-          };
-          break;
-      }
-    } catch (const bp::process_error& e) {
-      return caf::make_error(ec::filesystem_error, e.what());
-    }
-    return result;
-  }
-
-  auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
-    TENZIR_ASSERT(not buffer.empty());
-    TENZIR_TRACE("trying to read {} bytes", buffer.size());
-    auto* data = reinterpret_cast<char*>(buffer.data());
-    auto size = detail::narrow<int>(buffer.size());
-    auto bytes_read = stdout_.read(data, size);
-    TENZIR_TRACE("read {} bytes", bytes_read);
-    return detail::narrow<size_t>(bytes_read);
-  }
-
-  auto write(std::span<const std::byte> buffer) -> caf::error {
-    TENZIR_ASSERT(not buffer.empty());
-    TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
-    const auto* data = reinterpret_cast<const char*>(buffer.data());
-    auto size = detail::narrow_cast<std::streamsize>(buffer.size());
-    if (not stdin_.write(data, size)) {
-      return caf::make_error(ec::unspecified,
-                             "failed to write into child's stdin");
-    }
-    return caf::none;
-  }
-
-  void close_stdin() {
-    TENZIR_DEBUG("sending EOF to child's stdin");
-    stdin_.close();
-  }
-
-  auto wait() -> caf::error {
-    auto ec = std::error_code{};
-    child_.wait(ec);
-    if (ec) {
-      return diagnostic::error("{}", ec.message())
-        .note("failed to wait for child process")
-        .to_error();
-    }
-    auto code = child_.exit_code();
-    if (code != 0) {
-      return diagnostic::error("child process exited with exit-code {}", code)
-        .to_error();
-    }
-    return {};
-  }
-
-  void terminate() {
-    auto ec = std::error_code{};
-    child_.terminate(ec);
-    if (ec) {
-      TENZIR_WARN("failed to terminate child process: {}", ec);
-    }
-  }
-
-private:
-  explicit child(std::string command) : command_{std::move(command)} {
-    TENZIR_ASSERT(not command_.empty());
-  }
-
-  std::string command_;
-  bp::child child_;
-  bp::pipe stdout_;
-  bp::pipe stdin_;
-};
 
 struct ShellArgs {
   located<secret> command = located{secret{}, location::unknown};
