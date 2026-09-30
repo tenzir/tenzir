@@ -1,0 +1,9 @@
+created: 2026-09-30
+title: Fix data loss with custom disk budgets
+intro: >-
+  This release fixes a data-loss regression in v6.19.0 when using custom disk-usage
+  checks such as tenzir-df-percent. Upgrade affected nodes to prevent further data
+  loss; this fix cannot restore data already deleted.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.19.0
