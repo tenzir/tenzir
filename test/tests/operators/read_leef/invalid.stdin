@@ -1,0 +1,10 @@
+invalid
+LEEF:3.0|V|P|1|42|value=42
+LEEF:2.0|V|P|1|42||value=42
+LEEF:2.0|V|P|1|42|0xGG|value=42
+LEEF:2.0|V|P|1|42|0x123|value=42
+LEEF:2.0|V|P|1|42|ab|value=42
+LEEF:1.0|V|P|1
+LEEF:2.0|V|P|1|42|^|first=42^missing_separator
+LEEF:2.0|V|P|1|42|^|first=42^=missing_key
+LEEF:2.0|V|P|1|42|^|value=42

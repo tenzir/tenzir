@@ -1,0 +1,6 @@
+type leef.first = record{
+  attributes: record{kind: string, value: int64, text: string},
+}
+type leef.second = record{
+  attributes: record{kind: string, value: string},
+}

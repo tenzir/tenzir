@@ -1,24 +1,18 @@
+warning: LEEF 2.0 requires at least 7 fields
+ --> tests/operators/read_leef/syslog.tql:7:1
+  |
+7 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 2
+  = note: got 6 fields
 {
-  facility: 0,
-  severity: 4,
-  version: 1,
-  timestamp: 2019-11-21T13:44:36Z,
-  hostname: "LAPTOP-45Q5L6E5",
-  app_name: "Microsoft-Windows-Security-Mitigations",
-  process_id: "4340",
-  message_id: null,
-  structured_data: {},
-  message: "LEEF:2.0|Microsoft|Microsoft-Windows-Security-Mitigations|4.6.4640-trial|10|0x09|devTime=2019-11-21 13:44:35\\tidentHostName=LAPTOP-45Q5L6E5\\tsev=6\\tEventID=10\\tMessage=Process 'chrome.exe' was blocked",
-}
-{
-  facility: 0,
-  severity: 4,
-  version: 1,
-  timestamp: 2019-11-21T13:44:37Z,
-  hostname: "ZSCALER",
-  app_name: "NSS",
-  process_id: null,
-  message_id: null,
-  structured_data: {},
-  message: "LEEF:2.0|Zscaler|NSS|3.6|ALLOW|cat=firewall\\tusrName=jane.doe\\tsrc=203.0.113.10\\tdst=198.51.100.20",
+  leef_version: "2.0",
+  vendor: "Microsoft",
+  product_name: "Microsoft-Windows-Security-Mitigations",
+  product_version: "4.6.4640-trial",
+  event_class_id: "10",
+  attributes: {
+    devTime: "2019-11-21 13:44:35\tidentHostName=LAPTOP-45Q5L6E5\tsev=6\tEventID=10\tMessage=Process 'chrome.exe' was blocked",
+  },
 }

@@ -1,0 +1,1 @@
+framing, delimiters, and auto-detection: ok

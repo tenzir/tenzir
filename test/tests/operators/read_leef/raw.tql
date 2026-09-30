@@ -1,0 +1,4 @@
+from_stdin {
+  read_leef raw=true, unflatten_separator="."
+}
+select attributes, schema=@name

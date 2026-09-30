@@ -116,13 +116,33 @@ auto append_parsed(Out& out, data const& value, type const& seed) -> void {
     });
 }
 
-/// Writes a string whose type the input did not specify, inferring bool,
-/// time, duration, subnet and ip unless `raw` is set.
+auto in_inference_scope(std::string_view field, value_path const& path)
+  -> bool {
+  return field.empty()
+         or path.root_field().value_or(std::string_view{}) == field;
+}
+
+/// Writes unparsed input, optionally inferring numbers as well as non-numbers.
 template <class Out>
-auto append_inferred(Out& out, std::string_view value, bool raw) -> void {
+auto append_inferred(Out& out, std::string_view value, bool raw,
+                     bool infer_numbers) -> void {
   if (raw) {
     out.data(value);
     return;
+  }
+  if (infer_numbers) {
+    if (auto parsed = detail::data_builder::best_effort_parser(value)) {
+      auto written = false;
+      match(*parsed, [&]<class T>(T const& number) {
+        if constexpr (concepts::one_of<T, int64_t, uint64_t, double>) {
+          out.data(number);
+          written = true;
+        }
+      });
+      if (written) {
+        return;
+      }
+    }
   }
   auto parsed
     = detail::data_builder::non_number_parser(value, nullptr, value_path{});
@@ -278,8 +298,12 @@ public:
   enum class Mode { full, common_fields_only };
 
   Retyper(bool schema_only, bool infer, diagnostic_handler& dh,
-          Mode mode = Mode::full)
-    : schema_only_{schema_only}, infer_{infer}, dh_{dh}, mode_{mode} {
+          Mode mode = Mode::full, std::string_view unparsed_field = {})
+    : schema_only_{schema_only},
+      infer_{infer},
+      dh_{dh},
+      mode_{mode},
+      unparsed_field_{unparsed_field} {
   }
 
   /// Converts the records in `rows` to `seed`, which is a `record_type` or a
@@ -444,7 +468,7 @@ private:
     auto replace = storage::BitMap{length, false};
     [&]<std::size_t... Is>(std::index_sequence<Is...>) {
       auto check = [&]<class Tag>() {
-        if (not needs_replacement<Tag>(seed)) {
+        if (not needs_replacement<Tag>(seed, path)) {
           return;
         }
         if (auto alternative = data.template get_alternative<Tag>()) {
@@ -494,7 +518,8 @@ private:
   }
 
   template <class Tag>
-  auto needs_replacement(type const& seed) const -> bool {
+  auto needs_replacement(type const& seed, value_path const& path) const
+    -> bool {
     if constexpr (std::same_as<Tag, Null>) {
       return false;
     } else if constexpr (std::same_as<Tag, Record>) {
@@ -503,7 +528,8 @@ private:
       return seed and not is<list_type>(seed);
     } else {
       if (not seed) {
-        return std::same_as<Tag, String> and infer_;
+        return std::same_as<Tag, String> and infer_
+               and in_inference_scope(unparsed_field_, path);
       }
       return not conforms<typename Type<Tag>::ViewType>(seed);
     }
@@ -532,7 +558,7 @@ private:
         if (seed) {
           append_coerced(builder, *view, seed, path, *dh_, schema_only_);
         } else {
-          append_inferred(builder, *view, false);
+          append_inferred(builder, *view, false, not unparsed_field_.empty());
         }
       } else {
         append_coerced(builder, *view, seed, path, *dh_, schema_only_);
@@ -544,6 +570,7 @@ private:
   bool infer_;
   Ref<diagnostic_handler> dh_;
   Mode mode_;
+  std::string_view unparsed_field_;
 };
 
 /// Returns the seed of the field `name` of a record seeded with `seed`, or
@@ -697,7 +724,10 @@ auto EventBuilder::Field::data_unparsed(std::string_view v) -> void {
     return;
   }
   if (not seed_) {
-    append_inferred(*inner_, v, parent_->raw_);
+    auto const& scope = parent_->settings_.infer_unparsed_under;
+    append_inferred(*inner_, v,
+                    parent_->raw_ or not in_inference_scope(scope, path_),
+                    not scope.empty());
     return;
   }
   append_coerced(*inner_, v, seed_, path_, *parent_->dh_,
@@ -797,7 +827,10 @@ auto EventBuilder::List::data_unparsed(std::string_view v) -> void {
     return;
   }
   if (not seed_) {
-    append_inferred(*inner_, v, parent_->raw_);
+    auto const& scope = parent_->settings_.infer_unparsed_under;
+    append_inferred(*inner_, v,
+                    parent_->raw_ or not in_inference_scope(scope, path_),
+                    not scope.empty());
     return;
   }
   append_coerced(*inner_, v, seed_, path_.list(), *parent_->dh_,
@@ -1126,13 +1159,15 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
           .emit(*dh_);
       }
       if (infer) {
-        array = Retyper{false, true, *dh_}.record(std::move(array), rows,
-                                                  type{}, value_path{});
+        array = Retyper{false, true, *dh_, Retyper::Mode::full,
+                        settings_.infer_unparsed_under}
+                  .record(std::move(array), rows, type{}, value_path{});
       }
       continue;
     }
-    array = Retyper{settings_.schema_only, infer, *dh_}.record(
-      std::move(array), rows, *selected, value_path{});
+    array = Retyper{settings_.schema_only, infer, *dh_, Retyper::Mode::full,
+                    settings_.infer_unparsed_under}
+              .record(std::move(array), rows, *selected, value_path{});
   }
   auto meta = Events::Meta::make_empty(length);
   meta.name = names.finish();

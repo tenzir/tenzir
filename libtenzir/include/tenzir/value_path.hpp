@@ -33,6 +33,18 @@ public:
     return {*this, index_t{index}};
   }
 
+  auto root_field() const -> Option<std::string_view> {
+    auto const* path = this;
+    while (path->data_ and path->data_->first.data_) {
+      path = &path->data_->first;
+    }
+    if (not path->data_) {
+      return None{};
+    }
+    auto const* field = try_as<field_t>(path->data_->second);
+    return field ? Option{field->name} : None{};
+  }
+
 private:
   friend struct fmt::formatter<tenzir::value_path>;
 

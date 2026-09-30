@@ -67,6 +67,10 @@ public:
     /// Splits keys at this separator into nested records, if not empty.
     std::string unflatten_separator;
     std::string default_schema_name = "tenzir.unknown";
+    /// Restricts inference to this top-level field and enables number parsing.
+    /// Other strings stay strings. Empty keeps the default non-number
+    /// inference. Schema declarations and `raw` take precedence.
+    std::string infer_unparsed_under = {};
   };
 
   class Field;

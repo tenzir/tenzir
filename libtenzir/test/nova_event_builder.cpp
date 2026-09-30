@@ -97,6 +97,65 @@ TEST("event builder tracks repeated keys per record") {
                       }}}}));
 }
 
+TEST("event builder infers numbers only under an opted-in field") {
+  for (auto raw : {false, true}) {
+    auto dh = null_diagnostic_handler{};
+    auto settings = EventBuilder::Settings{};
+    settings.raw = raw;
+    settings.infer_unparsed_under = "attributes";
+    auto builder = make_builder(dh, std::move(settings));
+    auto event = builder.event();
+    event.field("version").data_unparsed("001");
+    auto attributes = event.field("attributes").record();
+    attributes.field("number").data_unparsed("001");
+    attributes.field("text").data(std::string_view{"001"});
+    attributes.field("nested").record().field("number").data_unparsed("-42");
+    attributes.field("values").list().data_unparsed("3.5");
+    auto events = finish(builder);
+    REQUIRE_EQUAL(events.size(), 1u);
+    CHECK_EQUAL(events[0],
+                (data{record{
+                  {"version", "001"},
+                  {"attributes",
+                   record{
+                     {"number", raw ? data{"001"} : data{int64_t{1}}},
+                     {"text", "001"},
+                     {"nested", record{{"number", raw ? data{"-42"}
+                                                      : data{int64_t{-42}}}}},
+                     {"values", list{raw ? data{"3.5"} : data{3.5}}},
+                   }},
+                }}));
+  }
+}
+
+TEST("event builder scopes selector inference to unparsed fields") {
+  for (auto raw : {false, true}) {
+    auto dh = null_diagnostic_handler{};
+    auto settings = EventBuilder::Settings{};
+    settings.policy = EventBuilder::SelectorPolicy{"schema", None{}};
+    settings.raw = raw;
+    settings.infer_unparsed_under = "attributes";
+    auto builder = make_builder(dh, std::move(settings));
+    auto event = builder.event();
+    event.field("schema").data(std::string_view{"missing"});
+    event.field("vendor").data(std::string_view{"true"});
+    event.field("product").data(std::string_view{"192.0.2.1"});
+    event.field("version").data(std::string_view{"1s"});
+    event.field("attributes").record().field("flag").data_unparsed("true");
+    auto events = finish(builder);
+    REQUIRE_EQUAL(events.size(), 1u);
+    CHECK_EQUAL(
+      events[0],
+      (data{record{
+        {"schema", "missing"},
+        {"vendor", "true"},
+        {"product", "192.0.2.1"},
+        {"version", "1s"},
+        {"attributes", record{{"flag", raw ? data{"true"} : data{true}}}},
+      }}));
+  }
+}
+
 TEST("event builder unflattens keys that share a prefix into one record") {
   auto dh = null_diagnostic_handler{};
   auto builder = make_builder(dh, {.unflatten_separator = "."});

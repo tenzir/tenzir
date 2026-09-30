@@ -1,0 +1,92 @@
+warning: invalid LEEF event
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 1
+  = hint: LEEF events start with LEEF:$VERSION|...
+
+warning: unsupported LEEF version: 3.0
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 2
+  = hint: only 1.0 and 2.0 are valid values
+
+warning: got empty delimiter
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 3
+  = note: LEEF v2.0 requires a delimiter specification
+  = hint: delimiter must be a single character or start with 'x' or '0x'
+
+warning: invalid hex delimiter: 0xGG
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 4
+  = hint: hex delimiters with 'x' or '0x' require subsequent hex chars
+
+warning: wrong number of hex delimiters: 3
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 5
+  = note: cannot interpret 3 or 4 characters in a meaningful way
+  = hint: need 1 or 2 hex chars
+
+warning: invalid non-hex delimiter
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 6
+  = hint: expected a single character, but got 2
+
+warning: LEEF 1.0 requires at least 6 fields
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 7
+  = note: got 4 fields
+
+warning: missing key-value separator in attribute
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 8
+  = note: attribute was `missing_separator`
+
+warning: missing key before separator in attributes
+ --> tests/operators/read_leef/invalid.tql:2:1
+  |
+2 | read_leef
+  | ~~~~~~~~~
+  |
+  = note: line 9
+  = note: attribute was `=missing_key`
+{
+  leef_version: "2.0",
+  vendor: "V",
+  product_name: "P",
+  product_version: "1",
+  event_class_id: "42",
+  attributes: {
+    value: 42,
+  },
+}

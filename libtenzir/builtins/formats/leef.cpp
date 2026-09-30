@@ -24,6 +24,7 @@
 #include <tenzir/module.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -39,6 +40,8 @@
 
 #include <memory>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 // The Log Event Extended Format (LEEF) is an event representation that has been
 // popularized by IBM QRadar. The official documentation at
@@ -144,9 +147,9 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
 }
 
 /// Parses the LEEF attributes field as a sequence of key-value pairs.
-auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
-                      const detail::quoting_escaping_policy& quoting)
-  -> Option<diagnostic> {
+auto parse_attribute_values(char delimiter, std::string_view attributes,
+                            detail::quoting_escaping_policy const& quoting,
+                            auto&& emit_pair) -> Option<diagnostic> {
   while (not attributes.empty()) {
     auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
     /// We greedily accept more than one consecutive separator
@@ -169,19 +172,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
     auto key = attribute.substr(0, sep_pos);
     auto value
       = quoting.unquote_unescape(detail::trim(attribute.substr(sep_pos + 1)));
-    if constexpr (detail::multi_series_builder::has_unflattened_field<
-                    decltype(builder)>) {
-      auto field = builder.unflattened_field(key);
-      field.data_unparsed(std::move(value));
-    } else {
-      auto field = builder.field(key);
-      auto res = detail::data_builder::best_effort_parser(value);
-      if (res) {
-        field.data(*res);
-      } else {
-        field.data(std::move(value));
-      }
-    }
+    emit_pair(key, std::move(value));
     if (attr_end != attributes.npos) {
       attributes.remove_prefix(attr_end + 1);
     } else {
@@ -191,10 +182,33 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   return {};
 }
 
-[[nodiscard]] auto parse_line(std::string_view line, auto& builder,
-                              const detail::quoting_escaping_policy& quoting)
+auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
+                      detail::quoting_escaping_policy const& quoting)
   -> Option<diagnostic> {
-  using namespace std::string_view_literals;
+  return parse_attribute_values(
+    delimiter, attributes, quoting,
+    [&](std::string_view key, std::string value) {
+      if constexpr (detail::multi_series_builder::has_unflattened_field<
+                      decltype(builder)>) {
+        builder.unflattened_field(key).data_unparsed(std::move(value));
+      } else {
+        auto field = builder.field(key);
+        auto parsed = detail::data_builder::best_effort_parser(value);
+        if (parsed) {
+          field.data(*parsed);
+        } else {
+          field.data(std::move(value));
+        }
+      }
+    });
+}
+
+struct ParsedHeader {
+  std::vector<std::string> fields;
+  char delimiter = '\t';
+};
+
+auto parse_header(std::string_view line) -> variant<ParsedHeader, diagnostic> {
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
   auto num_fields = 0u;
@@ -232,21 +246,33 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   auto delimiter = '\t';
   if (leef_version == "2.0") {
     auto delim = parse_delimiter(fields[5]);
-    if (const auto* c = std::get_if<char>(&delim)) {
+    if (auto const* c = try_as<char>(delim)) {
       TENZIR_DEBUG("parsed LEEF delimiter: {:#04x}", *c);
       delimiter = *c;
     } else {
-      return std::get<diagnostic>(delim);
+      return std::move(as<diagnostic>(delim));
     }
   }
+  return ParsedHeader{std::move(fields), delimiter};
+}
+
+[[nodiscard]] auto parse_line(std::string_view line, auto& builder,
+                              detail::quoting_escaping_policy const& quoting)
+  -> Option<diagnostic> {
+  auto parsed = parse_header(line);
+  auto* header = try_as<ParsedHeader>(parsed);
+  if (not header) {
+    return std::move(as<diagnostic>(parsed));
+  }
+  auto& fields = header->fields;
   auto r = builder.record();
-  r.field("leef_version").data(std::string{leef_version});
+  r.field("leef_version").data(fields[0].substr(5));
   r.field("vendor").data(std::move(fields[1]));
   r.field("product_name").data(std::move(fields[2]));
   r.field("product_version").data(std::move(fields[3]));
   r.field("event_class_id").data(std::move(fields[4]));
 
-  auto d = parse_attributes(delimiter, fields[num_fields],
+  auto d = parse_attributes(header->delimiter, fields.back(),
                             r.field("attributes").record(), quoting);
   if (d) {
     builder.remove_last();
@@ -395,6 +421,190 @@ private:
   SeriesPusher pusher_;
 };
 
+/// Validate attributes before opening an event, so a malformed line leaves no
+/// partial record in the batch.
+auto parse_event(std::string_view line, nova::EventBuilder& builder,
+                 detail::quoting_escaping_policy const& quoting)
+  -> Option<diagnostic> {
+  auto parsed = parse_header(line);
+  auto* header = try_as<ParsedHeader>(parsed);
+  if (not header) {
+    return std::move(as<diagnostic>(parsed));
+  }
+  auto attributes = std::vector<std::pair<std::string_view, std::string>>{};
+  auto diag
+    = parse_attribute_values(header->delimiter, header->fields.back(), quoting,
+                             [&](std::string_view key, std::string value) {
+                               attributes.emplace_back(key, std::move(value));
+                             });
+  if (diag) {
+    return diag;
+  }
+  auto const& fields = header->fields;
+  auto row = builder.event();
+  row.field("leef_version").data(std::string_view{fields[0]}.substr(5));
+  row.field("vendor").data(std::string_view{fields[1]});
+  row.field("product_name").data(std::string_view{fields[2]});
+  row.field("product_version").data(std::string_view{fields[3]});
+  row.field("event_class_id").data(std::string_view{fields[4]});
+  auto record = row.field("attributes").record();
+  for (auto const& [key, value] : attributes) {
+    record.field(key).data_unparsed(value);
+  }
+  return {};
+}
+
+class ReadLeefEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadLeefEvents(ReadLeefArgs args)
+    : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    quoting_ = detail::quoting_escaping_policy{.unescape_operation = unescape};
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
+      if (args_.operator_location and not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{},
+                                   args_.operator_location);
+      }
+      if (diagnostic_line_) {
+        d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                        fmt::format("line {}", *diagnostic_line_));
+      }
+      return d;
+    });
+    auto settings = nova::event_builder_settings(args_.msb_options);
+    settings.infer_unparsed_under = "attributes";
+    if (settings.default_schema_name.empty()) {
+      settings.default_schema_name = "leef.event";
+    }
+    auto builder = nova::EventBuilder::make(std::move(settings), **dh_);
+    if (builder) {
+      builder_ = std::move(builder).unwrap();
+    }
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return builder_ ? OperatorState::normal : OperatorState::done;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await maybe_emit_ready(push);
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (not builder_) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      co_await maybe_emit_ready(push);
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current});
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      if (static_cast<size_t>(builder_->length())
+          >= args_.msb_options.settings.desired_batch_size) {
+        co_await emit_finished(push);
+      }
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    co_await maybe_emit_ready(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (builder_ and not buffer_.empty()) {
+      process_line(buffer_);
+      buffer_.clear();
+    }
+    co_await emit_finished(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await emit_finished(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_counter", line_counter_);
+    if (serde.is_loading()) {
+      timeout_.reset();
+    }
+  }
+
+private:
+  auto process_line(std::string_view line) -> void {
+    ++line_counter_;
+    if (line.empty()) {
+      return;
+    }
+    diagnostic_line_ = line_counter_;
+    if (auto diag = parse_event(line, *builder_, quoting_)) {
+      (**dh_).emit(std::move(*diag));
+    }
+    diagnostic_line_ = None{};
+  }
+
+  auto emit_finished(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and builder_->length() > 0) {
+      auto events = builder_->finish();
+      timeout_.reset();
+      co_await push(std::move(events));
+    }
+  }
+
+  auto maybe_emit_ready(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and timeout_.poll(builder_->length())) {
+      co_await emit_finished(push);
+    }
+  }
+
+  ReadLeefArgs args_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  size_t line_counter_ = 0;
+  detail::quoting_escaping_policy quoting_;
+  // Present only while parsing a line, not during setup or batch finalization.
+  Option<size_t> diagnostic_line_;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<nova::EventBuilder> builder_;
+  BatchTimeout timeout_;
+};
+
 class read_leef final : public virtual operator_factory_plugin,
                         public virtual ReadOperatorPlugin {
 public:
@@ -403,10 +613,14 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadLeefArgs, ReadLeef>{ReadLeefArgs{
+    auto d = Describer<ReadLeefArgs, ReadLeef, ReadLeefEvents>{ReadLeefArgs{
       .msb_options = {.settings = {.default_schema_name = "leef.event"}},
     }};
-    d.validate(add_msb_to_describer(d, &ReadLeefArgs::msb_options));
+    auto msb = add_msb_to_describer(d, &ReadLeefArgs::msb_options);
+    d.validate(msb);
+    d.validate([msb](DescribeCtx& ctx) -> Empty {
+      return nova::validate_event_builder_options(msb, ctx);
+    });
     d.operator_location(&ReadLeefArgs::operator_location);
     d.optimization(&ReadLeefArgs::optimization);
     return d.without_optimize();

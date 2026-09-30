@@ -1,0 +1,33 @@
+{
+  leef_version: "2.0",
+  vendor: "42",
+  product_name: "false",
+  product_version: "192.0.2.1",
+  event_class_id: "01",
+  attributes: {
+    signed: -42,
+    large: 18446744073709551615,
+    real: 3.5,
+    boolean: true,
+    ip: 192.0.2.1,
+    subnet: 192.0.2.0/24,
+    duration: 5s,
+    time: 2024-01-02T03:04:05Z,
+    none: "null",
+    empty: "",
+    quoted: "foo^bar",
+    equal: "first=second",
+    repeat: [
+      1,
+      "two",
+    ],
+  },
+}
+{
+  leef_version: "1.0",
+  vendor: "V",
+  product_name: "P",
+  product_version: "1",
+  event_class_id: "42",
+  attributes: {},
+}
