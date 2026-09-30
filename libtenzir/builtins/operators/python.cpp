@@ -24,7 +24,13 @@
 #include <tenzir/detail/strip_leading_indentation.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/generator.hpp>
+#include <tenzir/import_conversion.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/arrow_export.hpp>
+#include <tenzir/nova/arrow_import.hpp>
+#include <tenzir/nova/arrow_metadata.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/fundamental_array_builder.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -922,6 +928,131 @@ private:
   Option<std::filesystem::path> venv_ = None{};
 };
 
+class PythonNova final : public Operator<nova::Events, nova::Events> {
+public:
+  PythonNova(config config, PythonArgs args)
+    : python_{std::move(config), std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (ctx.checkpoint_settings()) {
+      checkpoint_rejected_ = true;
+      diagnostic::error("`python` does not support checkpointing").emit(ctx);
+      co_return;
+    }
+    co_await python_.start(ctx);
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (state() == OperatorState::done) {
+      co_return;
+    }
+    input = redact_import_secrets(std::move(input)).second;
+    auto pending = std::vector<table_slice>{};
+    auto times = nova::ArrayBuilder<nova::Time>{};
+    auto flush = [&]() -> Task<void> {
+      if (pending.empty()) {
+        co_return;
+      }
+      auto slice = pending.size() == 1 ? std::move(pending.front())
+                                       : concatenate(std::move(pending));
+      pending.clear();
+      auto output = ArrowOutput{
+        push, ctx.dh(),
+        nova::ArrowMetadata::from_arrow(*slice.schema().to_arrow_schema()),
+        times.finish()};
+      times = nova::ArrayBuilder<nova::Time>{};
+      co_await python_.process(std::move(slice), output, ctx);
+    };
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      // Convert one row at a time so record shapes do not get merged into a
+      // nullable schema that changes Python's field-presence semantics.
+      auto slices = nova::to_table_slices(nova::subslice(input, row, row + 1));
+      TENZIR_ASSERT(slices.size() == 1);
+      auto slice = std::move(slices.front());
+      if (not pending.empty() and pending.back().schema() != slice.schema()) {
+        co_await flush();
+      }
+      if (python_.state() == OperatorState::done) {
+        co_return;
+      }
+      pending.push_back(std::move(slice));
+      times.data(*input.meta.import_time.get(row));
+    }
+    co_await flush();
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (checkpoint_rejected_) {
+      co_return FinalizeBehavior::done;
+    }
+    auto output = ArrowOutput{
+      push, ctx.dh(), {}, nova::Events::Meta::make_empty(0).import_time};
+    co_return co_await python_.finalize(output, ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return checkpoint_rejected_ ? OperatorState::done : python_.state();
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    python_.snapshot(serde);
+  }
+
+private:
+  class ArrowOutput final : public Push<table_slice> {
+  public:
+    ArrowOutput(Push<nova::Events>& push, diagnostic_handler& dh,
+                nova::ArrowMetadata metadata, nova::Array<nova::Time> times)
+      : push_{push},
+        dh_{dh},
+        metadata_{std::move(metadata)},
+        times_{std::move(times)} {
+    }
+
+    auto operator()(table_slice slice) -> Task<void> override {
+      auto array = to_record_batch(slice)->ToStructArray();
+      if (not array.ok()) {
+        diagnostic::error("failed to convert Python output")
+          .note("{}", array.status().ToString())
+          .emit(dh_);
+        co_return;
+      }
+      auto imported = nova::import_arrow_array(array.MoveValueUnsafe());
+      if (not imported) {
+        diagnostic::error("failed to convert Python output")
+          .note("{}", imported.unwrap_err())
+          .emit(dh_);
+        co_return;
+      }
+      auto records = std::move(imported).unwrap().try_as<nova::Record>();
+      TENZIR_ASSERT(records);
+      auto length = records->length();
+      if (length != times_.length()) {
+        diagnostic::error("Python output row count changed unexpectedly")
+          .emit(dh_);
+        co_return;
+      }
+      auto meta = metadata_.to_meta(length);
+      meta.import_time = std::move(times_);
+      co_await push_(nova::Events{std::move(*records),
+                                  nova::storage::BitMap{length, true},
+                                  std::move(meta)});
+    }
+
+  private:
+    Push<nova::Events>& push_;
+    diagnostic_handler& dh_;
+    nova::ArrowMetadata metadata_;
+    nova::Array<nova::Time> times_;
+  };
+
+  Python python_;
+  bool checkpoint_rejected_ = false;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -978,14 +1109,21 @@ public:
         return {};
       };
       TRY(validate(ctx));
-      if constexpr (not std::same_as<Input, table_slice>) {
-        return None{};
-      } else {
+      if constexpr (std::same_as<Input, table_slice>) {
         return SpawnWith<PythonArgs, table_slice>{
           [config](PythonArgs args) -> Box<Operator<table_slice, table_slice>> {
             return Box<Operator<table_slice, table_slice>>{
               Python{config, std::move(args)}};
           }};
+      } else if constexpr (std::same_as<Input, nova::Events>) {
+        return SpawnWith<PythonArgs, nova::Events>{
+          [config](
+            PythonArgs args) -> Box<Operator<nova::Events, nova::Events>> {
+            return Box<Operator<nova::Events, nova::Events>>{
+              PythonNova{config, std::move(args)}};
+          }};
+      } else {
+        return None{};
       }
     });
     return d.without_optimize();
