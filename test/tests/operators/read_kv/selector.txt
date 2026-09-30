@@ -1,0 +1,12 @@
+{
+  name: "suricata.dns",
+  event_type: "dns",
+  dest_port: 53,
+  extra: 7,
+}
+{
+  name: "suricata.flow",
+  event_type: "flow",
+  dest_port: 443,
+  extra: 8,
+}

@@ -64,12 +64,14 @@ public:
     bool schema_only = false;
     /// Keeps unparsed strings as strings unless a schema says otherwise.
     bool raw = false;
+    /// Infers numbers in unparsed strings for formats without numeric types.
+    bool infer_numbers = false;
     /// Splits keys at this separator into nested records, if not empty.
     std::string unflatten_separator;
     std::string default_schema_name = "tenzir.unknown";
     /// Restricts inference to this top-level field and enables number parsing.
-    /// Other strings stay strings. Empty keeps the default non-number
-    /// inference. Schema declarations and `raw` take precedence.
+    /// Other strings stay strings. Empty leaves inference unrestricted.
+    /// Schema declarations and `raw` take precedence.
     std::string infer_unparsed_under = {};
   };
 

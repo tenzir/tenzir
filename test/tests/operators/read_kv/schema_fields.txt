@@ -1,0 +1,8 @@
+{
+  name: "suricata.dns",
+  dest_port: 53,
+  dns: {
+    rrname: "123",
+  },
+  extra: 42,
+}

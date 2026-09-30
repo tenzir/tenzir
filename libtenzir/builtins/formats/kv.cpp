@@ -18,6 +18,7 @@
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/nova/array.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -587,6 +588,200 @@ private:
   SeriesPusher pusher_;
 };
 
+class ReadKvEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadKvEvents(ReadKvArgs args)
+    : args_{std::move(args)},
+      quoting_{.quotes = args_.quotes.inner},
+      field_split_{located<std::string_view>{args_.field_split.inner,
+                                             args_.field_split.source}},
+      value_split_{located<std::string_view>{args_.value_split.inner,
+                                             args_.value_split.source}},
+      timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
+      if (args_.operator_location and not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{},
+                                   args_.operator_location);
+      }
+      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                      fmt::format("line {}", line_counter_));
+      return d;
+    });
+    auto settings = nova::event_builder_settings(args_.msb_options);
+    settings.infer_numbers = true;
+    auto builder = nova::EventBuilder::make(std::move(settings), **dh_);
+    if (not builder) {
+      done_ = true;
+      co_return;
+    }
+    builder_ = std::move(builder).unwrap();
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (timeout_.poll(rows())) {
+      co_await flush(push);
+    }
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (done_ or not input or input->size() == 0) {
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current});
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      if (done_) {
+        co_return;
+      }
+      if (rows() >= args_.msb_options.settings.desired_batch_size) {
+        co_await flush(push);
+      }
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    if (timeout_.poll(rows())) {
+      co_await flush(push);
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (not builder_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (not buffer_.empty()) {
+      process_line(buffer_);
+      buffer_.clear();
+    }
+    co_await flush(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await flush(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_counter", line_counter_);
+    serde("done", done_);
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto rows() const -> size_t {
+    return builder_ ? static_cast<size_t>(builder_->length()) : 0;
+  }
+
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    if (rows() == 0) {
+      co_return;
+    }
+    auto events = builder_->finish();
+    timeout_.reset();
+    co_await push(std::move(events));
+  }
+
+  auto process_line(std::string_view line) -> void {
+    ++line_counter_;
+    auto event = builder_->event();
+    struct Previous {
+      std::string_view key;
+      std::string_view value;
+    };
+    auto previous = Option<Previous>{};
+    auto commit = [&] {
+      if (not previous) {
+        return;
+      }
+      auto key = quoting_.unquote_unescape(previous->key);
+      if (previous->value.empty()) {
+        event.field(key).null();
+        return;
+      }
+      auto value = quoting_.unquote_unescape(previous->value);
+      event.field(key).data_unparsed(value);
+    };
+    while (not line.empty()) {
+      auto const [head, tail, field_sep] = field_split_.split(line, quoting_);
+      auto const [key_view, value_view, value_sep]
+        = value_split_.split(head, quoting_);
+      if (value_sep.found()) {
+        commit();
+        previous.emplace(key_view, value_view);
+      } else if (previous) {
+        if (previous->value.empty()) {
+          previous->value = value_view;
+        } else {
+          previous->value = std::string_view{
+            previous->value.data(),
+            previous->value.size() + field_sep.length() + key_view.length(),
+          };
+        }
+      } else {
+        previous.emplace(key_view, value_view);
+      }
+      if (line == tail) {
+        diagnostic::error("`kv` parsing did not make progress")
+          .note("make sure `field_split` is a regular expression")
+          .emit(**dh_);
+        done_ = true;
+        return;
+      }
+      line = tail;
+    }
+    commit();
+  }
+
+  ReadKvArgs args_;
+  detail::quoting_escaping_policy quoting_;
+  splitter field_split_;
+  splitter value_split_;
+  BatchTimeout timeout_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  size_t line_counter_ = 0;
+  bool done_ = false;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<nova::EventBuilder> builder_;
+};
+
 struct WriteKvArgs {
   located<std::string> field_separator = {" ", location::unknown};
   located<std::string> value_separator = {"=", location::unknown};
@@ -1113,7 +1308,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadKvArgs, ReadKv>{};
+    auto d = Describer<ReadKvArgs, ReadKv, ReadKvEvents>{};
     auto defaults = ReadKvArgs{};
     auto field_split
       = d.named_optional("field_split", &ReadKvArgs::field_split);
@@ -1130,6 +1325,7 @@ public:
       (void)validate_splitter(fs ? *fs : defaults.field_split, ctx);
       (void)validate_splitter(vs ? *vs : defaults.value_split, ctx);
       msb(ctx);
+      nova::validate_event_builder_options(msb, ctx);
       return {};
     });
     return d.without_optimize();

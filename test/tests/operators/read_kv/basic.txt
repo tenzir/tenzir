@@ -5,9 +5,9 @@
 }
 {
   CATEGORY: "Access",
-  ID: "XER-8343-12",
   FILE: "C:\\foo\\bar.exe",
   ARGUMENTS: "[--qux]",
+  ID: "XER-8343-12",
 }
 {
   CATEGORY: 42,

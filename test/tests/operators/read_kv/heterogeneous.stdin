@@ -1,0 +1,3 @@
+value=42 flag=true addr=192.0.2.1 tag=one tag=2 empty= quoted="hello world"
+value=text other=3.5
+value= false=false

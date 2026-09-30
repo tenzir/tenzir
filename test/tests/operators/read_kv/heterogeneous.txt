@@ -1,0 +1,19 @@
+{
+  value: 42,
+  flag: true,
+  addr: 192.0.2.1,
+  tag: [
+    "one",
+    2,
+  ],
+  empty: null,
+  quoted: "hello world",
+}
+{
+  value: "text",
+  other: 3.5,
+}
+{
+  value: null,
+  "false": false,
+}

@@ -298,9 +298,11 @@ public:
   enum class Mode { full, common_fields_only };
 
   Retyper(bool schema_only, bool infer, diagnostic_handler& dh,
-          Mode mode = Mode::full, std::string_view unparsed_field = {})
+          bool infer_numbers = false, Mode mode = Mode::full,
+          std::string_view unparsed_field = {})
     : schema_only_{schema_only},
       infer_{infer},
+      infer_numbers_{infer_numbers or not unparsed_field.empty()},
       dh_{dh},
       mode_{mode},
       unparsed_field_{unparsed_field} {
@@ -558,7 +560,7 @@ private:
         if (seed) {
           append_coerced(builder, *view, seed, path, *dh_, schema_only_);
         } else {
-          append_inferred(builder, *view, false, not unparsed_field_.empty());
+          append_inferred(builder, *view, false, infer_numbers_);
         }
       } else {
         append_coerced(builder, *view, seed, path, *dh_, schema_only_);
@@ -568,6 +570,7 @@ private:
 
   bool schema_only_;
   bool infer_;
+  bool infer_numbers_;
   Ref<diagnostic_handler> dh_;
   Mode mode_;
   std::string_view unparsed_field_;
@@ -727,7 +730,7 @@ auto EventBuilder::Field::data_unparsed(std::string_view v) -> void {
     auto const& scope = parent_->settings_.infer_unparsed_under;
     append_inferred(*inner_, v,
                     parent_->raw_ or not in_inference_scope(scope, path_),
-                    not scope.empty());
+                    parent_->settings_.infer_numbers or not scope.empty());
     return;
   }
   append_coerced(*inner_, v, seed_, path_, *parent_->dh_,
@@ -830,7 +833,7 @@ auto EventBuilder::List::data_unparsed(std::string_view v) -> void {
     auto const& scope = parent_->settings_.infer_unparsed_under;
     append_inferred(*inner_, v,
                     parent_->raw_ or not in_inference_scope(scope, path_),
-                    not scope.empty());
+                    parent_->settings_.infer_numbers or not scope.empty());
     return;
   }
   append_coerced(*inner_, v, seed_, path_.list(), *parent_->dh_,
@@ -1138,9 +1141,9 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
   if (common_initialized and not common_fields.empty()) {
     auto common = type{record_type{std::move(common_fields)}};
     array
-      = Retyper{false, false, *dh_, Retyper::Mode::common_fields_only}.record(
-        std::move(array), std::move(selected_rows).finish(), common,
-        value_path{});
+      = Retyper{false, false, *dh_, false, Retyper::Mode::common_fields_only}
+          .record(std::move(array), std::move(selected_rows).finish(), common,
+                  value_path{});
   }
   // Convert every group to its schema.
   auto const infer = not settings_.raw;
@@ -1159,13 +1162,21 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
           .emit(*dh_);
       }
       if (infer) {
-        array = Retyper{false, true, *dh_, Retyper::Mode::full,
+        array = Retyper{false,
+                        true,
+                        *dh_,
+                        settings_.infer_numbers,
+                        Retyper::Mode::full,
                         settings_.infer_unparsed_under}
                   .record(std::move(array), rows, type{}, value_path{});
       }
       continue;
     }
-    array = Retyper{settings_.schema_only, infer, *dh_, Retyper::Mode::full,
+    array = Retyper{settings_.schema_only,
+                    infer,
+                    *dh_,
+                    settings_.infer_numbers,
+                    Retyper::Mode::full,
                     settings_.infer_unparsed_under}
               .record(std::move(array), rows, *selected, value_path{});
   }
