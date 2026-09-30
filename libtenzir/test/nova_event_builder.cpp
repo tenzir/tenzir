@@ -308,6 +308,63 @@ TEST("event builder collects an unflattened scalar prefix with its "
     }}));
 }
 
+TEST("event builder groups the dotted siblings of a scalar prefix") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.infer_numbers = true, .unflatten_separator = "."});
+  auto event = builder.event();
+  // Siblings continue the record that follows the scalar, like they do when
+  // there is no scalar, and other keys in between do not split them.
+  event.field("k").data_unparsed("1");
+  event.field("k.x").data_unparsed("2");
+  event.field("other").data_unparsed("3");
+  event.field("k.y").data_unparsed("4");
+  event.field("k.z.w").data_unparsed("5");
+  // A repeated scalar before the first sibling stays in front of the record.
+  event.field("m").data_unparsed("6");
+  event.field("m").data_unparsed("7");
+  event.field("m.x").data_unparsed("8");
+  event.field("m.y").data_unparsed("9");
+  // The record may come first, and a scalar in between ends the group.
+  event.field("n.x").data_unparsed("10");
+  event.field("n").data_unparsed("11");
+  event.field("n.y").data_unparsed("12");
+  event.field("n.z").data_unparsed("13");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(
+    events[0],
+    (data{record{
+      {"k", list{int64_t{1}, record{{"x", int64_t{2}},
+                                    {"y", int64_t{4}},
+                                    {"z", record{{"w", int64_t{5}}}}}}},
+      {"other", int64_t{3}},
+      {"m", list{int64_t{6}, int64_t{7},
+                 record{{"x", int64_t{8}}, {"y", int64_t{9}}}}},
+      {"n", list{record{{"x", int64_t{10}}}, int64_t{11},
+                 record{{"y", int64_t{12}}, {"z", int64_t{13}}}}},
+    }}));
+}
+
+TEST("event builder does not merge dotted keys into a list from the input") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.infer_numbers = true, .unflatten_separator = "."});
+  auto event = builder.event();
+  // The input supplied this list, so the record in it is not a prefix that
+  // unflattening created.
+  auto items = event.field("k").list();
+  items.record().field("x").data_unparsed("1");
+  event.field("k.y").data_unparsed("2");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(
+    events[0],
+    (data{record{
+      {"k", list{list{record{{"x", int64_t{1}}}}, record{{"y", int64_t{2}}}}},
+    }}));
+}
+
 TEST("event builder keeps scalars and unflattened records in arrival order") {
   auto dh = null_diagnostic_handler{};
   auto builder

@@ -56,6 +56,8 @@ public:
   auto length() const -> storage::Index;
   /// Removes the last list, closing it first if still open, and returns it.
   auto take_last() -> Data;
+  /// Returns the record that ends the last list if both are still being built.
+  auto open_last_record() -> Option<ArrayBuilder<Record>::RecordBuilder>;
   auto finish() -> Array<List>;
 
 private:

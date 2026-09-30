@@ -40,6 +40,9 @@ public:
     /// Returns the record that the open row holds for `name`, if it is still
     /// being built.
     auto open_record_field(std::string_view name) -> Option<RecordBuilder>;
+    /// Returns the record that ends the list which the open row holds for
+    /// `name`, if both are still being built.
+    auto open_list_record_field(std::string_view name) -> Option<RecordBuilder>;
     ArrayBuilder* parent_ = nullptr;
   };
 

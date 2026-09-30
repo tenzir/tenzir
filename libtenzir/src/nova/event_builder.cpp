@@ -1048,7 +1048,19 @@ auto EventBuilder::take(ArrayBuilder<nova::Record>::RecordBuilder& record,
 auto EventBuilder::open_record(
   ArrayBuilder<nova::Record>::RecordBuilder& record, std::string_view name)
   -> Option<ArrayBuilder<nova::Record>::RecordBuilder> {
-  return record.open_record_field(name);
+  if (auto opened = record.open_record_field(name)) {
+    return opened;
+  }
+  // A key that conflicted holds the list of everything written to it. Dotted
+  // siblings such as `k.x` and `k.y` continue the record at the end of that
+  // list, even after a scalar `k`, instead of each starting their own. Lists
+  // that came from the input are not in `repeated_` and stay untouched.
+  auto const key = RepeatedKey{record.parent_, record.parent_->length() - 1,
+                               std::string{name}};
+  if (std::ranges::find(repeated_, key) != repeated_.end()) {
+    return record.open_list_record_field(name);
+  }
+  return None{};
 }
 
 auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {

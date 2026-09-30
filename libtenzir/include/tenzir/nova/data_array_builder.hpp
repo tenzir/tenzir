@@ -39,6 +39,9 @@ public:
   auto list() -> ArrayBuilder<List>::ListBuilder;
   /// Returns the record in the last row if it is still being built.
   auto open_record() -> Option<ArrayBuilder<Record>::RecordBuilder>;
+  /// Returns the record that ends the list in the last row if both are still
+  /// being built.
+  auto open_list_record() -> Option<ArrayBuilder<Record>::RecordBuilder>;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
   auto length() const -> storage::Index;
@@ -95,6 +98,7 @@ public:
   using UnionArrayBuilder::length;
   using UnionArrayBuilder::list;
   using UnionArrayBuilder::null;
+  using UnionArrayBuilder::open_list_record;
   using UnionArrayBuilder::open_record;
   using UnionArrayBuilder::record;
   using UnionArrayBuilder::skip;
