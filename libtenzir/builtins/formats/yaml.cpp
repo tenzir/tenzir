@@ -19,6 +19,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/nova/array.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -36,6 +37,7 @@
 #include <fmt/format.h>
 
 #include <string_view>
+#include <tuple>
 
 #include <yaml-cpp/yaml.h>
 
@@ -414,6 +416,235 @@ private:
   SeriesPusher pusher_;
 };
 
+// Validate keys before opening an event so invalid documents cannot leave
+// partially built records. Bound recursion to reject cyclic aliases as well.
+auto validate_yaml_node(YAML::Node const& node, diagnostic_handler& diag,
+                        size_t depth = 0) -> bool {
+  constexpr auto max_depth = size_t{64};
+  if (depth > max_depth) {
+    diagnostic::warning("document nesting exceeds limit of {} levels",
+                        max_depth)
+      .emit(diag);
+    return false;
+  }
+  if (node.IsMap()) {
+    for (auto const& entry : node) {
+      std::ignore = entry.first.as<std::string>();
+      if (not validate_yaml_node(entry.second, diag, depth + 1)) {
+        return false;
+      }
+    }
+  } else if (node.IsSequence()) {
+    for (auto const& entry : node) {
+      if (not validate_yaml_node(entry, diag, depth + 1)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+auto append_yaml_node(auto&& field, YAML::Node const& node,
+                      diagnostic_handler& diag) -> void {
+  switch (node.Type()) {
+    case YAML::NodeType::Undefined:
+      diagnostic::warning("yaml parser encountered undefined field").emit(diag);
+      [[fallthrough]];
+    case YAML::NodeType::Null:
+      field.null();
+      return;
+    case YAML::NodeType::Scalar:
+      if (try_as<bool>(node, field) or try_as<int64_t>(node, field)
+          or try_as<uint64_t>(node, field) or try_as<double>(node, field)) {
+        return;
+      }
+      field.data_unparsed(node.Scalar());
+      return;
+    case YAML::NodeType::Sequence: {
+      auto list = field.list();
+      for (auto const& entry : node) {
+        append_yaml_node(list, entry, diag);
+      }
+      return;
+    }
+    case YAML::NodeType::Map: {
+      auto record = field.record();
+      for (auto const& entry : node) {
+        append_yaml_node(record.field(entry.first.as<std::string>()),
+                         entry.second, diag);
+      }
+      return;
+    }
+  }
+}
+
+auto load_document(nova::EventBuilder& builder, std::string const& document,
+                   diagnostic_handler& diag) -> void {
+  try {
+    auto node = YAML::Load(document);
+    if (not node.IsDefined()) {
+      diagnostic::warning("document is not valid").emit(diag);
+      return;
+    }
+    if (not node.IsMap()) {
+      diagnostic::warning("document is not a map").emit(diag);
+      return;
+    }
+    if (not validate_yaml_node(node, diag)) {
+      return;
+    }
+    auto row = builder.event();
+    for (auto const& entry : node) {
+      append_yaml_node(row.field(entry.first.as<std::string>()), entry.second,
+                       diag);
+    }
+  } catch (YAML::Exception const& err) {
+    diagnostic::warning("failed to load YAML document: {}", err.what())
+      .emit(diag);
+  }
+}
+
+class ReadYamlEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadYamlEvents(ReadYamlArgs args)
+    : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(std::in_place, ctx.dh(), [](diagnostic d) {
+      d.message = fmt::format("yaml parser: {}", d.message);
+      return d;
+    });
+    auto builder = nova::EventBuilder::make(
+      nova::event_builder_settings(args_.msb_options), **dh_);
+    if (builder) {
+      builder_ = std::move(builder).unwrap();
+    }
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return builder_ ? OperatorState::normal : OperatorState::done;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await maybe_emit_ready(push);
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (not builder_) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      co_await maybe_emit_ready(push);
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current});
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      if (static_cast<size_t>(builder_->length())
+          >= args_.msb_options.settings.desired_batch_size) {
+        co_await emit_finished(push);
+      }
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    co_await maybe_emit_ready(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (builder_) {
+      if (not buffer_.empty()) {
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      if (not document_.empty()) {
+        load_document(*builder_, document_, **dh_);
+        document_.clear();
+      }
+    }
+    co_await emit_finished(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await emit_finished(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("document", document_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    if (serde.is_loading()) {
+      timeout_.reset();
+    }
+  }
+
+private:
+  auto process_line(std::string_view line) -> void {
+    if (line == document_end_marker or line == document_start_marker) {
+      if (not document_.empty()) {
+        load_document(*builder_, document_, **dh_);
+        document_.clear();
+      }
+      return;
+    }
+    fmt::format_to(std::back_inserter(document_), "{}\n", line);
+  }
+
+  auto emit_finished(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and builder_->length() > 0) {
+      auto events = builder_->finish();
+      timeout_.reset();
+      co_await push(std::move(events));
+    }
+  }
+
+  auto maybe_emit_ready(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and timeout_.poll(builder_->length())) {
+      co_await emit_finished(push);
+    }
+  }
+
+  ReadYamlArgs args_;
+  std::string buffer_;
+  std::string document_;
+  bool ended_on_carriage_return_ = false;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<nova::EventBuilder> builder_;
+  BatchTimeout timeout_;
+};
+
 class read_yaml final : public virtual operator_factory_plugin,
                         public virtual ReadOperatorPlugin {
 public:
@@ -422,8 +653,12 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadYamlArgs, ReadYaml>{};
-    d.validate(add_msb_to_describer(d, &ReadYamlArgs::msb_options));
+    auto d = Describer<ReadYamlArgs, ReadYaml, ReadYamlEvents>{};
+    auto msb = add_msb_to_describer(d, &ReadYamlArgs::msb_options);
+    d.validate([msb](DescribeCtx& ctx) -> Empty {
+      msb(ctx);
+      return nova::validate_event_builder_options(msb, ctx);
+    });
     return d.without_optimize();
   }
 

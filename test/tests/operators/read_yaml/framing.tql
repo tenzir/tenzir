@@ -1,0 +1,14 @@
+// Split CRLF, UTF-8, and document markers one byte at a time.
+// The last document has no trailing newline.
+from {
+  data: (
+    "---\r\n{}\r\n...\r\n"
+    + "---\r\nvalue: héllo\r\n...\r\n"
+    + "---\rvalue: [1, two, null]\r"
+    + "---\nvalue: last"
+  )
+}
+write_all data
+split_bytes 1
+read_yaml _batch_size=3
+write_ndjson

@@ -1,0 +1,20 @@
+kind: first
+value: 42
+text: 123
+src: 192.0.2.1
+extra: yes
+...
+kind: duplicates
+a: {x: 1}
+a: {y: 2}
+l: [1]
+l: [2, 3]
+text: 123
+src: 192.0.2.1
+extra: {b: 2}
+extra: null
+extra: null
+scalar: 1
+scalar.b: 2
+reverse.b: 2
+reverse: 1

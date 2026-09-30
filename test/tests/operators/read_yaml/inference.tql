@@ -1,0 +1,6 @@
+from_stdin {
+  read_yaml
+}
+select flag=type_of(flag).kind, integer=type_of(integer).kind,
+  unsigned=type_of(unsigned).kind, real=type_of(real).kind,
+  ip=type_of(ip).kind, duration=type_of(duration).kind, time=type_of(time).kind

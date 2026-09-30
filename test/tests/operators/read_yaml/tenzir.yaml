@@ -1,0 +1,3 @@
+tenzir:
+  nova: true
+  schema-dirs: [tests/operators/read_yaml/schemas]

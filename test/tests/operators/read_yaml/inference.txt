@@ -1,0 +1,9 @@
+{
+  flag: "bool",
+  integer: "int",
+  unsigned: "uint",
+  real: "float",
+  ip: "ip",
+  duration: "duration",
+  time: "time",
+}

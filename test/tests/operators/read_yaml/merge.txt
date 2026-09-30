@@ -1,0 +1,16 @@
+warning: `merge` has no effect with `--nova`
+ --> tests/operators/read_yaml/merge.tql:2:19
+  |
+2 |   read_yaml merge=true
+  |                   ~~~~
+  |
+
+warning: `merge` has no effect with `--nova`
+ --> tests/operators/read_yaml/merge.tql:2:19
+  |
+2 |   read_yaml merge=true
+  |                   ~~~~
+  |
+{
+  value: 42,
+}

@@ -1,0 +1,4 @@
+from_stdin {
+  read_yaml unflatten_separator=".", _batch_size=1
+}
+write_ndjson

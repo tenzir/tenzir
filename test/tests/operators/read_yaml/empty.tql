@@ -1,0 +1,3 @@
+from {data: b""}, {data: b"---\n...\n"}
+write_chunks
+read_yaml

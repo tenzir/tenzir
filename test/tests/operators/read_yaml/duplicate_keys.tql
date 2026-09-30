@@ -1,0 +1,5 @@
+from_stdin {
+  split_bytes 7
+  read_yaml unflatten_separator=".", _batch_size=7
+}
+write_ndjson

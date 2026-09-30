@@ -1,0 +1,4 @@
+{}
+{"value":"héllo"}
+{"value":[1,"two",null]}
+{"value":"last"}
