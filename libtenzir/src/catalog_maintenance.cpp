@@ -192,9 +192,19 @@ void catalog_state::advance_maintenance(time now) {
   auto const space_enabled
     = maintenance.space.high_water_mark > 0
       and maintenance.space.scan_interval > std::chrono::seconds::zero();
-  if (space_enabled and now >= next_space_scan) {
+  // Consume a completed custom sample before starting another scan, even if
+  // the checker took longer than the scan interval.
+  if (space_enabled and not custom_space_measurement
+      and (now >= next_space_scan or recheck_custom_space)) {
     next_space_scan = now + maintenance.space.scan_interval;
-    if (not measuring_space) {
+    // A custom check cannot estimate the space promised by pending deletions
+    // or separate temporary transform outputs from steady-state usage.
+    const auto awaiting_reclamation
+      = maintenance.space.scan_binary
+        and (now < eviction_retry_at or not space_scan_is_stable()
+             or not deferred.empty() or eviction_running > 0);
+    if (not measuring_space and not awaiting_reclamation) {
+      recheck_custom_space = false;
       measure_space();
     }
   }
@@ -1088,6 +1098,7 @@ auto catalog_state::space_scan_is_stable() const -> bool {
 void catalog_state::measure_space() {
   TENZIR_ASSERT(not measuring_space);
   measuring_space = true;
+  custom_space_measurement = None{};
   auto const generation = storage_generation;
   auto const stable = space_scan_is_stable();
   auto measurement = std::make_shared<disk_usage>();
@@ -1118,12 +1129,13 @@ void catalog_state::measure_space() {
     .then(
       [this, generation, stable, measurement](uint64_t size) {
         measuring_space = false;
-        if (stable and measurement->stable and generation == storage_generation
+        if (stable and generation == storage_generation
             and space_scan_is_stable()) {
           on_space_measured(size, std::move(measurement->partition_bytes));
         } else {
-          // A directory walk is not a snapshot. Retain the last reconciled
-          // overhead instead of interpreting partially moved files as growth.
+          // Neither a directory walk nor a custom check is a snapshot. A
+          // storage change may already have relieved the measured pressure.
+          recheck_custom_space = maintenance.space.scan_binary.has_value();
           advance_maintenance(time::clock::now());
         }
       },
@@ -1139,6 +1151,12 @@ void catalog_state::measure_space() {
 
 void catalog_state::on_space_measured(
   uint64_t size, std::unordered_map<uuid, uint64_t> observed) {
+  if (maintenance.space.scan_binary) {
+    dbdir_size = size;
+    custom_space_measurement = size;
+    advance_maintenance(time::clock::now());
+    return;
+  }
   auto const known = catalog_bytes + parked_bytes() + deleting_bytes();
   external_bytes = size - std::min(size, known);
   std::erase_if(observed, [this](const auto& entry) {
@@ -1155,24 +1173,40 @@ void catalog_state::enforce_disk_budget(time now) {
   if (maintenance.space.high_water_mark == 0
       or maintenance.space.scan_interval <= std::chrono::seconds::zero()
       or now < eviction_retry_at) {
+    custom_space_measurement = None{};
     return;
   }
-  // Only live data and non-partition bytes need further reclamation. Parked
-  // and deleting files are still physical usage, but already spoken for.
-  // Known partition bytes enforce the budget even before the first successful
-  // scan: continuous catalog churn can invalidate every directory walk. Scans
-  // only refine the non-partition overhead, never gate live-byte enforcement.
-  auto const live = detail::saturating_add(catalog_bytes, external_bytes);
-  dbdir_size = detail::saturating_add(
-    live, detail::saturating_add(parked_bytes(), deleting_bytes()));
-  auto promised = uint64_t{0};
-  for (auto const& id : retiring) {
-    if (auto synopsis = find_synopsis(id)) {
-      promised += synopsis->store_file.size + synopsis->indexes_file.size
-                  + synopsis->sketches_file.size;
+  auto const custom = maintenance.space.scan_binary.has_value();
+  auto effective = uint64_t{0};
+  if (custom) {
+    auto measurement = std::exchange(custom_space_measurement, None{});
+    if (not measurement) {
+      return;
     }
+    if (measuring_space or not retiring.empty() or not deleting.empty()
+        or not deferred.empty() or eviction_running > 0) {
+      recheck_custom_space = true;
+      return;
+    }
+    effective = *measurement;
+  } else {
+    // Only live data and non-partition bytes need further reclamation. Parked
+    // and deleting files are still physical usage, but already spoken for.
+    // Known partition bytes enforce the budget even before the first successful
+    // scan: continuous catalog churn can invalidate every directory walk. Scans
+    // only refine the non-partition overhead, never gate live-byte enforcement.
+    auto const live = detail::saturating_add(catalog_bytes, external_bytes);
+    dbdir_size = detail::saturating_add(
+      live, detail::saturating_add(parked_bytes(), deleting_bytes()));
+    auto promised = uint64_t{0};
+    for (auto const& id : retiring) {
+      if (auto synopsis = find_synopsis(id)) {
+        promised += synopsis->store_file.size + synopsis->indexes_file.size
+                    + synopsis->sketches_file.size;
+      }
+    }
+    effective = live - std::min(live, promised);
   }
-  auto const effective = live - std::min(live, promised);
   auto const threshold = evicting ? maintenance.space.low_water_mark
                                   : maintenance.space.high_water_mark;
   if (effective <= threshold) {
@@ -1196,8 +1230,9 @@ void catalog_state::enforce_disk_budget(time now) {
   for (auto const& id :
        select_eviction_batch(std::numeric_limits<size_t>::max(), {}, now)) {
     if (slots == 0
-        or effective - std::min(effective, planned)
-             <= maintenance.space.low_water_mark) {
+        or (not custom
+            and effective - std::min(effective, planned)
+                  <= maintenance.space.low_water_mark)) {
       break;
     }
     auto const synopsis = find_synopsis(id);
@@ -1208,6 +1243,7 @@ void catalog_state::enforce_disk_budget(time now) {
     if (outcome != eviction_outcome::none) {
       eviction_pending.insert(id);
       if (outcome == eviction_outcome::started) {
+        recheck_custom_space = custom;
         break;
       }
       continue;
@@ -1215,6 +1251,7 @@ void catalog_state::enforce_disk_budget(time now) {
     planned += synopsis->store_file.size + synopsis->indexes_file.size
                + synopsis->sketches_file.size;
     retiring.insert(id);
+    recheck_custom_space = custom;
     --slots;
     self->mail(atom::erase_v, id)
       .request(caf::actor_cast<catalog_actor>(self), caf::infinite)

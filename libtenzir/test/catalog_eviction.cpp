@@ -15,6 +15,7 @@
 #include "tenzir/uuid.hpp"
 
 #include <caf/make_copy_on_write.hpp>
+#include <caf/test/fixture/deterministic.hpp>
 
 #include <fstream>
 
@@ -163,23 +164,24 @@ TEST("directory scans record the partition bytes they actually measured") {
   }
   auto measured = compute_dbdir_size(paths, {});
   REQUIRE(measured);
-  CHECK(measured->stable);
   CHECK_EQUAL(measured->bytes, uint64_t{110});
   CHECK_EQUAL(measured->partition_bytes.size(), size_t{1});
   CHECK_EQUAL(measured->partition_bytes.at(id), uint64_t{60});
+}
+
+TEST("custom disk checks retain their own units without a file inventory") {
+  const auto paths = partition_paths::from_database_dir("does-not-exist");
   auto config = disk_monitor_config{};
   // Use shell builtins so this test needs no external scan program.
-  config.scan_binary = "printf 456; #";
-  measured = compute_dbdir_size(paths, config);
+  config.scan_binary = "printf 1; #";
+  auto measured = compute_dbdir_size(paths, config);
   REQUIRE(measured);
-  CHECK(measured->stable);
-  CHECK_EQUAL(measured->bytes, uint64_t{456});
-  CHECK_EQUAL(measured->partition_bytes.at(id), uint64_t{60});
-  config.scan_binary
-    = fmt::format("printf x >> '{}'; printf 456; #", paths.partition(id));
-  measured = compute_dbdir_size(paths, config);
-  REQUIRE(measured);
-  CHECK(not measured->stable);
+  CHECK_EQUAL(measured->bytes, uint64_t{1});
+  CHECK(measured->partition_bytes.empty());
+  config.scan_binary = "printf invalid; #";
+  CHECK(not compute_dbdir_size(paths, config));
+  config.scan_binary = "exit 1; #";
+  CHECK(not compute_dbdir_size(paths, config));
 }
 
 TEST("disk scans wait for catalog commits after their transformer exits") {
@@ -372,6 +374,147 @@ TEST("disk eviction enforces known bytes without a scan and respects pause") {
   f.state.enforce_disk_budget();
   CHECK(f.state.evicting);
   CHECK_EQUAL(f.state.dbdir_size, uint64_t{2000});
+}
+
+TEST("percentage disk budgets never compare thresholds with partition bytes") {
+  auto f = fixture{};
+  const auto id = f.add("test", 1'000'000);
+  // Keep a regression from sending messages through this actor-free fixture.
+  f.state.in_transformation.insert(id);
+  f.state.maintenance.space.high_water_mark = 95;
+  f.state.maintenance.space.low_water_mark = 90;
+  f.state.maintenance.space.scan_binary = "tenzir-df-percent";
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+  CHECK(not f.state.dbdir_size);
+  f.state.on_space_measured(1);
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+  CHECK_EQUAL(f.state.dbdir_size, uint64_t{1});
+  CHECK_EQUAL(f.state.catalog_bytes, uint64_t{1'000'000});
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{0});
+  // A measurement is consumed once, including when it selected no victims.
+  f.state.on_space_measured(96);
+  f.state.enforce_disk_budget();
+  CHECK(f.state.evicting);
+  CHECK(not f.state.custom_space_measurement);
+  f.state.catalog_bytes = 0;
+  f.state.enforce_disk_budget();
+  CHECK(f.state.evicting);
+  CHECK_EQUAL(f.state.dbdir_size, uint64_t{96});
+  f.state.on_space_measured(90);
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+}
+
+TEST("custom disk checks wait for pending reclamation") {
+  auto f = fixture{};
+  const auto id = f.add();
+  f.state.maintenance.space.high_water_mark = 95;
+  f.state.maintenance.space.low_water_mark = 90;
+  f.state.maintenance.space.scan_binary = "tenzir-df-percent";
+  auto check_waiting = [&] {
+    f.state.on_space_measured(96);
+    f.state.enforce_disk_budget();
+    CHECK(not f.state.evicting);
+    CHECK(not f.state.custom_space_measurement);
+    CHECK(f.state.recheck_custom_space);
+    f.state.recheck_custom_space = false;
+  };
+  f.state.retiring.insert(id);
+  check_waiting();
+  f.state.retiring.clear();
+  f.state.deleting[id] = 1000;
+  check_waiting();
+  f.state.deleting.clear();
+  f.park(id, 1000);
+  check_waiting();
+  f.state.deferred.clear();
+  f.state.eviction_running = 1;
+  check_waiting();
+  f.state.eviction_running = 0;
+  f.state.measuring_space = true;
+  check_waiting();
+}
+
+TEST("custom disk checks do not reuse measurements from eviction backoff") {
+  auto f = fixture{};
+  f.state.maintenance.space.high_water_mark = 95;
+  f.state.maintenance.space.low_water_mark = 90;
+  f.state.maintenance.space.scan_binary = "tenzir-df-percent";
+  f.state.eviction_retry_at = f.clock + std::chrono::minutes{1};
+  f.state.on_space_measured(96);
+  f.state.enforce_disk_budget(f.clock);
+  CHECK(not f.state.custom_space_measurement);
+  f.state.enforce_disk_budget(f.state.eviction_retry_at);
+  CHECK(not f.state.evicting);
+}
+
+TEST("custom disk eviction needs a fresh measurement after each batch") {
+  auto f = caf::test::fixture::deterministic{};
+  auto partitions = fixture{};
+  for (auto i = 0; i < 6; ++i) {
+    partitions.add("test", 1000);
+  }
+  auto* state = static_cast<catalog_state*>(nullptr);
+  auto erased = std::vector<uuid>{};
+  auto catalog
+    = f.sys.spawn([&](catalog_actor::stateful_pointer<catalog_state> self)
+                    -> catalog_actor::behavior_type {
+        state = &self->state();
+        state->self = self;
+        state->synopses_per_type = partitions.state.synopses_per_type;
+        REQUIRE(not state->initialize_maintenance(partitions.clock).valid());
+        state->maintenance.space.high_water_mark = 95;
+        state->maintenance.space.low_water_mark = 90;
+        state->maintenance.space.step_size = 2;
+        state->maintenance.space.scan_binary = "tenzir-df-percent";
+        return {caf::partial_behavior_init, [&](atom::erase, const uuid& id) {
+                  erased.push_back(id);
+                  state->erase(id);
+                  return atom::done_v;
+                }};
+      });
+  f.dispatch_messages();
+  REQUIRE(state);
+  state->on_space_measured(95);
+  state->enforce_disk_budget();
+  f.dispatch_messages();
+  CHECK(erased.empty());
+  state->on_space_measured(96);
+  state->enforce_disk_budget();
+  f.dispatch_messages();
+  // File sizes do not tell us how many percentage points were reclaimed.
+  CHECK_EQUAL(erased.size(), size_t{2});
+  CHECK_EQUAL(state->catalog_bytes, uint64_t{4000});
+  CHECK(state->recheck_custom_space);
+  state->enforce_disk_budget();
+  f.dispatch_messages();
+  CHECK_EQUAL(erased.size(), size_t{2});
+  // Once pressure starts, continue toward 90, even after dropping below 95.
+  state->on_space_measured(93);
+  state->enforce_disk_budget();
+  f.dispatch_messages();
+  CHECK_EQUAL(erased.size(), size_t{4});
+  CHECK_EQUAL(state->catalog_bytes, uint64_t{2000});
+  state->on_space_measured(90);
+  state->enforce_disk_budget();
+  f.dispatch_messages();
+  CHECK_EQUAL(erased.size(), size_t{4});
+  CHECK(not state->evicting);
+  CHECK_EQUAL(state->dbdir_size, uint64_t{90});
+  // A slow check finishes after the next scan became due. Its sample must
+  // still authorize one batch before another scan can replace it.
+  state->maintenance_ready = true;
+  state->next_space_scan = time::min();
+  state->maintenance.space.scan_binary = "printf 1; #";
+  state->on_space_measured(96);
+  CHECK(state->evicting);
+  CHECK_EQUAL(state->retiring.size(), size_t{2});
+  state->maintenance_ready = false;
+  f.dispatch_messages();
+  CHECK_EQUAL(erased.size(), size_t{6});
+  f.inject_exit(catalog);
 }
 
 TEST("eviction waits for rewrite results even with spare disk step allowance") {
