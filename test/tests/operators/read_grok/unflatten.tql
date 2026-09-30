@@ -1,0 +1,1 @@
+from_stdin { read_grok "%{IP:[source][ip]} %{NUMBER:[source][port]:int}", unflatten_separator="." }

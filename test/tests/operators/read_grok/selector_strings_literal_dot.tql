@@ -1,0 +1,6 @@
+from_stdin {
+  read_grok "%{WORD:event_type} %{WORD:a.b:string} %{WORD:a/b}",
+    selector="event_type:suricata", unflatten_separator="/"
+}
+select literal=this["a.b"], a
+write_json

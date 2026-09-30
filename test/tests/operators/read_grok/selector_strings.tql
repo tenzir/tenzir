@@ -1,0 +1,5 @@
+from_stdin {
+  read_grok "%{WORD:event_type} %{NUMBER:dest_port:string} %{WORD:text:string} %{WORD:[nested][value]:string}",
+    selector="event_type:suricata", unflatten_separator="."
+}
+select name=@name, dest_port, text, nested

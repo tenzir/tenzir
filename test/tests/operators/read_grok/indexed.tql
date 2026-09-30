@@ -1,0 +1,1 @@
+from_stdin { read_grok "(foo) %{NUMBER:value}", indexed_captures=true }

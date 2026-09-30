@@ -1,0 +1,5 @@
+{
+  pair: "foo=42",
+  key: "foo",
+  value: 42,
+}

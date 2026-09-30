@@ -1,0 +1,1 @@
+from_stdin { read_grok "%{WORD:kind} %{DATA:value}", _batch_size=2 }

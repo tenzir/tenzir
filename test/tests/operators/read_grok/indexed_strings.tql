@@ -1,0 +1,2 @@
+from_stdin { read_grok "%{WORD:event_type} %{WORD:value:string}", indexed_captures=true, selector="event_type:suricata" }
+select value

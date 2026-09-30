@@ -1,0 +1,2 @@
+from_stdin { read_grok "%{WORD:event_type} %{NUMBER:dest_port} %{NUMBER:extra}", selector="event_type:suricata" }
+select name=@name, event_type, dest_port, extra

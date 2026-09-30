@@ -1,0 +1,16 @@
+{
+  word: "foo",
+  value: 1,
+}
+{
+  word: "bar",
+  value: 2,
+}
+{
+  word: "baz",
+  value: 3,
+}
+{
+  word: "last",
+  value: 4,
+}

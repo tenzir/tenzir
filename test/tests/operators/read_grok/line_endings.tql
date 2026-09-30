@@ -1,0 +1,4 @@
+from_stdin {
+  split_bytes 1
+  read_grok "%{WORD:word} %{NUMBER:value}", _batch_size=1
+}

@@ -75,6 +75,51 @@ TEST("event builder raw strings override numeric inference") {
   CHECK_EQUAL(events[0], (data{record{{"x", "42"}, {"l", list{"1.5"}}}}));
 }
 
+TEST("event builder preserves explicit strings after selection") {
+  auto dh = null_diagnostic_handler{};
+  auto settings = EventBuilder::Settings{};
+  settings.policy = EventBuilder::SelectorPolicy{"kind", None{}};
+  settings.infer_numbers = true;
+  settings.string_fields = {{"x"}, {"nested", "y"}};
+  auto builder = make_builder(dh, std::move(settings));
+  auto event = builder.event();
+  event.field("kind").null();
+  auto values = event.field("x").list();
+  values.data(std::string_view{"42"});
+  values.data(std::string_view{"true"});
+  event.field("nested").record().field("y").data(std::string_view{"false"});
+  event.field("inferred").data_unparsed("7");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0], (data{record{{"kind", caf::none},
+                                      {"x", list{"42", "true"}},
+                                      {"nested", record{{"y", "false"}}},
+                                      {"inferred", int64_t{7}}}}));
+}
+
+TEST("event builder distinguishes literal punctuation in explicit string "
+     "paths") {
+  auto dh = null_diagnostic_handler{};
+  auto settings = EventBuilder::Settings{};
+  settings.policy = EventBuilder::SelectorPolicy{"kind", None{}};
+  settings.infer_numbers = true;
+  settings.string_fields = {{"a.b"}, {"array[]"}};
+  auto builder = make_builder(dh, std::move(settings));
+  auto event = builder.event();
+  event.field("kind").null();
+  event.field("a.b").data(std::string_view{"123"});
+  event.field("a").record().field("b").data_unparsed("true");
+  event.field("array[]").data(std::string_view{"false"});
+  event.field("array").list().data_unparsed("true");
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(events[0], (data{record{{"kind", caf::none},
+                                      {"a.b", "123"},
+                                      {"a", record{{"b", true}}},
+                                      {"array[]", "false"},
+                                      {"array", list{true}}}}));
+}
+
 TEST("event builder collects the values of a repeated key into a list") {
   auto dh = null_diagnostic_handler{};
   auto builder = make_builder(dh);

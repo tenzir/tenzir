@@ -12,6 +12,8 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/event_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -574,6 +576,110 @@ public:
     return true;
   }
 
+  auto string_fields(std::string_view unflatten_separator) const
+    -> std::vector<std::vector<std::string>> {
+    auto result = std::vector<std::vector<std::string>>{};
+    for (auto const& [name, type] : input_pattern_.named_captures) {
+      if (type != capture_type::string) {
+        continue;
+      }
+      auto path = std::vector<std::string>{};
+      if (unflatten_separator.empty()) {
+        path.push_back(name);
+      } else {
+        for (auto segment : detail::split(name, unflatten_separator)) {
+          path.emplace_back(segment);
+        }
+      }
+      result.push_back(std::move(path));
+    }
+    return result;
+  }
+
+  auto parse_line(nova::EventBuilder& builder, diagnostic_handler& dh,
+                  std::string_view line) const -> bool {
+    auto matches = boost::cmatch{};
+    try {
+      if (not boost::regex_match(line.begin(), line.end(), matches,
+                                 *input_pattern_.resolved_pattern)) {
+        diagnostic::warning("pattern could not be matched")
+          .hint("input: `{}`", line)
+          .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
+          .primary(input_pattern_.loc)
+          .emit(dh);
+        return false;
+      }
+    } catch (boost::regex_error const& error) {
+      if (error.code() != boost::regex_constants::error_complexity) {
+        throw;
+      }
+      diagnostic::warning("failed to apply grok pattern due to its complexity")
+        .note("example input: {:?}", line)
+        .hint("try to simplify or optimize your grok pattern")
+        .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
+        .primary(input_pattern_.loc)
+        .emit(dh);
+      return false;
+    }
+    auto event = builder.event();
+    auto add_field = [&](std::string_view name,
+                         boost::csub_match const& capture, capture_type type) {
+      if (type == capture_type::unnamed and not include_unnamed_) {
+        return;
+      }
+      if (not capture.matched) {
+        event.field(name).null();
+        return;
+      }
+      auto value = std::string_view{capture.first, capture.second};
+      switch (type) {
+        case capture_type::unnamed:
+        case capture_type::implicit:
+        case capture_type::infer:
+          event.field(name).data_unparsed(value);
+          return;
+        case capture_type::string:
+          event.field(name).data(value);
+          return;
+        case capture_type::integer:
+          if (auto parsed = to<int64_t>(value)) {
+            event.field(name).data(*parsed);
+          } else {
+            event.field(name).null();
+          }
+          return;
+        case capture_type::floating:
+          if (auto parsed = to<double>(value)) {
+            event.field(name).data(*parsed);
+          } else {
+            event.field(name).null();
+          }
+          return;
+      }
+      TENZIR_UNREACHABLE();
+    };
+    if (indexed_captures_) {
+      auto count = input_pattern_.resolved_pattern->mark_count() + 1;
+      for (auto index = size_t{0}; index < count; ++index) {
+        auto const& capture = matches[index];
+        auto named = std::ranges::find_if(
+          input_pattern_.named_captures, [&](auto const& item) {
+            return capture == matches[item.first];
+          });
+        if (named != input_pattern_.named_captures.end()) {
+          add_field(named->first, capture, named->second);
+        } else {
+          add_field(std::to_string(index), capture, capture_type::implicit);
+        }
+      }
+    } else {
+      for (auto const& [name, type] : input_pattern_.named_captures) {
+        add_field(name, matches[name], type);
+      }
+    }
+    return true;
+  }
+
   auto parse_strings(const arrow::StringArray& input,
                      diagnostic_handler& dh) const -> std::vector<series> {
     auto tdh = transforming_diagnostic_handler{
@@ -801,6 +907,150 @@ private:
   SeriesPusher pusher_;
 };
 
+class ReadGrokEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadGrokEvents(ReadGrokArgs args)
+    : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(ctx.dh(), [loc = args_.operator_location](diagnostic diag) {
+      if (not diag.has_location()) {
+        diag.annotations.emplace_back(true, std::string{}, loc);
+      }
+      return diag;
+    });
+    auto noop_dh = null_diagnostic_handler{};
+    auto parser = make_grok_parser(
+      args_.pattern,
+      args_.pattern_definitions ? Option{*args_.pattern_definitions} : None{},
+      args_.indexed_captures, args_.include_unnamed, args_.msb_options,
+      noop_dh);
+    if (not parser) {
+      done_ = true;
+      co_return;
+    }
+    parser_ = std::move(parser).unwrap();
+    auto settings = nova::event_builder_settings(args_.msb_options);
+    settings.infer_numbers = true;
+    settings.string_fields
+      = parser_->string_fields(settings.unflatten_separator);
+    auto builder = nova::EventBuilder::make(std::move(settings), *dh_);
+    if (not builder) {
+      done_ = true;
+      co_return;
+    }
+    builder_ = std::move(builder).unwrap();
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (timeout_.poll(rows())) {
+      co_await flush(push);
+    }
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (done_ or not input or input->size() == 0) {
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current});
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      if (rows() >= args_.msb_options.settings.desired_batch_size) {
+        co_await flush(push);
+      }
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    if (timeout_.poll(rows())) {
+      co_await flush(push);
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (not builder_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (not buffer_.empty()) {
+      process_line(buffer_);
+      buffer_.clear();
+    }
+    co_await flush(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await flush(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("done", done_);
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto rows() const -> size_t {
+    return builder_ ? static_cast<size_t>(builder_->length()) : 0;
+  }
+
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    if (rows() == 0) {
+      co_return;
+    }
+    auto events = builder_->finish();
+    timeout_.reset();
+    co_await push(std::move(events));
+  }
+
+  auto process_line(std::string_view line) -> void {
+    std::ignore = parser_->parse_line(*builder_, *dh_, line);
+  }
+
+  ReadGrokArgs args_;
+  BatchTimeout timeout_;
+  Option<grok_parser> parser_;
+  Option<transforming_diagnostic_handler> dh_;
+  Option<nova::EventBuilder> builder_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  bool done_ = false;
+};
+
 class read_grok_plugin : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -810,7 +1060,8 @@ public:
   auto describe() const -> Description override {
     auto defaults = ReadGrokArgs{};
     defaults.msb_options.settings.default_schema_name = "tenzir.grok";
-    auto d = Describer<ReadGrokArgs, ReadGrok>{std::move(defaults)};
+    auto d
+      = Describer<ReadGrokArgs, ReadGrok, ReadGrokEvents>{std::move(defaults)};
     d.operator_location(&ReadGrokArgs::operator_location);
     auto pattern = d.positional("pattern", &ReadGrokArgs::pattern);
     auto pattern_definitions
@@ -823,6 +1074,7 @@ public:
     auto msb = add_msb_to_describer(d, &ReadGrokArgs::msb_options);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
+      nova::validate_event_builder_options(msb, ctx);
       auto grok_pattern = ctx.get(pattern);
       if (not grok_pattern) {
         return {};
