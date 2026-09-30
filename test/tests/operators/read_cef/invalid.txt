@@ -1,0 +1,36 @@
+warning: incorrect field count in CEF event
+ --> tests/operators/read_cef/invalid.tql:2:1
+  |
+2 | read_cef
+  | ~~~~~~~~
+  |
+  = note: line 1
+
+warning: invalid CEF header
+ --> tests/operators/read_cef/invalid.tql:2:1
+  |
+2 | read_cef
+  | ~~~~~~~~
+  |
+  = note: line 2
+  = note: header does not start with `CEF:`
+
+warning: extension field did not contain a key-value separator
+ --> tests/operators/read_cef/invalid.tql:2:1
+  |
+2 | read_cef
+  | ~~~~~~~~
+  |
+  = note: line 4
+{
+  cef_version: 0,
+  device_vendor: "V",
+  device_product: "P",
+  device_version: "1",
+  signature_id: "42",
+  name: "msg",
+  severity: "5",
+  extension: {
+    value: 42,
+  },
+}

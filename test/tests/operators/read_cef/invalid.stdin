@@ -1,0 +1,5 @@
+not a CEF event
+ABC:0|V|P|1|42|msg|5|value=1
+CEF:nope|V|P|1|42|msg|5|value=1
+CEF:0|V|P|1|42|msg|5|missing_separator
+CEF:0|V|P|1|42|msg|5|value=42

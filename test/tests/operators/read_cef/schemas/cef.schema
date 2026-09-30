@@ -1,0 +1,6 @@
+type cef.first = record{
+  extension: record{kind: string, value: int64, text: string},
+}
+type cef.second = record{
+  extension: record{kind: string, value: string},
+}

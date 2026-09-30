@@ -21,6 +21,7 @@
 #include <tenzir/module.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -37,6 +38,8 @@
 #include <istream>
 #include <memory>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace tenzir::plugins::cef {
 
@@ -150,25 +153,11 @@ auto cef_unescape_value(std::string_view text) -> std::string {
 /// The algorithm finds '=' separators and uses the heuristic that a real
 /// separator must be preceded by whitespace + a valid key name, to distinguish
 /// from unescaped '=' embedded in values (e.g., DN strings "CN=foo,O=bar").
-auto parse_extension(std::string_view ext, auto builder) -> Option<diagnostic> {
+auto parse_extension_values(std::string_view ext, auto&& emit_pair)
+  -> Option<diagnostic> {
   if (ext.empty()) {
     return {};
   }
-  auto emit_pair = [&](std::string key, std::string value) {
-    if constexpr (detail::multi_series_builder::has_unflattened_field<
-                    decltype(builder)>) {
-      auto field = builder.unflattened_field(key);
-      field.data_unparsed(std::move(value));
-    } else {
-      auto field = builder.field(key);
-      auto res = detail::data_builder::best_effort_parser(value);
-      if (res) {
-        field.data(*res);
-      } else {
-        field.data(std::move(value));
-      }
-    }
-  };
   // Single pass: scan for unescaped, unquoted '=' characters.
   auto in_quotes = false;
   size_t i = 0;
@@ -243,6 +232,23 @@ auto parse_extension(std::string_view ext, auto builder) -> Option<diagnostic> {
   auto raw_value = ext.substr(value_start);
   emit_pair(std::move(current_key), cef_unescape_value(raw_value));
   return {};
+}
+
+auto parse_extension(std::string_view ext, auto builder) -> Option<diagnostic> {
+  return parse_extension_values(ext, [&](std::string key, std::string value) {
+    if constexpr (detail::multi_series_builder::has_unflattened_field<
+                    decltype(builder)>) {
+      builder.unflattened_field(key).data_unparsed(std::move(value));
+    } else {
+      auto field = builder.field(key);
+      auto parsed = detail::data_builder::best_effort_parser(value);
+      if (parsed) {
+        field.data(*parsed);
+      } else {
+        field.data(std::move(value));
+      }
+    }
+  });
 }
 
 [[nodiscard]] auto parse_line(std::string_view line, location loc, auto& msb)
@@ -425,6 +431,207 @@ private:
   SeriesPusher pusher_;
 };
 
+/// Validate the full line before starting an event so malformed extensions
+/// never leave a partial record in the batch.
+auto parse_event(std::string_view line, location loc,
+                 nova::EventBuilder& builder) -> Option<diagnostic> {
+  auto fields = detail::split_escaped(line, "|", "\\", 8);
+  if (fields.size() < 7 or fields.size() > 8) {
+    return diagnostic::warning("incorrect field count in CEF event")
+      .primary(loc)
+      .done();
+  }
+  if (not fields[0].starts_with("CEF:")) {
+    return diagnostic::warning("invalid CEF header")
+      .primary(loc)
+      .note("header does not start with `CEF:`")
+      .done();
+  }
+  auto version = int64_t{};
+  auto [ptr, ec] = std::from_chars(
+    fields[0].data() + 4, fields[0].data() + fields[0].size(), version);
+  if (ec != std::errc{}) {
+    return diagnostic::warning("invalid CEF header")
+      .primary(loc)
+      .note("failed to parse CEF version")
+      .done();
+  }
+  auto extension = std::vector<std::pair<std::string, std::string>>{};
+  if (fields.size() == 8) {
+    auto diag = parse_extension_values(fields[7], [&](std::string key,
+                                                      std::string value) {
+      extension.emplace_back(std::move(key), std::move(value));
+    });
+    if (diag) {
+      return diag;
+    }
+  }
+  auto row = builder.event();
+  row.field("cef_version").data(version);
+  row.field("device_vendor").data(std::string_view{fields[1]});
+  row.field("device_product").data(std::string_view{fields[2]});
+  row.field("device_version").data(std::string_view{fields[3]});
+  row.field("signature_id").data(std::string_view{fields[4]});
+  row.field("name").data(std::string_view{fields[5]});
+  row.field("severity").data(std::string_view{fields[6]});
+  if (fields.size() == 8) {
+    auto record = row.field("extension").record();
+    for (auto const& [key, value] : extension) {
+      record.field(key).data_unparsed(value);
+    }
+  }
+  return {};
+}
+
+class ReadCefEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadCefEvents(ReadCefArgs args)
+    : args_{std::move(args)}, timeout_{args_.msb_options.settings.timeout} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
+      if (args_.operator_location and not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{},
+                                   args_.operator_location);
+      }
+      if (diagnostic_line_) {
+        d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                        fmt::format("line {}", *diagnostic_line_));
+      }
+      return d;
+    });
+    auto settings = nova::event_builder_settings(args_.msb_options);
+    settings.infer_unparsed_under = "extension";
+    if (settings.default_schema_name.empty()) {
+      settings.default_schema_name = "cef.event";
+    }
+    auto builder = nova::EventBuilder::make(std::move(settings), **dh_);
+    if (builder) {
+      builder_ = std::move(builder).unwrap();
+    }
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return builder_ ? OperatorState::normal : OperatorState::done;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await timeout_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await maybe_emit_ready(push);
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    if (not builder_) {
+      co_return;
+    }
+    if (not input or input->size() == 0) {
+      co_await maybe_emit_ready(push);
+      co_return;
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      if (buffer_.empty()) {
+        process_line({begin, current});
+      } else {
+        buffer_.append(begin, current);
+        process_line(buffer_);
+        buffer_.clear();
+      }
+      if (static_cast<size_t>(builder_->length())
+          >= args_.msb_options.settings.desired_batch_size) {
+        co_await emit_finished(push);
+      }
+      if (*current == '\r') {
+        if (current + 1 == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*(current + 1) == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer_.append(begin, end);
+    co_await maybe_emit_ready(push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (builder_ and not buffer_.empty()) {
+      process_line(buffer_);
+      buffer_.clear();
+    }
+    co_await emit_finished(push);
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await emit_finished(push);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+    serde("line_counter", line_counter_);
+    if (serde.is_loading()) {
+      timeout_.reset();
+    }
+  }
+
+private:
+  auto process_line(std::string_view line) -> void {
+    ++line_counter_;
+    if (line.empty()) {
+      return;
+    }
+    diagnostic_line_ = line_counter_;
+    if (auto diag = parse_event(line, location::unknown, *builder_)) {
+      (**dh_).emit(std::move(*diag));
+    }
+    diagnostic_line_ = None{};
+  }
+
+  auto emit_finished(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and builder_->length() > 0) {
+      auto events = builder_->finish();
+      timeout_.reset();
+      co_await push(std::move(events));
+    }
+  }
+
+  auto maybe_emit_ready(Push<nova::Events>& push) -> Task<void> {
+    if (builder_ and timeout_.poll(builder_->length())) {
+      co_await emit_finished(push);
+    }
+  }
+
+  ReadCefArgs args_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  size_t line_counter_ = 0;
+  // Present only while parsing a line, not during setup or batch finalization.
+  Option<size_t> diagnostic_line_;
+  Option<Box<transforming_diagnostic_handler>> dh_;
+  Option<nova::EventBuilder> builder_;
+  BatchTimeout timeout_;
+};
+
 class read_cef final : public virtual operator_factory_plugin,
                        public virtual ReadOperatorPlugin {
 public:
@@ -433,10 +640,14 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadCefArgs, ReadCef>{ReadCefArgs{
+    auto d = Describer<ReadCefArgs, ReadCef, ReadCefEvents>{ReadCefArgs{
       .msb_options = {.settings = {.default_schema_name = "cef.event"}},
     }};
-    d.validate(add_msb_to_describer(d, &ReadCefArgs::msb_options));
+    auto msb = add_msb_to_describer(d, &ReadCefArgs::msb_options);
+    d.validate(msb);
+    d.validate([msb](DescribeCtx& ctx) -> Empty {
+      return nova::validate_event_builder_options(msb, ctx);
+    });
     d.operator_location(&ReadCefArgs::operator_location);
     d.optimization(&ReadCefArgs::optimization);
     return d.without_optimize();

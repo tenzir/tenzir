@@ -1,0 +1,1 @@
+framing and auto-detection: ok

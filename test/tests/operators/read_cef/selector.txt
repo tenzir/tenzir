@@ -1,0 +1,21 @@
+warning: selected schema not found
+ --> tests/operators/read_cef/selector.tql:2:1
+  |
+2 | read_cef selector="extension.kind:custom"
+  | ~~~~~~~~
+  |
+  = note: `custom.first` does not refer to a known schema
+{
+  extension: {
+    kind: "first",
+    value: 42,
+  },
+  schema: "custom.first",
+}
+{
+  extension: {
+    kind: "second",
+    value: "two",
+  },
+  schema: "custom.second",
+}

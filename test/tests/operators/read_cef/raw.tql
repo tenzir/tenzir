@@ -1,0 +1,3 @@
+load_stdin
+read_cef raw=true, unflatten_separator="."
+select extension, schema=@name

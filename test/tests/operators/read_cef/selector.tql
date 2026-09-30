@@ -1,0 +1,3 @@
+load_stdin
+read_cef selector="extension.kind:custom"
+select extension, schema=@name

@@ -1,0 +1,1 @@
+diagnostics and startup failures: ok
