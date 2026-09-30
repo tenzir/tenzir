@@ -1,0 +1,6 @@
+from_stdin {
+  read_grok "%{WORD:event_type} %{WORD:a/b:string} %{WORD:c/d:string}",
+    selector="event_type:suricata", unflatten_separator="/"
+}
+select a, c
+write_json
