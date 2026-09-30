@@ -6,6 +6,7 @@
   encrypted_server: dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00,
   encrypted_missing: null,
   decrypted_client: 192.0.2.1,
+  explicit_client: 192.0.2.1,
   decrypted_server: 2001:db8::1,
   decrypted_missing: null,
   ambiguous_ciphertext: 192.0.2.1,

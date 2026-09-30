@@ -1,0 +1,44 @@
+warning: ocsf_derive expects a record
+ --> tests/functions/ocsf_derive/invalid.tql:3:22
+  |
+3 | result = ocsf_derive(x)
+  |                      ~
+  |
+
+warning: dropping events where `metadata` does not exist
+ --> tests/functions/ocsf_derive/invalid.tql:3:10
+  |
+3 | result = ocsf_derive(x)
+  |          ~~~~~~~~~~~~~~
+  |
+{
+  x: null,
+  result: null,
+}
+{
+  x: "bad",
+  result: null,
+}
+{
+  x: {},
+  result: null,
+}
+{
+  x: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: 99,
+    activity_name: "custom",
+  },
+  result: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: 99,
+    activity_name: "custom",
+    class_name: "File System Activity",
+  },
+}

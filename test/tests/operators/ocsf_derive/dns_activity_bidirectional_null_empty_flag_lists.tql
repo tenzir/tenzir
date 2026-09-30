@@ -1,6 +1,5 @@
 // Test ocsf_derive with null-vs-empty DNS answer flag_ids/flags lists.
-// This verifies that bidirectional list derivation stays column-wise and treats
-// different outer list validity as an inconsistent layout.
+// Different outer list validity is an inconsistent layout for the affected pair.
 
 from {
   metadata: {
@@ -24,7 +23,7 @@ from {
     {
       rdata: "192.168.1.3",
       flag_ids: [1],
-      flags: ["Authoritative Answer"],
+      flags: [null],
       ttl: 900,
     },
   ],

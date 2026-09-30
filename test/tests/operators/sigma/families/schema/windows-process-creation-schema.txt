@@ -1,11 +1,3 @@
-warning: dropping field which does not exist in schema
-  --> tests/operators/sigma/families/schema/windows-process-creation-schema.tql:11:1
-   |
-11 | ocsf_cast
-   | ~~~~~~~~~
-   |
-   = note: found `process`
-
 warning: dropping events with unknown OCSF version
   --> tests/operators/sigma/families/schema/windows-process-creation-schema.tql:11:1
    |
@@ -13,6 +5,14 @@ warning: dropping events with unknown OCSF version
    | ~~~~~~~~~
    |
    = note: found "999.0.0"
+
+warning: dropping field which does not exist in schema
+  --> tests/operators/sigma/families/schema/windows-process-creation-schema.tql:11:1
+   |
+11 | ocsf_cast
+   | ~~~~~~~~~
+   |
+   = note: found `process`
 {
   events: 12,
 }

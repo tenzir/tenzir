@@ -1,5 +1,5 @@
-// TODO(TNZ-1363): Move this test back to `families/` once `ocsf_cast` works
-// with `--nova`; `families/` runs on Nova, but this directory must not yet.
+// Validate fixture events with the Nova implementation of ocsf_cast.
+// Keep schema diagnostics in this suite's baseline.
 // The fixture events must be valid OCSF 1.9: a misspelled path would
 // otherwise only make a projection absent and silently skip the rule. The
 // baseline records only the warnings that deliberate near-miss negatives

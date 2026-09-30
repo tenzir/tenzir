@@ -8,10 +8,8 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
   metadata: {
     version: "1.5.0",
   },
-  class_name: "DNS Activity",
   class_uid: 4003,
   activity_id: 2,
-  activity_name: "Response",
   answers: [
     {
       rdata: "192.168.1.1",
@@ -25,4 +23,6 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
       ttl: 300,
     },
   ],
+  activity_name: "Response",
+  class_name: "DNS Activity",
 }

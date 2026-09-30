@@ -1,0 +1,4 @@
+---
+error: true
+---
+from {x: 192.0.2.1.decrypt_cryptopan(family="ipv5")}

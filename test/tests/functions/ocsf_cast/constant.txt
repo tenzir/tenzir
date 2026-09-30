@@ -1,0 +1,18 @@
+{
+  event: {
+    class_uid: 4001,
+    metadata: {
+      version: "1.5.0",
+    },
+    unmapped: "{\"x\":1}",
+  },
+}
+{
+  event: {
+    class_uid: 4001,
+    metadata: {
+      version: "1.5.0",
+    },
+    unmapped: "{\"x\":1}",
+  },
+}

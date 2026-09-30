@@ -1,0 +1,59 @@
+warning: expected argument of type `ip`, but got `string`
+ --> tests/functions/community_id/types.tql:7:33
+  |
+7 | select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)
+  |                                 ~~~
+  |
+
+warning: expected argument of type `ip`, but got `string`
+ --> tests/functions/community_id/types.tql:7:45
+  |
+7 | select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)
+  |                                             ~~~
+  |
+
+warning: expected argument of type `string`, but got `int`
+ --> tests/functions/community_id/types.tql:7:56
+  |
+7 | select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)
+  |                                                        ~~~~~
+  |
+
+warning: expected argument of type `int`, but got `bool`
+ --> tests/functions/community_id/types.tql:7:72
+  |
+7 | select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)
+  |                                                                        ~~~~~
+  |
+
+warning: expected argument of type `int`, but got `float`
+ --> tests/functions/community_id/types.tql:7:88
+  |
+7 | select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)
+  |                                                                                        ~~~~~
+  |
+
+warning: expected argument of type `int`, but got `float`
+ --> tests/functions/community_id/types.tql:7:100
+  |
+7 | select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)
+  |                                                                                                    ~~~~
+  |
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}
+{
+  id: null,
+}

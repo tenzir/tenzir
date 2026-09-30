@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import gzip
 import json
 import os
 import threading
@@ -55,6 +56,9 @@ class Options:
 class Assertions:
     queries: int = 1
     tokens: int = 1
+    ingestions: int = 0
+    events: list[dict[str, Any]] | None = None
+    large_event_ids: list[int] | None = None
 
 
 class Server(ThreadingHTTPServer):
@@ -63,6 +67,8 @@ class Server(ThreadingHTTPServer):
         self.options = options
         self.queries = 0
         self.tokens = 0
+        self.ingestions = 0
+        self.events: list[dict[str, Any]] = []
         self.body: bytes | None = None
         self.failures: list[str] = []
         self.request_received = threading.Event()
@@ -114,7 +120,11 @@ class Handler(BaseHTTPRequestHandler):
                 "client_id": ["fixture-client"],
                 "client_secret": ["fixture-secret"],
                 "grant_type": ["client_credentials"],
-                "scope": ["https://api.loganalytics.io/.default"],
+                "scope": [
+                    "https://monitor.azure.com/.default"
+                    if case == "ingestion"
+                    else "https://api.loganalytics.io/.default"
+                ],
             }, "unexpected token request"
             if case == "bad-auth" or (case == "refresh-failed" and server.tokens > 1):
                 self.send_json(
@@ -129,6 +139,21 @@ class Handler(BaseHTTPRequestHandler):
                     "expires_in": 1 if case.startswith("refresh") else 3600,
                 },
             )
+            return
+        if case == "ingestion":
+            server.ingestions += 1
+            assert self.path == (
+                "/dataCollectionRules/fixture-rule/streams/fixture-stream"
+                "?api-version=2023-01-01"
+            ), self.path
+            assert self.headers["Authorization"] == "Bearer fixture-token-1"
+            assert self.headers["Content-Type"] == "application/json"
+            assert self.headers["Content-Encoding"] == "gzip"
+            payload = json.loads(gzip.decompress(body))
+            assert isinstance(payload, list) and payload, payload
+            assert all(isinstance(event, dict) for event in payload), payload
+            server.events.extend(payload)
+            self.send_body(204, b"")
             return
         server.queries += 1
         assert self.path == f"/v1/workspaces/{_WORKSPACE}/query", self.path
@@ -376,6 +401,25 @@ def run() -> FixtureHandle:
             assertions.queries,
         )
         assert server.tokens == assertions.tokens, (server.tokens, assertions.tokens)
+        assert server.ingestions == assertions.ingestions, (
+            server.ingestions,
+            assertions.ingestions,
+        )
+        if assertions.events is not None:
+
+            def canonical(event: dict[str, Any]) -> str:
+                return json.dumps(event, sort_keys=True)
+
+            assert sorted(map(canonical, server.events)) == sorted(
+                map(canonical, assertions.events)
+            ), server.events
+        if assertions.large_event_ids is not None:
+            assert sorted(event["id"] for event in server.events) == sorted(
+                assertions.large_event_ids
+            )
+            assert all(event["message"] == "x" * 600_000 for event in server.events), (
+                "large event was truncated or corrupted"
+            )
 
     def teardown() -> None:
         server.release_response.set()

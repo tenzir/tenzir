@@ -15,6 +15,10 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -54,7 +58,7 @@ class json_builder {
 public:
   json_builder(json_printer_options printer_opts, uint64_t max_size,
                bool compress)
-    : printer_{printer_opts}, max_size_{max_size} {
+    : printer_{printer_opts}, nova_printer_{printer_opts}, max_size_{max_size} {
     if (compress) {
       auto codec = arrow::util::Codec::Create(
         arrow::Compression::type::GZIP,
@@ -115,15 +119,22 @@ public:
     return None{};
   }
 
-  auto create_doc(std::string_view action, view3<record> doc) {
+  auto create_doc(std::string_view action, auto doc) {
     if (action == "delete") {
       return;
     }
     if (action == "update" or action == "upsert") {
       element_text_ += R"({"doc":)";
     }
-    auto it = std::back_inserter(element_text_);
-    printer_.print(it, doc);
+    if constexpr (std::same_as<decltype(doc), nova::RowView<nova::Record>>) {
+      nova_printer_.print(doc);
+      auto bytes = nova_printer_.bytes();
+      element_text_.append(reinterpret_cast<char const*>(bytes.data()),
+                           bytes.size());
+    } else {
+      auto it = std::back_inserter(element_text_);
+      printer_.print(it, doc);
+    }
     if (action == "update") {
       element_text_ += "}";
     } else if (action == "upsert") {
@@ -192,6 +203,7 @@ public:
 
 private:
   json_printer printer_;
+  nova::json_printer nova_printer_;
   uint64_t max_size_{};
   std::string element_text_;
   std::string body_;
@@ -201,8 +213,7 @@ private:
   uint64_t event_count_{};
 };
 
-auto to_option_string_view(Option<Option<view3<std::string>>> value)
-  -> Option<Option<std::string_view>> {
+auto to_option_string_view(auto value) -> Option<Option<std::string_view>> {
   if (not value) {
     return None{};
   }
@@ -212,7 +223,8 @@ auto to_option_string_view(Option<Option<view3<std::string>>> value)
   return Option<std::string_view>{std::string_view{**value}};
 }
 
-class ToOpenSearch final : public Operator<table_slice, void> {
+template <class Input>
+class ToOpenSearch final : public Operator<Input, void> {
 public:
   explicit ToOpenSearch(ToOpenSearchArgs args)
     : args_{std::move(args)},
@@ -231,6 +243,35 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto prepare
+        = [&](ast::expression const& expression,
+              Option<nova::Evaluator>& target) -> Task<failure_or<void>> {
+        CO_TRY(auto evaluator, co_await nova::Evaluator::make(expression, ctx));
+        target = std::move(evaluator);
+        co_return {};
+      };
+      if (not co_await prepare(args_.action, action_)) {
+        co_return;
+      }
+      // GCC can evaluate operands of a compound co_await condition before
+      // their short-circuit guards. Check optional arguments separately.
+      if (args_.id) {
+        if (not co_await prepare(*args_.id, id_)) {
+          co_return;
+        }
+      }
+      if (args_.index) {
+        if (not co_await prepare(*args_.index, index_)) {
+          co_return;
+        }
+      }
+      if (args_.doc) {
+        if (not co_await prepare(*args_.doc, doc_)) {
+          co_return;
+        }
+      }
+    }
     auto resolved_url = std::string{};
     auto user = std::string{};
     auto password = std::string{};
@@ -316,25 +357,85 @@ public:
                          MetricsUnit::events);
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    input = resolve_enumerations(std::move(input));
-    constexpr auto null_values = []() -> generator<Option<view3<std::string>>> {
+  auto process(Input input, OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto docs = doc_ ? doc_->eval(input, nova::EvalCtx{ctx.dh()})
+                       : nova::Array<nova::Data>{input.data};
+      auto rows = [&]() -> generator<nova::RowView<nova::Data>> {
+        for (auto row : nova::storage::true_bits(input.mask)) {
+          co_yield docs.get(row);
+        }
+      };
+      co_await process_rows(
+        rows(),
+        eval_string("id",
+                    args_.id ? args_.id->get_location() : location::unknown,
+                    id_, input, ctx),
+        eval_string("index",
+                    args_.index ? args_.index->get_location()
+                                : location::unknown,
+                    index_, input, ctx),
+        eval_string("action", args_.action.get_location(), action_, input, ctx),
+        ctx);
+    } else {
+      input = resolve_enumerations(std::move(input));
+      constexpr auto null_values
+        = []() -> generator<Option<view3<std::string>>> {
+        co_yield None{};
+      };
+      auto id = args_.id ? detail::eval_as<string_type>("id", *args_.id, input,
+                                                        ctx.dh())
+                         : null_values();
+      auto idx = args_.index
+                   ? detail::eval_as<string_type>("index", *args_.index, input,
+                                                  ctx.dh())
+                   : null_values();
+      auto act
+        = detail::eval_as<string_type>("action", args_.action, input, ctx.dh());
+      auto docs
+        = eval(args_.doc ? *args_.doc
+                         : ast::expression{ast::this_{args_.operator_location}},
+               input, ctx.dh());
+      co_await process_rows(docs.values3(), std::move(id), std::move(idx),
+                            std::move(act), ctx);
+    }
+  }
+
+private:
+  auto eval_string(std::string_view name, location source,
+                   Option<nova::Evaluator>& evaluator,
+                   nova::Events const& input, OpCtx& ctx)
+    -> generator<Option<std::string_view>> {
+    if (not evaluator) {
       co_yield None{};
-    };
-    auto id = args_.id
-                ? detail::eval_as<string_type>("id", *args_.id, input, ctx.dh())
-                : null_values();
-    auto idx = args_.index ? detail::eval_as<string_type>("index", *args_.index,
-                                                          input, ctx.dh())
-                           : null_values();
-    auto act
-      = detail::eval_as<string_type>("action", args_.action, input, ctx.dh());
-    auto docs
-      = eval(args_.doc ? *args_.doc
-                       : ast::expression{ast::this_{args_.operator_location}},
-             input, ctx.dh());
-    for (auto&& doc : docs.values3()) {
-      auto* ptr = try_as<view3<record>>(doc);
+      co_return;
+    }
+    auto values = evaluator->eval(input, nova::EvalCtx{ctx.dh()});
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      auto value = values.get(row);
+      if (auto string = try_as<nova::RowView<nova::String>>(value)) {
+        co_yield **string;
+      } else {
+        if (not is<nova::RowView<nova::Null>>(value)) {
+          match(value, [&]<class T>(nova::RowView<T>) {
+            diagnostic::warning("`{}` must be `string`, got `{}`", name,
+                                nova::Type<T>::static_name)
+              .primary(source)
+              .emit(ctx);
+          });
+        }
+        co_yield None{};
+      }
+    }
+  }
+
+  auto process_rows(auto docs, auto id, auto idx, auto act, OpCtx& ctx)
+    -> Task<void> {
+    using RecordView
+      = std::conditional_t<std::same_as<Input, nova::Events>,
+                           nova::RowView<nova::Record>, view3<record>>;
+    for (auto&& doc : docs) {
+      auto* ptr = try_as<RecordView>(doc);
       auto action = act.next();
       auto actual_id = id.next();
       auto actual_idx = idx.next();
@@ -396,6 +497,7 @@ public:
     }
   }
 
+public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     co_return co_await wakeup_queue_->dequeue();
@@ -550,6 +652,10 @@ private:
   }
 
   ToOpenSearchArgs args_;
+  Option<nova::Evaluator> action_;
+  Option<nova::Evaluator> id_;
+  Option<nova::Evaluator> index_;
+  Option<nova::Evaluator> doc_;
   json_builder builder_;
   /// Bounds the bulk requests this instance keeps in flight.
   RequestWindow<Completion> window_;
@@ -576,7 +682,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToOpenSearchArgs, ToOpenSearch>{};
+    auto d = Describer<ToOpenSearchArgs, ToOpenSearch<table_slice>,
+                       ToOpenSearch<nova::Events>>{};
     d.positional("url", &ToOpenSearchArgs::url);
     d.named("action", &ToOpenSearchArgs::action, "string");
     d.named("index", &ToOpenSearchArgs::index, "string");

@@ -1,0 +1,12 @@
+from {indices: [0, 1]}
+events = indices.map(i => {
+  keep: i == 1,
+  class_uid: 4001,
+  metadata: {
+    version: "1.5.0",
+    profiles: ["host"] if i == 0 else null,
+  },
+  src_endpoint: {ip: 192.0.2.1} if i == 0 else null,
+})
+trimmed = events.map(x => ocsf_trim(x, drop_optional=false) if x.keep else null)
+select trimmed

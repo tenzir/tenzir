@@ -1,0 +1,12 @@
+from {
+  class_uid: 4001,
+  metadata: {version: "1.5.0"},
+  activity_id: 1,
+  time: 2026-01-01,
+  unmapped: {nested: [1, "two", null]},
+}
+original = this
+cast = ocsf_cast(original)
+encoded = ocsf_cast(original, encode_variants=true, timestamp_to_ms=true)
+filled = ocsf_cast(original, null_fill=true).activity_name
+select original, cast, encoded, filled

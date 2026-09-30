@@ -2,10 +2,8 @@
   metadata: {
     version: "1.5.0",
   },
-  class_name: "DNS Activity",
   class_uid: 4003,
   activity_id: 2,
-  activity_name: "Response",
   answers: [
     {
       rdata: "192.168.1.1",
@@ -14,12 +12,12 @@
         3,
         4,
       ],
+      ttl: 300,
       flags: [
         "Authoritative Answer",
         "Recursion Desired",
         "Recursion Available",
       ],
-      ttl: 300,
     },
     {
       rdata: "192.168.1.2",
@@ -27,11 +25,13 @@
         2,
         5,
       ],
+      ttl: 600,
       flags: [
         "Truncated Response",
         "Authentic Data",
       ],
-      ttl: 600,
     },
   ],
+  activity_name: "Response",
+  class_name: "DNS Activity",
 }

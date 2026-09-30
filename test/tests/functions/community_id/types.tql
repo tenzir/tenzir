@@ -1,0 +1,7 @@
+from {src: "192.0.2.1", dst: 192.0.2.2, proto: "tcp", sport: 1, dport: 2, seed: 0},
+     {src: 192.0.2.1, dst: "192.0.2.2", proto: "tcp", sport: 1, dport: 2, seed: 0},
+     {src: 192.0.2.1, dst: 192.0.2.2, proto: 6, sport: 1, dport: 2, seed: 0},
+     {src: 192.0.2.1, dst: 192.0.2.2, proto: "tcp", sport: true, dport: 2, seed: 0},
+     {src: 192.0.2.1, dst: 192.0.2.2, proto: "tcp", sport: 1, dport: 2.0, seed: 0},
+     {src: 192.0.2.1, dst: 192.0.2.2, proto: "tcp", sport: 1, dport: 2, seed: 0.0}
+select id = community_id(src_ip=src, dst_ip=dst, proto=proto, src_port=sport, dst_port=dport, seed=seed)

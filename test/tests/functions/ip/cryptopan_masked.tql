@@ -1,0 +1,7 @@
+from {keep: true, x: 192.0.2.1},
+     {keep: false, x: "invalid"},
+     {keep: true, x: null},
+     {keep: false, x: 42},
+     {keep: true, x: 2001:db8::1}
+where keep
+select x, roundtrip = x.encrypt_cryptopan(seed="abc").decrypt_cryptopan(seed="abc")

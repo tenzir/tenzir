@@ -40,6 +40,9 @@ public:
     return apply_kernel<1>(
       frame, "ip", {args.x}, args.call,
       detail::overload{
+        [](diagnostic_handler&, Null) -> Option<Ip> {
+          return None{};
+        },
         [](diagnostic_handler&, Ip v) -> Option<Ip> {
           return v;
         },
@@ -158,8 +161,11 @@ public:
   static auto eval(IpCheckArgs const& args, EvalFrame frame) -> Array<Data> {
     return apply_kernel<1>(
       frame, name(), {args.x}, args.call,
-      [](diagnostic_handler&, Ip v) -> Option<Bool> {
-        if constexpr (CheckType == check_type::v4) {
+      [](diagnostic_handler&,
+         concepts::one_of<Ip, Null> auto v) -> Option<Bool> {
+        if constexpr (std::same_as<decltype(v), Null>) {
+          return None{};
+        } else if constexpr (CheckType == check_type::v4) {
           return v.is_v4();
         } else if constexpr (CheckType == check_type::v6) {
           return v.is_v6();
@@ -259,11 +265,15 @@ struct IpCategoryArgs {
 class IpCategoryFunction final {
 public:
   static auto eval(IpCategoryArgs const& args, EvalFrame frame) -> Array<Data> {
-    return apply_kernel<1>(frame, "ip_category", {args.x}, args.call,
-                           [](diagnostic_handler&,
-                              Ip v) -> Option<std::string_view> {
-                             return to_string(v.type());
-                           });
+    return apply_kernel<1>(
+      frame, "ip_category", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, Null) -> Option<std::string_view> {
+          return None{};
+        },
+        [](diagnostic_handler&, Ip v) -> Option<std::string_view> {
+          return to_string(v.type());
+        }});
   }
 };
 

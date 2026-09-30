@@ -1,0 +1,6 @@
+from {keep: true, metadata: {version: "1.6.0"}, time: 0s.from_epoch(), severity_id: 4, items: [1, "two", null]},
+     {keep: false, metadata: {version: "1.6.0"}, time: "invalid", severity_id: "invalid"},
+     {keep: true, message: "plain"}
+where keep
+drop keep
+to_sentinelone_data_lake "https://example.com", token="TOKEN", _dry_run=true

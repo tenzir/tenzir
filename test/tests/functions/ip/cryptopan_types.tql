@@ -1,0 +1,2 @@
+from {x: 192.0.2.1}, {x: null}, {x: "192.0.2.1"}, {x: 42}, {x: 2001:db8::1}
+select encrypted = x.encrypt_cryptopan(), decrypted = x.decrypt_cryptopan()

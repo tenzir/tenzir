@@ -1,0 +1,41 @@
+warning: ocsf_trim expects a record
+ --> tests/functions/ocsf_trim/invalid.tql:3:20
+  |
+3 | result = ocsf_trim(x)
+  |                    ~
+  |
+
+warning: dropping events where `metadata` does not exist
+ --> tests/functions/ocsf_trim/invalid.tql:3:10
+  |
+3 | result = ocsf_trim(x)
+  |          ~~~~~~~~~~~~
+  |
+{
+  x: null,
+  result: null,
+}
+{
+  x: [],
+  result: null,
+}
+{
+  x: {},
+  result: null,
+}
+{
+  x: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+  },
+  result: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: null,
+  },
+}

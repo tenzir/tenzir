@@ -1,0 +1,3 @@
+let $event = ocsf_trim({class_uid: 4001, metadata: {version: "1.5.0"}, message: null, unmapped: {}}, drop_optional=false)
+from {}, {}
+event = ocsf_trim($event, drop_optional=false)

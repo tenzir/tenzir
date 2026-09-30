@@ -11,6 +11,8 @@
 #include "tenzir/multi_series.hpp"
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -30,6 +32,22 @@ enum class Mode {
   decrypt,
 };
 
+auto parse_seed(Option<std::string> const& seed) -> cryptopan_seed {
+  auto result = cryptopan_seed{};
+  if (not seed) {
+    return result;
+  }
+  auto max_size = std::min(cryptopan_seed_size * 2, seed->size());
+  for (auto i = size_t{0}; i * 2 < max_size; ++i) {
+    auto byte = seed->substr(i * 2, 2);
+    if (byte.size() == 1) {
+      byte += '0';
+    }
+    result[i] = static_cast<std::byte>(std::strtoul(byte.c_str(), nullptr, 16));
+  }
+  return result;
+}
+
 template <Mode Value>
 auto transform_cryptopan(ip const& value, cryptopan_seed const& seed,
                          [[maybe_unused]] Option<ip::family> decrypt_family)
@@ -43,8 +61,60 @@ auto transform_cryptopan(ip const& value, cryptopan_seed const& seed,
   }
 }
 
+struct CryptopanArgs {
+  nova::ValueArgument x;
+  Option<std::string> seed;
+  Option<located<std::string>> family;
+  cryptopan_seed seed_bytes{};
+  Option<ip::family> decrypt_family;
+};
+
 template <Mode Value>
-class cryptopan_function : public virtual function_plugin {
+struct CryptopanFunction {
+  static auto eval(CryptopanArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::apply_kernel<1>(
+      frame, Value == Mode::encrypt ? "encrypt_cryptopan" : "decrypt_cryptopan",
+      {args.x}, args.x.source,
+      detail::overload{[](diagnostic_handler&, nova::Null) -> Option<ip> {
+                         return None{};
+                       },
+                       [&](diagnostic_handler&, ip value) -> Option<ip> {
+                         return transform_cryptopan<Value>(
+                           value, args.seed_bytes, args.decrypt_family);
+                       }});
+  }
+};
+
+template <Mode Value>
+class cryptopan_function : public virtual nova::FunctionPlugin {
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<CryptopanArgs, CryptopanFunction<Value>>{};
+    d.positional("x", &CryptopanArgs::x, "ip");
+    d.named("seed", &CryptopanArgs::seed);
+    if constexpr (Value == Mode::decrypt) {
+      d.named("family", &CryptopanArgs::family, "string");
+    }
+    d.validate(
+      [](CryptopanArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        args.seed_bytes = parse_seed(args.seed);
+        if (args.family) {
+          if (args.family->inner == "ipv4") {
+            args.decrypt_family = ip::ipv4;
+          } else if (args.family->inner == "ipv6") {
+            args.decrypt_family = ip::ipv6;
+          } else {
+            diagnostic::error("`family` must be one of `ipv4`, `ipv6`")
+              .primary(*args.family)
+              .emit(dh);
+            return failure::promise();
+          }
+        }
+        return {};
+      });
+    return std::move(d).finish();
+  }
+
   auto name() const -> std::string override {
     if constexpr (Value == Mode::decrypt) {
       return "decrypt_cryptopan";
@@ -83,22 +153,7 @@ class cryptopan_function : public virtual function_plugin {
     } else {
       TRY(parser.parse(inv, ctx));
     }
-    auto seed_bytes = cryptopan_seed{};
-    if (seed) {
-      auto max_seed_size = std::min(cryptopan_seed_size * 2, seed->size());
-      for (auto i = size_t{0}; (i * 2) < max_seed_size; ++i) {
-        auto byte_string_pos = i * 2;
-        auto byte_size = (byte_string_pos + 2 > seed->size()) ? 1 : 2;
-        auto byte = seed->substr(byte_string_pos, byte_size);
-        if (byte_size == 1) {
-          byte.append("0");
-        }
-        TENZIR_ASSERT(i < seed_bytes.size());
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-        seed_bytes[i]
-          = static_cast<std::byte>(std::strtoul(byte.c_str(), nullptr, 16));
-      }
-    }
+    auto seed_bytes = parse_seed(seed);
     return function_use::make([expr = std::move(expr), seed = seed_bytes,
                                decrypt_family](evaluator eval, session ctx) {
       return map_series(eval(expr), [&](series s) {

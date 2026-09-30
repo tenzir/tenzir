@@ -1,0 +1,10 @@
+---
+fixtures:
+  - http_request:
+      stop_on_connection_drop: true
+      path: /_bulk
+      body: "{\"delete\":{\"_id\":\"old\"}}\n{\"index\":{}}\n{\"value\":42}\n"
+timeout: 10
+---
+accept_elasticsearch env("HTTP_REQUEST_ENDPOINT")
+head 1
