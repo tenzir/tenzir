@@ -1,0 +1,8 @@
+error: expected exactly 1 positional argument
+ --> tests/functions/values/missing_argument.tql:5:15
+  |
+5 | select result=values()
+  |               ^^^^^^^^
+  |
+  = usage: values(x:record)
+  = docs: https://tenzir.com/docs/reference/functions/values

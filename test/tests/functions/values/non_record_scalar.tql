@@ -1,0 +1,2 @@
+from {x: 42}
+select column=x.values(), constant=values("text")

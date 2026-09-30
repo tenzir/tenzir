@@ -14,20 +14,21 @@
 #include <string>
 #include <utility>
 
-namespace tenzir::plugins::entries {
+namespace tenzir::plugins::values {
 namespace {
 
 using namespace nova;
 
-struct EntriesArgs {
+struct ValuesArgs {
   ValueArgument x;
 };
 
-/// Converts each record into a list of `{key, value}` records, one for every
-/// top-level field in field order. This is the inverse of `collect_record`.
-class EntriesFunction {
+/// Converts each record into the list of its top-level field values in field
+/// order. Together with `keys`, it is the inverse of the two-argument form of
+/// `collect_record`.
+class ValuesFunction {
 public:
-  static auto eval(EntriesArgs const& args, EvalFrame frame) -> Array<Data> {
+  static auto eval(ValuesArgs const& args, EvalFrame frame) -> Array<Data> {
     auto records = resolve_record(args.x, frame);
     if (not records) {
       return frame.null();
@@ -35,13 +36,11 @@ public:
     auto builder = ArrayBuilder<Data>{};
     for (auto row : storage::true_bits(records->present)) {
       builder.skip_n(row - builder.length());
-      // The key is the field name verbatim, without interpreting dots. The
-      // value is copied as is, including nested records, lists, and nulls.
+      // Values are copied as is, including nested records, lists, and nulls.
+      // A list may hold values of different types.
       auto list = builder.list();
-      for (auto [name, value] : records->data.get(row)) {
-        auto entry = list.record();
-        entry.field("key").data(name);
-        append_row(entry.field("value"), value);
+      for (auto const& field : records->data.get(row)) {
+        append_row(list, field.second);
       }
     }
     builder.skip_n(frame.length() - builder.length());
@@ -52,7 +51,7 @@ public:
 class Plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
-    return "entries";
+    return "values";
   }
 
   auto is_deterministic() const -> bool override {
@@ -60,19 +59,19 @@ public:
   }
 
   auto describe() const -> nova::FunctionDescription override {
-    auto d = nova::FunctionDescriber<EntriesArgs, EntriesFunction>{};
-    d.positional("x", &EntriesArgs::x, "record");
+    auto d = nova::FunctionDescriber<ValuesArgs, ValuesFunction>{};
+    d.positional("x", &ValuesArgs::x, "record");
     return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
-    diagnostic::error("`entries` requires `--nova`").primary(inv.call).emit(ctx);
+    diagnostic::error("`values` requires `--nova`").primary(inv.call).emit(ctx);
     return failure::promise();
   }
 };
 
 } // namespace
-} // namespace tenzir::plugins::entries
+} // namespace tenzir::plugins::values
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::entries::Plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::values::Plugin)

@@ -1,0 +1,40 @@
+warning: expected `record`, got `int`
+ --> tests/functions/values/non_record.tql:7:15
+  |
+7 | select values=x.values()
+  |               ~
+  |
+
+warning: expected `record`, got `string`
+ --> tests/functions/values/non_record.tql:7:15
+  |
+7 | select values=x.values()
+  |               ~
+  |
+
+warning: expected `record`, got `list`
+ --> tests/functions/values/non_record.tql:7:15
+  |
+7 | select values=x.values()
+  |               ~
+  |
+{
+  values: null,
+}
+{
+  values: null,
+}
+{
+  values: null,
+}
+{
+  values: [
+    1,
+  ],
+}
+{
+  values: null,
+}
+{
+  values: null,
+}
