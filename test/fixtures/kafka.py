@@ -55,9 +55,10 @@ from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
-KAFKA_IMAGE = "apache/kafka:latest"
+KAFKA_IMAGE = "docker.io/apache/kafka:4.1.1"
 KAFKA_STARTUP_TIMEOUT = 120  # seconds
 KAFKA_HEALTH_CHECK_INTERVAL = 2  # seconds
+KAFKA_PULL_ATTEMPTS = 3
 ALLOWED_COMPRESSION_TYPES = {"none", "gzip", "snappy", "lz4", "zstd"}
 ALLOWED_MODES = {"plain", "aws_iam"}
 IAM_STARTUP_TIMEOUT = 30  # seconds
@@ -165,9 +166,23 @@ def _start_kafka(
         )
     run_args.append(image)
     logger.info("Starting Kafka container with %s", runtime.binary)
-    container = start_detached(runtime, run_args)
-    logger.info("Kafka container started: %s", container.container_id[:12])
-    return container
+    attempt = 0
+    while True:
+        try:
+            container = start_detached(runtime, run_args)
+        except ContainerCommandError as exc:
+            attempt += 1
+            if (
+                runtime.binary != "podman"
+                or "writing blob: adding layer" not in str(exc)
+                or attempt >= KAFKA_PULL_ATTEMPTS
+            ):
+                raise
+            logger.warning("Kafka image layer extraction failed; retrying: %s", exc)
+            time.sleep(2 * attempt)
+        else:
+            logger.info("Kafka container started: %s", container.container_id[:12])
+            return container
 
 
 def _stop_kafka(container: ManagedContainer) -> None:
