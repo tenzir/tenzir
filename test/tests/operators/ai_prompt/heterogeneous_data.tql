@@ -1,0 +1,20 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['"hello"', '42', 'null', '[1,"two",null]', '{"nested":[true,3]}']
+      body: {model: fixture-model, stream: false, store: false, temperature: 0}
+---
+
+from {id: 1, value: "hello"},
+     {id: 2, value: 42},
+     {id: 3, value: null},
+     {id: 4, value: [1, "two", null]},
+     {id: 5, value: {nested: [true, 3]}}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data=value,
+           concurrency=3
+select id, value, text=ai.prompt.text

@@ -1,0 +1,14 @@
+{
+  id: 1,
+  name: "schema1",
+  import_time: 2020-01-01T00:00:00Z,
+  internal: false,
+  text: "echo:\"hello\"",
+}
+{
+  id: 2,
+  name: "schema2",
+  import_time: 2020-01-01T00:00:00Z,
+  internal: true,
+  text: "echo:\"world\"",
+}

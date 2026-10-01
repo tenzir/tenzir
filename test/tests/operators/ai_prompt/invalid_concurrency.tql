@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {message: "hello"}
+ai_prompt model="fixture-model", concurrency=0

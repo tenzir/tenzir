@@ -1,0 +1,15 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['"hello"']
+---
+
+from {message: "hello", discarded: true}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data=message,
+           into=this
+select text, model, usage

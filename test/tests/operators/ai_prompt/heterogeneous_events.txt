@@ -1,0 +1,52 @@
+{
+  id: 1,
+  x: 42,
+  ai: {
+    prompt: {
+      text: "echo:{\"id\":1,\"x\":42}",
+      model: "fixture-model",
+      usage: {
+        input_tokens: 1,
+        output_tokens: 2,
+        total_tokens: 3,
+      },
+    },
+  },
+}
+{
+  id: 2,
+  x: "two",
+  extra: true,
+  ai: {
+    prompt: {
+      text: "echo:{\"id\":2,\"x\":\"two\",\"extra\":true}",
+      model: "fixture-model",
+      usage: {
+        input_tokens: 1,
+        output_tokens: 2,
+        total_tokens: 3,
+      },
+    },
+  },
+}
+{
+  id: 3,
+  nested: {
+    xs: [
+      1,
+      "two",
+      null,
+    ],
+  },
+  ai: {
+    prompt: {
+      text: "echo:{\"id\":3,\"nested\":{\"xs\":[1,\"two\",null]}}",
+      model: "fixture-model",
+      usage: {
+        input_tokens: 1,
+        output_tokens: 2,
+        total_tokens: 3,
+      },
+    },
+  },
+}

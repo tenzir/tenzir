@@ -1,0 +1,28 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['"HELLO"']
+      body:
+        model: fixture-model
+        stream: false
+        store: false
+        temperature: 0.5
+        instructions: fixture instructions
+        max_output_tokens: 16
+      authorization: Bearer fixture-key
+---
+
+from {message: "hello", context: {keep: 7, response: "old"}}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           api_key="fixture-key",
+           system="fixture instructions",
+           data=message.to_upper(),
+           into=context.response,
+           temperature=0.5,
+           max_tokens=16
+select message, keep=context.keep, text=context.response.text,
+       latency_is_duration=type_of(context.response.latency).kind == "duration"

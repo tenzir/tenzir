@@ -1,0 +1,6 @@
+error: `temperature` must be between 0 and 2
+ --> tests/operators/ai_prompt/invalid_temperature.tql:6:46
+  |
+6 | ai_prompt model="fixture-model", temperature=3.0
+  |                                              ^^^
+  |

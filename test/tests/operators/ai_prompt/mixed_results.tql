@@ -1,0 +1,16 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['{"mode":"order","id":1}', '{"mode":"fail","id":2}', '{"mode":"order","id":3}']
+---
+
+from {id: 1, mode: "order"}, {id: 2, mode: "fail"}, {id: 3, mode: "order"}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={mode: mode, id: id},
+           into=result,
+           concurrency=3
+select id, text=result?.text?

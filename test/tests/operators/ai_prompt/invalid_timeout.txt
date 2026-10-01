@@ -1,0 +1,6 @@
+error: `timeout` must not be negative
+ --> tests/operators/ai_prompt/invalid_timeout.tql:6:42
+  |
+6 | ai_prompt model="fixture-model", timeout=-1s
+  |                                          ^^^
+  |

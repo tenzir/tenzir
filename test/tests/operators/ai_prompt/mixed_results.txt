@@ -1,0 +1,18 @@
+warning: AI request failed: HTTP request returned status 500: {"error":"fixture failure"}
+  --> tests/operators/ai_prompt/mixed_results.tql:11:1
+   |
+11 | ai_prompt model="fixture-model",
+   | ~~~~~~~~~
+   |
+{
+  id: 1,
+  text: "order:1",
+}
+{
+  id: 2,
+  text: null,
+}
+{
+  id: 3,
+  text: "order:3",
+}

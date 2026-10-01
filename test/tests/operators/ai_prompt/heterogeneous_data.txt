@@ -1,0 +1,34 @@
+{
+  id: 1,
+  value: "hello",
+  text: "echo:\"hello\"",
+}
+{
+  id: 2,
+  value: 42,
+  text: "echo:42",
+}
+{
+  id: 3,
+  value: null,
+  text: "echo:null",
+}
+{
+  id: 4,
+  value: [
+    1,
+    "two",
+    null,
+  ],
+  text: "echo:[1,\"two\",null]",
+}
+{
+  id: 5,
+  value: {
+    nested: [
+      true,
+      3,
+    ],
+  },
+  text: "echo:{\"nested\":[true,3]}",
+}

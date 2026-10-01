@@ -1,0 +1,6 @@
+error: `model` must not be empty
+ --> tests/operators/ai_prompt/invalid_model.tql:6:17
+  |
+6 | ai_prompt model=""
+  |                 ^^
+  |

@@ -15,6 +15,11 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/openai.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -302,6 +307,215 @@ private:
   bool done_ = false;
 };
 
+auto append_usage(nova::ArrayBuilder<nova::Record>::RecordBuilder row,
+                  Option<openai::TokenUsage> const& usage) -> void {
+  if (not usage) {
+    row.field("usage").null();
+    return;
+  }
+  auto usage_record = row.field("usage").record();
+  if (usage->input_tokens) {
+    usage_record.field("input_tokens").data(*usage->input_tokens);
+  } else {
+    usage_record.field("input_tokens").null();
+  }
+  if (usage->output_tokens) {
+    usage_record.field("output_tokens").data(*usage->output_tokens);
+  } else {
+    usage_record.field("output_tokens").null();
+  }
+  if (usage->total_tokens) {
+    usage_record.field("total_tokens").data(*usage->total_tokens);
+  } else {
+    usage_record.field("total_tokens").null();
+  }
+}
+
+auto append_response(nova::ArrayBuilder<nova::Data>& builder,
+                     openai::ResponsesResult const& response) -> void {
+  auto row = builder.record();
+  row.field("text").data(response.text);
+  if (response.model) {
+    row.field("model").data(*response.model);
+  } else {
+    row.field("model").null();
+  }
+  append_usage(row, response.usage);
+  row.field("latency").data(response.latency);
+}
+
+class PromptNova final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit PromptNova(PromptArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (args_.model.inner.empty()) {
+      diagnostic::error("`model` must not be empty")
+        .primary(args_.model)
+        .emit(ctx);
+      co_return;
+    }
+    if (args_.concurrency.inner == 0) {
+      diagnostic::error("`concurrency` must be greater than zero")
+        .primary(args_.concurrency)
+        .emit(ctx);
+      co_return;
+    }
+    if (args_.timeout.inner < duration::zero()) {
+      diagnostic::error("`timeout` must not be negative")
+        .primary(args_.timeout)
+        .emit(ctx);
+      co_return;
+    }
+    auto expr = args_.data
+                  ? std::move(*args_.data)
+                  : ast::expression{ast::this_{args_.operator_location}};
+    auto evaluator = co_await nova::Evaluator::make(std::move(expr), ctx);
+    if (not evaluator) {
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+    auto endpoint = std::string{default_endpoint};
+    auto requests = std::vector<secret_request>{};
+    auto endpoint_location = args_.operator_location;
+    if (args_.endpoint) {
+      endpoint_location = args_.endpoint->source;
+      requests.push_back(
+        make_secret_request("endpoint", *args_.endpoint, endpoint, ctx.dh()));
+    }
+    auto api_key = std::string{};
+    if (args_.api_key) {
+      requests.push_back(
+        make_secret_request("api_key", *args_.api_key, api_key, ctx.dh()));
+    }
+    if (not requests.empty()) {
+      auto resolved = co_await ctx.resolve_secrets(std::move(requests));
+      if (resolved.is_error()) {
+        co_return;
+      }
+    }
+    if (endpoint.empty()) {
+      diagnostic::error("`endpoint` must not be empty")
+        .primary(endpoint_location)
+        .emit(ctx);
+      co_return;
+    }
+    auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+      args_.timeout.inner);
+    auto config
+      = http::make_http_pool_config(args_.tls, endpoint, endpoint_location,
+                                    ctx.dh(), timeout,
+                                    ctx.actor_system().config());
+    if (config.is_error()) {
+      co_return;
+    }
+    auto responses_url = openai::make_responses_url(endpoint);
+    if (responses_url.is_err()) {
+      diagnostic::error("{}", std::move(responses_url).unwrap_err())
+        .primary(endpoint_location)
+        .emit(ctx);
+      co_return;
+    }
+    auto headers = std::vector<http::Header>{};
+    if (not api_key.empty()) {
+      headers.push_back({"Authorization", fmt::format("Bearer {}", api_key)});
+    }
+    auto pool = HttpPool::make(
+      ctx.io_executor(), std::move(responses_url).unwrap(), std::move(*config));
+    client_.emplace(std::in_place, std::move(pool), std::move(headers));
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not client_ or not evaluator_ or not input.mask.any()) {
+      co_return;
+    }
+    auto values = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto printer = nova::json_printer{{
+      .style = no_style(),
+      .oneline = true,
+    }};
+    auto rows = std::vector<RowResult>{};
+    rows.reserve(detail::narrow<size_t>(input.active_count()));
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      printer.print(values.get(row));
+      auto bytes = printer.bytes();
+      rows.push_back(RowResult{
+        .input = std::string{reinterpret_cast<char const*>(bytes.data()),
+                             bytes.size()},
+      });
+    }
+    auto permits = Semaphore{detail::narrow<size_t>(args_.concurrency.inner)};
+    // All requests finish before returning, leaving no pending checkpoint state.
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      for (auto i = size_t{}; i < rows.size(); ++i) {
+        scope.spawn([&, i]() -> Task<void> {
+          auto permit = co_await permits.acquire();
+          auto request = openai::ResponsesRequest{
+            .model = args_.model.inner,
+            .instructions = args_.system.map([](auto const& x) {
+              return x.inner;
+            }),
+            .input = std::move(*rows[i].input),
+            .temperature = args_.temperature.inner,
+            .max_output_tokens = args_.max_tokens.map([](auto const& x) {
+              return x.inner;
+            }),
+          };
+          auto response = co_await (*client_)->create(std::move(request));
+          permit.release();
+          if (response.is_err()) {
+            rows[i].error = std::move(response).unwrap_err();
+            co_return;
+          }
+          rows[i].response = std::move(response).unwrap();
+        });
+      }
+      co_return;
+    });
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto i = size_t{};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      builder.skip_n(row - builder.length());
+      auto const& result = rows[i++];
+      if (result.response) {
+        append_response(builder, *result.response);
+        continue;
+      }
+      builder.null();
+      if (result.error) {
+        auto diag = diagnostic::warning("AI request failed: {}", *result.error)
+                      .primary(args_.operator_location);
+        if (not args_.endpoint) {
+          diag = std::move(diag)
+                   .note("endpoint: {}/responses", default_endpoint)
+                   .hint("the default endpoint targets Ollama; check that "
+                         "Ollama is running and the model name is valid, or "
+                         "set `endpoint=...`");
+        }
+        std::move(diag).emit(ctx);
+      }
+    }
+    builder.skip_n(input.length() - builder.length());
+    auto value = nova::MaskedArray<nova::Array<nova::Data>>{builder.finish(),
+                                                            input.mask};
+    if (args_.into.path().empty()) {
+      input.data = nova::records_or_empty(std::move(value), input.length(),
+                                          args_.into.get_location(), ctx.dh());
+    } else {
+      input.data = nova::assign_nested_field(
+        std::move(input.data), args_.into.path(), std::move(value), ctx.dh());
+    }
+    co_await push(std::move(input));
+  }
+
+private:
+  PromptArgs args_;
+  Option<nova::Evaluator> evaluator_;
+  Option<Box<openai::ResponsesClient>> client_;
+};
+
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -309,7 +523,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<PromptArgs, Prompt>{};
+    auto d = Describer<PromptArgs, Prompt, PromptNova>{};
     d.named("model", &PromptArgs::model);
     d.named("endpoint", &PromptArgs::endpoint, "string");
     d.named("system", &PromptArgs::system);

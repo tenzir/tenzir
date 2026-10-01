@@ -1,0 +1,6 @@
+{
+  message: "hello",
+  keep: 7,
+  text: "echo:\"HELLO\"",
+  latency_is_duration: true,
+}

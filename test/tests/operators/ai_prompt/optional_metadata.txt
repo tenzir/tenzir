@@ -1,0 +1,14 @@
+{
+  id: 1,
+  model: null,
+  usage: null,
+}
+{
+  id: 2,
+  model: "fixture-model",
+  usage: {
+    input_tokens: 1,
+    output_tokens: null,
+    total_tokens: null,
+  },
+}

@@ -1,0 +1,15 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+---
+
+from {id: 1, message: "hello"}, {id: 2, message: "world"}
+@name = f"schema{id}"
+@import_time = 2020-01-01
+@internal = id == 2
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data=message,
+           concurrency=2
+select id, name=@name, import_time=@import_time, internal=@internal,
+       text=ai.prompt.text

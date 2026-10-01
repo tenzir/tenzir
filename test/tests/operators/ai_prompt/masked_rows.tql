@@ -1,0 +1,17 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['{"id":1,"message":"one"}', '{"id":3,"message":"three"}']
+---
+
+from {id: 0, message: "skip"}, {id: 1, message: "one"},
+     {id: 2, message: "skip"}, {id: 3, message: "three"},
+     {id: 4, message: "skip"}
+where id == 1 or id == 3
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           concurrency=2
+select id, text=ai.prompt.text

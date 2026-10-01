@@ -1,0 +1,9 @@
+{
+  text: "echo:\"hello\"",
+  model: "fixture-model",
+  usage: {
+    input_tokens: 1,
+    output_tokens: 2,
+    total_tokens: 3,
+  },
+}

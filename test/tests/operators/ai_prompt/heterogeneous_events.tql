@@ -1,0 +1,15 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['{"id":1,"x":42}', '{"id":2,"x":"two","extra":true}', '{"id":3,"nested":{"xs":[1,"two",null]}}']
+---
+
+from {id: 1, x: 42}, {id: 2, x: "two", extra: true},
+     {id: 3, nested: {xs: [1, "two", null]}}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           concurrency=2
+drop ai.prompt.latency
