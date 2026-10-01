@@ -21,7 +21,9 @@
 #include <tenzir/module.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/event_builder.hpp>
+#include <tenzir/nova/fundamental_array_builder.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -35,6 +37,8 @@
 #include <caf/expected.hpp>
 #include <fmt/format.h>
 
+#include <array>
+#include <concepts>
 #include <istream>
 #include <memory>
 #include <string_view>
@@ -672,7 +676,63 @@ public:
     };
   }
 };
-class parse_cef final : public virtual function_plugin {
+
+struct ParseCefArgs {
+  nova::ValueArgument x;
+  nova::EventBuilder::Settings settings;
+  location call;
+};
+
+class ParseCefFunction {
+public:
+  static auto eval(ParseCefArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto strings = args.x.data.get_alternative<nova::String>();
+    auto nulls = args.x.data.get_alternative<nova::Null>();
+    auto accepted = nova::storage::BitMap{frame.length(), false};
+    if (strings) {
+      accepted = accepted | strings->present;
+    }
+    if (nulls) {
+      accepted = accepted | nulls->present;
+    }
+    if (auto invalid = frame.mask().and_not(accepted); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.x.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("`parse_cef` expected `string`, got `{}`",
+                            nova::Type<T>::static_name)
+          .primary(args.call)
+          .emit(frame);
+      });
+    }
+    auto dh = transforming_diagnostic_handler{
+      frame.dh(), [call = args.call](diagnostic d) {
+        if (not d.has_location()) {
+          d.annotations.emplace_back(true, std::string{}, call);
+        }
+        return d;
+      }};
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+    for (auto row = nova::storage::Index{0}; row < frame.length(); ++row) {
+      if (not frame.mask().get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not strings or not strings->present.get(row)) {
+        builder.value().null();
+        continue;
+      }
+      if (auto diag
+          = parse_event(*strings->data.get(row), args.call, builder)) {
+        dh.emit(std::move(*diag));
+        builder.value().null();
+      }
+    }
+    return builder.finish_data();
+  }
+};
+
+class parse_cef final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_cef";
@@ -680,6 +740,20 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseCefArgs, ParseCefFunction>{};
+    d.positional("x", &ParseCefArgs::x, "string");
+    d.call_location(&ParseCefArgs::call);
+    auto validate
+      = nova::add_event_builder_to_describer(d, &ParseCefArgs::settings);
+    d.validate([validate](ParseCefArgs& args,
+                          nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      args.settings.infer_unparsed_under = "extension";
+      return validate(args, ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -806,7 +880,140 @@ void append_extension(std::string& out, record_view3 attributes,
   out.erase(out.size() - 1);
 }
 
-class print_cef final : public virtual function_plugin {
+struct PrintCefArgs {
+  nova::ValueArgument extension;
+  nova::ValueArgument cef_version;
+  nova::ValueArgument device_vendor;
+  nova::ValueArgument device_product;
+  nova::ValueArgument device_version;
+  nova::ValueArgument signature_id;
+  nova::ValueArgument name;
+  nova::ValueArgument severity;
+  located<std::string> null_value = located{std::string{}, location::unknown};
+  located<std::string> flatten_separator
+    = located{std::string{"."}, location::unknown};
+};
+
+auto append_extension(std::string& out, nova::RowView<nova::Record> attributes,
+                      std::string_view prefix, PrintCefArgs const& args,
+                      nova::EvalFrame frame) -> void {
+  for (auto [key, value] : attributes) {
+    auto path = fmt::format("{}{}", prefix, key);
+    match(value, [&]<class T>(nova::RowView<T> v) {
+      if constexpr (std::same_as<T, nova::Record>) {
+        append_extension(
+          out, v, fmt::format("{}{}", path, args.flatten_separator.inner), args,
+          frame);
+      } else {
+        out += path;
+        out += '=';
+        if constexpr (std::same_as<T, nova::Null>) {
+          out += args.null_value.inner;
+        } else if constexpr (std::same_as<T, nova::List>) {
+          diagnostic::warning(
+            "`list` is not supported in a CEF extension value")
+            .primary(args.extension.source)
+            .emit(frame);
+        } else if constexpr (std::same_as<T, nova::Secret>) {
+          out += "***";
+        } else if constexpr (std::same_as<T, nova::String>) {
+          out += *v;
+        } else {
+          fmt::format_to(std::back_inserter(out), "{}", data_view{*v});
+        }
+        out += ' ';
+      }
+    });
+  }
+}
+
+class PrintCefFunction {
+public:
+  static auto eval(PrintCefArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto valid = frame.mask();
+    auto extensions = args.extension.data.get_alternative<nova::Record>();
+    auto const extension_mask
+      = extensions ? extensions->present
+                   : nova::storage::BitMap{frame.length(), false};
+    warn_invalid(args.extension, "extension", "record",
+                 frame.mask().and_not(extension_mask), frame);
+    valid = valid & extension_mask;
+    auto const headers = std::array{
+      std::pair{"cef_version", &args.cef_version},
+      std::pair{"device_vendor", &args.device_vendor},
+      std::pair{"device_product", &args.device_product},
+      std::pair{"device_version", &args.device_version},
+      std::pair{"signature_id", &args.signature_id},
+      std::pair{"name", &args.name},
+      std::pair{"severity", &args.severity},
+    };
+    auto strings
+      = std::array<Option<nova::MaskedArray<nova::Array<nova::String>>>, 7>{};
+    for (auto i = size_t{0}; i < headers.size(); ++i) {
+      auto const& [name, arg] = headers[i];
+      strings[i] = arg->data.get_alternative<nova::String>();
+      auto present = strings[i] ? strings[i]->present
+                                : nova::storage::BitMap{frame.length(), false};
+      warn_invalid(*arg, name, "string", frame.mask().and_not(present), frame);
+      valid = valid & present;
+    }
+    auto builder = nova::ArrayBuilder<nova::String>{};
+    auto nulls = nova::storage::BitMap::Builder{};
+    auto out = std::string{};
+    for (auto row = nova::storage::Index{0}; row < frame.length(); ++row) {
+      if (not valid.get(row)) {
+        builder.data("");
+        nulls.emplace_back(true);
+        continue;
+      }
+      out = "CEF:";
+      auto ok = true;
+      for (auto i = size_t{0}; i < headers.size(); ++i) {
+        auto value = *strings[i]->data.get(row);
+        if (value.contains('|')) {
+          diagnostic::warning("`{}` contains illegal character `|`",
+                              headers[i].first)
+            .primary(headers[i].second->source)
+            .emit(frame);
+          ok = false;
+          break;
+        }
+        out += value;
+        out += '|';
+      }
+      if (not ok) {
+        builder.data("");
+        nulls.emplace_back(true);
+        continue;
+      }
+      append_extension(out, extensions->data.get(row), "", args, frame);
+      // Remove the final space, or the extension delimiter for an empty record.
+      out.pop_back();
+      builder.data(out);
+      nulls.emplace_back(false);
+    }
+    return nova::Array<nova::Data>{builder.finish()}.null_where(nulls.finish());
+  }
+
+private:
+  static auto
+  warn_invalid(nova::ValueArgument const& arg, std::string_view name,
+               std::string_view expected, nova::storage::BitMap const& invalid,
+               nova::EvalFrame frame) -> void {
+    if (not invalid.any()) {
+      return;
+    }
+    auto row = *nova::storage::true_bits(invalid).begin();
+    match(arg.data.get(row), [&]<class T>(nova::RowView<T>) {
+      diagnostic::warning("`{}` must be `{}`", name, expected)
+        .primary(arg.source, "got `{}`", nova::Type<T>::static_name)
+        .emit(frame);
+    });
+  }
+};
+
+class print_cef final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "print_cef";
@@ -814,6 +1021,41 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrintCefArgs, PrintCefFunction>{};
+    d.positional("extension", &PrintCefArgs::extension, "record");
+    d.named("cef_version", &PrintCefArgs::cef_version, "string");
+    d.named("device_vendor", &PrintCefArgs::device_vendor, "string");
+    d.named("device_product", &PrintCefArgs::device_product, "string");
+    d.named("device_version", &PrintCefArgs::device_version, "string");
+    d.named("signature_id", &PrintCefArgs::signature_id, "string");
+    d.named("name", &PrintCefArgs::name, "string");
+    d.named("severity", &PrintCefArgs::severity, "string");
+    d.named_optional("null_value", &PrintCefArgs::null_value);
+    d.named_optional("flatten_separator", &PrintCefArgs::flatten_separator);
+    d.validate(
+      [](PrintCefArgs const& args, diagnostic_handler& dh) -> failure_or<void> {
+        auto ok = true;
+        if (args.null_value.inner.contains('|')) {
+          diagnostic::error("`null_value` must not contain `|`")
+            .primary(args.null_value)
+            .emit(dh);
+          ok = false;
+        }
+        if (args.flatten_separator.inner.contains('|')) {
+          diagnostic::error("`flatten_separator` must not contain `|`")
+            .primary(args.flatten_separator)
+            .emit(dh);
+          ok = false;
+        }
+        if (not ok) {
+          return failure::promise();
+        }
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
