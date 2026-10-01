@@ -1,0 +1,18 @@
+{
+  message: "{\"id\": 1, \"message\": \"First test message\"}",
+}
+{
+  message: "{\"id\": 2, \"message\": \"Second test message\"}",
+}
+{
+  message: "{\"id\": 21}",
+}
+{
+  message: "{\"id\": 22}",
+}
+{
+  message: "{\"id\": 3, \"message\": \"Third test message\"}",
+}
+{
+  message: "{\"keep\":true,\"id\":23}",
+}

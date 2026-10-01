@@ -1,0 +1,22 @@
+warning: expected `string` or `blob`, got `null`
+  --> tests/operators/to_amazon_cloudwatch/hlc/10-hlc-invalid-values.tql:25:11
+   |
+25 |   payload=message,
+   |           ~~~~~~~
+   |
+   = note: event is skipped
+
+warning: expected `string` or `blob`, got `int`
+  --> tests/operators/to_amazon_cloudwatch/hlc/10-hlc-invalid-values.tql:25:11
+   |
+25 |   payload=message,
+   |           ~~~~~~~
+   |
+   = note: events are skipped
+
+warning: `timestamp` must be `time`, got `string`
+  --> tests/operators/to_amazon_cloudwatch/hlc/10-hlc-invalid-values.tql:26:13
+   |
+26 |   timestamp=timestamp,
+   |             ~~~~~~~~~
+   |

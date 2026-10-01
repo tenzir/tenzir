@@ -1,0 +1,11 @@
+// The direct `print_ndjson` path must respect the mask and its options.
+from {keep: true, id: 23, extra: null},
+     {keep: false, id: 24, extra: null}
+where keep
+to_amazon_sqs env("LOCALSTACK_SQS_QUEUE_SAVE"),
+  message=print_ndjson(this, strip=true),
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1"
+  }

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/nova/fundamental_array.hpp"
 #include "tenzir/nova/union_array.hpp"
@@ -34,5 +35,12 @@ auto stringify(Array<Data> const& array, storage::BitMap const& mask)
 auto stringify(Array<Data> const& array, storage::BitMap const& mask,
                location source, diagnostic_handler& dh)
   -> MaskedArray<Array<String>>;
+
+/// Converts every selected row of `array` to JSON with the given printer
+/// `options`. Unlike the TQL representation above, every value goes through
+/// the printer, so strings are quoted and nulls print as `null`. Rows outside
+/// `mask` are unspecified.
+auto stringify(Array<Data> const& array, storage::BitMap const& mask,
+               json_printer_options options) -> Array<String>;
 
 } // namespace tenzir::nova

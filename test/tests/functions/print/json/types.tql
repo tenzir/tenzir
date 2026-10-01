@@ -1,0 +1,4 @@
+from {x: {s: "text", b: b"bytes", t: 2024-01-01T00:00:00Z, d: 1min, i: 1.2.3.4, n: 10.0.0.0/8, f: 1.5, u: 18446744073709551615}}
+ndjson = x.print_ndjson()
+s = x.s.print_ndjson()
+b = x.b.print_ndjson()

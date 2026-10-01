@@ -99,4 +99,22 @@ auto stringify(Array<Data> const& array, storage::BitMap const& mask,
   return {builder.finish(), std::move(present).finish()};
 }
 
+auto stringify(Array<Data> const& array, storage::BitMap const& mask,
+               json_printer_options options) -> Array<String> {
+  TENZIR_ASSERT_EQ(array.length(), mask.length());
+  auto builder = ArrayBuilder<String>{};
+  auto printer = json_printer{std::move(options)};
+  for (auto index : storage::bitmap_iteration(mask)) {
+    if (not index) {
+      builder.skip();
+      continue;
+    }
+    printer.print(array.get(*index));
+    auto const bytes = printer.bytes();
+    builder.data(std::string_view{reinterpret_cast<char const*>(bytes.data()),
+                                  bytes.size()});
+  }
+  return builder.finish();
+}
+
 } // namespace tenzir::nova

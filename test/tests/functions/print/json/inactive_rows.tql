@@ -1,0 +1,4 @@
+// Rows removed by `where` must not be printed.
+from {keep: true, x: {a: 1}}, {keep: false, x: "skipped"}, {keep: true, x: [1, 2]}
+where keep
+x = x.print_ndjson()

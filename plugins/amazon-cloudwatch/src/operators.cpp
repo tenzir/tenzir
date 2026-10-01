@@ -15,6 +15,9 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -395,7 +398,7 @@ auto live_tail_page(
   return page;
 }
 
-auto hlc_json_event(ToCloudWatch::Event const& event) -> std::string {
+auto hlc_json_event(PendingEvent const& event) -> std::string {
   auto result = std::string{"{\"time\":"};
   result += epoch_seconds(event.timestamp);
   result += R"(,"event":)";
@@ -411,7 +414,7 @@ auto max_event_bytes(ToMethod method) -> size_t {
   return max_http_event_bytes;
 }
 
-auto structured_json_event(ToCloudWatch::Event const& event) -> std::string {
+auto structured_json_event(PendingEvent const& event) -> std::string {
   auto payload = simdjson::padded_string{event.message};
   auto parser = simdjson::dom::parser{};
   auto parsed = parser.parse(payload);
@@ -672,10 +675,10 @@ auto parse_get_log_events_response(std::string const& body,
 
 auto send_put_batch(amazon::SignedHttpClient& client,
                     ToCloudWatchArgs const& args,
-                    std::vector<ToCloudWatch::Event> events)
+                    std::vector<PendingEvent> events)
   -> Task<ToCloudWatchSendReport> {
   auto report = ToCloudWatchSendReport{};
-  std::ranges::sort(events, {}, &ToCloudWatch::Event::timestamp);
+  std::ranges::sort(events, {}, &PendingEvent::timestamp);
   auto now = std::chrono::system_clock::now();
   auto request_events
     = Aws::Vector<Aws::CloudWatchLogs::Model::InputLogEvent>{};
@@ -699,7 +702,7 @@ auto send_put_batch(amazon::SignedHttpClient& client,
     if (request_events.size() >= max_put_events
         or request_bytes + event_bytes > max_put_request_bytes
         or exceeds_batch_span) {
-      auto rest = std::vector<ToCloudWatch::Event>{};
+      auto rest = std::vector<PendingEvent>{};
       rest.reserve(events.size() - i);
       for (auto& pending : events | std::views::drop(i)) {
         rest.push_back(std::move(pending));
@@ -763,13 +766,13 @@ auto post_ingest(amazon::SignedHttpClient& client, Option<std::string> token,
 auto send_http_batch(amazon::SignedHttpClient& client,
                      ToCloudWatchArgs const& args, ToMethod method,
                      Option<std::string> token,
-                     std::vector<ToCloudWatch::Event> events)
+                     std::vector<PendingEvent> events)
   -> Task<ToCloudWatchSendReport> {
   auto report = ToCloudWatchSendReport{};
   auto const stream = args.log_stream->inner;
   auto path = std::string{};
   auto content_type = std::string{};
-  auto format_event = [](ToMethod method, ToCloudWatch::Event const& event) {
+  auto format_event = [](ToMethod method, PendingEvent const& event) {
     if (method == ToMethod::hlc) {
       return hlc_json_event(event);
     }
@@ -850,7 +853,7 @@ auto send_http_batch(amazon::SignedHttpClient& client,
                                     std::move(request_event_bytes)))) {
         co_return report;
       }
-      auto rest = std::vector<ToCloudWatch::Event>{};
+      auto rest = std::vector<PendingEvent>{};
       rest.reserve(events.size() - i);
       for (auto& pending : events | std::views::drop(i)) {
         rest.push_back(std::move(pending));
@@ -892,17 +895,19 @@ auto default_to_amazon_cloudwatch_message_expression() -> ast::expression {
   };
 }
 
-FromCloudWatch::FromCloudWatch(FromCloudWatchArgs args)
+// --- CloudWatchReader ---
+
+CloudWatchReader::CloudWatchReader(FromCloudWatchArgs args)
   : args_{std::move(args)} {
 }
 
-auto FromCloudWatch::snapshot(Serde& serde) -> void {
+auto CloudWatchReader::snapshot(Serde& serde) -> void {
   serde("next_token", next_token_);
   serde("emitted", emitted_);
   serde("done", done_);
 }
 
-auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
+auto CloudWatchReader::start(OpCtx& ctx) -> Task<void> {
   if (args_.mode.inner == "search") {
     mode_ = FromMode::search;
   } else if (args_.mode.inner == "replay") {
@@ -1041,8 +1046,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
-  TENZIR_UNUSED(dh);
+auto CloudWatchReader::next() const -> Task<Any> {
   if (done_) {
     co_await wait_forever();
     TENZIR_UNREACHABLE();
@@ -1084,15 +1088,15 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
                                           token, reads_from_start(args_));
 }
 
-auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
-                                  OpCtx& ctx) -> Task<void> {
+auto CloudWatchReader::handle(Any result, OpCtx& ctx)
+  -> std::vector<CloudWatchEvent> {
   auto outcome = std::move(result).as<SourceResult>();
   if (outcome.is_err()) {
     diagnostic::error("{}", outcome.unwrap_err())
       .primary(args_.operator_location)
       .emit(ctx);
     done_ = true;
-    co_return;
+    return {};
   }
   auto page = std::move(outcome).unwrap();
   next_token_ = std::move(page.next_token);
@@ -1101,7 +1105,7 @@ auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
     auto remaining = args_.count->inner - emitted_;
     if (remaining == 0) {
       done_ = true;
-      co_return;
+      return {};
     }
     if (page.events.size() > remaining) {
       page.events.resize(detail::narrow<size_t>(remaining));
@@ -1111,23 +1115,22 @@ auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
   for (auto const& event : page.events) {
     bytes_read_counter_.add(event.message.size());
   }
-  for (auto&& slice : build_slice(page.events, ctx.dh())) {
-    auto const rows = slice.rows();
-    emitted_ += rows;
-    co_await push(std::move(slice));
-    events_read_counter_.add(rows);
-  }
+  emitted_ += page.events.size();
   if (args_.count and emitted_ >= args_.count->inner) {
     done_ = true;
   }
+  return std::move(page.events);
 }
 
-auto FromCloudWatch::state() -> OperatorState {
+auto CloudWatchReader::count_events(uint64_t count) -> void {
+  events_read_counter_.add(count);
+}
+
+auto CloudWatchReader::state() -> OperatorState {
   return done_ ? OperatorState::done : OperatorState::normal;
 }
 
-auto FromCloudWatch::stop(OpCtx& ctx) -> Task<void> {
-  TENZIR_UNUSED(ctx);
+auto CloudWatchReader::stop() -> void {
   live_cancel_.requestCancellation();
   if (live_queue_) {
     auto page = SourcePage{};
@@ -1135,14 +1138,15 @@ auto FromCloudWatch::stop(OpCtx& ctx) -> Task<void> {
     std::ignore = (*live_queue_)->try_enqueue(SourceResult{std::move(page)});
   }
   done_ = true;
-  co_return;
 }
 
-ToCloudWatch::ToCloudWatch(ToCloudWatchArgs args)
-  : args_{std::move(args)}, request_slots_{1} {
+// --- CloudWatchWriter ---
+
+CloudWatchWriter::CloudWatchWriter(ToCloudWatchArgs const& args)
+  : args_{args}, request_slots_{1} {
 }
 
-auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
+auto CloudWatchWriter::start(OpCtx& ctx) -> Task<void> {
   if (args_.method.inner == "hlc") {
     method_ = ToMethod::hlc;
   } else if (args_.method.inner == "ndjson") {
@@ -1213,80 +1217,33 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ToCloudWatch::process(table_slice input, OpCtx& ctx) -> Task<void> {
-  if (done_) {
-    co_return;
-  }
-  if (input.rows() == 0) {
-    co_return;
-  }
-  auto& dh = ctx.dh();
-  auto timestamps
-    = detail::eval_as<time_type>("timestamp", args_.timestamp, input, dh, [] {
-        return time{std::chrono::duration_cast<time::duration>(
-          std::chrono::system_clock::now().time_since_epoch())};
-      });
-  auto consume_timestamps = [&](int64_t count) {
-    for (auto i = int64_t{}; i < count; ++i) {
-      std::ignore = timestamps.next();
-    }
-  };
-  for (auto const& messages : eval(args_.payload, input, dh)) {
-    auto append = [&](auto const& array) -> Task<void> {
-      for (auto i = int64_t{0}; i < array.length(); ++i) {
-        auto t = time{std::chrono::duration_cast<time::duration>(
-          std::chrono::system_clock::now().time_since_epoch())};
-        if (auto next = timestamps.next(); next and *next) {
-          t = **next;
-        }
-        if (array.IsNull(i)) {
-          diagnostic::warning("expected `string` or `blob`, got `null`")
-            .primary(args_.payload)
-            .note("event is skipped")
-            .emit(dh);
-          continue;
-        }
-        auto bytes = as_bytes(array.Value(i));
-        auto message = std::string{reinterpret_cast<char const*>(bytes.data()),
-                                   bytes.size()};
-        if (message.size() > max_event_bytes(method_)) {
-          diagnostic::warning(
-            "CloudWatch log event exceeds maximum payload size")
-            .primary(args_.payload)
-            .note("event is skipped")
-            .emit(dh);
-          continue;
-        }
-        if (batch_.empty()) {
-          next_timeout_ = std::chrono::steady_clock::now() + batch_timeout_;
-          if (not timer_armed_) {
-            arm_flush_timer(ctx);
-          }
-        }
-        batch_.push_back(Event{.timestamp = t, .message = std::move(message)});
-        if (batch_.size() >= batch_size_) {
-          co_await flush(ctx);
-        }
-      }
-    };
-    if (auto strings = messages.template as<string_type>()) {
-      co_await append(*strings->array);
-      continue;
-    }
-    if (auto blobs = messages.template as<blob_type>()) {
-      co_await append(*blobs->array);
-      continue;
-    }
-    consume_timestamps(messages.length());
-    diagnostic::warning("expected `string` or `blob`, got `{}`",
-                        messages.type.kind())
+auto CloudWatchWriter::done() const -> bool {
+  return done_;
+}
+
+auto CloudWatchWriter::add(time timestamp, std::string message, OpCtx& ctx)
+  -> Task<void> {
+  if (message.size() > max_event_bytes(method_)) {
+    diagnostic::warning("CloudWatch log event exceeds maximum payload size")
       .primary(args_.payload)
-      .note("events are skipped")
-      .emit(dh);
+      .note("event is skipped")
+      .emit(ctx);
+    co_return;
+  }
+  if (batch_.empty()) {
+    next_timeout_ = std::chrono::steady_clock::now() + batch_timeout_;
+    if (not timer_armed_) {
+      arm_flush_timer(ctx);
+    }
+  }
+  batch_.push_back(
+    PendingEvent{.timestamp = timestamp, .message = std::move(message)});
+  if (batch_.size() >= batch_size_) {
+    co_await flush(ctx);
   }
 }
 
-auto ToCloudWatch::flush(OpCtx& ctx) -> Task<void> {
+auto CloudWatchWriter::flush(OpCtx& ctx) -> Task<void> {
   if (batch_.empty()) {
     co_return;
   }
@@ -1340,12 +1297,11 @@ auto ToCloudWatch::flush(OpCtx& ctx) -> Task<void> {
   });
 }
 
-auto ToCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
-  TENZIR_UNUSED(dh);
+auto CloudWatchWriter::next() const -> Task<Any> {
   co_return co_await wakeup_queue_->dequeue();
 }
 
-auto ToCloudWatch::arm_flush_timer(OpCtx& ctx) -> void {
+auto CloudWatchWriter::arm_flush_timer(OpCtx& ctx) -> void {
   TENZIR_ASSERT(next_timeout_);
   timer_armed_ = true;
   ctx.spawn_task(
@@ -1355,8 +1311,8 @@ auto ToCloudWatch::arm_flush_timer(OpCtx& ctx) -> void {
     });
 }
 
-auto ToCloudWatch::handle_send_report(ToCloudWatchSendReport report, OpCtx& ctx)
-  -> void {
+auto CloudWatchWriter::handle_send_report(ToCloudWatchSendReport report,
+                                          OpCtx& ctx) -> void {
   for (auto& item : report.diagnostics) {
     auto emit = [&](auto diag) {
       if (item.primary == ToCloudWatchDiagnosticPrimary::payload) {
@@ -1382,7 +1338,7 @@ auto ToCloudWatch::handle_send_report(ToCloudWatchSendReport report, OpCtx& ctx)
   done_ = done_ or report.failed;
 }
 
-auto ToCloudWatch::drain_send_reports(OpCtx& ctx) -> void {
+auto CloudWatchWriter::drain_send_reports(OpCtx& ctx) -> void {
   if (not send_queue_) {
     return;
   }
@@ -1391,7 +1347,7 @@ auto ToCloudWatch::drain_send_reports(OpCtx& ctx) -> void {
   }
 }
 
-auto ToCloudWatch::process_task(Any result, OpCtx& ctx) -> Task<void> {
+auto CloudWatchWriter::handle(Any result, OpCtx& ctx) -> Task<void> {
   if (result.try_as<ToCloudWatchReportReady>()) {
     drain_send_reports(ctx);
     co_return;
@@ -1408,7 +1364,7 @@ auto ToCloudWatch::process_task(Any result, OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto ToCloudWatch::wait_for_requests(OpCtx& ctx) -> Task<void> {
+auto CloudWatchWriter::wait_for_requests(OpCtx& ctx) -> Task<void> {
   TENZIR_ASSERT(send_queue_);
   while (pending_reports_ > 0) {
     auto report = co_await (*send_queue_)->dequeue();
@@ -1418,7 +1374,7 @@ auto ToCloudWatch::wait_for_requests(OpCtx& ctx) -> Task<void> {
   co_return;
 }
 
-auto ToCloudWatch::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+auto CloudWatchWriter::prepare_snapshot(OpCtx& ctx) -> Task<void> {
   if (not send_queue_) {
     co_return;
   }
@@ -1428,20 +1384,321 @@ auto ToCloudWatch::prepare_snapshot(OpCtx& ctx) -> Task<void> {
   co_await wait_for_requests(ctx);
 }
 
-auto ToCloudWatch::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+auto CloudWatchWriter::finalize(OpCtx& ctx) -> Task<void> {
   if (not send_queue_) {
-    co_return FinalizeBehavior::done;
+    co_return;
   }
   if (not done_) {
     co_await flush(ctx);
   }
   co_await wait_for_requests(ctx);
   done_ = true;
+}
+
+auto CloudWatchWriter::state() -> OperatorState {
+  return done_ ? OperatorState::done : OperatorState::normal;
+}
+
+namespace {
+
+auto current_time() -> time {
+  return time{std::chrono::duration_cast<time::duration>(
+    std::chrono::system_clock::now().time_since_epoch())};
+}
+
+auto build_events(std::vector<CloudWatchEvent> const& events)
+  -> nova::Array<nova::Record> {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (auto const& event : events) {
+    auto record = builder.record();
+    record.field("timestamp").data(event.timestamp);
+    record.field("ingestion_time").data(event.ingestion_time);
+    record.field("log_group").data(event.log_group);
+    record.field("log_stream").data(event.log_stream);
+    record.field("message").data(event.message);
+    if (event.event_id) {
+      record.field("event_id").data(*event.event_id);
+    }
+  }
+  return builder.finish();
+}
+
+} // namespace
+
+// --- FromCloudWatch ---
+
+FromCloudWatch::FromCloudWatch(FromCloudWatchArgs args)
+  : reader_{std::move(args)} {
+}
+
+auto FromCloudWatch::snapshot(Serde& serde) -> void {
+  reader_.snapshot(serde);
+}
+
+auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
+  co_await reader_.start(ctx);
+}
+
+auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return reader_.next();
+}
+
+auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
+                                  OpCtx& ctx) -> Task<void> {
+  auto events = reader_.handle(std::move(result), ctx);
+  if (events.empty()) {
+    co_return;
+  }
+  for (auto&& slice : build_slice(events, ctx.dh())) {
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    reader_.count_events(rows);
+  }
+}
+
+auto FromCloudWatch::state() -> OperatorState {
+  return reader_.state();
+}
+
+auto FromCloudWatch::stop(OpCtx& ctx) -> Task<void> {
+  TENZIR_UNUSED(ctx);
+  reader_.stop();
+  co_return;
+}
+
+// --- FromCloudWatchEvents ---
+
+FromCloudWatchEvents::FromCloudWatchEvents(FromCloudWatchArgs args)
+  : reader_{std::move(args)} {
+}
+
+auto FromCloudWatchEvents::snapshot(Serde& serde) -> void {
+  reader_.snapshot(serde);
+}
+
+auto FromCloudWatchEvents::start(OpCtx& ctx) -> Task<void> {
+  co_await reader_.start(ctx);
+}
+
+auto FromCloudWatchEvents::await_task(diagnostic_handler& dh) const
+  -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return reader_.next();
+}
+
+auto FromCloudWatchEvents::process_task(Any result, Push<nova::Events>& push,
+                                        OpCtx& ctx) -> Task<void> {
+  auto events = reader_.handle(std::move(result), ctx);
+  if (events.empty()) {
+    co_return;
+  }
+  auto data = build_events(events);
+  auto const rows = data.length();
+  co_await push(
+    nova::Events{std::move(data), nova::storage::BitMap{rows, true},
+                 nova::Events::Meta::make_empty(rows, "tenzir.cloudwatch")});
+  reader_.count_events(detail::narrow<uint64_t>(rows));
+}
+
+auto FromCloudWatchEvents::state() -> OperatorState {
+  return reader_.state();
+}
+
+auto FromCloudWatchEvents::stop(OpCtx& ctx) -> Task<void> {
+  TENZIR_UNUSED(ctx);
+  reader_.stop();
+  co_return;
+}
+
+// --- ToCloudWatch ---
+
+ToCloudWatch::ToCloudWatch(ToCloudWatchArgs args)
+  : args_{std::move(args)}, writer_{args_} {
+}
+
+auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
+  co_await writer_.start(ctx);
+}
+
+auto ToCloudWatch::process(table_slice input, OpCtx& ctx) -> Task<void> {
+  if (writer_.done()) {
+    co_return;
+  }
+  if (input.rows() == 0) {
+    co_return;
+  }
+  auto& dh = ctx.dh();
+  auto timestamps
+    = detail::eval_as<time_type>("timestamp", args_.timestamp, input, dh, [] {
+        return current_time();
+      });
+  auto consume_timestamps = [&](int64_t count) {
+    for (auto i = int64_t{}; i < count; ++i) {
+      std::ignore = timestamps.next();
+    }
+  };
+  for (auto const& messages : eval(args_.payload, input, dh)) {
+    auto append = [&](auto const& array) -> Task<void> {
+      for (auto i = int64_t{0}; i < array.length(); ++i) {
+        auto t = current_time();
+        if (auto next = timestamps.next(); next and *next) {
+          t = **next;
+        }
+        if (array.IsNull(i)) {
+          diagnostic::warning("expected `string` or `blob`, got `null`")
+            .primary(args_.payload)
+            .note("event is skipped")
+            .emit(dh);
+          continue;
+        }
+        auto bytes = as_bytes(array.Value(i));
+        co_await writer_.add(
+          t,
+          std::string{reinterpret_cast<char const*>(bytes.data()),
+                      bytes.size()},
+          ctx);
+      }
+    };
+    if (auto strings = messages.template as<string_type>()) {
+      co_await append(*strings->array);
+      continue;
+    }
+    if (auto blobs = messages.template as<blob_type>()) {
+      co_await append(*blobs->array);
+      continue;
+    }
+    consume_timestamps(messages.length());
+    diagnostic::warning("expected `string` or `blob`, got `{}`",
+                        messages.type.kind())
+      .primary(args_.payload)
+      .note("events are skipped")
+      .emit(dh);
+  }
+}
+
+auto ToCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return writer_.next();
+}
+
+auto ToCloudWatch::process_task(Any result, OpCtx& ctx) -> Task<void> {
+  co_await writer_.handle(std::move(result), ctx);
+}
+
+auto ToCloudWatch::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+  co_await writer_.prepare_snapshot(ctx);
+}
+
+auto ToCloudWatch::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+  co_await writer_.finalize(ctx);
   co_return FinalizeBehavior::done;
 }
 
 auto ToCloudWatch::state() -> OperatorState {
-  return done_ ? OperatorState::done : OperatorState::normal;
+  return writer_.state();
+}
+
+// --- ToCloudWatchEvents ---
+
+ToCloudWatchEvents::ToCloudWatchEvents(ToCloudWatchArgs args)
+  : args_{std::move(args)}, writer_{args_} {
+}
+
+auto ToCloudWatchEvents::start(OpCtx& ctx) -> Task<void> {
+  co_await writer_.start(ctx);
+  if (writer_.done()) {
+    co_return;
+  }
+  auto payload = co_await nova::Evaluator::make(args_.payload, ctx);
+  if (not payload) {
+    co_return;
+  }
+  payload_.emplace(std::move(*payload));
+  auto timestamp = co_await nova::Evaluator::make(args_.timestamp, ctx);
+  if (not timestamp) {
+    co_return;
+  }
+  timestamp_.emplace(std::move(*timestamp));
+}
+
+auto ToCloudWatchEvents::process(nova::Events input, OpCtx& ctx) -> Task<void> {
+  if (writer_.done() or not payload_ or not timestamp_
+      or not input.mask.any()) {
+    co_return;
+  }
+  auto& dh = ctx.dh();
+  // The default timestamp expression refers to a field that may not exist, so
+  // its evaluation must not warn about it.
+  auto ndh = null_diagnostic_handler{};
+  auto& timestamp_dh = args_.timestamp.get_location()
+                         ? dh
+                         : static_cast<diagnostic_handler&>(ndh);
+  auto timestamps = timestamp_->eval(input, nova::EvalCtx{timestamp_dh});
+  auto messages = payload_->eval(input, nova::EvalCtx{dh});
+  auto warn_timestamp_type = nova::WarnOnce{};
+  auto warn_message_null = nova::WarnOnce{};
+  auto warn_message_type = nova::WarnOnce{};
+  for (auto row : nova::storage::true_bits(input.mask)) {
+    auto t = current_time();
+    auto timestamp = timestamps.get(row);
+    if (auto value = try_as<nova::RowView<nova::Time>>(timestamp)) {
+      t = **value;
+    } else if (not is<nova::RowView<nova::Null>>(timestamp)) {
+      match(timestamp, [&]<class T>(nova::RowView<T> const&) {
+        warn_timestamp_type(dh, diagnostic::warning("`timestamp` must be "
+                                                    "`time`, got `{}`",
+                                                    nova::Type<T>::static_name)
+                                  .primary(args_.timestamp));
+      });
+    }
+    auto value = messages.get(row);
+    auto message = std::string{};
+    if (auto text = try_as<nova::RowView<nova::String>>(value)) {
+      message = std::string{**text};
+    } else if (auto bytes = try_as<nova::RowView<nova::Blob>>(value)) {
+      message = std::string{reinterpret_cast<char const*>((**bytes).data()),
+                            (**bytes).size()};
+    } else if (is<nova::RowView<nova::Null>>(value)) {
+      warn_message_null(dh, diagnostic::warning("expected `string` or `blob`, "
+                                                "got `null`")
+                              .primary(args_.payload)
+                              .note("event is skipped"));
+      continue;
+    } else {
+      match(value, [&]<class T>(nova::RowView<T> const&) {
+        warn_message_type(dh, diagnostic::warning("expected `string` or "
+                                                  "`blob`, got `{}`",
+                                                  nova::Type<T>::static_name)
+                                .primary(args_.payload)
+                                .note("events are skipped"));
+      });
+      continue;
+    }
+    co_await writer_.add(t, std::move(message), ctx);
+  }
+}
+
+auto ToCloudWatchEvents::await_task(diagnostic_handler& dh) const -> Task<Any> {
+  TENZIR_UNUSED(dh);
+  return writer_.next();
+}
+
+auto ToCloudWatchEvents::process_task(Any result, OpCtx& ctx) -> Task<void> {
+  co_await writer_.handle(std::move(result), ctx);
+}
+
+auto ToCloudWatchEvents::prepare_snapshot(OpCtx& ctx) -> Task<void> {
+  co_await writer_.prepare_snapshot(ctx);
+}
+
+auto ToCloudWatchEvents::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
+  co_await writer_.finalize(ctx);
+  co_return FinalizeBehavior::done;
+}
+
+auto ToCloudWatchEvents::state() -> OperatorState {
+  return writer_.state();
 }
 
 } // namespace tenzir::plugins::cloudwatch

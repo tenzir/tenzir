@@ -10,6 +10,7 @@
 
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
@@ -30,7 +31,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromSqsArgs, FromSqs>{};
+    auto d = Describer<FromSqsArgs, FromSqs, FromSqsEvents>{};
     d.operator_location(&FromSqsArgs::operator_location);
     auto queue = d.positional("queue", &FromSqsArgs::queue);
     d.named("keep_messages", &FromSqsArgs::keep_messages);
@@ -90,7 +91,7 @@ public:
   auto describe() const -> Description override {
     auto initial = ToSqsArgs{};
     initial.message = default_to_amazon_sqs_message_expression();
-    auto d = Describer<ToSqsArgs, ToSqs>{std::move(initial)};
+    auto d = Describer<ToSqsArgs, ToSqs, ToSqsEvents>{std::move(initial)};
     d.operator_location(&ToSqsArgs::operator_location);
     auto queue = d.positional("queue", &ToSqsArgs::queue);
     d.named_optional("message", &ToSqsArgs::message, "blob|string");
@@ -110,7 +111,11 @@ public:
     // concurrency-safe broker: standard queues never guaranteed order across
     // messages, and this sink does not set a message group ID. Replicating the
     // operator therefore weakens no guarantee that a single instance provided.
-    d.parallelizable();
+    // TODO(TNZ-1409): The executor cannot yet route events across multiple
+    // lanes, so the event implementation must run as a single instance.
+    d.parallelizable([](const ToSqsArgs&) {
+      return not nova_enabled();
+    });
     return d.without_optimize();
   }
 };

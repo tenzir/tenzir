@@ -1,0 +1,7 @@
+from {x: {a: null, b: [], c: {}, d: [null, 1]}}
+strip = x.print_ndjson(strip=true)
+strip_null_fields = x.print_ndjson(strip_null_fields=true)
+strip_nulls_in_lists = x.print_ndjson(strip_nulls_in_lists=true)
+strip_empty_records = x.print_ndjson(strip_empty_records=true)
+strip_empty_lists = x.print_ndjson(strip_empty_lists=true)
+pretty = x.print_json(strip=true)

@@ -14,6 +14,8 @@
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova/type_system.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
@@ -2547,7 +2549,26 @@ public:
   }
 };
 
-class print_json_plugin : public virtual function_plugin {
+struct PrintJsonArgs {
+  nova::ValueArgument x;
+  Option<location> strip;
+  Option<location> strip_null_fields;
+  Option<location> strip_nulls_in_lists;
+  Option<location> strip_empty_records;
+  Option<location> strip_empty_lists;
+  /// Derived from the arguments above in `validate`.
+  json_printer_options options;
+};
+
+class PrintJsonFunction {
+public:
+  static auto eval(PrintJsonArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return nova::stringify(args.x.data, frame.mask(), args.options);
+  }
+};
+
+class print_json_plugin : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return compact_ ? "print_ndjson" : "print_json";
@@ -2558,6 +2579,31 @@ public:
   }
 
   print_json_plugin(bool compact) : compact_{compact} {
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrintJsonArgs, PrintJsonFunction>{};
+    d.positional("x", &PrintJsonArgs::x, "any");
+    d.named("strip", &PrintJsonArgs::strip);
+    d.named("strip_null_fields", &PrintJsonArgs::strip_null_fields);
+    d.named("strip_nulls_in_lists", &PrintJsonArgs::strip_nulls_in_lists);
+    d.named("strip_empty_records", &PrintJsonArgs::strip_empty_records);
+    d.named("strip_empty_lists", &PrintJsonArgs::strip_empty_lists);
+    d.validate([compact = compact_](PrintJsonArgs& args,
+                                    diagnostic_handler&) -> failure_or<void> {
+      auto const strip = args.strip.has_value();
+      args.options = json_printer_options{
+        .tql = false,
+        .style = no_style(),
+        .oneline = compact,
+        .omit_null_fields = strip or args.strip_null_fields.has_value(),
+        .omit_nulls_in_lists = strip or args.strip_nulls_in_lists.has_value(),
+        .omit_empty_records = strip or args.strip_empty_records.has_value(),
+        .omit_empty_lists = strip or args.strip_empty_lists.has_value(),
+      };
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

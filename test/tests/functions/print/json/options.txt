@@ -1,0 +1,17 @@
+{
+  x: {
+    a: null,
+    b: [],
+    c: {},
+    d: [
+      null,
+      1,
+    ],
+  },
+  strip: "{\"d\":[1]}",
+  strip_null_fields: "{\"b\":[],\"c\":{},\"d\":[1]}",
+  strip_nulls_in_lists: "{\"a\":null,\"b\":[],\"c\":{},\"d\":[1]}",
+  strip_empty_records: "{\"a\":null,\"b\":[],\"d\":[null,1]}",
+  strip_empty_lists: "{\"a\":null,\"c\":{},\"d\":[null,1]}",
+  pretty: "{\n  \"d\": [\n    1\n  ]\n}",
+}

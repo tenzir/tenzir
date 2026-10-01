@@ -1,4 +1,6 @@
 // parallelism: 4
+// TODO(TNZ-1409): Run this directory on Nova once the executor routes Nova
+// events across multiple lanes.
 // Each instance opens its own Kinesis client; together they publish every
 // event exactly once. Records sharing a partition key may be produced by
 // different instances and land in their shard out of input order.

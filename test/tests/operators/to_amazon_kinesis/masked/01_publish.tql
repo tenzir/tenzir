@@ -1,0 +1,10 @@
+// Rows removed by `where` must neither be sent nor produce diagnostics.
+from {keep: true, message: "masked-1", key: "masked"},
+     {keep: false, message: 42, key: false},
+     {keep: true, message: null, key: "masked"},
+     {keep: true, message: "masked-2", key: null},
+     {keep: true, message: b"masked-3", key: "masked"}
+where keep
+to_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                  message=message,
+                  partition_key=key
