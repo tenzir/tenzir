@@ -1,0 +1,7 @@
+pipeline_detach id="nova-detached" {
+  every 1h {
+    from {items: [1, "two"]}
+    assert items[1] == "two"
+  }
+  discard
+}

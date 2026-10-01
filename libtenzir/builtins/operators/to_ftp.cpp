@@ -10,6 +10,7 @@
 
 #include <tenzir/async/curl.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -78,7 +79,8 @@ auto resolve_url(OpCtx& ctx, ToFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-class ToFtp final : public Operator<table_slice, void> {
+template <class Input>
+class ToFtp final : public Operator<Input, void> {
 public:
   explicit ToFtp(ToFtpArgs args) : args_{std::move(args)} {
   }
@@ -151,8 +153,8 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    if (not co_await ctx.plan_and_spawn_sub<table_slice>(caf::none,
-                                                         std::move(pipeline))) {
+    if (not co_await ctx.plan_and_spawn_sub<Input>(caf::none,
+                                                   std::move(pipeline))) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
@@ -160,7 +162,7 @@ public:
     co_return;
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+  auto process(Input input, OpCtx& ctx) -> Task<void> override {
     if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
@@ -171,8 +173,14 @@ public:
       co_await finish_upload_task();
       co_return;
     }
-    auto const rows = input.rows();
-    auto& printer = as<SubHandle<table_slice>>(*sub);
+    auto const rows = [&] {
+      if constexpr (std::same_as<Input, nova::Events>) {
+        return input.active_count();
+      } else {
+        return input.rows();
+      }
+    }();
+    auto& printer = as<SubHandle<Input>>(*sub);
     auto push_result = co_await printer.push(std::move(input));
     if (push_result.is_err()) {
       // A closed printer input can be an intentional early shutdown, e.g., from
@@ -198,7 +206,7 @@ public:
     if (lifecycle_ == Lifecycle::running) {
       lifecycle_ = Lifecycle::draining;
       if (auto sub = ctx.get_sub(caf::none)) {
-        auto& printer = as<SubHandle<table_slice>>(*sub);
+        auto& printer = as<SubHandle<Input>>(*sub);
         co_await printer.close();
         co_return FinalizeBehavior::continue_;
       }
@@ -348,7 +356,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToFtpArgs, ToFtp>{};
+    auto d = Describer<ToFtpArgs, ToFtp<table_slice>, ToFtp<nova::Events>>{};
     d.positional("url", &ToFtpArgs::url);
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToFtpArgs::tls);
@@ -356,17 +364,24 @@ public:
       = d.pipeline(&ToFtpArgs::printer, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
-      TRY(auto printer, ctx.get(printer_arg));
-      auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes")
-          .primary(printer.source.subloc(0, 1))
-          .emit(ctx);
-      }
       return {};
+    });
+    // Validation has no input type; the spawner checks the printer with the
+    // actual Arrow or Nova input type.
+    d.spawner([printer_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ToFtpArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        TRY(auto printer, ctx.get(printer_arg));
+        TRY(auto output, printer.inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(printer.source.subloc(0, 1))
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return None{};
     });
     return d.invariant_order_filter();
   }

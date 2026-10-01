@@ -1,0 +1,8 @@
+{
+  id: "nova-detached",
+  name: "tenzir.pipeline",
+  hidden: true,
+  configured: false,
+  created_is_time: true,
+  modified_is_time: true,
+}

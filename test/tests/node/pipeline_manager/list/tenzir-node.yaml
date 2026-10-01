@@ -1,8 +1,9 @@
 tenzir:
   nova: true
+  start:
+    no-autostart: true
   pipelines:
-    repro:
+    never-started:
       definition: |
-        from {x: 1}
-        acme::mark
+        from {}
         discard

@@ -31,6 +31,7 @@ class FtpOptions:
 @dataclass(frozen=True)
 class FtpAssertions:
     uploaded_contains: str | None = None
+    uploaded_equals: str | None = None
     upload_count: int | None = None
 
 
@@ -292,6 +293,14 @@ def ftp() -> FixtureHandle:
                 error = (
                     f"{test.name}: expected uploaded data to contain "
                     f"{assertions.uploaded_contains!r}, got {uploaded!r}"
+                )
+            elif (
+                assertions.uploaded_equals is not None
+                and assertions.uploaded_equals != uploaded
+            ):
+                error = (
+                    f"{test.name}: expected uploaded data to equal "
+                    f"{assertions.uploaded_equals!r}, got {uploaded!r}"
                 )
             elif (
                 assertions.upload_count is not None

@@ -1,0 +1,4 @@
+from {keep: false, id: 42}, {keep: true, id: "masked_package", name: "Masked package"}
+where keep
+drop keep
+package_add

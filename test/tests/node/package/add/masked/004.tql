@@ -1,0 +1,2 @@
+package_list
+summarize packages=count()

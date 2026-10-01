@@ -1,0 +1,6 @@
+{
+  name: "tenzir.activity",
+  first_is_time: true,
+  last_is_time: true,
+  pipelines_is_list: true,
+}

@@ -1,0 +1,4 @@
+suite: pipeline-list
+runner: tenzir
+fixtures: [node]
+timeout: 30

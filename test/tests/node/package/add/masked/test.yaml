@@ -1,0 +1,3 @@
+suite:
+  name: package-add-masked
+  mode: sequential

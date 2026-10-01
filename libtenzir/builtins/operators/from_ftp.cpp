@@ -10,6 +10,7 @@
 
 #include <tenzir/async/curl.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -62,7 +63,8 @@ auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
   co_return true;
 }
 
-class FromFtp final : public Operator<void, table_slice> {
+template <class Output>
+class FromFtp final : public Operator<void, Output> {
 public:
   explicit FromFtp(FromFtpArgs args) : args_{std::move(args)} {
   }
@@ -148,7 +150,7 @@ public:
                   CurlDownloadDone{.status = CurlTransferStatus::local_abort}};
   }
 
-  auto process_task(Any result, Push<table_slice>&, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>&, OpCtx& ctx)
     -> Task<void> override {
     if (lifecycle_ == Lifecycle::done) {
       co_return;
@@ -212,15 +214,20 @@ public:
       });
   }
 
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
-                   OpCtx&) -> Task<void> override {
-    auto const rows = slice.rows();
+  auto process_sub(SubKeyView, Output slice, Push<Output>& push, OpCtx&)
+    -> Task<void> override {
+    auto const rows = [&] {
+      if constexpr (std::same_as<Output, nova::Events>) {
+        return slice.active_count();
+      } else {
+        return slice.rows();
+      }
+    }();
     co_await push(std::move(slice));
     events_read_counter_.add(rows);
   }
 
-  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&)
-    -> Task<void> override {
+  auto finish_sub(SubKeyView, Push<Output>&, OpCtx&) -> Task<void> override {
     lifecycle_ = Lifecycle::done;
     co_return;
   }
@@ -265,7 +272,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromFtpArgs, FromFtp>{};
+    auto d
+      = Describer<FromFtpArgs, FromFtp<table_slice>, FromFtp<nova::Events>>{};
     d.positional("url", &FromFtpArgs::url);
     auto tls_validator = tls_options{
       {.is_server = false}}.add_to_describer(d, &FromFtpArgs::tls);
@@ -278,7 +286,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (output->is_not<table_slice>()) {
+      if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(parser.source.subloc(0, 1))
           .emit(ctx);
