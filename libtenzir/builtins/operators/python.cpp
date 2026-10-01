@@ -459,11 +459,13 @@ auto prepare_runtime(const config& config, std::string_view requirements,
     TENZIR_VERBOSE("creating a python venv with: '{}'",
                    fmt::join(invocation, "' '"));
     auto venv_err = bp::ipstream{};
-    if (bp::system(invocation, runtime.env, bp::std_err > venv_err,
-                   detail::preserved_fds{{STDERR_FILENO}},
-                   bp::detail::limit_handles_{})
-        != 0) {
-      return drain_pipe(venv_err);
+    auto child = bp::child{invocation, runtime.env, bp::std_err > venv_err,
+                           detail::preserved_fds{{STDERR_FILENO}},
+                           bp::detail::limit_handles_{}};
+    auto error = drain_pipe(venv_err);
+    child.wait();
+    if (child.exit_code() != 0) {
+      return error;
     }
     return None{};
   };
@@ -515,11 +517,13 @@ auto prepare_runtime(const config& config, std::string_view requirements,
     auto install_err = bp::ipstream{};
     TENZIR_VERBOSE("installing python modules with: '{}'",
                    fmt::join(invocation, "' '"));
-    if (bp::system(invocation, runtime.env, bp::std_err > install_err,
-                   detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                   bp::detail::limit_handles_{})
-        != 0) {
-      diagnostic::error("{}", drain_pipe(install_err))
+    auto child = bp::child{invocation, runtime.env, bp::std_err > install_err,
+                           detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                           bp::detail::limit_handles_{}};
+    auto error = drain_pipe(install_err);
+    child.wait();
+    if (child.exit_code() != 0) {
+      diagnostic::error("{}", error)
         .primary(operator_location)
         .note("{}", error_note)
         .emit(dh);
