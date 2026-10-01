@@ -820,7 +820,10 @@ public:
     auto const scalar = document.is_scalar();
     // An event whose `log` field is not JSON is dropped without a warning.
     auto dh = null_diagnostic_handler{};
-    if (not nova::parse_json_value(document, std::move(field), dh)) {
+    // Unflattening applies to the Fluent Bit record, not to the decoded value.
+    auto options = nova::JsonDecodingOptions{.exact_keys = true};
+    if (not nova::parse_json_value(document, std::move(field), dh, {},
+                                   options)) {
       return false;
     }
     return scalar.error() or scalar.value_unsafe() or document.at_end();

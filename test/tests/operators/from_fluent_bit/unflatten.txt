@@ -4,5 +4,8 @@
       ip: 10.0.0.1,
       port: 443,
     },
+    log: {
+      "user.name": "alice",
+    },
   },
 }
