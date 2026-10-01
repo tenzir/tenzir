@@ -1,0 +1,36 @@
+warning: failed to parse Avro input
+ --> tests/functions/parse_avro/dynamic_maps.tql:8:10
+  |
+8 | parsed = raw.decode_hex().parse_avro(schema={type: "map", values: ["long", "string"]})
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: invalid UTF-8 in Avro string
+{
+  parsed: null,
+}
+{
+  parsed: {
+    x: 1,
+  },
+}
+{
+  parsed: {},
+}
+{
+  parsed: {
+    y: 2,
+  },
+}
+{
+  parsed: {
+    x: 3,
+  },
+}
+{
+  parsed: null,
+}
+{
+  parsed: {
+    y: "y",
+  },
+}

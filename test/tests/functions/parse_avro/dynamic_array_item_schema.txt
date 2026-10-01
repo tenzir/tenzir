@@ -5,3 +5,5 @@ error: unsupported Avro schema
   |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
   = note: Avro array item types must have a fixed Tenzir type
+  = usage: parse_avro(input:blob|string, schema=record|string)
+  = docs: https://tenzir.com/docs/reference/functions/parse_avro

@@ -1,0 +1,16 @@
+{
+  integer: -1,
+  single: 1.5,
+  double: -2.25,
+  bytes: "00FF",
+  fixed: "ABCD",
+  enumeration: "b",
+  nothing: null,
+  flag: true,
+  numbers: [
+    1,
+    2,
+    3,
+  ],
+  empty: [],
+}

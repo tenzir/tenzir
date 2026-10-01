@@ -1,0 +1,20 @@
+from {raw: "010000C03F00000000000002C00400FFABCD0201060204060000"}
+parsed = raw.decode_hex().parse_avro(schema={
+  type: "record",
+  name: "values",
+  fields: [
+    {name: "integer", type: "int"},
+    {name: "single", type: "float"},
+    {name: "double", type: "double"},
+    {name: "bytes", type: "bytes"},
+    {name: "fixed", type: {type: "fixed", name: "pair", size: 2}},
+    {name: "enumeration", type: {type: "enum", name: "choice", symbols: ["a", "b"]}},
+    {name: "nothing", type: "null"},
+    {name: "flag", type: "boolean"},
+    {name: "numbers", type: {type: "array", items: "long"}},
+    {name: "empty", type: {type: "array", items: "string"}},
+  ],
+})
+this = parsed
+bytes = bytes.encode_hex()
+fixed = fixed.encode_hex()

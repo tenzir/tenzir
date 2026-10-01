@@ -5,3 +5,5 @@ error: invalid Avro schema
   |                                             ^^^
   |
   = note: EOF reached
+  = usage: parse_avro(input:blob|string, schema=record|string)
+  = docs: https://tenzir.com/docs/reference/functions/parse_avro

@@ -5,3 +5,5 @@ error: unsupported Avro schema
   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
   = note: recursive Avro schemas are not supported
+  = usage: parse_avro(input:blob|string, schema=record|string)
+  = docs: https://tenzir.com/docs/reference/functions/parse_avro

@@ -1,0 +1,6 @@
+let $schema = {type: "long"}
+from {active: true, raw: "54", alternate: "80"},
+  {active: false, raw: "80", alternate: "56"},
+  {active: true, raw: "58", alternate: "80"}
+parsed = raw.decode_hex().parse_avro(schema=$schema) if active else alternate.decode_hex().parse_avro(schema=$schema)
+this = {parsed: parsed}

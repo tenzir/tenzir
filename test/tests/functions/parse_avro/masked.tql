@@ -1,0 +1,9 @@
+let $schema = {type: "long"}
+from {raw: "54", active: true},
+  {raw: "02", active: false},
+  {raw: "56", active: true},
+  {raw: "80", active: false},
+  {raw: "58", active: true}
+where active
+parsed = raw.decode_hex().parse_avro(schema=$schema)
+this = {parsed: parsed}

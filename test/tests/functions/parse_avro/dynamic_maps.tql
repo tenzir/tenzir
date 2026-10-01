@@ -1,0 +1,9 @@
+from {raw: null},
+  {raw: "020278000200"},
+  {raw: "00"},
+  {raw: "020279000400"},
+  {raw: "020278000600"},
+  {raw: "04027802027802790202ff00"},
+  {raw: "02027902027900"}
+parsed = raw.decode_hex().parse_avro(schema={type: "map", values: ["long", "string"]})
+drop raw

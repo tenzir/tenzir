@@ -1,0 +1,4 @@
+from {}
+integer = "54".decode_hex().parse_avro(schema={type: "long"})
+string = "a".parse_avro(schema={type: "fixed", name: "byte", size: 1}).encode_hex()
+nothing = "".parse_avro(schema={type: "null"})

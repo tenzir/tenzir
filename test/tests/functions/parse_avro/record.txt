@@ -5,7 +5,7 @@
     metadata: null,
     maybe: null,
   },
-  maybe_kind: "string",
+  maybe_kind: "null",
 }
 {
   parsed: {
