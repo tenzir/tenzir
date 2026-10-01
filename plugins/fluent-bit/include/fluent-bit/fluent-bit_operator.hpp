@@ -28,6 +28,11 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/array.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/event_builder.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -797,6 +802,182 @@ auto parse_fluent_bit_chunk(chunk_ptr const& chunk, multi_series_builder& msb,
   }
 }
 
+/// Appends a decoded JSON value without inferring types from its strings.
+auto append_json(auto&& out, const data& value) -> void {
+  match(
+    value,
+    [&](caf::none_t) {
+      out.null();
+    },
+    [&](const std::string& x) {
+      out.data(std::string_view{x});
+    },
+    [&](const list& xs) {
+      auto elements = out.list();
+      for (const auto& x : xs) {
+        append_json(elements, x);
+      }
+    },
+    [&](const record& xs) {
+      auto fields = out.record();
+      for (const auto& [key, x] : xs) {
+        append_json(fields.exact_field(key), x);
+      }
+    },
+    [&]<class T>(const T& x) {
+      if constexpr (requires { out.data(x); }) {
+        out.data(x);
+      } else {
+        out.null();
+      }
+    });
+}
+
+auto append_msgpack(auto&& field, const msgpack_object& object,
+                    diagnostic_handler& dh, bool decode = false) -> bool {
+  auto f = detail::overload{
+    [&](None) {
+      field.null();
+      return true;
+    },
+    [&](auto x) {
+      field.data(x);
+      return true;
+    },
+    [&](std::string_view x) {
+      // A `log` field may hold an escaped JSON object, see
+      // https://docs.fluentbit.io/manual/pipeline/parsers/decoders.
+      if (decode) {
+        auto json = from_json(x);
+        if (not json) {
+          return false;
+        }
+        append_json(field, *json);
+        return true;
+      }
+      field.data_unparsed(x);
+      return true;
+    },
+    [&](std::span<const std::byte> xs) {
+      field.data(blob_view{xs});
+      return true;
+    },
+    [&](std::span<msgpack_object> xs) {
+      auto list = field.list();
+      for (const auto& x : xs) {
+        if (not append_msgpack(list, x, dh, decode)) {
+          return false;
+        }
+      }
+      return true;
+    },
+    [&](std::span<msgpack_object_kv> xs) {
+      auto record = field.record();
+      for (const auto& kvp : xs) {
+        if (kvp.key.type != MSGPACK_OBJECT_STR) {
+          diagnostic::warning("invalid Fluent Bit record")
+            .note("failed to parse key")
+            .note("got {}", kvp.key.type)
+            .emit(dh);
+          return false;
+        }
+        auto key = msgpack::to_str(kvp.key);
+        if (not append_msgpack(record.field(key), kvp.val, dh, key == "log")) {
+          return false;
+        }
+      }
+      return true;
+    },
+    [&](const msgpack_object_ext& ext) {
+      diagnostic::warning("unknown MsgPack type")
+        .note("cannot handle MsgPack extensions")
+        .note("got {}", ext.type)
+        .emit(dh);
+      return false;
+    },
+    [&](const unknown_msgpack_type&) {
+      diagnostic::warning("unknown MsgPack type")
+        .note("got {}", object.type)
+        .emit(dh);
+      return false;
+    },
+  };
+  return msgpack::visit(f, object);
+}
+
+/// Appends one Fluent Bit event to `builder`, see the overload above for the
+/// format. Drops the event with a warning if it is malformed.
+auto parse_fluent_bit_chunk(chunk_ptr const& chunk, nova::EventBuilder& builder,
+                            diagnostic_handler& dh) -> void {
+  auto unpacked = msgpack::unpacked{};
+  auto object = unpacked.unpack(as_bytes(chunk));
+  TENZIR_ASSERT(object);
+  if (object->type != MSGPACK_OBJECT_ARRAY) {
+    diagnostic::warning("invalid Fluent Bit message")
+      .note("expected array as top-level object")
+      .note("got MsgPack type {}", object->type)
+      .emit(dh);
+    return;
+  }
+  auto const& outer = msgpack::to_array(*object);
+  if (outer.size() != 2) {
+    diagnostic::warning("invalid Fluent Bit message")
+      .note("expected two-element array at top-level object")
+      .note("got {} elements", outer.size())
+      .emit(dh);
+    return;
+  }
+  auto row = builder.event();
+  auto const& first = outer[0];
+  auto const& second = outer[1];
+  if (first.type == MSGPACK_OBJECT_ARRAY) {
+    auto xs = msgpack::to_array(first);
+    if (xs.size() != 2) {
+      diagnostic::warning("invalid Fluent Bit message")
+        .note("wrong number of array elements in first-level array")
+        .note("got {}, expected 2", xs.size())
+        .emit(dh);
+      builder.discard_last();
+      return;
+    }
+    auto timestamp = msgpack::to_flb_time(xs[0]);
+    if (not timestamp) {
+      diagnostic::warning("invalid Fluent Bit message")
+        .note("failed to parse timestamp in first-level array")
+        .note("got MsgPack type {}", xs[0].type)
+        .emit(dh);
+      builder.discard_last();
+      return;
+    }
+    row.exact_field("timestamp").data(*timestamp);
+    if (xs[1].type != MSGPACK_OBJECT_MAP) {
+      diagnostic::warning("invalid Fluent Bit message")
+        .note("failed parse metadata in first-level array")
+        .note("got MsgPack type {}, expected map", xs[1].type)
+        .emit(dh);
+      builder.discard_last();
+      return;
+    }
+    if (not msgpack::to_map(xs[1]).empty()
+        and not append_msgpack(row.exact_field("metadata"), xs[1], dh)) {
+      builder.discard_last();
+      return;
+    }
+  } else if (auto timestamp = msgpack::to_flb_time(first)) {
+    row.exact_field("timestamp").data(*timestamp);
+  } else {
+    diagnostic::warning("invalid Fluent Bit message")
+      .note("failed to parse first-level array element")
+      .note("got MsgPack type {}, expected array or timestamp", first.type)
+      .emit(dh);
+    builder.discard_last();
+    return;
+  }
+  if (not append_msgpack(row.exact_field("message"), second, dh)) {
+    builder.discard_last();
+  }
+}
+
 constexpr auto source_channel_capacity = size_t{16};
 constexpr auto sink_stop_wait = std::chrono::seconds{1};
 constexpr auto snapshot_stop_wait = std::chrono::seconds{5};
@@ -1195,6 +1376,284 @@ private:
   FluentBitArgs args_;
   property_map fluent_bit_args_;
   property_map plugin_args_;
+  std::unique_ptr<engine> engine_;
+  MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
+  bool done_ = false;
+};
+
+class FromFluentBitEvents final : public Operator<void, nova::Events> {
+public:
+  explicit FromFluentBitEvents(FluentBitArgs args)
+    : args_{std::move(args)}, timeout_{args_.builder_options.settings.timeout} {
+    args_.builder_options.settings.default_schema_name
+      = fmt::format("fluent_bit.{}", args_.plugin.inner);
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    read_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_fluent_bit",
+      },
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
+    read_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_fluent_bit",
+      },
+      MetricsDirection::read, MetricsVisibility::external_,
+      MetricsUnit::events);
+    // Without a running bridge there is nothing to wait for.
+    source_exhausted_ = true;
+    auto settings = nova::event_builder_settings(args_.builder_options);
+    // Fluent Bit parsers emit their captures as strings, including numbers.
+    settings.infer_numbers = true;
+    auto builder = nova::EventBuilder::make(std::move(settings), ctx.dh());
+    if (not builder) {
+      co_return;
+    }
+    builder_ = std::move(builder).unwrap();
+    auto operator_args = make_operator_args(args_, ctx);
+    if (not operator_args) {
+      co_return;
+    }
+    auto args = std::move(operator_args).unwrap();
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    auto requests = collect_fluent_bit_properties(args, fluent_bit_args,
+                                                  plugin_args, ctx.dh());
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      co_return;
+    }
+    auto [sender, receiver]
+      = channel<FluentBitSourceTaskResult>(source_channel_capacity);
+    events_ = std::move(receiver);
+    source_exhausted_ = false;
+    ctx.spawn_task([sender, this]() mutable -> Task<void> {
+      while (true) {
+        co_await timeout_.wait();
+        co_await sender.send(FluentBitSourceTimeout{});
+      }
+    });
+    ctx.spawn_task(
+      [sender = std::move(sender), args = std::move(args),
+       config = args_.config, fluent_bit_args = std::move(fluent_bit_args),
+       plugin_args = std::move(plugin_args), stop_requested = stop_requested_,
+       bridge_alive = bridge_lifetime_.alive,
+       &dh = ctx.dh()]() mutable -> Task<void> {
+        // A forced teardown cancels this task without calling `stop()`. The
+        // polling loop runs on a blocking thread and cannot observe
+        // cancellation, so we translate it into the flag that tells the loop to
+        // give up.
+        auto cancellation = folly::CancellationCallback{
+          co_await folly::coro::co_current_cancellation_token,
+          [bridge_alive]() mutable noexcept {
+            bridge_alive->store(false, std::memory_order_release);
+          },
+        };
+        co_await spawn_blocking(
+          [sender = std::move(sender), args = std::move(args),
+           config = std::move(config),
+           fluent_bit_args = std::move(fluent_bit_args),
+           plugin_args = std::move(plugin_args),
+           stop_requested = std::move(stop_requested),
+           bridge_alive = std::move(bridge_alive), &dh]() mutable {
+            poll_fluent_bit_source(
+              std::move(sender), std::move(args), std::move(config),
+              std::move(fluent_bit_args), std::move(plugin_args),
+              std::move(stop_requested), std::move(bridge_alive), dh);
+          });
+      });
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (source_exhausted_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    TENZIR_ASSERT(events_);
+    auto message = co_await events_->recv();
+    TENZIR_ASSERT(message);
+    co_return std::move(*message);
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto task_result = std::move(result).as<FluentBitSourceTaskResult>();
+    co_await co_match(
+      task_result,
+      [&](FluentBitSourceMessage& message) -> Task<void> {
+        if (is<FluentBitSourceDone>(message)) {
+          co_await flush(push);
+          source_exhausted_ = true;
+          co_return;
+        }
+        auto const batch_size
+          = args_.builder_options.settings.desired_batch_size;
+        for (auto& chunk : as<std::vector<chunk_ptr>>(message)) {
+          parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
+          if (rows() >= batch_size) {
+            co_await flush(push);
+          }
+        }
+        if (timeout_.poll(rows())) {
+          co_await flush(push);
+        }
+      },
+      [&](FluentBitSourceTimeout&) -> Task<void> {
+        if (timeout_.poll(rows())) {
+          co_await flush(push);
+        }
+      });
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await flush(push);
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    // The polling loop still delivers the end-of-stream marker after this.
+    stop_requested_->store(true, std::memory_order_release);
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return source_exhausted_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  auto rows() const -> size_t {
+    return builder_ ? static_cast<size_t>(builder_->length()) : 0;
+  }
+
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    if (rows() == 0) {
+      co_return;
+    }
+    auto events = builder_->finish();
+    timeout_.reset();
+    auto const bytes = events.approx_bytes();
+    auto const rows = events.active_count();
+    co_await push(std::move(events));
+    read_bytes_counter_.add(bytes);
+    read_events_counter_.add(rows);
+  }
+
+  FluentBitArgs args_;
+  BatchTimeout timeout_;
+  mutable Option<Receiver<FluentBitSourceTaskResult>> events_;
+  Option<nova::EventBuilder> builder_;
+  SourceBridgeLifetime bridge_lifetime_;
+  Arc<Atomic<bool>> stop_requested_{std::in_place, false};
+  MetricsCounter read_bytes_counter_;
+  MetricsCounter read_events_counter_;
+  bool source_exhausted_ = false;
+};
+
+class ToFluentBitEvents final : public Operator<nova::Events, void> {
+public:
+  explicit ToFluentBitEvents(FluentBitArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    write_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_fluent_bit",
+      },
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::bytes);
+    write_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_fluent_bit",
+      },
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::events);
+    auto operator_args = make_operator_args(args_, ctx);
+    if (not operator_args) {
+      done_ = true;
+      co_return;
+    }
+    auto runtime_args = std::move(operator_args).unwrap();
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    auto requests = collect_fluent_bit_properties(runtime_args, fluent_bit_args,
+                                                  plugin_args, ctx.dh());
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      done_ = true;
+      co_return;
+    }
+    engine_ = engine::make_sink(runtime_args, args_.config, fluent_bit_args,
+                                plugin_args, ctx.dh());
+    if (not engine_) {
+      done_ = true;
+      co_return;
+    }
+    engine_->max_wait_before_stop(sink_stop_wait);
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (done_ or not engine_) {
+      co_return;
+    }
+    auto failed = false;
+    auto bytes = uint64_t{0};
+    auto events = uint64_t{0};
+    auto printer = nova::json_printer{json_printer_options{
+      .style = no_style(),
+      .oneline = true,
+    }};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      printer.print(input.data.get(row));
+      auto const event = printer.bytes();
+      auto message = fmt::format("[{}, {}]", flb_time_now(),
+                                 std::string_view{
+                                   reinterpret_cast<char const*>(event.data()),
+                                   event.size(),
+                                 });
+      if (engine_->push(message).is_error()) {
+        failed = true;
+      } else {
+        bytes += message.size();
+        ++events;
+      }
+    }
+    if (failed) {
+      diagnostic::warning("failed to push data into Fluent Bit Engine")
+        .emit(ctx.dh());
+    }
+    write_bytes_counter_.add(bytes);
+    write_events_counter_.add(events);
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    if (done_ or not engine_) {
+      co_return;
+    }
+    if (auto error = engine_->restart(snapshot_stop_wait)) {
+      ctx.dh().emit(std::move(*error));
+      done_ = true;
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    engine_.reset();
+    done_ = true;
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  FluentBitArgs args_;
   std::unique_ptr<engine> engine_;
   MetricsCounter write_bytes_counter_;
   MetricsCounter write_events_counter_;

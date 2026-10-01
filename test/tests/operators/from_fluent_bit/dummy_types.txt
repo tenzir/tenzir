@@ -1,0 +1,22 @@
+{
+  metadata: {
+    host: "web-1",
+  },
+  message: {
+    log: {
+      level: "info",
+    },
+    src: 10.0.0.1,
+    count: -3,
+    ratio: 0.5,
+    ok: true,
+    none: null,
+    tags: [
+      "a",
+      "b",
+    ],
+    nested: {
+      x: 1,
+    },
+  },
+}

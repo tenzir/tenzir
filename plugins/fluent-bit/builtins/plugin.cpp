@@ -43,7 +43,8 @@ public:
   auto describe() const -> Description override {
     auto initial = FluentBitArgs{};
     initial.config = config_;
-    auto d = Describer<FluentBitArgs, FromFluentBit>{std::move(initial)};
+    auto d = Describer<FluentBitArgs, FromFluentBit, FromFluentBitEvents>{
+      std::move(initial)};
     d.positional("plugin", &FluentBitArgs::plugin);
     d.named_optional("options", &FluentBitArgs::args);
     d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
@@ -58,7 +59,7 @@ public:
         std::ignore = tls_opts.validate(ctx);
       }
       msb_validator(ctx);
-      return {};
+      return nova::validate_event_builder_options(msb_validator, ctx);
     });
     return d.without_optimize();
   }
@@ -93,7 +94,8 @@ public:
   auto describe() const -> Description override {
     auto initial = FluentBitArgs{};
     initial.config = config_;
-    auto d = Describer<FluentBitArgs, ToFluentBit>{std::move(initial)};
+    auto d = Describer<FluentBitArgs, ToFluentBit, ToFluentBitEvents>{
+      std::move(initial)};
     d.positional("plugin", &FluentBitArgs::plugin);
     d.named_optional("options", &FluentBitArgs::args);
     d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);

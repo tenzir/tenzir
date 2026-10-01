@@ -1,0 +1,3 @@
+from {x: 1, y: "skipped"}, {x: 2, y: "foo", z: [1, 2]}, {x: 3, y: null, z: []}
+where x > 1
+to_fluent_bit "stdout", options={format: "json_lines", json_date_key: false}
