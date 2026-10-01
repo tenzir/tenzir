@@ -1,14 +1,20 @@
 ---
 fixtures:
   - http_request:
-      path: /other
-      body: '{"value":8}'
-      expected_status: 200
-      expected_body: ""
+      requests:
+        - path: /other
+          body: '{"value":0}'
+          expected_status: 200
+          expected_body: ""
+        - path: /other
+          body: '{"value":8}'
+          stop_on_connection_drop: true
 timeout: 60
 ---
 
 accept_http env("HTTP_REQUEST_ENDPOINT"), responses={"/ingest": {code: 201, content_type: "text/plain", body: "created"}} {
   read_json
+  // Let the response check finish before `head` stops the server.
+  where value != 0
 }
 head 1

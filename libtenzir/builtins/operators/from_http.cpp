@@ -22,6 +22,14 @@
 #include <tenzir/http_pool.hpp>
 #include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/data_array_builder.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/fundamental_array_builder.hpp>
+#include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova/record_array_builder.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -54,6 +62,7 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <iterator>
@@ -539,6 +548,8 @@ auto next_request_from_url(std::string_view url,
   return None{};
 }
 
+namespace legacy {
+
 auto next_request_from_lambda(PaginationRequestContext const& context,
                               table_slice const& slice, diagnostic_handler& dh)
   -> Option<NextRequest> {
@@ -574,6 +585,134 @@ auto next_request_from_lambda(PaginationRequestContext const& context,
         .emit(dh);
       return None{};
     });
+}
+
+} // namespace legacy
+
+/// The prepared body of a `paginate` lambda.
+struct PaginateLambda {
+  std::string param;
+  nova::Evaluator evaluator;
+};
+
+auto type_name(nova::RowView<nova::Data> const& value) -> std::string_view {
+  return match(value, []<class Tag>(nova::RowView<Tag> const&) {
+    return nova::Type<Tag>::static_name;
+  });
+}
+
+auto next_request_from_lambda(PaginationRequestContext const& context,
+                              PaginateLambda& lambda,
+                              nova::Events const& events,
+                              diagnostic_handler& dh) -> Option<NextRequest> {
+  if (events.active_count() != 1) {
+    diagnostic::warning("cannot paginate over multiple events")
+      .primary(context.spec)
+      .note("stopping pagination")
+      .emit(dh);
+    return None{};
+  }
+  // Evaluate the body over records that hold the event in the parameter, so
+  // that `x => x.next` reads the field `next` of the event.
+  auto const fields = std::array{
+    std::pair{
+      std::string_view{lambda.param},
+      nova::MaskedArray<nova::Array<nova::Data>>{
+        nova::Array<nova::Data>{events.data},
+        events.mask,
+      },
+    },
+  };
+  auto input = nova::Events{nova::Array<nova::Record>::from_fields(fields),
+                            events.mask, events.meta};
+  auto result = lambda.evaluator.eval(input, nova::EvalCtx{dh});
+  auto const row = *nova::storage::true_bits(events.mask).begin();
+  auto const value = result.get(row);
+  if (is<nova::RowView<nova::Null>>(value)) {
+    return None{};
+  }
+  if (auto const* url = try_as<nova::RowView<nova::String>>(&value)) {
+    return next_request_from_url(**url, context, dh);
+  }
+  if (is<nova::RowView<nova::Record>>(value)) {
+    return next_request_from_record(as<record>(nova::materialize_legacy(value)),
+                                    context, dh);
+  }
+  diagnostic::error("expected `paginate` to be `string`, `record`, or `null`, "
+                    "got `{}`",
+                    type_name(value))
+    .primary(context.spec)
+    .emit(dh);
+  return None{};
+}
+
+/// The events and the opaque next URL of an OData collection page.
+struct OdataEvents {
+  Option<std::string> next_url;
+  /// Absent when the `value` array is empty.
+  Option<nova::Events> events;
+};
+
+auto emit_odata_envelope_error(location paginate_loc, diagnostic_handler& dh)
+  -> failure_or<OdataEvents> {
+  diagnostic::error(
+    "expected OData response body to contain a top-level `value` array")
+    .primary(paginate_loc)
+    .emit(dh);
+  return failure::promise();
+}
+
+/// Extracts the events of an OData collection envelope, which must be the
+/// single event of `events`. Each object in `value` becomes one event, without
+/// its top-level `@odata.*` fields.
+auto extract_odata_page(nova::Events const& events, location paginate_loc,
+                        diagnostic_handler& dh) -> failure_or<OdataEvents> {
+  if (events.active_count() != 1) {
+    return emit_odata_envelope_error(paginate_loc, dh);
+  }
+  auto result = OdataEvents{};
+  auto value = Option<nova::RowView<nova::Data>>{};
+  auto const row = *nova::storage::true_bits(events.mask).begin();
+  for (auto const& [key, field] : events.data.get(row)) {
+    if (key == "@odata.nextLink") {
+      if (auto const* next = try_as<nova::RowView<nova::String>>(&field)) {
+        result.next_url = std::string{**next};
+      }
+      continue;
+    }
+    if (key == "value") {
+      value = field;
+    }
+  }
+  if (not value) {
+    return emit_odata_envelope_error(paginate_loc, dh);
+  }
+  auto const* items = try_as<nova::RowView<nova::List>>(&*value);
+  if (not items) {
+    return emit_odata_envelope_error(paginate_loc, dh);
+  }
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (auto const& item : *items) {
+    auto const* item_record = try_as<nova::RowView<nova::Record>>(&item);
+    if (not item_record) {
+      diagnostic::error("expected OData `value` array to contain objects")
+        .primary(paginate_loc)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto output = builder.record();
+    for (auto const& [key, field] : *item_record) {
+      if (not key.starts_with("@odata.")) {
+        nova::append_row(output.field(key), field);
+      }
+    }
+  }
+  if (auto const length = builder.length(); length > 0) {
+    result.events
+      = nova::Events{builder.finish(), nova::storage::BitMap{length, true},
+                     nova::Events::Meta::make_empty(length)};
+  }
+  return result;
 }
 
 auto builtin_pagination_mode(Option<pagination_spec> const& paginate)
@@ -859,6 +998,8 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
 }
 
 // ---- Operator ---------------------------------------------------------------
+
+namespace legacy {
 
 class FromHttp final : public Operator<void, table_slice> {
 public:
@@ -1235,6 +1376,419 @@ private:
   Option<ResponseState> response_;
 };
 
+} // namespace legacy
+
+class FromHttp final : public Operator<void, nova::Events> {
+public:
+  explicit FromHttp(FromHttpArgs args)
+    : message_queue_{std::in_place, 64}, args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    evb_ = folly::getGlobalIOExecutor()->getEventBase();
+    TENZIR_ASSERT(evb_);
+    // prepare pagination
+    auto paginate = validate_paginate(args_.paginate, ctx.dh());
+    if (not paginate) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    pagination_.spec = std::move(*paginate);
+    if (pagination_.spec) {
+      if (auto const* lambda
+          = try_as<ast::lambda_expr>(&pagination_.spec->inner)) {
+        auto evaluator = co_await nova::Evaluator::make(lambda->body, ctx);
+        if (not evaluator) {
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+        paginate_lambda_.emplace(PaginateLambda{
+          .param = std::string{lambda->param(0).name},
+          .evaluator = std::move(*evaluator),
+        });
+      }
+    }
+    // resolve secrets
+    std::string resolved_url;
+    auto resolved_body = Option<data>{};
+    auto secret_resolution = co_await resolve_http_secrets(
+      ctx, args_, resolved_url, resolved_headers_, resolved_body);
+    if (secret_resolution.is_error()) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    pagination_.current_url = resolved_url;
+    // prepare fetch config
+    fetch_config_ = make_fetch_config(args_);
+    // ensure system CA paths are registered
+    http::ensure_default_ca_paths();
+    pagination_.current_request
+      = make_request_config(args_, resolved_headers_, resolved_body);
+    co_await start_fetch(ctx, pagination_.current_request);
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    co_await co_match(
+      std::move(result).as<Message>(),
+      // --- ResponseHeader ---
+      [&](ResponseHeader hdr) -> Task<void> {
+        auto headers = std::move(hdr.headers);
+        auto content_encoding = Option<std::string>{};
+        if (auto value = http::find(headers, "content-encoding")) {
+          auto trimmed = std::string{detail::trim(*value)};
+          if (not trimmed.empty()) {
+            content_encoding = std::move(trimmed);
+          }
+        }
+        response_ = ResponseState{
+          .status = hdr.status,
+          .headers = std::move(headers),
+          .content_encoding = content_encoding,
+          .decompressor = nullptr,
+          .error_body = {},
+        };
+        if (content_encoding) {
+          if (auto dec = http::make_decompressor(*content_encoding, ctx)) {
+            response_->decompressor = std::move(*dec);
+          } else {
+            response_->content_encoding = None{};
+          }
+        }
+        if (response_->is_success()) {
+          co_await spawn_parser(ctx);
+          if (lifecycle_ == Lifecycle::done) {
+            co_return;
+          }
+          if (auto mode = builtin_pagination_mode(pagination_.spec);
+              mode and *mode == http::PaginationMode::link) {
+            TENZIR_ASSERT(pagination_.spec);
+            // Extract the rel=next URL for link pagination.
+            if (auto next_url = http::next_url_from_link_headers(
+                  response_->headers, pagination_.current_url,
+                  pagination_.spec->source, ctx.dh())) {
+              pagination_.next_request = NextRequest{
+                .url = std::move(*next_url),
+                .request = make_paginated_request_config(resolved_headers_),
+              };
+            }
+          }
+        } else {
+          if (not args_.error_field) {
+            diagnostic::error("received HTTP error status {}",
+                              response_->status)
+              .primary(args_.operator_location)
+              .emit(ctx);
+          }
+        }
+        co_return;
+      },
+      // --- ResponseBody ---
+      [&](ResponseBody body) -> Task<void> {
+        if (not response_body_needed()) {
+          co_return;
+        }
+        auto const* p = reinterpret_cast<std::byte const*>(body.data->data());
+        auto payload = blob{p, p + body.data->size()};
+        if (response_->decompressor) {
+          auto decompressed = http::decompress_chunk(*response_->decompressor,
+                                                     payload, ctx.dh());
+          if (decompressed.is_err()) {
+            co_return;
+          }
+          payload = std::move(decompressed).unwrap();
+        }
+        if (payload.empty()) {
+          co_return;
+        }
+        bytes_read_.add(payload.size());
+        if (response_->is_success()) {
+          // push to parser
+          if (auto sub = ctx.get_sub(pagination_.page_count)) {
+            auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
+            auto push_result = co_await pipeline.push(chunk::copy(
+              reinterpret_cast<char const*>(payload.data()), payload.size()));
+            TENZIR_UNUSED(push_result);
+          }
+        } else {
+          // append to error body
+          response_->error_body.insert(response_->error_body.end(),
+                                       payload.begin(), payload.end());
+        }
+        co_return;
+      },
+      // --- FetchError ---
+      [&](FetchError err) -> Task<void> {
+        diagnostic::error("HTTP request to `{}` failed: {}",
+                          pagination_.current_url, err.message)
+          .primary(args_.operator_location)
+          .emit(ctx);
+        pagination_.next_request = None{};
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      },
+      // --- RetryWarning ---
+      [&](RetryWarning warn) -> Task<void> {
+        diagnostic::warning("{}", warn.message)
+          .primary(args_.operator_location)
+          .emit(ctx);
+        co_return;
+      },
+      // --- FetchDone ---
+      [&](FetchDone) -> Task<void> {
+        if (response_ and not response_->is_success() and args_.error_field) {
+          co_await push_error_field(push, ctx);
+        }
+        // close sub-pipeline (next pagination request is started from finish_sub)
+        if (auto sub = ctx.get_sub(pagination_.page_count)) {
+          auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
+          co_await pipeline.close();
+        } else {
+          lifecycle_ = Lifecycle::done;
+        }
+        co_return;
+      });
+  }
+
+  auto process_sub(SubKeyView, nova::Events slice, Push<nova::Events>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    if (slice.active_count() == 0) {
+      co_return;
+    }
+    if (auto mode = builtin_pagination_mode(pagination_.spec);
+        mode and *mode == http::PaginationMode::odata) {
+      TENZIR_ASSERT(pagination_.spec);
+      auto page = extract_odata_page(slice, pagination_.spec->source, ctx.dh());
+      if (not page) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      pagination_.odata_envelope_seen = true;
+      if (page->next_url) {
+        if (auto next_url
+            = resolve_next_url(*page->next_url, pagination_.current_url,
+                               pagination_.spec->source, ctx.dh(),
+                               NextUrlSource::odata_next_link)) {
+          pagination_.next_request = NextRequest{
+            .url = std::move(*next_url),
+            .request = make_paginated_request_config(resolved_headers_),
+          };
+        }
+      }
+      if (page->events) {
+        auto const rows = page->events->active_count();
+        co_await push(std::move(*page->events));
+        events_read_.add(rows);
+      }
+      co_return;
+    }
+    if (paginate_lambda_ and not pagination_.next_request) {
+      TENZIR_ASSERT(pagination_.spec);
+      auto context = PaginationRequestContext{
+        .spec = *pagination_.spec,
+        .current_url = pagination_.current_url,
+        .current_request = pagination_.current_request,
+        .paginated_headers = resolved_headers_,
+        .encode = args_.encode,
+      };
+      if (auto next = next_request_from_lambda(context, *paginate_lambda_,
+                                               slice, ctx.dh())) {
+        pagination_.next_request = std::move(*next);
+      }
+    }
+    auto const rows = slice.active_count();
+    co_await push(std::move(slice));
+    events_read_.add(rows);
+  }
+
+  auto finish_sub(SubKeyView, Push<nova::Events>&, OpCtx& ctx)
+    -> Task<void> override {
+    if (auto mode = builtin_pagination_mode(pagination_.spec);
+        mode and *mode == http::PaginationMode::odata
+        and not pagination_.odata_envelope_seen and response_
+        and response_->is_success()) {
+      TENZIR_ASSERT(pagination_.spec);
+      diagnostic::error(
+        "expected OData response body to contain a top-level `value` array")
+        .primary(pagination_.spec->source)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (pagination_.next_request) {
+      // next page
+      auto next = std::move(*pagination_.next_request);
+      pagination_.current_url = std::move(next.url);
+      pagination_.current_request = std::move(next.request);
+      pagination_.next_request = None{};
+      pagination_.page_count += 1;
+      if (args_.paginate_delay
+          and args_.paginate_delay->inner > duration::zero()) {
+        co_await sleep_for(
+          std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            args_.paginate_delay->inner));
+      }
+      co_await start_fetch(ctx, pagination_.current_request);
+    } else {
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // A restored operator would fetch the first page again and repeat the
+    // events that earlier checkpoints already committed.
+    diagnostic::error("from_http does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
+private:
+  enum class Lifecycle { running, done };
+
+  // Starts the fetch task for the current page.
+  // Requires pagination_.current_url and pagination_.page_count to be set.
+  auto start_fetch(OpCtx& ctx, RequestConfig request) -> Task<void> {
+    response_ = None{};
+    pagination_.odata_envelope_seen = false;
+    auto parsed_url = proxygen::URL{pagination_.current_url};
+    if (parsed_url.isSecure() and not fetch_config_.tls_context) {
+      auto tls_opts
+        = tls_options::from_optional(args_.tls, {.is_server = false});
+      auto tls = tls_opts.resolve(ctx.actor_system().config(), ctx);
+      if (tls.is_error()) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      auto result = tls->make_folly_ssl_context(ctx, true);
+      if (result.is_success()) {
+        fetch_config_.tls_context = std::move(*result);
+      } else {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+    }
+    bytes_read_ = ctx.make_counter(
+      MetricsLabel{"host",
+                   MetricsLabel::FixedString::truncate(parsed_url.getHost())},
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
+    events_read_ = ctx.make_counter(
+      MetricsLabel{"host",
+                   MetricsLabel::FixedString::truncate(parsed_url.getHost())},
+      MetricsDirection::read, MetricsVisibility::external_,
+      MetricsUnit::events);
+    ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
+                         fetch_config_, static_cast<bool>(args_.error_field),
+                         message_queue_));
+    co_return;
+  }
+
+  // Spawns the parser sub-pipeline for the current page.
+  // Requires response_, pagination_.current_url and pagination_.page_count to
+  // be set.
+  auto spawn_parser(OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(response_);
+    auto pipeline = ir::pipeline{};
+    if (args_.parser) {
+      pipeline = args_.parser->inner;
+      // Bind the response context as a `let` binding
+      pipeline.bind(args_.response, make_response_context(*response_));
+    } else {
+      auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
+      if (auto value = http::find(response_->headers, "content-type");
+          value and not detail::trim(*value).empty()) {
+        auto content_type = std::string{detail::trim(*value)};
+        plugin = read_plugin_for_content_type(content_type);
+        if (not plugin) {
+          diagnostic::error("unsupported Content-Type `{}`", content_type)
+            .primary(args_.operator_location)
+            .hint("pass an explicit parser pipeline")
+            .emit(ctx);
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+      } else {
+        auto path = path_from_url(pagination_.current_url);
+        plugin = read_plugin_for_url_path(path);
+        if (not plugin) {
+          diagnostic::error("could not infer parser for URL path `{}`", path)
+            .primary(args_.operator_location)
+            .hint("pass an explicit parser pipeline")
+            .emit(ctx);
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+      }
+      auto inferred
+        = make_parser_pipeline(*plugin, args_.operator_location, ctx);
+      if (inferred.is_error()) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      pipeline = std::move(*inferred);
+      TENZIR_TRACE("from_http inferred parser `{}` for `{}`", plugin->name(),
+                   pagination_.current_url);
+    }
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(pagination_.page_count,
+                                                       std::move(pipeline))) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+  }
+
+  auto push_error_field(Push<nova::Events>& push, OpCtx& ctx) -> Task<void> {
+    auto data = nova::Array<nova::Record>::make_empty(1);
+    auto const path = args_.error_field->path();
+    if (path.empty()) {
+      diagnostic::warning(
+        "assignment to `this` requires `record`, but got `blob`")
+        .primary(*args_.error_field)
+        .emit(ctx);
+    } else {
+      auto error = nova::ArrayBuilder<nova::Blob>{};
+      error.data(blob_view{response_->error_body});
+      data = nova::assign_nested_field(std::move(data), path,
+                                       {nova::Array<nova::Data>{error.finish()},
+                                        nova::storage::BitMap{1, true}},
+                                       ctx.dh());
+    }
+    co_await push(nova::Events{std::move(data), nova::storage::BitMap{1, true},
+                               nova::Events::Meta::make_empty(1)});
+    events_read_.add(1);
+  }
+
+  auto response_body_needed() const -> bool {
+    return response_ and (response_->is_success() or args_.error_field);
+  }
+
+  // --- transient ---
+  mutable Arc<MessageQueue> message_queue_;
+  folly::EventBase* evb_{};
+  MetricsCounter bytes_read_;
+  MetricsCounter events_read_;
+  // --- args ---
+  FromHttpArgs args_;
+  FetchConfig fetch_config_;
+  std::vector<http::Header> resolved_headers_;
+  // --- state ---
+  Lifecycle lifecycle_{};
+  PaginationState pagination_;
+  Option<PaginateLambda> paginate_lambda_;
+  // State collected per response page; absent before first response header.
+  Option<ResponseState> response_;
+};
+
 class from_http_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -1242,7 +1796,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromHttpArgs, FromHttp>{};
+    auto d = Describer<FromHttpArgs, legacy::FromHttp, FromHttp>{};
     d.positional("url", &FromHttpArgs::url);
     auto method_arg = d.named("method", &FromHttpArgs::method);
     auto body_arg = d.named("body", &FromHttpArgs::body);
@@ -1395,7 +1949,8 @@ public:
       if (auto parser = ctx.get(parser_arg)) {
         auto output = parser->inner.infer_type(tag_v<chunk_ptr>, ctx);
         if (not output.is_error()) {
-          if (output->is_not<table_slice>()) {
+          if (output->is_not<table_slice>()
+              and output->is_not<nova::Events>()) {
             diagnostic::error("pipeline must return events")
               .primary(parser->source.subloc(0, 1))
               .emit(ctx);
@@ -1403,6 +1958,31 @@ public:
         }
       }
       return {};
+    });
+    // The output type follows an explicit parser. Without one, the operator
+    // infers the parser at runtime, which produces events of the active data
+    // model, so the default implementation selection applies.
+    d.spawner([parser_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<FromHttpArgs, Input>>> {
+      if constexpr (not std::same_as<Input, void>) {
+        return {};
+      } else {
+        auto parser = ctx.get(parser_arg);
+        if (not parser) {
+          return {};
+        }
+        TRY(auto output, parser->inner.infer_type(tag_v<chunk_ptr>, ctx));
+        if (output.template is<nova::Events>()) {
+          return SpawnWith<FromHttpArgs, void>{
+            [](FromHttpArgs args) -> Box<Operator<void, nova::Events>> {
+              return FromHttp{std::move(args)};
+            }};
+        }
+        return SpawnWith<FromHttpArgs, void>{
+          [](FromHttpArgs args) -> Box<Operator<void, table_slice>> {
+            return legacy::FromHttp{std::move(args)};
+          }};
+      }
     });
     return d.without_optimize();
   }

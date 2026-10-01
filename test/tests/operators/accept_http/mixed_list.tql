@@ -1,0 +1,11 @@
+---
+fixtures:
+  - http_request:
+      stop_on_connection_drop: true
+      body: '{"xs":[1,"two",{"three":3},[4.5],null]}'
+---
+
+accept_http env("HTTP_REQUEST_ENDPOINT") {
+  read_json
+}
+head 1

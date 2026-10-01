@@ -1,4 +1,9 @@
-warning: json parser: parser input ended with incomplete object
+warning: input ended with incomplete JSON
+  --> tests/operators/accept_http/subpipeline_error_nonfatal.tql:19:3
+   |
+19 |   read_json
+   |   ~~~~~~~~~
+   |
 {
   value: 42,
 }

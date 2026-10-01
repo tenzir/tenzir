@@ -24,6 +24,9 @@ Exports:
   HTTP_FIXTURE_ODATA_USERS_URL        — Microsoft Graph-shaped OData collection pages
   HTTP_FIXTURE_ODATA_RELATIVE_USERS_URL
                                       — OData collection with relative nextLink
+  HTTP_FIXTURE_ODATA_EMPTY_URL        — OData collection with an empty `value`
+  HTTP_FIXTURE_ODATA_NON_OBJECT_URL   — OData `value` array with a non-object item
+  HTTP_FIXTURE_ODATA_NO_VALUE_URL     — OData envelope without a `value` array
 """
 
 from __future__ import annotations
@@ -68,6 +71,9 @@ _META_LAMBDA_PAGE_2 = "/paginate/meta-lambda/2"
 _ODATA_PAGE_1 = "/graph/v1.0/users"
 _ODATA_RELATIVE_PAGE_1 = "/graph/v1.0/relative-users"
 _ODATA_PAGE_2 = "/graph/v1.0/users/next"
+_ODATA_EMPTY_PAGE = "/graph/v1.0/empty"
+_ODATA_NON_OBJECT_PAGE = "/graph/v1.0/non-object"
+_ODATA_NO_VALUE_PAGE = "/graph/v1.0/no-value"
 _ODATA_SKIPTOKEN = "RFNwdAIAAQAAAD8...AAAAAAAA"
 # Port 9 is IANA Discard Protocol — always refuses connections on most systems.
 _UNREACHABLE_NEXT = "http://127.0.0.1:9/paginate/unreachable/next"
@@ -395,6 +401,15 @@ class _Handler(BaseHTTPRequestHandler):
             }
             self._reply(json.dumps(body).encode())
             return
+        if path == _ODATA_EMPTY_PAGE:
+            self._reply(b'{"@odata.context":"users","value":[]}\n')
+            return
+        if path == _ODATA_NON_OBJECT_PAGE:
+            self._reply(b'{"value":[{"id":"user-1"},42]}\n')
+            return
+        if path == _ODATA_NO_VALUE_PAGE:
+            self._reply(b'{"@odata.context":"users","items":[]}\n')
+            return
         # Large error body for queue-draining regression tests.
         if path == _LARGE_ERROR_PAGE:
             chunk = b"x" * 1024
@@ -456,6 +471,9 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_ODATA_RELATIVE_USERS_URL": (
                 f"{base}{_ODATA_RELATIVE_PAGE_1}"
             ),
+            "HTTP_FIXTURE_ODATA_EMPTY_URL": f"{base}{_ODATA_EMPTY_PAGE}",
+            "HTTP_FIXTURE_ODATA_NON_OBJECT_URL": f"{base}{_ODATA_NON_OBJECT_PAGE}",
+            "HTTP_FIXTURE_ODATA_NO_VALUE_URL": f"{base}{_ODATA_NO_VALUE_PAGE}",
         }
     finally:
         server.shutdown()

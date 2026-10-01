@@ -6,13 +6,10 @@
     "@odata.type": "#microsoft.graph.user",
     id: "manager-1",
   },
-  mail: null,
 }
 {
   id: "user-2",
   displayName: "Grace Hopper",
-  accountEnabled: null,
-  manager: null,
   mail: null,
 }
 {

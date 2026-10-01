@@ -20,6 +20,8 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/http_server.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/operator/stream_source_spawner.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
@@ -55,6 +57,7 @@ struct AcceptHttpArgs {
   Option<located<data>> tls;
   located<ir::pipeline> parser;
   let_id request;
+  location operator_location = location::unknown;
 
   auto get_max_request_size() const -> size_t {
     if (not max_request_size) {
@@ -301,6 +304,8 @@ private:
   Arc<Atomic<uint64_t>> request_id_gen_;
   Arc<Semaphore> active_connections_;
 };
+
+namespace legacy {
 
 class AcceptHttp final : public Operator<void, table_slice> {
 public:
@@ -620,6 +625,336 @@ private:
   Arc<Semaphore> active_connections_;
 };
 
+} // namespace legacy
+
+class AcceptHttp final : public Operator<void, nova::Events> {
+public:
+  explicit AcceptHttp(AcceptHttpArgs args)
+    : args_{std::move(args)},
+      active_connections_{std::in_place, args_.get_max_connections()} {
+  }
+
+  ~AcceptHttp() noexcept override {
+    force_stop();
+  }
+  AcceptHttp(AcceptHttp const&) = delete;
+  AcceptHttp(AcceptHttp&&) noexcept = default;
+  auto operator=(AcceptHttp const&) -> AcceptHttp& = delete;
+  auto operator=(AcceptHttp&&) -> AcceptHttp& = delete;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto config = co_await make_config(ctx);
+    if (not config) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
+    auto request_handler = std::make_shared<RequestHandler>(
+      args_, message_queue_, request_id_gen, active_connections_);
+    auto server = co_await http_server::Server::start(
+      std::move(config.unwrap()), std::move(request_handler));
+    if (server.is_err()) {
+      diagnostic::error("failed to start HTTP server: {}",
+                        std::move(server).unwrap_err())
+        .primary(args_.endpoint)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    server_ = std::move(server).unwrap();
+    // Forceful cancellation still bypasses the graceful drain path.
+    ctx.spawn_task([this]() -> Task<void> {
+      co_await catch_cancellation(wait_forever());
+      force_stop();
+    });
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_http"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    lifecycle_ = Lifecycle::running;
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](RequestStarted msg) -> Task<void> {
+        auto pipeline = args_.parser.inner;
+        // Bind the request context in the parser subpipeline for this request
+        pipeline.bind(args_.request, make_request_context(msg.metadata));
+        auto request_dh = null_diagnostic_handler{};
+        auto plan = ir::make_plan(std::move(pipeline), tag_v<chunk_ptr>,
+                                  base_ctx{request_dh, ctx.reg()});
+        if (not plan) {
+          diagnostic::warning("failed to prepare parser pipeline for request")
+            .primary(args_.endpoint)
+            .note("request path: {}", msg.metadata.path)
+            .emit(ctx);
+          msg.response_signal->send(500); // internal server error
+          co_return;
+        }
+        auto decompressor
+          = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
+        if (not msg.content_encoding.empty()) {
+          decompressor = http::make_decompressor(msg.content_encoding, ctx);
+        }
+        auto request_id = msg.request_id;
+        auto bytes_read = ctx.make_counter(
+          MetricsLabel{"client_ip", MetricsLabel::FixedString::truncate(
+                                      msg.metadata.client_ip)},
+          MetricsDirection::read, MetricsVisibility::external_,
+          MetricsUnit::bytes);
+        {
+          auto active_requests = co_await active_requests_.lock();
+          active_requests->emplace(
+            request_id, ActiveRequest{.metadata = std::move(msg.metadata),
+                                      .decompressor = std::move(decompressor),
+                                      .finished = msg.response_signal,
+                                      .bytes_read = std::move(bytes_read)});
+        }
+        co_await ctx.spawn_sub(request_id, std::move(*plan),
+                               DiagnosticBehavior::ErrorToWarning);
+      },
+      [&](RequestBody body) -> Task<void> {
+        auto chunk = std::move(body.chunk);
+        {
+          auto active_requests = co_await active_requests_.lock();
+          auto it = active_requests->find(body.request_id);
+          if (it == active_requests->end()) {
+            // Request was dropped (e.g. pipeline substitution failed).
+            co_return;
+          }
+          auto& req = it->second;
+          if (req.drop_body) {
+            co_return;
+          }
+          if (req.decompressor) {
+            auto remaining = args_.get_max_request_size() - req.output_bytes;
+            auto input_span = std::span<std::byte const>{
+              reinterpret_cast<std::byte const*>(chunk->data()), chunk->size()};
+            auto decompressed = http::decompress_chunk(
+              **req.decompressor, input_span, ctx.dh(), remaining);
+            if (decompressed.is_err()) {
+              req.drop_body = true;
+              req.finished->send(std::move(decompressed).unwrap_err());
+              co_return;
+            }
+            chunk = chunk::make(std::move(decompressed).unwrap());
+          }
+          if (req.output_bytes + chunk->size() > args_.get_max_request_size()) {
+            diagnostic::warning("request body exceeds `max_request_size`")
+              .primary(args_.endpoint)
+              .note("request path: {}", req.metadata.path)
+              .note("rejecting request body")
+              .emit(ctx);
+            req.drop_body = true;
+            req.finished->send(413); // payload too large
+            co_return;
+          }
+          req.bytes_read.add(chunk->size());
+          req.output_bytes += chunk->size();
+        }
+        if (auto sub = ctx.get_sub(body.request_id)) {
+          auto& parser = as<SubHandle<chunk_ptr>>(*sub);
+          auto push_result = co_await parser.push(std::move(chunk));
+          if (push_result.is_err()) {
+            auto active_requests = co_await active_requests_.lock();
+            if (auto it = active_requests->find(body.request_id);
+                it != active_requests->end()) {
+              it->second.drop_body = true;
+            }
+          }
+        }
+      },
+      [&](RequestFinished msg) -> Task<void> {
+        if (auto sub = ctx.get_sub(msg.request_id)) {
+          auto& parser = as<SubHandle<chunk_ptr>>(*sub);
+          co_await parser.close();
+        }
+      },
+      [&](Noop) -> Task<void> {
+        co_return;
+      });
+  }
+
+  auto process_sub(SubKeyView key, nova::Events slice, Push<nova::Events>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx, key);
+    auto const rows = slice.active_count();
+    co_await push(std::move(slice));
+    events_read_counter_.add(rows);
+  }
+
+  auto finish_sub(SubKeyView key, Push<nova::Events>&, OpCtx&)
+    -> Task<void> override {
+    auto request_id = as<uint64_t>(key);
+    {
+      auto active_requests = co_await active_requests_.lock();
+      auto it = active_requests->find(request_id);
+      if (it == active_requests->end()) {
+        co_return;
+      }
+      // notify the handler to respond
+      it->second.finished->send(200);
+      active_requests->erase(request_id);
+    }
+    co_return;
+  }
+
+  auto finish_sub(SubKeyView key, failure error, Push<nova::Events>& push,
+                  OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(error);
+    co_await finish_sub(key, push, ctx);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    begin_draining(ctx);
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    begin_draining(ctx);
+    maybe_finish_draining();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // A request gets its response only after its events went downstream, so a
+    // checkpoint may commit the events of a request that is still in flight.
+    // A restored operator cannot answer it, and the client that retries the
+    // request delivers its events twice.
+    diagnostic::error("accept_http does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
+private:
+  enum class Lifecycle {
+    starting,
+    running,
+    draining,
+    done,
+  };
+
+  struct ActiveRequest {
+    RequestMetadata metadata;
+    // Non-null only when the request carries a supported Content-Encoding.
+    Option<std::shared_ptr<arrow::util::Decompressor>> decompressor;
+    size_t output_bytes = 0;
+    bool drop_body = false;
+    Arc<ResponseSignal> finished;
+    MetricsCounter bytes_read;
+  };
+
+  static constexpr auto drain_timeout = std::chrono::seconds{5};
+
+  MetricsCounter events_read_counter_;
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  Option<std::chrono::steady_clock::time_point> drain_deadline_ = None{};
+
+  void force_stop() {
+    if (lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::done;
+    drain_deadline_ = None{};
+    if (server_) {
+      (*server_)->force_stop();
+      server_ = None{};
+    }
+  }
+
+  auto begin_draining(OpCtx& ctx) -> void {
+    if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    drain_deadline_ = std::chrono::steady_clock::now() + drain_timeout;
+    ctx.spawn_task([queue = message_queue_,
+                    deadline = *drain_deadline_]() mutable -> Task<void> {
+      co_await sleep_until(deadline);
+      queue->force_enqueue(Noop{});
+    });
+    if (server_) {
+      (*server_)->drain();
+    }
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining) {
+      return;
+    }
+    if (drain_deadline_
+        and std::chrono::steady_clock::now() >= *drain_deadline_) {
+      force_stop();
+      return;
+    }
+    // A connection holds its permit from the moment it is accepted until its
+    // handler returns, i.e. until the response has been sent. While the permit
+    // is held the connection may still have request messages queued or a
+    // request in flight, so a full set of available permits is a sufficient
+    // signal that all accepted work has drained.
+    if (active_connections_->available_permits()
+          != detail::narrow<size_t>(args_.get_max_connections())
+        or not message_queue_->empty()) {
+      return;
+    }
+    drain_deadline_ = None{};
+    if (server_) {
+      (*server_)->finish();
+      server_ = None{};
+    }
+    lifecycle_ = Lifecycle::done;
+  }
+
+  auto make_config(OpCtx& ctx) const
+    -> Task<Option<proxygen::coro::HTTPServer::Config>> {
+    auto resolved_endpoint = std::string{};
+    auto requests = std::vector<secret_request>{make_secret_request(
+      "endpoint", args_.endpoint, resolved_endpoint, ctx.dh())};
+    if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
+      co_return None{};
+    }
+    auto config
+      = http_server::make_config(resolved_endpoint, args_.endpoint.source,
+                                 args_.tls, ctx.actor_system().config(),
+                                 ctx.dh());
+    if (not config) {
+      co_return None{};
+    }
+    co_return std::move(*config);
+  }
+
+  // --- config ---
+  AcceptHttpArgs args_;
+  // --- transient ---
+  mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
+  Option<Box<http_server::Server>> server_;
+  Mutex<std::unordered_map<uint64_t, ActiveRequest>> active_requests_{{}};
+  Arc<Semaphore> active_connections_;
+};
+
 class AcceptHttpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -627,7 +962,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptHttpArgs, AcceptHttp>{};
+    auto d = Describer<AcceptHttpArgs, legacy::AcceptHttp, AcceptHttp>{};
     d.positional("endpoint", &AcceptHttpArgs::endpoint);
     auto responses_arg
       = d.named("responses", &AcceptHttpArgs::responses, "record");
@@ -641,6 +976,7 @@ public:
     auto parser_arg
       = d.pipeline(&AcceptHttpArgs::parser, SubOptimize::from_downstream,
                    {{"request", &AcceptHttpArgs::request}});
+    d.operator_location(&AcceptHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto responses = ctx.get(responses_arg)) {
@@ -729,13 +1065,16 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (output->is_not<table_slice>()) {
+      if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(parser.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
     });
+    d.spawner(
+      make_stream_source_spawner<AcceptHttpArgs, legacy::AcceptHttp, AcceptHttp>(
+        parser_arg));
     return d.without_optimize();
   }
 };

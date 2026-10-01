@@ -1,0 +1,6 @@
+error: expected OData `value` array to contain objects
+ --> tests/operators/from_http/paginate_odata_non_object.tql:6:62
+  |
+6 | from_http env("HTTP_FIXTURE_ODATA_NON_OBJECT_URL"), paginate="odata", tls=false {
+  |                                                              ^^^^^^^
+  |

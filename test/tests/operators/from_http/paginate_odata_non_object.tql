@@ -1,0 +1,8 @@
+---
+fixtures: [http_paginate]
+error: true
+---
+
+from_http env("HTTP_FIXTURE_ODATA_NON_OBJECT_URL"), paginate="odata", tls=false {
+  read_json
+}

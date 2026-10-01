@@ -1,0 +1,6 @@
+error: expected `paginate` to be `string`, `record`, or `null`, got `int`
+ --> tests/operators/from_http/paginate_lambda_wrong_type.tql:6:53
+  |
+6 | from_http env("HTTP_FIXTURE_LAMBDA_URL"), paginate=(x => x.page), tls=false {
+  |                                                     ^^^^^^^^^^^
+  |

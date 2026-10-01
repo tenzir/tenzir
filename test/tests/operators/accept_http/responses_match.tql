@@ -1,13 +1,19 @@
 ---
 fixtures:
   - http_request:
-      path: /ingest
-      body: '{"value":7}'
-      expected_status: 201
-      expected_body: created
+      requests:
+        - path: /ingest
+          body: '{"value":0}'
+          expected_status: 201
+          expected_body: created
+        - path: /ingest
+          body: '{"value":7}'
+          stop_on_connection_drop: true
 ---
 
 accept_http env("HTTP_REQUEST_ENDPOINT"), responses={"/ingest": {code: 201, content_type: "text/plain", body: "created"}} {
   read_json
+  // Let the response check finish before `head` stops the server.
+  where value != 0
 }
 head 1

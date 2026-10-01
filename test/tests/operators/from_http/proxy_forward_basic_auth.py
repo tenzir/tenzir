@@ -41,6 +41,7 @@ def main() -> None:
             *tenzir,
             "--bare-mode",
             "--console-verbosity=error",
+            "--nova=true",
             pipeline,
         ],
         env=env,

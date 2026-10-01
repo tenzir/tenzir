@@ -1,0 +1,11 @@
+---
+fixtures: [http]
+---
+
+// The fixture echoes the request body, so the response holds a list whose
+// elements have different types.
+from_http env("HTTP_FIXTURE_URL"),
+  body="{\"xs\":[1,\"two\",{\"three\":3},[4.5],null]}",
+  tls=false {
+  read_json
+}

@@ -52,6 +52,7 @@ serve_http "127.0.0.1:{port}" {{ write_lines }}
             *shlex.split(os.environ["TENZIR_BINARY"]),
             "--bare-mode",
             "--console-verbosity=warning",
+            "--nova=true",
             "--multi",
             pipeline,
         ],

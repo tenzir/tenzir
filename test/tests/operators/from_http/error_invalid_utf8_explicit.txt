@@ -1,6 +1,7 @@
-error: json parser: UTF8_ERROR: The input is not valid UTF-8
+error: UTF8_ERROR: The input is not valid UTF-8
+ --> tests/operators/from_http/error_invalid_utf8_explicit.tql:8:3
+  |
+8 |   read_json
+  |   ^^^^^^^^^
+  |
   = note: found invalid JSON
-  = note: context:
-          ...aaaaaaaaaaaaaaaaaaaaa","message":"before\xFFafter"}\x0A
-                                                     ^
-  = note: total buffer size: 120

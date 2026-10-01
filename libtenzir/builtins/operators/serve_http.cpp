@@ -8,6 +8,7 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/join_set.hpp>
+#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/atomic.hpp>
@@ -21,6 +22,7 @@
 #include <tenzir/http.hpp>
 #include <tenzir/http_server.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -321,6 +323,8 @@ private:
   Arc<Semaphore> active_connections_;
 };
 
+namespace legacy {
+
 class ServeHttp final : public Operator<table_slice, void> {
 public:
   explicit ServeHttp(ServeHttpArgs args)
@@ -605,6 +609,352 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
+} // namespace legacy
+
+/// The clients that the current `serve_http` broadcasts to.
+struct Clients {
+  std::vector<Arc<Client>> connected;
+  bool accepting = true;
+};
+
+/// Registers clients as they connect, before their response is handed to
+/// proxygen, so that a client receives every chunk that `process_sub()`
+/// broadcasts from then on.
+class RegisteringRequestHandler final : public proxygen::coro::HTTPHandler {
+public:
+  RegisteringRequestHandler(Arc<MessageQueue> message_queue,
+                            Arc<Semaphore> active_connections,
+                            Arc<Mutex<Clients>> clients)
+    : message_queue_{std::move(message_queue)},
+      active_connections_{std::move(active_connections)},
+      clients_{std::move(clients)} {
+  }
+
+  auto
+  handleRequest(folly::EventBase* evb, proxygen::coro::HTTPSessionContextPtr,
+                proxygen::coro::HTTPSourceHolder request_source)
+    -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
+    auto header_event = co_await request_source.readHeaderEvent();
+    auto request = std::move(header_event.headers);
+    TENZIR_ASSERT(request);
+    if (request->getMethod() != proxygen::HTTPMethod::GET) {
+      co_return http_server::make_response(405, "text/plain",
+                                           "method not allowed");
+    }
+    auto permit = co_await active_connections_->acquire();
+    auto client = Client::make(evb, std::move(permit), message_queue_);
+    client->start(client);
+    auto startup_guard = detail::scope_guard{[client]() mutable noexcept {
+      client->cancel_startup();
+    }};
+    auto* source = client->source();
+    TENZIR_ASSERT(source);
+    {
+      auto clients = co_await clients_->lock();
+      if (clients->accepting) {
+        clients->connected.push_back(client);
+      } else {
+        // The operator no longer broadcasts, so end the response right away.
+        client->close(true);
+      }
+    }
+    startup_guard.disable();
+    co_return proxygen::coro::HTTPSourceHolder{source};
+  }
+
+private:
+  Arc<MessageQueue> message_queue_;
+  Arc<Semaphore> active_connections_;
+  Arc<Mutex<Clients>> clients_;
+};
+
+class ServeHttp final : public Operator<nova::Events, void> {
+public:
+  explicit ServeHttp(ServeHttpArgs args)
+    : args_{std::move(args)},
+      active_connections_{std::in_place,
+                          detail::narrow<size_t>(args_.get_max_connections())} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto config = co_await make_config(ctx);
+    if (not config) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto request_handler = std::make_shared<RegisteringRequestHandler>(
+      message_queue_, active_connections_, clients_);
+    auto server = co_await http_server::Server::start(
+      std::move(config.unwrap()), std::move(request_handler));
+    if (server.is_err()) {
+      diagnostic::error("failed to start HTTP server: {}",
+                        std::move(server).unwrap_err())
+        .primary(args_.endpoint)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    server_ = std::move(server).unwrap();
+    bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    // Cancellation joins the operator tasks before destroying `server_`, whose
+    // RAII cleanup force-stops the server without touching lifecycle state.
+    if (not co_await ctx.plan_and_spawn_sub<nova::Events>(
+          sub_key_, std::move(args_.printer.inner))) {
+      co_await force_stop();
+      co_return;
+    }
+    lifecycle_ = Lifecycle::running;
+    co_return;
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (lifecycle_ != Lifecycle::running) {
+      co_return;
+    }
+    auto sub = ctx.get_sub(make_view(sub_key_));
+    if (not sub) {
+      co_await force_stop();
+      co_return;
+    }
+    auto& pipeline = as<SubHandle<nova::Events>>(*sub);
+    // Count events at ingress: the number of rows accepted for serving. Egress
+    // event attribution is not possible here because the printer subpipeline
+    // is opaque, its output chunks carry no row count, and a single event may
+    // even span multiple chunks. Bytes, in contrast, are counted at egress in
+    // `broadcast_payload()` where per-client writes are exactly known.
+    auto const rows = input.active_count();
+    auto result = co_await pipeline.push(std::move(input));
+    if (result.is_err()) {
+      co_await force_stop();
+      co_return;
+    }
+    events_counter_.add(rows);
+    co_return;
+  }
+
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+    // Write before returning, because checkpoints and `finish_sub()` only wait
+    // for earlier calls to return. Keep writing while draining, because
+    // printers may emit output when they finalize.
+    if (not chunk or chunk->size() == 0) {
+      co_return;
+    }
+    co_await broadcast_payload(chunk);
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    // Nothing is pending, because `process_sub()` writes before returning.
+    TENZIR_UNUSED(ctx);
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx&) -> Task<void> override {
+    auto* message_ptr = result.try_as<Message>();
+    if (not message_ptr) {
+      co_return;
+    }
+    co_await co_match(
+      std::move(*message_ptr),
+      [&](ClientStarted) -> Task<void> {
+        // Only the legacy implementation queues clients, printer output, and
+        // the end of the stream.
+        TENZIR_UNREACHABLE();
+      },
+      [&](Payload) -> Task<void> {
+        TENZIR_UNREACHABLE();
+      },
+      [&](EndOfStream) -> Task<void> {
+        TENZIR_UNREACHABLE();
+      },
+      [&](ClientClosed) -> Task<void> {
+        co_await remove_closed_clients();
+      });
+    maybe_finish_draining();
+  }
+
+  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
+    // Close the clients here instead of queueing the end of the stream: only
+    // this loop drains the queue, so waiting for a free slot could block it.
+    // `process_sub()` already wrote all output.
+    if (lifecycle_ == Lifecycle::running) {
+      begin_draining();
+    }
+    co_await close_all_clients(true);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    if (lifecycle_ == Lifecycle::running) {
+      begin_draining();
+      if (auto sub = ctx.get_sub(make_view(sub_key_))) {
+        auto& pipeline = as<SubHandle<nova::Events>>(*sub);
+        co_await pipeline.close();
+      } else {
+        co_await force_stop();
+      }
+    }
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
+  }
+
+  auto state() -> OperatorState override {
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
+  }
+
+private:
+  enum class Lifecycle {
+    running,
+    draining,
+    done,
+  };
+
+  auto force_stop() -> Task<void> {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    begin_draining();
+    co_await close_all_clients(false);
+    maybe_finish_draining();
+  }
+
+  auto begin_draining() -> void {
+    if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    if (server_) {
+      (*server_)->drain();
+    }
+  }
+
+  auto close_all_clients(bool graceful) -> Task<void> {
+    auto clients = co_await clients_->lock();
+    clients->accepting = false;
+    auto join = JoinSet<bool>{};
+    co_await join.activate([&]() -> Task<void> {
+      for (auto& client : clients->connected) {
+        join.add([client, graceful]() mutable -> Task<bool> {
+          co_return co_await folly::coro::co_withExecutor(
+            client->evb(),
+            folly::coro::co_invoke([client, graceful]() mutable -> Task<bool> {
+              client->close(graceful);
+              co_return true;
+            }));
+        });
+      }
+      while (co_await join.next()) {
+      }
+    });
+    co_return;
+  }
+
+  auto remove_closed_clients() -> Task<void> {
+    auto clients = co_await clients_->lock();
+    std::erase_if(clients->connected, [](Arc<Client> const& client) {
+      return client->closed();
+    });
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining) {
+      return;
+    }
+    // A client holds its connection permit until its response completes, so
+    // no client is connected once all permits are back.
+    if (active_connections_->available_permits()
+        != detail::narrow<size_t>(args_.get_max_connections())) {
+      return;
+    }
+    if (message_queue_->empty()) {
+      if (server_) {
+        (*server_)->force_stop();
+        server_ = None{};
+      }
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  auto broadcast_payload(chunk_ptr const& chunk) -> Task<void> {
+    auto content_type = chunk->metadata().content_type.value_or("");
+    // Hold the lock while writing, so that the clients do not change during
+    // the broadcast. A client that connects meanwhile receives the next chunk.
+    auto clients = co_await clients_->lock();
+    if (not clients->accepting) {
+      co_return;
+    }
+    auto join = JoinSet<bool>{};
+    co_await join.activate([&]() -> Task<void> {
+      // send payloads to each client
+      for (auto& client : clients->connected) {
+        if (client->closing()) {
+          continue;
+        }
+        join.add([this, client, chunk, content_type]() mutable -> Task<bool> {
+          auto const ok = co_await folly::coro::co_withExecutor(
+            client->evb(),
+            folly::coro::co_invoke(
+              [client, chunk, content_type]() mutable -> Task<bool> {
+                co_return co_await client->write_payload(chunk, content_type);
+              }));
+          if (ok) {
+            // Count bytes per successful client write so the egress metric
+            // reflects the actual fan-out to each connected client.
+            bytes_counter_.add(chunk->size());
+          }
+          co_return ok;
+        });
+      }
+      // wait for all; the slowest client determines progress.
+      while (co_await join.next()) {
+      }
+    });
+    std::erase_if(clients->connected, [](Arc<Client> const& client) {
+      return client->closed();
+    });
+  }
+
+  auto make_config(OpCtx& ctx) const
+    -> Task<Option<proxygen::coro::HTTPServer::Config>> {
+    auto config
+      = http_server::make_config(args_.endpoint.inner, args_.endpoint.source,
+                                 args_.tls, ctx.actor_system().config(),
+                                 ctx.dh());
+    if (not config) {
+      co_return None{};
+    }
+    co_return std::move(*config);
+  }
+
+  // --- args ---
+  ServeHttpArgs args_;
+  // --- transient ---
+  data sub_key_ = data{int64_t{0}};
+  mutable Arc<MessageQueue> message_queue_{std::in_place, 64};
+  Option<Box<http_server::Server>> server_;
+  Arc<Semaphore> active_connections_;
+  Arc<Mutex<Clients>> clients_{std::in_place};
+  MetricsCounter bytes_counter_;
+  MetricsCounter events_counter_;
+  // --- state ---
+  Lifecycle lifecycle_ = Lifecycle::running;
+};
+
 class ServeHttpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -612,7 +962,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ServeHttpArgs, ServeHttp>{};
+    auto d = Describer<ServeHttpArgs, legacy::ServeHttp, ServeHttp>{};
     auto endpoint_arg = d.positional("endpoint", &ServeHttpArgs::endpoint);
     auto max_connections_arg
       = d.named("max_connections", &ServeHttpArgs::max_connections);
@@ -641,17 +991,24 @@ public:
             .emit(ctx);
         }
       }
-      TRY(auto printer, ctx.get(printer_pipeline));
-      auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes")
-          .primary(printer.source)
-          .emit(ctx);
-      }
       return {};
+    });
+    // `validate` runs without an input type. Check the printer here so that it
+    // receives the actual input type during type inference.
+    d.spawner([printer_pipeline]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ServeHttpArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        TRY(auto printer, ctx.get(printer_pipeline));
+        TRY(auto output, printer.inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(printer.source)
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return None{};
     });
     return d.invariant_order_filter();
   }

@@ -1,0 +1,5 @@
+{
+  response: {
+    error: b"{\"error\":\"not-found\"}\n",
+  },
+}
