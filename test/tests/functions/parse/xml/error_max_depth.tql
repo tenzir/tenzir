@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: "<root/>"}
+y = x.parse_xml(max_depth=-1)

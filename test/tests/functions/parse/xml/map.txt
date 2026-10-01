@@ -1,0 +1,24 @@
+{
+  xs: [
+    "<root><a>1</a></root>",
+    "<root><b>2</b></root>",
+    null,
+    "",
+  ],
+  ys: [
+    {
+      a: "1",
+    },
+    {
+      b: "2",
+    },
+    null,
+    null,
+  ],
+  missing: [
+    null,
+    null,
+    null,
+    null,
+  ],
+}

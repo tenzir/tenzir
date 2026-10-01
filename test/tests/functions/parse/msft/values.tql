@@ -1,0 +1,5 @@
+from {x: "<Event><System><EventID>invalid</EventID><TimeCreated SystemTime='invalid'/><Execution ProcessID='invalid' ThreadID='2'/></System><EventData><Data Name='number'>42</Data><Data Name='empty'/><Data>10.0.0.1</Data></EventData></Event>"},
+  {x: "<wrapper><Event><System><EventID>2</EventID></System><EventData/></Event></wrapper>"},
+  {x: null}, {x: ""}, {x: 42}, {x: "<root/>"}, {x: "<broken"}
+y = x.parse_winlog()
+select y

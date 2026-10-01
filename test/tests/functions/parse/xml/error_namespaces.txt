@@ -1,0 +1,8 @@
+error: `namespaces` must be "strip" or "keep"
+ --> tests/functions/parse/xml/error_namespaces.tql:5:28
+  |
+5 | y = x.parse_xml(namespaces="invalid")
+  |                            ^^^^^^^^^
+  |
+  = usage: parse_xml(input:string, [xpath=string, attr_prefix=string, text_key=string, key_attr=string, max_depth=int, namespaces=string, schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_xml

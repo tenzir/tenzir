@@ -1,0 +1,4 @@
+from {x: r#"<ns:root xmlns:ns="urn:test" id="1">hello<ns:a><ns:b>nested</ns:b></ns:a></ns:root>"#}
+custom = x.parse_xml(xpath="/root", attr_prefix="", text_key="text", max_depth=1)
+kept = x.parse_xml(xpath="/ns:root", namespaces="keep", max_depth=0)
+select custom, kept

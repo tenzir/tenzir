@@ -1,0 +1,8 @@
+from {x: "<root><event_type>dns</event_type><src_port>53</src_port></root>", active: true},
+  {x: "<root><src_port>80</src_port></root>", active: false},
+  {x: "<broken", active: false}, {x: 42, active: false},
+  {x: "<root><event_type>flow</event_type><src_port>80</src_port></root>", active: true}
+y = x.parse_xml(xpath="/root", selector="event_type:suricata") if active else null
+where active
+again = x.parse_xml(xpath="/root", selector="event_type:suricata")
+select active, conditional_port=y.src_port?, filtered_port=again.src_port?

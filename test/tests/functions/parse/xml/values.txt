@@ -1,0 +1,43 @@
+warning: `parse_xml` expected `string`, got `int`
+ --> tests/functions/parse/xml/values.tql:3:5
+  |
+3 | y = x.parse_xml()
+  |     ~~~~~~~~~~~~~
+  |
+
+warning: failed to parse XML: line 1:0: unclosed token
+ --> tests/functions/parse/xml/values.tql:3:5
+  |
+3 | y = x.parse_xml()
+  |     ~~~~~~~~~~~~~
+  |
+{
+  x: "<root><a>1</a></root>",
+  y: [
+    {
+      a: "1",
+    },
+  ],
+}
+{
+  x: null,
+  y: null,
+}
+{
+  x: "",
+  y: null,
+}
+{
+  x: 42,
+  y: null,
+}
+{
+  x: "<broken",
+  y: null,
+}
+{
+  x: "<empty/>",
+  y: [
+    {},
+  ],
+}

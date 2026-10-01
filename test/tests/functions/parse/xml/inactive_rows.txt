@@ -1,0 +1,10 @@
+{
+  active: true,
+  conditional_port: 53,
+  filtered_port: 53,
+}
+{
+  active: true,
+  conditional_port: 80,
+  filtered_port: 80,
+}

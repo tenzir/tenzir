@@ -1,0 +1,4 @@
+from {x: "<Event><System><EventID>1</EventID></System><EventData><Data Name='n'>42</Data><Data Name='dotted.name'>10.0.0.1</Data></EventData></Event>"}
+raw = x.parse_winlog(raw=true)
+unflattened = x.parse_winlog(unflatten_separator=".")
+select raw, unflattened

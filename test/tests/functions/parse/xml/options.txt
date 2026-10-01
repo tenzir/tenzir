@@ -1,0 +1,13 @@
+{
+  custom: {
+    id: "1",
+    text: "hello",
+    a: null,
+  },
+  kept: {
+    "@xmlns:ns": "urn:test",
+    "@id": "1",
+    "#text": "hello",
+    "ns:a": null,
+  },
+}

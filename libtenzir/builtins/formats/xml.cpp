@@ -16,6 +16,8 @@
 #include <tenzir/generator.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -651,7 +653,104 @@ auto make_xml_function(location call, multi_series_builder::options msb_opts,
     });
 }
 
-class parse_xml_plugin final : public virtual function_plugin {
+template <class Args, class Processor>
+auto eval_xml(Args const& args, nova::EvalFrame frame, std::string_view fn_name,
+              Processor&& process) -> nova::Array<nova::Data> {
+  auto strings = args.input.data.template get_alternative<nova::String>();
+  auto nulls = args.input.data.template get_alternative<nova::Null>();
+  auto accepted = nova::storage::BitMap{frame.length(), false};
+  if (strings) {
+    accepted = accepted | strings->present;
+  }
+  if (nulls) {
+    accepted = accepted | nulls->present;
+  }
+  if (auto invalid = frame.mask().and_not(accepted); invalid.any()) {
+    auto row = *nova::storage::true_bits(invalid).begin();
+    match(args.input.data.get(row), [&]<class T>(nova::RowView<T>) {
+      diagnostic::warning("`{}` expected `string`, got `{}`", fn_name,
+                          nova::Type<T>::static_name)
+        .primary(args.call)
+        .emit(frame);
+    });
+  }
+  auto dh = transforming_diagnostic_handler{
+    frame.dh(), [call = args.call](diagnostic d) {
+      if (not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{}, call);
+      }
+      return d;
+    }};
+  auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+  for (auto row = nova::storage::Index{0}; row < frame.length(); ++row) {
+    if (not frame.mask().get(row)) {
+      builder.skip();
+      continue;
+    }
+    if (not strings or not strings->present.get(row)) {
+      builder.value().null();
+      continue;
+    }
+    auto xml = std::string_view{*strings->data.get(row)};
+    if (xml.empty()) {
+      builder.value().null();
+      continue;
+    }
+    auto root = parse_xml_dom(xml, args.opts.strip_namespaces, max_sax_depth);
+    if (not root) {
+      diagnostic::warning("failed to parse XML: {}", root.error())
+        .primary(args.call)
+        .emit(frame);
+      builder.value().null();
+      continue;
+    }
+    process(builder.value(), **root);
+  }
+  return builder.finish_data();
+}
+
+struct ParseXmlArgs {
+  nova::ValueArgument input;
+  std::string xpath = "/*";
+  Option<located<std::string>> attr_prefix;
+  Option<located<std::string>> text_key;
+  Option<located<std::string>> key_attr;
+  Option<located<int64_t>> max_depth;
+  Option<located<std::string>> namespaces;
+  nova::EventBuilder::Settings settings;
+  xml_options opts;
+  location call;
+};
+
+class ParseXmlFunction {
+public:
+  static auto eval(ParseXmlArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return eval_xml(
+      args, frame, "parse_xml",
+      [&](nova::EventBuilder::Field value, xml_element const& root) {
+        // The default XPath always returns a one-element list.
+        if (args.xpath == "/*") {
+          auto list = value.list();
+          element_to_record(list.record(), root, args.opts, 0);
+          return;
+        }
+        auto matches = evaluate_xpath(&root, args.xpath);
+        if (matches.empty()) {
+          value.null();
+        } else if (matches.size() > 1) {
+          auto list = value.list();
+          for (auto const* elem : matches) {
+            element_to_record(list.record(), *elem, args.opts, 0);
+          }
+        } else {
+          element_to_record(value.record(), *matches[0], args.opts, 0);
+        }
+      });
+  }
+};
+
+class parse_xml_plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_xml";
@@ -659,6 +758,55 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseXmlArgs, ParseXmlFunction>{};
+    d.positional("input", &ParseXmlArgs::input, "string");
+    d.named_optional("xpath", &ParseXmlArgs::xpath);
+    d.named("attr_prefix", &ParseXmlArgs::attr_prefix);
+    d.named("text_key", &ParseXmlArgs::text_key);
+    d.named("key_attr", &ParseXmlArgs::key_attr);
+    d.named("max_depth", &ParseXmlArgs::max_depth);
+    d.named("namespaces", &ParseXmlArgs::namespaces);
+    d.call_location(&ParseXmlArgs::call);
+    auto validate
+      = nova::add_event_builder_to_describer(d, &ParseXmlArgs::settings);
+    d.validate([validate](ParseXmlArgs& args,
+                          nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      if (args.attr_prefix) {
+        args.opts.attr_prefix = args.attr_prefix->inner;
+      }
+      if (args.text_key) {
+        args.opts.text_key = args.text_key->inner;
+      }
+      if (args.key_attr) {
+        args.opts.key_attr = args.key_attr->inner;
+      }
+      if (args.max_depth) {
+        if (args.max_depth->inner < 0) {
+          diagnostic::error("`max_depth` must be non-negative")
+            .primary(*args.max_depth)
+            .emit(ctx);
+          return failure::promise();
+        }
+        args.opts.max_depth = args.max_depth->inner;
+      }
+      if (args.namespaces) {
+        if (args.namespaces->inner == "strip") {
+          args.opts.strip_namespaces = true;
+        } else if (args.namespaces->inner == "keep") {
+          args.opts.strip_namespaces = false;
+        } else {
+          diagnostic::error("`namespaces` must be \"strip\" or \"keep\"")
+            .primary(*args.namespaces)
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return validate(args, ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -965,7 +1113,45 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
   }
 }
 
-class parse_winlog_plugin final : public virtual function_plugin {
+struct ParseWinlogArgs {
+  nova::ValueArgument input;
+  nova::EventBuilder::Settings settings;
+  xml_options opts = {.attr_prefix = "", .key_attr = ""};
+  location call;
+};
+
+class ParseWinlogFunction {
+public:
+  static auto eval(ParseWinlogArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    return eval_xml(
+      args, frame, "parse_winlog",
+      [&](nova::EventBuilder::Field value, xml_element const& root) {
+        auto const* event = &root;
+        if (root.name != "Event") {
+          event = nullptr;
+          for (auto const& child : root.children) {
+            if (auto* elem = try_as<std::unique_ptr<xml_element>>(child)) {
+              if ((*elem)->name == "Event") {
+                event = elem->get();
+                break;
+              }
+            }
+          }
+        }
+        if (not event) {
+          diagnostic::warning("no Event element found in Windows XML")
+            .primary(args.call)
+            .emit(frame);
+          value.null();
+          return;
+        }
+        winlog_to_record(value.record(), *event, args.opts);
+      });
+  }
+};
+
+class parse_winlog_plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_winlog";
@@ -973,6 +1159,20 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseWinlogArgs, ParseWinlogFunction>{};
+    d.positional("input", &ParseWinlogArgs::input, "string");
+    d.call_location(&ParseWinlogArgs::call);
+    auto validate
+      = nova::add_event_builder_to_describer(d, &ParseWinlogArgs::settings);
+    d.validate([validate](ParseWinlogArgs& args,
+                          nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      args.settings.infer_numbers = true;
+      return validate(args, ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

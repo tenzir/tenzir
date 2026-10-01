@@ -9,8 +9,26 @@ from typing import Any, Sequence
 
 from tenzir_test import hooks
 
+from .config_scope import scope_tenzir_config
+
 
 _LOGGER = logging.getLogger("tenzir_test.cli")
+
+
+@hooks.startup
+def use_scoped_tenzir_config(ctx):
+    import tenzir_test.run as run_mod
+
+    if getattr(run_mod, "_tenzir_scoped_config_installed", False):
+        return
+    original = run_mod.get_test_env_and_config_args
+
+    def get_test_env_and_config_args(test, *, inputs=None):
+        env, config_args = original(test, inputs=inputs)
+        return scope_tenzir_config(test, env, config_args)
+
+    run_mod.get_test_env_and_config_args = get_test_env_and_config_args
+    run_mod._tenzir_scoped_config_installed = True
 
 
 @hooks.startup

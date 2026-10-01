@@ -1,0 +1,3 @@
+from {xs: ["<root><a>1</a></root>", "<root><b>2</b></root>", null, ""]}
+ys = xs.map(x => x.parse_xml(xpath="/root"))
+missing = xs.map(x => x.parse_xml(xpath="//missing"))

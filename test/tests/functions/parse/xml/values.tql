@@ -1,0 +1,3 @@
+from {x: "<root><a>1</a></root>"}, {x: null}, {x: ""},
+  {x: 42}, {x: "<broken"}, {x: "<empty/>"}
+y = x.parse_xml()

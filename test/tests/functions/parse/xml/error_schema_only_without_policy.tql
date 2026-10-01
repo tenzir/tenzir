@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: "<root/>"}
+y = x.parse_xml(schema_only=true)

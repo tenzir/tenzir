@@ -1,0 +1,22 @@
+{
+  xs: [
+    "<Event><System><EventID>1</EventID></System></Event>",
+    "<Event><EventData><Data Name='a'>2</Data></EventData></Event>",
+    null,
+    "",
+  ],
+  ys: [
+    {
+      System: {
+        EventID: 1,
+      },
+    },
+    {
+      EventData: {
+        a: 2,
+      },
+    },
+    null,
+    null,
+  ],
+}

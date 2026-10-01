@@ -1,0 +1,4 @@
+from {x: "<root><event_type>dns</event_type><src_port>53</src_port></root>"},
+  {x: "<root><event_type>flow</event_type><src_port>80</src_port></root>"}
+y = x.parse_xml(xpath="/root", selector="event_type:suricata")
+select port=y.src_port?

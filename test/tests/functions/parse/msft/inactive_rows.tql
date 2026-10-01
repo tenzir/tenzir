@@ -1,0 +1,10 @@
+from {x: "<Event><System><EventID>1</EventID></System></Event>", active: true},
+  {x: "<broken", active: false}, {x: 42, active: false},
+  {x: "<root/>", active: false},
+  {x: "<Event><System><EventID>2</EventID></System></Event>", active: true}
+y = x.parse_winlog(selector="System.EventID") if active else null
+where active
+// The inactive branch must not warn about passing a record to the parser.
+z = y.parse_winlog() if false else y.System.EventID
+again = x.parse_winlog()
+select active, y, z, again

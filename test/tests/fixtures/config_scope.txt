@@ -1,0 +1,1 @@
+Configuration scope checks passed

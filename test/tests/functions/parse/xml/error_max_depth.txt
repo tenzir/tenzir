@@ -1,0 +1,8 @@
+error: `max_depth` must be non-negative
+ --> tests/functions/parse/xml/error_max_depth.tql:5:27
+  |
+5 | y = x.parse_xml(max_depth=-1)
+  |                           ^^
+  |
+  = usage: parse_xml(input:string, [xpath=string, attr_prefix=string, text_key=string, key_attr=string, max_depth=int, namespaces=string, schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_xml

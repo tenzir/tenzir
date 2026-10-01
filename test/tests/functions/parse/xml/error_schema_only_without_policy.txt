@@ -1,0 +1,8 @@
+error: `schema_only` requires a `schema` or `selector`
+ --> tests/functions/parse/xml/error_schema_only_without_policy.tql:5:29
+  |
+5 | y = x.parse_xml(schema_only=true)
+  |                             ^^^^
+  |
+  = usage: parse_xml(input:string, [xpath=string, attr_prefix=string, text_key=string, key_attr=string, max_depth=int, namespaces=string, schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_xml

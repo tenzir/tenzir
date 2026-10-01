@@ -1,0 +1,22 @@
+{
+  raw: {
+    System: {
+      EventID: 1,
+    },
+    EventData: {
+      n: "42",
+      "dotted.name": "10.0.0.1",
+    },
+  },
+  unflattened: {
+    System: {
+      EventID: 1,
+    },
+    EventData: {
+      n: 42,
+      dotted: {
+        name: 10.0.0.1,
+      },
+    },
+  },
+}

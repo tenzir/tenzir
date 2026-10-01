@@ -1,0 +1,62 @@
+warning: `parse_winlog` expected `string`, got `int`
+ --> tests/functions/parse/msft/values.tql:4:5
+  |
+4 | y = x.parse_winlog()
+  |     ~~~~~~~~~~~~~~~~
+  |
+
+warning: no Event element found in Windows XML
+ --> tests/functions/parse/msft/values.tql:4:5
+  |
+4 | y = x.parse_winlog()
+  |     ~~~~~~~~~~~~~~~~
+  |
+
+warning: failed to parse XML: line 1:0: unclosed token
+ --> tests/functions/parse/msft/values.tql:4:5
+  |
+4 | y = x.parse_winlog()
+  |     ~~~~~~~~~~~~~~~~
+  |
+{
+  y: {
+    System: {
+      EventID: "invalid",
+      TimeCreated: {
+        SystemTime: "invalid",
+      },
+      Execution: {
+        ProcessID: "invalid",
+        ThreadID: 2,
+      },
+    },
+    EventData: {
+      number: 42,
+      empty: null,
+      _0: 10.0.0.1,
+    },
+  },
+}
+{
+  y: {
+    System: {
+      EventID: 2,
+    },
+    EventData: {},
+  },
+}
+{
+  y: null,
+}
+{
+  y: null,
+}
+{
+  y: null,
+}
+{
+  y: null,
+}
+{
+  y: null,
+}

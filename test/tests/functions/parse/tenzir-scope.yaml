@@ -1,0 +1,3 @@
+tests:
+  - parse_xml*.tql
+  - parse_winlog.tql

@@ -1,0 +1,5 @@
+from {x: "<root><src_port>53</src_port><extra>kept</extra></root>"}
+schema = x.parse_xml(xpath="/root", schema="suricata.dns")
+schema_only = x.parse_xml(xpath="/root", schema="suricata.dns", schema_only=true)
+select port=schema.src_port?, extra=schema.extra?,
+  only_port=schema_only.src_port?, only_extra=schema_only.extra?
