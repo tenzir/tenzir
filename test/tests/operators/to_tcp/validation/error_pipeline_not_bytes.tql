@@ -2,6 +2,7 @@
 error: true
 ---
 
+from {x: 1}
 to_tcp "127.0.0.1:31337" {
   pass
 }

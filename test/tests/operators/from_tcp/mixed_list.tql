@@ -1,0 +1,16 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+      payload: "{\"a\":[1,\"x\"]}\n"
+assertions:
+  fixtures:
+    tcp:
+      server_sent_contains: "[1,\"x\"]"
+timeout: 60
+---
+
+from_tcp env("TCP_ENDPOINT") {
+  read_json
+}
+head 1

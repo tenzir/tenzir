@@ -2,6 +2,7 @@
 error: true
 ---
 
+from {x: 1}
 serve_tcp ":31337" {
   pass
 }

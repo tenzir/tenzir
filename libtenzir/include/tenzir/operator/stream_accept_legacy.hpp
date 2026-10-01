@@ -16,7 +16,6 @@
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/scope_guard.hpp"
-#include "tenzir/nova/events.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 
@@ -32,10 +31,10 @@
 #include <limits>
 #include <unordered_map>
 
-namespace tenzir {
+namespace tenzir::legacy {
 
 template <class Impl>
-class StreamAccept final : public Operator<void, nova::Events> {
+class StreamAccept final : public Operator<void, table_slice> {
 public:
   using Args = typename Impl::Args;
   using AcceptedInfo = typename Impl::AcceptedInfo;
@@ -58,10 +57,8 @@ public:
 
   struct AcceptLoopFinished {};
 
-  struct ConnectionReleased {};
-
-  using Message = variant<AcceptLoopFinished, ConnectionReleased, Accepted,
-                          Payload, ConnectionClosed>;
+  using Message
+    = variant<AcceptLoopFinished, Accepted, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   explicit StreamAccept(Args args)
@@ -103,7 +100,7 @@ public:
     co_return co_await message_queue_->dequeue();
   }
 
-  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
     auto message = std::move(result).as<Message>();
@@ -182,21 +179,17 @@ public:
         }
         maybe_finish_draining();
         co_return;
-      },
-      [&](ConnectionReleased) -> Task<void> {
-        maybe_finish_draining();
-        co_return;
       });
   }
 
-  auto process_sub(SubKeyView, nova::Events events, Push<nova::Events>& push,
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx&) -> Task<void> override {
-    auto const rows = events.active_count();
-    co_await push(std::move(events));
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
     events_read_counter_.add(rows);
   }
 
-  auto finish_sub(SubKeyView key, Push<nova::Events>&, OpCtx&)
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
     auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
     if (auto it = connections_.find(conn_id); it != connections_.end()) {
@@ -210,13 +203,13 @@ public:
     co_return;
   }
 
-  auto finish_sub(SubKeyView key, failure error, Push<nova::Events>& push,
+  auto finish_sub(SubKeyView key, failure error, Push<table_slice>& push,
                   OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(error);
     co_await finish_sub(key, push, ctx);
   }
 
-  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
     if (lifecycle_ == Lifecycle::done) {
@@ -317,30 +310,27 @@ private:
     connection_slots_.add_permit();
   }
 
-  auto finish_accept(Box<folly::coro::Transport> transport, OpCtx& ctx)
-    -> Task<void> {
-    // The main loop may be waiting for this slot to finish draining.
-    auto release_connection_slot_guard
-      = detail::scope_guard{[this, &ctx]() noexcept {
-          release_connection_slot();
-          ctx.spawn_task([this]() -> Task<void> {
-            co_await message_queue_->enqueue(ConnectionReleased{});
-          });
-        }};
+  auto finish_accept(Box<folly::coro::Transport> transport,
+                     diagnostic_handler& dh) -> Task<void> {
+    auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
+      release_connection_slot();
+    }};
     auto current_token = co_await folly::coro::co_current_cancellation_token;
     auto local_token = accept_cancel_->getToken();
     auto cancel_token
       = folly::cancellation_token_merge(current_token, local_token);
-    if (cancel_token.isCancellationRequested()) {
+    if (lifecycle_ != Lifecycle::running
+        or cancel_token.isCancellationRequested()) {
       close_stream_transport(std::move(transport));
       co_return;
     }
     auto accepted = co_await impl_.finish_accept(
-      std::move(transport), current_token, local_token, cancel_token, ctx.dh());
+      std::move(transport), current_token, local_token, cancel_token, dh);
     if (not accepted) {
       co_return;
     }
-    if (cancel_token.isCancellationRequested()) {
+    if (lifecycle_ != Lifecycle::running
+        or cancel_token.isCancellationRequested()) {
       close_stream_transport(std::move(accepted->transport));
       co_return;
     }
@@ -368,7 +358,7 @@ private:
           }
         },
         should_retry_socket);
-      ctx.spawn_task(finish_accept(std::move(transport), ctx));
+      ctx.spawn_task(finish_accept(std::move(transport), ctx.dh()));
       release_connection_slot_guard.disable();
     }
   }
@@ -415,4 +405,4 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
-} // namespace tenzir
+} // namespace tenzir::legacy

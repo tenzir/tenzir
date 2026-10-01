@@ -11,7 +11,6 @@
 #include "tenzir/async.hpp"
 #include "tenzir/async/stream.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/nova/events.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 
@@ -21,10 +20,10 @@
 
 #include <limits>
 
-namespace tenzir {
+namespace tenzir::legacy {
 
 template <class Impl>
-class StreamTo final : public Operator<nova::Events, void> {
+class StreamTo final : public Operator<table_slice, void> {
 public:
   using Args = typename Impl::Args;
 
@@ -53,15 +52,15 @@ public:
         = ctx.make_counter(*label, MetricsDirection::write,
                            MetricsVisibility::external_, MetricsUnit::bytes);
     }
-    if (not co_await ctx.plan_and_spawn_sub<nova::Events>(
-          sub_key_, std::move(pipeline))) {
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(sub_key_,
+                                                         std::move(pipeline))) {
       finish();
       co_return;
     }
     co_return;
   }
 
-  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
@@ -70,8 +69,8 @@ public:
       finish();
       co_return;
     }
-    auto const rows = input.active_count();
-    auto& pipeline = as<SubHandle<nova::Events>>(*sub);
+    auto const rows = input.rows();
+    auto& pipeline = as<SubHandle<table_slice>>(*sub);
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
       finish();
@@ -96,7 +95,7 @@ public:
     if (lifecycle_ == Lifecycle::running) {
       lifecycle_ = Lifecycle::draining;
       if (auto sub = ctx.get_sub(make_view(sub_key_))) {
-        auto& pipeline = as<SubHandle<nova::Events>>(*sub);
+        auto& pipeline = as<SubHandle<table_slice>>(*sub);
         co_await pipeline.close();
         co_return FinalizeBehavior::continue_;
       }
@@ -108,7 +107,6 @@ public:
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
-    // Nothing is pending, because `process_sub()` writes before returning.
     TENZIR_UNUSED(ctx);
     co_return;
   }
@@ -242,4 +240,4 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
-} // namespace tenzir
+} // namespace tenzir::legacy

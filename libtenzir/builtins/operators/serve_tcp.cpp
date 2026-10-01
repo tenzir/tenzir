@@ -8,6 +8,7 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/metrics.hpp>
+#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/atomic.hpp>
@@ -20,6 +21,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
@@ -121,6 +123,8 @@ auto emit_tcp_metrics(Arc<TcpConnectionMetrics> metrics) -> Task<void> {
     metrics->emit();
   }
 }
+
+namespace legacy {
 
 class ServeTcp final : public Operator<table_slice, void> {
 public:
@@ -520,6 +524,406 @@ private:
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
+} // namespace legacy
+
+class ServeTcp final : public Operator<nova::Events, void> {
+public:
+  struct ConnectionReleased {};
+
+  struct AcceptLoopFinished {};
+
+  using Message = variant<ConnectionReleased, AcceptLoopFinished>;
+  using MessageQueue = folly::coro::BoundedQueue<Message>;
+
+  struct Client {
+    Box<folly::coro::Transport> transport;
+    Arc<TcpConnectionMetrics> metrics;
+  };
+
+  struct Clients {
+    std::vector<Client> connected;
+    bool accepting = true;
+  };
+
+  enum class Lifecycle {
+    running,
+    draining_accept_loop,
+    draining_connections,
+    done,
+  };
+
+  explicit ServeTcp(ServeTcpArgs args)
+    : args_{std::move(args)},
+      max_connections_{args_.max_connections ? args_.max_connections->inner
+                                             : uint64_t{128}},
+      connection_slots_{detail::narrow<size_t>(max_connections_)} {
+    auto ep = to<Endpoint>(args_.endpoint.inner);
+    TENZIR_ASSERT(ep);
+    TENZIR_ASSERT(ep->port);
+    if (ep->host.empty()) {
+      address_.setFromLocalPort(ep->port->number());
+    } else {
+      address_.setFromHostPort(ep->host, ep->port->number());
+    }
+    if (args_.tls) {
+      tls_ = tls_options{*args_.tls, {.is_server = true}};
+    }
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (tls_) {
+      auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
+      if (not resolved) {
+        co_await request_stop();
+        co_return;
+      }
+      if (resolved->tls.inner) {
+        auto context = resolved->make_folly_ssl_context(ctx);
+        if (not context) {
+          co_await request_stop();
+          co_return;
+        }
+        tls_context_ = std::move(*context);
+      }
+    }
+    evb_ = folly::getGlobalIOExecutor()->getEventBase();
+    TENZIR_ASSERT(evb_);
+    auto socket = folly::AsyncServerSocket::newSocket(evb_);
+    server_ = std::make_unique<folly::coro::ServerSocket>(
+      std::move(socket), address_, listen_backlog);
+    tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
+    bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_tcp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_tcp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    accept_loop_started_ = true;
+    ctx.spawn_task([this, &ctx]() -> Task<void> {
+      auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
+        ctx.spawn_task([this]() -> Task<void> {
+          co_await message_queue_->enqueue(AcceptLoopFinished{});
+        });
+      }};
+      auto token = folly::cancellation_token_merge(
+        co_await folly::coro::co_current_cancellation_token,
+        accept_cancel_->getToken());
+      co_await folly::coro::co_withCancellation(token, accept_loop(ctx));
+    });
+    auto pipeline = std::move(args_.printer.inner);
+    if (not co_await ctx.plan_and_spawn_sub<nova::Events>(
+          sub_key_, std::move(pipeline))) {
+      co_await request_stop();
+      co_return;
+    }
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx&) -> Task<void> override {
+    auto* message_ptr = result.try_as<Message>();
+    if (not message_ptr) {
+      co_return;
+    }
+    auto message = std::move(*message_ptr);
+    co_await co_match(
+      std::move(message),
+      [&](ConnectionReleased) -> Task<void> {
+        maybe_finish_draining();
+        co_return;
+      },
+      [&](AcceptLoopFinished) -> Task<void> {
+        if (lifecycle_ != Lifecycle::done) {
+          lifecycle_ = Lifecycle::draining_connections;
+        }
+        maybe_finish_draining();
+        co_return;
+      });
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (lifecycle_ != Lifecycle::running) {
+      co_return;
+    }
+    auto sub = ctx.get_sub(make_view(sub_key_));
+    if (not sub) {
+      co_await request_stop();
+      co_return;
+    }
+    auto& pipeline = as<SubHandle<nova::Events>>(*sub);
+    // Count events at ingress: the number of rows accepted for serving. Egress
+    // event attribution is not possible here because the printer subpipeline
+    // is opaque, its output chunks carry no row count, and a single event may
+    // even span multiple chunks. Bytes, in contrast, are counted at egress in
+    // `broadcast_payload()` where per-client writes are exactly known.
+    auto const rows = input.active_count();
+    auto result = co_await pipeline.push(std::move(input));
+    if (result.is_err()) {
+      co_await request_stop();
+      co_return;
+    }
+    events_counter_.add(rows);
+  }
+
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+    // Write before returning, because checkpoints and `finish_sub()` only wait
+    // for earlier calls to return. Keep writing while draining, because
+    // printers may emit output when they finalize.
+    if (not chunk or chunk->size() == 0) {
+      co_return;
+    }
+    co_await broadcast_payload(chunk);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    if (lifecycle_ == Lifecycle::running) {
+      begin_draining();
+      if (auto sub = ctx.get_sub(make_view(sub_key_))) {
+        auto& pipeline = as<SubHandle<nova::Events>>(*sub);
+        co_await pipeline.close();
+      } else {
+        co_await request_stop();
+      }
+    }
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
+  }
+
+  auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
+    co_await request_stop();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
+  }
+
+private:
+  static auto close_client(Box<folly::coro::Transport> client) -> void {
+    auto* evb = client->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([client = std::move(client)]() mutable {
+      client->close();
+    });
+  }
+
+  static auto close_client(Client client) -> void {
+    client.metrics->close();
+    close_client(std::move(client.transport));
+  }
+
+  auto stop_accepting() -> void {
+    accept_cancel_->requestCancellation();
+    if (server_ and evb_) {
+      evb_->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
+        if (server_) {
+          server_->close();
+        }
+      });
+    }
+  }
+
+  auto begin_draining() -> void {
+    if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    if (not accept_loop_started_) {
+      lifecycle_ = Lifecycle::done;
+      return;
+    }
+    lifecycle_ = Lifecycle::draining_accept_loop;
+    stop_accepting();
+  }
+
+  auto request_stop() -> Task<void> {
+    if (lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    begin_draining();
+    co_await close_all_clients();
+    maybe_finish_draining();
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining_connections) {
+      return;
+    }
+    if (static_cast<uint64_t>(connection_slots_.available_permits())
+        == max_connections_) {
+      lifecycle_ = Lifecycle::done;
+    }
+  }
+
+  auto release_connection_slot() -> void {
+    connection_slots_.add_permit();
+  }
+
+  auto close_all_clients() -> Task<void> {
+    auto clients = co_await clients_.lock();
+    clients->accepting = false;
+    for (auto& client : clients->connected) {
+      close_client(std::move(client));
+      release_connection_slot();
+    }
+    clients->connected.clear();
+  }
+
+  auto write_to_client(Client& client, folly::ByteRange data) -> Task<bool> {
+    auto* client_evb = client.transport->getEventBase();
+    TENZIR_ASSERT(client_evb);
+    try {
+      co_await folly::coro::co_withExecutor(client_evb,
+                                            client.transport->write(data));
+      client.metrics->record_write(data.size());
+      co_return true;
+    } catch (folly::AsyncSocketException const&) {
+      // TODO: Surface peer disconnects and other routine TCP write failures
+      // as metrics instead of warnings in a follow-up that covers all TCP
+      // operators.
+      co_return false;
+    }
+  }
+
+  auto broadcast_payload(chunk_ptr const& chunk) -> Task<void> {
+    auto data = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(chunk->data()),
+      chunk->size(),
+    };
+    auto clients = co_await clients_.lock();
+    auto& connected = clients->connected;
+    for (size_t i = 0; i < connected.size();) {
+      auto ok = co_await write_to_client(connected[i], data);
+      if (ok) {
+        // Count bytes per successful client write so the egress metric reflects
+        // the actual fan-out: each connected client is counted separately.
+        bytes_counter_.add(data.size());
+        ++i;
+        continue;
+      }
+      close_client(std::move(connected[i]));
+      release_connection_slot();
+      connected.erase(connected.begin() + i);
+    }
+  }
+
+  auto finish_accept(Box<folly::coro::Transport> client, std::string peer,
+                     OpCtx& ctx) -> Task<void> {
+    auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
+      release_connection_slot();
+    }};
+    auto handshake_failed = false;
+    if (tls_context_) {
+      try {
+        client = Box<folly::coro::Transport>{
+          co_await upgrade_transport_to_tls_server(std::move(*client),
+                                                   tls_context_)};
+      } catch (folly::AsyncSocketException const& ex) {
+        diagnostic::warning("TLS handshake failed")
+          .primary(args_.endpoint.source)
+          .note("peer: {}", peer)
+          .note("reason: {}", ex.what())
+          .hint("verify TLS settings and certificates on both sides")
+          .emit(ctx.dh());
+        handshake_failed = true;
+      }
+    }
+    if (not handshake_failed) {
+      // Register here rather than in `process_task()`, so that the client
+      // receives every chunk that `process_sub()` broadcasts from now on.
+      auto clients = co_await clients_.lock();
+      if (clients->accepting) {
+        TENZIR_DEBUG("serve_tcp: accepted {}", peer);
+        auto metrics = Arc<TcpConnectionMetrics>{
+          std::in_place,
+          *client,
+          tcp_metrics_,
+        };
+        ctx.spawn_task(emit_tcp_metrics(metrics));
+        clients->connected.push_back({
+          .transport = std::move(client),
+          .metrics = std::move(metrics),
+        });
+        release_connection_slot_guard.disable();
+        co_return;
+      }
+      close_client(std::move(client));
+    }
+    release_connection_slot_guard.disable();
+    release_connection_slot();
+    co_await message_queue_->enqueue(ConnectionReleased{});
+  }
+
+  auto accept_loop(OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(server_);
+    TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
+    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
+      return ew.is_compatible_with<folly::AsyncSocketException>();
+    };
+    while (true) {
+      co_await connection_slots_.consume();
+      auto release_connection_slot_guard
+        = detail::scope_guard{[this]() noexcept {
+            release_connection_slot();
+          }};
+      auto transport = co_await folly::coro::retryWithExponentialBackoff(
+        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+        accept_retry_delay, 0.0,
+        [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
+          try {
+            co_return co_await folly::coro::co_withExecutor(evb_,
+                                                            server_->accept());
+          } catch (folly::AsyncSocketException const& ex) {
+            // Accept failures are per-connection network errors; keep the
+            // listener alive and continue accepting new clients.
+            diagnostic::warning("failed to accept incoming connection")
+              .primary(args_.endpoint.source)
+              .note("endpoint: {}", address_.describe())
+              .note("reason: {}", ex.what())
+              .emit(ctx.dh());
+            throw;
+          }
+        },
+        should_retry_accept);
+      auto client
+        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+      auto peer = client->getPeerAddress().describe();
+      ctx.spawn_task(finish_accept(std::move(client), std::move(peer), ctx));
+      release_connection_slot_guard.disable();
+    }
+  }
+
+  ServeTcpArgs args_;
+  data sub_key_ = data{int64_t{0}};
+  folly::SocketAddress address_;
+  Option<tls_options> tls_;
+  std::shared_ptr<folly::SSLContext> tls_context_;
+  folly::EventBase* evb_ = nullptr;
+  std::unique_ptr<folly::coro::ServerSocket> server_;
+  uint64_t max_connections_ = 128;
+  mutable Box<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  Semaphore connection_slots_;
+  Box<folly::CancellationSource> accept_cancel_{std::in_place};
+  Mutex<Clients> clients_;
+  metric_handler tcp_metrics_ = {};
+  MetricsCounter bytes_counter_;
+  MetricsCounter events_counter_;
+  bool accept_loop_started_ = false;
+  Lifecycle lifecycle_ = Lifecycle::running;
+};
+
 class ServeTcpPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -527,7 +931,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ServeTcpArgs, ServeTcp>{};
+    auto d = Describer<ServeTcpArgs, legacy::ServeTcp, ServeTcp>{};
     auto endpoint_arg = d.positional("endpoint", &ServeTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &ServeTcpArgs::tls);
     auto max_connections_arg
@@ -566,17 +970,24 @@ public:
             .emit(ctx);
         }
       }
-      TRY(auto printer, ctx.get(printer_arg));
-      auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes")
-          .primary(printer.source.subloc(0, 1))
-          .emit(ctx);
-      }
       return {};
+    });
+    // `validate` runs without an input type. Check the printer here so that it
+    // receives the actual input type during type inference.
+    d.spawner([printer_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ServeTcpArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        TRY(auto printer, ctx.get(printer_arg));
+        TRY(auto output, printer.inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(printer.source.subloc(0, 1))
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return None{};
     });
     return d.invariant_order_filter();
   }

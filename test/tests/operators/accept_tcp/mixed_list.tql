@@ -1,0 +1,12 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+      payload: "{\"a\":[1,\"x\"]}\n"
+timeout: 60
+---
+
+accept_tcp env("TCP_ENDPOINT") {
+  read_json
+}
+head 1

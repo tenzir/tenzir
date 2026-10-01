@@ -11,7 +11,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
-#include <tenzir/operator/stream_accept.hpp>
+#include <tenzir/operator/stream_accept_legacy.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -170,7 +170,7 @@ private:
 };
 
 using AcceptUnixSocketArgs = UnixSocketAccept::Args;
-using AcceptUnixSocket = StreamAccept<UnixSocketAccept>;
+using AcceptUnixSocket = legacy::StreamAccept<UnixSocketAccept>;
 
 class AcceptUnixSocketPlugin final : public virtual OperatorPlugin {
 public:

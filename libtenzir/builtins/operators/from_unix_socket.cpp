@@ -11,7 +11,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
-#include <tenzir/operator/stream_from.hpp>
+#include <tenzir/operator/stream_from_legacy.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -114,7 +114,7 @@ private:
 };
 
 using FromUnixSocketArgs = UnixSocketFrom::Args;
-using FromUnixSocket = StreamFrom<UnixSocketFrom>;
+using FromUnixSocket = legacy::StreamFrom<UnixSocketFrom>;
 
 class FromUnixSocketPlugin final : public virtual OperatorPlugin {
 public:

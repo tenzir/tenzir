@@ -1,0 +1,18 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+assertions:
+  fixtures:
+    tcp:
+      client_received_contains: "{\"a\":[1,\"x\"]}"
+timeout: 60
+---
+
+every 50ms {
+  from {a: [1, "x"]}
+}
+head 20
+serve_tcp env("TCP_ENDPOINT") {
+  write_ndjson
+}

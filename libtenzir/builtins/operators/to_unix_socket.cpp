@@ -12,7 +12,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
-#include <tenzir/operator/stream_to.hpp>
+#include <tenzir/operator/stream_to_legacy.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -120,7 +120,7 @@ private:
 };
 
 using ToUnixSocketArgs = UnixSocketTo::Args;
-using ToUnixSocket = StreamTo<UnixSocketTo>;
+using ToUnixSocket = legacy::StreamTo<UnixSocketTo>;
 
 class ToUnixSocketPlugin final : public OperatorPlugin {
 public:

@@ -18,7 +18,10 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator/stream_accept.hpp>
+#include <tenzir/operator/stream_accept_legacy.hpp>
+#include <tenzir/operator/stream_source_spawner.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -416,7 +419,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptTcpArgs, AcceptTcp>{};
+    auto d
+      = Describer<AcceptTcpArgs, legacy::StreamAccept<TcpAccept>, AcceptTcp>{};
     auto endpoint_arg = d.positional("endpoint", &AcceptTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &AcceptTcpArgs::tls);
     auto max_connections_arg
@@ -473,13 +477,16 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (output->is_not<table_slice>()) {
+      if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(pipeline.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
     });
+    d.spawner(
+      make_stream_source_spawner<AcceptTcpArgs, legacy::StreamAccept<TcpAccept>,
+                                 AcceptTcp>(pipeline_arg));
     return d.without_optimize();
   }
 };

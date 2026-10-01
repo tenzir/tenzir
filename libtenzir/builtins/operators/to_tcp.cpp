@@ -14,7 +14,9 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator/stream_to.hpp>
+#include <tenzir/operator/stream_to_legacy.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -163,7 +165,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToTcpArgs, ToTcp>{};
+    auto d = Describer<ToTcpArgs, legacy::StreamTo<TcpTo>, ToTcp>{};
     auto endpoint_arg = d.positional("endpoint", &ToTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &ToTcpArgs::tls);
     auto max_retry_count_arg
@@ -195,17 +197,24 @@ public:
             .emit(ctx);
         }
       }
-      TRY(auto printer, ctx.get(printer_arg));
-      auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes")
-          .primary(printer.source.subloc(0, 1))
-          .emit(ctx);
-      }
       return {};
+    });
+    // `validate` runs without an input type. Check the printer here so that it
+    // receives the actual input type during type inference.
+    d.spawner([printer_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ToTcpArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        TRY(auto printer, ctx.get(printer_arg));
+        TRY(auto output, printer.inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(printer.source.subloc(0, 1))
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return None{};
     });
     return d.invariant_order_filter();
   }

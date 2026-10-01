@@ -1,0 +1,19 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+assertions:
+  fixtures:
+    tcp:
+      # The printer emits the closing bracket only when it finalizes.
+      client_received_contains: "}]"
+timeout: 60
+---
+
+every 50ms {
+  from {line: "hello-from-serve_tcp"}
+}
+head 20
+serve_tcp env("TCP_ENDPOINT") {
+  write_json arrays_of_objects=true
+}
