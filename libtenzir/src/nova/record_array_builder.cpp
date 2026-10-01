@@ -170,6 +170,24 @@ auto ArrayBuilder<Record>::skip_n(storage::Index count) -> void {
   storage_->shape_index_builder.append_n(count, -1);
 }
 
+auto ArrayBuilder<Record>::pop_skipped(storage::Index count) -> void {
+  TENZIR_ASSERT(not storage_->row_open);
+  auto& shapes = storage_->shape_index_builder;
+  TENZIR_ASSERT_LEQ(count, shapes.size());
+  shapes.truncate(shapes.size() - count);
+  pop_padded_fields();
+}
+
+auto ArrayBuilder<Record>::pop_padded_fields() -> void {
+  // Fields are padded lazily, so give back the rows that they cover.
+  const auto rows = storage_->shape_index_builder.size();
+  for (auto& field : storage_->field_builders) {
+    if (field.size() > rows) {
+      field.pop_absent(field.size() - rows);
+    }
+  }
+}
+
 auto ArrayBuilder<Record>::length() const -> storage::Index {
   return storage_->shape_index_builder.size() + (storage_->row_open ? 1 : 0);
 }
@@ -187,6 +205,7 @@ auto ArrayBuilder<Record>::take_last() -> Data {
     result.emplace(std::string{storage.field_names[index]},
                    storage.field_builders[index].take_last());
   }
+  pop_padded_fields();
   // The row cache described the removed row.
   storage.previous_shape = -1;
   storage.previous_row_indices.clear();

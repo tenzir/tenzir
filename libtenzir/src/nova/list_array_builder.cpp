@@ -51,6 +51,13 @@ auto ArrayBuilder<List>::skip_n(storage::Index count) -> void {
   storage_->span_builder.append_n(count, storage::Span{end, end});
 }
 
+auto ArrayBuilder<List>::pop_skipped(storage::Index count) -> void {
+  TENZIR_ASSERT(not storage_->list_open);
+  auto& spans = storage_->span_builder;
+  TENZIR_ASSERT_LEQ(count, spans.size());
+  spans.truncate(spans.size() - count);
+}
+
 auto ArrayBuilder<List>::list() -> ListBuilder {
   finish_last_row();
   storage_->open_begin = storage_->values_builder->length();

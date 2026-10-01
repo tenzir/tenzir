@@ -56,6 +56,14 @@ auto UnionArrayBuilder::skip_n(storage::Index count) -> void {
   alternative_index_builder_.append_n(count, -1);
 }
 
+auto UnionArrayBuilder::pop_skipped(storage::Index count) -> void {
+  for (auto i = storage::Index{0}; i < count; ++i) {
+    TENZIR_ASSERT_GT(alternative_index_builder_.size(), 0);
+    TENZIR_ASSERT_EQ(alternative_index_builder_.back(), -1);
+    alternative_index_builder_.pop_back();
+  }
+}
+
 auto UnionArrayBuilder::length() const -> storage::Index {
   return alternative_index_builder_.size();
 }
@@ -67,7 +75,9 @@ auto UnionArrayBuilder::take_last() -> Data {
   alternative_index_builder_.pop_back();
   return match(builders_[static_cast<std::size_t>(alternative)],
                [](auto& builder) {
-                 return builder.take_last();
+                 auto result = builder.take_last();
+                 builder.pop_trailing_absent();
+                 return result;
                });
 }
 

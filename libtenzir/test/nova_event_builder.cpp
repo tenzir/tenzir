@@ -293,6 +293,28 @@ TEST("event builder can retain repeated keys with a schema policy") {
   }
 }
 
+TEST("event builder collects a repeated key whose values alternate in type") {
+  auto dh = null_diagnostic_handler{};
+  auto builder
+    = make_builder(dh, {.infer_numbers = true, .unflatten_separator = ""});
+  auto event = builder.event();
+  for (auto value : {"1", "x", "2", "3", "y", "4"}) {
+    event.field("a").data_unparsed(value);
+  }
+  event.field("b").data_unparsed("z");
+  for (auto value : {"5", "w", "6", "7"}) {
+    event.field("b").data_unparsed(value);
+  }
+  auto events = finish(builder);
+  REQUIRE_EQUAL(events.size(), 1u);
+  CHECK_EQUAL(
+    events[0],
+    (data{record{
+      {"a", list{int64_t{1}, "x", int64_t{2}, int64_t{3}, "y", int64_t{4}}},
+      {"b", list{"z", int64_t{5}, "w", int64_t{6}, int64_t{7}}},
+    }}));
+}
+
 TEST("event builder collects an unflattened scalar prefix with its "
      "descendants") {
   auto dh = null_diagnostic_handler{};

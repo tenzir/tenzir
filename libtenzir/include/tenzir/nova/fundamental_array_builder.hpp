@@ -50,6 +50,7 @@ public:
   auto data(View v) -> void;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   auto length() const -> storage::Index;
   /// Removes the last row, which must hold a value, and returns it.
   auto take_last() -> Data;
@@ -65,6 +66,7 @@ public:
   auto data(bool v) -> void;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   auto length() const -> storage::Index;
   auto take_last() -> Data;
   auto finish() -> Array<Bool>;
@@ -79,6 +81,7 @@ public:
   auto null() -> void;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   auto length() const -> storage::Index;
   auto take_last() -> Data;
   auto finish() -> Array<Null>;
@@ -98,6 +101,7 @@ public:
   auto data(View v) -> void;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   auto length() const -> storage::Index;
   auto take_last() -> Data;
   auto finish() -> Array<Tag>;

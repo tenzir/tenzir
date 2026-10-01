@@ -22,6 +22,12 @@ auto ArrayBuilder<Tag>::skip_n(storage::Index count) -> void {
 }
 
 template <fundamental_type Tag>
+auto ArrayBuilder<Tag>::pop_skipped(storage::Index count) -> void {
+  TENZIR_ASSERT_LEQ(count, data_builder.size());
+  data_builder.truncate(data_builder.size() - count);
+}
+
+template <fundamental_type Tag>
 auto ArrayBuilder<Tag>::length() const -> storage::Index {
   return data_builder.size();
 }
@@ -52,6 +58,13 @@ auto ArrayBuilder<Bool>::skip_n(storage::Index count) -> void {
   data_builder.append_n(false, count);
 }
 
+auto ArrayBuilder<Bool>::pop_skipped(storage::Index count) -> void {
+  TENZIR_ASSERT_LEQ(count, data_builder.size());
+  for (auto i = storage::Index{0}; i < count; ++i) {
+    data_builder.pop_back();
+  }
+}
+
 auto ArrayBuilder<Bool>::length() const -> storage::Index {
   return data_builder.size();
 }
@@ -74,6 +87,11 @@ auto ArrayBuilder<Null>::skip() -> void {
 
 auto ArrayBuilder<Null>::skip_n(storage::Index count) -> void {
   length_ += count;
+}
+
+auto ArrayBuilder<Null>::pop_skipped(storage::Index count) -> void {
+  TENZIR_ASSERT_LEQ(count, length_);
+  length_ -= count;
 }
 
 auto ArrayBuilder<Null>::length() const -> storage::Index {
@@ -108,6 +126,13 @@ auto DenseOffsetArrayBuilder<Tag, Char>::skip() -> void {
 template <fundamental_type Tag, typename Char>
 auto DenseOffsetArrayBuilder<Tag, Char>::skip_n(storage::Index count) -> void {
   range_builder.append_n(count, storage::Span{-1, -1});
+}
+
+template <fundamental_type Tag, typename Char>
+auto DenseOffsetArrayBuilder<Tag, Char>::pop_skipped(storage::Index count)
+  -> void {
+  TENZIR_ASSERT_LEQ(count, range_builder.size());
+  range_builder.truncate(range_builder.size() - count);
 }
 
 template <fundamental_type Tag, typename Char>

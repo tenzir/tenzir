@@ -44,6 +44,7 @@ public:
   auto open_list_record() -> Option<ArrayBuilder<Record>::RecordBuilder>;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   auto length() const -> storage::Index;
   /// Removes the last row, which must hold a value, and returns it.
   auto take_last() -> Data;
@@ -57,7 +58,7 @@ private:
   /// to `length()` right before it receives a value, and all of them catch up
   /// in `finish()`. Rows that carry no value for an alternative therefore cost
   /// nothing until the next value of that alternative, at which point they are
-  /// appended in bulk.
+  /// appended in bulk. An alternative never ends in padding.
   template <data_type T>
   auto switch_builder() -> ArrayBuilder<T>& {
     constexpr auto type_index = data_type_list::unique_index_of<T>;
@@ -100,6 +101,7 @@ public:
   using UnionArrayBuilder::null;
   using UnionArrayBuilder::open_list_record;
   using UnionArrayBuilder::open_record;
+  using UnionArrayBuilder::pop_skipped;
   using UnionArrayBuilder::record;
   using UnionArrayBuilder::skip;
   using UnionArrayBuilder::skip_n;

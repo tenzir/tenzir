@@ -1,0 +1,4 @@
+a=1 a=x a=2 a=3
+a=x a=1 a=y a=2
+a=1 a=x a=2 a=y a=3 a=z
+n.x=1 n=2 n.y=3 n=4 n.z=5

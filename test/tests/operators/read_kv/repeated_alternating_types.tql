@@ -1,0 +1,4 @@
+from_stdin {
+  read_kv unflatten_separator="."
+}
+write_ndjson

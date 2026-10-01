@@ -56,6 +56,7 @@ public:
   auto record() -> RecordBuilder;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   /// Returns the number of rows, including a row that is still being built.
   auto length() const -> storage::Index;
   /// Removes the last row, closing it first if still open, and returns it.
@@ -71,6 +72,8 @@ private:
   auto reopen() -> Option<RecordBuilder>;
 
   auto finish_last_row() -> void;
+  /// Removes the absent rows of fields that extend past the finished rows.
+  auto pop_padded_fields() -> void;
 
   struct Storage;
   std::unique_ptr<Storage> storage_;

@@ -52,6 +52,7 @@ public:
   auto list() -> ListBuilder;
   auto skip() -> void;
   auto skip_n(storage::Index count) -> void;
+  auto pop_skipped(storage::Index count) -> void;
   /// Returns the number of lists, including a list that is still being built.
   auto length() const -> storage::Index;
   /// Removes the last list, closing it first if still open, and returns it.

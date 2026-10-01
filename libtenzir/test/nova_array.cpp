@@ -3145,6 +3145,98 @@ TEST("take_last pops a union, a list, and a nested record") {
   CHECK(not a->present.get(1));
 }
 
+TEST("take_last pops every row of a union with alternating types") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(std::int64_t{1});
+  builder.data(std::string_view{"a"});
+  builder.data(std::int64_t{2});
+  builder.data(std::string_view{"b"});
+  builder.data(std::int64_t{3});
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{Int{3}}));
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{String{"b"}}));
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{Int{2}}));
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{String{"a"}}));
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{Int{1}}));
+  CHECK_EQUAL(builder.length(), 0);
+}
+
+TEST("a union stays aligned when rows of other alternatives are taken") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(std::int64_t{1});
+  builder.data(std::string_view{"x"});
+  builder.data(std::int64_t{2});
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{Int{2}}));
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{String{"x"}}));
+  builder.data(std::int64_t{7});
+  builder.data(std::string_view{"z"});
+  builder.null();
+  auto array = builder.finish();
+  REQUIRE_EQUAL(array.length(), 4);
+  CHECK_EQUAL(materialize_legacy(array.get(0)),
+              (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(array.get(1)),
+              (tenzir::data{std::int64_t{7}}));
+  CHECK_EQUAL(materialize_legacy(array.get(2)),
+              (tenzir::data{std::string{"z"}}));
+  CHECK_EQUAL(materialize_legacy(array.get(3)), (tenzir::data{caf::none}));
+}
+
+TEST("take_last pops a list whose elements alternate between types") {
+  auto lists = ArrayBuilder<List>{};
+  auto list = lists.list();
+  list.data(std::int64_t{1});
+  list.record().field("x").data(std::int64_t{2});
+  list.data(std::string_view{"three"});
+  list.record().field("y").data(std::int64_t{4});
+  list.data(std::int64_t{5});
+  auto expected = List{};
+  expected.emplace_back(Int{1});
+  auto first = Record{};
+  first.emplace("x", Int{2});
+  expected.emplace_back(std::move(first));
+  expected.emplace_back(String{"three"});
+  auto second = Record{};
+  second.emplace("y", Int{4});
+  expected.emplace_back(std::move(second));
+  expected.emplace_back(Int{5});
+  CHECK(materialize_legacy(lists.take_last())
+        == materialize_legacy(Data{std::move(expected)}));
+  lists.list().data(std::int64_t{6});
+  auto array = lists.finish();
+  REQUIRE_EQUAL(array.length(), 1);
+  CHECK_EQUAL(materialize_legacy(RowView<Data>{array.get(0)}),
+              (tenzir::data{tenzir::list{std::int64_t{6}}}));
+}
+
+TEST("take_last pops consecutive records with different fields") {
+  auto lists = ArrayBuilder<List>{};
+  auto list = lists.list();
+  list.record().field("x").data(std::int64_t{1});
+  list.record().field("y").data(std::int64_t{2});
+  list.record().field("x").data(std::int64_t{3});
+  auto expected = List{};
+  for (auto [name, value] : {std::pair{"x", 1}, {"y", 2}, {"x", 3}}) {
+    auto element = Record{};
+    element.emplace(name, Int{value});
+    expected.emplace_back(std::move(element));
+  }
+  CHECK(materialize_legacy(lists.take_last())
+        == materialize_legacy(Data{std::move(expected)}));
+  lists.list().record().field("y").data(std::int64_t{4});
+  auto array = lists.finish();
+  REQUIRE_EQUAL(array.length(), 1);
+  CHECK_EQUAL(
+    materialize_legacy(RowView<Data>{array.get(0)}),
+    (tenzir::data{tenzir::list{tenzir::record{{"y", std::int64_t{4}}}}}));
+}
+
 TEST("record builder keeps the last value of a repeated key") {
   auto builder = ArrayBuilder<Record>{};
   auto row = builder.record();
