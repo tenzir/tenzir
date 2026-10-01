@@ -1,0 +1,3 @@
+pipeline_list
+where id == "never-started"
+select id, start_time

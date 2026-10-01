@@ -1,0 +1,3 @@
+pipeline_activity range=1min, interval=10s
+head 1
+select name=@name, first_is_time=type_of(first).kind == "time", last_is_time=type_of(last).kind == "time", pipelines_is_list=type_of(pipelines).kind == "list"

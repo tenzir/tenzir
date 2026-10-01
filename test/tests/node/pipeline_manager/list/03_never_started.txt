@@ -1,0 +1,4 @@
+{
+  id: "never-started",
+  start_time: null,
+}

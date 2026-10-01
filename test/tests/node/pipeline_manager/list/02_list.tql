@@ -1,0 +1,3 @@
+pipeline_list
+where id == "nova-detached"
+select id, name=@name, hidden, configured, created_is_time=type_of(created_at).kind == "time", modified_is_time=type_of(last_modified).kind == "time"
