@@ -89,6 +89,51 @@ _STATIC_RESPONSES: dict[str, list[dict[str, Any]]] = {
             ]
         ),
     ],
+    # Inference applies recursively, but never turns strings into booleans or
+    # numbers. JSON integer boundaries keep their signed/unsigned types.
+    "select_inferred": [
+        _data(
+            [
+                {
+                    "ip": "192.0.2.1",
+                    "subnet": "192.0.2.0/24",
+                    "time": "2024-01-01T00:00:00Z",
+                    "duration": "1h",
+                    "text": "true",
+                    "number": "42",
+                    "null_text": "null",
+                    "boolean": True,
+                    "min": -9223372036854775808,
+                    "max": 18446744073709551615,
+                    "nested": {"text": "false", "ip": "2001:db8::1"},
+                    "items": ["true", "false", "192.0.2.2", "2s", False],
+                },
+            ]
+        ),
+    ],
+    "select_field_order": [
+        _data([{"b": 1, "a": 2}, {"a": 3, "b": 4}, {}, {"a.b": 5, "a": {}}]),
+    ],
+    "select_duplicates": [
+        _data('[{"x":1,"x":2,"nested":{"b":3,"b":4},"items":[{"a":5,"a":6}]}]'),
+    ],
+    "select_empty_array": [_data([])],
+    "select_invalid_late_element": [
+        _data([{"discard": 1}, None, {"discard": 2}], part=0),
+        _data([{"n": 1}], part=1),
+    ],
+    "select_invalid_nested": [
+        _data('[{"discard":1},{"broken":[true,]}]', part=0),
+        _data([{"n": 1}], part=1),
+    ],
+    "select_invalid_trailing": [
+        _data('[{"discard":1}] trailing', part=0),
+        _data([{"n": 1}], part=1),
+    ],
+    "select_invalid_number": [
+        _data('[{"discard":1},{"big":18446744073709551616}]', part=0),
+        _data([{"n": 1}], part=1),
+    ],
     # A control message.
     "select_log": [_log("Starting query")],
     # A stream of several messages. The empty data message yields no events.

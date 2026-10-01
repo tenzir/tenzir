@@ -1,9 +1,8 @@
-error: invalid Microsoft Defender value in row 0, column `Count`
+error: invalid Microsoft Defender response: invalid value in row 0, column 1
  --> tests/operators/from_microsoft_defender/overflow.tql:7:25
   |
 7 | from_microsoft_defender "overflow",
   |                         ^^^^^^^^^^
   |
-  = note: expected int64
-  = hint: check the query's projected types; integer values must fit int64
+  = hint: check the query's projected types and reduce its time range or output
   = note: request ID: defender-request-123

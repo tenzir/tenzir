@@ -8,9 +8,11 @@
 
 #include <tenzir/async/fetch_node.hpp>
 #include <tenzir/async/mail.hpp>
+#include <tenzir/detail/assert.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/node.hpp>
-#include <tenzir/nova/data_array_builder.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/json_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -19,6 +21,9 @@
 #include <tenzir/try.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
+#include <fmt/format.h>
+
+#include <utility>
 
 namespace tenzir::plugins::api {
 
@@ -197,29 +202,29 @@ public:
         .emit(ctx);
       co_return;
     }
-    auto parsed_response = from_json(response->body());
-    if (not parsed_response) {
-      diagnostic::error("failed to parse response: {}", parsed_response.error())
-        .emit(ctx);
+    auto parser_dh = transforming_diagnostic_handler{
+      ctx.dh(), [](diagnostic d) {
+        d.severity = severity::error;
+        if (d.message == "expected a JSON object") {
+          d.message = "expected the response to be a record";
+        } else {
+          d.message = fmt::format("failed to parse response: {}", d.message);
+        }
+        return d;
+      }};
+    auto settings = nova::JsonParser::Settings{};
+    settings.origin = args_.endpoint.source;
+    settings.builder.default_schema_name = "tenzir.api";
+    settings.builder.infer_booleans = false;
+    settings.decoding.first_duplicate_wins = true;
+    settings.decoding.reject_oversized_integers = true;
+    auto parser = nova::JsonParser::make(std::move(settings), parser_dh);
+    TENZIR_ASSERT(parser);
+    auto events = parser->parse_document(response->body());
+    if (not events) {
       co_return;
     }
-    auto builder = nova::ArrayBuilder<nova::Data>{};
-    nova::append_legacy_data(builder, *parsed_response, ctx.dh());
-    const auto array = builder.finish();
-    auto record = array.get_alternative<nova::Record>();
-    if (not record or not record->present.get(0)) {
-      diagnostic::error("expected the response to be a record")
-        .primary(args_.endpoint.source)
-        .note("got: {}", *parsed_response)
-        .emit(ctx);
-      co_return;
-    }
-    const auto length = record->data.length();
-    co_await push(nova::Events{
-      std::move(record->data),
-      std::move(record->present),
-      nova::Events::Meta::make_empty(length, "tenzir.api"),
-    });
+    co_await push(std::move(*events));
   }
 
   auto state() -> OperatorState override {

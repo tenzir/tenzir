@@ -1,0 +1,6 @@
+error: expected Microsoft 365 activity event to be an object
+ --> tests/operators/from_microsoft_365_activity/late-invalid.tql:9:1
+  |
+9 | from_microsoft_365_activity auth={
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

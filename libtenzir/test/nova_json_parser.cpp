@@ -6,10 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/nova/array_base.hpp"
 #include "tenzir/nova/json_parser.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/variant_traits.hpp"
 
+#include <fmt/format.h>
+
+#include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace tenzir;
 using namespace tenzir::nova;
@@ -49,6 +56,131 @@ TEST("document parsing accepts multiline objects and preserves pending "
   auto ready = parser.take_ready();
   REQUIRE_EQUAL(ready.size(), 1u);
   CHECK_EQUAL(int_field(ready[0], "id"), 1);
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("value documents retain columnar array elements and field order") {
+  auto dh = collecting_diagnostic_handler{};
+  auto parser = make_parser(dh);
+  auto result = parser.parse_document_value(
+    "[\n{\"b\":1,\"a\":2},\n{\"a\":3,\"b\":4},\n{}\n]\n");
+  REQUIRE(result);
+  REQUIRE_EQUAL(result->length(), 1);
+  auto lists = result->try_as<List>();
+  REQUIRE(lists);
+  auto primary = lists->to_primary();
+  auto const& elements = as<storage::ListStorage>(primary.storage()).values();
+  auto records = elements.try_as<Record>();
+  REQUIRE(records);
+  REQUIRE_EQUAL(records->length(), 3);
+  auto names = std::vector<std::string_view>{};
+  for (auto [name, value] : records->get(0)) {
+    names.push_back(name);
+    CHECK(is<RowView<Int>>(value));
+  }
+  CHECK_EQUAL(names, (std::vector<std::string_view>{"b", "a"}));
+  names.clear();
+  for (auto [name, value] : records->get(1)) {
+    names.push_back(name);
+    CHECK(is<RowView<Int>>(value));
+  }
+  CHECK_EQUAL(names, (std::vector<std::string_view>{"a", "b"}));
+  auto last = records->get(2);
+  CHECK(last.begin() == last.end());
+  auto empty = parser.parse_document_value("[]");
+  REQUIRE(empty);
+  lists = empty->try_as<List>();
+  REQUIRE(lists);
+  CHECK_EQUAL(lists->get(0).length(), 0);
+  // A later parse must not invalidate the earlier document's columns.
+  auto b = records->field("b");
+  REQUIRE(b);
+  CHECK_EQUAL(*b->data.try_as<Int>()->get(0), 1);
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("value documents accept every JSON root type") {
+  auto dh = collecting_diagnostic_handler{};
+  auto parser = make_parser(dh);
+  auto check_type = [&]<class Tag>(std::string_view source) -> void {
+    auto result = parser.parse_document_value(source);
+    REQUIRE(result);
+    REQUIRE_EQUAL(result->length(), 1);
+    CHECK(result->try_as<Tag>());
+  };
+  check_type.template operator()<Null>("null");
+  check_type.template operator()<Bool>("true");
+  check_type.template operator()<Int>("-1");
+  check_type.template operator()<UInt>("18446744073709551615");
+  check_type.template operator()<Float>("1.5");
+  check_type.template operator()<String>(R"("text")");
+  check_type.template operator()<List>("[]");
+  check_type.template operator()<Record>("{}");
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("value documents reject malformed input without changing frame state") {
+  auto dh = collecting_diagnostic_handler{};
+  auto settings = JsonParser::Settings{};
+  settings.batch_size = 2;
+  settings.decoding.first_duplicate_wins = true;
+  settings.decoding.reject_oversized_integers = true;
+  auto parser = make_parser(dh, settings);
+  for (auto id : {1, 2, 3}) {
+    auto frame = fmt::format(R"({{"id":{}}})", id);
+    parser.parse(frame);
+  }
+  for (auto const* source :
+       {"", " ", "[", "[{},]", "[{]", "[1e]", "[nul]", "[truth]", "[01]",
+        R"([{"x":1},{"x":[true,]}])", R"([{"x":1,"x":1e}])",
+        R"([{"x":1,"x":18446744073709551616}])", R"([{"x":1},{"x":"\uZZZZ"}])",
+        "[] trailing", "[] []", "null false", "1 2", R"("text" {})"}) {
+    CHECK(not parser.parse_document_value(source));
+    CHECK_EQUAL(parser.length(), 1u);
+    auto valid = parser.parse_document_value("[{}]");
+    REQUIRE(valid);
+  }
+  auto ready = parser.take_ready();
+  REQUIRE_EQUAL(ready.size(), 1u);
+  CHECK_EQUAL(int_field(ready.front(), "id", 0), 1);
+  CHECK_EQUAL(int_field(ready.front(), "id", 1), 2);
+  parser.flush();
+  ready = parser.take_ready();
+  REQUIRE_EQUAL(ready.size(), 1u);
+  CHECK_EQUAL(int_field(ready.front(), "id"), 3);
+  CHECK(not std::move(dh).collect().empty());
+}
+
+TEST("value documents apply decoding and inference options recursively") {
+  auto dh = collecting_diagnostic_handler{};
+  auto settings = JsonParser::Settings{};
+  settings.builder.infer_booleans = false;
+  settings.decoding.first_duplicate_wins = true;
+  settings.decoding.reject_oversized_integers = true;
+  auto parser = make_parser(dh, settings);
+  auto result = parser.parse_document_value(
+    R"([{"x":1,"x":2,"items":["true","false","42","192.0.2.1","1h",true]}])");
+  REQUIRE(result);
+  auto lists = result->try_as<List>();
+  REQUIRE(lists);
+  auto primary = lists->to_primary();
+  auto records
+    = as<storage::ListStorage>(primary.storage()).values().try_as<Record>();
+  REQUIRE(records);
+  auto x = records->field("x");
+  REQUIRE(x);
+  CHECK_EQUAL(*x->data.try_as<Int>()->get(0), 1);
+  auto items = records->field("items");
+  REQUIRE(items);
+  lists = items->data.try_as<List>();
+  REQUIRE(lists);
+  auto row = lists->get(0);
+  CHECK(is<RowView<String>>(row.get(0)));
+  CHECK(is<RowView<String>>(row.get(1)));
+  CHECK(is<RowView<String>>(row.get(2)));
+  CHECK(is<RowView<Ip>>(row.get(3)));
+  CHECK(is<RowView<Duration>>(row.get(4)));
+  CHECK(is<RowView<Bool>>(row.get(5)));
   CHECK(std::move(dh).collect().empty());
 }
 
@@ -225,4 +357,37 @@ TEST("string inference can preserve booleans without disabling extended "
   CHECK(is<RowView<String>>(row.get(1)));
   CHECK(is<RowView<Bool>>(row.get(2)));
   CHECK(std::move(dh).collect().empty());
+}
+
+TEST("strict documents reject duplicate keys and unsigned integers "
+     "recursively") {
+  auto dh = null_diagnostic_handler{};
+  auto settings = JsonParser::Settings{};
+  settings.builder.raw = true;
+  settings.decoding.reject_duplicate_keys = true;
+  settings.decoding.reject_unsigned_integers = true;
+  settings.decoding.reject_oversized_integers = true;
+  auto parser = make_parser(dh, settings);
+  for (auto source :
+       {R"({"a":1,"a":2})", R"({"nested":[{"a":1,"a":2}]})",
+        R"({"n":9223372036854775808})", R"({"n":18446744073709551616})"}) {
+    CHECK(not parser.parse_document(source));
+    CHECK(not parser.parse_document_value(source));
+  }
+  CHECK(parser.parse_document(
+    R"({"min":-9223372036854775808,"max":9223372036854775807})"));
+  // Match decoded keys, not their source spellings.
+  CHECK(not parser.parse_document(R"({"x":1,"\u0078":2})"));
+  CHECK(parser.parse_document_value(R"("9223372036854775808")"));
+}
+
+TEST("document depth budgets account for protocol wrappers") {
+  auto dh = null_diagnostic_handler{};
+  auto settings = JsonParser::Settings{};
+  settings.decoding.max_depth = 2;
+  auto parser = make_parser(dh, settings);
+  CHECK(parser.parse_document_value("[[1]]"));
+  CHECK(not parser.parse_document_value("[[[1]]]"));
+  CHECK(parser.parse_document(R"({"a":{"b":1}})"));
+  CHECK(not parser.parse_document(R"({"a":{"b":{"c":1}}})"));
 }

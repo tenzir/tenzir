@@ -1,0 +1,7 @@
+error: invalid Microsoft Defender response: expected valid JSON with unique keys and int64 integers
+ --> tests/operators/from_microsoft_defender/trailing.tql:7:25
+  |
+7 | from_microsoft_defender "trailing",
+  |                         ^^^^^^^^^^
+  |
+  = hint: check the query's projected types and reduce its time range or output

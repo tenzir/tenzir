@@ -1,0 +1,2 @@
+from_velociraptor request_name="test", query="select_invalid_number",
+  _config=env("VELOCIRAPTOR_CONFIG").parse_json()

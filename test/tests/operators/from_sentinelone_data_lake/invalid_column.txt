@@ -1,0 +1,6 @@
+error: error when parsing response: expected column names to be strings
+ --> tests/operators/from_sentinelone_data_lake/invalid_column.tql:5:1
+  |
+5 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

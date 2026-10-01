@@ -27,6 +27,12 @@ struct JsonDecodingOptions {
   bool first_duplicate_wins = false;
   /// Rejects integers outside the 64-bit range instead of storing their token.
   bool reject_oversized_integers = false;
+  /// Rejects integers that require the unsigned half of the 64-bit range.
+  bool reject_unsigned_integers = false;
+  /// Rejects repeated object keys instead of collecting their values.
+  bool reject_duplicate_keys = false;
+  /// Maximum depth, counting the complete document's root as zero.
+  size_t max_depth = defaults::max_recursion;
 };
 
 /// Appends an already framed object to an event builder. Malformed values
@@ -69,6 +75,12 @@ public:
   /// Parses exactly one complete object. On failure, no partial events are
   /// returned. Does not change the pending frames or ready batches.
   auto parse_document(std::string_view source) -> failure_or<Events>;
+
+  /// Parses exactly one complete JSON value into a single-row array. Lists
+  /// retain their columnar elements, so callers can validate and unwrap them
+  /// without rebuilding rows. On failure, no partial values are returned.
+  /// Does not change the pending frames or ready batches.
+  auto parse_document_value(std::string_view source) -> failure_or<Array<Data>>;
 
   auto flush() -> void;
   auto take_ready() -> std::vector<Events>;

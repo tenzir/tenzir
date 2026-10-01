@@ -101,6 +101,15 @@ class _ActivityHandler(BaseHTTPRequestHandler):
             ["retry"],
             ["untrusted"],
             ["continuous"],
+            ["compatibility"],
+            ["many-events"],
+            ["late-invalid"],
+            ["metadata-conflict"],
+            ["malformed"],
+            ["trailing"],
+            ["duplicate-malformed"],
+            ["bad-content-page"],
+            ["expired-sensitive"],
         ):
             _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "publisher missing"})
             return False
@@ -164,6 +173,39 @@ class _ActivityHandler(BaseHTTPRequestHandler):
                     [],
                     [("NextPageUri", "https://example.invalid/next")],
                 )
+                return
+            case = query["PublisherIdentifier"][0]
+            if case in {
+                "compatibility",
+                "many-events",
+                "late-invalid",
+                "metadata-conflict",
+                "malformed",
+                "trailing",
+                "duplicate-malformed",
+                "bad-content-page",
+                "expired-sensitive",
+            }:
+                blobs: list[object] = [
+                    {
+                        "contentType": "Audit.General",
+                        "contentId": "blob-1",
+                        "contentUri": f"{base_url}{root}/audit/blob-1",
+                        "contentCreated": "2026-09-02T10:00:00Z",
+                        "contentExpiration": "2099-09-09T10:10:00Z",
+                    }
+                ]
+                if case == "expired-sensitive":
+                    blobs[0] = {
+                        "contentType": "Audit.General",
+                        "contentId": "DO-NOT-LOG-CONTENT",
+                        "contentUri": f"{base_url}{root}/audit/blob-1",
+                        "contentCreated": "1970-01-01T00:00:00Z",
+                        "contentExpiration": "1970-01-01T00:00:01Z",
+                    }
+                if case == "bad-content-page":
+                    blobs.append({"contentType": "DO-NOT-LOG-DATA"})
+                _json_response(self, HTTPStatus.OK, blobs)
                 return
             if query.get("PublisherIdentifier") == ["continuous"]:
                 server = cast(_ActivityServer, self.server)
@@ -236,6 +278,42 @@ class _ActivityHandler(BaseHTTPRequestHandler):
             )
             return
         if path == f"{root}/audit/blob-1":
+            case = query["PublisherIdentifier"][0]
+            if case in {
+                "compatibility",
+                "many-events",
+                "late-invalid",
+                "metadata-conflict",
+                "malformed",
+                "trailing",
+                "duplicate-malformed",
+            }:
+                if case == "compatibility":
+                    raw = (
+                        b'[{"b":1,"a":2,"b":3,"boolean":"true","number":"42",'
+                        b'"ip":"192.0.2.1","time":"2026-01-01T00:00:00Z",'
+                        b'"duration":"1h","nested":{"a.b":"false"},'
+                        b'"uint":18446744073709551615}, {"a":3,"b":4}]'
+                    )
+                else:
+                    events: list[object] = [{"Value": i} for i in range(9000)]
+                    if case == "late-invalid":
+                        events.append("DO-NOT-LOG-DATA")
+                    elif case == "metadata-conflict":
+                        events.append({"microsoft_365_activity": "DO-NOT-LOG-DATA"})
+                    raw = json.dumps(events).encode()
+                    if case == "malformed":
+                        raw = raw[:-1] + b',{"DO-NOT-LOG-DATA":[true,]}]'
+                    elif case == "trailing":
+                        raw += b' {"DO-NOT-LOG-DATA":true}'
+                    elif case == "duplicate-malformed":
+                        raw = b'[{"Value":1,"Value":[true,]}]'
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+                return
             _json_response(
                 self,
                 HTTPStatus.OK,

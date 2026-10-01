@@ -11,8 +11,11 @@
 #include "tenzir/detail/flat_set.hpp"
 #include "tenzir/detail/function.hpp"
 #include "tenzir/json_parser.hpp"
+#include "tenzir/nova/array_base.hpp"
+#include "tenzir/nova/type_system.hpp"
 
 #include <algorithm>
+#include <simdjson.h>
 #include <utility>
 
 namespace tenzir::nova {
@@ -54,7 +57,7 @@ auto parse_value_impl(auto&& val, auto&& out, diagnostic_handler& dh,
                       std::string_view source = {},
                       JsonDecodingOptions options = {}, size_t depth = 0)
   -> bool {
-  if (depth > defaults::max_recursion) {
+  if (depth > options.max_depth) {
     warn_malformed(dh, source, val.current_location(),
                    "JSON nesting is too deep");
     out.null();
@@ -126,6 +129,12 @@ auto parse_value_impl(auto&& val, auto&& out, diagnostic_handler& dh,
           if (number.error()) {
             warn_malformed(dh, source, val.current_location(),
                            "failed to parse a JSON number");
+            out.null();
+            return false;
+          }
+          if (options.reject_unsigned_integers) {
+            warn_malformed(dh, source, val.current_location(),
+                           "JSON integer does not fit into int64");
             out.null();
             return false;
           }
@@ -238,8 +247,12 @@ auto parse_object_impl(simdjson::ondemand::object object,
       ok = false;
       continue;
     }
-    if (options.first_duplicate_wins
+    if ((options.first_duplicate_wins or options.reject_duplicate_keys)
         and not keys.insert(key.value_unsafe()).second) {
+      if (options.reject_duplicate_keys) {
+        warn_malformed(dh, source, location(), "duplicate JSON object key");
+        ok = false;
+      }
       // Ignoring a repeated key must not hide malformed JSON in its value.
       auto discarded_settings = EventBuilder::Settings{};
       discarded_settings.raw = true;
@@ -417,6 +430,32 @@ auto JsonParser::parse_document(std::string_view source) -> failure_or<Events> {
     return failure::promise();
   }
   return builder.finish();
+}
+
+auto JsonParser::parse_document_value(std::string_view source)
+  -> failure_or<Array<Data>> {
+  auto buffer = std::string{source};
+  auto document = parser_.iterate(buffer);
+  // Iterating may reallocate the buffer to add padding.
+  source = buffer;
+  if (document.error() != simdjson::SUCCESS) {
+    warn_malformed(*dh_, source, source.data(),
+                   simdjson::error_message(document.error()));
+    return failure::promise();
+  }
+  auto& doc = document.value_unsafe();
+  auto builder = EventBuilder::make_prevalidated(settings_.builder, *dh_);
+  auto ok
+    = parse_value_impl(doc, builder.value(), *dh_, source, settings_.decoding);
+  if (ok and not doc.at_end()) {
+    warn_malformed(*dh_, source, doc.current_location(),
+                   "found trailing content after the JSON value");
+    ok = false;
+  }
+  if (not ok) {
+    return failure::promise();
+  }
+  return builder.finish_data();
 }
 
 auto JsonParser::length() const -> size_t {

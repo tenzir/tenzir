@@ -1,0 +1,6 @@
+error: expected Microsoft 365 activity response to be a valid JSON array
+ --> tests/operators/from_microsoft_365_activity/trailing.tql:9:1
+  |
+9 | from_microsoft_365_activity auth={
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

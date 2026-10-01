@@ -1,0 +1,27 @@
+warning: failed to parse Velociraptor gRPC response
+ --> tests/operators/from_velociraptor/invalid_nested.tql:1:1
+  |
+1 | from_velociraptor request_name="test", query="select_invalid_nested",
+  | ~~~~~~~~~~~~~~~~~
+  |
+  = note: !! parse_error: Velociraptor response not in JSON format
+  = note: response: '[{"discard":1},{"broken":[true,]}]'
+  = note: query_id: '1'
+  = note: part: '0'
+  = note: query name: 'test'
+  = note: query VQL: 'select_invalid_nested'
+  = note: timestamp: '1704067200000000'
+  = note: total_rows: '0'
+  = note: log: ''
+{
+  timestamp: 2024-01-01T00:00:00.000001Z,
+  query_id: 1,
+  query: {
+    name: "test",
+    vql: "select_invalid_nested",
+  },
+  part: 1,
+  response: {
+    n: 1,
+  },
+}

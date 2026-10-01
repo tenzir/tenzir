@@ -1,0 +1,6 @@
+warning: Microsoft 365 activity content has expired
+ --> tests/operators/from_microsoft_365_activity/expired-sensitive.tql:8:1
+  |
+8 | from_microsoft_365_activity auth={
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |

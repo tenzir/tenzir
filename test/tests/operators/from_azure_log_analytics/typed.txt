@@ -19,14 +19,14 @@
   },
   Types: {
     TimeGenerated: "time",
-    Count: "int64",
-    Small: "int64",
-    Ratio: "double",
+    Count: "int",
+    Small: "int",
+    Ratio: "float",
     Enabled: "bool",
     Message: "string",
     Elapsed: "duration",
     Amount: "string",
-    NullTime: "time",
+    NullTime: "null",
     NestedString: "string",
   },
 }

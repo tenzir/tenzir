@@ -1,9 +1,8 @@
-error: invalid Microsoft Defender value in row 0, column `Timestamp`
+error: invalid Microsoft Defender response: invalid value in row 0, column 0
  --> tests/operators/from_microsoft_defender/bad-datetime.tql:7:25
   |
 7 | from_microsoft_defender "bad-datetime",
   |                         ^^^^^^^^^^^^^^
   |
-  = note: expected time
-  = hint: check the query's projected types; integer values must fit int64
+  = hint: check the query's projected types and reduce its time range or output
   = note: request ID: defender-request-123

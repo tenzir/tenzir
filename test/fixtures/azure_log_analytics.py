@@ -240,6 +240,9 @@ class Handler(BaseHTTPRequestHandler):
             )
         elif case == "metadata":
             envelope.update(statistics={"query": {}}, render={"visualization": "table"})
+        elif case == "dynamic-first":
+            columns[:] = [columns[-1], *columns[:-1]]
+            rows[:] = [[row[-1], *row[:-1]] for row in rows]
         elif case == "reordered":
             table = {"rows": rows, "name": "PrimaryResult", "columns": columns}
             envelope = {"statistics": {}, "tables": [table]}
@@ -251,6 +254,8 @@ class Handler(BaseHTTPRequestHandler):
             rows[0][-1] = 100000000000000000000000000000
         elif case == "encoded-dynamic-overflow":
             rows[0][-1] = "100000000000000000000000000000"
+        elif case == "encoded-dynamic-boundary":
+            rows[0][-1] = '{"nested":[18446744073709551616]}'
         elif case == "nulls":
             rows[:] = [[None] * len(columns)]
         elif case in {"dynamic", "dynamic-scalars", "mixed-list"}:
@@ -304,8 +309,20 @@ class Handler(BaseHTTPRequestHandler):
             rows[0][4] = "yes"
         elif case == "bad-real":
             rows[0][3] = "NaN"
-        elif case == "bad-string":
-            rows[0][5] = 42
+        elif case in {
+            "bad-string",
+            "bigint-string",
+            "bigint-real",
+            "encoded-duplicate",
+        }:
+            if case == "bad-string":
+                rows[0][5] = 42
+            elif case == "bigint-string":
+                rows[0][5] = 12345678901234567890123456789
+            elif case == "bigint-real":
+                rows[0][3] = 12345678901234567890123456789
+            else:
+                rows[0][-1] = '{"sensitive":"DO-NOT-LOG-DATA","sensitive":2}'
         elif case == "bad-decimal":
             rows[0][8] = "NaN"
         elif case == "bad-timespan":
@@ -339,6 +356,10 @@ class Handler(BaseHTTPRequestHandler):
             for _ in range(102):
                 nested = [nested]
             rows[0][-1] = nested
+        elif case in {"fixed-array", "fixed-object"}:
+            columns[:] = [{"name": "Value", "type": "long"}]
+            value = [None, {"nested": [1, 2]}]
+            rows[:] = [[value if case == "fixed-array" else {"nested": value}]]
         elif case == "value-budget":
             columns[:] = [{"name": "Value", "type": "dynamic"}]
             rows[:] = [[[None] * (2 * 1024 * 1024)]]

@@ -23,7 +23,7 @@ from_azure_log_analytics env("AZLOG_QUERY"),
   tls=false
 """
 process = subprocess.Popen(
-    [*shlex.split(os.environ["TENZIR_BINARY"]), "--bare-mode", pipeline],
+    [*shlex.split(os.environ["TENZIR_BINARY"]), "--bare-mode", "--nova=true", pipeline],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     text=True,

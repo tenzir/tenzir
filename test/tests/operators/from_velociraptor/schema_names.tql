@@ -1,0 +1,3 @@
+from_velociraptor request_name="true", query="select_parts",
+  _config=env("VELOCIRAPTOR_CONFIG").parse_json()
+schema = @name

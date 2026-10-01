@@ -1,0 +1,8 @@
+error: invalid Microsoft Defender response: invalid string-encoded dynamic value
+ --> tests/operators/from_microsoft_defender/encoded-dynamic-overflow.tql:7:25
+  |
+7 | from_microsoft_defender "encoded-dynamic-overflow",
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: check the query's projected types and reduce its time range or output
+  = note: request ID: defender-request-123

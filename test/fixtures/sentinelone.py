@@ -46,6 +46,42 @@ _STATIC_RESPONSES: dict[str, object] = {
         "columns": [{"name": "n"}],
         "values": [[i] for i in range(8193)],
     },
+    "select_invalid_json": '{"columns":[{"name":"x"}],"values":[[1],[true,]]}',
+    "select_invalid_trailing": '{"columns":[],"values":[]} trailing',
+    "select_invalid_column": {
+        "columns": [{"name": None}],
+        "values": [[1]],
+    },
+    "select_invalid_row": {
+        "columns": [{"name": "n"}],
+        "values": [[i] for i in range(8193)] + [[]],
+    },
+    "select_invalid_special": {
+        "columns": [{"name": "x"}],
+        "values": [[1], [{"special": "other"}]],
+    },
+    "select_invalid_timestamp": {
+        "columns": [{"name": "timestamp"}],
+        "values": [["2024-01-01T00:00:00Z"]],
+    },
+    "select_inference": {
+        "columns": [
+            {"name": "flag"},
+            {"name": "number"},
+            {"name": "time"},
+            {"name": "duration"},
+            {"name": "true"},
+        ],
+        "values": [["true", "42", "2024-01-01T00:00:00Z", "1h", "false"]],
+    },
+    "select_field_collisions": {
+        "columns": [{"name": "x"}, {"name": "x"}, {"name": "a.b"}, {"name": "a.c"}],
+        "values": [[1, 2, "true", "192.0.2.1"], [3, 4, "false", None]],
+    },
+    "select_empty_records": {
+        "columns": [],
+        "values": [[], []],
+    },
     "select_mixed_column": {
         "columns": [{"name": "value"}],
         "values": [[1], ["two"], [None]],
@@ -266,7 +302,7 @@ def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
             self._respond(200, _STATIC_RESPONSES[query])
 
         def _respond(self, code: int, obj: object) -> None:
-            body = json.dumps(obj).encode()
+            body = obj.encode() if isinstance(obj, str) else json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

@@ -1,0 +1,7 @@
+error: Microsoft 365 activity event already contains metadata field
+ --> tests/operators/from_microsoft_365_activity/metadata-conflict.tql:9:1
+  |
+9 | from_microsoft_365_activity auth={
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: conflicting field: `microsoft_365_activity`

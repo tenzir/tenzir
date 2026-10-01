@@ -12,6 +12,8 @@
 #include <tenzir/async.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/nova/json_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -392,6 +394,12 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    auto settings = nova::JsonParser::Settings{};
+    settings.builder.infer_booleans = false;
+    settings.decoding.first_duplicate_wins = true;
+    settings.decoding.reject_oversized_integers = true;
+    json_parser_ = nova::JsonParser::make(std::move(settings), json_dh_);
+    TENZIR_ASSERT(json_parser_);
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
                          MetricsDirection::read, MetricsVisibility::external_,
@@ -446,7 +454,7 @@ public:
       if (bytes > 0) {
         bytes_read_counter_.add(bytes);
       }
-      auto events = parse_events(response, ctx.dh());
+      auto events = parse_events(response, *json_parser_);
       if (not events) {
         emit_parse_warning(response, ctx.dh(), events.error(),
                            args_.operator_location);
@@ -495,6 +503,9 @@ private:
   bool stream_finished_ = false;
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
+  // Parse failures use the response-specific warning, not JSON diagnostics.
+  null_diagnostic_handler json_dh_;
+  Option<nova::JsonParser> json_parser_;
 };
 
 class FromVelociraptorPlugin final : public virtual OperatorPlugin {

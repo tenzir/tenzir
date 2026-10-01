@@ -1,0 +1,25 @@
+{
+  response: {
+    ip: 192.0.2.1,
+    subnet: 192.0.2.0/24,
+    time: 2024-01-01T00:00:00Z,
+    duration: 1h,
+    text: "true",
+    number: "42",
+    null_text: "null",
+    boolean: true,
+    min: -9223372036854775808,
+    max: 18446744073709551615,
+    nested: {
+      text: "false",
+      ip: 2001:db8::1,
+    },
+    items: [
+      "true",
+      "false",
+      192.0.2.2,
+      2s,
+      false,
+    ],
+  },
+}

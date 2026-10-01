@@ -182,8 +182,50 @@ class _Handler(BaseHTTPRequestHandler):
                 ]
             ]
             envelope["results"] = rows
-        elif query == "late-invalid":
+        elif query in {"late-invalid", "late-batch-invalid"}:
+            if query == "late-batch-invalid":
+                rows[:] = [dict(_ROW)] * 9000
             rows.append(dict(_ROW, Count="DO-NOT-LOG-DATA"))
+        elif query == "many-rows":
+            schema[:] = [{"name": "Count", "type": "Int64"}]
+            rows[:] = [{"Count": i} for i in range(9000)]
+        elif query == "real-uint":
+            rows[0]["Ratio"] = 18446744073709551615
+        elif query == "dynamic-overflow":
+            rows[0]["Details"] = {"nested": [9223372036854775808]}
+        elif query == "encoded-dynamic-overflow":
+            rows[0]["Details"] = '{"nested":[18446744073709551616]}'
+        elif query == "encoded-duplicate":
+            rows[0]["Details"] = '{"sensitive":"DO-NOT-LOG-DATA","sensitive":2}'
+        elif query == "field-order":
+            rows[0] = dict(reversed(list(rows[0].items())))
+        elif query == "dynamic-first":
+            schema[:] = [schema[-1], *schema[:-1]]
+        elif query in {
+            "duplicate-envelope",
+            "duplicate-row",
+            "duplicate-dynamic",
+            "trailing",
+        }:
+            raw = json.dumps(envelope).encode()
+            if query == "duplicate-envelope":
+                raw = raw[:-1] + b', "results": []}'
+            elif query == "duplicate-row":
+                raw = raw.replace(
+                    b'"Count": 9223372036854775807', b'"Count": 1, "Count": 2'
+                )
+            elif query == "duplicate-dynamic":
+                raw = raw.replace(
+                    b'"Details": {"text": "2026-01-01T00:00:00Z", "values": [1, 2, null]}',
+                    b'"Details": {"sensitive": "DO-NOT-LOG-DATA", "sensitive": 2}',
+                )
+            else:
+                raw += b' {"DO-NOT-LOG-DATA":true}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         elif query == "overflow":
             rows[0]["Count"] = 9223372036854775808
         elif query == "negative-limit":

@@ -1,0 +1,21 @@
+{
+  response: {
+    b: 1,
+    a: 2,
+  },
+}
+{
+  response: {
+    a: 3,
+    b: 4,
+  },
+}
+{
+  response: {},
+}
+{
+  response: {
+    "a.b": 5,
+    a: {},
+  },
+}

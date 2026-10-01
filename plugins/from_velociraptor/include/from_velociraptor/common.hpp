@@ -14,6 +14,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/data_array_builder.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/json_parser.hpp>
 #include <tenzir/nova/record_array_builder.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/uuid.hpp>
@@ -21,6 +22,7 @@
 
 #include <fmt/format.h>
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -184,59 +186,70 @@ inline auto parse(const proto::VQLResponse& response)
 ///
 /// Returns an empty batch for a data message without rows.
 inline auto
-parse_events(const proto::VQLResponse& response, diagnostic_handler& dh)
+parse_events(proto::VQLResponse const& response, nova::JsonParser& parser)
   -> caf::expected<nova::Events> {
-  auto builder = nova::ArrayBuilder<nova::Record>{};
   auto us = std::chrono::microseconds(response.timestamp());
   auto timestamp = time{std::chrono::duration_cast<duration>(us)};
-  auto name = std::string_view{};
   // See `parse` above for the two kinds of messages.
   if (not response.response().empty()) {
     TENZIR_DEBUG("got a data message");
-    name = "velociraptor.response";
-    auto json = from_json(response.response());
+    auto json = parser.parse_document_value(response.response());
     if (not json) {
       return caf::make_error(ec::parse_error,
                              "Velociraptor response not in JSON format");
     }
-    const auto* objects = try_as<list>(&*json);
-    if (objects == nullptr) {
+    auto list = json->try_as<nova::List>();
+    if (not list) {
       return caf::make_error(ec::parse_error,
                              "expected JSON array in Velociraptor response");
     }
-    for (const auto& object : *objects) {
-      const auto* rec = try_as<record>(&object);
-      if (rec == nullptr) {
-        return caf::make_error(ec::parse_error,
-                               "expected objects in Velociraptor response");
-      }
-      auto row = builder.record();
-      row.field("timestamp").data(timestamp);
-      row.field("query_id").data(static_cast<uint64_t>(response.query_id()));
-      {
-        auto query = row.field("query").record();
-        query.field("name").data(std::string_view{response.query().name()});
-        query.field("vql").data(std::string_view{response.query().vql()});
-      }
-      row.field("part").data(static_cast<uint64_t>(response.part()));
-      auto resp = row.field("response").record();
-      for (const auto& [field, value] : *rec) {
-        nova::append_legacy_data(resp.field(field), value, dh);
-      }
+    auto primary = list->to_primary();
+    auto const& objects
+      = as<nova::storage::ListStorage>(primary.storage()).values();
+    auto rows = objects.length();
+    auto mask = nova::storage::BitMap{rows, true};
+    auto meta = nova::Events::Meta::make_empty(rows, "velociraptor.response");
+    if (rows == 0) {
+      return nova::Events{nova::Array<nova::Record>::make_empty(0),
+                          std::move(mask), std::move(meta)};
     }
-  } else if (not response.log().empty()) {
+    auto records = objects.try_as<nova::Record>();
+    if (not records) {
+      return caf::make_error(ec::parse_error,
+                             "expected objects in Velociraptor response");
+    }
+    // Wrap the decoded columns without walking the response rows again.
+    // Metadata stays constant across the entire response.
+    using Field
+      = std::pair<std::string_view, nova::Array<nova::Record>::MaskedArray>;
+    auto fields = std::array{
+      Field{"timestamp", {nova::repeat(timestamp, rows), mask}},
+      Field{"query_id",
+            {nova::repeat(uint64_t{response.query_id()}, rows), mask}},
+      Field{"query",
+            {nova::repeat(
+               nova::Record{
+                 {"name", response.query().name()},
+                 {"vql", response.query().vql()},
+               },
+               rows),
+             mask}},
+      Field{"part", {nova::repeat(uint64_t{response.part()}, rows), mask}},
+      Field{"response", {std::move(*records), mask}},
+    };
+    return nova::Events{nova::Array<nova::Record>::from_fields(fields),
+                        std::move(mask), std::move(meta)};
+  }
+  if (not response.log().empty()) {
     TENZIR_DEBUG("got a control message");
-    name = "velociraptor.log";
+    auto builder = nova::ArrayBuilder<nova::Record>{};
     auto row = builder.record();
     row.field("timestamp").data(timestamp);
     row.field("log").data(std::string_view{response.log()});
-  } else {
-    return caf::make_error(ec::unspecified, "empty Velociraptor response");
+    return nova::Events{builder.finish(), nova::storage::BitMap{1, true},
+                        nova::Events::Meta::make_empty(1, "velociraptor.log")};
   }
-  auto array = builder.finish();
-  auto rows = array.length();
-  return nova::Events{std::move(array), nova::storage::BitMap{rows, true},
-                      nova::Events::Meta::make_empty(rows, name)};
+  return caf::make_error(ec::unspecified, "empty Velociraptor response");
 }
 
 inline auto emit_parse_warning(proto::VQLResponse const& response,

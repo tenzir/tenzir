@@ -1,0 +1,6 @@
+error: invalid Microsoft 365 activity content descriptor field `contentId`
+ --> tests/operators/from_microsoft_365_activity/bad-content-page.tql:9:1
+  |
+9 | from_microsoft_365_activity auth={
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

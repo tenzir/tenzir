@@ -15,11 +15,11 @@
   },
   Types: {
     Timestamp: "time",
-    Count: "int64",
-    Ratio: "double",
+    Count: "int",
+    Ratio: "float",
     Enabled: "bool",
     Message: "string",
-    NullTime: "time",
+    NullTime: "null",
     NestedString: "string",
   },
 }

@@ -1,0 +1,17 @@
+error: error when parsing response: failed to parse a JSON value
+ --> tests/operators/from_sentinelone_data_lake/invalid_json.tql:5:1
+  |
+5 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: context:
+          ...mns":[{"name":"x"}],"values":[[1],[true,]]}
+                                                     ^
+  = note: total buffer size: 49
+
+error: error when parsing response: failed to parse a JSON array element
+ --> tests/operators/from_sentinelone_data_lake/invalid_json.tql:5:1
+  |
+5 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
