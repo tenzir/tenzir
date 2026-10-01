@@ -150,8 +150,10 @@ in
       cxxStandard = "23";
     }).overrideAttrs
       (base: {
-        # Cross builds lack the host executable used only by the gRPC examples.
-        cmakeFlags = base.cmakeFlags ++ [ (lib.cmakeBool "WITH_EXAMPLES" false) ];
+        cmakeFlags = base.cmakeFlags ++ [
+          (lib.cmakeBool "WITH_EXAMPLES" false)
+          "-DgRPC_CPP_PLUGIN_EXECUTABLE=${lib.getBin finalPkgs.pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
+        ];
         # Fails on binding port 4318, which a parallel test already holds.
         checkPhase = ''
           runHook preCheck
