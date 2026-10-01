@@ -15,6 +15,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/engine_main.hpp"
 #include "tenzir/folly_init.hpp"
 #include "tenzir/legacy_type.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
@@ -111,7 +112,7 @@ private:
 
 } // namespace
 
-auto main(int argc, char** argv) -> int try {
+auto tenzir::engine_main(int argc, char** argv) -> int try {
   using namespace tenzir;
   // Ensure the signal handler object file is linked (needed for static builds).
   signal_handlers_anchor();

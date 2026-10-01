@@ -409,10 +409,10 @@ auto any_value_kind(common::AnyValue const& value) -> std::string_view {
       return "kvlist";
     case common::AnyValue::kBytesValue:
       return "bytes";
-    case common::AnyValue::VALUE_NOT_SET:
+    // Profiling dictionary indexes have no meaning in log/metric/trace data.
+    default:
       return "empty";
   }
-  TENZIR_UNREACHABLE();
 }
 
 auto make_tagged_any_value(common::AnyValue const& value,
@@ -450,7 +450,7 @@ auto make_tagged_any_value(common::AnyValue const& value,
     case common::AnyValue::kKvlistValue:
       result["json_value"] = canonical_json(value);
       break;
-    case common::AnyValue::VALUE_NOT_SET:
+    default:
       break;
   }
   if (ctx.is_cancelled()) {
@@ -486,7 +486,7 @@ auto make_native_any_value(common::AnyValue const& value,
     case common::AnyValue::kKvlistValue:
       result = canonical_json(value);
       break;
-    case common::AnyValue::VALUE_NOT_SET:
+    default:
       break;
   }
   if (ctx.is_cancelled()) {
@@ -502,37 +502,41 @@ auto make_receiver(DecodeContext const& ctx) -> data {
                 {"metadata", ctx.metadata}};
 }
 
-auto make_entity_refs(resource::Resource const& value, DecodeContext const& ctx)
+template <class Resource>
+auto make_entity_refs(Resource const& value, DecodeContext const& ctx)
   -> Result<list, std::string> {
   auto result = list{};
-  result.reserve(tenzir::detail::narrow<size_t>(value.entity_refs_size()));
-  for (auto const& entity_ref : value.entity_refs()) {
-    if (ctx.is_cancelled()) {
-      return Err{std::string{cancelled_error}};
-    }
-    auto id_keys = list{};
-    id_keys.reserve(tenzir::detail::narrow<size_t>(entity_ref.id_keys_size()));
-    for (auto const& key : entity_ref.id_keys()) {
+  if constexpr (requires { value.entity_refs(); }) {
+    result.reserve(tenzir::detail::narrow<size_t>(value.entity_refs_size()));
+    for (auto const& entity_ref : value.entity_refs()) {
       if (ctx.is_cancelled()) {
         return Err{std::string{cancelled_error}};
       }
-      id_keys.emplace_back(key);
-    }
-    auto description_keys = list{};
-    description_keys.reserve(
-      tenzir::detail::narrow<size_t>(entity_ref.description_keys_size()));
-    for (auto const& key : entity_ref.description_keys()) {
-      if (ctx.is_cancelled()) {
-        return Err{std::string{cancelled_error}};
+      auto id_keys = list{};
+      id_keys.reserve(
+        tenzir::detail::narrow<size_t>(entity_ref.id_keys_size()));
+      for (auto const& key : entity_ref.id_keys()) {
+        if (ctx.is_cancelled()) {
+          return Err{std::string{cancelled_error}};
+        }
+        id_keys.emplace_back(key);
       }
-      description_keys.emplace_back(key);
+      auto description_keys = list{};
+      description_keys.reserve(
+        tenzir::detail::narrow<size_t>(entity_ref.description_keys_size()));
+      for (auto const& key : entity_ref.description_keys()) {
+        if (ctx.is_cancelled()) {
+          return Err{std::string{cancelled_error}};
+        }
+        description_keys.emplace_back(key);
+      }
+      result.emplace_back(record{
+        {"schema_url", nullable_string(entity_ref.schema_url())},
+        {"type", entity_ref.type()},
+        {"id_keys", std::move(id_keys)},
+        {"description_keys", std::move(description_keys)},
+      });
     }
-    result.emplace_back(record{
-      {"schema_url", nullable_string(entity_ref.schema_url())},
-      {"type", entity_ref.type()},
-      {"id_keys", std::move(id_keys)},
-      {"description_keys", std::move(description_keys)},
-    });
   }
   return result;
 }
@@ -707,52 +711,62 @@ auto validate_any_value(common::AnyValue const& value, DecodeContext const* ctx)
   return Empty{};
 }
 
-auto validate_resource(resource::Resource const& value, bool unique,
-                       DecodeContext const* ctx) -> Result<Empty, std::string> {
+template <class Resource>
+auto validate_resource_impl(Resource const& value, bool unique,
+                            DecodeContext const* ctx)
+  -> Result<Empty, std::string> {
   auto result = validate_attributes(value.attributes(), unique, ctx);
   if (result.is_err()) {
     return result;
   }
-  auto attribute_keys = std::unordered_set<std::string_view>{};
-  for (auto const& attribute : value.attributes()) {
-    if (ctx and ctx->is_cancelled()) {
-      return Err{std::string{cancelled_error}};
-    }
-    attribute_keys.emplace(attribute.key());
-  }
-  for (auto const& entity_ref : value.entity_refs()) {
-    if (ctx and ctx->is_cancelled()) {
-      return Err{std::string{cancelled_error}};
-    }
-    if (entity_ref.type().empty()) {
-      return Err{std::string{"entity reference type must not be empty"}};
-    }
-    if (entity_ref.id_keys().empty()) {
-      return Err{
-        std::string{"entity reference must contain at least one ID key"}};
-    }
-    for (auto const& key : entity_ref.id_keys()) {
+  if constexpr (requires { value.entity_refs(); }) {
+    auto attribute_keys = std::unordered_set<std::string_view>{};
+    for (auto const& attribute : value.attributes()) {
       if (ctx and ctx->is_cancelled()) {
         return Err{std::string{cancelled_error}};
       }
-      if (not attribute_keys.contains(key)) {
-        return Err{fmt::format("entity reference ID key `{}` does not name a "
-                               "resource attribute",
-                               key)};
-      }
+      attribute_keys.emplace(attribute.key());
     }
-    for (auto const& key : entity_ref.description_keys()) {
+    for (auto const& entity_ref : value.entity_refs()) {
       if (ctx and ctx->is_cancelled()) {
         return Err{std::string{cancelled_error}};
       }
-      if (not attribute_keys.contains(key)) {
-        return Err{fmt::format("entity reference description key `{}` does not "
-                               "name a resource attribute",
-                               key)};
+      if (entity_ref.type().empty()) {
+        return Err{std::string{"entity reference type must not be empty"}};
+      }
+      if (entity_ref.id_keys().empty()) {
+        return Err{
+          std::string{"entity reference must contain at least one ID key"}};
+      }
+      for (auto const& key : entity_ref.id_keys()) {
+        if (ctx and ctx->is_cancelled()) {
+          return Err{std::string{cancelled_error}};
+        }
+        if (not attribute_keys.contains(key)) {
+          return Err{fmt::format("entity reference ID key `{}` does not name a "
+                                 "resource attribute",
+                                 key)};
+        }
+      }
+      for (auto const& key : entity_ref.description_keys()) {
+        if (ctx and ctx->is_cancelled()) {
+          return Err{std::string{cancelled_error}};
+        }
+        if (not attribute_keys.contains(key)) {
+          return Err{
+            fmt::format("entity reference description key `{}` does not "
+                        "name a resource attribute",
+                        key)};
+        }
       }
     }
   }
   return Empty{};
+}
+
+auto validate_resource(resource::Resource const& value, bool unique,
+                       DecodeContext const* ctx) -> Result<Empty, std::string> {
+  return validate_resource_impl(value, unique, ctx);
 }
 
 auto decode(Signal signal, Encoding encoding, std::span<std::byte const> bytes,

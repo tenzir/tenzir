@@ -1081,7 +1081,6 @@ endif ()
 
 add_subdirectory(libtenzir)
 add_subdirectory(libtenzir_test)
-add_subdirectory(tenzir)
 
 # A sibling project, built in tree like the plugins above it. Its presence is
 # the switch; the option is for when it is there but in the way.
@@ -1092,6 +1091,7 @@ else ()
 endif ()
 option(TENZIR_ENABLE_DEPLOYMENT "Build the sibling deployment project"
        ${TENZIR_DEPLOYMENT_DEFAULT})
+add_subdirectory(tenzir)
 if (TENZIR_ENABLE_DEPLOYMENT)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../deployment" deployment)
 endif ()

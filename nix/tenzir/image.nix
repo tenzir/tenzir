@@ -304,8 +304,8 @@ in
   };
 }
 // lib.optionalAttrs (pkg.hasDeployment or false) {
-  tenzir2 = buildTenzirImage {
-    name = "tenzir/tenzir2";
-    entrypoint = [ "tenzir2" ];
+  tenzir-up = buildTenzirImage {
+    name = "tenzir/tenzir-up";
+    entrypoint = [ "tenzir-up" ];
   };
 }

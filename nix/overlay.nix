@@ -136,12 +136,8 @@ in
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
   ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
-  # Upstream builds the OTLP exporters only when asked, and something exporting
-  # over OTLP/HTTP needs them. Nothing Tenzir builds links this — it reaches the
-  # dev shell through `shell.nix` and no further — so what enabling them costs is
-  # protobuf in that shell's closure, the same one grpc and google-cloud-cpp
-  # already bring, from the same nixpkgs. One copy, nothing to fight over
-  # protobuf's descriptor registry with.
+  # The OTLP receiver and exporters share the SDK's generated protobuf code.
+  # Build the gRPC service stubs as well as the HTTP exporters.
   # `cxxStandard` also sets `WITH_STL`, which is what makes the API speak
   # `std::shared_ptr` and `std::string_view` instead of its own ABI-stable
   # stand-ins. Those exist so a separately compiled instrumentation library can
@@ -150,9 +146,21 @@ in
     (prevPkgs.opentelemetry-cpp.override {
       curl = finalPkgs.curl-ws;
       enableHttp = true;
+      enableGrpc = true;
       cxxStandard = "23";
     }).overrideAttrs
-      (_: {
+      (base: {
+        cmakeFlags =
+          base.cmakeFlags
+          ++ [
+            (lib.cmakeBool "WITH_EXAMPLES" false)
+            "-DgRPC_CPP_PLUGIN_EXECUTABLE=${lib.getBin finalPkgs.pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
+          ]
+          ++ lib.optionals isStatic [
+            (lib.cmakeBool "BUILD_TESTING" false)
+            (lib.cmakeBool "WITH_FUNC_TESTS" false)
+          ];
+        doCheck = (base.doCheck or false) && !isStatic;
         # Fails on binding port 4318, which a parallel test already holds.
         checkPhase = ''
           runHook preCheck

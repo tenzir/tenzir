@@ -10,7 +10,6 @@ let
       tenzirPythonPkgs,
       caf,
       curl-ws,
-      opentelemetry-cpp,
       cacert,
       iconv,
       lz4,
@@ -18,8 +17,8 @@ let
       expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
-      # The sibling `deployment/` project. When set, the build also produces
-      # `tenzir2`, which only builds in tree.
+      # The sibling `deployment/` project. When set, the build includes the
+      # `tenzir-up` persona.
       deployment-source ? null,
       extraPlugins ? [ ],
       symlinkJoin,
@@ -165,7 +164,7 @@ let
 
           inherit (deps) nativeBuildInputs;
           inherit (deps) propagatedNativeBuildInputs;
-          buildInputs = deps.buildInputs ++ lib.optional (deployment-source != null) opentelemetry-cpp;
+          inherit (deps) buildInputs;
           inherit (deps) propagatedBuildInputs;
 
           env = {
@@ -311,6 +310,7 @@ let
           # UV_PYTHON themselves.
           postInstall = lib.optionalString (!isStatic) ''
             wrapProgram $out/bin/tenzir \
+              --inherit-argv0 \
               --prefix PATH : ${
                 lib.makeBinPath [
                   py3

@@ -163,12 +163,18 @@ rec {
   tenzir-de = toChecked (unchecked pkgs).tenzir-de;
   # Unchecked: the integration tests exercise `tenzir`, which this carries
   # unchanged. The deployment has unit tests of its own in CI.
-  tenzir2 = (unchecked pkgs).tenzir-de.override {
-    deployment-source = lib.fileset.toSource {
-      root = ../../deployment;
-      fileset = ../../deployment;
-    };
-  };
+  tenzir-up =
+    ((unchecked pkgs).tenzir-de.override {
+      deployment-source = lib.fileset.toSource {
+        root = ../../deployment;
+        fileset = ../../deployment;
+      };
+    }).overrideAttrs
+      (old: {
+        meta = old.meta // {
+          mainProgram = "tenzir-up";
+        };
+      });
   tenzir = toChecked (unchecked pkgs).tenzir;
   tenzir-de-static = toChecked (unchecked pkgs.pkgsStatic).tenzir-de;
   tenzir-static = toChecked (unchecked pkgs.pkgsStatic).tenzir;

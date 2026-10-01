@@ -22,6 +22,7 @@
   flatbuffers,
   fluent-bit,
   protobuf,
+  opentelemetry-cpp,
   google-cloud-cpp-tenzir,
   nlohmann_json,
   crc32c,
@@ -136,6 +137,7 @@ in
     jemalloc-tenzir
     mimalloc-tenzir
     protobuf
+    opentelemetry-cpp
     re2
     reproc
     robin-map
