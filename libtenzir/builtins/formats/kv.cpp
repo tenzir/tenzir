@@ -17,9 +17,12 @@
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/nova/array.hpp>
+#include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -591,6 +594,65 @@ private:
   SeriesPusher pusher_;
 };
 
+/// Splits `line` into key-value pairs and writes them into `event`.
+///
+/// Shared by `read_kv` and `parse_kv` on the Nova path. Unlike the legacy
+/// `multi_series_builder`, `nova::EventBuilder::Record::field()` already
+/// unflattens the key, so this writes through `field()`.
+///
+/// Returns whether the splitters made progress; otherwise it emitted an error.
+auto parse_kv_line(nova::EventBuilder::Record& event, std::string_view line,
+                   const detail::quoting_escaping_policy& quoting,
+                   const splitter& field_split, const splitter& value_split,
+                   diagnostic_handler& dh) -> bool {
+  struct Previous {
+    std::string_view key;
+    std::string_view value;
+  };
+  auto previous = Option<Previous>{};
+  auto commit = [&] {
+    if (not previous) {
+      return;
+    }
+    auto key = quoting.unquote_unescape(previous->key);
+    if (previous->value.empty()) {
+      event.field(key).null();
+      return;
+    }
+    auto value = quoting.unquote_unescape(previous->value);
+    event.field(key).data_unparsed(value);
+  };
+  while (not line.empty()) {
+    auto const [head, tail, field_sep] = field_split.split(line, quoting);
+    auto const [key_view, value_view, value_sep]
+      = value_split.split(head, quoting);
+    if (value_sep.found()) {
+      commit();
+      previous.emplace(key_view, value_view);
+    } else if (previous) {
+      if (previous->value.empty()) {
+        previous->value = value_view;
+      } else {
+        previous->value = std::string_view{
+          previous->value.data(),
+          previous->value.size() + field_sep.length() + key_view.length(),
+        };
+      }
+    } else {
+      previous.emplace(key_view, value_view);
+    }
+    if (line == tail) {
+      diagnostic::error("`kv` parsing did not make progress")
+        .note("make sure `field_split` is a regular expression")
+        .emit(dh);
+      return false;
+    }
+    line = tail;
+  }
+  commit();
+  return true;
+}
+
 class ReadKvEvents final : public Operator<chunk_ptr, nova::Events> {
 public:
   explicit ReadKvEvents(ReadKvArgs args)
@@ -753,52 +815,10 @@ private:
   auto process_line(std::string_view line) -> void {
     ++line_counter_;
     auto event = builder_->event();
-    struct Previous {
-      std::string_view key;
-      std::string_view value;
-    };
-    auto previous = Option<Previous>{};
-    auto commit = [&] {
-      if (not previous) {
-        return;
-      }
-      auto key = quoting_.unquote_unescape(previous->key);
-      if (previous->value.empty()) {
-        event.field(key).null();
-        return;
-      }
-      auto value = quoting_.unquote_unescape(previous->value);
-      event.field(key).data_unparsed(value);
-    };
-    while (not line.empty()) {
-      auto const [head, tail, field_sep] = field_split_.split(line, quoting_);
-      auto const [key_view, value_view, value_sep]
-        = value_split_.split(head, quoting_);
-      if (value_sep.found()) {
-        commit();
-        previous.emplace(key_view, value_view);
-      } else if (previous) {
-        if (previous->value.empty()) {
-          previous->value = value_view;
-        } else {
-          previous->value = std::string_view{
-            previous->value.data(),
-            previous->value.size() + field_sep.length() + key_view.length(),
-          };
-        }
-      } else {
-        previous.emplace(key_view, value_view);
-      }
-      if (line == tail) {
-        diagnostic::error("`kv` parsing did not make progress")
-          .note("make sure `field_split` is a regular expression")
-          .emit(**dh_);
-        done_ = true;
-        return;
-      }
-      line = tail;
+    if (not parse_kv_line(event, line, quoting_, field_split_, value_split_,
+                          **dh_)) {
+      done_ = true;
     }
-    commit();
   }
 
   ReadKvArgs args_;
@@ -955,7 +975,16 @@ public:
   explicit NovaKvPrinter(WriteKvArgs const& args) : args_{args} {
   }
 
+  /// Prints `row` followed by a newline, as the `write_kv` operator needs it.
   auto print(nova::RowView<nova::Record> const& row) -> void {
+    print_row(row);
+    out_.push_back('\n');
+  }
+
+  /// Prints `row` without a trailing newline and returns what it appended to
+  /// the output buffer. The returned view is valid until the next call.
+  auto print_row(nova::RowView<nova::Record> const& row) -> std::string_view {
+    auto const begin = out_.size();
     fields_.clear();
     names_.clear();
     paths_.clear();
@@ -972,7 +1001,12 @@ public:
         print_field(first, names[i], fields_[i]);
       }
     }
-    out_.push_back('\n');
+    return std::string_view{out_}.substr(begin);
+  }
+
+  /// Drops everything printed so far, for callers that consume row by row.
+  auto clear() -> void {
+    out_.clear();
   }
 
   auto take() && -> std::string {
@@ -1462,7 +1496,72 @@ public:
   }
 };
 
-class parse_kv : public function_plugin {
+struct ParseKvArgs {
+  nova::ValueArgument input;
+  located<std::string> field_split = {"\\s", location::unknown};
+  located<std::string> value_split = {"=", location::unknown};
+  located<std::string> quotes
+    = {detail::quoting_escaping_policy{}.quotes, location::unknown};
+  nova::EventBuilder::Settings settings;
+  location call;
+  // Derived from the arguments above during validation.
+  detail::quoting_escaping_policy quoting;
+  splitter field_splitter;
+  splitter value_splitter;
+};
+
+struct ParseKvFunction {
+  static auto eval(ParseKvArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const& mask = frame.mask();
+    auto const length = args.input.data.length();
+    auto strings = args.input.data.get_alternative<nova::String>();
+    auto nulls = args.input.data.get_alternative<nova::Null>();
+    auto accepted = nova::storage::BitMap{length, false};
+    if (strings) {
+      accepted = accepted | strings->present;
+    }
+    if (nulls) {
+      accepted = accepted | nulls->present;
+    }
+    if (auto invalid = mask.and_not(accepted); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.input.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("expected `string`, got `{}`",
+                            nova::Type<T>::static_name)
+          .primary(args.input.source)
+          .emit(frame);
+      });
+    }
+    auto dh = transforming_diagnostic_handler{
+      frame,
+      [&](diagnostic d) {
+        d.message = fmt::format("parse_kv: {}", d.message);
+        if (args.call and not d.has_location()) {
+          d.annotations.emplace_back(true, std::string{}, args.call);
+        }
+        return d;
+      },
+    };
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not mask.get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not strings or not strings->present.get(row)) {
+        builder.value().null();
+        continue;
+      }
+      auto event = builder.value().record();
+      parse_kv_line(event, std::string_view{*strings->data.get(row)},
+                    args.quoting, args.field_splitter, args.value_splitter, dh);
+    }
+    return builder.finish_data();
+  }
+};
+
+class parse_kv : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_kv";
@@ -1470,6 +1569,33 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseKvArgs, ParseKvFunction>{};
+    d.positional("input", &ParseKvArgs::input, "string");
+    d.named_optional("field_split", &ParseKvArgs::field_split);
+    d.named_optional("value_split", &ParseKvArgs::value_split);
+    d.named_optional("quotes", &ParseKvArgs::quotes);
+    d.call_location(&ParseKvArgs::call);
+    auto validate
+      = nova::add_event_builder_to_describer(d, &ParseKvArgs::settings);
+    d.validate([validate](ParseKvArgs& args,
+                          nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      TRY(validate_splitter(args.field_split, ctx));
+      TRY(validate_splitter(args.value_split, ctx));
+      args.quoting
+        = detail::quoting_escaping_policy{.quotes = args.quotes.inner};
+      args.field_splitter = splitter{located<std::string_view>{
+        args.field_split.inner, args.field_split.source}};
+      args.value_splitter = splitter{located<std::string_view>{
+        args.value_split.inner, args.value_split.source}};
+      // `kv` has no types of its own, so every value arrives unparsed.
+      args.settings.infer_numbers = true;
+      args.settings.merge_structural = true;
+      return validate(args, ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -1524,7 +1650,46 @@ public:
   }
 };
 
-class print_kv : public function_plugin {
+struct PrintKvArgs {
+  nova::ValueArgument input;
+  /// The separators, in the shape that `NovaKvPrinter` consumes.
+  WriteKvArgs separators;
+};
+
+struct PrintKvFunction {
+  static auto eval(PrintKvArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const& mask = frame.mask();
+    auto const length = args.input.data.length();
+    auto records = args.input.data.get_alternative<nova::Record>();
+    auto nulls = args.input.data.get_alternative<nova::Null>();
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto printer = NovaKvPrinter{args.separators};
+    auto warn = nova::WarnOnce{};
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not mask.get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (records and records->present.get(row)) {
+        printer.clear();
+        builder.data(printer.print_row(records->data.get(row)));
+        continue;
+      }
+      if (not nulls or not nulls->present.get(row)) {
+        match(args.input.data.get(row), [&]<class T>(nova::RowView<T>) {
+          warn(frame, diagnostic::warning("expected `record`, got `{}`",
+                                          nova::Type<T>::static_name)
+                        .primary(args.input.source));
+        });
+      }
+      builder.null();
+    }
+    return builder.finish();
+  }
+};
+
+class print_kv : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "print_kv";
@@ -1532,6 +1697,42 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrintKvArgs, PrintKvFunction>{};
+    d.positional("input", &PrintKvArgs::input, "record");
+    auto separator = [](located<std::string> WriteKvArgs::* ptr) {
+      return [ptr](PrintKvArgs& args, located<std::string> value,
+                   diagnostic_handler&) -> failure_or<void> {
+        args.separators.*ptr = std::move(value);
+        return {};
+      };
+    };
+    d.named_with_setter<std::string>("field_separator",
+                                     separator(&WriteKvArgs::field_separator));
+    d.named_with_setter<std::string>("value_separator",
+                                     separator(&WriteKvArgs::value_separator));
+    d.named_with_setter<std::string>("list_separator",
+                                     separator(&WriteKvArgs::list_separator));
+    d.named_with_setter<std::string>(
+      "flatten_separator", separator(&WriteKvArgs::flatten_separator));
+    d.named_with_setter<std::string>("null_value",
+                                     separator(&WriteKvArgs::null_value));
+    d.validate([](PrintKvArgs& args,
+                  nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      auto const& s = args.separators;
+      TRY(check_no_substrings(ctx, {{"flatten_separator", s.flatten_separator},
+                                    {"field_separator", s.field_separator},
+                                    {"value_separator", s.value_separator},
+                                    {"list_separator", s.list_separator},
+                                    {"null_value", s.null_value}}));
+      TRY(check_non_empty("field_separator", s.field_separator, ctx));
+      TRY(check_non_empty("value_separator", s.value_separator, ctx));
+      TRY(check_non_empty("list_separator", s.list_separator, ctx));
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

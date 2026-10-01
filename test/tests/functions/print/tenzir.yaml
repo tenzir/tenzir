@@ -1,0 +1,3 @@
+# Apply only to the test patterns in tenzir-scope.yaml.
+tenzir:
+  nova: true
