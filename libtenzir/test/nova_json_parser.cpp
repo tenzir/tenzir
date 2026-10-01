@@ -184,6 +184,30 @@ TEST("value documents apply decoding and inference options recursively") {
   CHECK(std::move(dh).collect().empty());
 }
 
+TEST("exact keys bypass the unflatten separator at every depth") {
+  auto dh = collecting_diagnostic_handler{};
+  auto settings = JsonParser::Settings{};
+  settings.builder.unflatten_separator = ".";
+  auto unflattening = make_parser(dh, settings);
+  auto nested = unflattening.parse_document(R"({"a.b":1})");
+  REQUIRE(nested);
+  CHECK(not nested->data.field("a.b"));
+  CHECK(nested->data.field("a"));
+  settings.decoding.exact_keys = true;
+  auto exact = make_parser(dh, settings);
+  auto literal = exact.parse_document(R"({"a.b":{"c.d":2}})");
+  REQUIRE(literal);
+  CHECK(not literal->data.field("a"));
+  auto outer = literal->data.field("a.b");
+  REQUIRE(outer);
+  auto inner = outer->data.try_as<Record>();
+  REQUIRE(inner);
+  auto leaf = inner->field("c.d");
+  REQUIRE(leaf);
+  CHECK_EQUAL(*leaf->data.try_as<Int>()->get(0), 2);
+  CHECK(std::move(dh).collect().empty());
+}
+
 TEST("frame parsing clamps a zero batch size") {
   auto dh = null_diagnostic_handler{};
   auto settings = JsonParser::Settings{};

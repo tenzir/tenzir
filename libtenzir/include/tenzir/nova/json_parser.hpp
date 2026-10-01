@@ -31,6 +31,8 @@ struct JsonDecodingOptions {
   bool reject_unsigned_integers = false;
   /// Rejects repeated object keys instead of collecting their values.
   bool reject_duplicate_keys = false;
+  /// Writes object keys literally instead of unflattening them.
+  bool exact_keys = false;
   /// Maximum depth, counting the complete document's root as zero.
   size_t max_depth = defaults::max_recursion;
 };
@@ -47,7 +49,8 @@ auto parse_json_object(simdjson::ondemand::object object,
 /// validation.
 auto parse_json_value(simdjson::ondemand::document& document,
                       EventBuilder::Field field, diagnostic_handler& dh,
-                      std::string_view source = {}) -> bool;
+                      std::string_view source = {},
+                      JsonDecodingOptions options = {}) -> bool;
 
 /// Decodes complete JSON documents or frames into event batches. Framing
 /// belongs to the caller: a frame may span multiple lines.
