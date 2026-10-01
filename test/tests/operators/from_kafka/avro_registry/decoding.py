@@ -48,6 +48,7 @@ def consume(
     group: str | None = None,
     stored: bool = False,
     max_poll_interval: int = 300_000,
+    worker_batch_size: int = 1,
 ) -> subprocess.CompletedProcess[str]:
     q = json.dumps
     pipeline = f"""from_kafka {q(topic)},
@@ -59,7 +60,7 @@ def consume(
         access_key_id: {q(os.environ["KAFKA_AWS_ACCESS_KEY_ID"])},
         secret_access_key: {q(os.environ["KAFKA_AWS_SECRET_ACCESS_KEY"])}
       }},
-      _optimization="unordered", _worker_batch_size=1,
+      _optimization="unordered", _worker_batch_size={worker_batch_size},
       options={{
         "bootstrap.servers": {q(os.environ["KAFKA_BOOTSTRAP_SERVERS"])},
         "group.id": {q(group or topic)},
@@ -73,7 +74,11 @@ def consume(
     to_stdout {{ write_ndjson }}
     """
     return subprocess.run(
-        [binary, pipeline], capture_output=True, text=True, timeout=35, check=False
+        [binary, "--nova=true", pipeline],
+        capture_output=True,
+        text=True,
+        timeout=35,
+        check=False,
     )
 
 
@@ -161,6 +166,22 @@ for name, message, error in cases:
         result.stderr,
     )
 print("invalid framing, payloads, and schemas: ok")
+
+seed(
+    "avro_lookup_after_valid", [record(prefix(9, b"\x02")), record(prefix(8, b"\x02"))]
+)
+result = consume("avro_lookup_after_valid", 2, worker_batch_size=2)
+assert result.returncode != 0 and "failed to resolve Avro schema" in result.stderr, (
+    result.stdout,
+    result.stderr,
+)
+print("late schema resolution errors fail the batch: ok")
+
+seed("avro_chunked", [record(prefix(9, b"\x00")) for _ in range(1025)])
+assert (
+    rows(consume("avro_chunked", 1025, worker_batch_size=1025)) == [{"value": 0}] * 1025
+)
+print("large Avro batches drain all events: ok")
 
 # Even when unordered optimization is requested, a failed lookup or decode
 # must not commit this or any later batch from the concurrent workers.

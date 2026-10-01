@@ -150,8 +150,7 @@ def target_pipeline(group_id: str) -> str:
             "group.id": {json.dumps(group_id)}
           }}
         where message != null
-        this = message.parse_json()
-        publish "configured-fairness-output"
+        discard
         """
     )
 
@@ -197,6 +196,7 @@ with tempfile.TemporaryDirectory(
     node = subprocess.Popen(
         [
             tenzir_node,
+            "--nova=true",
             f"--config={config_path}",
             f"--state-directory={root / 'state'}",
             f"--cache-directory={root / 'cache'}",
@@ -212,6 +212,7 @@ with tempfile.TemporaryDirectory(
         cli = subprocess.Popen(
             [
                 tenzir,
+                "--nova=true",
                 "--console-verbosity=warning",
                 f"--endpoint=127.0.0.1:{port}",
                 target_pipeline(cli_group),

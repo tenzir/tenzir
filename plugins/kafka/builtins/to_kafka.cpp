@@ -13,9 +13,13 @@
 #include "tenzir/option.hpp"
 
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/atomic.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/entity_path.hpp>
@@ -45,7 +49,7 @@ constexpr auto producer_poll_interval = size_t{4096};
 /// `print_ndjson` call with constant boolean options, enabling the optimized
 /// serialization path that bypasses expression evaluation entirely.
 auto try_make_json_printer(ast::expression const& expr)
-  -> Option<json_printer2> {
+  -> Option<json_printer_options> {
   auto const* const call = try_as<ast::function_call>(expr);
   if (not call) {
     return None{};
@@ -106,14 +110,14 @@ auto try_make_json_printer(ast::expression const& expr)
       return None{};
     }
   }
-  return json_printer2{json_printer_options{
+  return json_printer_options{
     .style = no_style(),
     .oneline = compact,
     .omit_null_fields = strip_null_fields or strip,
     .omit_nulls_in_lists = strip_nulls_in_lists or strip,
     .omit_empty_records = strip_empty_records or strip,
     .omit_empty_lists = strip_empty_lists or strip,
-  }};
+  };
 }
 
 /// Stores process-wide `to_kafka` defaults from `kafka.yaml`.
@@ -162,9 +166,12 @@ public:
       auth_{std::move(auth)},
       cfg_{std::move(cfg)},
       producer_{std::move(producer)},
-      printer_{try_make_json_printer(message_expr_)},
+      printer_options_{try_make_json_printer(message_expr_)},
       write_bytes_counter_{std::move(write_bytes_counter)},
       write_events_counter_{std::move(write_events_counter)} {
+    if (printer_options_) {
+      printer_.emplace(*printer_options_);
+    }
   }
 
   /// Serializes and produces all rows from `input` as Kafka messages.
@@ -217,10 +224,53 @@ public:
     co_return {};
   }
 
-  /// Flushes buffered messages and tears down producer resources.
-  auto finalize(diagnostic_handler* dh) -> Task<void> {
-    constexpr auto max_retries = 1000;
-    for (auto retry = 0; retry < max_retries; ++retry) {
+  /// Serializes and produces the active rows from an event batch.
+  auto process(nova::Events const& input, nova::Evaluator* evaluator,
+               std::string_view key, int64_t timestamp_ms, OpCtx& ctx)
+    -> Task<failure_or<void>> {
+    if (printer_) {
+      auto printer = nova::json_printer{*printer_options_};
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        printer.print(input.data.get(row));
+        CO_TRY(co_await produce(printer.bytes(), key, timestamp_ms, ctx));
+      }
+    } else if (evaluator) {
+      auto messages = evaluator->eval(input, nova::EvalCtx{ctx.dh()});
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        auto message = messages.get(row);
+        auto valid = match(
+          message,
+          [&](nova::RowView<nova::String> text) -> Task<failure_or<void>> {
+            co_return co_await produce(as_bytes(*text), key, timestamp_ms, ctx);
+          },
+          [&](nova::RowView<nova::Blob> bytes) -> Task<failure_or<void>> {
+            co_return co_await produce(*bytes, key, timestamp_ms, ctx);
+          },
+          [&](nova::RowView<nova::Null>) -> Task<failure_or<void>> {
+            diagnostic::warning("expected `string` or `blob`, got `null`")
+              .primary(message_expr_)
+              .emit(ctx);
+            co_return {};
+          },
+          [&](auto const&) -> Task<failure_or<void>> {
+            diagnostic::warning("expected `string` or `blob`")
+              .primary(message_expr_)
+              .emit(ctx);
+            co_return {};
+          });
+        CO_TRY(co_await std::move(valid));
+      }
+    }
+    if (produced_since_poll_ > 0) {
+      producer_->poll(0);
+      produced_since_poll_ = 0;
+    }
+    co_return {};
+  }
+
+  /// Waits for queued messages to drain or for cancellation after an error.
+  auto flush(diagnostic_handler& dh) -> Task<void> {
+    while (true) {
       auto result = producer_->flush(0);
       const auto pending = producer_->outq_len();
       if (result == RdKafka::ERR_NO_ERROR and pending == 0) {
@@ -228,30 +278,17 @@ public:
       }
       if (result != RdKafka::ERR_NO_ERROR
           and result != RdKafka::ERR__TIMED_OUT) {
-        if (dh) {
-          auto out
-            = diagnostic::error(
-                "failed to flush produced Kafka messages for `{}`", topic_)
-                .note("reason={}", RdKafka::err2str(result))
-                .note("outbound.messages.pending={}", pending);
-          out = add_connection_and_auth_notes(std::move(out));
-          out = add_connectivity_hint(std::move(out));
-          std::move(out).emit(*dh);
-        }
-        co_return;
+        auto out = diagnostic::error(
+                     "failed to flush produced Kafka messages for `{}`", topic_)
+                     .note("reason={}", RdKafka::err2str(result))
+                     .note("outbound.messages.pending={}", pending);
+        out = add_connection_and_auth_notes(std::move(out));
+        out = add_connectivity_hint(std::move(out));
+        std::move(out).emit(dh);
+        co_await wait_forever();
+        TENZIR_UNREACHABLE();
       }
       co_await folly::coro::sleep(std::chrono::milliseconds{10});
-    }
-    if (dh) {
-      const auto pending = producer_->outq_len();
-      auto out = diagnostic::error(
-                   "failed to flush produced Kafka messages for `{}`", topic_)
-                   .note("reason=producer flush timed out after {} retries",
-                         max_retries)
-                   .note("outbound.messages.pending={}", pending);
-      out = add_connection_and_auth_notes(std::move(out));
-      out = add_connectivity_hint(std::move(out));
-      std::move(out).emit(*dh);
     }
   }
 
@@ -333,6 +370,7 @@ private:
   Option<ResolvedAwsIamAuth> auth_;
   producer_configuration cfg_;      // destroyed after producer_
   Box<RdKafka::Producer> producer_; // destroyed first (declared after cfg_)
+  Option<json_printer_options> printer_options_;
   Option<json_printer2> printer_;
   MetricsCounter write_bytes_counter_;
   MetricsCounter write_events_counter_;
@@ -418,9 +456,15 @@ public:
     }
   }
 
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    if (producer_) {
+      co_await producer_->flush(ctx.dh());
+    }
+  }
+
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (producer_) {
-      co_await producer_->finalize(&ctx.dh());
+      co_await producer_->flush(ctx.dh());
     }
     co_return FinalizeBehavior::done;
   }
@@ -442,6 +486,119 @@ private:
 
   ToKafkaArgs args_;
   Option<ResolvedAwsIamAuth> auth_;
+  Option<AsyncKafkaProducer> producer_;
+  MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
+  Atomic<bool> done_{false};
+};
+
+class ToKafkaEvents final : public Operator<nova::Events, void> {
+public:
+  explicit ToKafkaEvents(ToKafkaArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (not try_make_json_printer(args_.message)) {
+      auto evaluator = co_await nova::Evaluator::make(args_.message, ctx);
+      if (not evaluator) {
+        done_.store(true, std::memory_order_release);
+        co_return;
+      }
+      evaluator_ = std::move(*evaluator);
+    }
+    write_bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_kafka"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    write_events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_kafka"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    auto aws_iam
+      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
+    auto aws_region = args_.aws_region
+                        ? Option<located<std::string>>{*args_.aws_region}
+                        : None{};
+    auto auth = co_await resolve_aws_iam_auth(
+      std::move(aws_iam), std::move(aws_region), ctx,
+      AwsIamRegionRequirement::required_with_iam);
+    if (not auth) {
+      done_.store(true, std::memory_order_release);
+      co_return;
+    }
+    auto cfg = make_producer_configuration(
+      sink_global_defaults(), auth->options, auth->credentials, ctx.dh());
+    if (not cfg) {
+      diagnostic::error("failed to create kafka configuration: {}", cfg.error())
+        .emit(ctx);
+      done_.store(true, std::memory_order_release);
+      co_return;
+    }
+    auto user_options = args_.options;
+    if (auth->options) {
+      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    }
+    if (not co_await ctx.resolve_secrets(configure_producer_or_request_secrets(
+          *cfg, user_options, ctx.dh()))) {
+      done_.store(true, std::memory_order_release);
+      co_return;
+    }
+    auto error = std::string{};
+    TENZIR_ASSERT(cfg->conf);
+    auto* raw_producer = RdKafka::Producer::create(cfg->conf.get(), error);
+    if (raw_producer == nullptr) {
+      diagnostic::error("failed to create kafka producer: {}", error).emit(ctx);
+      done_.store(true, std::memory_order_release);
+      co_return;
+    }
+    producer_.emplace(args_.topic, args_.message, *auth, std::move(*cfg),
+                      Box<RdKafka::Producer>::from_non_null(
+                        std::unique_ptr<RdKafka::Producer>{raw_producer}),
+                      write_bytes_counter_, write_events_counter_);
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (done_.load(std::memory_order_acquire) or not input.mask.any()
+        or not producer_) {
+      co_return;
+    }
+    if (not co_await producer_->process(
+          input, evaluator_ ? &*evaluator_ : nullptr,
+          args_.key ? args_.key->inner : "", timestamp_ms(), ctx)) {
+      done_.store(true, std::memory_order_release);
+    }
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    if (producer_) {
+      co_await producer_->flush(ctx.dh());
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (producer_) {
+      co_await producer_->flush(ctx.dh());
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_.load(std::memory_order_acquire) ? OperatorState::done
+                                                 : OperatorState::normal;
+  }
+
+private:
+  auto timestamp_ms() const -> int64_t {
+    if (args_.timestamp and args_.timestamp->inner != time{}) {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(
+               args_.timestamp->inner.time_since_epoch())
+        .count();
+    }
+    return 0;
+  }
+
+  ToKafkaArgs args_;
+  Option<nova::Evaluator> evaluator_;
   Option<AsyncKafkaProducer> producer_;
   MetricsCounter write_bytes_counter_;
   MetricsCounter write_events_counter_;
@@ -495,7 +652,7 @@ public:
   auto describe() const -> Description override {
     auto initial = ToKafkaArgs{};
     initial.options = located{record{}, location::unknown};
-    auto d = Describer<ToKafkaArgs, ToKafka>{std::move(initial)};
+    auto d = Describer<ToKafkaArgs, ToKafka, ToKafkaEvents>{std::move(initial)};
     d.positional("topic", &ToKafkaArgs::topic);
     d.named_optional("message", &ToKafkaArgs::message, "blob|string");
     d.named("key", &ToKafkaArgs::key);

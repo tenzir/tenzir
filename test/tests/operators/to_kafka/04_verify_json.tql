@@ -1,0 +1,9 @@
+// The default producer message must decode as one JSON event.
+from_kafka "to_kafka_json_forwarded",
+           _json=true,
+           count=1,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-to-kafka-json-verify"
+           }

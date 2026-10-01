@@ -1,0 +1,12 @@
+// Serialize the seeded event with the default message expression.
+from_kafka env("KAFKA_TOPIC"),
+           count=1,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-to-kafka-json-forward"
+           }
+to_kafka "to_kafka_json_forwarded",
+         options={
+           "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS")
+         }
