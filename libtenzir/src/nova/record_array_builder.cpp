@@ -199,11 +199,15 @@ auto ArrayBuilder<Record>::take_last() -> Data {
   const auto shape = storage.shape_index_builder.back();
   TENZIR_ASSERT_LEQ(0, shape);
   storage.shape_index_builder.pop_back();
+  const auto rows = storage.shape_index_builder.size();
   auto result = Record{};
   for (const auto field : storage.shape_table.fields(shape)) {
     const auto index = static_cast<std::size_t>(field);
+    auto& builder = storage.field_builders[index];
+    // A requested field that never received a value has no entry for the
+    // removed row and reads as null, like in `finish()`.
     result.emplace(std::string{storage.field_names[index]},
-                   storage.field_builders[index].take_last());
+                   builder.size() > rows ? builder.take_last() : Data{Null{}});
   }
   pop_padded_fields();
   // The row cache described the removed row.
