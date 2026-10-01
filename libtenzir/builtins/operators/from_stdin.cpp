@@ -9,6 +9,7 @@
 #include "tenzir/arc.hpp"
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/nova/events.hpp"
@@ -16,12 +17,14 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 
+#include <folly/FileUtil.h>
 #include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/ViaIfAsync.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncPipe.h>
 #include <folly/net/NetworkSocket.h>
+#include <sys/stat.h>
 
 #include <cerrno>
 #include <cstring>
@@ -91,8 +94,55 @@ struct ReadCB : folly::AsyncReader::ReadCallback {
   }
 };
 
+/// Whether reads from stdin never block, which holds for regular files, block
+/// devices, and the null device.
+///
+/// Event loops cannot wait for these: kqueue never reports the end of a
+/// regular file, and epoll rejects regular files.
+auto stdin_never_blocks() -> bool {
+  struct stat st{};
+  if (::fstat(STDIN_FILENO, &st) != 0) {
+    return false;
+  }
+  if (S_ISREG(st.st_mode) or S_ISBLK(st.st_mode)) {
+    return true;
+  }
+  struct stat null{};
+  return S_ISCHR(st.st_mode) and ::stat("/dev/null", &null) == 0
+         and st.st_rdev == null.st_rdev;
+}
+
+auto read_stdin_blocking(Arc<ChunkQueue> queue, diagnostic_handler& dh)
+  -> Task<void> {
+  while (true) {
+    auto result = co_await spawn_blocking([] {
+      auto buffer = std::vector<std::byte>(buffer_size);
+      auto bytes = folly::readNoInt(STDIN_FILENO, buffer.data(), buffer.size());
+      auto err = bytes < 0 ? errno : 0;
+      buffer.resize(bytes > 0 ? bytes : 0);
+      return std::pair{err, std::move(buffer)};
+    });
+    auto& [err, buffer] = result;
+    if (err != 0) {
+      diagnostic::error("failed to read from stdin")
+        .note("errno {}: {}", err, std::strerror(err))
+        .emit(dh);
+      break;
+    }
+    if (buffer.empty()) {
+      break;
+    }
+    co_await queue->enqueue(chunk::make(std::move(buffer)));
+  }
+  co_await queue->enqueue(chunk_ptr{});
+}
+
 auto read_stdin(Arc<ChunkQueue> queue, diagnostic_handler& dh,
                 folly::EventBase* evb) -> Task<void> {
+  if (stdin_never_blocks()) {
+    co_await read_stdin_blocking(std::move(queue), dh);
+    co_return;
+  }
   const auto fail = [&](auto&& emit) -> Task<void> {
     emit();
     co_await queue->enqueue(chunk_ptr{});

@@ -1,0 +1,6 @@
+{
+  line: "first",
+}
+{
+  line: "last",
+}
