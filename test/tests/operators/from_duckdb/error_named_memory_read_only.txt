@@ -1,0 +1,6 @@
+error: TransactionContext Error: Cannot write to database "memory" - transaction is launched in read-only mode
+ --> tests/operators/from_duckdb/error_named_memory_read_only.tql:5:1
+  |
+5 | from_duckdb ":memory:foo", sql="CREATE TABLE t (x BIGINT)"
+  | ^^^^^^^^^^^
+  |

@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_duckdb ":memory:foo", sql="CREATE TABLE t (x BIGINT)"
