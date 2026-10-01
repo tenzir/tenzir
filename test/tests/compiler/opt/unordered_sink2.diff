@@ -25,10 +25,11 @@
 -      order: "ordered"
 +      order: "unordered"
      },
-     GenericIr {
--      desc: "sort",
+-    sort {
+-      args: {
++    GenericIr {
 +      desc: "to_file",
-       store: {
++      store: {
          op: {
            path: [
 -            `sort` @ [1]:7..11 from 0
@@ -52,51 +53,13 @@
          named_args: [
            
 -        ]
-+        ],
-+        pipeline: {
-+          pipeline: {
-+            lets: [
-+              
-+            ],
-+            operators: [
-+              GenericIr {
-+                desc: "write_ndjson",
-+                store: {
-+                  op: {
-+                    path: [
-+                      `write_ndjson` @ [1]:58..70 from 0
-+                    ],
-+                    ref: std::write_ndjson/op
-+                  },
-+                  args: [
-+                    
-+                  ],
-+                  named_args: [
-+                    
-+                  ]
-+                },
-+                filter: [
-+                  
-+                ],
-+                order: "unordered"
-+              }
-+            ]
-+          } @ [1]:52..74 from 0,
-+          let_ids: {
-+            
-+          }
-+        }
-       },
-       filter: [
-         
-       ],
-       order: "ordered"
+-      }
 -    },
 -    UnorderedIr {
 -      pipeline: {
 -        lets: [
 -          
--        ],
+         ],
 -        operators: [
 -          GenericIr {
 -            desc: "to_file",
@@ -121,8 +84,24 @@
 -              pipeline: {
 -                pipeline: {
 -                  lets: [
--                    
--                  ],
++        pipeline: {
++          pipeline: {
++            lets: [
++              
++            ],
++            operators: [
++              GenericIr {
++                desc: "write_ndjson",
++                store: {
++                  op: {
++                    path: [
++                      `write_ndjson` @ [1]:58..70 from 0
++                    ],
++                    ref: std::write_ndjson/op
++                  },
++                  args: [
+                     
+                   ],
 -                  operators: [
 -                    GenericIr {
 -                      desc: "write_ndjson",
@@ -145,21 +124,36 @@
 -                      ],
 -                      order: "ordered"
 -                    }
--                  ]
++                  named_args: [
++                    
+                   ]
 -                } @ [1]:52..74 from 0,
 -                let_ids: {
--                  
++                },
++                filter: [
+                   
 -                }
--              }
++                ],
++                order: "unordered"
+               }
 -            },
 -            filter: [
 -              
 -            ],
 -            order: "ordered"
--          }
++            ]
++          } @ [1]:52..74 from 0,
++          let_ids: {
++            
+           }
 -        ]
--      },
++        }
+       },
 -      loc: [1]:14..23 from 0
++      filter: [
++        
++      ],
++      order: "ordered"
      }
    ]
  }

@@ -1,0 +1,145 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    sort {
+-      args: {
+-        op: {
+-          path: [
+-            `sort` @ [1]:7..11 from 0
+-          ],
+-          ref: std::sort/op
+-        },
+-        args: [
+-          expression root_field {
+-            id: `key` @ [1]:12..15 from 0,
+-            has_question_mark: false
+-          }
+-        ],
+-        named_args: [
+-          
+-        ]
+-      }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:16..21 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `sqrt` @ [1]:22..26 from 0
+               ],
+               ref: std::sqrt/fn
+             },
+             args: [
+               root_field {
+                 id: `value` @ [1]:27..32 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: false,
+             location: [1]:22..33 from 0
+           },
+           op: "gt",
+           right: constant int64 2 @ [1]:36..37 from 0,
+           location: [1]:22..37 from 0
+         }
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "unordered"
++    },
++    sort {
++      args: {
++        op: {
++          path: [
++            `sort` @ [1]:7..11 from 0
++          ],
++          ref: std::sort/op
++        },
++        args: [
++          expression root_field {
++            id: `key` @ [1]:12..15 from 0,
++            has_question_mark: false
++          }
++        ],
++        named_args: [
++          
++        ]
++      },
++      limit: 1
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:38..42 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 1 @ [1]:43..44 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:44..44 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

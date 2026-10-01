@@ -1,0 +1,155 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     summarize {
+       self: [1]:7..10 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `count` @ [1]:7..10 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `count` @ [1]:7..10 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:7..10 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:7..10 from 0
+             }
+           }
+         ],
+         groups: [
+           {
+             expr: {
+               expr: root_field {
+                 id: `x` @ [1]:11..12 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `x` @ [1]:11..12 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         indices: [
+           -1,
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
+     },
+     sort {
+       args: {
+         op: {
+           path: [
+             `sort` @ [1]:7..10 from 0
+           ],
+           ref: unresolved
+         },
+         args: [
+           expression unary_expr {
+             op: "neg",
+             expr: root_field {
+               id: `count` @ [1]:7..10 from 0,
+               has_question_mark: false
+             },
+             location: [1]:7..10 from 0
+           }
+         ],
+         named_args: [
+           
+         ]
+-      }
++      },
++      limit: 2
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:13..17 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:18..19 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:19..19 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

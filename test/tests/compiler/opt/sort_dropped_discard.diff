@@ -24,9 +24,8 @@
        ],
 -      order: "ordered"
 -    },
--    GenericIr {
--      desc: "sort",
--      store: {
+-    sort {
+-      args: {
 -        op: {
 -          path: [
 -            `sort` @ [1]:7..11 from 0
@@ -42,11 +41,7 @@
 -        named_args: [
 -          
 -        ]
--      },
--      filter: [
--        
--      ],
--      order: "ordered"
+-      }
 +      order: "unordered"
      },
      GenericIr {

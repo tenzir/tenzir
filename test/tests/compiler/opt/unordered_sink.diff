@@ -49,9 +49,8 @@
            
          ],
 -        operators: [
--          GenericIr {
--            desc: "sort",
--            store: {
+-          sort {
+-            args: {
 -              op: {
 -                path: [
 -                  `sort` @ [1]:21..25 from 0
@@ -67,14 +66,7 @@
 -              named_args: [
 -                
 -              ]
--            },
--            filter: [
-+        pipeline: {
-+          pipeline: {
-+            lets: [
-               
-             ],
--            order: "ordered"
+-            }
 -          },
 -          GenericIr {
 -            desc: "to_file",
@@ -99,6 +91,11 @@
 -              pipeline: {
 -                pipeline: {
 -                  lets: [
++        pipeline: {
++          pipeline: {
++            lets: [
++              
++            ],
 +            operators: [
 +              GenericIr {
 +                desc: "write_ndjson",

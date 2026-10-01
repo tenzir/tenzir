@@ -34,29 +34,26 @@
            ref: std::sort/op
          },
          args: [
-           expression root_field {
-             id: `x` @ [1]:12..13 from 0,
-             has_question_mark: false
-           }
+           
          ],
          named_args: [
            
          ]
 -      }
 +      },
-+      limit: 1
++      limit: 2
      },
      GenericIr {
        desc: "head",
        store: {
          op: {
            path: [
-             `head` @ [1]:14..18 from 0
+             `head` @ [1]:12..16 from 0
            ],
            ref: std::head/op
          },
          args: [
-           located 1 @ [1]:19..20 from 0
+           located 2 @ [1]:17..18 from 0
          ],
          named_args: [
            
@@ -66,13 +63,40 @@
          
        ],
        order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:26..28 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:26..28 from 0,
+             has_question_mark: false
+           },
+           location: [1]:26..28 from 0
+         }
+       ],
+       order: "ordered"
 +    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:20..20 from 0
++            `to_stdout` @ [1]:28..28 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },

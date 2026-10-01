@@ -417,6 +417,13 @@ set_source_files_properties(
 )
 target_include_directories(libtenzir_builtins
                            PRIVATE "${otlp_proto_binary_dir}")
+set_property(
+  SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort/sort.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort/legacy.cpp"
+  APPEND
+  PROPERTY INCLUDE_DIRECTORIES
+           "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort/include")
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_property(
