@@ -1,0 +1,33 @@
+{
+  response: {
+    host: {
+      name: "web-01",
+      os: {
+        family: "linux",
+      },
+    },
+    tags: [
+      "a",
+      "b",
+    ],
+    procs: [
+      {
+        pid: 1,
+      },
+      {
+        pid: 2,
+        name: "init",
+      },
+    ],
+    mixed: [
+      1,
+      "two",
+      null,
+      {
+        k: "v",
+      },
+    ],
+    empty_list: [],
+    empty_record: {},
+  },
+}

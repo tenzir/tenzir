@@ -13,7 +13,8 @@ TenzirRegisterPlugin(
   TARGET from_velociraptor
   ENTRYPOINT src/from_velociraptor.cpp
   INCLUDE_DIRECTORIES include
-  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+  TEST_SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
 
 find_package(protobuf CONFIG)
 if (NOT protobuf_FOUND)

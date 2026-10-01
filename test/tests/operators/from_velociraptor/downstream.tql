@@ -1,0 +1,4 @@
+from_velociraptor request_name="test", query="select_basic",
+  _config=env("VELOCIRAPTOR_CONFIG").parse_json()
+where response.admin == false
+select user = response.user, id = response.id

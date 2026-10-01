@@ -1,0 +1,32 @@
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  query_id: 1,
+  query: {
+    name: "test",
+    vql: "select_basic",
+  },
+  part: 0,
+  response: {
+    user: "alice",
+    id: 1,
+    score: 1.5,
+    admin: true,
+    note: null,
+  },
+}
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  query_id: 1,
+  query: {
+    name: "test",
+    vql: "select_basic",
+  },
+  part: 0,
+  response: {
+    user: "bob",
+    id: 2,
+    score: -2.25,
+    admin: false,
+    note: "x",
+  },
+}

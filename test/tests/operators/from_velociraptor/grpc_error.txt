@@ -1,0 +1,7 @@
+error: Velociraptor gRPC request failed
+ --> tests/operators/from_velociraptor/grpc_error.tql:5:1
+  |
+5 | from_velociraptor request_name="test", query="select_denied",
+  | ^^^^^^^^^^^^^^^^^
+  |
+  = note: access denied

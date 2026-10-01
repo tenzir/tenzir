@@ -1,0 +1,9 @@
+{
+  response: {
+    name: "echo-test",
+    max_row: 10,
+    max_wait: 5,
+    org_id: "acme",
+    queries: 1,
+  },
+}

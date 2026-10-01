@@ -1,0 +1,40 @@
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  query_id: 1,
+  query: {
+    name: "test",
+    vql: "select_parts",
+  },
+  part: 0,
+  response: {
+    n: 1,
+  },
+}
+{
+  timestamp: 2024-01-01T00:00:00Z,
+  query_id: 1,
+  query: {
+    name: "test",
+    vql: "select_parts",
+  },
+  part: 0,
+  response: {
+    n: 2,
+  },
+}
+{
+  timestamp: 2024-01-01T00:00:00.000001Z,
+  log: "Halfway there",
+}
+{
+  timestamp: 2024-01-01T00:00:00.000003Z,
+  query_id: 1,
+  query: {
+    name: "test",
+    vql: "select_parts",
+  },
+  part: 3,
+  response: {
+    n: 3,
+  },
+}

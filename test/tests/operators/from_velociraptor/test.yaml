@@ -1,0 +1,12 @@
+suite: from-velociraptor
+fixtures:
+  - velociraptor
+timeout: 60
+requires:
+  operators:
+    - from_velociraptor
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable
+  reason: requires the from_velociraptor plugin

@@ -50,6 +50,7 @@ from . import s3_proxy  # noqa: F401
 from . import tcp  # noqa: F401
 from . import uds  # noqa: F401
 from . import udp  # noqa: F401
+from . import velociraptor  # noqa: F401
 from . import zmq  # noqa: F401
 from . import mock_s3  # noqa: F401
 
@@ -101,5 +102,6 @@ __all__ = [
     "tcp",
     "uds",
     "udp",
+    "velociraptor",
     "zmq",
 ]

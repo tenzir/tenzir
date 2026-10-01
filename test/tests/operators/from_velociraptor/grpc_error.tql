@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_velociraptor request_name="test", query="select_denied",
+  _config=env("VELOCIRAPTOR_CONFIG").parse_json()

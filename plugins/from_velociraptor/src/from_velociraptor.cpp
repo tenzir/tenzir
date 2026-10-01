@@ -280,6 +280,8 @@ private:
   std::atomic<bool> queue_overflow_{false};
 };
 
+namespace legacy {
+
 class FromVelociraptor final : public Operator<void, table_slice> {
 public:
   explicit FromVelociraptor(FromVelociraptorArgs args)
@@ -381,6 +383,120 @@ private:
   MetricsCounter events_read_counter_;
 };
 
+} // namespace legacy
+
+class FromVelociraptor final : public Operator<void, nova::Events> {
+public:
+  explicit FromVelociraptor(FromVelociraptorArgs args)
+    : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    auto normalized = normalize_args(args_, ctx);
+    TENZIR_ASSERT(normalized);
+    auto config = select_client_config(args_, ctx.dh());
+    TENZIR_ASSERT(config);
+    auto credentials = grpc::SslCredentials({
+      .pem_root_certs = config->ca_certificate,
+      .pem_private_key = config->client_private_key,
+      .pem_cert_chain = config->client_cert,
+    });
+    auto channel_args = grpc::ChannelArguments{};
+    channel_args.SetSslTargetNameOverride("VelociraptorServer");
+    auto channel = grpc::CreateCustomChannel(config->api_connection_string,
+                                             credentials, channel_args);
+    auto stub = proto::API::NewStub(channel);
+    reactor_.emplace(std::in_place, *stub, make_collector_args(*normalized),
+                     message_queue_);
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    TENZIR_ASSERT(reactor_);
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto responses = std::vector<proto::VQLResponse>{};
+    auto terminal_error = Option<std::string>{};
+    auto collect_message = [&](Message message) -> void {
+      if (auto* response = try_as<Response>(&message)) {
+        responses.push_back(std::move(response->response));
+        return;
+      }
+      auto finish_message = as<StreamFinished>(std::move(message));
+      terminal_error = std::move(finish_message.error);
+      stream_finished_ = true;
+    };
+    collect_message(std::move(result).as<Message>());
+    while (auto next = message_queue_->try_dequeue()) {
+      collect_message(std::move(*next));
+    }
+    for (auto& response : responses) {
+      const auto bytes = response.ByteSizeLong();
+      if (bytes > 0) {
+        bytes_read_counter_.add(bytes);
+      }
+      auto events = parse_events(response, ctx.dh());
+      if (not events) {
+        emit_parse_warning(response, ctx.dh(), events.error(),
+                           args_.operator_location);
+        continue;
+      }
+      auto const rows = events->length();
+      if (rows == 0) {
+        continue;
+      }
+      co_await push(std::move(*events));
+      events_read_counter_.add(rows);
+    }
+    TENZIR_ASSERT(not stream_finished_ or message_queue_->empty());
+    if (terminal_error) {
+      diagnostic::error(grpc_request_failed_error)
+        .primary(args_.operator_location)
+        .note("{}", *terminal_error)
+        .emit(ctx);
+    }
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_ASSERT(reactor_);
+    (*reactor_)->request_shutdown();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return stream_finished_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // A gRPC stream has no cursor that a restored operator could resume from.
+    // `start()` would run the query again and repeat the events that earlier
+    // checkpoints already committed, or, for subscriptions, miss events.
+    diagnostic::error("from_velociraptor does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
+private:
+  FromVelociraptorArgs args_;
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  Option<Box<VelociraptorReadReactor>> reactor_;
+  bool stream_finished_ = false;
+  MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
+};
+
 class FromVelociraptorPlugin final : public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
@@ -410,8 +526,8 @@ public:
   auto describe() const -> Description override {
     auto initial = FromVelociraptorArgs{};
     initial.plugin_config = config_;
-    auto d
-      = Describer<FromVelociraptorArgs, FromVelociraptor>{std::move(initial)};
+    auto d = Describer<FromVelociraptorArgs, legacy::FromVelociraptor,
+                       FromVelociraptor>{std::move(initial)};
     auto request_name
       = d.named("request_name", &FromVelociraptorArgs::request_name);
     auto org_id = d.named("org_id", &FromVelociraptorArgs::org_id);
@@ -420,13 +536,17 @@ public:
     auto subscribe = d.named("subscribe", &FromVelociraptorArgs::subscribe);
     auto max_wait = d.named("max_wait", &FromVelociraptorArgs::max_wait);
     auto profile = d.named("profile", &FromVelociraptorArgs::profile);
-    d.named_optional("_config", &FromVelociraptorArgs::plugin_config);
+    auto config
+      = d.named_optional("_config", &FromVelociraptorArgs::plugin_config);
     d.operator_location(&FromVelociraptorArgs::operator_location);
     d.validate([request_name, org_id, query, max_rows, subscribe, max_wait,
-                profile, this](DescribeCtx& ctx) -> Empty {
+                profile, config, this](DescribeCtx& ctx) -> Empty {
       TENZIR_UNUSED(request_name, org_id, max_rows, profile);
       auto args = FromVelociraptorArgs{};
       args.plugin_config = config_;
+      if (auto value = ctx.get(config)) {
+        args.plugin_config = std::move(*value);
+      }
       args.operator_location = ctx.operator_location();
       if (auto value = ctx.get(request_name)) {
         args.request_name = *value;

@@ -1,0 +1,34 @@
+{
+  response: {
+    value: 1,
+  },
+}
+{
+  response: {
+    value: "two",
+  },
+}
+{
+  response: {
+    value: null,
+  },
+}
+{
+  response: {
+    value: 2.5,
+  },
+}
+{
+  response: {
+    other: true,
+  },
+}
+{
+  response: {
+    value: [
+      1,
+      "a",
+    ],
+    other: false,
+  },
+}

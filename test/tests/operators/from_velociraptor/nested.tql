@@ -1,0 +1,3 @@
+from_velociraptor request_name="test", query="select_nested",
+  _config=env("VELOCIRAPTOR_CONFIG").parse_json()
+select response

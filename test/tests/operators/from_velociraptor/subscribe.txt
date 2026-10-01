@@ -1,0 +1,5 @@
+{
+  response: {
+    artifact: "Windows.Sys.Pslist",
+  },
+}

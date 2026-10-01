@@ -1,0 +1,4 @@
+from_velociraptor request_name="echo-test", query="echo",
+  org_id="acme", max_rows=10, max_wait=5s,
+  _config=env("VELOCIRAPTOR_CONFIG").parse_json()
+select response
