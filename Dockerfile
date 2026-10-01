@@ -229,6 +229,7 @@ COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=yara-x-package /usr/local/lib/libyara_x_capi.so* /usr/local/lib/
 
+# Trixie runtime package: https://packages.debian.org/trixie/opentelemetry-cpp
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ca-certificates \
@@ -273,6 +274,7 @@ RUN apt-get update && \
       libzstd1 \
       lsb-release \
       openssl \
+      opentelemetry-cpp \
       python3 \
       python3-venv \
       robin-map-dev && \

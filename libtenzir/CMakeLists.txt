@@ -358,65 +358,60 @@ add_library(tenzir::libtenzir ALIAS libtenzir)
 # flavor of TENZIR_REGISTER_PLUGIN lets them register like any other builtin.
 target_compile_definitions(libtenzir PRIVATE TENZIR_ENABLE_BUILTINS)
 
-set(otlp_proto_root "${CMAKE_CURRENT_SOURCE_DIR}/aux/opentelemetry-proto")
-set(otlp_grpc_proto_sources
-    "${otlp_proto_root}/opentelemetry/proto/collector/logs/v1/logs_service.proto"
-    "${otlp_proto_root}/opentelemetry/proto/collector/trace/v1/trace_service.proto"
-    "${otlp_proto_root}/opentelemetry/proto/collector/metrics/v1/metrics_service.proto"
+find_package(opentelemetry-cpp CONFIG REQUIRED COMPONENTS exporters_otlp_grpc)
+string(
+  APPEND
+  TENZIR_FIND_DEPENDENCY_LIST
+  "\nfind_package(opentelemetry-cpp CONFIG REQUIRED COMPONENTS exporters_otlp_grpc)"
 )
-set(otlp_proto_sources
-    "${otlp_proto_root}/opentelemetry/proto/common/v1/common.proto"
-    "${otlp_proto_root}/opentelemetry/proto/resource/v1/resource.proto"
-    "${otlp_proto_root}/opentelemetry/proto/logs/v1/logs.proto"
-    "${otlp_proto_root}/opentelemetry/proto/trace/v1/trace.proto"
-    "${otlp_proto_root}/opentelemetry/proto/metrics/v1/metrics.proto"
-    ${otlp_grpc_proto_sources})
-add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources}
-                                      ${otlp_proto_sources})
-set(otlp_proto_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/otlp-proto")
-file(MAKE_DIRECTORY "${otlp_proto_binary_dir}")
-protobuf_generate(
-  TARGET libtenzir_builtins
-  OUT_VAR otlp_proto_generated_files
-  IMPORT_DIRS "${otlp_proto_root}"
-  PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
-if (TENZIR_GRPC_CPP_PLUGIN)
+add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
+# Debian's OpenTelemetry SDK exports the protobuf libraries but omits their
+# generated headers. Generate headers from the same system proto definitions.
+find_path(otlp_proto_headers opentelemetry/proto/common/v1/common.pb.h)
+if (NOT otlp_proto_headers)
+  find_path(otlp_proto_root opentelemetry/proto/common/v1/common.proto REQUIRED)
+  set(otlp_proto_files
+      common/v1/common.proto
+      resource/v1/resource.proto
+      logs/v1/logs.proto
+      trace/v1/trace.proto
+      metrics/v1/metrics.proto
+      collector/logs/v1/logs_service.proto
+      collector/trace/v1/trace_service.proto
+      collector/metrics/v1/metrics_service.proto)
+  list(TRANSFORM otlp_proto_files
+       PREPEND "${otlp_proto_root}/opentelemetry/proto/")
+  set(otlp_grpc_proto_files
+      "${otlp_proto_root}/opentelemetry/proto/collector/logs/v1/logs_service.proto"
+      "${otlp_proto_root}/opentelemetry/proto/collector/trace/v1/trace_service.proto"
+      "${otlp_proto_root}/opentelemetry/proto/collector/metrics/v1/metrics_service.proto"
+  )
+  set(otlp_proto_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/otlp-proto")
+  protobuf_generate(
+    PROTOS ${otlp_proto_files}
+    OUT_VAR otlp_proto_generated_files
+    IMPORT_DIRS "${otlp_proto_root}"
+    PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
   if (NOT TARGET gRPC::grpc_cpp_plugin)
+    find_program(grpc_cpp_plugin grpc_cpp_plugin REQUIRED)
     add_executable(gRPC::grpc_cpp_plugin IMPORTED)
+    set_target_properties(gRPC::grpc_cpp_plugin PROPERTIES IMPORTED_LOCATION
+                                                           "${grpc_cpp_plugin}")
   endif ()
-  set_target_properties(gRPC::grpc_cpp_plugin
-                        PROPERTIES IMPORTED_LOCATION ${TENZIR_GRPC_CPP_PLUGIN})
+  protobuf_generate(
+    PROTOS ${otlp_grpc_proto_files}
+    OUT_VAR otlp_grpc_generated_files
+    LANGUAGE grpc
+    GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+    PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+    IMPORT_DIRS "${otlp_proto_root}"
+    PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
+  add_custom_target(otlp-proto-headers DEPENDS ${otlp_proto_generated_files}
+                                               ${otlp_grpc_generated_files})
+  add_dependencies(libtenzir_builtins otlp-proto-headers)
+  target_include_directories(libtenzir_builtins
+                             PRIVATE "${otlp_proto_binary_dir}")
 endif ()
-if (NOT TARGET gRPC::grpc_cpp_plugin)
-  add_executable(gRPC::grpc_cpp_plugin IMPORTED)
-  find_program(_grpc_cpp_plugin NAME grpc_cpp_plugin REQUIRED)
-  set_target_properties(gRPC::grpc_cpp_plugin PROPERTIES IMPORTED_LOCATION
-                                                         ${_grpc_cpp_plugin})
-endif ()
-protobuf_generate(
-  PROTOS ${otlp_grpc_proto_sources}
-  OUT_VAR otlp_grpc_generated_files
-  LANGUAGE grpc
-  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
-  PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
-  IMPORT_DIRS "${otlp_proto_root}"
-  PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
-target_sources(libtenzir_builtins PRIVATE ${otlp_grpc_generated_files})
-add_custom_target(otlp-proto DEPENDS ${otlp_proto_generated_files}
-                                     ${otlp_grpc_generated_files})
-set_source_files_properties(
-  ${otlp_proto_generated_files} ${otlp_grpc_generated_files}
-  PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
-# Generated code compiled with the project's warnings: the `CHECK`s protobuf
-# inlines expand abseil's nullability macros to a Clang extension, which
-# `-pedantic -Werror` refuses.
-set_source_files_properties(
-  ${otlp_proto_generated_files} ${otlp_grpc_generated_files}
-  PROPERTIES COMPILE_OPTIONS
-             "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-nullability-extension>"
-)
-target_include_directories(libtenzir_builtins
-                           PRIVATE "${otlp_proto_binary_dir}")
 set_property(
   SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort.cpp"
          "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort/sort.cpp"
@@ -438,8 +433,9 @@ target_link_libraries(
   PRIVATE libtenzir_internal
   PUBLIC gRPC::grpc++)
 target_link_libraries(
-  libtenzir_builtins PRIVATE libtenzir libtenzir_internal protobuf::libprotobuf
-                             gRPC::grpc++)
+  libtenzir_builtins
+  PRIVATE libtenzir libtenzir_internal protobuf::libprotobuf gRPC::grpc++
+          opentelemetry-cpp::proto opentelemetry-cpp::proto_grpc)
 
 # Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to
 # indicate that libtenzir is considered to have an unstable API and ABI. The +7

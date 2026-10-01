@@ -3,6 +3,8 @@
 set -euo pipefail
 
 apt-get update
+# Trixie packages: https://packages.debian.org/trixie/opentelemetry-cpp-dev
+# and https://packages.debian.org/trixie/opentelemetry-proto.
 apt-get -y --no-install-recommends install \
   build-essential \
   ca-certificates \
@@ -58,6 +60,8 @@ apt-get -y --no-install-recommends install \
   ncat \
   nmap \
   ninja-build \
+  opentelemetry-cpp-dev \
+  opentelemetry-proto \
   openssl \
   pandoc \
   parallel \

@@ -10,7 +10,6 @@ let
       tenzirPythonPkgs,
       caf,
       curl-ws,
-      opentelemetry-cpp,
       cacert,
       iconv,
       lz4,
@@ -165,7 +164,7 @@ let
 
           inherit (deps) nativeBuildInputs;
           inherit (deps) propagatedNativeBuildInputs;
-          buildInputs = deps.buildInputs ++ lib.optional (deployment-source != null) opentelemetry-cpp;
+          inherit (deps) buildInputs;
           inherit (deps) propagatedBuildInputs;
 
           env = {

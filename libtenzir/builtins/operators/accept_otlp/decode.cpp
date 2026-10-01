@@ -409,10 +409,10 @@ auto any_value_kind(common::AnyValue const& value) -> std::string_view {
       return "kvlist";
     case common::AnyValue::kBytesValue:
       return "bytes";
-    case common::AnyValue::VALUE_NOT_SET:
+    // Profiling dictionary indexes have no meaning in log/metric/trace data.
+    default:
       return "empty";
   }
-  TENZIR_UNREACHABLE();
 }
 
 auto make_tagged_any_value(common::AnyValue const& value,
@@ -450,7 +450,7 @@ auto make_tagged_any_value(common::AnyValue const& value,
     case common::AnyValue::kKvlistValue:
       result["json_value"] = canonical_json(value);
       break;
-    case common::AnyValue::VALUE_NOT_SET:
+    default:
       break;
   }
   if (ctx.is_cancelled()) {
@@ -486,7 +486,7 @@ auto make_native_any_value(common::AnyValue const& value,
     case common::AnyValue::kKvlistValue:
       result = canonical_json(value);
       break;
-    case common::AnyValue::VALUE_NOT_SET:
+    default:
       break;
   }
   if (ctx.is_cancelled()) {

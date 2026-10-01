@@ -1,4 +1,8 @@
 add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
+target_include_directories(tenzir PRIVATE include)
+if (NOT TENZIR_ENABLE_DEPLOYMENT)
+  target_sources(tenzir PRIVATE entry.cpp)
+endif ()
 # Static binaries are not fully static on macOS, they still need to link to the
 # apple system libraries dynamically.
 if (TENZIR_ENABLE_STATIC_EXECUTABLE
@@ -88,6 +92,9 @@ endmacro ()
 create_tenzir_symlink(tenzir-node)
 create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(tenzir-rebuild)
+if (TENZIR_ENABLE_DEPLOYMENT)
+  create_tenzir_symlink(tenzir-up)
+endif ()
 
 # -- example configuration file -----------------------------------------------
 
