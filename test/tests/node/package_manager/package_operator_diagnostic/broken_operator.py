@@ -71,6 +71,7 @@ with tempfile.TemporaryDirectory() as tmp:
     proc = subprocess.Popen(
         [
             *_node_binary(),
+            "--nova=true",
             f"--config={config}",
             f"--state-directory={root / 'state'}",
             f"--cache-directory={root / 'cache'}",

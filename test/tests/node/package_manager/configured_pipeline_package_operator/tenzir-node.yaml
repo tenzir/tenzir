@@ -1,4 +1,5 @@
 tenzir:
+  nova: true
   pipelines:
     repro:
       definition: |

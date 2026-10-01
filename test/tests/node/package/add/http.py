@@ -8,6 +8,7 @@ from pathlib import Path
 node = acquire_fixture("node")
 node.start()
 tenzir = Executor.from_env(node.env)
+tenzir.binary = (*tenzir.binary, "--nova=true")
 base = os.environ["HTTP_FIXTURE_URL"].rstrip("/")
 local_root = Path(os.environ["PACKAGE_LOCAL_DIR"])
 

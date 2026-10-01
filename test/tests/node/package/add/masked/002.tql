@@ -1,0 +1,2 @@
+package_list format="extended"
+select name=@name, id=package_definition.id, state=package_status.install_state

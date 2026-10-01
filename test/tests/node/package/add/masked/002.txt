@@ -1,0 +1,5 @@
+{
+  name: "tenzir.package.extended",
+  id: "masked_package",
+  state: "installed",
+}
