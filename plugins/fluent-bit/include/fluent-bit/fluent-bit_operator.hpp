@@ -1406,6 +1406,13 @@ public:
       MetricsUnit::events);
     // Without a running bridge there is nothing to wait for.
     source_exhausted_ = true;
+    // A restored engine cannot resume where Fluent Bit stopped reading.
+    if (ctx.checkpoint_settings()) {
+      diagnostic::error("`from_fluent_bit` does not support checkpointing")
+        .primary(args_.plugin.source)
+        .emit(ctx);
+      co_return;
+    }
     auto settings = nova::event_builder_settings(args_.builder_options);
     // Fluent Bit parsers emit their captures as strings, including numbers.
     settings.infer_numbers = true;
