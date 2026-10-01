@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), tls={min_version: "tls1.2"},
+  sql="SELECT 1"

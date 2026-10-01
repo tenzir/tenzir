@@ -1,0 +1,5 @@
+from_duckdb env("QUACK_URI"),
+  token=secret(env("QUACK_TOKEN"), _literal=true),
+  table="events"
+select id, name
+sort id

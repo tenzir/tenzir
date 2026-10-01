@@ -1,0 +1,18 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT count(*) AS n FROM live_events
+      rows: [{n: 4}]
+---
+
+// Stop the live source before the fork, so both branches can finish.
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="live_events", live=true
+head 4
+fork {
+  where id <= 2
+  id = id + 100
+  name = "appended"
+  to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="live_events", mode="append"
+}
+sort id

@@ -1,0 +1,10 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT id FROM new_schema.new_table ORDER BY id
+      rows: [{id: 10}, {id: 11}, {id: 12}]
+---
+
+from {id: 12, name: "twelve"}
+to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="new_schema.new_table"

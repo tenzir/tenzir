@@ -1,0 +1,8 @@
+error: expected exactly 1 positional argument
+ --> tests/operators/from_duckdb/quack/error_missing_uri.tql:5:1
+  |
+5 | from_duckdb sql="SELECT 1"
+  | ^^^^^^^^^^^
+  |
+  = usage: from_duckdb uri:string, [token=string, tls=any, table=string, sql=string, live=bool, tracking_column=string]
+  = docs: https://tenzir.com/docs/reference/operators/from_duckdb

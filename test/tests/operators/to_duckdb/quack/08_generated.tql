@@ -1,0 +1,12 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT * FROM computed ORDER BY a
+      rows:
+        - {a: 1, doubled: 2, n: 5}
+        - {a: 2, doubled: 4, n: 7}
+---
+
+from {a: 1}, {a: 2, n: 7}
+to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="computed", mode="append"

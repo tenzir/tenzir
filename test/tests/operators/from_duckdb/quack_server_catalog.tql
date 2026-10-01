@@ -1,0 +1,12 @@
+---
+fixtures:
+  - quack:
+      extra_sql: |
+        CREATE SEQUENCE ids START 42;
+        CREATE TABLE sequence_defaults (id BIGINT DEFAULT nextval('ids'));
+        INSERT INTO sequence_defaults DEFAULT VALUES;
+        CREATE MACRO server_increment(x) AS x + 1;
+---
+
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+  sql="SELECT server_increment(id) AS n FROM sequence_defaults"

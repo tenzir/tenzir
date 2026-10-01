@@ -1,0 +1,3 @@
+from_duckdb env("QUACK_TLS_URI"), token=env("QUACK_TOKEN"),
+  tls={cacert: env("QUACK_CA")},
+  sql="SELECT 42 AS answer"

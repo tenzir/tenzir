@@ -1,0 +1,7 @@
+error: `token` and `tls` require a Quack database URI
+ --> tests/operators/from_duckdb/quack/error_local_token.tql:5:31
+  |
+5 | from_duckdb ":memory:", token=env("QUACK_TOKEN"),
+  |                               ^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use `quack:host[:port]` as the database

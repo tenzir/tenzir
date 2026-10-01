@@ -1,0 +1,6 @@
+error: `tls.min_version` is not supported by DuckDB's Quack client
+ --> tests/operators/from_duckdb/quack/error_tls_unsupported.tql:5:61
+  |
+5 | from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), tls={min_version: "tls1.2"},
+  |                                                             ^^^^^^^^^^^^^^^^^^^^^^^
+  |

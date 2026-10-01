@@ -1,0 +1,11 @@
+---
+error: true
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT count(*) AS n FROM events
+      rows: [{n: 2}]
+---
+
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+  sql="SELECT 1; DELETE FROM events"

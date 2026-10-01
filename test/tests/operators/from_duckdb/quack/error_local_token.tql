@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_duckdb ":memory:", token=env("QUACK_TOKEN"),
+  sql="SELECT 1"

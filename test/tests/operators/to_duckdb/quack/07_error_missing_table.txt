@@ -1,0 +1,10 @@
+error: Catalog Error: Table with name absent does not exist!
+Did you mean "pg_settings"?
+
+LINE 1: DESCRIBE "absent"
+                 ^
+  --> tests/operators/to_duckdb/quack/07_error_missing_table.tql:11:1
+   |
+11 | to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+   | ^^^^^^^^^
+   |

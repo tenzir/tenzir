@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_duckdb env("QUACK_URI"), token="",
+  sql="SELECT 1"

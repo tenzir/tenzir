@@ -1,0 +1,11 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT * FROM events WHERE id = 5
+      rows: [{id: 5, name: tls, note: default}]
+---
+
+from {id: 5, name: "tls"}
+to_duckdb env("QUACK_TLS_URI"), token=env("QUACK_TOKEN"),
+  tls={cacert: env("QUACK_CA")}, table="events", mode="append"

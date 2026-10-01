@@ -1,0 +1,21 @@
+warning: column `amount` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/quack/cast.tql:1:1
+  |
+1 | from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `nested` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/quack/cast.tql:1:1
+  |
+1 | from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+{
+  amount: "12.34",
+  nested: [
+    "1.5",
+  ],
+}

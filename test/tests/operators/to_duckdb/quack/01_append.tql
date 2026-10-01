@@ -1,0 +1,13 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT * FROM events WHERE id > 2 ORDER BY id
+      rows:
+        - {id: 3, name: Grüße, note: default}
+        - {id: 4, name: "a\0b", note: null}
+---
+
+from {id: 3, name: "Grüße"}, {id: 4, name: "a\u{0}b", note: null}
+to_duckdb env("QUACK_URI"), token=secret(env("QUACK_TOKEN"), _literal=true),
+  table="events", mode="append", checkpoint_interval=0s

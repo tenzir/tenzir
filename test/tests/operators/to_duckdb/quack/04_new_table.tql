@@ -1,0 +1,10 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT * FROM brand_new
+      rows: [{id: 1}]
+---
+
+from {id: 1}
+to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="brand_new"

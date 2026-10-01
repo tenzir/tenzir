@@ -1,0 +1,11 @@
+---
+error: true
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT count(*) AS n FROM duckdb_tables() WHERE table_name = 'should_not_exist'
+      rows: [{n: 0}]
+---
+
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+  sql="CREATE TABLE should_not_exist (n INTEGER)"

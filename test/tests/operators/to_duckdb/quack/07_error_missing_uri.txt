@@ -1,0 +1,8 @@
+error: expected exactly 1 positional argument
+ --> tests/operators/to_duckdb/quack/07_error_missing_uri.tql:6:1
+  |
+6 | to_duckdb table="events"
+  | ^^^^^^^^^
+  |
+  = usage: to_duckdb uri:string, table=string, [token=string, tls=any, mode=string, primary=field, checkpoint_interval=duration]
+  = docs: https://tenzir.com/docs/reference/operators/to_duckdb

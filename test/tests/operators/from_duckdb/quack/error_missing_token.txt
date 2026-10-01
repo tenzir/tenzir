@@ -1,0 +1,7 @@
+error: `token` is required for a Quack database URI
+ --> tests/operators/from_duckdb/quack/error_missing_token.tql:5:13
+  |
+5 | from_duckdb env("QUACK_URI"),
+  |             ^^^^^^^^^^^^^^^^
+  |
+  = hint: set `token=secret("duckdb-token")`

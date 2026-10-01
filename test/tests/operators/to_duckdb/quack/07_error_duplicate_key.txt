@@ -1,0 +1,6 @@
+error: Failed to append: Failed to append: Duplicate key "id: 10" violates primary key constraint.
+  --> tests/operators/to_duckdb/quack/07_error_duplicate_key.tql:11:1
+   |
+11 | to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+   | ^^^^^^^^^
+   |

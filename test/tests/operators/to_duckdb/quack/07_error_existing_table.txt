@@ -1,0 +1,9 @@
+error: Invalid Input Error: Table with name "new_table" already exists!
+
+LINE 1: SELECT * FROM quack_query_by_name('__tenzir_quack', 'CREATE TABLE "new_sc...
+                      ^
+  --> tests/operators/to_duckdb/quack/07_error_existing_table.tql:11:1
+   |
+11 | to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+   | ^^^^^^^^^
+   |

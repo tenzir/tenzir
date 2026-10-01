@@ -1,0 +1,7 @@
+suite: from-duckdb-quack
+fixtures:
+  - quack:
+      tls: true
+timeout: 60
+skip:
+  on: fixture-unavailable

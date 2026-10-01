@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {id: 10}
+to_duckdb table="events"

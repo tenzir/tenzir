@@ -1,0 +1,15 @@
+---
+assertions:
+  fixtures:
+    quack:
+      sql: >-
+        SELECT count(*) AS n, min(id) AS first, max(id) AS last,
+        count(*) FILTER (WHERE note = 'default') AS defaults
+        FROM events WHERE id >= 10000
+      rows: [{n: 5000, first: 10000, last: 19998, defaults: 5000}]
+---
+
+from_duckdb ":memory:", sql="SELECT range AS id, range % 2 = 0 AS keep FROM range(10000, 20000)"
+where keep
+drop keep
+to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="events", mode="append"

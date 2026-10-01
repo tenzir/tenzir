@@ -1,0 +1,3 @@
+from_duckdb env("QUACK_URI"),
+  token=secret(env("QUACK_TOKEN"), _literal=true),
+  sql="SELECT * FROM read_json_auto('server-only.json')"

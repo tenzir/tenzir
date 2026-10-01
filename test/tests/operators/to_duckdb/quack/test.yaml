@@ -1,0 +1,13 @@
+suite: to-duckdb-quack
+fixtures:
+  - quack:
+      tls: true
+      extra_sql: >-
+        CREATE TABLE computed (
+          a BIGINT,
+          doubled BIGINT GENERATED ALWAYS AS (a * 2),
+          n BIGINT NOT NULL DEFAULT 5
+        );
+timeout: 60
+skip:
+  on: fixture-unavailable

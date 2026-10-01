@@ -1,0 +1,12 @@
+---
+error: true
+assertions:
+  fixtures:
+    quack:
+      sql: SELECT count(*) AS n FROM new_schema.new_table
+      rows: [{n: 3}]
+---
+
+from {id: 10}
+to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+  table="absent", mode="append"

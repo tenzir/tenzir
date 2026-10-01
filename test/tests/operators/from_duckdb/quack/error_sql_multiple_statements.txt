@@ -1,0 +1,12 @@
+error: Invalid Input Error: Expected a single SELECT statement
+
+LINE 1: SELECT * FROM query('SELECT 1; DELETE FROM events')
+                      ^
+
+LINE 1: SELECT * FROM "__tenzir_quack_read"('SELECT * FROM query(''SELECT 1; DELETE...
+                      ^
+  --> tests/operators/from_duckdb/quack/error_sql_multiple_statements.tql:10:1
+   |
+10 | from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
+   | ^^^^^^^^^^^
+   |

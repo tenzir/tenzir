@@ -1,0 +1,3 @@
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="events", live=true
+head 2
+select id, name

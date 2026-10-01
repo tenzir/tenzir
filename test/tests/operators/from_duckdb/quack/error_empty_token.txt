@@ -1,0 +1,6 @@
+error: `token` must not be empty or contain NUL bytes
+ --> tests/operators/from_duckdb/quack/error_empty_token.tql:5:37
+  |
+5 | from_duckdb env("QUACK_URI"), token="",
+  |                                     ^^
+  |

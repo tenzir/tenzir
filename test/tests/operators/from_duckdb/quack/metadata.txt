@@ -1,0 +1,9 @@
+{
+  name: "events",
+}
+{
+  name: "live_events",
+}
+{
+  name: "many",
+}

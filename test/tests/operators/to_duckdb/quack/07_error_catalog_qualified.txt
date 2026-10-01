@@ -1,0 +1,6 @@
+error: Quack destinations support `table` or `schema.table`, not a catalog-qualified table
+  --> tests/operators/to_duckdb/quack/07_error_catalog_qualified.tql:12:9
+   |
+12 |   table="other.main.events"
+   |         ^^^^^^^^^^^^^^^^^^^
+   |

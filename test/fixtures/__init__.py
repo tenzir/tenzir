@@ -40,6 +40,7 @@ from . import splunk  # noqa: F401
 from . import platform_ws  # noqa: F401
 from . import prometheus  # noqa: F401
 from . import prometheus_remote_write_mock  # noqa: F401
+from . import quack  # noqa: F401
 from . import read_pushdown  # noqa: F401
 from . import relp  # noqa: F401
 from . import rsyslog_relp  # noqa: F401
