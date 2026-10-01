@@ -32,6 +32,7 @@
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/json_parser.hpp>
 #include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -802,38 +803,35 @@ auto parse_fluent_bit_chunk(chunk_ptr const& chunk, multi_series_builder& msb,
   }
 }
 
-/// Appends a decoded JSON value without inferring types from its strings.
-auto append_json(auto&& out, const data& value) -> void {
-  match(
-    value,
-    [&](caf::none_t) {
-      out.null();
-    },
-    [&](const std::string& x) {
-      out.data(std::string_view{x});
-    },
-    [&](const list& xs) {
-      auto elements = out.list();
-      for (const auto& x : xs) {
-        append_json(elements, x);
-      }
-    },
-    [&](const record& xs) {
-      auto fields = out.record();
-      for (const auto& [key, x] : xs) {
-        append_json(fields.exact_field(key), x);
-      }
-    },
-    [&]<class T>(const T& x) {
-      if constexpr (requires { out.data(x); }) {
-        out.data(x);
-      } else {
-        out.null();
-      }
-    });
-}
+/// Decodes the JSON value that Fluent Bit leaves escaped in a `log` field, see
+/// https://docs.fluentbit.io/manual/pipeline/parsers/decoders.
+class LogDecoder {
+public:
+  /// Returns false if `json` is not a single JSON value.
+  auto decode(std::string_view json, nova::EventBuilder::Field field) -> bool {
+    buffer_.assign(json);
+    auto result = parser_.iterate(buffer_);
+    if (result.error()) {
+      return false;
+    }
+    auto& document = result.value_unsafe();
+    // simdjson rejects trailing content after scalars itself, but does not
+    // consume the token of a big integer.
+    auto const scalar = document.is_scalar();
+    // An event whose `log` field is not JSON is dropped without a warning.
+    auto dh = null_diagnostic_handler{};
+    if (not nova::parse_json_value(document, std::move(field), dh)) {
+      return false;
+    }
+    return scalar.error() or scalar.value_unsafe() or document.at_end();
+  }
 
-auto append_msgpack(auto&& field, const msgpack_object& object,
+private:
+  simdjson::ondemand::parser parser_;
+  std::string buffer_;
+};
+
+auto append_msgpack(auto&& field, const msgpack_object& object, LogDecoder& log,
                     diagnostic_handler& dh, bool decode = false) -> bool {
   auto f = detail::overload{
     [&](None) {
@@ -845,15 +843,11 @@ auto append_msgpack(auto&& field, const msgpack_object& object,
       return true;
     },
     [&](std::string_view x) {
-      // A `log` field may hold an escaped JSON object, see
-      // https://docs.fluentbit.io/manual/pipeline/parsers/decoders.
-      if (decode) {
-        auto json = from_json(x);
-        if (not json) {
-          return false;
+      if constexpr (std::same_as<std::remove_cvref_t<decltype(field)>,
+                                 nova::EventBuilder::Field>) {
+        if (decode) {
+          return log.decode(x, std::move(field));
         }
-        append_json(field, *json);
-        return true;
       }
       field.data_unparsed(x);
       return true;
@@ -865,7 +859,7 @@ auto append_msgpack(auto&& field, const msgpack_object& object,
     [&](std::span<msgpack_object> xs) {
       auto list = field.list();
       for (const auto& x : xs) {
-        if (not append_msgpack(list, x, dh, decode)) {
+        if (not append_msgpack(list, x, log, dh, decode)) {
           return false;
         }
       }
@@ -882,7 +876,8 @@ auto append_msgpack(auto&& field, const msgpack_object& object,
           return false;
         }
         auto key = msgpack::to_str(kvp.key);
-        if (not append_msgpack(record.field(key), kvp.val, dh, key == "log")) {
+        if (not append_msgpack(record.field(key), kvp.val, log, dh,
+                               key == "log")) {
           return false;
         }
       }
@@ -908,7 +903,7 @@ auto append_msgpack(auto&& field, const msgpack_object& object,
 /// Appends one Fluent Bit event to `builder`, see the overload above for the
 /// format. Drops the event with a warning if it is malformed.
 auto parse_fluent_bit_chunk(chunk_ptr const& chunk, nova::EventBuilder& builder,
-                            diagnostic_handler& dh) -> void {
+                            LogDecoder& log, diagnostic_handler& dh) -> void {
   auto unpacked = msgpack::unpacked{};
   auto object = unpacked.unpack(as_bytes(chunk));
   TENZIR_ASSERT(object);
@@ -959,7 +954,7 @@ auto parse_fluent_bit_chunk(chunk_ptr const& chunk, nova::EventBuilder& builder,
       return;
     }
     if (not msgpack::to_map(xs[1]).empty()
-        and not append_msgpack(row.exact_field("metadata"), xs[1], dh)) {
+        and not append_msgpack(row.exact_field("metadata"), xs[1], log, dh)) {
       builder.discard_last();
       return;
     }
@@ -973,7 +968,7 @@ auto parse_fluent_bit_chunk(chunk_ptr const& chunk, nova::EventBuilder& builder,
     builder.discard_last();
     return;
   }
-  if (not append_msgpack(row.exact_field("message"), second, dh)) {
+  if (not append_msgpack(row.exact_field("message"), second, log, dh)) {
     builder.discard_last();
   }
 }
@@ -1499,7 +1494,7 @@ public:
         auto const batch_size
           = args_.builder_options.settings.desired_batch_size;
         for (auto& chunk : as<std::vector<chunk_ptr>>(message)) {
-          parse_fluent_bit_chunk(chunk, *builder_, ctx.dh());
+          parse_fluent_bit_chunk(chunk, *builder_, log_decoder_, ctx.dh());
           if (rows() >= batch_size) {
             co_await flush(push);
           }
@@ -1554,6 +1549,7 @@ private:
   BatchTimeout timeout_;
   mutable Option<Receiver<FluentBitSourceTaskResult>> events_;
   Option<nova::EventBuilder> builder_;
+  LogDecoder log_decoder_;
   SourceBridgeLifetime bridge_lifetime_;
   Arc<Atomic<bool>> stop_requested_{std::in_place, false};
   MetricsCounter read_bytes_counter_;

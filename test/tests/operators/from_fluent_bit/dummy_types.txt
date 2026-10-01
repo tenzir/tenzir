@@ -5,6 +5,7 @@
   message: {
     log: {
       level: "info",
+      peer: 10.0.0.2,
     },
     src: 10.0.0.1,
     count: -3,
