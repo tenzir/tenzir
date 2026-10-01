@@ -1,0 +1,19 @@
+from {
+  keep: true,
+  data: "0005000100002710000003e8000000000000002a010240050102030405060708090a0b0c000d000e0000000f00000010000023280000251c00110012001211140015001617180000".decode_hex(),
+  peer: {ip: 192.0.2.5, port: 2055},
+}, {
+  keep: false,
+  data: "not-a-blob",
+}, {
+  keep: true,
+  data: "000a001c0000000000000000000000070002000c0100000100080004".decode_hex(),
+  peer: null,
+}, {
+  keep: true,
+  data: "000a001800000001000000000000000701000008c0000201".decode_hex(),
+}
+where keep
+read_netflow
+select version = netflow.version, exporter = netflow.exporter?,
+  source_ipv4_address

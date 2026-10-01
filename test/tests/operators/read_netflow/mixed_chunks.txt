@@ -6,15 +6,7 @@ warning: discarded reordered IPFIX data set
   |
   = note: template 258 was not established by the delayed message
 {
-  events: 28,
-  schema: "netflow.ipfix",
-}
-{
-  events: 18,
-  schema: "netflow.ipfix",
-}
-{
-  events: 18,
+  events: 64,
   schema: "netflow.ipfix",
 }
 {

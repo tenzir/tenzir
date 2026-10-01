@@ -1,0 +1,16 @@
+from {
+  data: "000a001c0000000000000000000000070002000c0100000100080004".decode_hex(),
+  peer: {ip: 192.0.2.1, port: 4739},
+}, {
+  data: "000a001c0000000000000000000000070002000c01000001000c0004".decode_hex(),
+  peer: {ip: 192.0.2.2, port: 4739},
+}, {
+  data: "000a001800000001000000000000000701000008c0000201".decode_hex(),
+  peer: {ip: 192.0.2.1, port: 4739},
+}, {
+  data: "000a001800000001000000000000000701000008c0000202".decode_hex(),
+  peer: {ip: 192.0.2.2, port: 4739},
+}
+read_netflow
+select exporter = netflow.exporter.ip, source_ipv4_address?,
+  destination_ipv4_address?

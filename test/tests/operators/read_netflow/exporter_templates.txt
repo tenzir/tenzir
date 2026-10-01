@@ -1,0 +1,10 @@
+{
+  exporter: 192.0.2.1,
+  source_ipv4_address: 192.0.2.1,
+  destination_ipv4_address: null,
+}
+{
+  exporter: 192.0.2.2,
+  source_ipv4_address: null,
+  destination_ipv4_address: 192.0.2.2,
+}

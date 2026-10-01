@@ -1,0 +1,13 @@
+{
+  version: 5,
+  exporter: {
+    ip: 192.0.2.5,
+    port: 2055,
+  },
+  source_ipv4_address: 1.2.3.4,
+}
+{
+  version: 10,
+  exporter: null,
+  source_ipv4_address: 192.0.2.1,
+}

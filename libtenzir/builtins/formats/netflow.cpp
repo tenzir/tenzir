@@ -15,6 +15,8 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/event_builder.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/read_detection.hpp"
@@ -500,6 +502,498 @@ private:
   SeriesPusher pusher_;
 };
 
+struct ReadyEvents {
+  std::vector<nova::Events> events;
+  Option<std::chrono::steady_clock::duration> wait_for;
+
+  auto merge(ReadyEvents other) -> void {
+    events.insert(events.end(), std::make_move_iterator(other.events.begin()),
+                  std::make_move_iterator(other.events.end()));
+    if (other.wait_for) {
+      wait_for
+        = wait_for ? std::min(*wait_for, *other.wait_for) : *other.wait_for;
+    }
+  }
+};
+
+/// Coordinates flush and framing deadlines with the same latest-wins mailbox
+/// contract as SeriesPusher. Callers merge every pending deadline before pushing
+/// and recheck it after waking, because a dequeued timeout can become stale.
+class EventPusher {
+public:
+  using Duration = std::chrono::steady_clock::duration;
+
+  auto wait() const -> Task<void> {
+    auto next = co_await wait_for_->dequeue();
+    co_await sleep_for(next);
+  }
+
+  auto push(ReadyEvents ready, Push<nova::Events>& push) const -> Task<void> {
+    for (auto& events : ready.events) {
+      co_await push(std::move(events));
+    }
+    if (ready.wait_for) {
+      wait_for_->try_dequeue();
+      wait_for_->try_enqueue(*ready.wait_for);
+    }
+  }
+
+private:
+  mutable Box<folly::coro::BoundedQueue<Duration>> wait_for_{std::in_place, 1u};
+};
+
+class EventBuilderSet {
+public:
+  auto start(diagnostic_handler& dh) -> void {
+    v5_.emplace(
+      nova::EventBuilder::make_prevalidated(settings("netflow.v5"), dh));
+    v9_.emplace(
+      nova::EventBuilder::make_prevalidated(settings("netflow.v9"), dh));
+    ipfix_.emplace(
+      nova::EventBuilder::make_prevalidated(settings("netflow.ipfix"), dh));
+  }
+
+  auto append(std::vector<DecodedRecord> records) -> ReadyEvents {
+    auto result = ReadyEvents{};
+    for (auto& record : records) {
+      if (active_ and *active_ != record.metadata.version) {
+        flush_active(result);
+      }
+      active_ = record.metadata.version;
+      if (not oldest_) {
+        oldest_ = std::chrono::steady_clock::now();
+      }
+      append(record);
+      if (static_cast<uint64_t>(builder(*active_).length())
+          >= defaults::import::table_slice_size) {
+        flush_active(result);
+      }
+    }
+    return result;
+  }
+
+  auto yield_ready(std::chrono::steady_clock::time_point now
+                   = std::chrono::steady_clock::now()) -> ReadyEvents {
+    auto result = ReadyEvents{};
+    if (oldest_) {
+      auto remaining = defaults::import::batch_timeout - (now - *oldest_);
+      if (remaining <= std::chrono::steady_clock::duration::zero()) {
+        flush_active(result);
+      } else {
+        result.wait_for = remaining;
+      }
+    }
+    return result;
+  }
+
+  auto finalize() -> std::vector<nova::Events> {
+    auto result = std::vector<nova::Events>{};
+    for (auto* builder : {&*v5_, &*v9_, &*ipfix_}) {
+      if (builder->length() > 0) {
+        result.push_back(builder->finish());
+      }
+    }
+    active_ = None{};
+    oldest_ = None{};
+    return result;
+  }
+
+private:
+  static auto settings(std::string name) -> nova::EventBuilder::Settings {
+    auto result = nova::EventBuilder::Settings{};
+    result.default_schema_name = std::move(name);
+    return result;
+  }
+
+  auto builder(Version version) -> nova::EventBuilder& {
+    switch (version) {
+      case Version::v5:
+        return *v5_;
+      case Version::v9:
+        return *v9_;
+      case Version::ipfix:
+        return *ipfix_;
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto flush_active(ReadyEvents& result) -> void {
+    TENZIR_ASSERT(active_);
+    auto& current = builder(*active_);
+    if (current.length() > 0) {
+      result.events.push_back(current.finish());
+    }
+    oldest_ = None{};
+  }
+
+  auto append(DecodedRecord const& record) -> void {
+    auto event = builder(record.metadata.version).event();
+    auto metadata = event.exact_field("netflow").record();
+    metadata.exact_field("version").data(
+      uint64_t{static_cast<uint16_t>(record.metadata.version)});
+    metadata.exact_field("record_type")
+      .data(record.metadata.record_kind == RecordKind::flow ? "flow"
+                                                            : "options");
+    metadata.exact_field("export_time").data(record.metadata.export_time);
+    metadata.exact_field("sequence_number")
+      .data(uint64_t{record.metadata.sequence_number});
+    if (record.metadata.observation_domain_id) {
+      metadata.exact_field("observation_domain_id")
+        .data(uint64_t{*record.metadata.observation_domain_id});
+    }
+    if (record.metadata.template_id) {
+      metadata.exact_field("template_id")
+        .data(uint64_t{*record.metadata.template_id});
+    }
+    if (record.metadata.sys_uptime) {
+      metadata.exact_field("sys_uptime").data(*record.metadata.sys_uptime);
+    }
+    if (record.metadata.exporter) {
+      auto exporter = metadata.exact_field("exporter").record();
+      exporter.exact_field("ip").data(record.metadata.exporter->address);
+      exporter.exact_field("port").data(
+        int64_t{record.metadata.exporter->port});
+    }
+    if (record.metadata.v5) {
+      metadata.exact_field("engine_type")
+        .data(uint64_t{record.metadata.v5->engine_type});
+      metadata.exact_field("engine_id")
+        .data(uint64_t{record.metadata.v5->engine_id});
+      metadata.exact_field("sampling_mode")
+        .data(uint64_t{record.metadata.v5->sampling_mode});
+      metadata.exact_field("sampling_interval")
+        .data(uint64_t{record.metadata.v5->sampling_interval});
+    }
+    for (auto const& field : record.fields) {
+      auto output = event.exact_field(field.name);
+      match(make_view(field.value), [&]<class T>(T value) {
+        if constexpr (nova::fundamental_view_type<T>) {
+          output.data(value);
+        } else if constexpr (std::same_as<T, caf::none_t>) {
+          output.null();
+        } else {
+          // The decoder only produces scalar information elements.
+          TENZIR_UNREACHABLE();
+        }
+      });
+    }
+  }
+
+  Option<nova::EventBuilder> v5_;
+  Option<nova::EventBuilder> v9_;
+  Option<nova::EventBuilder> ipfix_;
+  Option<Version> active_;
+  Option<std::chrono::steady_clock::time_point> oldest_;
+};
+
+auto find_field(nova::RowView<nova::Record> record, std::string_view name)
+  -> Option<nova::RowView<nova::Data>> {
+  for (auto [field_name, value] : record) {
+    if (field_name == name) {
+      return value;
+    }
+  }
+  return None{};
+}
+
+auto parse_message_event(nova::RowView<nova::Record> row)
+  -> Option<MessageEvent> {
+  auto data = find_field(row, "data");
+  if (not data) {
+    return None{};
+  }
+  auto const* payload = try_as<nova::RowView<nova::Blob>>(*data);
+  if (not payload) {
+    return None{};
+  }
+  auto peer = find_field(row, "peer");
+  if (not peer or is<nova::RowView<nova::Null>>(*peer)) {
+    return MessageEvent{.data = **payload, .peer = None{}};
+  }
+  auto const* peer_record = try_as<nova::RowView<nova::Record>>(*peer);
+  if (not peer_record) {
+    return None{};
+  }
+  auto address = find_field(*peer_record, "ip");
+  auto port = find_field(*peer_record, "port");
+  if (not address or not port) {
+    return None{};
+  }
+  auto const* peer_ip = try_as<nova::RowView<nova::Ip>>(*address);
+  auto const* peer_port = try_as<nova::RowView<nova::Int>>(*port);
+  if (not peer_ip or not peer_port or **peer_port < 0
+      or **peer_port > std::numeric_limits<uint16_t>::max()) {
+    return None{};
+  }
+  return MessageEvent{
+    .data = **payload,
+    .peer = Peer{**peer_ip, static_cast<uint16_t>(**peer_port)},
+  };
+}
+
+class ReadNetflowStreamEvents final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit ReadNetflowStreamEvents(ReadNetflowArgs args)
+    : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(make_dh(ctx.dh(), args_.operator_location));
+    builders_.start(*dh_);
+    co_return;
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (failed_) {
+      co_return;
+    }
+    auto bytes = as_bytes(input);
+    ambiguous_frame_.on_input(bytes.size());
+    TENZIR_ASSERT(buffer_.size() <= max_stream_buffer_bytes);
+    if (bytes.size() > max_stream_buffer_bytes - buffer_.size()) {
+      diagnostic::error("NetFlow byte stream exceeds the framing buffer limit")
+        .primary(args_.operator_location)
+        .note("retaining {} buffered bytes plus {} input bytes would exceed "
+              "the {}-byte limit",
+              buffer_.size(), bytes.size(), max_stream_buffer_bytes)
+        .note("the input may contain a truncated NetFlow v9 message")
+        .emit(ctx);
+      failed_ = true;
+      buffer_.clear();
+      co_return;
+    }
+    buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+    co_await pusher_.push(
+      with_ambiguous_frame_wakeup(process_available(false, ctx)), push);
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto ready = ReadyEvents{};
+    auto const now = std::chrono::steady_clock::now();
+    if (auto frame_size = ambiguous_frame_.take_expired(now)) {
+      ready = process_available(false, ctx, frame_size);
+    } else {
+      // Input can replace a dequeued timeout with a later deadline. Treat that
+      // wakeup as stale and schedule the remaining delay below.
+      ready = builders_.yield_ready(now);
+    }
+    co_await pusher_.push(with_ambiguous_frame_wakeup(std::move(ready), now),
+                          push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    ambiguous_frame_.reset();
+    if (not failed_) {
+      co_await pusher_.push(process_available(true, ctx), push);
+      decoder_.finish(*dh_);
+    }
+    for (auto& events : builders_.finalize()) {
+      co_await push(std::move(events));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    for (auto& events : builders_.finalize()) {
+      co_await push(std::move(events));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    decoder_.snapshot(serde);
+    // The buffer holds an undecodable incomplete or ambiguous prefix that
+    // cannot be flushed in `prepare_snapshot()`, so serialize it despite its
+    // potential size; the overflow check in `process()` bounds it to
+    // `max_stream_buffer_bytes`. The idle grace timer for an ambiguous prefix
+    // is steady-clock state that cannot survive a restart; instead of
+    // restoring it, the next input re-frames the buffer and re-arms the timer
+    // through `process()`, and `finalize()` resolves the end of the stream.
+    // Only a restored ambiguous prefix on a stream that never sends another
+    // byte and never closes waits indefinitely; that delays delivery but
+    // loses nothing.
+    serde("netflow_stream_buffer", buffer_);
+    serde("netflow_stream_failed", failed_);
+  }
+
+private:
+  auto with_ambiguous_frame_wakeup(ReadyEvents result,
+                                   std::chrono::steady_clock::time_point now
+                                   = std::chrono::steady_clock::now()) const
+    -> ReadyEvents {
+    if (auto wait_for = ambiguous_frame_.wait_for(now)) {
+      auto wakeup = ReadyEvents{};
+      wakeup.wait_for = *wait_for;
+      result.merge(std::move(wakeup));
+    }
+    return result;
+  }
+
+  auto process_available(bool end_of_input, OpCtx& ctx,
+                         Option<size_t> committed_frame_size = None{})
+    -> ReadyEvents {
+    auto consumed = size_t{0};
+    auto ready = ReadyEvents{};
+    while (consumed < buffer_.size()) {
+      auto remaining = std::span<const std::byte>{buffer_}.subspan(consumed);
+      auto framed = FrameResult{};
+      if (committed_frame_size) {
+        TENZIR_ASSERT(*committed_frame_size <= remaining.size());
+        framed = decoder_.frame(remaining.first(*committed_frame_size), true);
+        committed_frame_size = None{};
+      } else {
+        framed = decoder_.frame(remaining, end_of_input);
+      }
+      if (framed.status == FrameStatus::incomplete) {
+        ambiguous_frame_.reset();
+        break;
+      }
+      if (framed.status == FrameStatus::ambiguous) {
+        TENZIR_ASSERT(framed.size > 0 and framed.size <= buffer_.size());
+        ambiguous_frame_.observe(framed.size);
+        break;
+      }
+      if (framed.status == FrameStatus::error) {
+        ambiguous_frame_.reset();
+        diagnostic::error("failed to frame NetFlow byte stream")
+          .primary(args_.operator_location)
+          .note("{}", framed.message)
+          .note("safe resynchronization is impossible for an unframed byte "
+                "stream")
+          .emit(ctx);
+        failed_ = true;
+        buffer_.clear();
+        return ready;
+      }
+      auto result
+        = decoder_.decode_message(remaining.first(framed.size), None{}, *dh_);
+      if (result.error) {
+        diagnostic::error("failed to decode NetFlow byte stream")
+          .primary(args_.operator_location)
+          .note("{}", result.error->message)
+          .emit(ctx);
+        failed_ = true;
+        buffer_.clear();
+        return ready;
+      }
+      ready.merge(builders_.append(std::move(result.records)));
+      ready.merge(builders_.yield_ready());
+      consumed += framed.size;
+    }
+    if (consumed > 0) {
+      buffer_.erase(buffer_.begin(), buffer_.begin() + consumed);
+    }
+    return ready;
+  }
+
+  ReadNetflowArgs args_;
+  Option<transforming_diagnostic_handler> dh_;
+  Decoder decoder_;
+  EventBuilderSet builders_;
+  EventPusher pusher_;
+  std::vector<std::byte> buffer_;
+  IdleFrameTimer ambiguous_frame_{ambiguous_stream_timeout};
+  bool failed_ = false;
+};
+
+class ReadNetflowMessageEvents final
+  : public Operator<nova::Events, nova::Events> {
+public:
+  explicit ReadNetflowMessageEvents(ReadNetflowArgs args)
+    : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    dh_.emplace(make_dh(ctx.dh(), args_.operator_location));
+    builders_.start(*dh_);
+    co_return;
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto ready = ReadyEvents{};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      auto message = parse_message_event(input.data.get(row));
+      if (not message) {
+        emit_envelope_error(args_, ctx.dh());
+        co_return;
+      }
+      auto result = decoder_.decode_message(message->data, message->peer, *dh_);
+      if (result.error) {
+        if (result.error->kind
+            == netflow::DecodeErrorKind::unsupported_version) {
+          auto warning
+            = diagnostic::warning("unsupported NetFlow message version")
+                .primary(args_.operator_location);
+          if (message->peer) {
+            warning = std::move(warning).note(
+              "peer: {}:{}", message->peer->address, message->peer->port);
+          }
+          std::move(warning).note("{}", result.error->message).emit(ctx);
+        } else {
+          auto warning = diagnostic::warning("malformed NetFlow message")
+                           .primary(args_.operator_location);
+          if (message->peer) {
+            warning = std::move(warning).note(
+              "peer: {}:{}", message->peer->address, message->peer->port);
+          }
+          std::move(warning).note("{}", result.error->message).emit(ctx);
+        }
+        continue;
+      }
+      ready.merge(builders_.append(std::move(result.records)));
+    }
+    ready.merge(builders_.yield_ready());
+    co_await pusher_.push(std::move(ready), push);
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await pusher_.wait();
+    co_return {};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await pusher_.push(builders_.yield_ready(), push);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    decoder_.finish(*dh_);
+    for (auto& events : builders_.finalize()) {
+      co_await push(std::move(events));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    for (auto& events : builders_.finalize()) {
+      co_await push(std::move(events));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    decoder_.snapshot(serde);
+  }
+
+private:
+  ReadNetflowArgs args_;
+  Option<transforming_diagnostic_handler> dh_;
+  Decoder decoder_;
+  EventBuilderSet builders_;
+  EventPusher pusher_;
+};
+
 class Plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -508,7 +1002,8 @@ public:
 
   auto describe() const -> Description override {
     auto description
-      = Describer<ReadNetflowArgs, ReadNetflowStream, ReadNetflowEvents>{};
+      = Describer<ReadNetflowArgs, ReadNetflowStream, ReadNetflowEvents,
+                  ReadNetflowStreamEvents, ReadNetflowMessageEvents>{};
     description.operator_location(&ReadNetflowArgs::operator_location);
     return description.without_optimize();
   }

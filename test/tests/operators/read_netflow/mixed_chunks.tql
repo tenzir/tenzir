@@ -2,6 +2,6 @@ from_file f"{env("TENZIR_INPUTS")}/netflow/mixed.fnf" {
   split_bytes 1
   read_netflow
 }
-measure
-drop timestamp, schema_id
+schema = @name
+summarize events=count(), schema
 sort schema
