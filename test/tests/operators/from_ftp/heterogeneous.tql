@@ -1,0 +1,12 @@
+---
+fixtures:
+  - ftp:
+      download_payload: |
+        {"x":null,"items":[1,"two"]}
+        {"x":{"nested":true}}
+      download_chunk_size: 5
+timeout: 60
+---
+from_ftp env("FTP_DOWNLOAD_URL") {
+  read_ndjson
+}

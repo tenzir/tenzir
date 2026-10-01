@@ -2,6 +2,7 @@
 error: true
 ---
 
+from {}
 to_ftp "ftp://127.0.0.1:21/upload.ndjson" {
   pass
 }

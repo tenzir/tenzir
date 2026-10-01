@@ -1,0 +1,12 @@
+{
+  x: null,
+  items: [
+    1,
+    "two",
+  ],
+}
+{
+  x: {
+    nested: true,
+  },
+}

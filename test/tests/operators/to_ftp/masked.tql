@@ -1,0 +1,16 @@
+---
+fixtures: [ftp]
+assertions:
+  fixtures:
+    ftp:
+      uploaded_equals: |
+        {"x":null,"items":[1,"two"]}
+      upload_count: 1
+timeout: 60
+---
+from {keep: false, x: "discarded"}, {keep: true, x: null, items: [1, "two"]}
+where keep
+drop keep
+to_ftp env("FTP_UPLOAD_URL") {
+  write_ndjson
+}
