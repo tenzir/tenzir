@@ -13,6 +13,7 @@ TenzirRegisterPlugin(
   TARGET zmq
   ENTRYPOINT src/plugin.cpp
   SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+  TEST_SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 

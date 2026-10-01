@@ -1,0 +1,15 @@
+---
+fixtures:
+  - zmq:
+      role: publisher
+      mode: bind
+      payload: 'alerts/{"items":[1,"two",null,{"three":[true,4.5]}]}'
+skip:
+  on: fixture-unavailable
+timeout: 60
+---
+
+from_zmq env("ZMQ_ENDPOINT"), prefix="alerts/" {
+  read_json
+}
+head 1

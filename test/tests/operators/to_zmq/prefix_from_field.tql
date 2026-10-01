@@ -1,0 +1,35 @@
+---
+fixtures:
+  - zmq:
+      role: subscriber
+      mode: bind
+assertions:
+  fixtures:
+    zmq:
+      received_contains: |-
+        alerts/{
+          "channel": "alerts/",
+          "line": "hello-from-to_zmq-prefix"
+        }
+timeout: 60
+---
+
+// Retry until delivery: monitor=true alone does not ensure SUB registration.
+every 10ms {
+  from {
+    channel: "alerts/",
+    line: "hello-from-to_zmq-prefix",
+  }
+  fork {
+    to_zmq env("ZMQ_ENDPOINT"), encoding="json", prefix=channel, monitor=true
+  }
+  where false
+}
+merge {
+  every 10ms {
+    from_file env("ZMQ_FILE") { read_all }
+  }
+  where data.search("alerts/{\n  \"channel\": \"alerts/\",\n  \"line\": \"hello-from-to_zmq-prefix\"\n}")
+}
+head 1
+discard

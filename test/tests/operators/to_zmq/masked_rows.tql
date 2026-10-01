@@ -1,0 +1,34 @@
+---
+fixtures:
+  - zmq:
+      role: subscriber
+      mode: bind
+assertions:
+  fixtures:
+    zmq:
+      received_lines:
+        - 'alerts/{"n":1,"channel":"alerts/","items":[1,"two",null,{"three":[true,4.5]}]}'
+        - 'audit/{"n":2,"channel":"audit/","items":[2,"two",null,{"three":[true,4.5]}]}'
+timeout: 60
+---
+
+// Retry until delivery: the handshake precedes subscription propagation.
+every 10ms {
+  from {n: 0, channel: 42},
+       {n: 1, channel: "alerts/"},
+       {n: 2, channel: "audit/"}
+  where n != 0
+  items = [n, "two", null, {three: [true, 4.5]}]
+  fork {
+    to_zmq env("ZMQ_ENDPOINT"), encoding="ndjson", prefix=channel, monitor=true
+  }
+  where false
+}
+merge {
+  every 10ms {
+    from_file env("ZMQ_FILE") { read_all }
+  }
+  where data.search("alerts/{\"n\":1") and data.search("audit/{\"n\":2")
+}
+head 1
+discard

@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/from_zmq/validation/error_pipeline_not_events.tql:5:28
+  |
+5 | from_zmq "127.0.0.1:31337" {
+  |                            ^
+  |

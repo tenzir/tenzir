@@ -30,11 +30,15 @@ class ZmqOptions:
     payload: str = '{"line":"foo"}'
     subscribe_prefix: str = ""
     send_interval_ms: int = 50
+    # Feed NDJSON over a FIFO until the subscriber observes an outgoing message.
+    input_until_received: bool = False
 
 
 @dataclass(frozen=True)
 class ZmqAssertions:
     received_contains: str | None = None
+    # Exact set of complete captured lines; repeated deliveries are allowed.
+    received_lines: list[str] | None = None
 
 
 @fixture(options=ZmqOptions, assertions=ZmqAssertions)
@@ -50,6 +54,14 @@ def zmq() -> FixtureHandle:
         raise RuntimeError("zmq fixture option `mode` must be one of: bind, connect")
     if opts.send_interval_ms <= 0:
         raise RuntimeError("zmq fixture option `send_interval_ms` must be > 0")
+    if opts.input_until_received and opts.role != "subscriber":
+        raise RuntimeError("zmq fixture input requires a subscriber")
+    input_path = None
+    if opts.input_until_received:
+        input_fd, input_path = tempfile.mkstemp(prefix="zmq-input-", suffix=".fifo")
+        os.close(input_fd)
+        os.unlink(input_path)
+        os.mkfifo(input_path)
     endpoint = f"tcp://{_HOST}:{find_free_port()}"
     ready_fd, ready_path = tempfile.mkstemp(prefix="zmq-ready-", suffix=".flag")
     os.close(ready_fd)
@@ -81,6 +93,8 @@ def zmq() -> FixtureHandle:
         "--subscribe-prefix",
         opts.subscribe_prefix,
     ]
+    if input_path is not None:
+        cmd.extend(["--input-fifo", input_path])
     proc = subprocess.Popen(
         cmd,
         stdout=helper_stdout,
@@ -107,6 +121,8 @@ def zmq() -> FixtureHandle:
         "ZMQ_ENDPOINT": endpoint,
         "ZMQ_FILE": capture_path,
     }
+    if input_path is not None:
+        env["ZMQ_INPUT_FIFO"] = input_path
 
     def _helper_diagnostics() -> str:
         status = "is still running"
@@ -123,23 +139,35 @@ def zmq() -> FixtureHandle:
     ) -> None:
         if isinstance(assertions, dict):
             assertions = ZmqAssertions(**assertions)
-        if assertions.received_contains is None:
+        if assertions.received_contains is None and assertions.received_lines is None:
             return
+        expected_lines = (
+            set(assertions.received_lines)
+            if assertions.received_lines is not None
+            else None
+        )
         deadline = time.monotonic() + _ASSERTION_WAIT_TIMEOUT
         while True:
             received = Path(capture_path).read_text(errors="replace")
-            if assertions.received_contains in received:
-                return
-            if proc.poll() is not None:
+            # Ignore an incomplete trailing line while the helper is appending.
+            lines = set(received.rpartition("\n")[0].splitlines())
+            if expected_lines is not None and lines - expected_lines:
                 raise AssertionError(
-                    f"{test.name}: expected fixture capture to contain "
-                    f"{assertions.received_contains!r}, got {received!r}; "
-                    f"{_helper_diagnostics()}"
+                    f"{test.name}: unexpected fixture capture lines "
+                    f"{sorted(lines - expected_lines)!r}; {_helper_diagnostics()}"
                 )
-            if time.monotonic() >= deadline:
+            contains_matches = (
+                assertions.received_contains is None
+                or assertions.received_contains in received
+            )
+            lines_match = expected_lines is None or lines == expected_lines
+            if contains_matches and lines_match:
+                return
+            if proc.poll() is not None or time.monotonic() >= deadline:
                 raise AssertionError(
                     f"{test.name}: expected fixture capture to contain "
-                    f"{assertions.received_contains!r}, got {received!r}; "
+                    f"{assertions.received_contains!r} with lines "
+                    f"{assertions.received_lines!r}, got {received!r}; "
                     f"{_helper_diagnostics()}"
                 )
             time.sleep(_ASSERTION_WAIT_INTERVAL)
@@ -153,8 +181,8 @@ def zmq() -> FixtureHandle:
                 proc.kill()
                 proc.wait(timeout=5)
         helper_stdout.close()
-        for path in (ready_path, capture_path, helper_log_path):
-            if os.path.exists(path):
+        for path in (ready_path, capture_path, helper_log_path, input_path):
+            if path is not None and os.path.exists(path):
                 os.remove(path)
 
     return FixtureHandle(

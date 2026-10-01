@@ -9,6 +9,7 @@
 #include "tenzir/option.hpp"
 #include "zmq/transport.hpp"
 
+#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -16,6 +17,10 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
@@ -27,6 +32,7 @@
 #include <chrono>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 using namespace std::chrono_literals;
@@ -59,6 +65,8 @@ auto parse_encoding(std::string_view encoding) -> Option<Encoding> {
   }
   return None{};
 }
+
+namespace legacy {
 
 auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
                      diagnostic_handler& dh) -> Option<std::string> {
@@ -249,6 +257,176 @@ private:
   MetricsCounter events_write_counter_;
 };
 
+} // namespace legacy
+
+template <transport::ConnectionMode Mode>
+class ZmqSink final : public Operator<nova::Events, void> {
+public:
+  explicit ZmqSink(SinkArgs args)
+    : args_{std::move(args)}, encoding_{*parse_encoding(args_.encoding.inner)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (ctx.checkpoint_settings()) {
+      diagnostic::error("ZeroMQ sinks do not support checkpointing")
+        .primary(args_.endpoint.source)
+        .emit(ctx);
+      co_return;
+    }
+    auto label = Mode == transport::ConnectionMode::connect
+                   ? MetricsLabel{"operator", "to_zmq"}
+                   : MetricsLabel{"operator", "serve_zmq"};
+    bytes_write_counter_
+      = ctx.make_counter(label, MetricsDirection::write,
+                         MetricsVisibility::external_, MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(label, MetricsDirection::write,
+                         MetricsVisibility::external_, MetricsUnit::events);
+    if (args_.prefix) {
+      auto evaluator = co_await nova::Evaluator::make(*args_.prefix, ctx);
+      if (not evaluator) {
+        co_return;
+      }
+      prefix_.emplace(std::move(*evaluator));
+    }
+    auto opened = co_await with_socket(
+      [endpoint = transport::normalize_endpoint(args_.endpoint.inner),
+       monitor
+       = args_.monitor](transport::Socket& socket) -> caf::expected<void> {
+        if (monitor) {
+          TRY(socket.enable_peer_monitoring());
+        }
+        return socket.open(Mode, endpoint);
+      });
+    if (not opened) {
+      diagnostic::error("failed to open ZeroMQ socket")
+        .primary(args_.endpoint.source)
+        .note("{}", render(opened.error()))
+        .emit(ctx);
+      co_return;
+    }
+    ready_ = true;
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (not ready_) {
+      co_return;
+    }
+    auto rows = input.mask;
+    auto prefixes = Option<nova::MaskedArray<nova::Array<nova::String>>>{};
+    if (prefix_) {
+      prefixes = prefix_->eval(input, nova::EvalCtx{ctx.dh()})
+                   .get_alternative<nova::String>();
+      auto strings = prefixes ? input.mask & prefixes->present
+                              : nova::storage::BitMap{input.length(), false};
+      if (input.mask.and_not(strings).any()) {
+        diagnostic::warning("expected `string` for ZeroMQ prefix")
+          .primary(args_.prefix->get_location())
+          .emit(ctx);
+      }
+      rows = std::move(strings);
+    }
+    auto printer = nova::json_printer{json_printer_options{
+      .style = no_style(),
+      .oneline = encoding_ == Encoding::ndjson,
+    }};
+    for (auto row : nova::storage::true_bits(rows)) {
+      printer.print(input.data.get(row));
+      auto payload = chunk::copy(printer.bytes());
+      if (prefixes) {
+        auto framed = transport::prepend_prefix(std::move(payload),
+                                                *prefixes->data.get(row));
+        if (not framed) {
+          diagnostic::error("failed to prefix ZeroMQ message")
+            .primary(args_.prefix->get_location())
+            .note("{}", render(framed.error()))
+            .emit(ctx);
+          co_return;
+        }
+        payload = std::move(*framed);
+      }
+      if (not co_await send(payload, ctx)) {
+        co_return;
+      }
+      bytes_write_counter_.add(payload->size());
+      events_write_counter_.add(1);
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return ready_ ? OperatorState::normal : OperatorState::done;
+  }
+
+private:
+  template <class F>
+  auto with_socket(F f) -> Task<std::invoke_result_t<F, transport::Socket&>> {
+    // libzmq permits socket migration with synchronized ownership handoffs.
+    // The pool queue publishes the socket to the worker, and the promise/future
+    // publishes it back. Await each call before issuing another; the worker
+    // retains the live handles if the coroutine is cancelled.
+    auto result = co_await spawn_blocking(
+      [socket = std::move(socket_), f = std::move(f)]() mutable {
+        auto value = f(socket);
+        return std::pair{std::move(socket), std::move(value)};
+      });
+    socket_ = std::move(result.first);
+    co_return std::move(result.second);
+  }
+
+  auto send(chunk_ptr payload, OpCtx& ctx) -> Task<bool> {
+    if (args_.monitor) {
+      auto deadline = std::chrono::steady_clock::now() + monitor_wait_timeout;
+      while (true) {
+        auto peers = co_await with_socket([](transport::Socket& socket) {
+          socket.poll_monitor(0ms);
+          if (socket.num_peers() == 0) {
+            socket.poll_monitor(monitor_wait_poll_interval);
+          }
+          return socket.num_peers();
+        });
+        if (peers != 0) {
+          break;
+        }
+        if (std::chrono::steady_clock::now() >= deadline) {
+          diagnostic::error("timed out waiting for a ZeroMQ peer")
+            .primary(args_.endpoint.source)
+            .note("`monitor=true` requires a connected peer before sending")
+            .emit(ctx);
+          co_return false;
+        }
+      }
+    }
+    auto deadline = std::chrono::steady_clock::now() + 250ms;
+    auto err = caf::error{};
+    do {
+      err = co_await with_socket([payload](transport::Socket& socket) {
+        socket.poll_monitor(0ms);
+        return socket.send(payload, 0ms);
+      });
+      if (not err) {
+        co_return true;
+      }
+      if (err != ec::timeout) {
+        break;
+      }
+      co_await sleep_for(10ms);
+    } while (std::chrono::steady_clock::now() < deadline);
+    diagnostic::error("failed to send ZeroMQ message")
+      .primary(args_.endpoint.source)
+      .note("{}", render(err))
+      .emit(ctx);
+    co_return false;
+  }
+
+  SinkArgs args_;
+  Encoding encoding_;
+  Option<nova::Evaluator> prefix_;
+  transport::Socket socket_{transport::SocketRole::publisher};
+  bool ready_ = false;
+  MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
+};
+
 template <transport::ConnectionMode Mode>
 class ZmqSinkPlugin : public virtual OperatorPlugin {
 public:
@@ -260,7 +438,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SinkArgs, ZmqSink<Mode>>{};
+    auto d = Describer<SinkArgs, legacy::ZmqSink<Mode>, ZmqSink<Mode>>{};
     auto endpoint_arg = d.positional("endpoint", &SinkArgs::endpoint);
     auto encoding_arg = d.named("encoding", &SinkArgs::encoding);
     auto prefix_arg = d.named("prefix", &SinkArgs::prefix, "string");

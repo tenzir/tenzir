@@ -1,0 +1,6 @@
+warning: expected `string` for ZeroMQ prefix
+  --> tests/operators/serve_zmq/invalid_prefix.tql:10:58
+   |
+10 | serve_zmq env("ZMQ_ENDPOINT"), encoding="ndjson", prefix=channel, monitor=true
+   |                                                          ~~~~~~~
+   |

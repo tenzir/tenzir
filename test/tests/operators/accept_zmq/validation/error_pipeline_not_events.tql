@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+accept_zmq "127.0.0.1:31337" {
+  read_json
+  write_json
+}

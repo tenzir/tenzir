@@ -3,16 +3,19 @@ fixtures:
   - zmq:
       role: subscriber
       mode: connect
+      input_until_received: true
+      payload: '{"line":"hello-from-serve_zmq"}'
 skip:
   on: fixture-unavailable
 assertions:
   fixtures:
     zmq:
-      received_contains: '"line":"hello-from-serve_zmq"'
+      received_contains: '{"line":"hello-from-serve_zmq"}'
 timeout: 60
 ---
 
-from {
-  line: "hello-from-serve_zmq",
-}
+// Keep one bound publisher alive until the fixture observes delivery and closes
+// the input. A monitor handshake alone does not ensure SUB readiness.
+shell "cat \"$ZMQ_INPUT_FIFO\""
+read_ndjson
 serve_zmq env("ZMQ_ENDPOINT"), encoding="ndjson", monitor=true

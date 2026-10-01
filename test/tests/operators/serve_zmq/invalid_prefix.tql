@@ -1,0 +1,10 @@
+---
+fixtures:
+  - zmq:
+      role: subscriber
+      mode: connect
+timeout: 60
+---
+
+from {channel: null}, {channel: 42}
+serve_zmq env("ZMQ_ENDPOINT"), encoding="ndjson", prefix=channel, monitor=true

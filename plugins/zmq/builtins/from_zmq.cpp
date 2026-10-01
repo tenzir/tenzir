@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "zmq/source_message.hpp"
 #include "zmq/transport.hpp"
 
 #include <tenzir/async.hpp>
@@ -16,6 +17,9 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/const_eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/operator/stream_source_spawner.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
@@ -61,13 +65,10 @@ struct SourceArgs {
   located<ir::pipeline> parser;
 };
 
-struct ReceiveError {
-  std::string message;
-};
-
-using SourceMessage = variant<ReceiveError, chunk_ptr>;
 using MessageSender = Sender<SourceMessage>;
 using MessageReceiver = Receiver<SourceMessage>;
+
+namespace legacy {
 
 struct Runtime {
   explicit Runtime(transport::Socket socket) : socket{std::move(socket)} {
@@ -291,6 +292,176 @@ private:
   MetricsCounter events_read_counter_;
 };
 
+} // namespace legacy
+
+template <transport::ConnectionMode Mode>
+class ZmqSource final : public Operator<void, nova::Events> {
+public:
+  explicit ZmqSource(SourceArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (ctx.checkpoint_settings()) {
+      diagnostic::error("ZeroMQ sources do not support checkpointing")
+        .primary(args_.endpoint.source)
+        .emit(ctx);
+      co_return;
+    }
+    auto label = Mode == transport::ConnectionMode::connect
+                   ? MetricsLabel{"operator", "from_zmq"}
+                   : MetricsLabel{"operator", "accept_zmq"};
+    bytes_read_counter_
+      = ctx.make_counter(label, MetricsDirection::read,
+                         MetricsVisibility::external_, MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(label, MetricsDirection::read,
+                         MetricsVisibility::external_, MetricsUnit::events);
+    if (args_.prefix) {
+      auto value = nova::const_eval(*args_.prefix,
+                                    nova::InstantiateCtx{ctx.dh(), ctx.reg()});
+      if (not value) {
+        co_return;
+      }
+      auto* prefix = try_as<nova::String>(*value);
+      if (not prefix) {
+        diagnostic::error("`prefix` must be a constant string")
+          .primary(args_.prefix->get_location())
+          .emit(ctx);
+        co_return;
+      }
+      prefix_ = *prefix;
+    }
+    auto opened = co_await spawn_blocking(
+      [endpoint = transport::normalize_endpoint(args_.endpoint.inner),
+       prefix = prefix_]() -> caf::expected<transport::Socket> {
+        auto socket = transport::Socket{transport::SocketRole::subscriber};
+        TRY(socket.set_subscription_prefix(prefix));
+        TRY(socket.open(Mode, endpoint));
+        return socket;
+      });
+    if (not opened) {
+      diagnostic::error("failed to open ZeroMQ socket")
+        .primary(args_.endpoint.source)
+        .note("{}", render(opened.error()))
+        .emit(ctx);
+      co_return;
+    }
+    auto [sender, receiver] = channel<SourceMessage>(message_queue_capacity);
+    message_receiver_.emplace(std::move(receiver));
+    read_done_ = false;
+    ctx.spawn_task(
+      read_loop(std::move(*opened), std::move(sender), stop_.getToken()));
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    TENZIR_ASSERT(message_receiver_);
+    co_return co_await message_receiver_->recv();
+  }
+
+  auto process_task(Any result, Push<nova::Events>&, OpCtx& ctx)
+    -> Task<void> override {
+    auto message = std::move(result).as<Option<SourceMessage>>();
+    if (not message) {
+      read_done_ = true;
+      co_return;
+    }
+    co_await co_match(
+      std::move(*message),
+      [&](ReceiveError error) -> Task<void> {
+        diagnostic::error("failed to receive ZeroMQ message")
+          .primary(args_.endpoint.source)
+          .note("{}", error.message)
+          .emit(ctx);
+        co_return;
+      },
+      [&](chunk_ptr payload) -> Task<void> {
+        auto const bytes = payload->size();
+        if (not args_.keep_prefix and not prefix_.empty()) {
+          auto stripped = transport::strip_prefix(std::move(payload), prefix_);
+          if (not stripped) {
+            diagnostic::warning("failed to strip ZeroMQ prefix")
+              .primary(args_.endpoint.source)
+              .note("{}", render(stripped.error()))
+              .emit(ctx);
+            co_return;
+          }
+          payload = std::move(*stripped);
+        }
+        TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
+                        std::numeric_limits<int64_t>::max()));
+        auto key = data{static_cast<int64_t>(next_sub_id_++)};
+        if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(
+              key, args_.parser.inner)) {
+          stop_.requestCancellation();
+          co_return;
+        }
+        auto sub = ctx.get_sub(make_view(key));
+        TENZIR_ASSERT(sub);
+        auto& parser = as<SubHandle<chunk_ptr>>(*sub);
+        auto result = co_await parser.push(std::move(payload));
+        if (result.is_err()) {
+          stop_.requestCancellation();
+        } else {
+          bytes_read_counter_.add(bytes);
+        }
+        co_await parser.close();
+      });
+  }
+
+  auto process_sub(SubKeyView, nova::Events events, Push<nova::Events>& push,
+                   OpCtx&) -> Task<void> override {
+    events_read_counter_.add(events.active_count());
+    co_await push(std::move(events));
+  }
+
+  auto stop(OpCtx&) -> Task<void> override {
+    stop_.requestCancellation();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    // A stop request only quiesces the reader. Complete after its sender closes
+    // and the receiver has drained all payloads accepted before shutdown.
+    return read_done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  static auto read_loop(transport::Socket socket, MessageSender sender,
+                        folly::CancellationToken stop) -> Task<void> {
+    auto token = folly::cancellation_token_merge(
+      co_await folly::coro::co_current_cancellation_token, stop);
+    while (not token.isCancellationRequested()) {
+      // The pool queue and returned future synchronize each ownership handoff,
+      // providing the barriers libzmq requires for socket migration. Keep the
+      // socket inside the worker so cancellation cannot destroy it during poll.
+      auto received
+        = co_await spawn_blocking([socket = std::move(socket)]() mutable {
+            auto message = socket.receive(receive_timeout);
+            return std::pair{std::move(socket), std::move(message)};
+          });
+      socket = std::move(received.first);
+      auto& message = received.second;
+      if (message) {
+        co_await sender.send(SourceMessage{std::move(*message)});
+      } else if (message != ec::timeout) {
+        co_await sender.send(SourceMessage{
+          ReceiveError{render_socket_error(socket, message.error())}});
+        co_return;
+      }
+    }
+  }
+
+  SourceArgs args_;
+  std::string prefix_;
+  mutable Option<MessageReceiver> message_receiver_;
+  folly::CancellationSource stop_;
+  bool read_done_ = true;
+  uint64_t next_sub_id_ = 0;
+  MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
+};
+
 template <transport::ConnectionMode Mode>
 class ZmqSourcePlugin : public virtual OperatorPlugin {
 public:
@@ -302,7 +473,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SourceArgs, ZmqSource<Mode>>{};
+    auto d = Describer<SourceArgs, legacy::ZmqSource<Mode>, ZmqSource<Mode>>{};
     auto endpoint_arg = d.positional("endpoint", &SourceArgs::endpoint);
     auto prefix_arg = d.named("prefix", &SourceArgs::prefix, "string");
     auto keep_prefix_arg = d.named("keep_prefix", &SourceArgs::keep_prefix);
@@ -330,13 +501,16 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (output->template is_not<table_slice>()) {
+      if (output->template is_not<table_slice>()
+          and output->template is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(parser.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
     });
+    d.spawner(make_stream_source_spawner<SourceArgs, legacy::ZmqSource<Mode>,
+                                         ZmqSource<Mode>>(parser_arg));
     return d.without_optimize();
   }
 
