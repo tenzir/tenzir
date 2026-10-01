@@ -392,18 +392,23 @@ if (NOT otlp_proto_headers)
     OUT_VAR otlp_proto_generated_files
     IMPORT_DIRS "${otlp_proto_root}"
     PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
-  if (NOT TARGET gRPC::grpc_cpp_plugin)
-    find_program(grpc_cpp_plugin grpc_cpp_plugin REQUIRED)
-    add_executable(gRPC::grpc_cpp_plugin IMPORTED)
-    set_target_properties(gRPC::grpc_cpp_plugin PROPERTIES IMPORTED_LOCATION
-                                                           "${grpc_cpp_plugin}")
+  if (TENZIR_GRPC_CPP_PLUGIN)
+    set(otlp_grpc_plugin "${TENZIR_GRPC_CPP_PLUGIN}")
+  else ()
+    if (NOT TARGET gRPC::grpc_cpp_plugin)
+      find_program(grpc_cpp_plugin grpc_cpp_plugin REQUIRED)
+      add_executable(gRPC::grpc_cpp_plugin IMPORTED)
+      set_target_properties(gRPC::grpc_cpp_plugin
+                            PROPERTIES IMPORTED_LOCATION "${grpc_cpp_plugin}")
+    endif ()
+    set(otlp_grpc_plugin "$<TARGET_FILE:gRPC::grpc_cpp_plugin>")
   endif ()
   protobuf_generate(
     PROTOS ${otlp_grpc_proto_files}
     OUT_VAR otlp_grpc_generated_files
     LANGUAGE grpc
     GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
-    PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+    PLUGIN "protoc-gen-grpc=${otlp_grpc_plugin}"
     IMPORT_DIRS "${otlp_proto_root}"
     PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
   add_custom_target(otlp-proto-headers DEPENDS ${otlp_proto_generated_files}
