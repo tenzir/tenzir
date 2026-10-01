@@ -19,12 +19,13 @@ import json
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator, cast
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
-from tenzir_test import fixture
+from tenzir_test import FixtureHandle, fixture
 
 from ._utils import find_free_port
 
@@ -76,6 +77,11 @@ class _GraphServer(ThreadingHTTPServer):
         super().__init__(*args, **kwargs)
         self.lock = threading.Lock()
         self.requests: dict[str, int] = {}
+        self.request_log: list[str] = []
+
+    def log_request(self, target: str) -> None:
+        with self.lock:
+            self.request_log.append(target)
 
     def record_request(self, path: str) -> int:
         with self.lock:
@@ -136,9 +142,113 @@ class _GraphHandler(BaseHTTPRequestHandler):
         if self.headers.get("Authorization") != f"Bearer {_ACCESS_TOKEN}":
             _json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
             return
+        server = cast(_GraphServer, self.server)
+        server.log_request(self.path)
         parts = urlsplit(self.path)
         query = parse_qs(parts.query, keep_blank_values=True)
         base_url = f"http://{_HOST}:{self.server.server_port}"
+        invalid_pages: dict[str, object] = {
+            "invalid-envelope": [],
+            "missing-value": {},
+            "invalid-value": {"value": {}},
+            "invalid-item": {"value": [{"id": "not-emitted"}, None]},
+            "invalid-next-link": {"value": [], "@odata.nextLink": 42},
+            "invalid-delta-link": {"value": [], "@odata.deltaLink": False},
+        }
+        if parts.path.startswith("/v1.0/test/"):
+            scenario = parts.path.removeprefix("/v1.0/test/")
+            if scenario in invalid_pages:
+                _json_response(self, HTTPStatus.OK, invalid_pages[scenario])
+                return
+            raw_pages = {
+                "invalid-json": b'{"value": [',
+                "duplicate-keys": (
+                    b'{"value": [{"id": "first", "id": "ignored", '
+                    b'"nested": {"x": 1, "x": 2}}]}'
+                ),
+                "oversized-integer": b'{"value": [{"x": 18446744073709551616}]}',
+            }
+            if scenario in raw_pages:
+                body = raw_pages[scenario]
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+        if parts.path == "/v1.0/users/mixed":
+            if query.get("cursor") == ["page-2"]:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "value": [
+                            {
+                                "@odata.etag": "omit-me",
+                                "id": "mixed-1",
+                                "value": 42,
+                                "literal.key": "literal",
+                                "boolean_text": "true",
+                                "nested": {
+                                    "@odata.etag": "keep-me",
+                                    "@odata.type": "#microsoft.graph.user",
+                                    "empty": {},
+                                    "list": [],
+                                    "boolean_text": "false",
+                                },
+                                "items": [
+                                    None,
+                                    False,
+                                    -1,
+                                    18446744073709551615,
+                                    1.25,
+                                    "10.0.0.1",
+                                    "10.0.0.0/24",
+                                    "2026-05-13T12:00:00Z",
+                                    "1s",
+                                    "true",
+                                    "false",
+                                    "null",
+                                    "42",
+                                    "1.25",
+                                    True,
+                                    {"value": 42},
+                                    ["nested"],
+                                ],
+                            },
+                            {"id": "mixed-2", "value": "string"},
+                            {"id": "mixed-3", "value": [1, "two"]},
+                            {
+                                "id": "mixed-4",
+                                "value": None,
+                                "@removed": {"reason": "deleted"},
+                            },
+                            {},
+                        ],
+                    },
+                )
+            else:
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    {"value": [], "@odata.nextLink": "?cursor=page-2"},
+                )
+            return
+        if parts.path == "/v1.0/users/empty-delta/delta":
+            step = query.get("step", ["initial"])[0]
+            next_step = "changed" if step == "empty" else "empty"
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {
+                    "@odata.deltaLink": f"?step={next_step}",
+                    "value": (
+                        [{"id": "removed-user", "@removed": {"reason": "deleted"}}]
+                        if step == "changed"
+                        else []
+                    ),
+                },
+            )
+            return
         if parts.path == "/v1.0/users/untrusted-next-link":
             _json_response(
                 self,
@@ -417,28 +527,48 @@ def _plugin_env() -> dict[str, str]:
     return env
 
 
-@fixture(name="microsoft_graph")
-def run() -> Iterator[dict[str, str]]:
+@dataclass(frozen=True)
+class GraphAssertions:
+    requests: list[str] | None = None
+    request_prefix: list[str] | None = None
+
+
+@fixture(name="microsoft_graph", assertions=GraphAssertions)
+def run() -> FixtureHandle:
     token_server = _TokenServer((_HOST, 0), _TokenHandler)
     graph_server = _GraphServer((_HOST, find_free_port()), _GraphHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     graph_thread = threading.Thread(target=graph_server.serve_forever, daemon=True)
     token_thread.start()
     graph_thread.start()
-    try:
-        base_url = f"http://{_HOST}:{graph_server.server_port}"
-        env = {
-            "MS_GRAPH_FIXTURE_BASE_URL_V1": f"{base_url}/v1.0/",
-            "MS_GRAPH_FIXTURE_BASE_URL_BETA": f"{base_url}/beta/",
-            "MS_GRAPH_FIXTURE_AUTHORITY": f"http://{_HOST}:{token_server.server_port}",
-            "MS_GRAPH_FIXTURE_TENANT_ID": _TENANT_ID,
-            "MS_GRAPH_FIXTURE_CLIENT_ID": _CLIENT_ID,
-            "MS_GRAPH_FIXTURE_CLIENT_SECRET": _CLIENT_SECRET,
-        }
-        env.update(_plugin_env())
-        yield env
-    finally:
+    base_url = f"http://{_HOST}:{graph_server.server_port}"
+    env = {
+        "MS_GRAPH_FIXTURE_BASE_URL_V1": f"{base_url}/v1.0/",
+        "MS_GRAPH_FIXTURE_BASE_URL_BETA": f"{base_url}/beta/",
+        "MS_GRAPH_FIXTURE_AUTHORITY": f"http://{_HOST}:{token_server.server_port}",
+        "MS_GRAPH_FIXTURE_TENANT_ID": _TENANT_ID,
+        "MS_GRAPH_FIXTURE_CLIENT_ID": _CLIENT_ID,
+        "MS_GRAPH_FIXTURE_CLIENT_SECRET": _CLIENT_SECRET,
+    }
+    env.update(_plugin_env())
+
+    def assert_test(*, assertions: GraphAssertions | dict[str, Any], **_: Any) -> None:
+        if not isinstance(assertions, GraphAssertions):
+            assert not assertions, assertions
+            return
+        with graph_server.lock:
+            requests = list(graph_server.request_log)
+        if assertions.requests is not None:
+            assert requests == assertions.requests, requests
+        if assertions.request_prefix is not None:
+            assert requests[: len(assertions.request_prefix)] == (
+                assertions.request_prefix
+            ), requests
+
+    def teardown() -> None:
         token_server.shutdown()
         graph_server.shutdown()
         token_thread.join(timeout=2)
         graph_thread.join(timeout=2)
+
+    return FixtureHandle(env=env, teardown=teardown, hooks={"assert_test": assert_test})

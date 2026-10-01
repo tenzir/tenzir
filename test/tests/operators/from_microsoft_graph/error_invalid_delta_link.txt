@@ -1,0 +1,6 @@
+error: expected `@odata.deltaLink` to be a string
+ --> tests/operators/from_microsoft_graph/error_invalid_delta_link.tql:9:1
+  |
+9 | from_microsoft_graph "test/invalid-delta-link",
+  | ^^^^^^^^^^^^^^^^^^^^
+  |

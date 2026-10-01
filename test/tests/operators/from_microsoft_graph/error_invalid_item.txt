@@ -1,0 +1,6 @@
+error: expected OData `value` array to contain objects
+ --> tests/operators/from_microsoft_graph/error_invalid_item.tql:9:1
+  |
+9 | from_microsoft_graph "test/invalid-item",
+  | ^^^^^^^^^^^^^^^^^^^^
+  |

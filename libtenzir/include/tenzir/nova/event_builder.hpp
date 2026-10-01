@@ -74,6 +74,8 @@ public:
     bool raw = false;
     /// Infers numbers in unparsed strings for formats without numeric types.
     bool infer_numbers = false;
+    /// Infers booleans in unparsed strings unless disabled by the format.
+    bool infer_booleans = true;
     /// Field segments of explicit string paths; selectors do not infer them.
     std::vector<std::vector<std::string>> string_fields = {};
     /// Splits keys at this separator into nested records, if not empty.

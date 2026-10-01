@@ -127,7 +127,7 @@ auto in_inference_scope(std::string_view field, value_path const& path)
 /// Writes unparsed input, optionally inferring numbers as well as non-numbers.
 template <class Out>
 auto append_inferred(Out& out, std::string_view value, bool raw,
-                     bool infer_numbers) -> void {
+                     bool infer_numbers, bool infer_booleans) -> void {
   if (raw) {
     out.data(value);
     return;
@@ -148,7 +148,7 @@ auto append_inferred(Out& out, std::string_view value, bool raw,
   }
   auto parsed
     = detail::data_builder::non_number_parser(value, nullptr, value_path{});
-  if (parsed.data) {
+  if (parsed.data and (infer_booleans or not is<bool>(*parsed.data))) {
     append_parsed(out, *parsed.data, type{});
     return;
   }
@@ -302,10 +302,12 @@ public:
   Retyper(bool schema_only, bool infer, diagnostic_handler& dh,
           bool infer_numbers = false, Mode mode = Mode::full,
           std::string_view unparsed_field = {},
-          std::span<std::vector<std::string> const> string_fields = {})
+          std::span<std::vector<std::string> const> string_fields = {},
+          bool infer_booleans = true)
     : schema_only_{schema_only},
       infer_{infer},
       infer_numbers_{infer_numbers or not unparsed_field.empty()},
+      infer_booleans_{infer_booleans},
       dh_{dh},
       mode_{mode},
       unparsed_field_{unparsed_field},
@@ -589,7 +591,8 @@ private:
         if (seed) {
           append_coerced(builder, *view, seed, path, *dh_, schema_only_);
         } else {
-          append_inferred(builder, *view, false, infer_numbers_);
+          append_inferred(builder, *view, false, infer_numbers_,
+                          infer_booleans_);
         }
       } else {
         append_coerced(builder, *view, seed, path, *dh_, schema_only_);
@@ -600,6 +603,7 @@ private:
   bool schema_only_;
   bool infer_;
   bool infer_numbers_;
+  bool infer_booleans_;
   Ref<diagnostic_handler> dh_;
   Mode mode_;
   std::string_view unparsed_field_;
@@ -829,7 +833,8 @@ auto EventBuilder::Field::data_unparsed(std::string_view v) -> void {
     auto const& scope = parent_->settings_.infer_unparsed_under;
     append_inferred(*inner_, v,
                     parent_->raw_ or not in_inference_scope(scope, path_),
-                    parent_->settings_.infer_numbers or not scope.empty());
+                    parent_->settings_.infer_numbers or not scope.empty(),
+                    parent_->settings_.infer_booleans);
     return;
   }
   append_coerced(*inner_, v, seed_, path_, *parent_->dh_,
@@ -932,7 +937,8 @@ auto EventBuilder::List::data_unparsed(std::string_view v) -> void {
     auto const& scope = parent_->settings_.infer_unparsed_under;
     append_inferred(*inner_, v,
                     parent_->raw_ or not in_inference_scope(scope, path_),
-                    parent_->settings_.infer_numbers or not scope.empty());
+                    parent_->settings_.infer_numbers or not scope.empty(),
+                    parent_->settings_.infer_booleans);
     return;
   }
   append_coerced(*inner_, v, seed_, path_.list(), *parent_->dh_,
@@ -1148,7 +1154,8 @@ auto EventBuilder::finish_array(Option<Array<String>>& names) -> Array<Data> {
                            settings_.infer_numbers,
                            Retyper::Mode::merge_structural,
                            settings_.infer_unparsed_under,
-                           settings_.string_fields};
+                           settings_.string_fields,
+                           settings_.infer_booleans};
     array = retype_records(std::move(array), rows, retyper, seed_);
   }
   return array;
@@ -1358,7 +1365,8 @@ auto EventBuilder::finish_selected(Array<Data> array, storage::BitMap rows)
                     settings_.merge_structural ? Retyper::Mode::merge_structural
                                                : Retyper::Mode::full,
                     settings_.infer_unparsed_under,
-                    settings_.string_fields}
+                    settings_.string_fields,
+                    settings_.infer_booleans}
               .value(std::move(array), rows, type{}, value_path{});
       }
       continue;
@@ -1371,7 +1379,8 @@ auto EventBuilder::finish_selected(Array<Data> array, storage::BitMap rows)
                 settings_.merge_structural ? Retyper::Mode::merge_structural
                                            : Retyper::Mode::full,
                 settings_.infer_unparsed_under,
-                settings_.string_fields};
+                settings_.string_fields,
+                settings_.infer_booleans};
     array = retype_records(std::move(array), rows, retyper, *selected);
   }
   return {std::move(array), names.finish()};

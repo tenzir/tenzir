@@ -1,0 +1,6 @@
+{
+  id: "first",
+  nested: {
+    x: 1,
+  },
+}

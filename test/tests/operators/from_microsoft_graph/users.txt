@@ -15,10 +15,10 @@ warning: failed to fetch Azure access token: HTTP code `503`
   },
 }
 {
+  "@odata.type": "#microsoft.graph.user",
   id: "user-2",
   displayName: "Grace Hopper",
   userPrincipalName: "grace@example.com",
-  "@odata.type": "#microsoft.graph.user",
 }
 {
   id: "user-3",

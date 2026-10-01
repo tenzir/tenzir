@@ -1,0 +1,10 @@
+error: expected Microsoft Graph response to be a JSON object
+ --> tests/operators/from_microsoft_graph/error_invalid_envelope.tql:9:1
+  |
+9 | from_microsoft_graph "test/invalid-envelope",
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: context:
+          []
+          ^
+  = note: total buffer size: 2

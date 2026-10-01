@@ -1,0 +1,10 @@
+error: failed to parse Microsoft Graph response as JSON: JSON integer does not fit into 64 bits
+ --> tests/operators/from_microsoft_graph/error_oversized_integer.tql:9:1
+  |
+9 | from_microsoft_graph "test/oversized-integer",
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: context:
+          {"value": [{"x": 18446744073709551616}]}
+                           ^
+  = note: total buffer size: 40

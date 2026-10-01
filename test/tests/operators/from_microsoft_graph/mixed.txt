@@ -1,0 +1,55 @@
+{
+  id: "mixed-1",
+  value: 42,
+  "literal.key": "literal",
+  boolean_text: "true",
+  nested: {
+    "@odata.etag": "keep-me",
+    "@odata.type": "#microsoft.graph.user",
+    empty: {},
+    list: [],
+    boolean_text: "false",
+  },
+  items: [
+    null,
+    false,
+    -1,
+    18446744073709551615,
+    1.25,
+    10.0.0.1,
+    10.0.0.0/24,
+    2026-05-13T12:00:00Z,
+    1s,
+    "true",
+    "false",
+    "null",
+    "42",
+    "1.25",
+    true,
+    {
+      value: 42,
+    },
+    [
+      "nested",
+    ],
+  ],
+}
+{
+  id: "mixed-2",
+  value: "string",
+}
+{
+  id: "mixed-3",
+  value: [
+    1,
+    "two",
+  ],
+}
+{
+  id: "mixed-4",
+  value: null,
+  "@removed": {
+    reason: "deleted",
+  },
+}
+{}

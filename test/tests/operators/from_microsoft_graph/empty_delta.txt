@@ -1,0 +1,6 @@
+{
+  id: "removed-user",
+  "@removed": {
+    reason: "deleted",
+  },
+}

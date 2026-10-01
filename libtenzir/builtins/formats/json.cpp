@@ -15,6 +15,7 @@
 #include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/json_parser.hpp"
 #include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova/type_system.hpp"
 
@@ -544,179 +545,6 @@ namespace nova_json {
 constexpr auto initial_batch_size = size_t{10 * 1024 * 1024};
 constexpr auto max_batch_size = size_t{2ull * 1024 * 1024 * 1024};
 
-/// Returns the current position in the document, for the context of warnings.
-using Locator
-  = detail::function_view<auto()->simdjson::simdjson_result<const char*>>;
-
-auto parse_object(simdjson::ondemand::object object,
-                  nova::EventBuilder::Record row, diagnostic_handler& dh,
-                  std::string_view source = {}, Option<Locator> where = None{})
-  -> bool;
-
-/// Warns about a malformed part of a JSON document. If the document's `source`
-/// is known, the warning shows the bytes around `location`.
-auto warn_malformed(diagnostic_handler& dh, std::string_view source,
-                    simdjson::simdjson_result<const char*> location,
-                    std::string_view message) -> void {
-  auto b = diagnostic::warning("{}", message);
-  if (not source.empty()) {
-    b = with_surrounding_bytes(std::move(b), source, location);
-  }
-  std::move(b).emit(dh);
-}
-
-/// Recursively writes a single simdjson value into an event builder field or
-/// list. Emits warnings on malformed values and falls back to `null`. Returns
-/// whether the value was well-formed. `source`, if given, is the text of the
-/// document for the context of warnings.
-auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh,
-                 std::string_view source = {}) -> bool {
-  auto type = val.type();
-  if (type.error()) {
-    warn_malformed(dh, source, val.current_location(),
-                   "failed to parse a JSON value");
-    out.null();
-    return false;
-  }
-  switch (type.value_unsafe()) {
-    case simdjson::ondemand::json_type::null: {
-      out.null();
-      return true;
-    }
-    case simdjson::ondemand::json_type::boolean: {
-      auto result = val.get_bool();
-      if (result.error()) {
-        warn_malformed(dh, source, val.current_location(),
-                       "failed to parse a JSON boolean");
-        out.null();
-        return false;
-      }
-      out.data(result.value_unsafe());
-      return true;
-    }
-    case simdjson::ondemand::json_type::number: {
-      auto kind = val.get_number_type();
-      if (kind.error()) {
-        warn_malformed(dh, source, val.current_location(),
-                       "failed to parse a JSON number");
-        out.null();
-        return false;
-      }
-      switch (kind.value_unsafe()) {
-        case simdjson::ondemand::number_type::floating_point_number: {
-          out.data(val.get_double().value_unsafe());
-          return true;
-        }
-        case simdjson::ondemand::number_type::signed_integer: {
-          out.data(val.get_int64().value_unsafe());
-          return true;
-        }
-        case simdjson::ondemand::number_type::unsigned_integer: {
-          out.data(val.get_uint64().value_unsafe());
-          return true;
-        }
-        case simdjson::ondemand::number_type::big_integer: {
-          // Does not fit into 64 bits; store the raw token as a string.
-          out.data(std::string_view{val.raw_json_token()});
-          return true;
-        }
-      }
-      TENZIR_UNREACHABLE();
-    }
-    case simdjson::ondemand::json_type::string: {
-      auto str = val.get_string();
-      if (str.error()) {
-        warn_malformed(dh, source, val.current_location(),
-                       "failed to parse a JSON string");
-        out.null();
-        return false;
-      }
-      out.data_unparsed(str.value_unsafe());
-      return true;
-    }
-    case simdjson::ondemand::json_type::array: {
-      auto arr = val.get_array();
-      if (arr.error()) {
-        warn_malformed(dh, source, val.current_location(),
-                       "failed to parse a JSON array");
-        out.null();
-        return false;
-      }
-      auto elements = out.list();
-      auto ok = true;
-      for (auto element : arr.value_unsafe()) {
-        if (element.error()) {
-          warn_malformed(dh, source, element.current_location(),
-                         "failed to parse a JSON array element");
-          elements.null();
-          ok = false;
-          continue;
-        }
-        ok &= parse_value(element.value_unsafe(), elements, dh, source);
-      }
-      return ok;
-    }
-    case simdjson::ondemand::json_type::object: {
-      auto obj = val.get_object();
-      if (obj.error()) {
-        warn_malformed(dh, source, val.current_location(),
-                       "failed to parse a JSON object");
-        out.null();
-        return false;
-      }
-      return parse_object(obj.value_unsafe(), out.record(), dh, source,
-                          Locator{[&] {
-                            return val.current_location();
-                          }});
-    }
-    case simdjson::ondemand::json_type::unknown: {
-      warn_malformed(dh, source, val.current_location(),
-                     "failed to parse a JSON value");
-      out.null();
-      return false;
-    }
-  }
-  TENZIR_UNREACHABLE();
-}
-
-/// Writes the fields of a JSON object into `row`. Returns whether the object
-/// was well-formed.
-auto parse_object(simdjson::ondemand::object object,
-                  nova::EventBuilder::Record row, diagnostic_handler& dh,
-                  std::string_view source, Option<Locator> where) -> bool {
-  auto location = [&]() -> simdjson::simdjson_result<const char*> {
-    if (where) {
-      return (*where)();
-    }
-    return simdjson::UNINITIALIZED;
-  };
-  auto ok = true;
-  for (auto pair : object) {
-    if (pair.error()) {
-      warn_malformed(dh, source, location(),
-                     "failed to parse a JSON key-value pair");
-      ok = false;
-      continue;
-    }
-    auto key = pair.unescaped_key();
-    if (key.error()) {
-      warn_malformed(dh, source, location(), "failed to parse a JSON key");
-      ok = false;
-      continue;
-    }
-    auto value = pair.value();
-    if (value.error()) {
-      warn_malformed(dh, source, value.current_location(),
-                     "failed to parse a JSON object value");
-      ok = false;
-      continue;
-    }
-    ok &= parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh,
-                      source);
-  }
-  return ok;
-}
-
 /// Points diagnostics without a location to the operator.
 auto make_operator_dh(location operator_location, diagnostic_handler& dh)
   -> std::unique_ptr<transforming_diagnostic_handler> {
@@ -729,146 +557,22 @@ auto make_operator_dh(location operator_location, diagnostic_handler& dh)
     });
 }
 
-/// Parses one JSON document per line (or frame) into events, and cuts them
-/// into batches of the desired size.
-class LineParser {
-public:
-  /// Fails if the builder settings are invalid.
-  static auto make(ReadJsonArgs const& args, diagnostic_handler& dh)
-    -> Option<LineParser> {
-    auto parser_dh = make_operator_dh(args.operator_location, dh);
-    auto builder = nova::EventBuilder::make(
-      nova::event_builder_settings(args.msb_options), *parser_dh);
-    if (not builder) {
-      return None{};
-    }
-    return LineParser{std::move(parser_dh), std::move(builder).unwrap(),
-                      args.msb_options.settings.desired_batch_size};
-  }
-
-  auto parse(simdjson::padded_string_view line) -> void {
-    ++lines_;
-    auto& dh = *dh_;
-    auto source = std::string_view{line.data(), line.size()};
-    auto stream = simdjson::ondemand::document_stream{};
-    if (auto err = parser_
-                     .iterate_many(line.data(), line.size(),
-                                   std::max(line.size(), initial_batch_size))
-                     .get(stream)) {
-      diagnostic::warning("{}", error_message(err)).emit(dh);
-      return;
-    }
-    auto objects = size_t{0};
-    auto failed = false;
-    for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
-      if (auto err = doc_it.error()) {
-        with_surrounding_bytes(diagnostic::warning("{}", error_message(err))
-                                 .note("line {}", lines_)
-                                 .note("skipped invalid JSON at index {}",
-                                       doc_it.current_index()),
-                               source, source.data() + doc_it.current_index())
-          .emit(dh);
-        failed = true;
-        break;
-      }
-      auto doc = *doc_it;
-      auto object = doc.get_object();
-      if (auto err = object.error()) {
-        auto loc = doc.current_location();
-        auto message = err == simdjson::INCORRECT_TYPE
-                         ? std::string{"expected a JSON object"}
-                         : std::string{error_message(err)};
-        auto column
-          = loc.error()
-              ? size_t{0}
-              : static_cast<size_t>(loc.value_unsafe() - source.data());
-        with_surrounding_bytes(diagnostic::warning("{}", message)
-                                 .note("line {} column {}", lines_, column)
-                                 .note("skipped invalid JSON"),
-                               source, loc)
-          .emit(dh);
-        failed = true;
-        break;
-      }
-      parse_object(object.value_unsafe(), builder_.event(), dh);
-      ++objects;
-      if (length() >= batch_size_) {
-        flush();
-      }
-    }
-    if (objects == 0 and not failed) {
-      with_surrounding_bytes(diagnostic::warning("line did not contain a "
-                                                 "single valid JSON object")
-                               .note("line {}", lines_)
-                               .note("skipped invalid JSON"),
-                             source, source.data())
-        .emit(dh);
-    } else if (objects > 1) {
-      with_surrounding_bytes(
-        diagnostic::warning("more than one JSON object in line")
-          .note("line {}", lines_)
-          .note("encountered a total of {} objects", objects),
-        source, source.data())
-        .emit(dh);
-    }
-    if (auto truncated = stream.truncated_bytes();
-        truncated > 0 and objects > 0) {
-      with_surrounding_bytes(diagnostic::warning("skipped remaining invalid "
-                                                 "JSON bytes")
-                               .note("line {}", lines_)
-                               .note("{} bytes remained", truncated)
-                               .note("skipped invalid JSON"),
-                             source, source.data() + source.size() - truncated)
-        .emit(dh);
-    }
-  }
-
-  /// Parses `line`, reserving the padding simdjson needs.
-  auto parse(std::string& line) -> void {
-    line.reserve(line.size() + simdjson::SIMDJSON_PADDING);
-    parse(simdjson::padded_string_view{line});
-  }
-
-  /// Returns the number of events not yet cut into a batch.
-  auto length() const -> size_t {
-    return static_cast<size_t>(builder_.length());
-  }
-
-  /// Cuts the pending events into a batch.
-  auto flush() -> void {
-    if (builder_.length() > 0) {
-      ready_.push_back(builder_.finish());
-    }
-  }
-
-  /// Returns the batches cut so far.
-  auto take_ready() -> std::vector<nova::Events> {
-    return std::exchange(ready_, {});
-  }
-
-private:
-  LineParser(std::unique_ptr<transforming_diagnostic_handler> dh,
-             nova::EventBuilder builder, size_t batch_size)
-    : dh_{std::move(dh)},
-      builder_{std::move(builder)},
-      batch_size_{std::max(batch_size, size_t{1})} {
-  }
-
-  /// Pointer stable because `builder_` holds a reference to it.
-  std::unique_ptr<transforming_diagnostic_handler> dh_;
-  nova::EventBuilder builder_;
-  size_t batch_size_;
-  simdjson::ondemand::parser parser_;
-  size_t lines_ = 0;
-  std::vector<nova::Events> ready_;
-};
+auto make_frame_parser(ReadJsonArgs const& args, diagnostic_handler& dh)
+  -> Option<nova::JsonParser> {
+  auto settings = nova::JsonParser::Settings{};
+  settings.builder = nova::event_builder_settings(args.msb_options);
+  settings.batch_size = args.msb_options.settings.desired_batch_size;
+  settings.origin = args.operator_location;
+  return nova::JsonParser::make(std::move(settings), dh);
+}
 
 /// Splits `data` at the delimiters of `mode` and parses every complete frame.
 /// The unterminated rest is appended to `carry`, which also holds the start of
 /// the first frame. In newline mode, `\r\n` counts as one delimiter, even when
 /// split across calls through `ended_on_carriage_return`.
 auto split_frames(split_at mode, std::string_view data, std::string& carry,
-                  bool& ended_on_carriage_return, LineParser& parser) -> void {
+                  bool& ended_on_carriage_return, nova::JsonParser& parser)
+  -> void {
   auto const newline = mode == split_at::newline;
   auto const* begin = data.data();
   auto const* const end = begin + data.size();
@@ -1043,7 +747,7 @@ private:
           diagnostic::error("expected a JSON object").emit(dh);
           continue;
         }
-        nova_json::parse_object(object.value_unsafe(), builder.event(), dh);
+        nova::parse_json_object(object.value_unsafe(), builder.event(), dh);
         if (static_cast<size_t>(builder.length()) >= batch_size) {
           co_await flush(push);
         }
@@ -1077,7 +781,7 @@ private:
           .emit(dh);
         continue;
       }
-      nova_json::parse_object(object.value_unsafe(), builder.event(), dh);
+      nova::parse_json_object(object.value_unsafe(), builder.event(), dh);
       if (static_cast<size_t>(builder.length()) >= batch_size) {
         co_await flush(push);
       }
@@ -1492,15 +1196,15 @@ public:
       co_return;
     }
     if (args_.jobs == 0) {
-      parser_ = nova_json::LineParser::make(args_, ctx.dh());
+      parser_ = nova_json::make_frame_parser(args_, ctx.dh());
       done_ = not parser_;
       co_return;
     }
     // Parallel mode: every worker owns a parser. Create them all up front so
     // that invalid settings fail before any worker starts.
-    auto parsers = std::vector<nova_json::LineParser>{};
+    auto parsers = std::vector<nova::JsonParser>{};
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-      auto parser = nova_json::LineParser::make(args_, ctx.dh());
+      auto parser = nova_json::make_frame_parser(args_, ctx.dh());
       if (not parser) {
         done_ = true;
         co_return;
@@ -1743,7 +1447,7 @@ private:
 
   /// Worker coroutine that parses chunks of complete frames on the CPU
   /// executor. The diagnostic handler of `parser` must be thread-safe.
-  auto read_worker_loop(nova_json::LineParser parser) const -> Task<void> {
+  auto read_worker_loop(nova::JsonParser parser) const -> Task<void> {
     co_await folly::coro::co_reschedule_on_current_executor;
     auto ct = co_await folly::coro::co_current_cancellation_token;
     auto timeout = BatchTimeout{args_.msb_options.settings.timeout};
@@ -1820,7 +1524,7 @@ private:
   bool draining_ = false;
   size_t finished_workers_ = 0;
   // Sequential mode state:
-  Option<nova_json::LineParser> parser_;
+  Option<nova::JsonParser> parser_;
   // Shared state:
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
@@ -2112,7 +1816,7 @@ struct ParseJsonFunction {
       // simdjson rejects trailing content after scalars itself, but does not
       // consume the token of a big integer.
       auto const scalar = document.is_scalar();
-      auto ok = nova_json::parse_value(document, builder.value(), *dh, source);
+      auto ok = nova::parse_json_value(document, builder.value(), *dh, source);
       if (ok and not scalar.error() and not scalar.value_unsafe()
           and not document.at_end()) {
         with_surrounding_bytes(diagnostic::warning("found trailing content "

@@ -1,0 +1,6 @@
+error: expected `@odata.nextLink` to be a string
+ --> tests/operators/from_microsoft_graph/error_invalid_next_link.tql:9:1
+  |
+9 | from_microsoft_graph "test/invalid-next-link",
+  | ^^^^^^^^^^^^^^^^^^^^
+  |

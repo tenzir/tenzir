@@ -1,0 +1,10 @@
+error: failed to parse Microsoft Graph response as JSON: INCOMPLETE_ARRAY_OR_OBJECT: JSON document ended early in the middle of an object or array. This is a fatal and unrecoverable error.
+ --> tests/operators/from_microsoft_graph/error_invalid_json.tql:9:1
+  |
+9 | from_microsoft_graph "test/invalid-json",
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: context:
+          {"value": [
+          ^
+  = note: total buffer size: 11
