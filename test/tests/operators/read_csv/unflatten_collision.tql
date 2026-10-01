@@ -1,0 +1,3 @@
+from {data: "a,a.b\n1,2\n"}
+write_all data
+read_csv unflatten_separator="."

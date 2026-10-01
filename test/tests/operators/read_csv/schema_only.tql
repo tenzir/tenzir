@@ -1,0 +1,4 @@
+from {data: "dest_port,unknown\n80,42\n"}
+write_all data
+read_csv schema="suricata.component.common", schema_only=true, raw=true
+select schema=@name, dest_port, unknown=unknown?

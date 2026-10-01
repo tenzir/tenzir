@@ -4,7 +4,6 @@ warning: duplicate field name `a` in header
 2 | output = input.parse_csv(header=["a","b","a"])
   |                                 ~~~~~~~~~~~~~
   |
-  = note: later values will overwrite earlier ones
 {
   input: "1,2,3",
   output: {

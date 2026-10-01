@@ -1,0 +1,4 @@
+from {data: "event_type,dest_port\nalert,80\ndns,53\n"}
+write_all data
+read_csv selector="event_type:suricata"
+select schema=@name, dest_port
