@@ -1,0 +1,40 @@
+{
+  merged: {
+    x: 1,
+    y: 3,
+    z: 4,
+  },
+  field_first: {
+    x: 1,
+    y: 2,
+  },
+  field_last: {
+    x: 0,
+    y: 2,
+  },
+  with_null: {
+    y: 2,
+    z: 4,
+    x: 1,
+  },
+}
+{
+  merged: {
+    y: 3,
+    x: 6,
+    z: 4,
+  },
+  field_first: {
+    x: 6,
+    y: 5,
+  },
+  field_last: {
+    y: 5,
+    x: 0,
+  },
+  with_null: {
+    y: 5,
+    z: 4,
+    x: 6,
+  },
+}

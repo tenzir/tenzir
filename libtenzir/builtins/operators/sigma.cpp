@@ -3954,8 +3954,11 @@ auto prepare_group(nova::Events const& input, std::shared_ptr<NovaPlan> planned,
                  nova::Array<nova::Bool>{std::move(guards[index])});
     }
   }
-  auto evaluation = nova::Events{input.data.with_fields(std::move(columns)),
-                                 rows, input.meta};
+  auto evaluation = nova::Events{
+    columns.empty()
+      ? input.data
+      : input.data.with_fields(nova::Array<nova::Record>::from_fields(columns)),
+    rows, input.meta};
   return PreparedGroup{
     .rows = rows,
     .plan = std::move(planned),

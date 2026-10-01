@@ -752,6 +752,12 @@ auto float_const(double v) -> tenzir::ast::expression {
     tenzir::located<tenzir::data>{tenzir::data{v}, tenzir::location::unknown})};
 }
 
+auto data_const(tenzir::data value) -> tenzir::ast::expression {
+  return tenzir::ast::expression{tenzir::ast::constant::make(
+    tenzir::located<tenzir::data>{std::move(value),
+                                  tenzir::location::unknown})};
+}
+
 auto compare_expr(tenzir::ast::expression lhs, tenzir::ast::binary_op op,
                   tenzir::ast::expression rhs) -> tenzir::ast::expression {
   return tenzir::ast::expression{
@@ -802,7 +808,7 @@ auto bool_or_null_rows(const Array<Data>& result, storage::Index length)
 
 TEST("ordering comparisons resolve mixed numeric alternatives per row") {
   // `x < 2` over `x = [1 (int), 3u (uint), 2.5 (float), null]`. The `float`
-  // row is newly supported; the `null` row is rejected with one warning.
+  // row is newly supported; the `null` row is `null` without a warning.
   auto events = make_mixed_number_events();
   auto dh = tenzir::collecting_diagnostic_handler{};
   auto reg = tenzir::registry{};
@@ -810,7 +816,7 @@ TEST("ordering comparisons resolve mixed numeric alternatives per row") {
     = compare_expr(root_field("x"), tenzir::ast::binary_op::lt, int_const(2));
 
   auto result = eval(expr, events, all_rows(events), dh, reg);
-  CHECK_EQUAL(std::move(dh).collect().size(), 1u);
+  CHECK_EQUAL(std::move(dh).collect().size(), 0u);
 
   auto rows = bool_or_null_rows(result, events.length());
   REQUIRE_EQUAL(rows.size(), 4u);
@@ -828,7 +834,7 @@ TEST("comparisons against a float constant accept every numeric row") {
                            float_const(2.5));
 
   auto result = eval(expr, events, all_rows(events), dh, reg);
-  CHECK_EQUAL(std::move(dh).collect().size(), 1u);
+  CHECK_EQUAL(std::move(dh).collect().size(), 0u);
 
   auto rows = bool_or_null_rows(result, events.length());
   REQUIRE_EQUAL(rows.size(), 4u);
@@ -865,61 +871,152 @@ TEST("comparisons are exact across the signedness boundary") {
   CHECK_EQUAL(std::move(dh).collect().size(), 0u);
 }
 
-TEST("ordering comparisons warn on a null operand, equality does not") {
+TEST("comparisons with a null operand follow the documented semantics") {
   auto events = make_int_field_events({1});
   auto reg = tenzir::registry{};
   auto check = [&](tenzir::ast::expression lhs, tenzir::ast::binary_op op,
-                   tenzir::ast::expression rhs, Option<bool> expected,
-                   std::size_t warnings) {
+                   tenzir::ast::expression rhs, Option<bool> expected) {
     auto dh = tenzir::collecting_diagnostic_handler{};
     auto result = eval(compare_expr(std::move(lhs), op, std::move(rhs)), events,
                        all_rows(events), dh, reg);
-    CHECK_EQUAL(std::move(dh).collect().size(), warnings);
+    CHECK_EQUAL(std::move(dh).collect().size(), 0u);
     auto rows = bool_or_null_rows(result, events.length());
     REQUIRE_EQUAL(rows.size(), 1u);
     CHECK_EQUAL(rows[0], expected);
   };
   using enum tenzir::ast::binary_op;
-  check(root_field("x"), lt, null_const(), None{}, 1u);
-  check(root_field("x"), leq, null_const(), None{}, 1u);
-  check(root_field("x"), gt, null_const(), None{}, 1u);
-  check(root_field("x"), geq, null_const(), None{}, 1u);
-  check(null_const(), lt, root_field("x"), None{}, 1u);
-  check(null_const(), gt, null_const(), None{}, 1u);
-  check(null_const(), geq, null_const(), None{}, 1u);
-  check(null_const(), leq, null_const(), None{}, 1u);
-  check(root_field("x"), eq, null_const(), Option{false}, 0u);
-  check(root_field("x"), neq, null_const(), Option{true}, 0u);
-  check(null_const(), eq, null_const(), Option{true}, 0u);
-  check(null_const(), neq, null_const(), Option{false}, 0u);
+  check(root_field("x"), lt, null_const(), None{});
+  check(root_field("x"), leq, null_const(), None{});
+  check(root_field("x"), gt, null_const(), None{});
+  check(root_field("x"), geq, null_const(), None{});
+  check(null_const(), lt, root_field("x"), None{});
+  check(null_const(), gt, null_const(), None{});
+  check(null_const(), lt, null_const(), None{});
+  check(null_const(), geq, null_const(), Option{true});
+  check(null_const(), leq, null_const(), Option{true});
+  check(root_field("x"), eq, null_const(), Option{false});
+  check(root_field("x"), neq, null_const(), Option{true});
+  check(null_const(), eq, null_const(), Option{true});
+  check(null_const(), neq, null_const(), Option{false});
+}
+
+TEST("ordering comparisons order strings, ips, subnets, blobs, and bools") {
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto events = make_int_field_events({1});
+  auto check = [&](tenzir::data lhs, tenzir::ast::binary_op op,
+                   tenzir::data rhs, bool expected) {
+    auto result = eval(compare_expr(data_const(std::move(lhs)), op,
+                                    data_const(std::move(rhs))),
+                       events, all_rows(events), dh, reg);
+    auto values = as_bool_array(result);
+    REQUIRE(values.has_value());
+    CHECK_EQUAL(*values->get(0), expected);
+  };
+  using enum tenzir::ast::binary_op;
+  check(tenzir::data{std::string{"a"}}, lt, tenzir::data{std::string{"b"}},
+        true);
+  check(tenzir::data{std::string{"b"}}, leq, tenzir::data{std::string{"a"}},
+        false);
+  check(tenzir::data{tenzir::ip::v4(0x01020304u)}, lt,
+        tenzir::data{tenzir::ip::v4(0x01020305u)}, true);
+  check(tenzir::data{tenzir::subnet{tenzir::ip::v4(0x0a000000u), 104}}, geq,
+        tenzir::data{tenzir::subnet{tenzir::ip::v4(0x0a000000u), 104}}, true);
+  check(tenzir::data{tenzir::blob{std::byte{1}}}, gt,
+        tenzir::data{tenzir::blob{std::byte{0}}}, true);
+  check(tenzir::data{false}, lt, tenzir::data{true}, true);
+  CHECK(std::move(dh).collect().empty());
 }
 
 TEST("ordering comparisons still reject types that have no order") {
-  auto builder = ArrayBuilder<Record>{};
-  builder.record().field("x").data(std::string_view{"a"});
-  auto events = make_events(builder.finish());
+  auto events = make_int_field_events({1});
   auto reg = tenzir::registry{};
-  auto rhs = [] {
-    return tenzir::ast::expression{tenzir::ast::constant::make(
-      tenzir::located<tenzir::data>{tenzir::data{std::string{"b"}},
-                                    tenzir::location::unknown})};
+  auto list = [] {
+    return tenzir::ast::expression{
+      tenzir::ast::list{tenzir::location::unknown,
+                        {tenzir::ast::list::item{int_const(1)}},
+                        tenzir::location::unknown}};
   };
 
   auto eq_dh = tenzir::collecting_diagnostic_handler{};
   auto eq_result
-    = eval(compare_expr(root_field("x"), tenzir::ast::binary_op::eq, rhs()),
-           events, all_rows(events), eq_dh, reg);
+    = eval(compare_expr(list(), tenzir::ast::binary_op::eq, list()), events,
+           all_rows(events), eq_dh, reg);
   CHECK_EQUAL(std::move(eq_dh).collect().size(), 0u);
   auto eq_values = as_bool_array(eq_result);
   REQUIRE(eq_values.has_value());
-  CHECK_EQUAL(*eq_values->get(0), false);
+  CHECK_EQUAL(*eq_values->get(0), true);
 
   auto lt_dh = tenzir::collecting_diagnostic_handler{};
   auto lt_result
-    = eval(compare_expr(root_field("x"), tenzir::ast::binary_op::lt, rhs()),
-           events, all_rows(events), lt_dh, reg);
+    = eval(compare_expr(list(), tenzir::ast::binary_op::lt, list()), events,
+           all_rows(events), lt_dh, reg);
   CHECK_EQUAL(std::move(lt_dh).collect().size(), 1u);
   CHECK(is_null_array(lt_result));
+}
+
+TEST("equality compares lists and records deeply") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto r = builder.record();
+    r.field("a").record().field("x").data(std::int64_t{1});
+    r.field("b").record().field("x").data(std::uint64_t{1});
+    r.field("c").record().field("x").data(std::int64_t{2});
+    auto l = r.field("l").list();
+    l.data(std::int64_t{1});
+    l.list().data(std::int64_t{2});
+    auto m = r.field("m").list();
+    m.data(std::int64_t{1});
+    m.list().data(std::int64_t{2});
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto check = [&](std::string lhs, tenzir::ast::binary_op op, std::string rhs,
+                   bool expected) {
+    auto result = eval(compare_expr(root_field(lhs), op, root_field(rhs)),
+                       events, all_rows(events), dh, reg);
+    auto values = as_bool_array(result);
+    REQUIRE(values.has_value());
+    CHECK_EQUAL(*values->get(0), expected);
+  };
+  using enum tenzir::ast::binary_op;
+  check("a", eq, "b", true);
+  check("a", neq, "b", false);
+  check("a", eq, "c", false);
+  check("l", eq, "m", true);
+  check("l", neq, "m", false);
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("binary in kernel matches nested list and record elements") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto r = builder.record();
+    r.field("needle").record().field("x").data(std::int64_t{1});
+    r.field("inner").list().data(std::int64_t{2});
+    auto haystack = r.field("haystack").list();
+    haystack.data(std::int64_t{0});
+    haystack.record().field("x").data(std::int64_t{1});
+    haystack.list().data(std::int64_t{2});
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto check = [&](tenzir::ast::expression lhs, bool expected) {
+    auto result = eval(compare_expr(std::move(lhs), tenzir::ast::binary_op::in,
+                                    root_field("haystack")),
+                       events, all_rows(events), dh, reg);
+    auto values = as_bool_array(result);
+    REQUIRE(values.has_value());
+    CHECK_EQUAL(*values->get(0), expected);
+  };
+  check(root_field("needle"), true);
+  check(root_field("inner"), true);
+  check(int_const(0), true);
+  check(int_const(1), false);
+  check(empty_record(), false);
+  CHECK(std::move(dh).collect().empty());
 }
 
 TEST("binary in kernel matches list elements across numeric types") {
@@ -1270,6 +1367,197 @@ TEST("constant list indices handle unsigned and signed extremes") {
                        all_rows(events), dh, reg);
     CHECK_EQUAL(materialize_legacy(result.get(0)), tenzir::data{});
     CHECK_EQUAL(materialize_legacy(result.get(1)), tenzir::data{});
+  }
+  CHECK(std::move(dh).collect().empty());
+}
+
+namespace {
+
+auto arith_expr(tenzir::ast::expression lhs, tenzir::ast::binary_op op,
+                tenzir::ast::expression rhs) -> tenzir::ast::expression {
+  return tenzir::ast::expression{
+    tenzir::ast::binary_expr{std::move(lhs), op, std::move(rhs)}};
+}
+
+auto neg_expr(tenzir::ast::expression operand) -> tenzir::ast::expression {
+  return tenzir::ast::expression{tenzir::ast::unary_expr{
+    tenzir::located<tenzir::ast::unary_op>{tenzir::ast::unary_op::neg,
+                                           tenzir::location::unknown},
+    std::move(operand)}};
+}
+
+} // namespace
+
+TEST("arithmetic with a null operand is null without a diagnostic") {
+  auto events = make_int_field_events({1});
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto const one_second
+    = tenzir::data{tenzir::duration{std::chrono::seconds{1}}};
+  using enum tenzir::ast::binary_op;
+  auto exprs = std::vector<tenzir::ast::expression>{
+    arith_expr(null_const(), mul, data_const(one_second)),
+    arith_expr(null_const(), add, string_const("a")),
+    arith_expr(null_const(), sub, int_const(1)),
+    arith_expr(root_field("x"), div, null_const()),
+    arith_expr(data_const(one_second), add, null_const()),
+    neg_expr(null_const()),
+  };
+  for (auto& expr : exprs) {
+    auto result = eval(std::move(expr), events, all_rows(events), dh, reg);
+    REQUIRE_EQUAL(result.length(), 1);
+    CHECK_EQUAL(materialize_legacy(result.get(0)), tenzir::data{});
+  }
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("arithmetic still warns on invalid non-null operands") {
+  auto events = make_int_field_events({1});
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto result = eval(arith_expr(string_const("a"), tenzir::ast::binary_op::mul,
+                                data_const(tenzir::data{
+                                  tenzir::duration{std::chrono::seconds{1}}})),
+                     events, all_rows(events), dh, reg);
+  CHECK(is_null_array(result));
+  CHECK_EQUAL(std::move(dh).collect().size(), 1u);
+}
+
+TEST("arithmetic nulls only the null rows of a union under a narrower mask") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").data(std::int64_t{1});
+  builder.record().field("x").null();
+  builder.record().field("x").data(std::int64_t{3});
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto result = eval(arith_expr(root_field("x"), tenzir::ast::binary_op::add,
+                                int_const(1)),
+                     events, bitmap_of({true, true, false}), dh, reg);
+  REQUIRE_EQUAL(result.length(), 3);
+  CHECK_EQUAL(materialize_legacy(result.get(0)),
+              (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(materialize_legacy(result.get(1)), tenzir::data{});
+  CHECK(std::move(dh).collect().empty());
+}
+
+namespace {
+
+auto spread_item(tenzir::ast::expression expr) -> tenzir::ast::record::item {
+  return tenzir::ast::spread{tenzir::location::unknown, std::move(expr)};
+}
+
+auto field_item(std::string name, tenzir::ast::expression expr)
+  -> tenzir::ast::record::item {
+  return tenzir::ast::record::field{
+    tenzir::ast::identifier{std::move(name), tenzir::location::unknown},
+    std::move(expr)};
+}
+
+auto record_expr(std::vector<tenzir::ast::record::item> items)
+  -> tenzir::ast::expression {
+  return tenzir::ast::expression{tenzir::ast::record{
+    tenzir::location::unknown, std::move(items), tenzir::location::unknown}};
+}
+
+auto int_record(std::vector<std::pair<std::string, std::int64_t>> fields)
+  -> tenzir::data {
+  auto result = tenzir::record{};
+  for (auto& [name, value] : fields) {
+    result.emplace(std::move(name), value);
+  }
+  return tenzir::data{std::move(result)};
+}
+
+} // namespace
+
+TEST("record literals apply several spreads and fields in order") {
+  // Row 0 has `a = {x: 1, y: 2}`, row 1 has `a = {y: 3, x: 4}`; both rows have
+  // `b = {y: 5, z: 6}`.
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto r = builder.record();
+    auto a = r.field("a").record();
+    a.field("x").data(std::int64_t{1});
+    a.field("y").data(std::int64_t{2});
+    auto b = r.field("b").record();
+    b.field("y").data(std::int64_t{5});
+    b.field("z").data(std::int64_t{6});
+  }
+  {
+    auto r = builder.record();
+    auto a = r.field("a").record();
+    a.field("y").data(std::int64_t{3});
+    a.field("x").data(std::int64_t{4});
+    auto b = r.field("b").record();
+    b.field("y").data(std::int64_t{5});
+    b.field("z").data(std::int64_t{6});
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto check = [&](std::vector<tenzir::ast::record::item> items,
+                   tenzir::data row0, tenzir::data row1) {
+    auto result
+      = eval(record_expr(std::move(items)), events, all_rows(events), dh, reg);
+    REQUIRE(result.try_as<Record>().is_some());
+    CHECK_EQUAL(materialize_legacy(result.get(0)), row0);
+    CHECK_EQUAL(materialize_legacy(result.get(1)), row1);
+  };
+  // A later spread overwrites a field in place and appends new fields in the
+  // row's own order.
+  {
+    auto items = std::vector<tenzir::ast::record::item>{};
+    items.push_back(spread_item(root_field("a")));
+    items.push_back(spread_item(root_field("b")));
+    check(std::move(items), int_record({{"x", 1}, {"y", 5}, {"z", 6}}),
+          int_record({{"y", 5}, {"x", 4}, {"z", 6}}));
+  }
+  // A spread overwrites an earlier field, and a later field overwrites it.
+  {
+    auto items = std::vector<tenzir::ast::record::item>{};
+    items.push_back(field_item("x", int_const(0)));
+    items.push_back(spread_item(root_field("a")));
+    items.push_back(field_item("y", int_const(7)));
+    check(std::move(items), int_record({{"x", 1}, {"y", 7}}),
+          int_record({{"x", 4}, {"y", 7}}));
+  }
+  // Spreading `null` among other spreads contributes nothing.
+  {
+    auto items = std::vector<tenzir::ast::record::item>{};
+    items.push_back(spread_item(root_field("b")));
+    items.push_back(spread_item(null_const()));
+    items.push_back(spread_item(root_field("a")));
+    check(std::move(items), int_record({{"y", 2}, {"z", 6}, {"x", 1}}),
+          int_record({{"y", 3}, {"z", 6}, {"x", 4}}));
+  }
+  CHECK(std::move(dh).collect().empty());
+}
+
+TEST("record and list constants broadcast one constant value") {
+  auto events = make_int_field_events({1, 2, 3});
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto const record = tenzir::data{tenzir::record{
+    {"a", std::int64_t{1}},
+    {"b", tenzir::list{std::int64_t{2}, tenzir::record{{"c", true}}}},
+  }};
+  auto const list = tenzir::data{
+    tenzir::list{std::string{"x"}, tenzir::record{{"y", 1.5}}, caf::none}};
+
+  auto record_result
+    = eval(data_const(record), events, all_rows(events), dh, reg);
+  auto records = record_result.try_as<Record>();
+  REQUIRE(records.is_some());
+  CHECK((
+    is<storage::ConstantStorage<Record, RowView<Record>>>(records->storage())));
+  auto list_result = eval(data_const(list), events, all_rows(events), dh, reg);
+  auto lists = list_result.try_as<List>();
+  REQUIRE(lists.is_some());
+  CHECK((is<storage::ConstantStorage<List, RowView<List>>>(lists->storage())));
+  for (auto row = storage::Index{0}; row < 3; ++row) {
+    CHECK_EQUAL(materialize_legacy(record_result.get(row)), record);
+    CHECK_EQUAL(materialize_legacy(list_result.get(row)), list);
   }
   CHECK(std::move(dh).collect().empty());
 }

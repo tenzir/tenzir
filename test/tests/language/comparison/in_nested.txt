@@ -1,0 +1,6 @@
+{
+  record_found: true,
+  record_missing: false,
+  list_found: true,
+  scalar_skips_nested: false,
+}

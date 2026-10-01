@@ -1,0 +1,9 @@
+warning: binary operator `<` does not accept the argument type combination `(list, list)`
+ --> tests/language/comparison/unordered.tql:2:10
+  |
+2 | from {x: [1] < [2]}
+  |          ~~~~~~~~~
+  |
+{
+  x: null,
+}

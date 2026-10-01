@@ -1,0 +1,9 @@
+// Record literals apply spreads and fields in order. A later item overwrites
+// an earlier field of the same name in place, and new fields are appended.
+from {a: {x: 1, y: 2}, b: {y: 3, z: 4}},
+  {a: {y: 5, x: 6}, b: {y: 3, z: 4}}
+merged = {...a, ...b}
+field_first = {x: 0, ...a}
+field_last = {...a, x: 0}
+with_null = {...b, ...null, ...a}
+drop a, b

@@ -1,0 +1,10 @@
+// Strings, IPs, subnets, blobs, and bools are ordered, in addition to numbers,
+// times, and durations.
+from {
+  strings: "a" < "b",
+  strings_equal: "b" <= "b",
+  ips: 1.2.3.4 < 1.2.3.5,
+  subnets: 10.0.0.0/8 >= 10.0.0.0/8,
+  blobs: b"b" > b"a",
+  bools: false < true,
+}

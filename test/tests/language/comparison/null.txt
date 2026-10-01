@@ -1,0 +1,11 @@
+{
+  x: 1,
+  lt: null,
+  gt: null,
+  both_lt: null,
+  both_geq: true,
+  both_leq: true,
+  eq: false,
+  neq: true,
+  both_eq: true,
+}

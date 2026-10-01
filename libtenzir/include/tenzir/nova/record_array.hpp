@@ -74,11 +74,20 @@ public:
   with_field_overwrite(std::string_view name, MaskedArray value,
                        FieldPosition position
                        = FieldPosition::back) && -> Array;
-  [[nodiscard]] auto
-  with_fields(std::vector<std::pair<std::string_view, MaskedArray>> fields)
-    const& -> Array;
-  [[nodiscard]] auto with_fields(
-    std::vector<std::pair<std::string_view, MaskedArray>> fields) && -> Array;
+  /// Builds a record array from `fields`, which must be non-empty and share
+  /// one length, which becomes the array's length. A row has a field iff that
+  /// field's `present` bit is set, and a row's fields appear in the order of
+  /// `fields`. A repeated name overwrites the earlier value on the rows its
+  /// `present` selects and keeps the earlier position.
+  [[nodiscard]] static auto
+  from_fields(std::span<const std::pair<std::string_view, MaskedArray>> fields)
+    -> Array;
+  /// Sets every field of `other` on the rows where `other` has it, in each
+  /// row's own field order. A field the row already has keeps its position and
+  /// takes the value from `other`; new fields are appended. This is what
+  /// spreading `other` into a record literal does.
+  [[nodiscard]] auto with_fields(Array const& other) const& -> Array;
+  [[nodiscard]] auto with_fields(Array const& other) && -> Array;
   [[nodiscard]] auto without_fields(std::span<const std::string_view> names,
                                     storage::BitMap mask) const& -> Array;
   [[nodiscard]] auto without_fields(std::span<const std::string_view> names,

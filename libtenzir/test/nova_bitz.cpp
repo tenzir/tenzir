@@ -1304,15 +1304,18 @@ TEST("bitz v2 encoder counts hidden children and metadata toward logical "
   for (auto visible : {false, true}) {
     for (auto extra : {0, 1}) {
       // Root, two lists, and three metadata columns account for six slots.
-      auto record = Array<Record>::make_empty(1).with_fields({
-        {"a",
-         {Array<Data>{list_with_child(Array<Null>{storage::NullStorage{half}})},
-          mask({true})}},
-        {"b",
-         {Array<Data>{list_with_child(
-            Array<Null>{storage::NullStorage{half - 6 + extra}})},
-          mask({true})}},
-      });
+      auto const fields = std::array{
+        std::pair<std::string_view, Array<Record>::MaskedArray>{
+          "a",
+          {Array<Data>{list_with_child(Array<Null>{storage::NullStorage{half}})},
+           mask({true})}},
+        std::pair<std::string_view, Array<Record>::MaskedArray>{
+          "b",
+          {Array<Data>{list_with_child(
+             Array<Null>{storage::NullStorage{half - 6 + extra}})},
+           mask({true})}},
+      };
+      auto record = Array<Record>::from_fields(fields);
       auto encoded = bitz::encode(bitz::Batch{Array<Data>{std::move(record)},
                                               mask({visible}),
                                               Events::Meta::make_empty(1)});

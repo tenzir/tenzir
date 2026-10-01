@@ -11,6 +11,7 @@
 #include <memory>
 #include <ranges>
 #include <utility>
+#include <vector>
 
 namespace tenzir::nova {
 
@@ -390,54 +391,120 @@ auto Array<Record>::with_field_overwrite(std::string_view name,
   return std::move(*this);
 }
 
-auto Array<Record>::with_fields(
-  std::vector<std::pair<std::string_view, MaskedArray>> fields) const& -> Array {
-  if (fields.empty()) {
-    return *this;
+namespace {
+
+/// Sets the values of field `name` to `value` on the rows `value.present`
+/// selects, adding the field if it does not exist yet, and returns its index.
+/// Shapes are left alone: the caller decides which rows gain the field.
+auto add_field_value(storage::RecordStorage::Storage& storage,
+                     std::string_view name, Array<Record>::MaskedArray value)
+  -> storage::Index {
+  if (auto const it = storage.names.find(name); it != storage.names.end()) {
+    auto& existing = storage.arrays[it->second];
+    auto merged = with_merged(existing, value);
+    existing.present = existing.present | value.present;
+    existing.data = std::move(merged);
+    return static_cast<storage::Index>(it->second);
   }
-  return as_unique().with_fields(std::move(fields));
+  auto const index = storage.arrays.size();
+  storage.arrays.push_back(std::move(value));
+  auto const [inserted, did_insert]
+    = storage.names.try_emplace(storage::String<>{name}, index);
+  TENZIR_ASSERT(did_insert);
+  storage.names_by_index.push_back(inserted->first);
+  return static_cast<storage::Index>(index);
 }
 
-auto Array<Record>::with_fields(
-  std::vector<std::pair<std::string_view, MaskedArray>> fields) && -> Array {
-  if (fields.empty()) {
+} // namespace
+
+auto Array<Record>::from_fields(
+  std::span<const std::pair<std::string_view, MaskedArray>> fields) -> Array {
+  TENZIR_ASSERT(not fields.empty());
+  auto const length = fields.front().second.data.length();
+  auto result = make_empty(length);
+  auto& storage = result.primary();
+  for (auto const& [name, value] : fields) {
+    TENZIR_ASSERT_EQ(value.data.length(), length);
+    TENZIR_ASSERT_EQ(value.present.length(), length);
+    auto const index = add_field_value(storage, name, value);
+    // Applying the fields one after another, each over the rows its mask
+    // selects, yields the same per-row transition sequence as visiting every
+    // row and applying the fields in order -- but it only touches the
+    // selected rows and memoizes the shape transition per source shape.
+    storage.shape_indices = rewrite_shape_indices(
+      std::move(storage.shape_indices), storage.shape_table, value.present,
+      [index](ShapeTable& table, ShapeTable::ShapeId id) {
+        return table.with_field(id, index);
+      });
+  }
+  storage.refresh_approx_bytes();
+  return result;
+}
+
+auto Array<Record>::with_fields(Array const& other) const& -> Array {
+  if (is<storage::RecordStorage>(other.storage())
+      and other.primary().arrays.empty()) {
+    return *this;
+  }
+  return as_unique().with_fields(other);
+}
+
+auto Array<Record>::with_fields(Array const& other) && -> Array {
+  TENZIR_ASSERT_EQ(length(), other.length());
+  if (not is<storage::RecordStorage>(other.storage())) {
+    return std::move(*this).with_fields(other.to_primary());
+  }
+  auto const& source = other.primary();
+  if (source.arrays.empty()) {
     return std::move(*this);
   }
   if (not is<storage::RecordStorage>(storage())) {
-    return to_primary().with_fields(std::move(fields));
+    return to_primary().with_fields(other);
   }
   *this = std::move(*this).as_unique();
-  auto new_fields
-    = storage::Vector<std::pair<storage::Index, storage::BitMap>>{};
-  for (auto& [name, value] : fields) {
-    const auto it = primary().names.find(name);
-    if (it != primary().names.end()) {
-      new_fields.emplace_back(static_cast<storage::Index>(it->second),
-                              value.present);
-      auto& existing = primary().arrays[it->second];
-      auto merged = with_merged(existing, value);
-      existing.present = existing.present | value.present;
-      existing.data = std::move(merged);
+  // Merge the values once per field, remembering where each field of `other`
+  // ends up. Fields that `other` removed entirely have no name anymore.
+  constexpr auto unused = storage::Index{-1};
+  auto remap = storage::Vector<storage::Index>(source.arrays.size(), unused);
+  for (auto index = std::size_t{0}; index < source.arrays.size(); ++index) {
+    auto const name = source.names_by_index[index];
+    auto const it = source.names.find(name);
+    if (it == source.names.end() or it->second != index) {
       continue;
     }
-    const auto new_index = static_cast<storage::Index>(primary().arrays.size());
-    auto mask = value.present;
-    primary().arrays.push_back(std::move(value));
-    auto const [inserted, did_insert] = primary().names.try_emplace(
-      storage::String<>{name}, primary().arrays.size() - 1);
-    TENZIR_ASSERT(did_insert);
-    primary().names_by_index.push_back(inserted->first);
-    new_fields.emplace_back(new_index, std::move(mask));
+    remap[index] = add_field_value(primary(), name, source.arrays[index]);
   }
-  // Applying the fields one after another, each over the rows its mask
-  // selects, yields the same per-row transition sequence as visiting every
-  // row and applying the fields in order -- but it only touches the selected
-  // rows and memoizes the shape transition per source shape.
-  for (const auto& [field_index, mask] : new_fields) {
+  // Rows of `other` differ in their field order only by shape, so the shapes
+  // are updated shape by shape, each over the rows of that shape.
+  auto shape_rows
+    = std::vector<Option<storage::BitMap::Mutable>>(source.shape_table.size());
+  for (auto row = storage::Index{0}; row < other.length(); ++row) {
+    auto const shape = source.shape_indices.get(row);
+    if (shape <= ShapeTable::empty_shape) {
+      continue;
+    }
+    auto& rows = shape_rows[static_cast<std::size_t>(shape)];
+    if (not rows) {
+      rows.emplace(other.length());
+    }
+    rows->set(row, true);
+  }
+  for (auto shape = std::size_t{0}; shape < shape_rows.size(); ++shape) {
+    if (not shape_rows[shape]) {
+      continue;
+    }
+    auto const fields
+      = source.shape_table.fields(static_cast<ShapeTable::ShapeId>(shape));
     primary().shape_indices = rewrite_shape_indices(
-      std::move(primary().shape_indices), primary().shape_table, mask,
-      [field_index](ShapeTable& table, ShapeTable::ShapeId id) {
-        return table.with_field(id, field_index);
+      std::move(primary().shape_indices), primary().shape_table,
+      std::move(*shape_rows[shape]).finish(),
+      [&](ShapeTable& table, ShapeTable::ShapeId id) {
+        for (auto const field : fields) {
+          auto const target = remap[static_cast<std::size_t>(field)];
+          TENZIR_ASSERT_NEQ(target, unused);
+          id = table.with_field(id, target);
+        }
+        return id;
       });
   }
   primary().refresh_approx_bytes();

@@ -1,0 +1,2 @@
+// Lists have no order, so ordering them warns and yields `null`.
+from {x: [1] < [2]}

@@ -1,0 +1,7 @@
+{
+  lists: true,
+  lists_differ: true,
+  records: true,
+  records_differ: false,
+  mixed_numbers: true,
+}

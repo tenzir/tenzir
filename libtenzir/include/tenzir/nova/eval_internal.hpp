@@ -128,6 +128,7 @@ private:
   auto eval(const ast::record&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::list&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::meta&, EvalFrame frame) -> Array<Data>;
+  auto eval(const ast::pkg_dollar_var&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::resolved_secret&, EvalFrame frame) -> Array<Data>;
 
   auto eval(ast::pipeline_expr const&, EvalFrame) -> Array<Data> {
@@ -143,9 +144,6 @@ private:
     TENZIR_UNREACHABLE();
   }
   auto eval(ast::dollar_var const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::pkg_dollar_var const&, EvalFrame) -> Array<Data> {
     TENZIR_UNREACHABLE();
   }
   auto eval(ast::type_expr const&, EvalFrame) -> Array<Data> {

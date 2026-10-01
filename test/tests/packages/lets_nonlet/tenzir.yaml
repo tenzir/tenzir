@@ -1,3 +1,4 @@
 tenzir:
+  nova: true
   package-dirs:
     - inputs/package-roots/lets-nonlet

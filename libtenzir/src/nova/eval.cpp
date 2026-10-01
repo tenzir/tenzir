@@ -123,6 +123,17 @@ public:
     failed = true;
   }
 
+  /// The value of a package binding is cached during resolution, so a
+  /// missing one is reported here rather than during every evaluation.
+  auto visit(ast::pkg_dollar_var& var) -> void {
+    if (not var.value) {
+      diagnostic::error("package binding `{}` is unresolved", var.id.name)
+        .primary(var.get_location())
+        .emit(ctx_);
+      failed = true;
+    }
+  }
+
   std::vector<ast::function_call*> calls;
   bool failed = false;
 

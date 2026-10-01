@@ -2459,8 +2459,10 @@ TEST("constant record updates materialize and detach") {
   auto alias = source;
   auto mask = storage::BitMap::Mutable{3};
   mask.set(1, true);
-  auto updated = source.with_fields(
-    {{"z", {repeat(Data{Int{7}}, 3), std::move(mask).finish()}}});
+  auto update
+    = std::array<std::pair<std::string_view, MaskedArray<Array<Data>>>, 1>{
+      {{"z", {repeat(Data{Int{7}}, 3), std::move(mask).finish()}}}};
+  auto updated = source.with_fields(Array<Record>::from_fields(update));
   CHECK(is<storage::RecordStorage>(updated.storage()));
   CHECK_EQUAL(*as<RowView<Int>>(updated.field("z")->data.get(0)), 1);
   CHECK_EQUAL(*as<RowView<Int>>(updated.field("z")->data.get(1)), 7);
@@ -2473,6 +2475,82 @@ TEST("constant record updates materialize and detach") {
   CHECK_EQUAL(record_field_names(removed.get(1)),
               std::vector<std::string>{"a"});
   CHECK(alias.field("z"));
+}
+
+namespace {
+
+using NamedField = std::pair<std::string_view, MaskedArray<Array<Data>>>;
+
+auto int_at(Array<Record> const& records, std::string_view name,
+            storage::Index row) -> std::int64_t {
+  auto field = records.field(name);
+  REQUIRE(field);
+  REQUIRE(field->present.get(row));
+  return *as<RowView<Int>>(field->data.get(row));
+}
+
+auto names_at(Array<Record> const& records, storage::Index row)
+  -> std::vector<std::string> {
+  return record_field_names(records.get(row));
+}
+
+} // namespace
+
+TEST("record from_fields gives each row the fields its masks select") {
+  auto const fields = std::array{
+    NamedField{"a", {repeat(Data{Int{1}}, 3), bitmap({true, false, true})}},
+    NamedField{"b", {repeat(Data{Int{2}}, 3), bitmap({true, true, false})}},
+  };
+  auto records = Array<Record>::from_fields(fields);
+  REQUIRE_EQUAL(records.length(), 3);
+  CHECK_EQUAL(names_at(records, 0), (std::vector<std::string>{"a", "b"}));
+  CHECK_EQUAL(names_at(records, 1), (std::vector<std::string>{"b"}));
+  CHECK_EQUAL(names_at(records, 2), (std::vector<std::string>{"a"}));
+}
+
+TEST("record from_fields overwrites a repeated name where it is present") {
+  auto const fields = std::array{
+    NamedField{"x", {repeat(Data{Int{1}}, 2), bitmap({true, true})}},
+    NamedField{"y", {repeat(Data{Int{2}}, 2), bitmap({true, true})}},
+    NamedField{"x", {repeat(Data{Int{3}}, 2), bitmap({false, true})}},
+  };
+  auto records = Array<Record>::from_fields(fields);
+  CHECK_EQUAL(names_at(records, 0), (std::vector<std::string>{"x", "y"}));
+  CHECK_EQUAL(names_at(records, 1), (std::vector<std::string>{"x", "y"}));
+  CHECK_EQUAL(int_at(records, "x", 0), 1);
+  CHECK_EQUAL(int_at(records, "x", 1), 3);
+}
+
+TEST("record with_fields keeps each row's own field order") {
+  auto source = constant_array(2, Record{{"x", Int{1}}, {"y", Int{2}}});
+  auto alias = source;
+  // Row 0 overwrites `y` and adds `z, w`; row 1 adds `w, z`.
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto r = builder.record();
+    r.field("z").data(std::int64_t{11});
+    r.field("y").data(std::int64_t{10});
+    r.field("w").data(std::int64_t{12});
+  }
+  {
+    auto r = builder.record();
+    r.field("w").data(std::int64_t{13});
+    r.field("z").data(std::int64_t{14});
+  }
+  auto other = builder.finish();
+  auto merged = source.with_fields(other);
+  CHECK_EQUAL(names_at(merged, 0),
+              (std::vector<std::string>{"x", "y", "z", "w"}));
+  CHECK_EQUAL(names_at(merged, 1),
+              (std::vector<std::string>{"x", "y", "w", "z"}));
+  CHECK_EQUAL(int_at(merged, "y", 0), 10);
+  CHECK_EQUAL(int_at(merged, "y", 1), 2);
+  CHECK_EQUAL(int_at(merged, "z", 0), 11);
+  CHECK_EQUAL(int_at(merged, "z", 1), 14);
+  CHECK_EQUAL(int_at(merged, "w", 1), 13);
+  // The constant source is left untouched.
+  CHECK_EQUAL(names_at(alias, 0), (std::vector<std::string>{"x", "y"}));
+  CHECK_EQUAL(int_at(alias, "y", 0), 2);
 }
 
 TEST("structured merges accept every physical representation pair") {

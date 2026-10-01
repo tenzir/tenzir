@@ -1,0 +1,10 @@
+// Comparisons with `null` follow the documented semantics without warnings.
+from {x: 1}
+lt = x < null
+gt = null > x
+both_lt = null < null
+both_geq = null >= null
+both_leq = null <= null
+eq = x == null
+neq = x != null
+both_eq = null == null

@@ -452,6 +452,21 @@ private:
   bool fired_ = false;
 };
 
+/// How `apply_kernel` treats a `null` operand.
+enum class NullPolicy {
+  /// `null` is an ordinary argument type: rows whose operand tuple includes a
+  /// `null` that `kernel` does not accept are rejected with a warning.
+  warning,
+  /// Rows where any operand is `null` yield `null` without invoking `kernel`
+  /// and without a diagnostic. Used for operators whose documented semantics
+  /// propagate missing data silently, such as arithmetic.
+  silent,
+};
+
+namespace _ {
+
+/// The single implementation behind every `apply_kernel` overload.
+///
 /// Dispatches the generic `kernel` (a templated lambda or overload set) over
 /// the `K` already-evaluated dynamic data-typed `args`, producing the rows of
 /// `frame.mask()`. Diagnostics for rejected arguments/type-combinations are
@@ -466,10 +481,14 @@ private:
 /// special case per arity. Results of variable-length types such as strings
 /// share one buffer with 32-bit offsets, so the rows whose results would
 /// exceed it become null with a single warning.
+///
+/// This function deliberately has no default for any parameter, so that every
+/// entry point spells out its `NullPolicy`.
 template <std::size_t K, class Kernel>
-inline auto apply_kernel(EvalFrame frame, std::string_view name,
-                         std::array<Array<Data>, K> args, location loc,
-                         const Kernel& kernel) -> Array<Data> {
+inline auto apply_kernel_impl(EvalFrame frame, std::string_view name,
+                              std::array<Array<Data>, K> args, location loc,
+                              NullPolicy null_policy, const Kernel& kernel)
+  -> Array<Data> {
   auto const length = args[0].length();
   using Acceptance = KernelAcceptance<Kernel, K>;
 
@@ -479,6 +498,23 @@ inline auto apply_kernel(EvalFrame frame, std::string_view name,
   // effect rather than threaded back through return values.
   auto results = Results{length};
   auto warn_too_large = WarnOnce{};
+  // Under `NullPolicy::silent`, rows with a `null` operand are settled up
+  // front and removed from the dispatch mask. A `null` operand then only ever
+  // reaches `reject` with an empty mask, which emits nothing.
+  auto mask = frame.mask();
+  if (null_policy == NullPolicy::silent) {
+    auto null_rows = storage::BitMap{length, false};
+    for (auto const& arg : args) {
+      if (auto null_alt = arg.template get_alternative<Null>()) {
+        null_rows = std::move(null_rows) | null_alt->present;
+      }
+    }
+    null_rows = mask & null_rows;
+    if (null_rows.any()) {
+      results.set_null(null_rows);
+      mask = std::move(mask).and_not(null_rows);
+    }
+  }
   auto reject = [&](std::array<std::size_t, K> const& tags,
                     storage::BitMap const& rejected_mask) {
     if (not rejected_mask.any()) {
@@ -505,10 +541,10 @@ inline auto apply_kernel(EvalFrame frame, std::string_view name,
 
     // Loop rows, invoking `kernel` with the concrete `ViewType`s and writing
     // each row's result into `results` — a `None` result marks that row
-    // explicitly null instead. `resolved_mask` is `frame.mask()` narrowed to
-    // the union alternatives that led to this accepted tuple; every argument
-    // holds a materialized value at every row of it, so there is nothing
-    // further to intersect.
+    // explicitly null instead. `resolved_mask` is `mask` narrowed to the union
+    // alternatives that led to this accepted tuple; every argument holds a
+    // materialized value at every row of it, so there is nothing further to
+    // intersect.
     [&]<std::size_t... Pos>(std::index_sequence<Pos...>) {
       auto const n = std::get<0>(arrays).length();
       for (auto i = storage::Index{0}; i < n; ++i) {
@@ -528,8 +564,31 @@ inline auto apply_kernel(EvalFrame frame, std::string_view name,
       }
     }(std::make_index_sequence<K>());
   };
-  resolve_tags<Acceptance, K>(args, finish, reject, frame.mask());
+  resolve_tags<Acceptance, K>(args, finish, reject, mask);
   return std::move(results).finish(frame.mask());
+}
+
+} // namespace _
+
+/// Dispatches `kernel` over the already-evaluated `args`; see
+/// `_::apply_kernel_impl`. A `null` operand that `kernel` does not accept
+/// warns.
+template <std::size_t K, class Kernel>
+inline auto apply_kernel(EvalFrame frame, std::string_view name,
+                         std::array<Array<Data>, K> args, location loc,
+                         const Kernel& kernel) -> Array<Data> {
+  return _::apply_kernel_impl<K>(frame, name, std::move(args), std::move(loc),
+                                 NullPolicy::warning, kernel);
+}
+
+/// Like the overload above, with an explicit `null_policy`.
+template <std::size_t K, class Kernel>
+inline auto apply_kernel(EvalFrame frame, std::string_view name,
+                         std::array<Array<Data>, K> args, location loc,
+                         NullPolicy null_policy, const Kernel& kernel)
+  -> Array<Data> {
+  return _::apply_kernel_impl<K>(frame, name, std::move(args), std::move(loc),
+                                 null_policy, kernel);
 }
 
 /// Dispatches `kernel` over already-evaluated argument values. This is the
@@ -539,11 +598,21 @@ template <std::size_t K, class Kernel>
 inline auto apply_kernel(EvalFrame frame, std::string_view name,
                          std::array<ValueArgument, K> const& args, location loc,
                          const Kernel& kernel) -> Array<Data> {
+  return apply_kernel<K>(frame, name, args, std::move(loc), NullPolicy::warning,
+                         kernel);
+}
+
+/// Like the overload above, with an explicit `null_policy`.
+template <std::size_t K, class Kernel>
+inline auto apply_kernel(EvalFrame frame, std::string_view name,
+                         std::array<ValueArgument, K> const& args, location loc,
+                         NullPolicy null_policy, const Kernel& kernel)
+  -> Array<Data> {
   auto arrays = [&]<std::size_t... Pos>(std::index_sequence<Pos...>) {
     return std::array{args[Pos].data...};
   }(std::make_index_sequence<K>());
-  return apply_kernel<K>(frame, name, std::move(arrays), std::move(loc),
-                         kernel);
+  return _::apply_kernel_impl<K>(frame, name, std::move(arrays), std::move(loc),
+                                 null_policy, kernel);
 }
 
 /// Evaluates `exprs` under `frame` and dispatches `kernel` over the results.
@@ -554,10 +623,22 @@ inline auto
 apply_kernel(EvalFrame frame, std::string_view name,
              std::array<std::reference_wrapper<const ast::expression>, K> exprs,
              location loc, const Kernel& kernel) -> Array<Data> {
+  return apply_kernel<K>(frame, name, exprs, std::move(loc),
+                         NullPolicy::warning, kernel);
+}
+
+/// Like the overload above, with an explicit `null_policy`.
+template <std::size_t K, class Kernel>
+inline auto
+apply_kernel(EvalFrame frame, std::string_view name,
+             std::array<std::reference_wrapper<const ast::expression>, K> exprs,
+             location loc, NullPolicy null_policy, const Kernel& kernel)
+  -> Array<Data> {
   auto args = [&]<std::size_t... Pos>(std::index_sequence<Pos...>) {
     return std::array{frame.eval(exprs[Pos].get())...};
   }(std::make_index_sequence<K>());
-  return apply_kernel<K>(frame, name, std::move(args), std::move(loc), kernel);
+  return _::apply_kernel_impl<K>(frame, name, std::move(args), std::move(loc),
+                                 null_policy, kernel);
 }
 
 } // namespace tenzir::nova

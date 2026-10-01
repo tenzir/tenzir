@@ -1,0 +1,4 @@
+// Spreading a non-record warns and contributes nothing; spreading `null` is
+// silent.
+from {r: {x: 1}}
+out = {...r, ...42, ...null, y: 2}

@@ -1852,9 +1852,11 @@ auto trim_record(Array<Record> input, record_type const& schema,
                             rows & field.present, optional, recommended);
     updates.emplace_back(name, std::move(field));
   }
-  return std::move(input)
-    .without_fields(removed, rows)
-    .with_fields(std::move(updates));
+  auto trimmed = std::move(input).without_fields(removed, rows);
+  if (updates.empty()) {
+    return trimmed;
+  }
+  return std::move(trimmed).with_fields(Array<Record>::from_fields(updates));
 }
 
 auto trim(Array<Record> input, storage::BitMap& rows, location self,
@@ -2127,7 +2129,10 @@ auto cast_record(Array<Record> input, record_type const& schema,
     }
     updates.emplace_back(name, std::move(*value));
   }
-  return std::move(input).with_fields(std::move(updates));
+  if (updates.empty()) {
+    return input;
+  }
+  return std::move(input).with_fields(Array<Record>::from_fields(updates));
 }
 
 auto cast(Array<Record> input, storage::BitMap& rows, location self,

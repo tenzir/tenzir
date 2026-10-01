@@ -1,0 +1,7 @@
+// `in` finds nested lists and records by value.
+from {
+  record_found: {x: 1} in [0, {x: 1}],
+  record_missing: {x: 2} in [0, {x: 1}],
+  list_found: [2] in [0, [2]],
+  scalar_skips_nested: 2 in [[2]],
+}

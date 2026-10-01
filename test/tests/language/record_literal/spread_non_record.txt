@@ -1,0 +1,15 @@
+warning: expected `record`
+ --> tests/language/record_literal/spread_non_record.tql:4:17
+  |
+4 | out = {...r, ...42, ...null, y: 2}
+  |                 ~~
+  |
+{
+  r: {
+    x: 1,
+  },
+  out: {
+    x: 1,
+    y: 2,
+  },
+}

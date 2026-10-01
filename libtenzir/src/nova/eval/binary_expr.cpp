@@ -50,24 +50,9 @@ auto select_rows(const Array<Data>& a, storage::BitMap const& mask_a,
                      MaskedArray<Array<Data>>{b, mask_b});
 }
 
-/// Wraps arithmetic kernels so a null operand propagates without a type
-/// warning. Comparisons use their own null semantics instead.
-auto null_propagating(auto kernel) {
-  return detail::overload{
-    []<class T, class U>(diagnostic_handler&, T, U) -> Option<Int>
-      requires(std::same_as<T, Null> or std::same_as<U, Null>)
-    {
-      return None{};
-    },
-    std::move(kernel),
-    };
-}
-
-/// Equality compares `null` by nullness. The ordering operators have no order
-/// to report, so they do not accept it at all and `apply_kernel` warns.
-template <class U, class T, ast::binary_op Op>
-concept null_compared_with
-  = not _::is_ordering(Op) and (std::same_as<T, Null> or std::same_as<U, Null>);
+/// Either operand of a comparison is `null`, which every comparison accepts.
+template <class U, class T>
+concept null_compared_with = std::same_as<T, Null> or std::same_as<U, Null>;
 
 template <class U, class T>
 concept other_number_than = concepts::number<U> and not std::same_as<T, U>;
@@ -80,7 +65,14 @@ concept self_comparable
   = fundamental_view_type<T> and not std::same_as<T, Null>
     and not std::same_as<T, SecretView>
     and (not _::is_ordering(Op)
-         or concepts::one_of<T, Int, UInt, Float, Time, Duration>);
+         or concepts::one_of<T, Bool, Int, UInt, Float, Time, Duration,
+                             std::string_view, BlobView, Ip, Subnet>);
+
+/// Lists and records support equality, compared deeply by value.
+template <class T, ast::binary_op Op>
+concept structurally_comparable
+  = not _::is_ordering(Op)
+    and concepts::one_of<T, RowView<List>, RowView<Record>>;
 
 /// Byte-sequence views that `+` concatenates.
 template <class T>
@@ -105,9 +97,21 @@ using concat_result_t = std::conditional_t<
 template <ast::binary_op Op>
 auto comparison_kernel() {
   return ::tenzir::detail::overload{
-    []<class T, null_compared_with<T, Op> U>(diagnostic_handler&, T,
-                                             U) -> Option<Bool> {
-      return compare<Op>(std::same_as<T, Null>, std::same_as<U, Null>);
+    // Equality compares `null` by nullness. For the ordering operators, two
+    // `null`s are equal but not ordered, and a single `null` has no order.
+    []<class T, null_compared_with<T> U>(diagnostic_handler&, T,
+                                         U) -> Option<Bool> {
+      constexpr auto lhs_null = std::same_as<T, Null>;
+      constexpr auto rhs_null = std::same_as<U, Null>;
+      if constexpr (not _::is_ordering(Op)) {
+        return compare<Op>(lhs_null, rhs_null);
+      } else if constexpr (lhs_null and rhs_null
+                           and (Op == ast::binary_op::geq
+                                or Op == ast::binary_op::leq)) {
+        return true;
+      } else {
+        return None{};
+      }
     },
     []<concepts::number T, other_number_than<T> U>(diagnostic_handler&, T lhs,
                                                    U rhs) -> Option<Bool> {
@@ -116,6 +120,11 @@ auto comparison_kernel() {
     []<self_comparable<Op> T>(diagnostic_handler&, T lhs,
                               T rhs) -> Option<Bool> {
       return compare<Op>(lhs, rhs);
+    },
+    []<structurally_comparable<Op> T>(diagnostic_handler&, T lhs,
+                                      T rhs) -> Option<Bool> {
+      auto const equal_rows = equal(RowView<Data>{lhs}, RowView<Data>{rhs});
+      return Op == ast::binary_op::eq ? equal_rows : not equal_rows;
     },
   };
 }
@@ -129,40 +138,45 @@ auto eval_comparison(const ast::binary_expr& x, std::string_view name,
 
 /// Returns whether `list` contains an element equal to `lhs`. A `Null` on the
 /// left-hand side matches only `Null` elements, and `Int`/`UInt` compare by
-/// value across signedness. Elements of other fundamental types never match.
-/// Encountering a structured element (a nested list or record) emits a warning
-/// attributed to `loc` and yields `None`.
+/// value across signedness. Elements of other types never match, including
+/// nested lists and records.
 template <fundamental_view_type T>
-auto list_contains(diagnostic_handler& dh, WarnOnce& warn_unsupported,
-                   location loc, T lhs, const RowView<List>& list)
-  -> Option<Bool> {
+auto list_contains(T lhs, const RowView<List>& list) -> bool {
   for (auto element : list) {
-    auto const found = match(
-      element, [&]<class V>(RowView<V> view) -> Option<Bool> {
-        if constexpr (std::same_as<V, Null>) {
-          return std::same_as<T, Null>;
-        } else if constexpr (std::same_as<V, List> or std::same_as<V, Record>) {
-          warn_unsupported(dh, diagnostic::warning("binary operator `in` does "
-                                                   "not support "
-                                                   "`{}` elements in the list",
-                                                   Type<V>::static_name)
-                                 .primary(loc));
-          return None{};
+    auto const found = match(element, [&]<class V>(RowView<V> view) -> bool {
+      if constexpr (std::same_as<V, Null>) {
+        return std::same_as<T, Null>;
+      } else if constexpr (std::same_as<V, List> or std::same_as<V, Record>) {
+        return false;
+      } else {
+        using E = std::remove_cvref_t<decltype(*view)>;
+        if constexpr (concepts::one_of<T, Int, UInt, Float>
+                      and concepts::one_of<E, Int, UInt, Float>) {
+          return compare<ast::binary_op::eq>(lhs, *view);
+        } else if constexpr (requires() { lhs == *view; }
+                             and not std::same_as<T, Null>) {
+          return lhs == *view;
         } else {
-          using E = std::remove_cvref_t<decltype(*view)>;
-          if constexpr (concepts::one_of<T, Int, UInt, Float>
-                        and concepts::one_of<E, Int, UInt, Float>) {
-            return compare<ast::binary_op::eq>(lhs, *view);
-          } else if constexpr (requires() { lhs == *view; }
-                               and not std::same_as<T, Null>) {
-            return lhs == *view;
-          } else {
-            return false;
-          }
+          return false;
         }
-      });
-    if (not found or *found) {
-      return found;
+      }
+    });
+    if (found) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Returns whether `list` contains an element deeply equal to the list or
+/// record `lhs`.
+template <class T>
+  requires concepts::one_of<T, RowView<List>, RowView<Record>>
+auto list_contains(T const& lhs, const RowView<List>& list) -> bool {
+  auto const needle = RowView<Data>{lhs};
+  for (auto element : list) {
+    if (equal(needle, element)) {
+      return true;
     }
   }
   return false;
@@ -311,8 +325,8 @@ auto evaluate_subtraction(EvalFrame frame, std::array<Array<Data>, 2> args,
   auto warn_duration_overflow = WarnOnce{};
   auto warn_time_overflow = WarnOnce{};
   return apply_kernel<2>(
-    frame, "binary operator `-`", std::move(args), loc,
-    null_propagating(::tenzir::detail::overload{
+    frame, "binary operator `-`", std::move(args), loc, NullPolicy::silent,
+    ::tenzir::detail::overload{
       [loc, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh, T lhs,
                                                   U rhs)
         requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -358,7 +372,7 @@ auto evaluate_subtraction(EvalFrame frame, std::array<Array<Data>, 2> args,
         }
         return Duration{*result};
       },
-    }));
+    });
 }
 
 auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
@@ -370,7 +384,8 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       auto warn_duration_overflow = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `+`", {x.left, x.right}, x.get_location(),
-        null_propagating(::tenzir::detail::overload{
+        NullPolicy::silent,
+        ::tenzir::detail::overload{
           [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
                                                      T lhs, U rhs)
             requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -431,7 +446,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
             }
             return Duration{*result};
           },
-        }));
+        });
     }
     case sub:
       return evaluate_subtraction(
@@ -458,7 +473,8 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       };
       return apply_kernel<2>(
         frame, "binary operator `*`", {x.left, x.right}, x.get_location(),
-        null_propagating(::tenzir::detail::overload{
+        NullPolicy::silent,
+        ::tenzir::detail::overload{
           [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
                                                      T lhs, U rhs)
             requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -500,13 +516,14 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
           {
             return mul_duration(dh, rhs, lhs);
           },
-        }));
+        });
     }
     case div: {
       auto warn_div_by_zero = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `/`", {x.left, x.right}, x.get_location(),
-        null_propagating(::tenzir::detail::overload{
+        NullPolicy::silent,
+        ::tenzir::detail::overload{
           [&x, &warn_div_by_zero]<class T, class U>(
             diagnostic_handler& dh, T lhs, U rhs) -> Option<Float>
             requires((std::same_as<T, Int> or std::same_as<T, UInt>
@@ -522,7 +539,8 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
                       }
                       return static_cast<Float>(lhs) / static_cast<Float>(rhs);
                     },
-                    [&x, &warn_div_by_zero](diagnostic_handler& dh, Duration lhs,
+                    [&x, &warn_div_by_zero](diagnostic_handler& dh,
+                                            Duration lhs,
                                             Duration rhs) -> Option<Float> {
                       if (rhs.count() == 0) {
                         warn_div_by_zero(
@@ -546,7 +564,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
             }
             return std::chrono::duration_cast<Duration>(lhs / rhs);
           },
-          }));
+          });
     }
     case eq:
       return eval_comparison<eq>(x, "binary operator `==`", std::move(frame));
@@ -564,26 +582,43 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
     case or_:
       return eval_and_or(x, std::move(frame));
     case in: {
-      auto warn_unsupported = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `in`", {x.left, x.right}, x.get_location(),
+        // `in` keeps `NullPolicy::warning`: `null in [null]` is `true`, so a
+        // `null` operand cannot be settled before the kernel runs. Every other
+        // `null` operand yields `null` without a warning.
         ::tenzir::detail::overload{
-          [](diagnostic_handler&, std::string_view lhs,
-             std::string_view rhs) -> Option<Bool> {
-            return rhs.find(lhs) != std::string_view::npos;
+          []<class T, class U>(diagnostic_handler&, T, U) -> Option<Bool>
+            requires((std::same_as<T, Null>
+                      and not std::same_as<U, RowView<List>>)
+                     or std::same_as<U, Null>)
+                    {
+                      return None{};
+                    },
+                    [](diagnostic_handler&, std::string_view lhs,
+                       std::string_view rhs) -> Option<Bool> {
+                      return rhs.find(lhs) != std::string_view::npos;
+                    },
+                    [](diagnostic_handler&, Ip lhs,
+                       Subnet rhs) -> Option<Bool> {
+                      return rhs.contains(lhs);
+                    },
+                    [](diagnostic_handler&, Subnet lhs,
+                       Subnet rhs) -> Option<Bool> {
+                      return rhs.contains(lhs);
+                    },
+                    []<fundamental_view_type T>(
+                      diagnostic_handler&, T lhs,
+                      RowView<List> rhs) -> Option<Bool> {
+                      return list_contains(lhs, rhs);
+                    },
+                    []<class T>(diagnostic_handler&, T const& lhs,
+                                RowView<List> rhs) -> Option<Bool>
+                      requires concepts::one_of<T, RowView<List>, RowView<Record>>
+          {
+            return list_contains(lhs, rhs);
           },
-          [](diagnostic_handler&, Ip lhs, Subnet rhs) -> Option<Bool> {
-            return rhs.contains(lhs);
-          },
-          [](diagnostic_handler&, Subnet lhs, Subnet rhs) -> Option<Bool> {
-            return rhs.contains(lhs);
-          },
-          [&x, &warn_unsupported]<fundamental_view_type T>(
-            diagnostic_handler& dh, T lhs, RowView<List> rhs) -> Option<Bool> {
-            return list_contains(dh, warn_unsupported, x.get_location(), lhs,
-                                 rhs);
-          },
-        });
+          });
     }
     case if_:
       return eval_if(x, std::move(frame));

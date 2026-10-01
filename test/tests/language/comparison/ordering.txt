@@ -1,0 +1,8 @@
+{
+  strings: true,
+  strings_equal: true,
+  ips: true,
+  subnets: true,
+  blobs: true,
+  bools: true,
+}
