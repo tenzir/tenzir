@@ -23,10 +23,33 @@
 
 #include <functional>
 #include <memory>
+#include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace tenzir::nova::_ {
+
+template <class T>
+constexpr auto invalid_value_kind() -> std::string_view {
+  if constexpr (std::is_same_v<T, ast::pipeline_expr>) {
+    return "pipeline";
+  } else if constexpr (std::is_same_v<T, ast::assignment>) {
+    return "assignment";
+  } else if constexpr (std::is_same_v<T, ast::underscore>) {
+    return "placeholder `_`";
+  } else if constexpr (std::is_same_v<T, ast::unpack>) {
+    return "unpack expression";
+  } else if constexpr (std::is_same_v<T, ast::dollar_var>) {
+    return "variable that was not resolved";
+  } else if constexpr (std::is_same_v<T, ast::type_expr>) {
+    return "type expression";
+  } else if constexpr (std::is_same_v<T, ast::lambda_expr>) {
+    return "lambda";
+  } else {
+    return {};
+  }
+}
 
 /// One argument expression the framework evaluates before every call, and
 /// where to store the result in the argument bundle.
@@ -131,26 +154,14 @@ private:
   auto eval(const ast::pkg_dollar_var&, EvalFrame frame) -> Array<Data>;
   auto eval(const ast::resolved_secret&, EvalFrame frame) -> Array<Data>;
 
-  auto eval(ast::pipeline_expr const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::assignment const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::underscore const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::unpack const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::dollar_var const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::type_expr const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
-  }
-  auto eval(ast::lambda_expr const&, EvalFrame) -> Array<Data> {
-    TENZIR_UNREACHABLE();
+  template <class T>
+    requires(not invalid_value_kind<T>().empty())
+  auto eval(T const& x, EvalFrame frame) -> Array<Data> {
+    diagnostic::error("expected a value expression, got a {}",
+                      invalid_value_kind<T>())
+      .primary(x)
+      .emit(ctx_);
+    return frame.null();
   }
 
   friend class nova::Evaluator;

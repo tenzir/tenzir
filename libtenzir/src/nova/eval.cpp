@@ -109,18 +109,19 @@ public:
 
   template <class T>
   auto visit(T& x) -> void {
-    enter(x);
+    if constexpr (not _::invalid_value_kind<T>().empty()) {
+      diagnostic::error("expected a value expression, got a {}",
+                        _::invalid_value_kind<T>())
+        .primary(x)
+        .emit(ctx_);
+      failed = true;
+    } else {
+      enter(x);
+    }
   }
 
   auto visit(ast::function_call& call) -> void {
     calls.push_back(std::addressof(call));
-  }
-
-  auto visit(ast::lambda_expr& lambda) -> void {
-    diagnostic::error("expected an expression, got a lambda")
-      .primary(lambda)
-      .emit(ctx_);
-    failed = true;
   }
 
   /// The value of a package binding is cached during resolution, so a

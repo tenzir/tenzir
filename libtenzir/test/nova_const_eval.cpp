@@ -96,6 +96,27 @@ auto error_count(const std::vector<diagnostic>& diags) -> size_t {
 
 } // namespace
 
+TEST("const_eval rejects invalid expressions before evaluation") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = registry{};
+  auto expr = ast::expression{ast::underscore{location::unknown}};
+  CHECK(not const_eval(expr, InstantiateCtx{dh, reg}));
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), size_t{1});
+  CHECK_EQUAL(diags[0].message,
+              "expected a value expression, got a placeholder `_`");
+}
+
+TEST("const_eval rejects unsupported nested constants") {
+  auto dh = collecting_diagnostic_handler{};
+  auto reg = registry{};
+  auto value = record{{"items", list{map{}}}};
+  CHECK(not const_eval(constant(value), InstantiateCtx{dh, reg}));
+  auto diags = std::move(dh).collect();
+  REQUIRE_EQUAL(diags.size(), size_t{1});
+  CHECK_EQUAL(diags[0].message, "cannot evaluate this constant type");
+}
+
 TEST("const_eval evaluates a scalar constant") {
   auto dh = null_diagnostic_handler{};
   auto reg = registry{};
