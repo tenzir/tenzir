@@ -353,6 +353,10 @@ public:
 /// preparing a call.
 class AggregationPlugin : public virtual function_plugin {
 public:
+  /// Defined out of line to anchor the vtable and typeinfo in libtenzir, see
+  /// `FunctionPlugin`.
+  ~AggregationPlugin() override;
+
   virtual auto describe() const -> AggregationDescription = 0;
 
   /// Instantiates `call` against `describe()`, under this plugin's function

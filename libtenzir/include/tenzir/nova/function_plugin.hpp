@@ -191,6 +191,11 @@ private:
 /// description turns concrete calls into `CallSite`s.
 class FunctionPlugin : public virtual function_plugin {
 public:
+  /// Defined out of line so that the vtable and typeinfo live in libtenzir
+  /// only. Without a key function, every shared object emits its own hidden
+  /// copy and `dynamic_cast` fails for plugins loaded from other objects.
+  ~FunctionPlugin() override;
+
   virtual auto describe() const -> FunctionDescription = 0;
 
   /// Instantiates `call` against `describe()`, under this plugin's function

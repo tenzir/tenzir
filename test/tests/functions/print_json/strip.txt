@@ -1,0 +1,10 @@
+{
+  y: {
+    none: "{\n  \"a\": null,\n  \"b\": {},\n  \"c\": [],\n  \"d\": [\n    null,\n    1,\n    null\n  ],\n  \"e\": {\n    \"f\": null\n  },\n  \"g\": [\n    [],\n    {}\n  ]\n}",
+    all: "{\n  \"d\": [\n    1\n  ]\n}",
+    null_fields: "{\n  \"b\": {},\n  \"c\": [],\n  \"d\": [\n    1\n  ],\n  \"e\": {},\n  \"g\": [\n    [],\n    {}\n  ]\n}",
+    nulls_in_lists: "{\n  \"a\": null,\n  \"b\": {},\n  \"c\": [],\n  \"d\": [\n    1\n  ],\n  \"e\": {\n    \"f\": null\n  },\n  \"g\": [\n    [],\n    {}\n  ]\n}",
+    empty_records: "{\n  \"a\": null,\n  \"c\": [],\n  \"d\": [\n    null,\n    1,\n    null\n  ],\n  \"e\": {\n    \"f\": null\n  },\n  \"g\": [\n    []\n  ]\n}",
+    empty_lists: "{\n  \"a\": null,\n  \"b\": {},\n  \"d\": [\n    null,\n    1,\n    null\n  ],\n  \"e\": {\n    \"f\": null\n  },\n  \"g\": [\n    {}\n  ]\n}",
+  },
+}

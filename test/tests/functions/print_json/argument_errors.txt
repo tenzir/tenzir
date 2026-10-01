@@ -1,0 +1,8 @@
+error: expected argument of type `bool`, but got `int`
+ --> tests/functions/print_json/argument_errors.tql:5:24
+  |
+5 | y = x.print_json(strip=1)
+  |                        ^
+  |
+  = usage: print_json(x:any, [strip=bool, strip_null_fields=bool, strip_nulls_in_lists=bool, strip_empty_records=bool, strip_empty_lists=bool])
+  = docs: https://tenzir.com/docs/reference/functions/print_json

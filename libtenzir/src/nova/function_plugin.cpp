@@ -328,6 +328,8 @@ auto FunctionDescription::instantiate(std::string_view name,
   };
 }
 
+FunctionPlugin::~FunctionPlugin() = default;
+
 auto FunctionPlugin::instantiate(ast::function_call& call,
                                  InstantiateCtx ctx) const
   -> failure_or<FunctionDescription::Instantiation> {

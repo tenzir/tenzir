@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: 1}
+y = print_json()

@@ -1,0 +1,14 @@
+{
+  x: {
+    a: 1,
+  },
+  active: true,
+  y: "{\n  \"a\": 1\n}",
+}
+{
+  x: {
+    a: 2,
+  },
+  active: false,
+  y: null,
+}

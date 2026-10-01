@@ -66,6 +66,8 @@ auto AggregationDescription::instantiate(std::string_view name,
   return instantiation;
 }
 
+AggregationPlugin::~AggregationPlugin() = default;
+
 auto AggregationPlugin::instantiate(ast::function_call& call,
                                     InstantiateCtx ctx) const
   -> failure_or<FunctionDescription::Instantiation> {

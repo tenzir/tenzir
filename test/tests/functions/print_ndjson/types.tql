@@ -1,0 +1,24 @@
+from {
+  a: true,
+  b: -1,
+  c: 2.5,
+  d: "q\"uo\nte",
+  e: 1.2.3.4,
+  f: 10.0.0.0/8,
+  g: 2024-01-02T03:04:05Z,
+  h: 90min,
+  i: b"abc",
+  j: 1.0,
+  k: {x: [1, "a", null]},
+}
+a = a.print_ndjson()
+b = b.print_ndjson()
+c = c.print_ndjson()
+d = d.print_ndjson()
+e = e.print_ndjson()
+f = f.print_ndjson()
+g = g.print_ndjson()
+h = h.print_ndjson()
+i = i.print_ndjson()
+j = j.print_ndjson()
+k = k.print_ndjson()

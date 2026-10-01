@@ -1,0 +1,3 @@
+// `print_json` only sees the active rows; the others must stay untouched.
+from {x: {a: 1}, active: true}, {x: {a: 2}, active: false}
+y = x.print_json() if active else null
