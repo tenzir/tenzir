@@ -1,0 +1,6 @@
+// Publish events as NDJSON. The filter leaves the second event inactive.
+from {id: 1, nested: {list: [1, null], none: null}},
+     {id: 2},
+     {id: 3, time: 2024-01-01T00:00:00Z, duration: 1s, ip: 1.2.3.4}
+where id != 2
+to_amqp env("AMQP_URL"), routing_key=env("AMQP_QUEUE")

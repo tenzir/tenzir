@@ -1,9 +1,9 @@
-suite: amqp-fixture
+suite: from-amqp-ack
 fixtures:
   - amqp:
-      queue: fixture_amqp_test
+      queue: from_amqp_ack
       declare: true
-      messages: 1
+      messages: 3
 timeout: 180
 skip:
   on: fixture-unavailable

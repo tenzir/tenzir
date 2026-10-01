@@ -1,0 +1,7 @@
+error: failed to start AMQP consumer
+ --> tests/operators/from_amqp/basic/error_passive_missing_queue.tql:6:11
+  |
+6 | from_amqp env("AMQP_URL"), queue="from_amqp_missing", passive=true
+  |           ^^^^^^^^^^^^^^^
+  |
+  = note: !! unspecified: failed to execute RPC method 1310760

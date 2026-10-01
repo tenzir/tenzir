@@ -1,0 +1,12 @@
+{
+  line: "message-0001",
+  schema: "tenzir.amqp",
+}
+{
+  line: "message-0002",
+  schema: "tenzir.amqp",
+}
+{
+  line: "message-0003",
+  schema: "tenzir.amqp",
+}

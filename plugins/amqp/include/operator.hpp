@@ -10,8 +10,11 @@
 
 #include "tenzir/option.hpp"
 
+#include <tenzir/async.hpp>
+#include <tenzir/async/task.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
+#include <tenzir/concepts.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
@@ -418,10 +421,37 @@ public:
     return to_error(amqp_get_rpc_reply(conn_));
   }
 
+  /// A message that the server delivered to a consumer.
+  struct delivery {
+    chunk_ptr body;
+    /// The tag that acknowledges this and all earlier deliveries on the
+    /// channel.
+    uint64_t tag = 0;
+  };
+
   /// Consumes a message.
   /// @returns The message from the server.
   auto consume(Option<std::chrono::microseconds> timeout = {})
     -> caf::expected<chunk_ptr> {
+    auto result = consume_delivery(timeout);
+    if (not result) {
+      return std::move(result.error());
+    }
+    if (not *result) {
+      return chunk_ptr{};
+    }
+    return std::move((*result)->body);
+  }
+
+  /// Acknowledges all deliveries on `channel` up to and including `tag`.
+  auto ack(amqp_channel_t channel, uint64_t tag) -> caf::error {
+    return to_error(amqp_basic_ack(conn_, channel, tag, as_amqp_bool(true)),
+                    "failed to acknowledge AMQP messages");
+  }
+
+  /// Consumes a message, returning `None` if none arrived within `timeout`.
+  auto consume_delivery(Option<std::chrono::microseconds> timeout = {})
+    -> caf::expected<Option<delivery>> {
     TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
@@ -440,7 +470,10 @@ public:
                    as_string_view(envelope.exchange), envelope.channel,
                    as_string_view(envelope.routing_key),
                    envelope.message.body.len);
-      auto result = move_into_chunk(envelope.message.body);
+      auto result = delivery{
+        .body = move_into_chunk(envelope.message.body),
+        .tag = envelope.delivery_tag,
+      };
       empty_amqp_pool(&envelope.message.pool);
       amqp_bytes_free(envelope.routing_key);
       amqp_bytes_free(envelope.exchange);
@@ -449,7 +482,7 @@ public:
     }
     // A timeout is no error.
     if (ret.library_error == AMQP_STATUS_TIMEOUT) {
-      return chunk_ptr{};
+      return None{};
     }
     // Now we're leaving the happy path.
     TENZIR_DEBUG(
@@ -513,7 +546,7 @@ public:
         }
       }
     }
-    return chunk_ptr{};
+    return None{};
   }
 
 private:
@@ -612,6 +645,71 @@ auto set_or_fail(record& config, std::string_view key, std::string value,
   diagnostic::error("failed to parse value for key `{}` in key-value pair", key)
     .primary(loc)
     .emit(dh);
+}
+
+/// Resolves the `url` and `options` arguments on top of the plugin
+/// configuration into the record that `amqp_engine::make()` takes. Values from
+/// the URL take precedence over `options`. Returns `None` after emitting an
+/// error.
+auto resolve_config(OpCtx& ctx, located<secret> const& url,
+                    Option<located<record>> const& options, record config)
+  -> Task<Option<record>> {
+  auto& dh = ctx.dh();
+  auto requests = std::vector<secret_request>{};
+  auto resolved_url = std::string{};
+  requests.push_back(make_secret_request("url", url, resolved_url, dh));
+  if (options) {
+    auto const& loc = options->source;
+    for (auto const& [k, v] : options->inner) {
+      match(
+        v,
+        [&](concepts::arithmetic auto const& x) {
+          set_or_fail(config, k, fmt::to_string(x), loc, dh);
+        },
+        [&](std::string const& x) {
+          set_or_fail(config, k, x, loc, dh);
+        },
+        [&](secret const& x) {
+          requests.push_back(secret_request{
+            x, loc,
+            [&config, k = std::string{k}, loc,
+             &dh](resolved_secret_value const& v) -> failure_or<void> {
+              TRY(auto str, v.utf8_view(k, loc, dh));
+              set_or_fail(config, k, std::string{str}, loc, dh);
+              return {};
+            }});
+        },
+        [](auto const&) {
+          // validated in describe()
+          TENZIR_UNREACHABLE();
+        });
+    }
+  }
+  if (not co_await ctx.resolve_secrets(std::move(requests))) {
+    co_return None{};
+  }
+  auto parsed = parse_url(config, resolved_url);
+  if (not parsed) {
+    diagnostic::error("failed to parse AMQP URL")
+      .primary(url.source)
+      .hint("URL must adhere to the following format")
+      .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
+      .emit(dh);
+    co_return None{};
+  }
+  if (options) {
+    for (auto const& [k, _] : options->inner) {
+      auto pre = config.find(k);
+      auto post = parsed->find(k);
+      if (pre != config.end() and post != parsed->end()
+          and pre->second != post->second) {
+        diagnostic::warning("option `{}` was overridden by the URL", k)
+          .primary(options->source)
+          .emit(dh);
+      }
+    }
+  }
+  co_return std::move(*parsed);
 }
 
 } // namespace

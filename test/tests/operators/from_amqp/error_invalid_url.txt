@@ -1,0 +1,8 @@
+error: failed to parse AMQP URL
+ --> tests/operators/from_amqp/error_invalid_url.tql:5:11
+  |
+5 | from_amqp "foo://example.test"
+  |           ^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: URL must adhere to the following format
+  = hint: amqp://[USERNAME[:PASSWORD]\@]HOSTNAME[:PORT]/[VHOST]

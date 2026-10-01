@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_amqp "foo://example.test"

@@ -1,0 +1,7 @@
+// Publish strings and blobs, and skip messages of other types.
+from {message: "text"},
+     {message: 42},
+     {message: b"bytes"},
+     {message: null},
+     {message: {x: 1}}
+to_amqp env("AMQP_URL"), routing_key=env("AMQP_QUEUE"), message=message

@@ -1,0 +1,3 @@
+// Publish a message after the acknowledged ones.
+from {message: "message-0004"}
+to_amqp env("AMQP_URL"), routing_key=env("AMQP_QUEUE"), message=message

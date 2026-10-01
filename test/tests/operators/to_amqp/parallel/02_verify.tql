@@ -1,0 +1,5 @@
+// Verify that every event of the previous test arrived exactly once.
+from_amqp env("AMQP_URL"), queue=env("AMQP_QUEUE"), passive=true
+select line = string(message)
+head 8
+sort line

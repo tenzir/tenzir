@@ -1,9 +1,8 @@
-suite: amqp-fixture
+suite: to-amqp-message
 fixtures:
   - amqp:
-      queue: fixture_amqp_test
+      queue: to_amqp_message
       declare: true
-      messages: 1
 timeout: 180
 skip:
   on: fixture-unavailable

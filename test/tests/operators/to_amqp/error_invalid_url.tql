@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+to_amqp "foo://example.test"

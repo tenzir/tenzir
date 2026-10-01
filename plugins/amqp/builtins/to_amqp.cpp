@@ -6,11 +6,18 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/async/mutex.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/concepts.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova_flag.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/series_builder.hpp>
@@ -22,7 +29,11 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
 
+#include <algorithm>
 #include <mutex>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include "operator.hpp"
 
@@ -68,6 +79,8 @@ struct ToAmqpArgs {
   bool immediate = false;
   record plugin_config;
 };
+
+namespace legacy {
 
 class ToAmqp final : public Operator<table_slice, void> {
 public:
@@ -329,6 +342,233 @@ private:
   MetricsCounter events_write_counter_;
 };
 
+} // namespace legacy
+
+/// Returns whether `expr` is `print_ndjson(this)`, the default `message`. We
+/// print such messages directly from the events instead of evaluating the
+/// expression.
+auto is_default_message(ast::expression const& expr) -> bool {
+  auto const* call = try_as<ast::function_call>(expr);
+  if (not call or not call->fn.ref.resolved()
+      or call->fn.ref.pkg() != entity_pkg_std) {
+    return false;
+  }
+  auto const segments = call->fn.ref.segments();
+  return segments.size() == 1 and segments.front() == "print_ndjson"
+         and call->args.size() == 1 and is<ast::this_>(call->args.front());
+}
+
+auto type_name(nova::RowView<nova::Data> const& value) -> std::string_view {
+  return match(value, []<class T>(nova::RowView<T> const&) {
+    return nova::Type<T>::static_name;
+  });
+}
+
+class ToAmqp final : public Operator<nova::Events, void> {
+public:
+  explicit ToAmqp(ToAmqpArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (is_default_message(args_.message)) {
+      printer_.emplace(json_printer_options{
+        .style = no_style(),
+        .oneline = true,
+      });
+    } else {
+      auto evaluator = co_await nova::Evaluator::make(args_.message, ctx);
+      if (not evaluator) {
+        done_ = true;
+        co_return;
+      }
+      evaluator_.emplace(std::move(*evaluator));
+    }
+    auto config = co_await resolve_config(ctx, args_.url, args_.options,
+                                          args_.plugin_config);
+    if (not config) {
+      done_ = true;
+      co_return;
+    }
+    auto hb_interval = heartbeat_interval(*config);
+    auto engine = amqp_engine::make(std::move(*config));
+    if (not engine) {
+      diagnostic::error("failed to construct AMQP engine")
+        .primary(args_.url.source)
+        .note("{}", engine.error())
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    channel_ = args_.channel ? detail::narrow<uint16_t>(args_.channel->inner)
+                             : default_channel;
+    auto failure = co_await spawn_blocking([&]() -> Option<diagnostic> {
+      if (auto err = engine->connect(); err.valid()) {
+        return diagnostic::error("failed to connect to AMQP server")
+          .primary(args_.url.source)
+          .note("{}", err)
+          .done();
+      }
+      if (auto err = engine->open(channel_); err.valid()) {
+        return diagnostic::error("failed to open AMQP channel {}", channel_)
+          .primary(args_.url.source)
+          .note("{}", err)
+          .done();
+      }
+      return None{};
+    });
+    if (failure) {
+      ctx.dh().emit(std::move(*failure));
+      done_ = true;
+      co_return;
+    }
+    engine_.emplace(std::in_place, std::move(*engine));
+    bytes_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    if (hb_interval > std::chrono::seconds{0}) {
+      ctx.spawn_task(
+        heartbeat_loop(*engine_, hb_interval, args_.url.source, ctx.dh()));
+    }
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    if (done_ or not input.mask.any()) {
+      co_return;
+    }
+    auto messages = Option<nova::Array<nova::Data>>{};
+    if (evaluator_) {
+      messages = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    }
+    // We collect the payloads of the batch in a single buffer so that we can
+    // publish them all at once outside of the executor.
+    auto buffer = std::vector<std::byte>{};
+    auto ends = std::vector<size_t>{};
+    auto append = [&](std::span<std::byte const> bytes) {
+      buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+      ends.push_back(buffer.size());
+    };
+    // Warn once per type and batch to not flood the output.
+    auto warned_types = std::vector<std::string_view>{};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      if (printer_) {
+        printer_->print(input.data.get(row));
+        append(printer_->bytes());
+        continue;
+      }
+      TENZIR_ASSERT(messages);
+      auto message = messages->get(row);
+      if (auto const* text = try_as<nova::RowView<nova::String>>(message)) {
+        append(as_bytes(**text));
+      } else if (auto const* bytes
+                 = try_as<nova::RowView<nova::Blob>>(message)) {
+        append(as_bytes(**bytes));
+      } else {
+        auto const name = type_name(message);
+        if (std::ranges::find(warned_types, name) == warned_types.end()) {
+          warned_types.push_back(name);
+          diagnostic::warning("expected `string` or `blob`, got `{}`", name)
+            .primary(args_.message)
+            .emit(ctx);
+        }
+      }
+    }
+    if (ends.empty()) {
+      co_return;
+    }
+    auto opts = amqp_engine::publish_options{
+      .channel = channel_,
+      .exchange = args_.exchange ? std::string_view{args_.exchange->inner}
+                                 : default_exchange,
+      .routing_key = args_.routing_key
+                       ? std::string_view{args_.routing_key->inner}
+                       : default_routing_key,
+      .mandatory = args_.mandatory,
+      .immediate = args_.immediate,
+    };
+    auto engine = co_await (*engine_)->lock();
+    // Returns the number of published messages and the error that stopped
+    // publishing, if any.
+    auto [published, err]
+      = co_await spawn_blocking([&]() -> std::pair<size_t, caf::error> {
+          auto begin = size_t{0};
+          for (auto i = size_t{0}; i < ends.size(); ++i) {
+            auto bytes = std::span{buffer}.subspan(begin, ends[i] - begin);
+            if (auto err = engine->publish(bytes, opts); err.valid()) {
+              return {i, std::move(err)};
+            }
+            begin = ends[i];
+          }
+          return {ends.size(), caf::error{}};
+        });
+    engine.unlock();
+    if (published > 0) {
+      bytes_write_counter_.add(ends[published - 1]);
+      events_write_counter_.add(published);
+    }
+    if (err.valid()) {
+      auto const begin = published == 0 ? size_t{0} : ends[published - 1];
+      diagnostic::error("failed to publish AMQP message")
+        .primary(args_.url.source)
+        .note("size: {}", ends[published] - begin)
+        .note("channel: {}", opts.channel)
+        .note("exchange: {}", opts.exchange)
+        .note("routing key: {}", opts.routing_key)
+        .note("{}", err)
+        .emit(ctx);
+      done_ = true;
+    }
+  }
+
+  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
+    // Messages are published before `process()` returns, so nothing is left.
+    done_ = true;
+    co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  static auto
+  heartbeat_loop(Arc<Mutex<amqp_engine>> engine, std::chrono::seconds interval,
+                 location loc, diagnostic_handler& dh) -> Task<void> {
+    while (true) {
+      co_await sleep_for(interval);
+      auto guard = co_await engine->lock();
+      auto err = co_await spawn_blocking([&] {
+        return guard->process_heartbeat();
+      });
+      if (err.valid()) {
+        diagnostic::warning("AMQP heartbeat failed")
+          .primary(loc)
+          .note("{}", err)
+          .emit(dh);
+        co_return;
+      }
+    }
+  }
+
+  ToAmqpArgs args_;
+  Option<nova::json_printer> printer_;
+  Option<nova::Evaluator> evaluator_;
+  /// The connection, shared by `process()` and the heartbeat task because
+  /// RabbitMQ-C connections are not thread-safe. Publishing directly from
+  /// `process()` instead of handing batches to a task that owns the connection
+  /// means that every batch is sent once `process()` returns, so a checkpoint
+  /// needs no further synchronization.
+  Option<Arc<Mutex<amqp_engine>>> engine_;
+  uint16_t channel_ = default_channel;
+  MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
+  bool done_ = false;
+};
+
 class to_amqp_plugin final : public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
@@ -355,7 +595,7 @@ public:
   auto describe() const -> Description override {
     auto args = ToAmqpArgs{};
     args.plugin_config = config_;
-    auto d = Describer<ToAmqpArgs, ToAmqp>{std::move(args)};
+    auto d = Describer<ToAmqpArgs, legacy::ToAmqp, ToAmqp>{std::move(args)};
     d.positional("url", &ToAmqpArgs::url);
     d.named_optional("message", &ToAmqpArgs::message, "blob|string");
     auto channel_arg = d.named("channel", &ToAmqpArgs::channel);
@@ -404,7 +644,11 @@ public:
     // instances and therefore arrive in their queue out of input order.
     // Parallelism waives that per-key ordering by design — routing affects
     // placement, not correctness.
-    d.parallelizable();
+    // TODO(TNZ-1311): The executor cannot yet route events across multiple
+    // lanes, so the event implementation must run as a single instance.
+    d.parallelizable([](const ToAmqpArgs&) {
+      return not nova_enabled();
+    });
     return d.without_optimize();
   }
 

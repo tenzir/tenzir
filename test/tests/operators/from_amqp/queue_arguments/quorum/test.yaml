@@ -1,0 +1,17 @@
+fixtures:
+  - amqp:
+      queue: from_amqp_quorum
+      messages: 1
+assertions:
+  fixtures:
+    amqp:
+      queue:
+        type: quorum
+        durable: true
+        auto_delete: false
+        arguments:
+          x-queue-type: quorum
+          x-quorum-initial-group-size: 1
+timeout: 180
+skip:
+  on: fixture-unavailable

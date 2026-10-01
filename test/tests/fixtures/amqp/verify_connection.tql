@@ -1,0 +1,4 @@
+// Smoke-test the fixture by consuming one seeded message.
+from_amqp env("AMQP_URL"), queue=env("AMQP_QUEUE"), passive=true
+select line = string(message)
+head 1

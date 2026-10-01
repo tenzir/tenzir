@@ -1,0 +1,13 @@
+// Declare a queue with numeric and boolean arguments of the broker's default
+// queue type.
+from_amqp env("AMQP_URL"),
+          queue=env("AMQP_QUEUE"),
+          durable=true,
+          no_auto_delete=true,
+          queue_arguments={
+            "x-max-length": 5,
+            "x-message-ttl": 60000,
+            "x-single-active-consumer": true,
+          }
+select line = string(message)
+head 1

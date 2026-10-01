@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A passive declaration fails for a queue that does not exist.
+from_amqp env("AMQP_URL"), queue="from_amqp_missing", passive=true

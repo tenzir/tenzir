@@ -1,0 +1,4 @@
+// Consume and acknowledge the seeded messages.
+from_amqp env("AMQP_URL"), queue=env("AMQP_QUEUE"), passive=true, ack=true
+select line = string(message)
+head 3

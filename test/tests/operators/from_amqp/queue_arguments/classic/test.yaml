@@ -1,0 +1,18 @@
+fixtures:
+  - amqp:
+      queue: from_amqp_classic
+      messages: 1
+assertions:
+  fixtures:
+    amqp:
+      queue:
+        type: classic
+        durable: true
+        auto_delete: false
+        arguments:
+          x-max-length: 5
+          x-message-ttl: 60000
+          x-single-active-consumer: true
+timeout: 180
+skip:
+  on: fixture-unavailable

@@ -1,0 +1,4 @@
+// Consume the seeded messages from an existing queue.
+from_amqp env("AMQP_URL"), queue=env("AMQP_QUEUE"), passive=true
+select line = string(message), schema = @name
+head 3

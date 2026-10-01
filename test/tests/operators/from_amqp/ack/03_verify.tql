@@ -1,0 +1,4 @@
+// The server would deliver unacknowledged messages first.
+from_amqp env("AMQP_URL"), queue=env("AMQP_QUEUE"), passive=true, ack=true
+select line = string(message)
+head 1

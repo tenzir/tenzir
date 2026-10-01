@@ -1,0 +1,12 @@
+// parallelism: 4
+// An explicit quorum queue lets multiple consumers share the queue.
+from_amqp env("AMQP_URL"),
+          queue=env("AMQP_QUEUE"),
+          durable=true,
+          no_auto_delete=true,
+          queue_arguments={
+            "x-queue-type": "quorum",
+            "x-quorum-initial-group-size": 1,
+          }
+select line = string(message)
+head 1
