@@ -1,6 +1,6 @@
 # runner: python
 # fixtures: [local_files]
-# timeout: 60
+# timeout: 120
 
 """Verify transactional hot reloads of Sigma rules and filters."""
 

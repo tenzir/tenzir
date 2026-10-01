@@ -1,3 +1,5 @@
+# timeout: 60
+
 import json
 import os
 from pathlib import Path

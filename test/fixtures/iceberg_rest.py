@@ -22,7 +22,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
-from typing import Iterator
+from collections.abc import Iterator
 
 from tenzir_test import fixture
 from tenzir_test.fixtures import FixtureUnavailable
@@ -68,7 +68,17 @@ def _start_catalog(
     if runtime.binary == "podman" and os.geteuid() != 0:
         run_args.extend(["--user", "0"])
     else:
-        run_args.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+        # Hadoop also needs to resolve the host UID to a username.
+        run_args.extend(
+            [
+                "--user",
+                f"{os.getuid()}:{os.getgid()}",
+                "-v",
+                "/etc/passwd:/etc/passwd:ro",
+                "-v",
+                "/etc/group:/etc/group:ro",
+            ]
+        )
     run_args.append(ICEBERG_REST_IMAGE)
     logger.info("Starting Iceberg REST catalog container with %s", runtime.binary)
     container = start_detached(runtime, run_args)

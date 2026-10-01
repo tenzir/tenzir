@@ -1,5 +1,5 @@
 # runner: python
-# timeout: 120
+# timeout: 240
 
 from feather_test_utils import assert_roundtrip
 

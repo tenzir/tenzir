@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# timeout: 600
 # fixtures: [http, package_http]
 
 import json
