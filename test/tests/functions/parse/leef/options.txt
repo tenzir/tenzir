@@ -1,0 +1,31 @@
+{
+  x: "LEEF:2.0|V|P|1|42|^|a.b=42^a.c=2h^ip=192.0.2.1^empty=",
+  raw: {
+    leef_version: "2.0",
+    vendor: "V",
+    product_name: "P",
+    product_version: "1",
+    event_class_id: "42",
+    attributes: {
+      "a.b": "42",
+      "a.c": "2h",
+      ip: "192.0.2.1",
+      empty: "",
+    },
+  },
+  unflattened: {
+    leef_version: "2.0",
+    vendor: "V",
+    product_name: "P",
+    product_version: "1",
+    event_class_id: "42",
+    attributes: {
+      a: {
+        b: 42,
+        c: 2h,
+      },
+      ip: 192.0.2.1,
+      empty: "",
+    },
+  },
+}

@@ -1,0 +1,3 @@
+from {xs: [{a: 1}, {b: "two"}, {}]}
+select printed=xs.map(x => x.print_leef(vendor="V", product_name="P",
+  product_version="1", event_class_id="42"))

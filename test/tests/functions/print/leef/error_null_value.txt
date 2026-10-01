@@ -1,0 +1,8 @@
+error: `null_value` must not contain `|`
+ --> tests/functions/print/leef/error_null_value.tql:6:56
+  |
+6 |   product_version="1", event_class_id="42", null_value="|")
+  |                                                        ^^^
+  |
+  = usage: print_leef(attributes:record, vendor=string, product_name=string, product_version=string, event_class_id=string, [delimiter=string, null_value=string, flatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/print_leef

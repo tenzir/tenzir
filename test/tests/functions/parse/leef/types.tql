@@ -1,0 +1,5 @@
+from {x: "LEEF:2.0|42|false|192.0.2.1|01|^|signed=-42^large=18446744073709551615^real=3.5^boolean=true^ip=192.0.2.1^subnet=192.0.2.0/24^duration=5s^time=2024-01-02T03:04:05Z^none=null^empty=^quoted=\"foo^bar\"^equal=first\\=second^repeat=1^repeat=two"},
+  {x: "LEEF:1.0|V|P|1|42|"},
+  {x: null}, {x: 42},
+  {x: "LEEF:1.0|V|P|1|42|a=1"}, {x: "LEEF:1.0|V|P|1|42|a=text"}
+select parsed=x.parse_leef()

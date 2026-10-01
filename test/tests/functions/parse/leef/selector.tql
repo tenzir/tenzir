@@ -1,0 +1,4 @@
+from {x: "LEEF:2.0|V|P|1|42|^|kind=first^n=1", active: true},
+  {x: "LEEF:2.0|V|P|1|42|^|n=2", active: false}
+parsed = x.parse_leef(selector="attributes.kind:leef") if active else null
+select active, parsed

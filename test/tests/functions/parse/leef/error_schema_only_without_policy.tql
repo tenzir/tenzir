@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: "LEEF:1.0|V|P|1|42|a=1"}
+parsed = x.parse_leef(schema_only=true)

@@ -1,0 +1,25 @@
+warning: selected schema not found
+ --> tests/functions/parse/leef/selector.tql:3:10
+  |
+3 | parsed = x.parse_leef(selector="attributes.kind:leef") if active else null
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: `leef.first` does not refer to a known schema
+{
+  active: true,
+  parsed: {
+    leef_version: "2.0",
+    vendor: "V",
+    product_name: "P",
+    product_version: "1",
+    event_class_id: "42",
+    attributes: {
+      kind: "first",
+      n: 1,
+    },
+  },
+}
+{
+  active: false,
+  parsed: null,
+}

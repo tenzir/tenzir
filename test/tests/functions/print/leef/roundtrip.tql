@@ -1,0 +1,7 @@
+from {x: "LEEF:1.0|V|P|1|42|a=1\tb=text"},
+  {x: "LEEF:2.0|Vendor|Product|2|43|^|ip=192.0.2.1^n=3"}
+parsed = x.parse_leef()
+printed = parsed.attributes.print_leef(vendor=parsed.vendor,
+  product_name=parsed.product_name, product_version=parsed.product_version,
+  event_class_id=parsed.event_class_id, delimiter="^")
+select printed, reparsed=printed.parse_leef()

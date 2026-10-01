@@ -1,0 +1,9 @@
+from {attributes: {a: [1, 2]}, vendor: "V", id: "list"},
+  {attributes: {a: 1}, vendor: "bad|vendor", id: "pipe"},
+  {attributes: {a: 2}, vendor: null, id: "null-header"},
+  {attributes: {a: 3}, vendor: 42, id: "wrong-header"},
+  {attributes: null, vendor: "V", id: "null-attributes"},
+  {attributes: 42, vendor: "V", id: "wrong-attributes"},
+  {attributes: {a: 4}, vendor: "V", id: "ok"}
+select id, printed=attributes.print_leef(vendor=vendor, product_name="P",
+  product_version="1", event_class_id=id)

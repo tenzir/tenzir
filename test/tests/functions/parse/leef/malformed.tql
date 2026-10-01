@@ -1,0 +1,9 @@
+from {x: "LEEF:3.0|V|P|1|42|a=1"},
+  {x: "LEEF:1.0|V|P"},
+  {x: "LEEF:2.0|V|P|1|42||a=1"},
+  {x: "LEEF:2.0|V|P|1|42|0xz|a=1"},
+  {x: "LEEF:1.0|V|P|1|42|a=1\tbroken"},
+  {x: "LEEF:1.0|V|P|1|42|=empty"},
+  {x: "LEEF:1.0|V|P|1|42|ok=2"},
+  {x: ""}
+select x, parsed=x.parse_leef()

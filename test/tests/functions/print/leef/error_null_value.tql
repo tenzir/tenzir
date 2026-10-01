@@ -1,0 +1,6 @@
+---
+error: true
+---
+from {attributes: {a: 42}}
+printed = attributes.print_leef(vendor="V", product_name="P",
+  product_version="1", event_class_id="42", null_value="|")

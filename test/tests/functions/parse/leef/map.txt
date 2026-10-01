@@ -1,0 +1,25 @@
+{
+  parsed: [
+    {
+      leef_version: "1.0",
+      vendor: "V",
+      product_name: "P",
+      product_version: "1",
+      event_class_id: "42",
+      attributes: {
+        n: 1,
+      },
+    },
+    null,
+    {
+      leef_version: "2.0",
+      vendor: "V",
+      product_name: "P",
+      product_version: "1",
+      event_class_id: "42",
+      attributes: {
+        n: "two",
+      },
+    },
+  ],
+}

@@ -1,0 +1,30 @@
+{
+  id: "first",
+  default: "LEEF:1.0|V|P|1|first|a.b=nested\tb=top\tc=",
+  custom: "LEEF:2.0|V|P|1|first|^|a/b=nested^b=top^c=",
+}
+{
+  id: "second",
+  default: "LEEF:1.0|V|P|1|second|z=true\ta=42",
+  custom: "LEEF:2.0|V|P|1|second|^|z=true^a=42",
+}
+{
+  id: "empty",
+  default: "LEEF:1.0|V|P|1|empty|",
+  custom: "LEEF:2.0|V|P|1|empty|^|",
+}
+{
+  id: "empty-nested",
+  default: "LEEF:1.0|V|P|1|empty-nested|b=after",
+  custom: "LEEF:2.0|V|P|1|empty-nested|^|b=after",
+}
+{
+  id: "collision",
+  default: "LEEF:1.0|V|P|1|collision|a.b=1\ta.b_2=2\ta.b_1=3",
+  custom: "LEEF:2.0|V|P|1|collision|^|a.b=1^a/b=2^a.b_1=3",
+}
+{
+  id: "scalars",
+  default: "LEEF:1.0|V|P|1|scalars|ip=192.0.2.1\tsubnet=192.0.2.0/24\tduration=5000000000ns\ttime=2024-01-02 03:04:05.000000000\treal=3.5",
+  custom: "LEEF:2.0|V|P|1|scalars|^|ip=192.0.2.1^subnet=192.0.2.0/24^duration=5000000000ns^time=2024-01-02 03:04:05.000000000^real=3.5",
+}

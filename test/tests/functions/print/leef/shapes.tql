@@ -1,0 +1,12 @@
+from {attributes: {a: {b: "nested"}, b: "top", c: null}, id: "first"},
+  {attributes: {z: true, a: 42}, id: "second"},
+  {attributes: {}, id: "empty"},
+  {attributes: {a: {}, b: "after"}, id: "empty-nested"},
+  {attributes: {"a.b": 1, a: {b: 2}, "a.b_1": 3}, id: "collision"},
+  {attributes: {ip: 192.0.2.1, subnet: 192.0.2.0/24, duration: 5s,
+    time: 2024-01-02T03:04:05Z, real: 3.5}, id: "scalars"}
+default = attributes.print_leef(vendor="V", product_name="P",
+  product_version="1", event_class_id=id)
+custom = attributes.print_leef(vendor="V", product_name="P",
+  product_version="1", event_class_id=id, delimiter="^", flatten_separator="/")
+select id, default, custom

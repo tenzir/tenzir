@@ -1,0 +1,7 @@
+from {attributes: {a: 1}, vendor: "V", active: true},
+  {attributes: {a: [1]}, vendor: "bad|vendor", active: false},
+  {attributes: 42, vendor: 42, active: false},
+  {attributes: null, vendor: null, active: false}
+printed = attributes.print_leef(vendor=vendor, product_name="P",
+  product_version="1", event_class_id="42") if active else null
+select active, printed

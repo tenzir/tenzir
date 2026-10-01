@@ -24,7 +24,10 @@
 #include <tenzir/module.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/event_builder.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -38,8 +41,11 @@
 #include <caf/expected.hpp>
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <array>
 #include <memory>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -645,7 +651,60 @@ public:
     };
   }
 };
-class parse_leef final : public virtual function_plugin {
+struct ParseLeefArgs {
+  nova::ValueArgument x;
+  nova::EventBuilder::Settings settings;
+  location call;
+};
+
+class ParseLeefFunction {
+public:
+  static auto eval(ParseLeefArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const length = frame.length();
+    auto strings = args.x.data.get_alternative<nova::String>();
+    auto accepted
+      = strings ? strings->present : nova::storage::BitMap{length, false};
+    if (auto nulls = args.x.data.get_alternative<nova::Null>()) {
+      accepted = accepted | nulls->present;
+    }
+    if (auto invalid = frame.mask().and_not(accepted); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.x.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("`parse_leef` expected `string`, got `{}`",
+                            nova::Type<T>::static_name)
+          .primary(args.x.source)
+          .emit(frame);
+      });
+    }
+    auto dh = transforming_diagnostic_handler{
+      frame, [&](diagnostic d) {
+        if (not d.has_location()) {
+          d.annotations.emplace_back(true, std::string{}, args.call);
+        }
+        return d;
+      }};
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+    auto quoting = detail::quoting_escaping_policy{};
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not frame.mask().get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not strings or not strings->present.get(row)) {
+        builder.value().null();
+        continue;
+      }
+      if (auto diag = parse_event(*strings->data.get(row), builder, quoting)) {
+        dh.emit(std::move(*diag));
+        builder.value().null();
+      }
+    }
+    return builder.finish_data();
+  }
+};
+
+class parse_leef final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_leef";
@@ -653,6 +712,20 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseLeefArgs, ParseLeefFunction>{};
+    d.positional("x", &ParseLeefArgs::x, "string");
+    d.call_location(&ParseLeefArgs::call);
+    auto validate
+      = nova::add_event_builder_to_describer(d, &ParseLeefArgs::settings);
+    d.validate([validate](ParseLeefArgs& args,
+                          nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      args.settings.infer_unparsed_under = "attributes";
+      return validate(args, ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -778,7 +851,215 @@ void append_attributes(std::string& out, record_view3 attributes,
   out.erase(out.size() - 1);
 }
 
-class print_leef final : public virtual function_plugin {
+struct PrintLeefArgs {
+  nova::ValueArgument attributes;
+  nova::ValueArgument vendor;
+  nova::ValueArgument product_name;
+  nova::ValueArgument product_version;
+  nova::ValueArgument event_class_id;
+  located<std::string> delimiter = located{"\t", location::unknown};
+  located<std::string> null_value = located{std::string{}, location::unknown};
+  located<std::string> flatten_separator
+    = located{std::string{"."}, location::unknown};
+};
+
+/// Collects the flattened leaf paths of records inside a list. Values remain
+/// unsupported, but their flattened field names match the record printer.
+auto collect_leef_list_paths(nova::RowView<nova::Data> value,
+                             std::string_view prefix,
+                             std::string_view separator,
+                             std::vector<std::string>& paths) -> bool {
+  return match(
+    value,
+    [&](nova::RowView<nova::List> list) {
+      auto found = false;
+      for (auto element : list) {
+        found
+          = collect_leef_list_paths(element, prefix, separator, paths) or found;
+      }
+      return found;
+    },
+    [&](nova::RowView<nova::Record> record) {
+      for (auto [name, field] : record) {
+        auto path = fmt::format("{}{}", prefix, name);
+        if (not collect_leef_list_paths(field, path + std::string{separator},
+                                        separator, paths)
+            and std::ranges::find(paths, path) == paths.end()) {
+          paths.push_back(std::move(path));
+        }
+      }
+      return true;
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
+/// Collects scalar and list leaves in the record's own field order.
+auto collect_leef_attributes(
+  nova::RowView<nova::Record> record, std::string_view prefix,
+  std::string_view separator,
+  std::vector<std::pair<std::string, nova::RowView<nova::Data>>>& fields)
+  -> void {
+  for (auto [name, value] : record) {
+    auto path = fmt::format("{}{}", prefix, name);
+    match(
+      value,
+      [&](nova::RowView<nova::Record> nested) {
+        collect_leef_attributes(nested, path + std::string{separator},
+                                separator, fields);
+      },
+      [&](nova::RowView<nova::List> list) {
+        auto paths = std::vector<std::string>{};
+        if (collect_leef_list_paths(list, path + std::string{separator},
+                                    separator, paths)) {
+          for (auto& leaf : paths) {
+            fields.emplace_back(std::move(leaf), value);
+          }
+        } else {
+          fields.emplace_back(std::move(path), value);
+        }
+      },
+      [&](auto const&) {
+        fields.emplace_back(std::move(path), value);
+      });
+  }
+}
+
+class PrintLeefFunction {
+public:
+  static auto eval(PrintLeefArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const length = frame.length();
+    auto valid = frame.mask();
+    auto header_args = std::array{
+      std::pair{"vendor", &args.vendor},
+      std::pair{"product_name", &args.product_name},
+      std::pair{"product_version", &args.product_version},
+      std::pair{"event_class_id", &args.event_class_id},
+    };
+    auto headers
+      = std::array<Option<nova::MaskedArray<nova::Array<nova::String>>>, 4>{};
+    for (auto i = size_t{0}; i < header_args.size(); ++i) {
+      auto const& [name, arg] = header_args[i];
+      headers[i] = arg->data.get_alternative<nova::String>();
+      auto present = headers[i] ? headers[i]->present
+                                : nova::storage::BitMap{length, false};
+      auto invalid = frame.mask().and_not(present);
+      if (auto nulls = arg->data.get_alternative<nova::Null>()) {
+        if ((frame.mask() & nulls->present).any()) {
+          diagnostic::warning("`{}` is `null`", name)
+            .primary(arg->source)
+            .emit(frame);
+        }
+        invalid = invalid.and_not(nulls->present);
+      }
+      if (invalid.any()) {
+        auto row = *nova::storage::true_bits(invalid).begin();
+        match(arg->data.get(row), [&]<class T>(nova::RowView<T>) {
+          diagnostic::warning("`{}` must be `string`", name)
+            .primary(arg->source, "got `{}`", nova::Type<T>::static_name)
+            .emit(frame);
+        });
+      }
+      valid = valid & present;
+    }
+    auto records = args.attributes.data.get_alternative<nova::Record>();
+    auto present
+      = records ? records->present : nova::storage::BitMap{length, false};
+    if (auto invalid = frame.mask().and_not(present); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.attributes.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("`attributes` must be `record`")
+          .primary(args.attributes.source, "got `{}`",
+                   nova::Type<T>::static_name)
+          .emit(frame);
+      });
+    }
+    valid = valid & present;
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto fields
+      = std::vector<std::pair<std::string, nova::RowView<nova::Data>>>{};
+    auto out = std::string{};
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not frame.mask().get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not valid.get(row)) {
+        builder.null();
+        continue;
+      }
+      out = args.delimiter.inner == "\t" ? "LEEF:1.0|" : "LEEF:2.0|";
+      auto ok = true;
+      for (auto i = size_t{0}; i < headers.size(); ++i) {
+        auto value = *headers[i]->data.get(row);
+        if (value.contains('|')) {
+          diagnostic::warning("`{}` contains illegal character `|`",
+                              header_args[i].first)
+            .primary(header_args[i].second->source)
+            .emit(frame);
+          ok = false;
+          break;
+        }
+        out += value;
+        out += '|';
+      }
+      if (not ok) {
+        builder.null();
+        continue;
+      }
+      if (args.delimiter.inner != "\t") {
+        out += args.delimiter.inner;
+        out += '|';
+      }
+      fields.clear();
+      collect_leef_attributes(records->data.get(row), "",
+                              args.flatten_separator.inner, fields);
+      // Keep flattened-name collisions distinct, as `flatten` does.
+      auto existing = std::unordered_set<std::string>{};
+      for (auto const& [name, value] : fields) {
+        existing.insert(name);
+      }
+      auto seen = std::unordered_set<std::string>{};
+      auto first = true;
+      for (auto const& [name, value] : fields) {
+        auto unique = name;
+        if (not seen.insert(name).second) {
+          for (auto suffix = size_t{1};; ++suffix) {
+            unique = fmt::format("{}_{}", name, suffix);
+            if (existing.insert(unique).second) {
+              break;
+            }
+          }
+        }
+        if (not std::exchange(first, false)) {
+          out += args.delimiter.inner;
+        }
+        out += unique;
+        out += '=';
+        match(
+          value, [](nova::RowView<nova::Null>) {},
+          [&](nova::RowView<nova::List>) {
+            diagnostic::warning("`list` is not supported in a LEEF attribute "
+                                "value")
+              .primary(args.attributes.source)
+              .emit(frame);
+          },
+          [](nova::RowView<nova::Record>) {
+            TENZIR_UNREACHABLE();
+          },
+          [&](auto scalar) {
+            fmt::format_to(std::back_inserter(out), "{}", *scalar);
+          });
+      }
+      builder.data(std::string_view{out});
+    }
+    return builder.finish();
+  }
+};
+
+class print_leef final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "print_leef";
@@ -786,6 +1067,47 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrintLeefArgs, PrintLeefFunction>{};
+    d.positional("attributes", &PrintLeefArgs::attributes, "record");
+    d.named("vendor", &PrintLeefArgs::vendor, "string");
+    d.named("product_name", &PrintLeefArgs::product_name, "string");
+    d.named("product_version", &PrintLeefArgs::product_version, "string");
+    d.named("event_class_id", &PrintLeefArgs::event_class_id, "string");
+    d.named_optional("delimiter", &PrintLeefArgs::delimiter);
+    d.named_optional("null_value", &PrintLeefArgs::null_value);
+    d.named_optional("flatten_separator", &PrintLeefArgs::flatten_separator);
+    d.validate([](PrintLeefArgs& args,
+                  diagnostic_handler& dh) -> failure_or<void> {
+      if (args.delimiter.inner.size() != 1) {
+        diagnostic::error("custom LEEF `delimiter` must be a single character")
+          .primary(args.delimiter, "got `{}`", args.delimiter.inner)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (args.delimiter.inner == "|") {
+        diagnostic::error("custom LEEF `delimiter` must not be `|`")
+          .primary(args.delimiter)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (args.null_value.inner.contains('|')) {
+        diagnostic::error("`null_value` must not contain `|`")
+          .primary(args.null_value)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (args.flatten_separator.inner.contains('|')) {
+        diagnostic::error("`flatten_separator` must not contain `|`")
+          .primary(args.flatten_separator)
+          .emit(dh);
+        return failure::promise();
+      }
+      return {};
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

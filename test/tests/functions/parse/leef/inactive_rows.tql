@@ -1,0 +1,5 @@
+from {x: "LEEF:1.0|V|P|1|42|ok=1", active: true},
+  {x: "malformed", active: false},
+  {x: 42, active: false}
+parsed = x.parse_leef() if active else null
+select active, parsed

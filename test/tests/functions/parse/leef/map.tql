@@ -1,0 +1,3 @@
+from {xs: ["LEEF:1.0|V|P|1|42|n=1", null,
+  "LEEF:2.0|V|P|1|42|^|n=two"]}
+select parsed=xs.map(x => x.parse_leef())

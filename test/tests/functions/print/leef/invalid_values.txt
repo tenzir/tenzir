@@ -1,0 +1,62 @@
+warning: `list` is not supported in a LEEF attribute value
+ --> tests/functions/print/leef/invalid_values.tql:8:20
+  |
+8 | select id, printed=attributes.print_leef(vendor=vendor, product_name="P",
+  |                    ~~~~~~~~~~
+  |
+
+warning: `vendor` contains illegal character `|`
+ --> tests/functions/print/leef/invalid_values.tql:8:49
+  |
+8 | select id, printed=attributes.print_leef(vendor=vendor, product_name="P",
+  |                                                 ~~~~~~
+  |
+
+warning: `vendor` is `null`
+ --> tests/functions/print/leef/invalid_values.tql:8:49
+  |
+8 | select id, printed=attributes.print_leef(vendor=vendor, product_name="P",
+  |                                                 ~~~~~~
+  |
+
+warning: `vendor` must be `string`
+ --> tests/functions/print/leef/invalid_values.tql:8:49
+  |
+8 | select id, printed=attributes.print_leef(vendor=vendor, product_name="P",
+  |                                                 ~~~~~~ got `int`
+  |
+
+warning: `attributes` must be `record`
+ --> tests/functions/print/leef/invalid_values.tql:8:20
+  |
+8 | select id, printed=attributes.print_leef(vendor=vendor, product_name="P",
+  |                    ~~~~~~~~~~ got `null`
+  |
+{
+  id: "list",
+  printed: "LEEF:1.0|V|P|1|list|a=",
+}
+{
+  id: "pipe",
+  printed: null,
+}
+{
+  id: "null-header",
+  printed: null,
+}
+{
+  id: "wrong-header",
+  printed: null,
+}
+{
+  id: "null-attributes",
+  printed: null,
+}
+{
+  id: "wrong-attributes",
+  printed: null,
+}
+{
+  id: "ok",
+  printed: "LEEF:1.0|V|P|1|ok|a=4",
+}

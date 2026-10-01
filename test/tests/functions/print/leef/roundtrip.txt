@@ -1,0 +1,28 @@
+{
+  printed: "LEEF:2.0|V|P|1|42|^|a=1^b=text",
+  reparsed: {
+    leef_version: "2.0",
+    vendor: "V",
+    product_name: "P",
+    product_version: "1",
+    event_class_id: "42",
+    attributes: {
+      a: 1,
+      b: "text",
+    },
+  },
+}
+{
+  printed: "LEEF:2.0|Vendor|Product|2|43|^|ip=192.0.2.1^n=3",
+  reparsed: {
+    leef_version: "2.0",
+    vendor: "Vendor",
+    product_name: "Product",
+    product_version: "2",
+    event_class_id: "43",
+    attributes: {
+      ip: 192.0.2.1,
+      n: 3,
+    },
+  },
+}

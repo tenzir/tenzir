@@ -1,4 +1,9 @@
 warning: invalid LEEF event
+ --> tests/functions/parse/leef/parse_leef.tql:3:10
+  |
+3 | output = input.parse_leef()
+  |          ~~~~~~~~~~~~~~~~~~
+  |
   = hint: LEEF events start with LEEF:$VERSION|...
 {
   input: "LEEF:1.0|Microsoft|MSExchange|2016|15345|src=10.50.1.1\tdst=2.10.20.20\tspt=1200",

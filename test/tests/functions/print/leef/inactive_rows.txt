@@ -1,0 +1,16 @@
+{
+  active: true,
+  printed: "LEEF:1.0|V|P|1|42|a=1",
+}
+{
+  active: false,
+  printed: null,
+}
+{
+  active: false,
+  printed: null,
+}
+{
+  active: false,
+  printed: null,
+}

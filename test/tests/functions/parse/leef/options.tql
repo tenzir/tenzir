@@ -1,0 +1,3 @@
+from {x: "LEEF:2.0|V|P|1|42|^|a.b=42^a.c=2h^ip=192.0.2.1^empty="}
+raw = x.parse_leef(raw=true)
+unflattened = x.parse_leef(unflatten_separator=".")

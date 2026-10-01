@@ -1,0 +1,21 @@
+{
+  active: true,
+  parsed: {
+    leef_version: "1.0",
+    vendor: "V",
+    product_name: "P",
+    product_version: "1",
+    event_class_id: "42",
+    attributes: {
+      ok: 1,
+    },
+  },
+}
+{
+  active: false,
+  parsed: null,
+}
+{
+  active: false,
+  parsed: null,
+}

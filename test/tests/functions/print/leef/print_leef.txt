@@ -1,19 +1,19 @@
-warning: `event_class_id` must be `string`
-  --> tests/functions/print/print_leef.tql:20:20
+warning: `event_class_id` is `null`
+  --> tests/functions/print/leef/print_leef.tql:20:20
    |
 20 |     event_class_id=null)
-   |                    ~~~~ got `null`
+   |                    ~~~~
    |
 
 warning: `attributes` must be `record`
-  --> tests/functions/print/print_leef.tql:21:6
+  --> tests/functions/print/leef/print_leef.tql:21:6
    |
 21 | r4 = null.print_leef(
    |      ~~~~ got `null`
    |
 
 warning: `event_class_id` is `null`
-  --> tests/functions/print/print_leef.tql:30:20
+  --> tests/functions/print/leef/print_leef.tql:30:20
    |
 30 |     event_class_id=string(null))
    |                    ~~~~~~~~~~~~

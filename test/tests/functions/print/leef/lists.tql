@@ -1,0 +1,7 @@
+from {attributes: {a: [1, 2]}},
+  {attributes: {a: [{b: 1}, {b: 2, c: "three"}]}},
+  {attributes: {a: [[{b: 1}]]}},
+  {attributes: {a: [{}]}},
+  {attributes: {a: [], b: "after"}}
+select printed=attributes.print_leef(vendor="V", product_name="P",
+  product_version="1", event_class_id="42")

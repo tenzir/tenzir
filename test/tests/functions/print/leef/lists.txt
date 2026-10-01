@@ -1,0 +1,21 @@
+warning: `list` is not supported in a LEEF attribute value
+ --> tests/functions/print/leef/lists.tql:6:16
+  |
+6 | select printed=attributes.print_leef(vendor="V", product_name="P",
+  |                ~~~~~~~~~~
+  |
+{
+  printed: "LEEF:1.0|V|P|1|42|a=",
+}
+{
+  printed: "LEEF:1.0|V|P|1|42|a.b=\ta.c=",
+}
+{
+  printed: "LEEF:1.0|V|P|1|42|a.b=",
+}
+{
+  printed: "LEEF:1.0|V|P|1|42|",
+}
+{
+  printed: "LEEF:1.0|V|P|1|42|a=\tb=after",
+}

@@ -1,0 +1,8 @@
+error: `schema_only` requires a `schema` or `selector`
+ --> tests/functions/parse/leef/error_schema_only_without_policy.tql:5:35
+  |
+5 | parsed = x.parse_leef(schema_only=true)
+  |                                   ^^^^
+  |
+  = usage: parse_leef(x:string, [schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_leef

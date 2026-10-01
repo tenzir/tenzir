@@ -1,0 +1,97 @@
+warning: unsupported LEEF version: 3.0
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = hint: only 1.0 and 2.0 are valid values
+
+warning: LEEF 1.0 requires at least 6 fields
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = note: got 3 fields
+
+warning: got empty delimiter
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = note: LEEF v2.0 requires a delimiter specification
+  = hint: delimiter must be a single character or start with 'x' or '0x'
+
+warning: invalid hex delimiter: 0xz
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = hint: hex delimiters with 'x' or '0x' require subsequent hex chars
+
+warning: missing key-value separator in attribute
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = note: attribute was `broken`
+
+warning: missing key before separator in attributes
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = note: attribute was `=empty`
+
+warning: invalid LEEF event
+ --> tests/functions/parse/leef/malformed.tql:9:18
+  |
+9 | select x, parsed=x.parse_leef()
+  |                  ~~~~~~~~~~~~~~
+  |
+  = hint: LEEF events start with LEEF:$VERSION|...
+{
+  x: "LEEF:3.0|V|P|1|42|a=1",
+  parsed: null,
+}
+{
+  x: "LEEF:1.0|V|P",
+  parsed: null,
+}
+{
+  x: "LEEF:2.0|V|P|1|42||a=1",
+  parsed: null,
+}
+{
+  x: "LEEF:2.0|V|P|1|42|0xz|a=1",
+  parsed: null,
+}
+{
+  x: "LEEF:1.0|V|P|1|42|a=1\tbroken",
+  parsed: null,
+}
+{
+  x: "LEEF:1.0|V|P|1|42|=empty",
+  parsed: null,
+}
+{
+  x: "LEEF:1.0|V|P|1|42|ok=2",
+  parsed: {
+    leef_version: "1.0",
+    vendor: "V",
+    product_name: "P",
+    product_version: "1",
+    event_class_id: "42",
+    attributes: {
+      ok: 2,
+    },
+  },
+}
+{
+  x: "",
+  parsed: null,
+}

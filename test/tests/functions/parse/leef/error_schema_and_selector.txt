@@ -1,0 +1,11 @@
+error: `schema` and `selector` cannot be combined
+ --> tests/functions/parse/leef/error_schema_and_selector.tql:5:30
+  |
+5 | parsed = x.parse_leef(schema="leef.test", selector="event_class_id")
+  |                              ^^^^^^^^^^^
+  ⋮
+5 | parsed = x.parse_leef(schema="leef.test", selector="event_class_id")
+  |                                                    ^^^^^^^^^^^^^^^^
+  |
+  = usage: parse_leef(x:string, [schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_leef
