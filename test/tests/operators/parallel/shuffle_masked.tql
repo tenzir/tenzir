@@ -1,0 +1,9 @@
+// parallelism: 4
+// Keyed routing also has to skip inactive rows: they must not contribute to
+// any group, and their keys must not influence the partitioning.
+from {}
+repeat 100
+enumerate i
+where i >= 90
+summarize k=i, n=count()
+summarize groups=count(), rows=sum(n), checksum=sum(k)

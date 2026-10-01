@@ -86,7 +86,7 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   // number does not balloon the pipeline's memory usage. Disabled fusing is
   // exempt: it asks for plain buffered channels throughout, so the budget
   // would only cost throughput without bounding anything.
-  if (type.is<table_slice>()
+  if ((type.is<table_slice>() or type.is<nova::Events>())
       and par_scopes_.back().fuse != parallelism::Fusing::none
       and (up_degree > 1 or down_degree > 1)) {
     return ChannelKind::tiny;

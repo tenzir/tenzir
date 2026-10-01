@@ -1,0 +1,5 @@
+{
+  groups: 1000,
+  rows: 1000,
+  checksum: 499500,
+}

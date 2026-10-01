@@ -21,6 +21,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/table_slice.hpp"
@@ -68,10 +70,14 @@ using AnyOpPush
 /// - `key` set: shuffle (hash-partition by the key expression).
 /// - a single lane: forward directly.
 ///
-/// Only `table_slice` ports ever hold more than one lane. Signals are
-/// broadcast to every lane by the runner.
+/// Only event ports — `table_slice` and `nova::Events` — ever hold more than
+/// one lane. Signals are broadcast to every lane by the runner.
 struct OutputPort {
   Option<ast::expression> key;
+  /// The prepared form of `key` for `nova::Events` lanes, which evaluate
+  /// through an evaluator that is instantiated once per port rather than per
+  /// push. Set only for keyed multi-lane event-batch ports.
+  Option<nova::Evaluator> key_evaluator;
   std::vector<AnyOpPush> lanes;
   /// Persistent adaptive-scatter state (one counter per lane), sized to
   /// `lanes.size()`. Only used for the keyless multi-lane case.
@@ -111,8 +117,8 @@ public:
       co_return;
     }
     TENZIR_ASSERT(not port_.lanes.empty());
-    // Multi-lane routing (scatter/shuffle) only applies to `table_slice`; the
-    // planner never produces multi-lane byte or void ports.
+    // Multi-lane routing (scatter/shuffle) only applies to event types; the
+    // planner never produces multi-lane byte, file, or void ports.
     if constexpr (std::same_as<T, table_slice>) {
       const auto lane = [&](size_t i) -> Push<OperatorMsg<table_slice>>& {
         return *as<Box<Push<OperatorMsg<table_slice>>>>(port_.lanes[i]);
@@ -137,6 +143,33 @@ public:
         for (auto& [bucket, part] :
              routing::hash_partition(output, values, jobs)) {
           co_await lane(bucket)(OperatorMsg<table_slice>{std::move(part)});
+        }
+      }
+    } else if constexpr (std::same_as<T, nova::Events>) {
+      const auto lane = [&](size_t i) -> Push<OperatorMsg<nova::Events>>& {
+        return *as<Box<Push<OperatorMsg<nova::Events>>>>(port_.lanes[i]);
+      };
+      // `key_evaluator` is the port's key in prepared form, so its absence
+      // means either a keyless port or one whose key failed to instantiate. The
+      // latter has already emitted a diagnostic that fails the pipeline, so
+      // scattering keeps the batch moving until the pipeline tears down.
+      if (not port_.key_evaluator) {
+        // Scatter: split the active rows across lanes, keeping load balanced.
+        // Inactive rows are no work, so they do not count towards the load.
+        auto total = static_cast<uint64_t>(output.active_count());
+        auto assignments
+          = routing::distribute_adaptive(total, port_.rows_assigned);
+        for (auto& [l, part] : routing::split_active(output, assignments)) {
+          co_await lane(l)(OperatorMsg<nova::Events>{std::move(part)});
+        }
+      } else {
+        // Shuffle: hash-partition the active rows by the key expression.
+        auto values = port_.key_evaluator->eval(output, nova::EvalCtx{dh_});
+        TENZIR_ASSERT(values.length() == output.length());
+        auto jobs = static_cast<uint64_t>(port_.lanes.size());
+        for (auto& [bucket, part] :
+             routing::hash_partition(output, values, jobs)) {
+          co_await lane(bucket)(OperatorMsg<nova::Events>{std::move(part)});
         }
       }
     } else {
@@ -485,6 +518,11 @@ protected:
   }
 
   auto make_fused_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>> override {
+    return inner_.make_fused_channel<nova::Events>(std::move(id));
+  }
+
+  auto make_tiny_nova_events(ChannelId id)
     -> PushPull<OperatorMsg<nova::Events>> override {
     return inner_.make_fused_channel<nova::Events>(std::move(id));
   }
@@ -1346,6 +1384,7 @@ private:
           TENZIR_ASSERT(ok);
         }
       }
+      co_await prepare_key_evaluators();
       co_await base_op().start(job_, *this);
       co_await folly::coro::co_safe_point;
       ensure_await_task();
@@ -1368,6 +1407,30 @@ private:
       throw;
     }
     LOGW("CANCELING queue");
+  }
+
+  /// Instantiates the routing keys of this operator's keyed multi-lane
+  /// `nova::Events` output ports.
+  ///
+  /// Unlike the legacy evaluator, this one must be prepared once up front
+  /// instead of per push. Preparation goes through the operator context, so a
+  /// key resolves its secrets exactly like the same expression does in the
+  /// keyed operator downstream. A failure has emitted a diagnostic and fails
+  /// the pipeline; the port then stays keyless for the teardown.
+  auto prepare_key_evaluators() -> Task<void> {
+    for (auto& port : push_downstream_) {
+      if (not port.key or port.lanes.size() < 2) {
+        continue;
+      }
+      if (not is<Box<Push<OperatorMsg<nova::Events>>>>(port.lanes.front())) {
+        continue;
+      }
+      auto evaluator = co_await nova::Evaluator::make(*port.key, *this);
+      if (not evaluator) {
+        continue;
+      }
+      port.key_evaluator.emplace(std::move(*evaluator));
+    }
   }
 
   auto main_loop() -> Task<void> {
@@ -1932,8 +1995,9 @@ private:
             case ir::ChannelKind::fused:
               return exec_ctx_.make_fused_channel<T>(cid);
             case ir::ChannelKind::tiny:
-              if constexpr (std::same_as<T, table_slice>) {
-                return exec_ctx_.make_tiny_channel(cid);
+              if constexpr (std::same_as<T, table_slice>
+                            or std::same_as<T, nova::Events>) {
+                return exec_ctx_.make_tiny_channel<T>(cid);
               } else {
                 panic("only event channels can be tiny");
               }

@@ -9,6 +9,9 @@
 #include "tenzir/async/routing.hpp"
 
 #include "tenzir/async/channel.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -77,6 +80,56 @@ auto ids_of(const table_slice& slice) -> std::vector<int64_t> {
     result.push_back(array.Value(i));
   }
   return result;
+}
+
+/// Builds a batch with one `id` field per row, where the rows in `active` are
+/// the only visible ones. The `id` makes every row identifiable across a
+/// routing decision.
+auto make_events(int64_t rows, std::span<const int64_t> active)
+  -> nova::Events {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (auto i = int64_t{0}; i < rows; ++i) {
+    builder.record().field("id").data(i);
+  }
+  auto mask
+    = nova::storage::BitMap::Mutable{static_cast<nova::storage::Index>(rows)};
+  for (auto row : active) {
+    mask.set(static_cast<nova::storage::Index>(row), true);
+  }
+  return nova::Events{
+    builder.finish(), std::move(mask).finish(),
+    nova::Events::Meta::make_empty(static_cast<nova::storage::Index>(rows),
+                                   "test.routing")};
+}
+
+/// Builds a batch where every row is active.
+auto make_events(int64_t rows) -> nova::Events {
+  auto active = std::vector<int64_t>(static_cast<size_t>(rows));
+  std::iota(active.begin(), active.end(), int64_t{0});
+  return make_events(rows, active);
+}
+
+/// Returns the `id` values of the active rows of a batch built by
+/// `make_events`, in order.
+auto active_ids(const nova::Events& events) -> std::vector<int64_t> {
+  auto result = std::vector<int64_t>{};
+  auto const field = events.data.field("id");
+  TENZIR_ASSERT(field);
+  auto const ids = field->data.get_alternative<nova::Int>();
+  TENZIR_ASSERT(ids);
+  for (auto row : nova::storage::true_bits(events.mask)) {
+    result.push_back(*ids->data.get(row));
+  }
+  return result;
+}
+
+/// Builds a key column with one string per physical row.
+auto make_keys(std::span<const std::string> keys) -> nova::Array<nova::Data> {
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  for (const auto& key : keys) {
+    builder.data(std::string_view{key});
+  }
+  return builder.finish();
 }
 
 auto make_sorted(std::span<const uint64_t> rows_assigned)
@@ -318,6 +371,177 @@ TEST("hash_partition preserves slice metadata") {
   for (const auto& part : hash_partition(slice, key_column(slice), 4)) {
     CHECK_EQUAL(part.slice.schema(), slice.schema());
     CHECK_EQUAL(part.slice.import_time(), import_time);
+  }
+}
+
+TEST("split_active hands every lane its share of the active rows") {
+  // Rows 1, 3, 4, and 7 are active, so the assigned counts must be taken from
+  // those rows in order; the inactive rows belong to no lane at all.
+  auto events = make_events(9, std::vector<int64_t>{1, 3, 4, 7});
+  auto assignments = std::vector<std::pair<size_t, uint64_t>>{{2, 1}, {0, 3}};
+  auto parts = split_active(events, assignments);
+  REQUIRE_EQUAL(parts.size(), size_t{2});
+  CHECK_EQUAL(parts[0].lane, uint64_t{2});
+  CHECK_EQUAL(active_ids(parts[0].events), (std::vector<int64_t>{1}));
+  CHECK_EQUAL(parts[1].lane, uint64_t{0});
+  CHECK_EQUAL(active_ids(parts[1].events), (std::vector<int64_t>{3, 4, 7}));
+  // The parts share the input's columns, so they keep its physical length and
+  // differ only in their masks.
+  for (const auto& part : parts) {
+    CHECK_EQUAL(part.events.length(), events.length());
+  }
+  CHECK_EQUAL(parts[0].events.active_count() + parts[1].events.active_count(),
+              events.active_count());
+}
+
+TEST("split_active with a single assignment forwards the input") {
+  auto events = make_events(5);
+  auto assignments = std::vector<std::pair<size_t, uint64_t>>{{1, 5}};
+  auto parts = split_active(events, assignments);
+  REQUIRE_EQUAL(parts.size(), size_t{1});
+  CHECK_EQUAL(parts[0].lane, uint64_t{1});
+  CHECK_EQUAL(parts[0].events.length(), events.length());
+  CHECK_EQUAL(active_ids(parts[0].events),
+              (std::vector<int64_t>{0, 1, 2, 3, 4}));
+}
+
+TEST("split_active distributes an adaptive assignment without losing rows") {
+  auto events = make_events(100);
+  auto rows_assigned = std::vector<uint64_t>(4, 0);
+  auto assignments = distribute_adaptive(100, rows_assigned);
+  auto parts = split_active(events, assignments);
+  auto seen = std::vector<int64_t>{};
+  for (const auto& part : parts) {
+    auto ids = active_ids(part.events);
+    seen.insert(seen.end(), ids.begin(), ids.end());
+  }
+  auto expected = std::vector<int64_t>(100);
+  std::iota(expected.begin(), expected.end(), int64_t{0});
+  CHECK_EQUAL(seen, expected);
+}
+
+TEST("event hash_partition covers every active row exactly once") {
+  auto keys = std::vector<std::string>{};
+  for (auto i = 0; i < 100; ++i) {
+    keys.push_back(fmt::format("key-{}", i));
+  }
+  auto events = make_events(100);
+  auto parts = hash_partition(events, make_keys(keys), 4);
+  auto seen = std::vector<int64_t>{};
+  for (const auto& part : parts) {
+    CHECK(part.lane < uint64_t{4});
+    auto ids = active_ids(part.events);
+    seen.insert(seen.end(), ids.begin(), ids.end());
+  }
+  std::sort(seen.begin(), seen.end());
+  auto expected = std::vector<int64_t>(100);
+  std::iota(expected.begin(), expected.end(), int64_t{0});
+  CHECK_EQUAL(seen, expected);
+}
+
+TEST("event hash_partition ignores inactive rows") {
+  // Inactive rows carry no work: they must never show up as the rows of a
+  // part, no matter which bucket their key would hash to.
+  auto keys = std::vector<std::string>{"a", "b", "c", "d", "e", "f"};
+  auto events = make_events(6, std::vector<int64_t>{1, 4});
+  auto parts = hash_partition(events, make_keys(keys), 3);
+  auto seen = std::vector<int64_t>{};
+  for (const auto& part : parts) {
+    auto ids = active_ids(part.events);
+    seen.insert(seen.end(), ids.begin(), ids.end());
+  }
+  std::sort(seen.begin(), seen.end());
+  CHECK_EQUAL(seen, (std::vector<int64_t>{1, 4}));
+}
+
+TEST("event hash_partition emits at most one part per bucket") {
+  // The same bound as for slices: unclustered keys must not degenerate into
+  // one message per row.
+  auto keys = std::vector<std::string>{};
+  for (auto i = 0; i < 1000; ++i) {
+    keys.push_back(fmt::format("key-{}", i));
+  }
+  auto events = make_events(1000);
+  const auto jobs = uint64_t{3};
+  auto parts = hash_partition(events, make_keys(keys), jobs);
+  CHECK(parts.size() <= jobs);
+  auto lanes = std::set<uint64_t>{};
+  for (const auto& part : parts) {
+    CHECK(lanes.insert(part.lane).second);
+    CHECK(part.events.active_count() > 0);
+  }
+}
+
+TEST("event hash_partition routes equal keys to the same bucket") {
+  auto keys = std::vector<std::string>{"a", "b", "a", "c", "b", "a"};
+  auto events = make_events(6);
+  auto buckets = std::vector<uint64_t>(keys.size());
+  for (const auto& part : hash_partition(events, make_keys(keys), 4)) {
+    for (auto id : active_ids(part.events)) {
+      buckets[static_cast<size_t>(id)] = part.lane;
+    }
+  }
+  for (auto i = size_t{0}; i < keys.size(); ++i) {
+    for (auto j = i + 1; j < keys.size(); ++j) {
+      if (keys[i] == keys[j]) {
+        CHECK_EQUAL(buckets[i], buckets[j]);
+      }
+    }
+  }
+}
+
+TEST("event hash_partition preserves order within a bucket") {
+  auto keys = std::vector<std::string>{"a", "b", "a", "b", "a", "b", "a"};
+  auto events = make_events(7);
+  for (const auto& part : hash_partition(events, make_keys(keys), 2)) {
+    CHECK(std::ranges::is_sorted(active_ids(part.events)));
+  }
+}
+
+TEST("event hash_partition with one job returns the input unchanged") {
+  auto keys = std::vector<std::string>{"a", "b", "c"};
+  auto events = make_events(3);
+  auto parts = hash_partition(events, make_keys(keys), 1);
+  REQUIRE_EQUAL(parts.size(), size_t{1});
+  CHECK_EQUAL(parts[0].lane, uint64_t{0});
+  CHECK_EQUAL(active_ids(parts[0].events), (std::vector<int64_t>{0, 1, 2}));
+}
+
+TEST("event hash_partition on inactive input yields nothing") {
+  auto events = make_events(4, std::vector<int64_t>{});
+  auto keys = std::vector<std::string>{"a", "b", "c", "d"};
+  CHECK(hash_partition(events, make_keys(keys), 4).empty());
+}
+
+TEST("event hash_partition splits the input mask into disjoint parts") {
+  // The parts share the input's columns, so the mask is what separates them:
+  // every active row belongs to exactly one part, and no part invents rows.
+  auto keys = std::vector<std::string>{};
+  for (auto i = 0; i < 60; ++i) {
+    keys.push_back(fmt::format("key-{}", i));
+  }
+  auto events = make_events(60);
+  auto covered = std::vector<int>(60, 0);
+  for (const auto& part : hash_partition(events, make_keys(keys), 3)) {
+    CHECK_EQUAL(part.events.length(), events.length());
+    for (auto row : nova::storage::true_bits(part.events.mask)) {
+      ++covered[static_cast<size_t>(row)];
+    }
+  }
+  CHECK(std::ranges::all_of(covered, [](int count) {
+    return count == 1;
+  }));
+}
+
+TEST("event hash_partition preserves batch metadata") {
+  auto keys = std::vector<std::string>{};
+  for (auto i = 0; i < 50; ++i) {
+    keys.push_back(fmt::format("key-{}", i));
+  }
+  auto events = make_events(50);
+  for (const auto& part : hash_partition(events, make_keys(keys), 4)) {
+    CHECK_EQUAL(part.events.meta.name.length(), part.events.length());
+    CHECK_EQUAL(*part.events.meta.name.get(0), "test.routing");
   }
 }
 

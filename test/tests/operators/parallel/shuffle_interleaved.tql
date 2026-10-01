@@ -1,0 +1,8 @@
+// parallelism: 4
+// Many distinct keys interleave the buckets, so the exchange cannot route
+// contiguous runs and must narrow one mask per bucket instead.
+from {}
+repeat 1000
+enumerate i
+summarize k=i, n=count()
+summarize groups=count(), rows=sum(n), checksum=sum(k)

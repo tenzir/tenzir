@@ -1,0 +1,8 @@
+// parallelism: 4
+// Scattering must neither lose nor duplicate rows, no matter how the exchange
+// balances them across the lanes.
+from {}
+repeat 1000
+enumerate i
+assert i >= 0
+summarize n=count(), s=sum(i)

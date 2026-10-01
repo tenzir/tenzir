@@ -9,6 +9,8 @@
 #pragma once
 
 #include "tenzir/multi_series.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/union_array.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <cstddef>
@@ -85,5 +87,40 @@ struct RoutedSlice {
 /// Requires `jobs > 0` and `keys.length() == slice.rows()`.
 auto hash_partition(const table_slice& slice, const multi_series& keys,
                     uint64_t jobs) -> std::vector<RoutedSlice>;
+
+/// A part of an input batch destined for one exchange lane.
+struct RoutedEvents {
+  uint64_t lane;
+  nova::Events events;
+};
+
+/// Splits the active rows of `events` across the assigned lanes, giving the
+/// lane of `(lane, count)` the next `count` active rows in row order.
+///
+/// This is the event-batch counterpart of sub-slicing for the keyless scatter.
+/// The assignments come from `distribute_adaptive` over the batch's *active*
+/// rows, because inactive rows are no work for the receiving lane. Every part
+/// shares the input's columns and selects its rows through a narrowed mask,
+/// which is cheaper than rebuilding a batch per lane but keeps the whole input
+/// alive as long as any part is.
+///
+/// Requires that the assigned counts sum to `events.active_count()`.
+auto split_active(const nova::Events& events,
+                  std::span<const std::pair<size_t, uint64_t>> assignments)
+  -> std::vector<RoutedEvents>;
+
+/// Partitions the active rows of `events` into at most `jobs` parts, one per
+/// bucket, where `bucket = hash(keys[row]) % jobs`. Rows keep their relative
+/// order within a bucket; order across buckets is not preserved. Empty buckets
+/// are omitted.
+///
+/// Like its `table_slice` overload, this is the routing primitive behind
+/// hash-partitioned exchanges. As in `split_active`, every part shares the
+/// input's columns and carries a narrowed mask that selects its rows.
+///
+/// Requires `jobs > 0` and `keys.length() == events.length()`.
+auto hash_partition(const nova::Events& events,
+                    const nova::Array<nova::Data>& keys, uint64_t jobs)
+  -> std::vector<RoutedEvents>;
 
 } // namespace tenzir::routing

@@ -1,0 +1,6 @@
+// parallelism: 4
+// A keyed operator receives a hash-partitioned exchange: every row with the
+// same key must reach the same instance, or the groups would be split.
+from {x: 1}, {x: 2}, {x: 1}, {x: 3}, {x: 2}, {x: 1}
+summarize x, n=count()
+sort x

@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/option.hpp"
 
 #include <algorithm>
@@ -240,6 +241,93 @@ auto hash_partition(const table_slice& slice, const multi_series& keys,
       continue;
     }
     result.push_back({bucket, take_rows(slice, rows)});
+  }
+  return result;
+}
+
+auto split_active(const nova::Events& events,
+                  std::span<const std::pair<size_t, uint64_t>> assignments)
+  -> std::vector<RoutedEvents> {
+  auto result = std::vector<RoutedEvents>{};
+  if (assignments.empty()) {
+    return result;
+  }
+  // One assignment takes everything, so there is nothing to split.
+  if (assignments.size() == 1) {
+    result.push_back({assignments.front().first, events});
+    return result;
+  }
+  result.reserve(assignments.size());
+  auto remaining = events.mask;
+  for (auto [lane, count] : assignments) {
+    auto part
+      = remaining.keep_first(detail::narrow<nova::storage::Index>(count));
+    remaining = remaining.and_not(part);
+    result.push_back(
+      {lane, nova::Events{events.data, std::move(part), events.meta}});
+  }
+  TENZIR_ASSERT(not remaining.any());
+  return result;
+}
+
+auto hash_partition(const nova::Events& events,
+                    const nova::Array<nova::Data>& keys, uint64_t jobs)
+  -> std::vector<RoutedEvents> {
+  TENZIR_ASSERT(jobs > 0);
+  TENZIR_ASSERT(keys.length() == events.length());
+  auto const active = static_cast<size_t>(events.active_count());
+  if (active == 0) {
+    return {};
+  }
+  if (jobs == 1) {
+    return {RoutedEvents{0, events}};
+  }
+  // Hash the key column in one pass over the active rows, then reduce the
+  // hashes to buckets. `hash_rows` yields one hash per active row, in order.
+  auto hashes = std::vector<uint64_t>(active, 0);
+  nova::hash_rows(keys, events.mask, hashes);
+  auto buckets = std::vector<uint64_t>{};
+  buckets.reserve(active);
+  auto seen = std::vector<bool>(jobs, false);
+  auto used = size_t{0};
+  for (auto hash : hashes) {
+    auto const bucket = hash % jobs;
+    buckets.push_back(bucket);
+    if (not seen[bucket]) {
+      seen[bucket] = true;
+      ++used;
+    }
+  }
+  // Everything lands in one bucket: forward the input untouched.
+  if (used == 1) {
+    return {RoutedEvents{buckets.front(), events}};
+  }
+  // Every part shares the input's columns and selects its rows through a
+  // narrowed mask, which costs one bitmap per used bucket instead of one
+  // rebuilt batch.
+  constexpr auto no_slot = std::numeric_limits<size_t>::max();
+  auto slot_of = std::vector<size_t>(jobs, no_slot);
+  auto masks = std::vector<nova::storage::BitMap::Mutable>{};
+  auto bucket_of_slot = std::vector<uint64_t>{};
+  masks.reserve(used);
+  bucket_of_slot.reserve(used);
+  auto row_index = size_t{0};
+  for (auto row : nova::storage::true_bits(events.mask)) {
+    auto const bucket = buckets[row_index++];
+    auto& slot = slot_of[bucket];
+    if (slot == no_slot) {
+      slot = masks.size();
+      masks.emplace_back(events.length());
+      bucket_of_slot.push_back(bucket);
+    }
+    masks[slot].set(row, true);
+  }
+  auto result = std::vector<RoutedEvents>{};
+  result.reserve(masks.size());
+  for (auto slot = size_t{0}; slot < masks.size(); ++slot) {
+    result.push_back({bucket_of_slot[slot],
+                      nova::Events{events.data, std::move(masks[slot]).finish(),
+                                   events.meta}});
   }
   return result;
 }

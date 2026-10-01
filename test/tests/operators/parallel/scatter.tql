@@ -1,0 +1,5 @@
+// parallelism: 2
+// A single-instance source feeding a replicated operator produces a
+// multi-lane port, which the exchange must scatter across the lanes.
+from {x: 1}
+assert true

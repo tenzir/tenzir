@@ -1,0 +1,9 @@
+// parallelism: 4
+// Rows that `where` masked out are inactive, not deleted: the exchange counts
+// only the active ones and must not route the inactive ones anywhere.
+from {}
+repeat 100
+enumerate i
+where i >= 90
+assert i >= 90
+summarize n=count(), s=sum(i)

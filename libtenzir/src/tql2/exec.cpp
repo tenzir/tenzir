@@ -256,9 +256,12 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
     [](const chunk_ptr& chunk) -> size_t {
       return chunk ? chunk->size() : 0;
     },
-    [](const nova::Events&) -> size_t {
-      // No byte accounting for nova::Events yet.
-      return 0;
+    [](const nova::Events& events) -> size_t {
+      // Routing hands several lanes the same columns under different masks, so
+      // this charges shared buffers once per message. That overestimates the
+      // resident bytes of an exchange, but a queued message does keep the whole
+      // batch alive, and an unaccounted one would make the limit meaningless.
+      return events.approx_bytes();
     },
     [](const FileHandle&) -> size_t {
       // The bytes behind a handle are accounted where they are read.
@@ -742,6 +745,12 @@ protected:
   auto make_fused_nova_events(ChannelId id)
     -> PushPull<OperatorMsg<nova::Events>> override {
     return make_profiled_fused_channel<nova::Events>(std::move(id));
+  }
+
+  auto make_tiny_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>> override {
+    return make_profiled_channel<nova::Events>(std::move(id),
+                                               events_tiny_limit);
   }
 
   auto make_files(ChannelId id) -> PushPull<OperatorMsg<FileHandle>> override {

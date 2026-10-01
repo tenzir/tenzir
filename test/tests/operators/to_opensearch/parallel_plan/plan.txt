@@ -1,7 +1,7 @@
 ● {input}
 │
 ● from
-│
+╎
 ● to_opensearch(x6)
 │
 ● pass

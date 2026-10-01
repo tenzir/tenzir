@@ -122,8 +122,15 @@ public:
   /// wiring). Tiny channels use a dedicated, small per-channel limit and are
   /// expected to share one `ChannelId` across all lanes of an exchange so their
   /// profiling stats collate into a single metric.
-  auto make_tiny_channel(ChannelId id) -> PushPull<OperatorMsg<table_slice>> {
-    return make_tiny_events(std::move(id));
+  template <class T>
+  auto make_tiny_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+    if constexpr (std::same_as<T, table_slice>) {
+      return make_tiny_events(std::move(id));
+    } else if constexpr (std::same_as<T, nova::Events>) {
+      return make_tiny_nova_events(std::move(id));
+    } else {
+      static_assert(false, "only event channels can be tiny");
+    }
   }
 
   /// Returns a per-operator CPU executor.
@@ -182,6 +189,10 @@ protected:
     = 0;
 
   virtual auto make_fused_nova_events(ChannelId id)
+    -> PushPull<OperatorMsg<nova::Events>>
+    = 0;
+
+  virtual auto make_tiny_nova_events(ChannelId id)
     -> PushPull<OperatorMsg<nova::Events>>
     = 0;
 
