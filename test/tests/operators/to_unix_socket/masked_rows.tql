@@ -1,0 +1,17 @@
+---
+fixtures:
+  - uds:
+      mode: server
+assertions:
+  fixtures:
+    uds:
+      # Exactly the two kept rows: `{"n":1}\n{"n":3}\n`.
+      server_received_equals_hex: "7b226e223a317d0a7b226e223a337d0a"
+timeout: 60
+---
+
+from {n: 1}, {n: 2}, {n: 3}
+where n != 2
+to_unix_socket env("UDS_PATH") {
+  write_ndjson
+}

@@ -1,0 +1,16 @@
+---
+fixtures:
+  - uds:
+      mode: server
+      payload: "{\"a\":[1,\"x\"]}\n"
+assertions:
+  fixtures:
+    uds:
+      server_sent_contains: "[1,\"x\"]"
+timeout: 60
+---
+
+from_unix_socket env("UDS_PATH") {
+  read_json
+}
+head 1

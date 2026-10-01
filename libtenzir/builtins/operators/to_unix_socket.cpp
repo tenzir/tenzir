@@ -12,6 +12,8 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/operator/stream_to.hpp>
 #include <tenzir/operator/stream_to_legacy.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -120,7 +122,7 @@ private:
 };
 
 using ToUnixSocketArgs = UnixSocketTo::Args;
-using ToUnixSocket = legacy::StreamTo<UnixSocketTo>;
+using ToUnixSocket = StreamTo<UnixSocketTo>;
 
 class ToUnixSocketPlugin final : public OperatorPlugin {
 public:
@@ -129,7 +131,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToUnixSocketArgs, ToUnixSocket>{};
+    auto d = Describer<ToUnixSocketArgs, legacy::StreamTo<UnixSocketTo>,
+                       ToUnixSocket>{};
     d.positional("path", &ToUnixSocketArgs::path);
     auto max_retry_count_arg
       = d.named("max_retry_count", &ToUnixSocketArgs::max_retry_count);
@@ -144,17 +147,24 @@ public:
             .emit(ctx);
         }
       }
-      TRY(auto printer, ctx.get(printer_arg));
-      auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes")
-          .primary(printer.source.subloc(0, 1))
-          .emit(ctx);
-      }
       return {};
+    });
+    // `validate` runs without an input type. Check the printer here so that it
+    // receives the actual input type during type inference.
+    d.spawner([printer_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ToUnixSocketArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        TRY(auto printer, ctx.get(printer_arg));
+        TRY(auto output, printer.inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(printer.source.subloc(0, 1))
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      return None{};
     });
     return d.invariant_order_filter();
   }

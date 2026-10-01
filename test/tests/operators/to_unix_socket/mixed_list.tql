@@ -1,0 +1,15 @@
+---
+fixtures:
+  - uds:
+      mode: server
+assertions:
+  fixtures:
+    uds:
+      server_received_contains: "{\"a\":[1,\"x\"]}"
+timeout: 60
+---
+
+from {a: [1, "x"]}
+to_unix_socket env("UDS_PATH") {
+  write_ndjson
+}

@@ -11,7 +11,10 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/operator/stream_from.hpp>
 #include <tenzir/operator/stream_from_legacy.hpp>
+#include <tenzir/operator/stream_source_spawner.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -114,7 +117,7 @@ private:
 };
 
 using FromUnixSocketArgs = UnixSocketFrom::Args;
-using FromUnixSocket = legacy::StreamFrom<UnixSocketFrom>;
+using FromUnixSocket = StreamFrom<UnixSocketFrom>;
 
 class FromUnixSocketPlugin final : public virtual OperatorPlugin {
 public:
@@ -123,7 +126,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromUnixSocketArgs, FromUnixSocket>{};
+    auto d = Describer<FromUnixSocketArgs, legacy::StreamFrom<UnixSocketFrom>,
+                       FromUnixSocket>{};
     d.positional("path", &FromUnixSocketArgs::path);
     auto pipeline_arg = d.pipeline(&FromUnixSocketArgs::user_pipeline,
                                    SubOptimize::from_downstream);
@@ -133,13 +137,17 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (output->is_not<table_slice>()) {
+      if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(pipeline.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
     });
+    d.spawner(
+      make_stream_source_spawner<
+        FromUnixSocketArgs, legacy::StreamFrom<UnixSocketFrom>, FromUnixSocket>(
+        pipeline_arg));
     return d.without_optimize();
   }
 };

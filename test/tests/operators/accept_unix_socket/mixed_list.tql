@@ -1,0 +1,12 @@
+---
+fixtures:
+  - uds:
+      mode: client
+      payload: "{\"a\":[1,\"x\"]}\n"
+timeout: 60
+---
+
+accept_unix_socket env("UDS_PATH") {
+  read_json
+}
+head 1

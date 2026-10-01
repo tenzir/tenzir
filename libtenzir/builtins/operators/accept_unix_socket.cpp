@@ -11,7 +11,10 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/operator/stream_accept.hpp>
 #include <tenzir/operator/stream_accept_legacy.hpp>
+#include <tenzir/operator/stream_source_spawner.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -170,7 +173,7 @@ private:
 };
 
 using AcceptUnixSocketArgs = UnixSocketAccept::Args;
-using AcceptUnixSocket = legacy::StreamAccept<UnixSocketAccept>;
+using AcceptUnixSocket = StreamAccept<UnixSocketAccept>;
 
 class AcceptUnixSocketPlugin final : public virtual OperatorPlugin {
 public:
@@ -179,7 +182,9 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptUnixSocketArgs, AcceptUnixSocket>{};
+    auto d
+      = Describer<AcceptUnixSocketArgs, legacy::StreamAccept<UnixSocketAccept>,
+                  AcceptUnixSocket>{};
     d.positional("path", &AcceptUnixSocketArgs::path);
     auto max_connections_arg
       = d.named("max_connections", &AcceptUnixSocketArgs::max_connections);
@@ -208,13 +213,16 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (output->is_not<table_slice>()) {
+      if (output->is_not<table_slice>() and output->is_not<nova::Events>()) {
         diagnostic::error("pipeline must return events")
           .primary(pipeline.source.subloc(0, 1))
           .emit(ctx);
       }
       return {};
     });
+    d.spawner(make_stream_source_spawner<AcceptUnixSocketArgs,
+                                         legacy::StreamAccept<UnixSocketAccept>,
+                                         AcceptUnixSocket>(pipeline_arg));
     return d.without_optimize();
   }
 };
