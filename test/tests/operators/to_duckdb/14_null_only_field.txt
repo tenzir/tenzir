@@ -1,0 +1,8 @@
+warning: cannot derive a type for field `empty`
+ --> tests/operators/to_duckdb/14_null_only_field.tql:3:1
+  |
+3 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="nulls"
+  | ~~~~~~~~~
+  |
+  = note: it only holds `null`, empty lists, or lists of `null`
+  = note: the column was not created

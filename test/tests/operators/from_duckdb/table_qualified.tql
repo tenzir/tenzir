@@ -1,0 +1,3 @@
+// A schema-qualified table with more rows than fit into one DuckDB vector.
+from_duckdb env("DUCKDB_SEED"), table="staging.numbers"
+where n < 2 or n > 4997

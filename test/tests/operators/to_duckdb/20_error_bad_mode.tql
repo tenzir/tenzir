@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {i: 1}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="t", mode="upsert"

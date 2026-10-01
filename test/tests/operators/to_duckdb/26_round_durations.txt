@@ -1,0 +1,7 @@
+warning: field `d` holds durations with sub-microsecond precision
+ --> tests/operators/to_duckdb/26_round_durations.tql:3:1
+  |
+3 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="durations"
+  | ~~~~~~~~~
+  |
+  = note: rounding them to microseconds, the precision of DuckDB's `INTERVAL`

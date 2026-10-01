@@ -54,6 +54,7 @@
   folly,
   proxygen,
   double-conversion,
+  duckdb,
   libevent,
   liburing,
   snappy,
@@ -86,6 +87,7 @@ in
     azure-sdk-for-cpp.storage-blobs
     azure-sdk-for-cpp.identity
     clickhouse-cpp
+    duckdb
     fluent-bit
     iceberg-cpp
     libpcap

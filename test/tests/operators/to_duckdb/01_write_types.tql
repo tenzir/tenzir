@@ -1,0 +1,30 @@
+// Every TQL type, plus nulls and an absent field in the second event.
+from {
+  i: 42,
+  u: 18446744073709551615,
+  f: 1.5,
+  b: true,
+  s: "hello",
+  t: 2024-01-01T10:00:00.123456789,
+  d: 90s,
+  ip: 10.0.0.1,
+  net: 10.0.0.0/8,
+  blob: b"\x01\x02",
+  list: [1, 2, 3],
+  rec: {host: "h1", ports: [80, 443]},
+  nested: [{x: 1}, {x: null}],
+}, {
+  i: -1,
+  u: 0,
+  f: null,
+  b: false,
+  s: null,
+  t: null,
+  d: null,
+  ip: null,
+  net: null,
+  blob: null,
+  list: [],
+  rec: {host: null, ports: null},
+}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="types"

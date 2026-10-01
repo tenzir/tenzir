@@ -1,0 +1,1 @@
+from_duckdb env("DUCKDB_SEED"), sql="SELECT * FROM events WHERE false"

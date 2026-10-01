@@ -1,0 +1,11 @@
+warning: column `a` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_positional.tql:4:1
+  |
+4 | from_duckdb ":memory:", sql="SELECT 1 AS a, 2.5::DECIMAL(3, 1) AS a; -- trailing comment"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+{
+  a: 1,
+  a_1: "2.5",
+}

@@ -1,0 +1,3 @@
+// `append` requires the table to exist and accepts a subset of its columns.
+from {i: 7, s: "appended"}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="types", mode="append"

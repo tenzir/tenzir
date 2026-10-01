@@ -700,6 +700,40 @@ TEST("rebuild defaults to the system timezone and accepts an explicit "
               arrow_vendored::date::locate_zone("UTC")->name());
 }
 
+TEST("rebuild windows without a time zone database are in UTC") {
+  using namespace std::chrono;
+  // Without a time zone database, as in minimal containers, no zone resolves
+  // and the catalog leaves the zone empty. That must behave exactly like UTC.
+  auto without_database = catalog_state{};
+  REQUIRE(without_database.rebuild_zone == nullptr);
+  auto utc = catalog_state{};
+  utc.rebuild_zone = arrow_vendored::date::locate_zone("UTC");
+  auto const midnight = tenzir::time{sys_days{2026y / March / 29}};
+  auto const times = std::vector<tenzir::time>{
+    tenzir::time{},
+    tenzir::time{} - minutes{1},
+    midnight - nanoseconds{1},
+    midnight,
+    midnight + minutes{30},
+    midnight + hours{1},
+    midnight + hours{1} + minutes{59} + seconds{59},
+    tenzir::time{sys_days{2026y / October / 25}} + hours{1} + minutes{30},
+  };
+  for (auto const t : times) {
+    CHECK_EQUAL(without_database.next_rebuild_hour(t),
+                utc.next_rebuild_hour(t));
+    CHECK_EQUAL(without_database.rebuild_day(t), utc.rebuild_day(t));
+  }
+  CHECK_EQUAL(without_database.next_rebuild_hour(midnight + minutes{30}),
+              midnight + hours{1});
+  // The status names the zone once maintenance runs.
+  auto status = without_database.rebuild_status();
+  CHECK(status.find("timezone") == status.end());
+  without_database.maintenance_ready = true;
+  status = without_database.rebuild_status();
+  CHECK_EQUAL(status.at("timezone"), data{std::string{"UTC"}});
+}
+
 TEST("arrivals cannot postpone or reopen a collection cutoff") {
   using namespace std::chrono;
   auto f = fixture{};

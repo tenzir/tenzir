@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_duckdb env("DUCKDB_SEED"), table="events", sql="SELECT 1"

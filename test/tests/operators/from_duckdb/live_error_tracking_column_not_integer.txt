@@ -1,0 +1,6 @@
+error: `tracking_column` `name` is not an integer column
+ --> tests/operators/from_duckdb/live_error_tracking_column_not_integer.tql:5:75
+  |
+5 | from_duckdb env("DUCKDB_SEED"), table="keyed", live=true, tracking_column="name"
+  |                                                                           ^^^^^^ has type `VARCHAR`
+  |

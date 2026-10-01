@@ -1,0 +1,3 @@
+// An arbitrary-precision integer works as tracking column, too.
+from_duckdb env("DUCKDB_SEED"), table="bignum_keyed", live=true, tracking_column="id"
+head 2

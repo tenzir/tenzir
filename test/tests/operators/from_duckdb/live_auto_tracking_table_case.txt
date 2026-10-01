@@ -1,0 +1,7 @@
+mixed.keyed: primary key resolved
+MIXED.KEYED: primary key resolved
+casedb.mixed.keyed: primary key resolved
+CASEDB.MIXED.KEYED: primary key resolved
+composite: primary key rejected
+only_unique: primary key rejected
+text_key: primary key rejected

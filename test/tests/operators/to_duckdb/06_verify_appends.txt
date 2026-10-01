@@ -1,0 +1,3 @@
+[{"i":7,"s":"appended","u":null,"list":null},
+{"i":8,"s":"create_append","u":null,"list":null},
+{"i":42,"s":"hello","u":"18446744073709551615","list":[1,2,3]}]

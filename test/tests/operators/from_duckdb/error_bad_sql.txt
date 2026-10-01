@@ -1,0 +1,9 @@
+error: Parser Error: syntax error at or near "SELEKT"
+
+LINE 1: SELEKT 1
+        ^
+ --> tests/operators/from_duckdb/error_bad_sql.tql:5:1
+  |
+5 | from_duckdb env("DUCKDB_SEED"), sql="SELEKT 1"
+  | ^^^^^^^^^^^
+  |

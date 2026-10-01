@@ -1,0 +1,5 @@
+// In live mode, a downstream `select` narrows every polling query, which need
+// not include the tracking column.
+from_duckdb env("DUCKDB_SEED"), table="keyed", live=true
+select name
+head 2

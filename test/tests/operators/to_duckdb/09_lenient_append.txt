@@ -1,0 +1,15 @@
+warning: field `i` holds `string` values that do not fit its column
+ --> tests/operators/to_duckdb/09_lenient_append.tql:4:1
+  |
+4 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="lenient"
+  | ~~~~~~~~~
+  |
+  = note: column `i` has type `BIGINT`; writing them as `NULL`
+
+warning: field `extra` has no matching column in the table
+ --> tests/operators/to_duckdb/09_lenient_append.tql:4:1
+  |
+4 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="lenient"
+  | ~~~~~~~~~
+  |
+  = note: dropping the field

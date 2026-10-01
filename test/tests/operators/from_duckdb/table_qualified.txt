@@ -1,0 +1,16 @@
+{
+  n: 0,
+  doubled: 0,
+}
+{
+  n: 1,
+  doubled: 2,
+}
+{
+  n: 4998,
+  doubled: 9996,
+}
+{
+  n: 4999,
+  doubled: 9998,
+}

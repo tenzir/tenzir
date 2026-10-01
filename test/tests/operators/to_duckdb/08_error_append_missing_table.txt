@@ -1,0 +1,10 @@
+error: Catalog Error: Table with name nope does not exist!
+Did you mean "types"?
+
+LINE 1: DESCRIBE "nope"
+                 ^
+ --> tests/operators/to_duckdb/08_error_append_missing_table.tql:6:1
+  |
+6 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="nope", mode="append"
+  | ^^^^^^^^^
+  |

@@ -1,0 +1,4 @@
+// A 128-bit integer primary key works as tracking column, even though its
+// values arrive as strings.
+from_duckdb env("DUCKDB_SEED"), table="huge_keyed", live=true
+head 2

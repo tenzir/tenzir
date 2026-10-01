@@ -1,0 +1,3 @@
+// What `to_duckdb` wrote comes back through `from_duckdb`, except that IPs
+// and subnets are strings and durations are cast from INTERVAL.
+from_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="types"

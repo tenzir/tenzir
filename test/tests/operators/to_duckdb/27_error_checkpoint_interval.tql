@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Checkpointing more often than once per second buys nothing.
+from {x: 1}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="ckpt", checkpoint_interval=1ns

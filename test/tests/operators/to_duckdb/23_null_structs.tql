@@ -1,0 +1,4 @@
+// Only the first DuckDB vector holds records. The members of the null records
+// in the other vectors must be null, too, not leftovers of the first vector.
+from_duckdb ":memory:", sql="SELECT range AS i, CASE WHEN range < 2048 THEN {host: 'a-rather-long-host-name-' || range::VARCHAR, ports: [range]} ELSE NULL END AS rec FROM range(6144)"
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="structs"

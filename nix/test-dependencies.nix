@@ -2,6 +2,7 @@
   python3Packages,
   fetchFromGitHub,
   curl,
+  duckdb,
   jq,
   lsof,
   perl,
@@ -58,6 +59,7 @@ rec {
 
   tenzir-integration-test-deps = [
     curl
+    duckdb
     jq
     lsof
     perl

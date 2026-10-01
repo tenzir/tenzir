@@ -1,0 +1,9 @@
+error: `sql` and `table` are mutually exclusive
+ --> tests/operators/from_duckdb/error_table_and_sql.tql:5:39
+  |
+5 | from_duckdb env("DUCKDB_SEED"), table="events", sql="SELECT 1"
+  |                                       ^^^^^^^^
+  ⋮
+5 | from_duckdb env("DUCKDB_SEED"), table="events", sql="SELECT 1"
+  |                                                     ^^^^^^^^^^
+  |

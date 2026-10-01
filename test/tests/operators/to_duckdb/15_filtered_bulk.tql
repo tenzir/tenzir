@@ -1,0 +1,6 @@
+// Filtering marks rows inactive instead of removing them; only active rows are
+// written. Enough rows for several DuckDB vectors.
+from_duckdb ":memory:", sql="SELECT range AS i, range % 3 = 0 AS keep FROM range(10000)"
+where keep
+drop keep
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="filtered"

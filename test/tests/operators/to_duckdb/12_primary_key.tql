@@ -1,0 +1,2 @@
+from {id: 1, v: "a"}, {id: 2, v: "b"}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="keyed", primary=id

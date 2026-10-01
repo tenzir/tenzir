@@ -1,0 +1,12 @@
+{
+  n: 0,
+  doubled: 0,
+}
+{
+  n: 1,
+  doubled: 2,
+}
+{
+  n: 2,
+  doubled: 4,
+}

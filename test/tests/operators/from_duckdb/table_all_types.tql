@@ -1,0 +1,4 @@
+// Every DuckDB type the seed table uses, including NULLs at every position.
+// `amount` (DECIMAL) and `took` (INTERVAL) have no TQL counterpart and arrive
+// as strings, with a warning each.
+from_duckdb env("DUCKDB_SEED"), table="events"

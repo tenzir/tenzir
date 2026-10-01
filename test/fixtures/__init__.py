@@ -11,6 +11,7 @@ from . import azure_log_analytics  # noqa: F401
 from . import clickhouse  # noqa: F401
 from . import cloudwatch  # noqa: F401
 from . import cloudwatch_repeat_token  # noqa: F401
+from . import duckdb  # noqa: F401
 from . import http_request_chunked  # noqa: F401
 from . import files_permission_tree  # noqa: F401
 from . import ftp  # noqa: F401

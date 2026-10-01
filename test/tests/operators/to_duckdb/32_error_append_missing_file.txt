@@ -1,0 +1,6 @@
+error: failed to open DuckDB database: the database file does not exist
+ --> tests/operators/to_duckdb/32_error_append_missing_file.tql:8:11
+  |
+8 | to_duckdb env("DUCKDB_ROOT") + "/missing.duckdb", table="t", mode="append"
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

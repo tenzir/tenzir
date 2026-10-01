@@ -1,0 +1,1 @@
+from_duckdb env("DUCKDB_SEED"), sql="SELECT id, name, meta.port AS port FROM events WHERE id > 1 ORDER BY id"

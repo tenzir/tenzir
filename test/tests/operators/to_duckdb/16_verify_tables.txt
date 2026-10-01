@@ -1,0 +1,8 @@
+[{"column_name":"id","column_type":"BIGINT","null":"NO","key":"PRI","default":null,"extra":null},
+{"column_name":"v","column_type":"VARCHAR","null":"YES","key":null,"default":null,"extra":null}]
+[{"id":1,"v":"a"},
+{"id":2,"v":"b"}]
+[{"column_name":"id","column_type":"BIGINT","null":"YES","key":null,"default":null,"extra":null}]
+[{"id":1},
+{"id":2}]
+[{"n":3334,"lo":0,"hi":9999,"total":"16668333"}]

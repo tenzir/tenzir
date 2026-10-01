@@ -1,0 +1,4 @@
+// Live mode first emits everything up to the current maximum of the tracking
+// column, in tracking order.
+from_duckdb env("DUCKDB_SEED"), table="staging.numbers", live=true, tracking_column="n"
+head 3

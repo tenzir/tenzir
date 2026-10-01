@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {id: 2, v: "dup"}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="keyed"

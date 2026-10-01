@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_duckdb env("DUCKDB_SEED"), sql="SELECT 1", live=true

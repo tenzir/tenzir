@@ -92,6 +92,7 @@ let
         dev-python
         pkgs.clangbuildanalyzer
         pkgs.curl
+        pkgs.duckdb
         pkgs.jq
         pkgs.lefthook
         pkgs.lsof

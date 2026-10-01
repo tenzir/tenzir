@@ -1,0 +1,16 @@
+{
+  i: 0,
+  even: true,
+}
+{
+  i: 1,
+  even: false,
+}
+{
+  i: 2,
+  even: true,
+}
+{
+  i: 3,
+  even: false,
+}

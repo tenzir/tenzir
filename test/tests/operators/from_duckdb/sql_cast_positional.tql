@@ -1,0 +1,4 @@
+// Columns that need a cast are addressed by position, so duplicate names keep
+// their own values, and a trailing terminator or comment does not break the
+// generated subquery.
+from_duckdb ":memory:", sql="SELECT 1 AS a, 2.5::DECIMAL(3, 1) AS a; -- trailing comment"

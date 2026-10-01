@@ -1,0 +1,4 @@
+// Without `tracking_column`, an integer primary key wins over other integer
+// columns.
+from_duckdb env("DUCKDB_SEED"), table="keyed", live=true
+head 3

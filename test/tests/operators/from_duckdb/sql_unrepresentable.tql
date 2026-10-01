@@ -1,0 +1,2 @@
+// Values beyond what `time` and `duration` hold become null with a warning.
+from_duckdb ":memory:", sql="SELECT * FROM (VALUES (TIMESTAMP 'infinity', DATE '5000-01-01', INTERVAL 1 MONTH), (TIMESTAMP '2024-01-01', DATE '2024-01-02', INTERVAL 90 SECOND)) AS t(ts, day, took)"

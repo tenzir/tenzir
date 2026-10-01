@@ -1,0 +1,15 @@
+[{"column_name":"i","column_type":"BIGINT","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"u","column_type":"UBIGINT","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"f","column_type":"DOUBLE","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"b","column_type":"BOOLEAN","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"s","column_type":"VARCHAR","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"t","column_type":"TIMESTAMP_NS","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"d","column_type":"INTERVAL","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"ip","column_type":"VARCHAR","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"net","column_type":"VARCHAR","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"blob","column_type":"BLOB","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"list","column_type":"BIGINT[]","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"rec","column_type":"STRUCT(host VARCHAR, ports BIGINT[])","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"nested","column_type":"STRUCT(x BIGINT)[]","null":"YES","key":null,"default":null,"extra":null}]
+[{"i":42,"u":"18446744073709551615","f":1.5,"b":true,"s":"hello","t":"2024-01-01 10:00:00.123456789","d":"00:01:30","ip":"10.0.0.1","net":"10.0.0.0/8","blob":"\\x01\\x02","list":[1,2,3],"rec":{"host":"h1","ports":[80,443]},"nested":[{"x":1},{"x":null}]},
+{"i":-1,"u":"0","f":null,"b":false,"s":null,"t":null,"d":null,"ip":null,"net":null,"blob":null,"list":[],"rec":{"host":null,"ports":null},"nested":null}]

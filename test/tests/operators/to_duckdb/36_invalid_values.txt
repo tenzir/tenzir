@@ -1,0 +1,31 @@
+warning: field `amount` holds numbers that do not fit into its column
+ --> tests/operators/to_duckdb/36_invalid_values.tql:5:1
+  |
+5 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="typed"
+  | ~~~~~~~~~
+  |
+  = note: column `amount` has type `DECIMAL(6, 2)`; writing them as `NULL`
+
+warning: field `big` holds numbers that do not fit into its column
+ --> tests/operators/to_duckdb/36_invalid_values.tql:5:1
+  |
+5 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="typed"
+  | ~~~~~~~~~
+  |
+  = note: column `big` has type `UHUGEINT`; writing them as `NULL`
+
+warning: field `id` holds strings that do not fit into its column
+ --> tests/operators/to_duckdb/36_invalid_values.tql:5:1
+  |
+5 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="typed"
+  | ~~~~~~~~~
+  |
+  = note: column `id` has type `UUID`; writing them as `NULL`
+
+warning: field `mood` holds strings that do not fit into its column
+ --> tests/operators/to_duckdb/36_invalid_values.tql:5:1
+  |
+5 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="typed"
+  | ~~~~~~~~~
+  |
+  = note: column `mood` has type `ENUM`; writing them as `NULL`

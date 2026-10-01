@@ -1,0 +1,3 @@
+// Like DuckDB identifiers, `tracking_column` is case-insensitive.
+from_duckdb env("DUCKDB_SEED"), table="keyed", live=true, tracking_column="ID"
+head 1

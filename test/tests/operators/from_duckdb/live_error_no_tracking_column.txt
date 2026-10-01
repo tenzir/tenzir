@@ -1,0 +1,8 @@
+error: could not find a suitable `tracking_column` for table `names`
+ --> tests/operators/from_duckdb/live_error_no_tracking_column.tql:5:39
+  |
+5 | from_duckdb env("DUCKDB_SEED"), table="names", live=true
+  |                                       ^^^^^^^
+  |
+  = note: the table has no single-column integer primary key
+  = hint: set `tracking_column` to an integer column whose values grow with every new row

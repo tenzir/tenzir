@@ -1,0 +1,6 @@
+error: `primary` must be a top-level field
+ --> tests/operators/to_duckdb/21_error_nested_primary.tql:6:66
+  |
+6 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="t", primary=a.b
+  |                                                                  ^^^
+  |

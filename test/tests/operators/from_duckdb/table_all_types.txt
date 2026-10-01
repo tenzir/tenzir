@@ -1,0 +1,93 @@
+warning: column `amount` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/table_all_types.tql:4:1
+  |
+4 | from_duckdb env("DUCKDB_SEED"), table="events"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+{
+  id: 1,
+  ts: 2024-01-01T10:00:00Z,
+  ts_ns: 2024-01-01T10:00:00.123456789Z,
+  day: 2024-01-01T00:00:00Z,
+  name: "alpha",
+  score: 1.5,
+  ratio: 0.25,
+  ok: true,
+  small: 7,
+  big: 18446744073709551615,
+  amount: "12.34",
+  tags: [
+    "a",
+    "b",
+  ],
+  meta: {
+    host: "h1",
+    port: 80,
+  },
+  kv: [
+    {
+      key: "x",
+      value: 1,
+    },
+  ],
+  pair: [
+    1,
+    2,
+  ],
+  payload: b"\u0001\u0002",
+  took: 1.5min,
+}
+{
+  id: 2,
+  ts: 2024-01-02T11:30:00Z,
+  ts_ns: null,
+  day: null,
+  name: null,
+  score: null,
+  ratio: null,
+  ok: false,
+  small: null,
+  big: 0,
+  amount: null,
+  tags: [],
+  meta: {
+    host: null,
+    port: 443,
+  },
+  kv: [],
+  pair: null,
+  payload: null,
+  took: null,
+}
+{
+  id: 3,
+  ts: null,
+  ts_ns: 2024-01-03T00:00:00Z,
+  day: 2024-01-03T00:00:00Z,
+  name: "gamma",
+  score: -2.0,
+  ratio: 1.0,
+  ok: null,
+  small: -7,
+  big: 42,
+  amount: "0.01",
+  tags: null,
+  meta: null,
+  kv: [
+    {
+      key: "y",
+      value: 2,
+    },
+    {
+      key: "z",
+      value: 3,
+    },
+  ],
+  pair: [
+    3,
+    null,
+  ],
+  payload: b"",
+  took: 1d,
+}

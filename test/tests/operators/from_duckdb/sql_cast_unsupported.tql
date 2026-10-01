@@ -1,0 +1,3 @@
+// Types without a TQL counterpart are cast to strings by DuckDB before they
+// reach Tenzir, also when they are nested.
+from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"

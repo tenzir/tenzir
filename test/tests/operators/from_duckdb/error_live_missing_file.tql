@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Live mode opens the file for writing, but never creates it.
+from_duckdb env("DUCKDB_ROOT") + "/does-not-exist.duckdb", table="t", live=true

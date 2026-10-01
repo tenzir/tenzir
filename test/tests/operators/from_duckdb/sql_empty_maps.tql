@@ -1,0 +1,2 @@
+// Empty and null-only maps have no entries, even when nested.
+from_duckdb ":memory:", sql="SELECT MAP {} AS m, NULL::MAP(VARCHAR, INTEGER) AS n, {m: MAP {}} AS r, [MAP {}, NULL] AS l, MAP {'x': MAP {}} AS nested"

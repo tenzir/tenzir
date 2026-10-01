@@ -2024,6 +2024,10 @@ std::string secret_type::arrow_type::Serialize() const {
   return name;
 }
 
+secret_type::array_type::~array_type() = default;
+
+secret_type::scalar_type::~scalar_type() = default;
+
 std::shared_ptr<arrow::StructArray> secret_type::array_type::storage() const {
   return std::static_pointer_cast<arrow::StructArray>(
     arrow::ExtensionArray::storage());
@@ -2135,6 +2139,10 @@ ip_type::arrow_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
 std::string ip_type::arrow_type::Serialize() const {
   return name;
 }
+
+ip_type::array_type::~array_type() = default;
+
+ip_type::scalar_type::~scalar_type() = default;
 
 std::shared_ptr<arrow::FixedSizeBinaryArray>
 ip_type::array_type::storage() const {
@@ -2251,6 +2259,10 @@ subnet_type::arrow_type::Deserialize(
 std::string subnet_type::arrow_type::Serialize() const {
   return name;
 }
+
+subnet_type::array_type::~array_type() = default;
+
+subnet_type::scalar_type::~scalar_type() = default;
 
 std::shared_ptr<arrow::StructArray> subnet_type::array_type::storage() const {
   return std::static_pointer_cast<arrow::StructArray>(
@@ -2505,6 +2517,10 @@ std::string enumeration_type::arrow_type::Serialize() const {
   fmt::format_to(inserter, " }}");
   return result;
 }
+
+enumeration_type::array_type::~array_type() = default;
+
+enumeration_type::scalar_type::~scalar_type() = default;
 
 std::shared_ptr<arrow::DictionaryArray>
 enumeration_type::array_type::storage() const {

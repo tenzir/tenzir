@@ -1,0 +1,50 @@
+{
+  i: 42,
+  u: 18446744073709551615,
+  f: 1.5,
+  b: true,
+  s: "hello",
+  t: 2024-01-01T10:00:00.123456789Z,
+  d: 1.5min,
+  ip: "10.0.0.1",
+  net: "10.0.0.0/8",
+  blob: b"\u0001\u0002",
+  list: [
+    1,
+    2,
+    3,
+  ],
+  rec: {
+    host: "h1",
+    ports: [
+      80,
+      443,
+    ],
+  },
+  nested: [
+    {
+      x: 1,
+    },
+    {
+      x: null,
+    },
+  ],
+}
+{
+  i: -1,
+  u: 0,
+  f: null,
+  b: false,
+  s: null,
+  t: null,
+  d: null,
+  ip: null,
+  net: null,
+  blob: null,
+  list: [],
+  rec: {
+    host: null,
+    ports: null,
+  },
+  nested: null,
+}

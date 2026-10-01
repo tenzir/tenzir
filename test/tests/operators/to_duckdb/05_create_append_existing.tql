@@ -1,0 +1,3 @@
+// The default mode appends to an existing table.
+from {i: 8, s: "create_append"}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="types"

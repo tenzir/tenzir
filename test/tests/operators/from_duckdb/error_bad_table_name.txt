@@ -1,0 +1,6 @@
+error: invalid table name: table name has more than three components
+ --> tests/operators/from_duckdb/error_bad_table_name.tql:5:39
+  |
+5 | from_duckdb env("DUCKDB_SEED"), table="a.b.c.d"
+  |                                       ^^^^^^^^^
+  |

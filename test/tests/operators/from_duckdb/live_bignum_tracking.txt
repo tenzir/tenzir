@@ -1,0 +1,15 @@
+warning: column `id` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/live_bignum_tracking.tql:2:1
+  |
+2 | from_duckdb env("DUCKDB_SEED"), table="bignum_keyed", live=true, tracking_column="id"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+{
+  id: "123456789012345678901234567890123456789012345678901",
+  name: "big",
+}
+{
+  id: "123456789012345678901234567890123456789012345678902",
+  name: "bigger",
+}

@@ -1,0 +1,15 @@
+warning: column `id` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/live_hugeint_tracking.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), table="huge_keyed", live=true
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+{
+  id: "170141183460469231731687303715884105726",
+  name: "big",
+}
+{
+  id: "170141183460469231731687303715884105727",
+  name: "bigger",
+}

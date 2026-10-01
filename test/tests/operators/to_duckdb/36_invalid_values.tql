@@ -1,0 +1,5 @@
+// Values that do not convert to their column become null, each field with a
+// warning. The valid values of the same fields are written.
+from {id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", mood: "happy", amount: 1.25, big: 5},
+     {id: "not a uuid", mood: "angry", amount: 12345.678, big: -1}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="typed"

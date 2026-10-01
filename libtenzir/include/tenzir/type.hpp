@@ -712,6 +712,12 @@ public:
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
 
+    /// Defined out of line to anchor the RTTI in libtenzir. Without a key
+    /// function, every binary emits its own hidden copy, and a `dynamic_cast`
+    /// across library boundaries fails on platforms that compare RTTI by
+    /// address, such as macOS.
+    ~array_type() override;
+
     [[nodiscard]] std::shared_ptr<arrow::FixedSizeBinaryArray> storage() const;
 
   private:
@@ -722,6 +728,9 @@ public:
   struct scalar_type final : arrow::ExtensionScalar {
     using TypeClass = arrow_type;
     using arrow::ExtensionScalar::ExtensionScalar;
+
+    /// Defined out of line to anchor the RTTI in libtenzir.
+    ~scalar_type() override;
   };
 
   /// The corresponding Arrow ArrayBuilder.
@@ -803,6 +812,12 @@ public:
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
 
+    /// Defined out of line to anchor the RTTI in libtenzir. Without a key
+    /// function, every binary emits its own hidden copy, and a `dynamic_cast`
+    /// across library boundaries fails on platforms that compare RTTI by
+    /// address, such as macOS.
+    ~array_type() override;
+
     [[nodiscard]] std::shared_ptr<arrow::StructArray> storage() const;
 
   private:
@@ -813,6 +828,9 @@ public:
   struct scalar_type final : arrow::ExtensionScalar {
     using TypeClass = arrow_type;
     using arrow::ExtensionScalar::ExtensionScalar;
+
+    /// Defined out of line to anchor the RTTI in libtenzir.
+    ~scalar_type() override;
   };
 
   /// The corresponding Arrow ArrayBuilder.
@@ -940,6 +958,12 @@ public:
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
 
+    /// Defined out of line to anchor the RTTI in libtenzir. Without a key
+    /// function, every binary emits its own hidden copy, and a `dynamic_cast`
+    /// across library boundaries fails on platforms that compare RTTI by
+    /// address, such as macOS.
+    ~array_type() override;
+
     [[nodiscard]] std::shared_ptr<arrow::DictionaryArray> storage() const;
 
     /// Create an array from a prepopulated indices Array.
@@ -955,6 +979,9 @@ public:
   struct scalar_type final : arrow::ExtensionScalar {
     using TypeClass = arrow_type;
     using arrow::ExtensionScalar::ExtensionScalar;
+
+    /// Defined out of line to anchor the RTTI in libtenzir.
+    ~scalar_type() override;
   };
 
   /// The corresponding Arrow ArrayBuilder.
@@ -1432,6 +1459,12 @@ public:
     using TypeClass = arrow_type;
     using arrow::ExtensionArray::ExtensionArray;
 
+    /// Defined out of line to anchor the RTTI in libtenzir. Without a key
+    /// function, every binary emits its own hidden copy, and a `dynamic_cast`
+    /// across library boundaries fails on platforms that compare RTTI by
+    /// address, such as macOS.
+    ~array_type() override;
+
     [[nodiscard]] std::shared_ptr<arrow::StructArray> storage() const;
 
   private:
@@ -1442,6 +1475,9 @@ public:
   struct scalar_type final : arrow::ExtensionScalar {
     using TypeClass = arrow_type;
     using arrow::ExtensionScalar::ExtensionScalar;
+
+    /// Defined out of line to anchor the RTTI in libtenzir.
+    ~scalar_type() override;
   };
 
   /// The corresponding Arrow ArrayBuilder.

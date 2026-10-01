@@ -1,0 +1,2 @@
+// A result whose lists are all empty has no list elements at all.
+from_duckdb ":memory:", sql="SELECT []::INTEGER[] AS l, {x: []::VARCHAR[]} AS r"

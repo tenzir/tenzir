@@ -74,6 +74,24 @@ auto rebuild_pipeline(const type& schema, size_t desired_batch_size)
   return std::move(*result);
 }
 
+/// The time zone for rebuild windows when the configuration names none: the
+/// system time zone, or UTC. Returns `nullptr`, which stands for UTC, on
+/// systems without a time zone database, such as minimal containers without
+/// `tzdata`: UTC needs no database, and without one no zone resolves.
+auto default_rebuild_zone() -> arrow_vendored::date::time_zone const* {
+  try {
+    return arrow_vendored::date::current_zone();
+  } catch (std::runtime_error const&) {
+    // Minimal containers may have no /etc/localtime. UTC is the system
+    // default there.
+  }
+  try {
+    return arrow_vendored::date::locate_zone("UTC");
+  } catch (std::runtime_error const&) {
+    return nullptr;
+  }
+}
+
 } // namespace
 
 auto catalog_state::rebuild_day(time imported) const -> int64_t {
@@ -85,7 +103,11 @@ auto catalog_state::rebuild_day(time imported) const -> int64_t {
 }
 
 auto catalog_state::next_rebuild_hour(time now) const -> time {
-  TENZIR_ASSERT(rebuild_zone);
+  if (not rebuild_zone) {
+    // UTC has no offset transitions, so every hour is a window.
+    return time{std::chrono::floor<std::chrono::hours>(now)
+                + std::chrono::hours{1}};
+  }
   auto const info = rebuild_zone->get_info(now);
   auto const local = rebuild_zone->to_local(now);
   auto const boundary
@@ -101,14 +123,10 @@ auto catalog_state::next_rebuild_hour(time now) const -> time {
 
 auto catalog_state::initialize_maintenance(time now) -> caf::error {
   try {
+    // An explicit time zone must resolve, even when the system lacks the
+    // database to resolve it with.
     if (maintenance.rebuild_timezone.empty()) {
-      try {
-        rebuild_zone = arrow_vendored::date::current_zone();
-      } catch (std::runtime_error const&) {
-        // Minimal containers may have no /etc/localtime. UTC is the system
-        // default there; an explicit invalid timezone must still fail.
-        rebuild_zone = arrow_vendored::date::locate_zone("UTC");
-      }
+      rebuild_zone = default_rebuild_zone();
     } else {
       rebuild_zone
         = arrow_vendored::date::locate_zone(maintenance.rebuild_timezone);
@@ -975,6 +993,8 @@ auto catalog_state::rebuild_status() const -> record {
   auto result = record{};
   if (rebuild_zone) {
     result["timezone"] = std::string{rebuild_zone->name()};
+  } else if (maintenance_ready) {
+    result["timezone"] = std::string{"UTC"};
   }
   if (maintenance_ready) {
     result["next-collection"] = next_collection;

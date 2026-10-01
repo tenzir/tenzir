@@ -1,0 +1,2 @@
+[{"id":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","mood":"happy","amount":"1.25","big":"5"},
+{"id":null,"mood":null,"amount":null,"big":null}]

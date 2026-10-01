@@ -1,0 +1,2 @@
+// An in-memory database is private to the operator and needs no file.
+from_duckdb ":memory:", sql="SELECT range AS i, range % 2 = 0 AS even FROM range(4)"

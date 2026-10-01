@@ -1,0 +1,5 @@
+suite: to-duckdb
+fixtures: [duckdb]
+timeout: 60
+skip:
+  on: fixture-unavailable

@@ -1,0 +1,6 @@
+error: primary key field `nope` does not exist in the events
+ --> tests/operators/to_duckdb/22_error_missing_primary.tql:6:1
+  |
+6 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="t2", primary=nope
+  | ^^^^^^^^^
+  |

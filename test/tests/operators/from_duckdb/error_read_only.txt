@@ -1,0 +1,6 @@
+error: Invalid Input Error: Cannot execute statement of type "CREATE" on database "seed" which is attached in read-only mode!
+ --> tests/operators/from_duckdb/error_read_only.tql:6:1
+  |
+6 | from_duckdb env("DUCKDB_SEED"), sql="CREATE TABLE nope (x INTEGER)"
+  | ^^^^^^^^^^^
+  |

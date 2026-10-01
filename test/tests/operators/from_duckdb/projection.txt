@@ -1,0 +1,49 @@
+warning: cannot access field of non-record type
+ --> tests/operators/from_duckdb/projection.tql:4:12
+  |
+4 | select id, meta.host, missing
+  |            ~~~~ not a record
+  ⋮
+4 | select id, meta.host, missing
+  |                 ----
+  |
+
+warning: record does not have field
+ --> tests/operators/from_duckdb/projection.tql:4:12
+  |
+4 | select id, meta.host, missing
+  |            ~~~~
+  ⋮
+4 | select id, meta.host, missing
+  |                 ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+
+warning: event does not have field
+ --> tests/operators/from_duckdb/projection.tql:4:23
+  |
+4 | select id, meta.host, missing
+  |                       ~~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  id: 1,
+  meta: {
+    host: "h1",
+  },
+  missing: null,
+}
+{
+  id: 2,
+  meta: {
+    host: null,
+  },
+  missing: null,
+}
+{
+  id: 3,
+  meta: {
+    host: null,
+  },
+  missing: null,
+}

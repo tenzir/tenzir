@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// Appending needs an existing table, so a missing file is an error and the
+// operator does not create it.
+from {i: 1}
+to_duckdb env("DUCKDB_ROOT") + "/missing.duckdb", table="t", mode="append"

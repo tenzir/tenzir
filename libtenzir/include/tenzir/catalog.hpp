@@ -932,6 +932,8 @@ public:
   time next_policy_flush = time::max();
   std::vector<std::filesystem::path> markers_waiting_for_flush = {};
   time eviction_retry_at = {};
+  /// The time zone of rebuild windows. `nullptr` stands for UTC, which is what
+  /// systems without a time zone database get.
   arrow_vendored::date::time_zone const* rebuild_zone = nullptr;
 
   /// Monotonic catalog admissions, independent of imported timestamps.

@@ -1,0 +1,3 @@
+// Appending to coarser timestamp columns truncates with a warning.
+from {t: 2024-01-01T00:00:00.123456789, t_s: 2024-01-01T00:00:00.5}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="coarse_times"

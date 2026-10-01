@@ -1,0 +1,6 @@
+error: `live=true` requires `table`
+ --> tests/operators/from_duckdb/error_live_requires_table.tql:5:54
+  |
+5 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1", live=true
+  |                                                      ^^^^
+  |

@@ -1,0 +1,24 @@
+{
+  table_schema: "main",
+  table_name: "bignum_keyed",
+}
+{
+  table_schema: "main",
+  table_name: "events",
+}
+{
+  table_schema: "main",
+  table_name: "huge_keyed",
+}
+{
+  table_schema: "main",
+  table_name: "keyed",
+}
+{
+  table_schema: "main",
+  table_name: "names",
+}
+{
+  table_schema: "staging",
+  table_name: "numbers",
+}

@@ -1,0 +1,36 @@
+warning: column `ts` holds values that TQL cannot represent
+ --> tests/operators/from_duckdb/sql_unrepresentable.tql:2:1
+  |
+2 | from_duckdb ":memory:", sql="SELECT * FROM (VALUES (TIMESTAMP 'infinity', DATE '5000-01-01', INTERVAL 1 MONTH), (TIMESTAMP '2024-01-01', DATE '2024-01-02', INTERVAL 90 SECOND)) AS t(ts, day, took)"
+  | ~~~~~~~~~~~
+  |
+  = note: reading them as `null`
+  = note: this applies to infinite timestamps, timestamps and dates outside the years 1678 to 2261, and intervals with months
+
+warning: column `day` holds values that TQL cannot represent
+ --> tests/operators/from_duckdb/sql_unrepresentable.tql:2:1
+  |
+2 | from_duckdb ":memory:", sql="SELECT * FROM (VALUES (TIMESTAMP 'infinity', DATE '5000-01-01', INTERVAL 1 MONTH), (TIMESTAMP '2024-01-01', DATE '2024-01-02', INTERVAL 90 SECOND)) AS t(ts, day, took)"
+  | ~~~~~~~~~~~
+  |
+  = note: reading them as `null`
+  = note: this applies to infinite timestamps, timestamps and dates outside the years 1678 to 2261, and intervals with months
+
+warning: column `took` holds values that TQL cannot represent
+ --> tests/operators/from_duckdb/sql_unrepresentable.tql:2:1
+  |
+2 | from_duckdb ":memory:", sql="SELECT * FROM (VALUES (TIMESTAMP 'infinity', DATE '5000-01-01', INTERVAL 1 MONTH), (TIMESTAMP '2024-01-01', DATE '2024-01-02', INTERVAL 90 SECOND)) AS t(ts, day, took)"
+  | ~~~~~~~~~~~
+  |
+  = note: reading them as `null`
+  = note: this applies to infinite timestamps, timestamps and dates outside the years 1678 to 2261, and intervals with months
+{
+  ts: null,
+  day: null,
+  took: null,
+}
+{
+  ts: 2024-01-01T00:00:00Z,
+  day: 2024-01-02T00:00:00Z,
+  took: 1.5min,
+}

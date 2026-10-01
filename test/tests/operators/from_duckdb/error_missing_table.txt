@@ -1,0 +1,10 @@
+error: Catalog Error: Table with name does_not_exist does not exist!
+Did you mean "pg_settings"?
+
+LINE 1: SELECT * FROM "does_not_exist"
+                      ^
+ --> tests/operators/from_duckdb/error_missing_table.tql:5:1
+  |
+5 | from_duckdb env("DUCKDB_SEED"), table="does_not_exist"
+  | ^^^^^^^^^^^
+  |

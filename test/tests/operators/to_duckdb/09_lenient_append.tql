@@ -1,0 +1,4 @@
+// Values that do not fit their column become null, and fields without a
+// column are dropped, each with a warning. The pipeline keeps running.
+from {i: 1, s: "a"}, {i: "two", s: "b"}, {i: 3, s: "c", extra: true}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="lenient"

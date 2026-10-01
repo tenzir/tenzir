@@ -1,0 +1,7 @@
+warning: column `amount` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_empty_result.tql:1:1
+  |
+1 | from_duckdb env("DUCKDB_SEED"), sql="SELECT * FROM events WHERE false"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`

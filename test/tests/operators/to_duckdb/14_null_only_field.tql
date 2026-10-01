@@ -1,0 +1,3 @@
+// A field without a single value has no type; the column is left out.
+from {id: 1, empty: null}, {id: 2, empty: null}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="nulls"

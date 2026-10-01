@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// `from_duckdb` opens databases read-only.
+from_duckdb env("DUCKDB_SEED"), sql="CREATE TABLE nope (x INTEGER)"

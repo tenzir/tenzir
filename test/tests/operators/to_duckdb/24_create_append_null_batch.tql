@@ -1,0 +1,4 @@
+// With an existing table, the default mode appends even a batch whose fields
+// only hold null, since it does not need to derive a schema.
+from {i: null, s: null}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="structs"

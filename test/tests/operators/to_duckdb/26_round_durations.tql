@@ -1,0 +1,3 @@
+// `INTERVAL` stores microseconds, so finer durations are rounded.
+from {d: 1500ns}, {d: 2us}
+to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="durations"

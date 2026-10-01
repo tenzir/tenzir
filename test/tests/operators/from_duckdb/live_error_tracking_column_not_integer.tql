@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_duckdb env("DUCKDB_SEED"), table="keyed", live=true, tracking_column="name"

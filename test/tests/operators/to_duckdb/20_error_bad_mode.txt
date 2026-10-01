@@ -1,0 +1,6 @@
+error: `mode` must be one of `create`, `append`, or `create_append`
+ --> tests/operators/to_duckdb/20_error_bad_mode.tql:6:63
+  |
+6 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="t", mode="upsert"
+  |                                                               ^^^^^^^^ got `upsert`
+  |

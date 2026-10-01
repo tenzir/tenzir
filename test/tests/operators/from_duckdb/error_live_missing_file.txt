@@ -1,0 +1,6 @@
+error: failed to open DuckDB database: the database file does not exist
+ --> tests/operators/from_duckdb/error_live_missing_file.tql:6:13
+  |
+6 | from_duckdb env("DUCKDB_ROOT") + "/does-not-exist.duckdb", table="t", live=true
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

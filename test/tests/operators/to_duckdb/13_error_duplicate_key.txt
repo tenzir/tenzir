@@ -1,0 +1,6 @@
+error: Failed to append: Duplicate key "id: 2" violates primary key constraint.
+ --> tests/operators/to_duckdb/13_error_duplicate_key.tql:6:1
+  |
+6 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="keyed"
+  | ^^^^^^^^^
+  |

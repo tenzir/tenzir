@@ -1,0 +1,6 @@
+error: `checkpoint_interval` must be at least 1s
+ --> tests/operators/to_duckdb/27_error_checkpoint_interval.tql:7:81
+  |
+7 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="ckpt", checkpoint_interval=1ns
+  |                                                                                 ^^^
+  |

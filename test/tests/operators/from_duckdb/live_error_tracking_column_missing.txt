@@ -1,0 +1,6 @@
+error: `tracking_column` `nope` does not exist in `keyed`
+ --> tests/operators/from_duckdb/live_error_tracking_column_missing.tql:5:75
+  |
+5 | from_duckdb env("DUCKDB_SEED"), table="keyed", live=true, tracking_column="nope"
+  |                                                                           ^^^^^^
+  |

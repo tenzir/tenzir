@@ -1,0 +1,8 @@
+warning: cannot derive a type for field `tags`
+ --> tests/operators/to_duckdb/28_empty_lists.tql:4:1
+  |
+4 | to_duckdb env("DUCKDB_ROOT") + "/out.duckdb", table="empty_lists"
+  | ~~~~~~~~~
+  |
+  = note: it only holds `null`, empty lists, or lists of `null`
+  = note: the column was not created

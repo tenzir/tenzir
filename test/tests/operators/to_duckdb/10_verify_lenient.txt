@@ -1,0 +1,5 @@
+[{"column_name":"i","column_type":"BIGINT","null":"YES","key":null,"default":null,"extra":null},
+{"column_name":"s","column_type":"VARCHAR","null":"YES","key":null,"default":null,"extra":null}]
+[{"i":1,"s":"a"},
+{"i":null,"s":"b"},
+{"i":3,"s":"c"}]

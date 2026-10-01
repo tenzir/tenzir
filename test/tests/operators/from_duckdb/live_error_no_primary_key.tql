@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Integer columns other than a primary key are no safe guess for tracking.
+from_duckdb env("DUCKDB_SEED"), table="events", live=true

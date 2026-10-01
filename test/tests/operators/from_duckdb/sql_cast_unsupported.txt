@@ -1,0 +1,69 @@
+warning: column `dec` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `huge` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `uuid` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `t` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `decs` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `st` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+
+warning: column `u` has a type without a TQL counterpart
+ --> tests/operators/from_duckdb/sql_cast_unsupported.tql:3:1
+  |
+3 | from_duckdb env("DUCKDB_SEED"), sql="SELECT 1.5::DECIMAL(4, 2) AS dec, 300::HUGEINT AS huge, '550e8400-e29b-41d4-a716-446655440000'::UUID AS uuid, TIME '13:37:00' AS t, [1.5::DECIMAL(4, 2)] AS decs, {a: 1::HUGEINT, b: 'x'} AS st, union_value(num := 1)::UNION(num INTEGER, str VARCHAR) AS u"
+  | ~~~~~~~~~~~
+  |
+  = note: reading it as `string`
+{
+  dec: "1.50",
+  huge: "300",
+  uuid: "550e8400-e29b-41d4-a716-446655440000",
+  t: "13:37:00",
+  decs: [
+    "1.50",
+  ],
+  st: {
+    a: "1",
+    b: "x",
+  },
+  u: "1",
+}
