@@ -1,0 +1,79 @@
+warning: parsed field `this` contains `int64`, but the schema expects `record`
+ --> tests/functions/parse/json/schema.tql:3:10
+  |
+3 | schema = x.parse_json(schema="suricata.dns")
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: parsed field `this` contains `int64`, but the schema expects `record`
+ --> tests/functions/parse/json/schema.tql:4:15
+  |
+4 | schema_only = x.parse_json(schema="suricata.dns", schema_only=true)
+  |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: parsed field `this` contains `list`, but the schema expects `record`
+ --> tests/functions/parse/json/schema.tql:3:10
+  |
+3 | schema = x.parse_json(schema="suricata.dns")
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: parsed field `this` contains `list`, but the schema expects `record`
+ --> tests/functions/parse/json/schema.tql:4:15
+  |
+4 | schema_only = x.parse_json(schema="suricata.dns", schema_only=true)
+  |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: schema expected `record`, but the input contained a string
+ --> tests/functions/parse/json/schema.tql:3:10
+  |
+3 | schema = x.parse_json(schema="suricata.dns")
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = hint: field `this`
+
+warning: schema expected `record`, but the input contained a string
+ --> tests/functions/parse/json/schema.tql:4:15
+  |
+4 | schema_only = x.parse_json(schema="suricata.dns", schema_only=true)
+  |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = hint: field `this`
+{
+  x: "{\"src_port\": \"53\", \"extra\": 1}",
+  schema_port: 53,
+  schema_extra: 1,
+  only_port: 53,
+  only_extra: null,
+  scalar: null,
+  scalar_only: null,
+}
+{
+  x: "1",
+  schema_port: null,
+  schema_extra: null,
+  only_port: null,
+  only_extra: null,
+  scalar: 1,
+  scalar_only: null,
+}
+{
+  x: "[1]",
+  schema_port: null,
+  schema_extra: null,
+  only_port: null,
+  only_extra: null,
+  scalar: null,
+  scalar_only: null,
+}
+{
+  x: "\"53\"",
+  schema_port: null,
+  schema_extra: null,
+  only_port: null,
+  only_extra: null,
+  scalar: null,
+  scalar_only: null,
+}

@@ -1,0 +1,5 @@
+from {x: r#"{"event_type": "dns", "src_port": "53"}"#},
+  {x: r#"{"event_type": "unknown", "v": "10.0.0.1"}"#},
+  {x: r#""10.0.0.1""#}
+y = x.parse_json(selector="event_type:suricata")
+select x, port=y.src_port?, v=y.v?, value=y if x == r#""10.0.0.1""# else null

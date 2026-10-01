@@ -6,12 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/concept/parseable/tenzir/ip.hpp"
+#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <vector>
 
 using namespace tenzir;
@@ -37,7 +41,72 @@ auto finish(EventBuilder& builder) -> std::vector<data> {
   return result;
 }
 
+/// Finishes `builder` and materializes the rows that hold a value.
+auto finish_data(EventBuilder& builder) -> std::vector<data> {
+  auto rows = builder.finish_data();
+  auto result = std::vector<data>{};
+  for (auto i = storage::Index{0}; i < rows.length(); ++i) {
+    result.push_back(materialize_legacy(rows.get(i)));
+  }
+  return result;
+}
+
 } // namespace
+
+TEST("event builder builds values that are not records") {
+  auto dh = null_diagnostic_handler{};
+  auto builder = make_builder(dh);
+  builder.value().data(int64_t{1});
+  builder.value().data_unparsed("10.0.0.1");
+  auto list = builder.value().list();
+  list.data(int64_t{2});
+  list.data_unparsed("x");
+  builder.value().record().field("a").data_unparsed("1h");
+  builder.value().null();
+  auto rows = finish_data(builder);
+  REQUIRE_EQUAL(rows.size(), 5u);
+  CHECK_EQUAL(rows[0], data{int64_t{1}});
+  CHECK_EQUAL(rows[1], data{*to<ip>("10.0.0.1")});
+  CHECK_EQUAL(rows[2], (data{tenzir::list{int64_t{2}, "x"}}));
+  CHECK_EQUAL(rows[3], (data{record{{"a", std::chrono::hours{1}}}}));
+  CHECK_EQUAL(rows[4], data{});
+}
+
+TEST("event builder skips and discards rows") {
+  auto dh = null_diagnostic_handler{};
+  auto builder = make_builder(dh);
+  builder.skip();
+  auto record = builder.value().record();
+  record.field("a").data(int64_t{1});
+  record.field("b").record().field("c").null();
+  builder.discard_last();
+  builder.value().data(std::string_view{"x"});
+  auto rows = builder.finish_data();
+  REQUIRE_EQUAL(rows.length(), 2);
+  CHECK_EQUAL(materialize_legacy(rows.get(1)), data{"x"});
+}
+
+TEST("event builder selects schemas only for records") {
+  auto dh = collecting_diagnostic_handler{};
+  auto settings = EventBuilder::Settings{};
+  settings.policy = EventBuilder::SelectorPolicy{"schema", None{}};
+  auto builder = make_builder(dh, std::move(settings));
+  auto event = builder.value().record();
+  event.field("schema").data_unparsed("missing");
+  event.field("x").data_unparsed("1h");
+  builder.value().data_unparsed("10.0.0.1");
+  builder.value().list().data_unparsed("2");
+  auto rows = finish_data(builder);
+  REQUIRE_EQUAL(rows.size(), 3u);
+  CHECK_EQUAL(rows[0], (data{record{{"schema", "missing"},
+                                    {"x", std::chrono::hours{1}}}}));
+  CHECK_EQUAL(rows[1], data{*to<ip>("10.0.0.1")});
+  CHECK_EQUAL(rows[2], (data{tenzir::list{"2"}}));
+  auto diagnostics = std::move(dh).collect();
+  CHECK(std::ranges::any_of(diagnostics, [](diagnostic const& d) {
+    return d.message == "event did not contain selector field";
+  }));
+}
 
 TEST("event builder infers numbers only when requested") {
   auto dh = null_diagnostic_handler{};

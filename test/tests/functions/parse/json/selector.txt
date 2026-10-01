@@ -1,0 +1,33 @@
+warning: selected schema not found
+ --> tests/functions/parse/json/selector.tql:4:5
+  |
+4 | y = x.parse_json(selector="event_type:suricata")
+  |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: `suricata.unknown` does not refer to a known schema
+
+warning: event did not contain selector field
+ --> tests/functions/parse/json/selector.tql:4:5
+  |
+4 | y = x.parse_json(selector="event_type:suricata")
+  |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: selector field `event_type` was not found
+{
+  x: "{\"event_type\": \"dns\", \"src_port\": \"53\"}",
+  port: 53,
+  v: null,
+  value: null,
+}
+{
+  x: "{\"event_type\": \"unknown\", \"v\": \"10.0.0.1\"}",
+  port: null,
+  v: 10.0.0.1,
+  value: null,
+}
+{
+  x: "\"10.0.0.1\"",
+  port: null,
+  v: null,
+  value: 10.0.0.1,
+}

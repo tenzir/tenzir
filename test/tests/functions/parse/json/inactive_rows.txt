@@ -1,0 +1,8 @@
+{
+  active: true,
+  port: 53,
+}
+{
+  active: false,
+  port: null,
+}

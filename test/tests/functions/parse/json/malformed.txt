@@ -1,0 +1,83 @@
+warning: failed to parse a JSON value
+ --> tests/functions/parse/json/malformed.tql:3:5
+  |
+3 | y = x.parse_json()
+  |     ~~~~~~~~~~~~~~
+  |
+  = note: context:
+          {"a":1,"b":}
+                     ^
+  = note: total buffer size: 12
+
+warning: failed to parse a JSON key-value pair
+ --> tests/functions/parse/json/malformed.tql:3:5
+  |
+3 | y = x.parse_json()
+  |     ~~~~~~~~~~~~~~
+  |
+  = note: context:
+          {"a":1,"b":}
+                      ^
+  = note: total buffer size: 12
+
+warning: could not parse json
+ --> tests/functions/parse/json/malformed.tql:3:5
+  |
+3 | y = x.parse_json()
+  |     ~~~~~~~~~~~~~~
+  |
+
+warning: failed to parse a JSON object
+ --> tests/functions/parse/json/malformed.tql:3:5
+  |
+3 | y = x.parse_json()
+  |     ~~~~~~~~~~~~~~
+  |
+  = note: context:
+          {"a":1} x
+          ^
+  = note: total buffer size: 9
+
+warning: failed to parse a JSON number
+ --> tests/functions/parse/json/malformed.tql:3:5
+  |
+3 | y = x.parse_json()
+  |     ~~~~~~~~~~~~~~
+  |
+  = note: context:
+          1 2
+          ^
+  = note: total buffer size: 3
+
+warning: failed to parse a JSON array
+ --> tests/functions/parse/json/malformed.tql:3:5
+  |
+3 | y = x.parse_json()
+  |     ~~~~~~~~~~~~~~
+  |
+  = note: context:
+          [1,
+          ^
+  = note: total buffer size: 3
+{
+  x: "{\"a\":1,\"b\":}",
+  y: null,
+}
+{
+  x: "{\"a\":1} x",
+  y: null,
+}
+{
+  x: "1 2",
+  y: null,
+}
+{
+  x: "[1,",
+  y: null,
+}
+{
+  x: "{\"a\":1}",
+  y: {
+    a: 1,
+  },
+}

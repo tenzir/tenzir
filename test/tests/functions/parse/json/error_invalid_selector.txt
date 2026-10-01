@@ -1,0 +1,8 @@
+error: invalid selector `a:b:c`: must contain at most one `:` and field name must not be empty
+ --> tests/functions/parse/json/error_invalid_selector.tql:5:27
+  |
+5 | y = x.parse_json(selector="a:b:c")
+  |                           ^^^^^^^
+  |
+  = usage: parse_json(x:string, [schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_json

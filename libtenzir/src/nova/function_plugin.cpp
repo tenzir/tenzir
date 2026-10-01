@@ -202,6 +202,7 @@ auto FunctionDescription::instantiate(std::string_view name,
   auto positional = std::vector<ast::expression*>{};
   auto named = std::vector<std::pair<size_t, ast::expression*>>{};
   auto named_found = std::vector<Option<location>>(named_.size());
+  auto named_values = std::vector<Option<location>>(named_.size());
   auto positional_idx = size_t{0};
   const auto min_positional = first_optional_.value_or(positional_.size());
   const auto max_positional = positional_.size();
@@ -241,6 +242,7 @@ auto FunctionDescription::instantiate(std::string_view name,
         continue;
       }
       named_found[idx] = assignment->left.get_location();
+      named_values[idx] = assignment->right.get_location();
       named.emplace_back(idx, &assignment->right);
       continue;
     }
@@ -314,7 +316,8 @@ auto FunctionDescription::instantiate(std::string_view name,
     (*set_call_location_)(args, call.get_location());
   }
   if (validator_) {
-    TRY((*validator_)(args, ctx));
+    auto validate_ctx = FunctionValidateCtx{ctx, named_values};
+    TRY((*validator_)(args, validate_ctx));
   }
   if (diagnostics.failed()) {
     return failure::promise();

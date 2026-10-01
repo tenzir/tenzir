@@ -1,0 +1,2 @@
+from {xs: ["1", r#"{"a": "1h"}"#, "[true]", "", null]}
+ys = xs.map(x => x.parse_json())

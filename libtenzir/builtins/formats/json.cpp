@@ -542,58 +542,81 @@ namespace nova_json {
 constexpr auto initial_batch_size = size_t{10 * 1024 * 1024};
 constexpr auto max_batch_size = size_t{2ull * 1024 * 1024 * 1024};
 
+/// Returns the current position in the document, for the context of warnings.
+using Locator
+  = detail::function_view<auto()->simdjson::simdjson_result<const char*>>;
+
 auto parse_object(simdjson::ondemand::object object,
-                  nova::EventBuilder::Record row, diagnostic_handler& dh)
-  -> void;
+                  nova::EventBuilder::Record row, diagnostic_handler& dh,
+                  std::string_view source = {}, Option<Locator> where = None{})
+  -> bool;
+
+/// Warns about a malformed part of a JSON document. If the document's `source`
+/// is known, the warning shows the bytes around `location`.
+auto warn_malformed(diagnostic_handler& dh, std::string_view source,
+                    simdjson::simdjson_result<const char*> location,
+                    std::string_view message) -> void {
+  auto b = diagnostic::warning("{}", message);
+  if (not source.empty()) {
+    b = with_surrounding_bytes(std::move(b), source, location);
+  }
+  std::move(b).emit(dh);
+}
 
 /// Recursively writes a single simdjson value into an event builder field or
-/// list. Emits warnings on malformed values and falls back to `null`.
-auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh) -> void {
+/// list. Emits warnings on malformed values and falls back to `null`. Returns
+/// whether the value was well-formed. `source`, if given, is the text of the
+/// document for the context of warnings.
+auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh,
+                 std::string_view source = {}) -> bool {
   auto type = val.type();
   if (type.error()) {
-    diagnostic::warning("failed to parse a JSON value").emit(dh);
+    warn_malformed(dh, source, val.current_location(),
+                   "failed to parse a JSON value");
     out.null();
-    return;
+    return false;
   }
   switch (type.value_unsafe()) {
     case simdjson::ondemand::json_type::null: {
       out.null();
-      return;
+      return true;
     }
     case simdjson::ondemand::json_type::boolean: {
       auto result = val.get_bool();
       if (result.error()) {
-        diagnostic::warning("failed to parse a JSON boolean").emit(dh);
+        warn_malformed(dh, source, val.current_location(),
+                       "failed to parse a JSON boolean");
         out.null();
-        return;
+        return false;
       }
       out.data(result.value_unsafe());
-      return;
+      return true;
     }
     case simdjson::ondemand::json_type::number: {
       auto kind = val.get_number_type();
       if (kind.error()) {
-        diagnostic::warning("failed to parse a JSON number").emit(dh);
+        warn_malformed(dh, source, val.current_location(),
+                       "failed to parse a JSON number");
         out.null();
-        return;
+        return false;
       }
       switch (kind.value_unsafe()) {
         case simdjson::ondemand::number_type::floating_point_number: {
           out.data(val.get_double().value_unsafe());
-          return;
+          return true;
         }
         case simdjson::ondemand::number_type::signed_integer: {
           out.data(val.get_int64().value_unsafe());
-          return;
+          return true;
         }
         case simdjson::ondemand::number_type::unsigned_integer: {
           out.data(val.get_uint64().value_unsafe());
-          return;
+          return true;
         }
         case simdjson::ondemand::number_type::big_integer: {
           // Does not fit into 64 bits; store the raw token as a string.
           out.data(std::string_view{val.raw_json_token()});
-          return;
+          return true;
         }
       }
       TENZIR_UNREACHABLE();
@@ -601,71 +624,95 @@ auto parse_value(auto&& val, auto&& out, diagnostic_handler& dh) -> void {
     case simdjson::ondemand::json_type::string: {
       auto str = val.get_string();
       if (str.error()) {
-        diagnostic::warning("failed to parse a JSON string").emit(dh);
+        warn_malformed(dh, source, val.current_location(),
+                       "failed to parse a JSON string");
         out.null();
-        return;
+        return false;
       }
       out.data_unparsed(str.value_unsafe());
-      return;
+      return true;
     }
     case simdjson::ondemand::json_type::array: {
       auto arr = val.get_array();
       if (arr.error()) {
-        diagnostic::warning("failed to parse a JSON array").emit(dh);
+        warn_malformed(dh, source, val.current_location(),
+                       "failed to parse a JSON array");
         out.null();
-        return;
+        return false;
       }
       auto elements = out.list();
+      auto ok = true;
       for (auto element : arr.value_unsafe()) {
         if (element.error()) {
-          diagnostic::warning("failed to parse a JSON array element").emit(dh);
+          warn_malformed(dh, source, element.current_location(),
+                         "failed to parse a JSON array element");
           elements.null();
+          ok = false;
           continue;
         }
-        parse_value(element.value_unsafe(), elements, dh);
+        ok &= parse_value(element.value_unsafe(), elements, dh, source);
       }
-      return;
+      return ok;
     }
     case simdjson::ondemand::json_type::object: {
       auto obj = val.get_object();
       if (obj.error()) {
-        diagnostic::warning("failed to parse a JSON object").emit(dh);
+        warn_malformed(dh, source, val.current_location(),
+                       "failed to parse a JSON object");
         out.null();
-        return;
+        return false;
       }
-      parse_object(obj.value_unsafe(), out.record(), dh);
-      return;
+      return parse_object(obj.value_unsafe(), out.record(), dh, source,
+                          Locator{[&] {
+                            return val.current_location();
+                          }});
     }
     case simdjson::ondemand::json_type::unknown: {
-      diagnostic::warning("failed to parse a JSON value").emit(dh);
+      warn_malformed(dh, source, val.current_location(),
+                     "failed to parse a JSON value");
       out.null();
-      return;
+      return false;
     }
   }
   TENZIR_UNREACHABLE();
 }
 
-/// Writes the fields of a JSON object into `row`.
+/// Writes the fields of a JSON object into `row`. Returns whether the object
+/// was well-formed.
 auto parse_object(simdjson::ondemand::object object,
-                  nova::EventBuilder::Record row, diagnostic_handler& dh)
-  -> void {
+                  nova::EventBuilder::Record row, diagnostic_handler& dh,
+                  std::string_view source, Option<Locator> where) -> bool {
+  auto location = [&]() -> simdjson::simdjson_result<const char*> {
+    if (where) {
+      return (*where)();
+    }
+    return simdjson::UNINITIALIZED;
+  };
+  auto ok = true;
   for (auto pair : object) {
     if (pair.error()) {
-      diagnostic::warning("failed to parse a JSON key-value pair").emit(dh);
+      warn_malformed(dh, source, location(),
+                     "failed to parse a JSON key-value pair");
+      ok = false;
       continue;
     }
     auto key = pair.unescaped_key();
     if (key.error()) {
-      diagnostic::warning("failed to parse a JSON key").emit(dh);
+      warn_malformed(dh, source, location(), "failed to parse a JSON key");
+      ok = false;
       continue;
     }
     auto value = pair.value();
     if (value.error()) {
-      diagnostic::warning("failed to parse a JSON object value").emit(dh);
+      warn_malformed(dh, source, value.current_location(),
+                     "failed to parse a JSON object value");
+      ok = false;
       continue;
     }
-    parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh);
+    ok &= parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh,
+                      source);
   }
+  return ok;
 }
 
 /// Points diagnostics without a location to the operator.
@@ -1999,7 +2046,93 @@ using read_suricata_plugin
 using read_zeek_plugin
   = configured_read_plugin<"zeek_json", "_path", "zeek", ".">;
 
-class parse_json_plugin final : public virtual function_plugin {
+struct ParseJsonArgs {
+  nova::ValueArgument x;
+  nova::EventBuilder::Settings settings;
+  location call;
+};
+
+struct ParseJsonFunction {
+  static auto eval(ParseJsonArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const& mask = frame.mask();
+    auto const length = args.x.data.length();
+    auto strings = args.x.data.get_alternative<nova::String>();
+    auto nulls = args.x.data.get_alternative<nova::Null>();
+    auto accepted = nova::storage::BitMap{length, false};
+    if (strings) {
+      accepted = accepted | strings->present;
+    }
+    if (nulls) {
+      accepted = accepted | nulls->present;
+    }
+    if (auto invalid = mask.and_not(accepted); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.x.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                            nova::Type<T>::static_name)
+          .primary(args.x.source)
+          .emit(frame);
+      });
+    }
+    auto dh = nova_json::make_operator_dh(args.call, frame);
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, *dh);
+    auto parser = simdjson::ondemand::parser{};
+    auto buffer = std::string{};
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not mask.get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not strings or not strings->present.get(row)) {
+        builder.value().null();
+        continue;
+      }
+      auto const view = std::string_view{*strings->data.get(row)};
+      if (view.empty()) {
+        builder.value().null();
+        continue;
+      }
+      buffer.assign(view);
+      auto doc = parser.iterate(buffer);
+      // Iterating may pad the buffer, so view it only afterwards.
+      auto const source = std::string_view{buffer};
+      if (doc.error()) {
+        with_surrounding_bytes(diagnostic::warning("{}",
+                                                   error_message(doc.error()))
+                                 .primary(args.call),
+                               source, source.data())
+          .emit(frame);
+        builder.value().null();
+        continue;
+      }
+      auto& document = doc.value_unsafe();
+      // simdjson rejects trailing content after scalars itself, but does not
+      // consume the token of a big integer.
+      auto const scalar = document.is_scalar();
+      auto ok = nova_json::parse_value(document, builder.value(), *dh, source);
+      if (ok and not scalar.error() and not scalar.value_unsafe()
+          and not document.at_end()) {
+        with_surrounding_bytes(diagnostic::warning("found trailing content "
+                                                   "after the JSON value")
+                                 .primary(args.call),
+                               source, document.current_location())
+          .emit(frame);
+        ok = false;
+      }
+      if (not ok) {
+        builder.discard_last();
+        diagnostic::warning("could not parse json")
+          .primary(args.call)
+          .emit(frame);
+        builder.value().null();
+      }
+    }
+    return builder.finish_data();
+  }
+};
+
+class parse_json_plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_json";
@@ -2007,6 +2140,15 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseJsonArgs, ParseJsonFunction>{};
+    d.positional("x", &ParseJsonArgs::x, "string");
+    d.call_location(&ParseJsonArgs::call);
+    d.validate(
+      nova::add_event_builder_to_describer(d, &ParseJsonArgs::settings));
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

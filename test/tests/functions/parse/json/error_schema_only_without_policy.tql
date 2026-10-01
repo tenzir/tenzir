@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: "{}"}
+y = x.parse_json(schema_only=true)

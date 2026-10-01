@@ -1,0 +1,8 @@
+from {x: r#"{"src_port": "53", "extra": 1}"#}, {x: "1"}, {x: "[1]"},
+  {x: r#""53""#}
+schema = x.parse_json(schema="suricata.dns")
+schema_only = x.parse_json(schema="suricata.dns", schema_only=true)
+select x, schema_port=schema.src_port?, schema_extra=schema.extra?,
+  only_port=schema_only.src_port?, only_extra=schema_only.extra?,
+  scalar=schema if x == "1" else null,
+  scalar_only=schema_only if x == "1" else null

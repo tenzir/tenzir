@@ -22,6 +22,7 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/panic.hpp"
+#include "tenzir/ref.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/try.hpp"
@@ -29,6 +30,7 @@
 
 #include <concepts>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -58,6 +60,36 @@ concept ArgType
      and not concepts::one_of<T, ast::expression, ast::lambda_expr,
                               located<ir::pipeline>, data, located<data>>)
     or concepts::one_of<T, Data, ConstantArgument, Secret, located<Secret>>;
+
+/// A handle to a named argument registered with a `FunctionDescriber`, which
+/// a validator uses to find where a call provided the argument.
+struct NamedArgument {
+  std::size_t index = 0;
+};
+
+/// The diagnostic handler that a validator receives. It also knows the
+/// locations of the named arguments that the call provided.
+class FunctionValidateCtx final : public diagnostic_handler {
+public:
+  FunctionValidateCtx(diagnostic_handler& dh,
+                      std::span<Option<location> const> named)
+    : dh_{dh}, named_{named} {
+  }
+
+  void emit(diagnostic d) override {
+    dh_->emit(std::move(d));
+  }
+
+  /// Returns the location of the value of `arg`, if the call provided it.
+  auto get_location(NamedArgument arg) const -> Option<location> {
+    TENZIR_ASSERT(arg.index < named_.size());
+    return named_[arg.index];
+  }
+
+private:
+  Ref<diagnostic_handler> dh_;
+  std::span<Option<location> const> named_;
+};
 
 /// The kernel of a nova function: a default constructible type with
 ///
@@ -126,7 +158,7 @@ private:
   using Prepare = std::function<
     auto(PrepareSink, ast::expression&, InstantiateCtx)->failure_or<void>>;
   using Validator
-    = std::function<auto(Any&, diagnostic_handler&)->failure_or<void>>;
+    = std::function<auto(Any&, FunctionValidateCtx&)->failure_or<void>>;
 
   struct Positional {
     std::string name;
@@ -485,6 +517,27 @@ public:
               prepare_member(ptr), false);
   }
 
+  /// Registers an optional named constant argument that `setter` stores into
+  /// the bundle. Returns a handle for looking up its location in a validator.
+  /// The setter may reject the value by emitting an error.
+  template <ArgType T>
+  auto named_with_setter(
+    std::string name,
+    std::function<auto(Args&, located<T>, diagnostic_handler&)->failure_or<void>>
+      setter,
+    std::string type = "") -> NamedArgument {
+    auto const index = desc_.named_.size();
+    add_named(
+      {std::move(name)}, type_or_default<T>(std::move(type)),
+      [setter = std::move(setter)](PrepareSink sink, ast::expression& expr,
+                                   InstantiateCtx ctx) -> failure_or<void> {
+        TRY(auto value, _::prepare_argument<located<T>>(expr, ctx));
+        return setter(sink.args.as<Args>(), std::move(value), ctx);
+      },
+      false);
+    return NamedArgument{index};
+  }
+
   /// Registers a member of `Args` to be populated with the call's location.
   auto call_location(location Args::* ptr) -> void {
     TENZIR_ASSERT(not desc_.set_call_location_);
@@ -495,16 +548,17 @@ public:
 
   /// Registers a check that runs on the fully materialized `Args`. It may
   /// normalize the arguments in place. Emitting an error or returning a
-  /// failure aborts the instantiation.
+  /// failure aborts the instantiation. The check may take the
+  /// `FunctionValidateCtx` or just a `diagnostic_handler&`.
   template <class F>
     requires concepts::invokable_r<failure_or<void>, F&, Args&,
-                                   diagnostic_handler&>
+                                   FunctionValidateCtx&>
   auto validate(F f) -> void {
     TENZIR_ASSERT(not desc_.validator_);
     desc_.validator_
       = [check = std::move(f)](Any& args,
-                               diagnostic_handler& dh) -> failure_or<void> {
-      return check(args.as<Args>(), dh);
+                               FunctionValidateCtx& ctx) -> failure_or<void> {
+      return check(args.as<Args>(), ctx);
     };
   }
 

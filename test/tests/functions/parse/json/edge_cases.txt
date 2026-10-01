@@ -1,0 +1,52 @@
+warning: `parse_json` expected `string`, got `int`
+ --> tests/functions/parse/json/edge_cases.tql:4:5
+  |
+4 | y = x.parse_json()
+  |     ~
+  |
+{
+  x: null,
+  y: null,
+}
+{
+  x: "",
+  y: null,
+}
+{
+  x: 42,
+  y: null,
+}
+{
+  x: "null",
+  y: null,
+}
+{
+  x: "true",
+  y: true,
+}
+{
+  x: "123456789012345678901234567890",
+  y: "123456789012345678901234567890",
+}
+{
+  x: "\"10.0.0.1\"",
+  y: 10.0.0.1,
+}
+{
+  x: "{\"a\":1,\"a\":2}",
+  y: {
+    a: [
+      1,
+      2,
+    ],
+  },
+}
+{
+  x: "[{\"a\":1},\"x\"]",
+  y: [
+    {
+      a: 1,
+    },
+    "x",
+  ],
+}

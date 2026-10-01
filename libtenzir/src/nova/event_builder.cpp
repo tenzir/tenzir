@@ -27,6 +27,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -436,6 +437,23 @@ public:
                          std::move(arrays)};
   }
 
+  /// Converts the top-level values in `rows` to `seed`, which may be a null
+  /// type. Unlike `record`, the values need not be records.
+  auto value(Array<Data> array, storage::BitMap const& rows, type const& seed,
+             value_path const& path) -> Array<Data> {
+    if (not rows.any()) {
+      return array;
+    }
+    auto const length = array.length();
+    auto result
+      = column(MaskedArray<Array<Data>>{array, storage::BitMap{length, true}},
+               rows, seed, path);
+    if (not result) {
+      return array;
+    }
+    return std::move(result->data);
+  }
+
 private:
   /// Converts the values of `column` in `selected` to `seed`, which may be a
   /// null type. Returns nothing if the column does not change.
@@ -606,7 +624,72 @@ auto field_seed(type const& seed, std::string_view name, bool schema_only)
   return type{};
 }
 
+/// Converts the records among the top-level values in `rows` to `seed`, which
+/// is a `record_type` or a null type. Other values stay as they are.
+auto retype_records(Array<Data> array, storage::BitMap const& rows,
+                    Retyper& retyper, type const& seed) -> Array<Data> {
+  return std::move(array).map_alternative<Record>(
+    [&](MaskedArray<Array<Record>> alternative) {
+      return retyper.record(std::move(alternative.data),
+                            alternative.present & rows, seed, value_path{});
+    });
+}
+
 } // namespace
+
+// -- Slot --------------------------------------------------------------------
+
+EventBuilder::Slot::Slot(FieldBuilder inner) : inner_{inner} {
+}
+
+EventBuilder::Slot::Slot(ArrayBuilder<Data>& inner)
+  : inner_{Ref<ArrayBuilder<Data>>{inner}} {
+}
+
+template <fundamental_view_type V>
+auto EventBuilder::Slot::data(V v) -> void {
+  match(
+    inner_,
+    [&](FieldBuilder& inner) {
+      inner.data(v);
+    },
+    [&](Ref<ArrayBuilder<Data>>& inner) {
+      inner->data(v);
+    });
+}
+
+auto EventBuilder::Slot::null() -> void {
+  match(
+    inner_,
+    [](FieldBuilder& inner) {
+      inner.null();
+    },
+    [](Ref<ArrayBuilder<Data>>& inner) {
+      inner->null();
+    });
+}
+
+auto EventBuilder::Slot::record() -> ArrayBuilder<nova::Record>::RecordBuilder {
+  return match(
+    inner_,
+    [](FieldBuilder& inner) {
+      return inner.record();
+    },
+    [](Ref<ArrayBuilder<Data>>& inner) {
+      return inner->record();
+    });
+}
+
+auto EventBuilder::Slot::list() -> ArrayBuilder<nova::List>::ListBuilder {
+  return match(
+    inner_,
+    [](FieldBuilder& inner) {
+      return inner.list();
+    },
+    [](Ref<ArrayBuilder<Data>>& inner) {
+      return inner->list();
+    });
+}
 
 // -- Record ------------------------------------------------------------------
 
@@ -679,16 +762,15 @@ auto EventBuilder::Record::lookup(std::string_view name, value_path const& path)
   }
   auto previous = Option<Data>{};
   auto extend = false;
-  auto inner = parent_->take(*inner_, name, previous, extend);
+  auto inner = Slot{parent_->take(*inner_, name, previous, extend)};
   return Field{*parent_, std::move(inner),    std::move(*seed),
                path,     std::move(previous), extend};
 }
 
 // -- Field -------------------------------------------------------------------
 
-EventBuilder::Field::Field(EventBuilder& parent, Option<FieldBuilder> inner,
-                           type seed, value_path path, Option<Data> previous,
-                           bool extend)
+EventBuilder::Field::Field(EventBuilder& parent, Option<Slot> inner, type seed,
+                           value_path path, Option<Data> previous, bool extend)
   : parent_{parent},
     inner_{std::move(inner)},
     seed_{std::move(seed)},
@@ -959,6 +1041,15 @@ auto EventBuilder::make(Settings settings, diagnostic_handler& dh)
   return result;
 }
 
+auto EventBuilder::make_prevalidated(Settings settings, diagnostic_handler& dh)
+  -> EventBuilder {
+  auto quiet = null_diagnostic_handler{};
+  auto result = make(std::move(settings), quiet);
+  TENZIR_ASSERT(result);
+  result->dh_ = dh;
+  return std::move(*result);
+}
+
 auto event_builder_settings(multi_series_builder::options const& options)
   -> EventBuilder::Settings {
   auto policy = match(
@@ -986,10 +1077,32 @@ auto event_builder_settings(multi_series_builder::options const& options)
 
 auto EventBuilder::event() -> Record {
   repeated_.clear();
+  rows_.emplace_back(true);
   auto const defer_schema
     = settings_.merge_structural and is<SchemaPolicy>(settings_.policy);
   return Record{*this, builder_.record(), defer_schema ? type{} : seed_,
                 value_path{}};
+}
+
+auto EventBuilder::value() -> Field {
+  repeated_.clear();
+  rows_.emplace_back(true);
+  auto const defer_schema
+    = settings_.merge_structural and is<SchemaPolicy>(settings_.policy);
+  return Field{*this, Slot{builder_}, defer_schema ? type{} : seed_,
+               value_path{}};
+}
+
+auto EventBuilder::skip() -> void {
+  repeated_.clear();
+  rows_.emplace_back(false);
+  builder_.skip();
+}
+
+auto EventBuilder::discard_last() -> void {
+  repeated_.clear();
+  TENZIR_ASSERT(rows_.pop_back());
+  std::ignore = builder_.take_last();
 }
 
 auto EventBuilder::length() const -> storage::Index {
@@ -997,24 +1110,48 @@ auto EventBuilder::length() const -> storage::Index {
 }
 
 auto EventBuilder::finish() -> Events {
-  auto array = std::exchange(builder_, ArrayBuilder<nova::Record>{}).finish();
+  auto names = Option<Array<String>>{};
+  auto data = finish_array(names);
+  auto const length = data.length();
+  auto array = data.try_as<nova::Record>();
+  if (not array) {
+    TENZIR_ASSERT_EQ(length, 0);
+    array = ArrayBuilder<nova::Record>{}.finish();
+  }
+  auto meta = Events::Meta::make_empty(length, name_);
+  if (names) {
+    meta.name = std::move(*names);
+  }
+  return Events{std::move(*array), storage::BitMap{length, true},
+                std::move(meta)};
+}
+
+auto EventBuilder::finish_data() -> Array<Data> {
+  auto names = Option<Array<String>>{};
+  return finish_array(names);
+}
+
+auto EventBuilder::finish_array(Option<Array<String>>& names) -> Array<Data> {
+  auto array = std::exchange(builder_, ArrayBuilder<Data>{}).finish();
+  auto rows = std::exchange(rows_, storage::BitMap::Builder{}).finish();
+  TENZIR_ASSERT_EQ(array.length(), rows.length());
   if (is<SelectorPolicy>(settings_.policy)) {
-    return finish_selected(std::move(array));
+    auto [result, selected_names]
+      = finish_selected(std::move(array), std::move(rows));
+    names = std::move(selected_names);
+    return std::move(result);
   }
-  auto const length = array.length();
-  auto rows = storage::BitMap{length, true};
   if (settings_.merge_structural and is<SchemaPolicy>(settings_.policy)) {
-    array = Retyper{settings_.schema_only,
-                    not settings_.raw,
-                    *dh_,
-                    settings_.infer_numbers,
-                    Retyper::Mode::merge_structural,
-                    settings_.infer_unparsed_under,
-                    settings_.string_fields}
-              .record(std::move(array), rows, seed_, value_path{});
+    auto retyper = Retyper{settings_.schema_only,
+                           not settings_.raw,
+                           *dh_,
+                           settings_.infer_numbers,
+                           Retyper::Mode::merge_structural,
+                           settings_.infer_unparsed_under,
+                           settings_.string_fields};
+    array = retype_records(std::move(array), rows, retyper, seed_);
   }
-  return Events{std::move(array), std::move(rows),
-                Events::Meta::make_empty(length, name_)};
+  return array;
 }
 
 auto EventBuilder::schema(std::string const& name) -> Option<type> const& {
@@ -1067,12 +1204,12 @@ auto EventBuilder::open_record(
   return None{};
 }
 
-auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
+auto EventBuilder::finish_selected(Array<Data> array, storage::BitMap rows)
+  -> std::pair<Array<Data>, Array<String>> {
   auto const& selector = as<SelectorPolicy>(settings_.policy);
   auto const length = array.length();
   // Look up the selector field for all events at once.
-  auto column = MaskedArray<Array<Data>>{Array<Data>{array},
-                                         storage::BitMap{length, true}};
+  auto column = MaskedArray<Array<Data>>{array, rows};
   auto rest = std::string_view{selector.field};
   while (true) {
     auto const dot = rest.find('.');
@@ -1107,6 +1244,10 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
   auto missing = false;
   auto invalid = Option<std::string_view>{};
   for (auto row = storage::Index{0}; row < length; ++row) {
+    if (not rows.get(row)) {
+      names.skip();
+      continue;
+    }
     auto name = std::string{};
     auto from_string = false;
     auto prefixed = [&](auto const& value) {
@@ -1186,10 +1327,10 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
   }
   if (common_initialized and not common_fields.empty()) {
     auto common = type{record_type{std::move(common_fields)}};
-    array
-      = Retyper{false, false, *dh_, false, Retyper::Mode::common_fields_only}
-          .record(std::move(array), std::move(selected_rows).finish(), common,
-                  value_path{});
+    auto retyper
+      = Retyper{false, false, *dh_, false, Retyper::Mode::common_fields_only};
+    array = retype_records(std::move(array), std::move(selected_rows).finish(),
+                           retyper, common);
   }
   // Convert every group to its schema.
   auto const infer = not settings_.raw;
@@ -1208,6 +1349,7 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
           .emit(*dh_);
       }
       if (infer) {
+        // Values that are not records land here, too.
         array
           = Retyper{false,
                     true,
@@ -1217,23 +1359,102 @@ auto EventBuilder::finish_selected(Array<nova::Record> array) -> Events {
                                                : Retyper::Mode::full,
                     settings_.infer_unparsed_under,
                     settings_.string_fields}
-              .record(std::move(array), rows, type{}, value_path{});
+              .value(std::move(array), rows, type{}, value_path{});
       }
       continue;
     }
-    array = Retyper{settings_.schema_only,
-                    infer,
-                    *dh_,
-                    settings_.infer_numbers,
-                    settings_.merge_structural ? Retyper::Mode::merge_structural
-                                               : Retyper::Mode::full,
-                    settings_.infer_unparsed_under,
-                    settings_.string_fields}
-              .record(std::move(array), rows, *selected, value_path{});
+    auto retyper
+      = Retyper{settings_.schema_only,
+                infer,
+                *dh_,
+                settings_.infer_numbers,
+                settings_.merge_structural ? Retyper::Mode::merge_structural
+                                           : Retyper::Mode::full,
+                settings_.infer_unparsed_under,
+                settings_.string_fields};
+    array = retype_records(std::move(array), rows, retyper, *selected);
   }
-  auto meta = Events::Meta::make_empty(length);
-  meta.name = names.finish();
-  return Events{std::move(array), storage::BitMap{length, true},
-                std::move(meta)};
+  return {std::move(array), names.finish()};
 }
+
+// -- Function arguments -------------------------------------------------------
+
+namespace _ {
+
+auto set_schema(EventBuilder::Settings& settings, located<std::string> value,
+                diagnostic_handler& dh) -> failure_or<void> {
+  if (value.inner.empty()) {
+    diagnostic::error("`schema` must not be empty").primary(value).emit(dh);
+    return failure::promise();
+  }
+  settings.policy = EventBuilder::SchemaPolicy{std::move(value.inner)};
+  return {};
+}
+
+auto set_selector(EventBuilder::Settings& settings, located<std::string> value,
+                  diagnostic_handler& dh) -> failure_or<void> {
+  if (value.inner.empty()) {
+    diagnostic::error("selector must not be empty").primary(value).emit(dh);
+    return failure::promise();
+  }
+  auto selector = parse_selector_value(value.inner);
+  if (not selector) {
+    diagnostic::error("invalid selector `{}`: must contain at most one `:` "
+                      "and field name must not be empty",
+                      value.inner)
+      .primary(value)
+      .emit(dh);
+    return failure::promise();
+  }
+  settings.policy = EventBuilder::SelectorPolicy{
+    std::move(selector->field_name), std::move(selector->naming_prefix)};
+  return {};
+}
+
+auto set_unflatten_separator(EventBuilder::Settings& settings,
+                             located<std::string> value, diagnostic_handler& dh)
+  -> failure_or<void> {
+  if (value.inner.empty()) {
+    diagnostic::error("`unflatten_separator` must not be empty")
+      .primary(value)
+      .emit(dh);
+    return failure::promise();
+  }
+  settings.unflatten_separator = std::move(value.inner);
+  return {};
+}
+
+} // namespace _
+
+auto validate_event_builder_settings(EventBuilder::Settings const& settings,
+                                     EventBuilderLocations const& locations,
+                                     bool schema_only_requires_policy,
+                                     diagnostic_handler& dh)
+  -> failure_or<void> {
+  if (locations.schema and locations.selector) {
+    diagnostic::error("`schema` and `selector` cannot be combined")
+      .primary(*locations.schema)
+      .primary(*locations.selector)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (settings.schema_only and schema_only_requires_policy
+      and is<EventBuilder::NoPolicy>(settings.policy)) {
+    diagnostic::error("`schema_only` requires a `schema` or `selector`")
+      .primary(locations.schema_only.value_or(location::unknown))
+      .emit(dh);
+    return failure::promise();
+  }
+  // Resolve the schema once, so that its diagnostics appear only once.
+  auto schema_dh = transforming_diagnostic_handler{
+    dh, [&](diagnostic d) {
+      if (locations.schema and not d.has_location()) {
+        d.annotations.emplace_back(true, std::string{}, *locations.schema);
+      }
+      return d;
+    }};
+  TRY(EventBuilder::make(settings, schema_dh));
+  return {};
+}
+
 } // namespace tenzir::nova

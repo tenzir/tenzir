@@ -1,0 +1,6 @@
+// `parse_json` only sees the active row, so the inactive one must not trigger
+// a missing-selector diagnostic.
+from {x: r#"{"event_type": "dns", "src_port": "53"}"#, active: true},
+  {x: r#"{"src_port": "80"}"#, active: false}
+y = x.parse_json(selector="event_type:suricata") if active else null
+select active, port=y.src_port?

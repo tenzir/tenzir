@@ -1,0 +1,8 @@
+error: schema `does_not_exist` does not exist, but `schema_only` was specified
+ --> tests/functions/parse/json/error_unknown_schema_only.tql:5:25
+  |
+5 | y = x.parse_json(schema="does_not_exist", schema_only=true)
+  |                         ^^^^^^^^^^^^^^^^
+  |
+  = usage: parse_json(x:string, [schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_json

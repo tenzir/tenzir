@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: "{}"}
+y = x.parse_json(schema="does_not_exist", schema_only=true)
