@@ -150,10 +150,14 @@ in
       cxxStandard = "23";
     }).overrideAttrs
       (base: {
-        cmakeFlags = base.cmakeFlags ++ [
-          (lib.cmakeBool "WITH_EXAMPLES" false)
-          "-DgRPC_CPP_PLUGIN_EXECUTABLE=${lib.getBin finalPkgs.pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
-        ];
+        cmakeFlags =
+          base.cmakeFlags
+          ++ [
+            (lib.cmakeBool "WITH_EXAMPLES" false)
+            "-DgRPC_CPP_PLUGIN_EXECUTABLE=${lib.getBin finalPkgs.pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
+          ]
+          ++ lib.optionals isStatic [ (lib.cmakeBool "BUILD_TESTING" false) ];
+        doCheck = (base.doCheck or false) && !isStatic;
         # Fails on binding port 4318, which a parallel test already holds.
         checkPhase = ''
           runHook preCheck
