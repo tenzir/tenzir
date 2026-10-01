@@ -1,0 +1,8 @@
+// Publish messages with different headers.
+from {message: "one", headers: {source: "tenzir"}},
+     {message: "two", headers: null},
+     {message: "three", headers: {multi: ["a", "b"], source: "other"}}
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL"),
+        message=message,
+        headers=headers

@@ -1,0 +1,23 @@
+warning: `headers` must be a record, got `string`
+  --> tests/operators/to_nats/invalid_headers/01_publish.tql:10:17
+   |
+10 |         headers=headers
+   |                 ~~~~~~~
+   |
+   = note: event is skipped
+
+warning: NATS header `a` must be string or list<string>
+  --> tests/operators/to_nats/invalid_headers/01_publish.tql:10:17
+   |
+10 |         headers=headers
+   |                 ~~~~~~~
+   |
+   = note: event is skipped
+
+warning: NATS header `a` must contain only strings
+  --> tests/operators/to_nats/invalid_headers/01_publish.tql:10:17
+   |
+10 |         headers=headers
+   |                 ~~~~~~~
+   |
+   = note: event is skipped

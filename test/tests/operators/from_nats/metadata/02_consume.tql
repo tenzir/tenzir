@@ -1,0 +1,16 @@
+// Consume the messages in one batch and nest the metadata.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=3,
+          metadata_field=meta.nats,
+          _batch_size=3,
+          _queue_capacity=3
+select line = string(message),
+       header_keys = meta.nats.headers.keys().sort(),
+       source = meta.nats.headers.source?,
+       multi = meta.nats.headers.multi?,
+       stream = meta.nats.stream,
+       stream_sequence = meta.nats.stream_sequence,
+       recent = meta.nats.timestamp > 2020-01-01T00:00:00Z
+sort stream_sequence

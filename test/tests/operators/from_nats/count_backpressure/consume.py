@@ -35,6 +35,7 @@ select line = string(message)
             "--bare-mode",
             "--console-verbosity=warning",
             "--multi",
+            "--nova=true",
             pipeline,
         ],
         text=True,

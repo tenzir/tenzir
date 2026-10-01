@@ -1,0 +1,5 @@
+// Serialize events of different shapes through the default message.
+from {a: 1, b: [1, "x", null]},
+     {c: {d: null, e: 2024-01-01T00:00:00Z}, f: []}
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL")

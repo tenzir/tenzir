@@ -1,0 +1,11 @@
+suite: from-nats-metadata
+fixtures:
+  - nats:
+      subject: from_nats_metadata_test
+      stream: FROM_NATS_METADATA_TEST
+      durable: from_nats_metadata_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

@@ -1,0 +1,11 @@
+suite: to-nats-masked
+fixtures:
+  - nats:
+      subject: to_nats_masked_test
+      stream: TO_NATS_MASKED_TEST
+      durable: to_nats_masked_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

@@ -1,0 +1,9 @@
+{
+  line: "text",
+}
+{
+  line: "bytes",
+}
+{
+  line: "last",
+}

@@ -1,0 +1,39 @@
+{
+  line: "one",
+  header_keys: [
+    "source",
+  ],
+  source: [
+    "tenzir",
+  ],
+  multi: null,
+  stream: "FROM_NATS_METADATA_TEST",
+  stream_sequence: 1,
+  recent: true,
+}
+{
+  line: "two",
+  header_keys: [],
+  source: null,
+  multi: null,
+  stream: "FROM_NATS_METADATA_TEST",
+  stream_sequence: 2,
+  recent: true,
+}
+{
+  line: "three",
+  header_keys: [
+    "multi",
+    "source",
+  ],
+  source: [
+    "other",
+  ],
+  multi: [
+    "a",
+    "b",
+  ],
+  stream: "FROM_NATS_METADATA_TEST",
+  stream_sequence: 3,
+  recent: true,
+}

@@ -1,8 +1,16 @@
 # runner: python
-"""Verify early downstream stop does not ACK messages not emitted by from_nats."""
+"""Verify that an early downstream stop leaves no JetStream message unsettled.
+
+`head 1` stops `from_nats` through the executor's control plane, which may
+reach `from_nats` only after it emitted the next message. That message counts
+as delivered and is acknowledged, even though `head` drops it. Every message
+that `from_nats` did not emit must be NAKed on teardown, so that it is
+immediately available again instead of after the ACK wait of 30 seconds.
+"""
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -33,6 +41,21 @@ def _run_nats_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, text=True, capture_output=True)
 
 
+def _ack_floor() -> int:
+    info = _run_nats_cli(
+        [
+            "consumer",
+            "info",
+            os.environ["NATS_STREAM"],
+            os.environ["NATS_DURABLE"],
+            "--json",
+        ]
+    )
+    if info.returncode != 0:
+        raise RuntimeError(f"failed to inspect consumer\nstderr:\n{info.stderr}")
+    return int(json.loads(info.stdout)["ack_floor"]["stream_seq"])
+
+
 def main() -> None:
     # Use single-message batches to make the downstream stop boundary coincide
     # with a NATS ACK boundary.
@@ -52,6 +75,7 @@ select line = string(message)
             "--bare-mode",
             "--console-verbosity=warning",
             "--multi",
+            "--nova=true",
             pipeline,
         ],
         text=True,
@@ -63,14 +87,17 @@ select line = string(message)
             f"stdout:\n{first.stdout}\n"
             f"stderr:\n{first.stderr}"
         )
-    if "message-0001" not in first.stdout:
+    if "message-0001" not in first.stdout or "message-0002" in first.stdout:
         raise RuntimeError(
-            "first pipeline did not emit the first message\n"
+            "first pipeline did not emit exactly the first message\n"
             f"stdout:\n{first.stdout}\n"
             f"stderr:\n{first.stderr}"
         )
-    outputs = []
-    for _ in range(2):
+    ack_floor = _ack_floor()
+    if ack_floor < 1:
+        raise RuntimeError("message-0001 was not acknowledged")
+    if ack_floor < 2:
+        # Wait well below the ACK wait, so that only a NAKed message arrives.
         remaining = _run_nats_cli(
             [
                 "consumer",
@@ -85,23 +112,14 @@ select line = string(message)
                 "--ack",
             ]
         )
-        outputs.append(remaining.stdout)
-        if "message-0002" in remaining.stdout:
-            break
-        if remaining.returncode != 0:
-            break
-    remaining_output = "".join(outputs)
-    if "message-0001" in remaining_output:
-        raise RuntimeError(
-            "message-0001 was redelivered after downstream early stop\n"
-            f"stdout:\n{remaining_output}\n"
-        )
-    if "message-0002" not in remaining_output:
-        raise RuntimeError(
-            "message-0002 was not available after downstream early stop\n"
-            f"stdout:\n{remaining_output}\n"
-        )
-    print("message-0002 remains available")
+        if "message-0002" not in remaining.stdout:
+            raise RuntimeError(
+                "message-0002 was neither acknowledged nor available after "
+                "downstream early stop\n"
+                f"stdout:\n{remaining.stdout}\n"
+                f"stderr:\n{remaining.stderr}"
+            )
+    print("no message left unsettled")
 
 
 if __name__ == "__main__":

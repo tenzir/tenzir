@@ -17,6 +17,8 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
@@ -33,6 +35,8 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -309,6 +313,24 @@ void complete_callback(natsConnection*, natsSubscription*, natsStatus status,
   queue->enqueue(status);
 }
 
+auto metadata_field_invalid(ast::field_path const& path) -> bool {
+  auto const segments = path.path();
+  if (segments.empty()) {
+    return true;
+  }
+  return segments.front().id.name == "message";
+}
+
+auto message_metadata(natsMsg* msg) -> js_msg_meta_data_ptr {
+  auto* raw = static_cast<jsMsgMetaData*>(nullptr);
+  if (natsMsg_GetMetaData(&raw, msg) != NATS_OK) {
+    return {};
+  }
+  return js_msg_meta_data_ptr{raw};
+}
+
+namespace legacy {
+
 auto optional_c_string(char const* str) -> data {
   if (str and *str) {
     return std::string{str};
@@ -356,14 +378,6 @@ auto message_headers(natsMsg* msg) -> record {
   return result;
 }
 
-auto message_metadata(natsMsg* msg) -> js_msg_meta_data_ptr {
-  auto* raw = static_cast<jsMsgMetaData*>(nullptr);
-  if (natsMsg_GetMetaData(&raw, msg) != NATS_OK) {
-    return {};
-  }
-  return js_msg_meta_data_ptr{raw};
-}
-
 auto message_payload(natsMsg* msg) -> blob {
   auto const size = natsMsg_GetDataLength(msg);
   if (size <= 0) {
@@ -393,14 +407,6 @@ auto emit_metadata(Record& metadata, natsMsg* msg) -> void {
     .data(meta ? data{meta->NumPending} : data{caf::none});
   metadata.field("timestamp")
     .data(meta ? data{time{} + duration{meta->Timestamp}} : data{caf::none});
-}
-
-auto metadata_field_invalid(ast::field_path const& path) -> bool {
-  auto const segments = path.path();
-  if (segments.empty()) {
-    return true;
-  }
-  return segments.front().id.name == "message";
 }
 
 class FromNats final : public Operator<void, table_slice> {
@@ -963,6 +969,686 @@ private:
   bool done_ = false;
 };
 
+} // namespace legacy
+
+auto optional_c_string(nova::FieldBuilder field, char const* str) -> void {
+  if (str and *str) {
+    field.data(std::string_view{str});
+  } else {
+    field.null();
+  }
+}
+
+auto emit_headers(nova::ArrayBuilder<nova::Record>::RecordBuilder headers,
+                  natsMsg* msg) -> void {
+  auto const** keys = static_cast<char const**>(nullptr);
+  auto key_count = int{};
+  if (natsMsgHeader_Keys(msg, &keys, &key_count) != NATS_OK) {
+    return;
+  }
+  auto keys_guard = std::unique_ptr<char const*, decltype(&std::free)>{
+    const_cast<char const**>(keys),
+    std::free,
+  };
+  for (auto i = 0; i < key_count; ++i) {
+    auto const* key = keys[i];
+    if (key == nullptr) {
+      continue;
+    }
+    auto const** values = static_cast<char const**>(nullptr);
+    auto value_count = int{};
+    if (natsMsgHeader_Values(msg, key, &values, &value_count) != NATS_OK) {
+      continue;
+    }
+    auto values_guard = std::unique_ptr<char const*, decltype(&std::free)>{
+      const_cast<char const**>(values),
+      std::free,
+    };
+    auto list = headers.field(key).list();
+    for (auto j = 0; j < value_count; ++j) {
+      list.data(values[j] ? std::string_view{values[j]} : std::string_view{});
+    }
+  }
+}
+
+auto message_payload(natsMsg* msg) -> nova::BlobView {
+  auto const size = natsMsg_GetDataLength(msg);
+  if (size <= 0) {
+    return {};
+  }
+  auto const* bytes = reinterpret_cast<std::byte const*>(natsMsg_GetData(msg));
+  return nova::BlobView{bytes, static_cast<size_t>(size)};
+}
+
+auto emit_metadata(nova::ArrayBuilder<nova::Record>::RecordBuilder metadata,
+                   natsMsg* msg) -> void {
+  auto meta = message_metadata(msg);
+  optional_c_string(metadata.field("subject"), natsMsg_GetSubject(msg));
+  optional_c_string(metadata.field("reply"), natsMsg_GetReply(msg));
+  emit_headers(metadata.field("headers").record(), msg);
+  if (not meta) {
+    for (auto name :
+         {"stream", "consumer", "stream_sequence", "consumer_sequence",
+          "num_delivered", "num_pending", "timestamp"}) {
+      metadata.field(name).null();
+    }
+    return;
+  }
+  optional_c_string(metadata.field("stream"), meta->Stream);
+  optional_c_string(metadata.field("consumer"), meta->Consumer);
+  metadata.field("stream_sequence").data(uint64_t{meta->Sequence.Stream});
+  metadata.field("consumer_sequence").data(uint64_t{meta->Sequence.Consumer});
+  metadata.field("num_delivered").data(uint64_t{meta->NumDelivered});
+  metadata.field("num_pending").data(uint64_t{meta->NumPending});
+  metadata.field("timestamp").data(time{} + duration{meta->Timestamp});
+}
+
+auto release_queue(void* closure) -> void {
+  delete static_cast<Arc<SourceQueue>*>(closure);
+}
+
+/// The NATS resources of one `from_nats` instance.
+///
+/// Message batches share ownership of the session, so that the subscription
+/// outlives every message received through it: nats.c ACKs and NAKs a message
+/// through its subscription without retaining it.
+///
+/// The destructor runs once the last owner lets go. It NAKs every message that
+/// did not reach downstream and ACKs every message that did. This also covers
+/// a forced stop, such as an early downstream stop, where the executor
+/// destroys the operator without calling `stop()`.
+class Session {
+public:
+  explicit Session(uint64_t queue_capacity)
+    : queue{std::in_place, queue_capacity} {
+  }
+
+  Session(Session const&) = delete;
+  auto operator=(Session const&) -> Session& = delete;
+  Session(Session&&) = delete;
+  auto operator=(Session&&) -> Session& = delete;
+
+  ~Session() {
+    queue->stop_accepting();
+    std::ignore = drain();
+    release_queued();
+    for (auto& msg : delivered) {
+      natsMsg_Ack(msg.get(), nullptr);
+    }
+    delivered.clear();
+    std::ignore = flush();
+  }
+
+  /// Removes interest without dropping messages and blocks until done.
+  ///
+  /// nats.c discards messages that it has already received for a closed
+  /// subscription without invoking the callback. They would stay
+  /// unacknowledged until the ACK wait expires. Draining dispatches them
+  /// instead, and the callback NAKs them because the queue no longer accepts
+  /// messages. Call `queue->stop_accepting()` first.
+  ///
+  /// The subscription stays alive until the session is destroyed, because the
+  /// messages received through it still need it for their ACKs and NAKs.
+  auto drain() -> natsStatus {
+    if (not subscription or std::exchange(drained, true)) {
+      return NATS_OK;
+    }
+    auto status = natsSubscription_DrainTimeout(subscription.get(),
+                                                shutdown_flush_timeout_ms);
+    if (status == NATS_OK) {
+      status = natsSubscription_WaitForDrainCompletion(
+        subscription.get(), shutdown_flush_timeout_ms);
+    } else {
+      natsSubscription_Unsubscribe(subscription.get());
+    }
+    return status;
+  }
+
+  /// NAKs the messages that the operator has not taken from the queue yet.
+  auto release_queued() -> void {
+    while (auto message = queue->try_dequeue()) {
+      if (auto* item = try_as<IncomingMessage>(&*message)) {
+        queue->release_message_slot();
+        negative_acknowledge(item->msg.get());
+      }
+    }
+  }
+
+  /// Sends buffered ACKs and NAKs and waits for the server to receive them.
+  auto flush() const -> natsStatus {
+    if (not connection) {
+      return NATS_OK;
+    }
+    return natsConnection_FlushTimeout(connection.get(),
+                                       shutdown_flush_timeout_ms);
+  }
+
+  // Declared in dependency order, so that destruction releases the
+  // subscription before the JetStream context and the connection, and the
+  // connection before the event base that it runs on.
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor;
+  nats_options_ptr options;
+  nats_connection_ptr connection;
+  js_ctx_ptr js;
+  Arc<SourceQueue> queue;
+  nats_subscription_ptr subscription;
+  bool drained = false;
+  /// Messages that reached downstream and await their ACK.
+  std::vector<nats_msg_ptr> delivered;
+};
+
+/// The messages that `await_task()` collects for one `process_task()`. NAKs
+/// the messages that it still holds when destroyed, such as when the executor
+/// cancels `await_task()`.
+struct EventBatch {
+  explicit EventBatch(Arc<Session> session) : session_{std::move(session)} {
+  }
+
+  EventBatch(EventBatch const&) = delete;
+  auto operator=(EventBatch const&) -> EventBatch& = delete;
+  EventBatch(EventBatch&&) noexcept = default;
+  auto operator=(EventBatch&& other) noexcept -> EventBatch& {
+    if (this == &other) {
+      return *this;
+    }
+    return_messages();
+    session_ = std::move(other.session_);
+    messages = std::move(other.messages);
+    completion = std::move(other.completion);
+    acknowledge_pending = std::exchange(other.acknowledge_pending, false);
+    return *this;
+  }
+
+  ~EventBatch() {
+    return_messages();
+  }
+
+  std::vector<nats_msg_ptr> messages;
+  Option<SubscriptionComplete> completion = None{};
+  bool acknowledge_pending = false;
+
+private:
+  auto return_messages() noexcept -> void {
+    for (auto& msg : messages) {
+      if (msg) {
+        negative_acknowledge(msg.get());
+        session_->queue->release_message_slot();
+      }
+    }
+    messages.clear();
+  }
+
+  Arc<Session> session_;
+};
+
+/// Keeps the queue alive until nats.c has invoked the last callback of
+/// `subscription`. nats.c invokes callbacks on its own threads, and may do so
+/// after another thread closed the subscription.
+auto keep_queue_alive(natsSubscription* subscription,
+                      Arc<SourceQueue> const& queue) -> void {
+  // If registering fails, the subscription closed already, and we cannot tell
+  // when nats.c is done with the queue. The reference leaks then, rather than
+  // risking a use-after-free.
+  auto* keepalive = std::make_unique<Arc<SourceQueue>>(queue).release();
+  std::ignore
+    = natsSubscription_SetOnCompleteCB(subscription, release_queue, keepalive);
+}
+
+class FromNats final : public Operator<void, nova::Events> {
+public:
+  explicit FromNats(FromNatsArgs args)
+    : args_{std::move(args)}, session_{std::in_place, args_.queue_capacity} {
+  }
+
+  FromNats(FromNats const&) = delete;
+  auto operator=(FromNats const&) -> FromNats& = delete;
+  FromNats(FromNats&&) noexcept = default;
+  auto operator=(FromNats&&) noexcept -> FromNats& = default;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    read_bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    read_events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    auto resolved
+      = co_await resolve_connection_config(ctx, args_.url, args_.auth);
+    if (not resolved) {
+      done_ = true;
+      co_return;
+    }
+    session_->io_executor = ctx.io_executor();
+    auto* evb = session_->io_executor->getEventBase();
+    TENZIR_ASSERT(evb);
+    auto options
+      = make_nats_options(*resolved, args_.tls,
+                          args_.url ? args_.url->source : location::unknown,
+                          ctx.dh(), *evb, ctx.actor_system().config());
+    if (not options) {
+      done_ = true;
+      co_return;
+    }
+    session_->options = std::move(*options);
+    auto* raw_connection = static_cast<natsConnection*>(nullptr);
+    auto status = co_await spawn_blocking([&] {
+      return natsConnection_Connect(&raw_connection, session_->options.get());
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to connect to NATS server")
+                        .primary(args_.url ? args_.url->source
+                                           : location::unknown),
+                      status, ctx.dh());
+      done_ = true;
+      co_return;
+    }
+    session_->connection = nats_connection_ptr{raw_connection};
+    auto* raw_js = static_cast<jsCtx*>(nullptr);
+    status
+      = natsConnection_JetStream(&raw_js, session_->connection.get(), nullptr);
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to create JetStream context")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+      done_ = true;
+      co_return;
+    }
+    session_->js = js_ctx_ptr{raw_js};
+    auto durable_stream = Option<std::string>{};
+    if (args_.durable) {
+      durable_stream = co_await ensure_durable_consumer(ctx);
+      if (not durable_stream) {
+        done_ = true;
+        co_return;
+      }
+    }
+    auto const fetch_size = std::min(args_.batch_size, args_.queue_capacity);
+    auto* queue = &*session_->queue;
+    auto js_options = jsOptions{};
+    jsOptions_Init(&js_options);
+    js_options.PullSubscribeAsync.FetchSize
+      = detail::narrow_cast<int>(fetch_size);
+    js_options.PullSubscribeAsync.KeepAhead
+      = detail::narrow_cast<int>(std::max<uint64_t>(1, fetch_size / 2));
+    js_options.PullSubscribeAsync.CompleteHandler = complete_callback;
+    js_options.PullSubscribeAsync.CompleteHandlerClosure = queue;
+    auto sub_options = jsSubOptions{};
+    jsSubOptions_Init(&sub_options);
+    sub_options.ManualAck = true;
+    sub_options.Config.AckPolicy = js_AckExplicit;
+    auto const* durable
+      = args_.durable ? args_.durable->inner.c_str() : nullptr;
+    if (not durable) {
+      sub_options.Config.MaxAckPending
+        = detail::narrow<int>(args_.queue_capacity);
+    }
+    if (durable) {
+      TENZIR_ASSERT(durable_stream);
+      sub_options.Stream = durable_stream->c_str();
+      sub_options.Consumer = durable;
+    }
+    auto js_error = jsErrCode{};
+    auto* raw_subscription = static_cast<natsSubscription*>(nullptr);
+    status = co_await spawn_blocking([&] {
+      return js_PullSubscribeAsync(&raw_subscription, session_->js.get(),
+                                   args_.subject.inner.c_str(), durable,
+                                   message_callback, queue, &js_options,
+                                   &sub_options, &js_error);
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to subscribe to NATS subject")
+                        .primary(args_.subject.source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      done_ = true;
+      co_return;
+    }
+    keep_queue_alive(raw_subscription, session_->queue);
+    session_->subscription = nats_subscription_ptr{raw_subscription};
+  }
+
+  auto post_commit(OpCtx& ctx) -> Task<void> override {
+    if (acknowledge_pending(ctx.dh())) {
+      co_await flush_acknowledgements(ctx);
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("received", received_);
+    serde("done", done_);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    auto& queue = *session_->queue;
+    auto batch = EventBatch{session_};
+    auto first = co_await queue.dequeue();
+    if (try_as<AcknowledgePending>(&first)) {
+      co_await wait_for_downstream_stop();
+    }
+    if (not append_to_batch(batch, std::move(first))) {
+      co_return batch;
+    }
+    auto const max_messages = detail::narrow_cast<size_t>(
+      std::min(args_.batch_size, args_.queue_capacity));
+    auto const started = std::chrono::steady_clock::now();
+    while (batch.messages.size() < max_messages) {
+      if (auto next = queue.try_dequeue()) {
+        if (try_as<AcknowledgePending>(&*next)) {
+          co_await wait_for_downstream_stop();
+        }
+        if (not append_to_batch(batch, std::move(*next))) {
+          co_return batch;
+        }
+        continue;
+      }
+      auto const elapsed = std::chrono::duration_cast<duration>(
+        std::chrono::steady_clock::now() - started);
+      if (elapsed >= args_.batch_timeout) {
+        break;
+      }
+      // Once we hold messages that will need an ACK after delivery, avoid
+      // lingering for the full batch timeout. Otherwise short JetStream ACK
+      // waits can redeliver messages before the batch reaches downstream.
+      auto const timeout
+        = std::min(args_.batch_timeout - elapsed, duration{ack_handoff_delay});
+      auto next = co_await queue.try_dequeue_for(timeout);
+      if (not next) {
+        break;
+      }
+      if (try_as<AcknowledgePending>(&*next)) {
+        co_await wait_for_downstream_stop();
+      }
+      if (not append_to_batch(batch, std::move(*next))) {
+        co_return batch;
+      }
+    }
+    co_return batch;
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto* batch = result.try_as<EventBatch>();
+    if (not batch) {
+      co_return;
+    }
+    if (batch->acknowledge_pending) {
+      if (acknowledge_pending(ctx.dh())) {
+        co_await flush_acknowledgements(ctx);
+      }
+    }
+    if (batch->messages.empty() and not batch->completion) {
+      co_return;
+    }
+    auto accepted = std::vector<nats_msg_ptr>{};
+    accepted.reserve(batch->messages.size());
+    for (auto& msg : batch->messages) {
+      if (done_ or (args_.count and received_ >= args_.count->inner)) {
+        // The stop flushes these NAKs.
+        negative_acknowledge(msg.get());
+        session_->queue->release_message_slot();
+        msg.reset();
+        continue;
+      }
+      auto const size = natsMsg_GetDataLength(msg.get());
+      if (size > 0) {
+        read_bytes_counter_.add(static_cast<size_t>(size));
+      }
+      ++received_;
+      accepted.push_back(std::move(msg));
+    }
+    batch->messages.clear();
+    if (not accepted.empty()) {
+      auto nak_guard = detail::scope_guard{[this, &accepted]() noexcept {
+        for (auto& msg : accepted) {
+          if (msg) {
+            negative_acknowledge(msg.get());
+            session_->queue->release_message_slot();
+          }
+        }
+      }};
+      auto events = build_events(accepted);
+      auto const rows = detail::narrow_cast<size_t>(events.length());
+      TENZIR_ASSERT(rows == accepted.size());
+      co_await push(std::move(events));
+      read_events_counter_.add(rows);
+      for (auto& msg : accepted) {
+        session_->delivered.push_back(std::move(msg));
+        session_->queue->release_message_slot();
+      }
+      nak_guard.disable();
+      if (args_.count and received_ >= args_.count->inner) {
+        done_ = true;
+        co_await request_stop(ctx);
+        co_return;
+      }
+      schedule_ack_handoff();
+    }
+    if (batch->completion and not normal_completion(batch->completion->status)
+        and batch->completion->status != NATS_OK) {
+      emit_nats_error(diagnostic::error("NATS subscription ended with error")
+                        .primary(args_.subject.source),
+                      batch->completion->status, ctx.dh());
+      done_ = true;
+      co_await request_stop(ctx);
+    }
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    done_ = true;
+    co_await request_stop(ctx);
+  }
+
+private:
+  static auto append_to_batch(EventBatch& batch, SourceMessage message)
+    -> bool {
+    if (auto* item = try_as<IncomingMessage>(&message)) {
+      batch.messages.push_back(std::move(item->msg));
+      return true;
+    }
+    if (auto* complete = try_as<SubscriptionComplete>(&message)) {
+      batch.completion = *complete;
+      return false;
+    }
+    if (try_as<AcknowledgePending>(&message)) {
+      batch.acknowledge_pending = true;
+      return false;
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto wait_for_downstream_stop() const -> Task<void> {
+    co_await sleep_for(ack_handoff_delay);
+  }
+
+  auto schedule_ack_handoff() -> void {
+    if (done_ or session_->delivered.empty()) {
+      return;
+    }
+    session_->queue->enqueue_acknowledge_pending();
+  }
+
+  auto ensure_durable_consumer(OpCtx& ctx) -> Task<Option<std::string>> {
+    TENZIR_ASSERT(args_.durable);
+    auto stream_options = jsOptions{};
+    jsOptions_Init(&stream_options);
+    stream_options.Stream.Info.SubjectsFilter = args_.subject.inner.c_str();
+    auto* raw_streams = static_cast<jsStreamNamesList*>(nullptr);
+    auto js_error = jsErrCode{};
+    auto status = co_await spawn_blocking([&] {
+      return js_StreamNames(&raw_streams, session_->js.get(), &stream_options,
+                            &js_error);
+    });
+    auto streams = js_stream_names_list_ptr{raw_streams};
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to resolve NATS stream for "
+                                        "durable consumer")
+                        .primary(args_.subject.source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      co_return None{};
+    }
+    if (streams->Count == 0) {
+      diagnostic::error("no NATS stream matches subject")
+        .primary(args_.subject.source)
+        .emit(ctx);
+      co_return None{};
+    }
+    if (streams->Count > 1) {
+      diagnostic::error("multiple NATS streams match subject")
+        .primary(args_.subject.source)
+        .note("matched {} streams", streams->Count)
+        .emit(ctx);
+      co_return None{};
+    }
+    auto stream = std::string{streams->List[0]};
+    auto* raw_consumer = static_cast<jsConsumerInfo*>(nullptr);
+    status = co_await spawn_blocking([&] {
+      return js_GetConsumerInfo(&raw_consumer, session_->js.get(),
+                                stream.c_str(), args_.durable->inner.c_str(),
+                                nullptr, &js_error);
+    });
+    auto consumer = js_consumer_info_ptr{raw_consumer};
+    if (status == NATS_OK) {
+      if (not consumer->Config
+          or consumer->Config->AckPolicy != js_AckExplicit) {
+        diagnostic::error("NATS durable consumer must use explicit "
+                          "acknowledgments")
+          .primary(args_.durable->source)
+          .note("consumer `{}` on stream `{}` uses ack policy `{}`",
+                args_.durable->inner, stream,
+                consumer->Config ? static_cast<int>(consumer->Config->AckPolicy)
+                                 : -1)
+          .emit(ctx);
+        co_return None{};
+      }
+      co_return stream;
+    }
+    if (status != NATS_NOT_FOUND) {
+      emit_nats_error(diagnostic::error("failed to inspect NATS durable "
+                                        "consumer")
+                        .primary(args_.durable->source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      co_return None{};
+    }
+    auto config = jsConsumerConfig{};
+    jsConsumerConfig_Init(&config);
+    config.Name = args_.durable->inner.c_str();
+    config.Durable = args_.durable->inner.c_str();
+    config.FilterSubject = args_.subject.inner.c_str();
+    config.AckPolicy = js_AckExplicit;
+    config.MaxAckPending = detail::narrow<int>(args_.queue_capacity);
+    status = co_await spawn_blocking([&] {
+      return js_AddConsumer(nullptr, session_->js.get(), stream.c_str(),
+                            &config, nullptr, &js_error);
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::error("failed to create NATS durable "
+                                        "consumer")
+                        .primary(args_.durable->source)
+                        .note("JetStream error code: {}",
+                              static_cast<int>(js_error)),
+                      status, ctx.dh());
+      co_return None{};
+    }
+    co_return stream;
+  }
+
+  auto build_events(std::span<nats_msg_ptr const> messages) const
+    -> nova::Events {
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    for (auto const& msg : messages) {
+      auto event = builder.record();
+      event.field("message").data(message_payload(msg.get()));
+      if (args_.metadata_field) {
+        auto const path = args_.metadata_field->path();
+        TENZIR_ASSERT(not path.empty());
+        auto metadata = event.field(path.front().id.name).record();
+        for (auto const& segment : path.subspan(1)) {
+          metadata = metadata.field(segment.id.name).record();
+        }
+        emit_metadata(metadata, msg.get());
+      }
+    }
+    auto data = builder.finish();
+    auto const length = data.length();
+    return nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                        nova::Events::Meta::make_empty(length, "tenzir.nats")};
+  }
+
+  /// ACKs the delivered messages and returns whether any ACK needs a flush.
+  auto acknowledge_pending(diagnostic_handler& dh) -> bool {
+    auto acknowledged = false;
+    for (auto& msg : session_->delivered) {
+      auto status = natsMsg_Ack(msg.get(), nullptr);
+      if (status != NATS_OK) {
+        emit_nats_error(diagnostic::warning("failed to acknowledge NATS "
+                                            "message")
+                          .primary(args_.subject.source),
+                        status, dh);
+        continue;
+      }
+      acknowledged = true;
+    }
+    session_->delivered.clear();
+    return acknowledged;
+  }
+
+  auto flush_acknowledgements(OpCtx& ctx) -> Task<void> {
+    auto status = co_await spawn_blocking([this] {
+      return session_->flush();
+    });
+    if (status != NATS_OK) {
+      emit_nats_error(diagnostic::warning("failed to flush NATS "
+                                          "acknowledgement")
+                        .primary(args_.subject.source),
+                      status, ctx.dh());
+    }
+  }
+
+  /// Stops the subscription and settles every message: NAKs the ones that
+  /// did not reach downstream and ACKs the ones that did.
+  auto request_stop(OpCtx& ctx) -> Task<void> {
+    session_->queue->stop_accepting();
+    // Remove interest before settling messages. An ACK frees a slot of the
+    // consumer's `MaxAckPending`, and a NAK makes a message available again,
+    // so JetStream could otherwise deliver more messages to this subscription
+    // while it is tearing down.
+    if (session_->subscription) {
+      auto status = co_await spawn_blocking([this] {
+        return session_->drain();
+      });
+      if (status != NATS_OK) {
+        emit_nats_error(diagnostic::warning("failed to stop NATS "
+                                            "subscription")
+                          .primary(args_.subject.source),
+                        status, ctx.dh());
+      }
+    }
+    session_->release_queued();
+    acknowledge_pending(ctx.dh());
+    co_await flush_acknowledgements(ctx);
+  }
+
+  FromNatsArgs args_;
+  /// Mutable for `await_task()`, which only touches the thread-safe queue.
+  mutable Arc<Session> session_;
+  MetricsCounter read_bytes_counter_;
+  MetricsCounter read_events_counter_;
+  uint64_t received_ = 0;
+  bool done_ = false;
+};
+
 class FromNatsPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -970,7 +1656,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromNatsArgs, FromNats>{};
+    auto d = Describer<FromNatsArgs, legacy::FromNats, FromNats>{};
     auto subject_arg = d.positional("subject", &FromNatsArgs::subject);
     auto url_arg = d.named("url", &FromNatsArgs::url);
     d.named("durable", &FromNatsArgs::durable);

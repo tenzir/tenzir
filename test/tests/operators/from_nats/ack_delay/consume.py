@@ -130,6 +130,7 @@ discard
             "--bare-mode",
             "--console-verbosity=warning",
             "--multi",
+            "--nova=true",
             pipeline,
         ],
         text=True,

@@ -1,0 +1,6 @@
+// Verify the serialized events in publication order.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=4
+select line = string(message)

@@ -1,0 +1,15 @@
+warning: expected `string` or `blob`, got `int`
+  --> tests/operators/to_nats/invalid_messages/01_publish.tql:10:17
+   |
+10 |         message=message
+   |                 ~~~~~~~
+   |
+   = note: event is skipped
+
+warning: expected `string` or `blob`, got `null`
+  --> tests/operators/to_nats/invalid_messages/01_publish.tql:10:17
+   |
+10 |         message=message
+   |                 ~~~~~~~
+   |
+   = note: event is skipped

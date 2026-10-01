@@ -1,0 +1,6 @@
+{
+  line: "keep-1",
+}
+{
+  line: "keep-3",
+}

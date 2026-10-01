@@ -1,0 +1,6 @@
+// Verify that only the strings and blobs were published, in order.
+from_nats env("NATS_SUBJECT"),
+          url=env("NATS_URL"),
+          durable=env("NATS_DURABLE"),
+          count=3
+select line = string(message)

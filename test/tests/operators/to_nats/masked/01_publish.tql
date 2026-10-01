@@ -1,0 +1,6 @@
+// Publish only the events that pass the filter.
+from {message: "keep-1"}, {message: "drop-2"}, {message: "keep-3"}
+where message != "drop-2"
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL"),
+        message=message

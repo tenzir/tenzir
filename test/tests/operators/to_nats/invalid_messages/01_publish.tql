@@ -1,0 +1,10 @@
+// Publish strings and blobs, and skip messages of other types.
+from {message: "text"},
+     {message: b"bytes"},
+     {message: 42},
+     {message: null},
+     {message: 43},
+     {message: "last"}
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL"),
+        message=message

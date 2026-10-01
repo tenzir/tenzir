@@ -1,0 +1,10 @@
+// Skip events with invalid headers and ignore null header values.
+from {message: "no-headers", headers: null},
+     {message: "not-a-record", headers: "nope"},
+     {message: "not-a-string", headers: {a: 1}},
+     {message: "not-a-string-list", headers: {a: ["x", 2]}},
+     {message: "null-values", headers: {a: null, b: ["x", null, "y"]}}
+to_nats env("NATS_SUBJECT"),
+        url=env("NATS_URL"),
+        message=message,
+        headers=headers

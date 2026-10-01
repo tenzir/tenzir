@@ -64,6 +64,18 @@ signaled end-of-data.
 For sources (`Input == void`), there is no upstream end-of-data signal, so a
 `stop()` should probably lead to operator terminating.
 
+### Forced shutdown
+
+When a downstream operator such as `head` finishes early, or the pipeline is
+cancelled, the executor cancels all tasks of the upstream operators and later
+destroys them. It calls neither `stop()` nor `finalize()`. Settle work that
+must not be lost in RAII members, such as handing unconsumed broker messages
+back.
+
+A source learns about an early downstream stop only through this control path,
+which can arrive after it pushed more output. Treat pushed output as delivered;
+downstream may drop it.
+
 ### Avoid Destructors
 
 Avoid defining destructors for operators. Work that needs to be done during a
@@ -167,6 +179,17 @@ auto bytes = co_await spawn_blocking([path = path_] {
 
 `spawn_blocking` expects a synchronous callable. Passing a coroutine that returns
 `Task<T>` only constructs the coroutine handle on the blocking pool.
+
+Awaiting `spawn_blocking` does not react to cancellation: the awaiting task
+resumes only once the callable returns. A long blocking call therefore delays
+shutdown. Give blocking calls on shutdown paths a timeout.
+
+### Library callbacks
+
+Libraries that invoke callbacks on their own threads may do so after the
+operator unsubscribed or closed a handle. Keep callback state alive until the
+library signals that the last callback returned, not until the operator is
+destroyed. Reference: `from_nats.cpp`.
 
 ### Structured concurrency with `async_scope`
 

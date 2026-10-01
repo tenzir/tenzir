@@ -1,0 +1,11 @@
+suite: to-nats-slow-acks
+fixtures:
+  - nats:
+      subject: to_nats_slow_acks_test
+      stream: TO_NATS_SLOW_ACKS_TEST
+      durable: to_nats_slow_acks_test
+timeout: 180
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable
