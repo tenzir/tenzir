@@ -3145,6 +3145,25 @@ TEST("take_last pops a union, a list, and a nested record") {
   CHECK(not a->present.get(1));
 }
 
+TEST("take_last pops a record with a field that never received a value") {
+  auto expected = Record{};
+  expected.emplace("a", Null{});
+  auto first = ArrayBuilder<Record>{};
+  std::ignore = first.record().field("a");
+  CHECK(materialize_legacy(first.take_last())
+        == materialize_legacy(Data{Record{expected}}));
+  CHECK_EQUAL(first.length(), 0);
+  // An earlier row holds a value for the field, which must stay untouched.
+  auto records = ArrayBuilder<Record>{};
+  records.record().field("a").data(std::int64_t{1});
+  std::ignore = records.record().field("a");
+  CHECK(materialize_legacy(records.take_last())
+        == materialize_legacy(Data{std::move(expected)}));
+  auto array = records.finish();
+  REQUIRE_EQUAL(array.length(), 1);
+  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{std::int64_t{1}}));
+}
+
 TEST("take_last pops every row of a union with alternating types") {
   auto builder = ArrayBuilder<Data>{};
   builder.data(std::int64_t{1});

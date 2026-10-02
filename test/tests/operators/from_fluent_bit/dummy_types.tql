@@ -1,0 +1,6 @@
+from_fluent_bit "dummy", options={
+  dummy: r#"{"log": "{\"level\": \"info\", \"peer\": \"10.0.0.2\"}", "src": "10.0.0.1", "count": -3, "ratio": 0.5, "ok": true, "none": null, "tags": ["a", "b"], "nested": {"x": 1}}"#,
+  metadata: r#"{"host": "web-1"}"#,
+}
+head 1
+select metadata, message

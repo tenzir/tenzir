@@ -1,0 +1,3 @@
+from_fluent_bit "dummy", options={dummy: r#"{"src": "10.0.0.1", "port": "443"}"#}, raw=true
+head 1
+select message

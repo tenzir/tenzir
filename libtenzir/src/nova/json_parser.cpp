@@ -262,8 +262,10 @@ auto parse_object_impl(simdjson::ondemand::object object,
                              source, options, depth + 1);
       continue;
     }
-    ok &= parse_value_impl(value.value_unsafe(), row.field(key.value_unsafe()),
-                           dh, source, options, depth + 1);
+    auto field = options.exact_keys ? row.exact_field(key.value_unsafe())
+                                    : row.field(key.value_unsafe());
+    ok &= parse_value_impl(value.value_unsafe(), std::move(field), dh, source,
+                           options, depth + 1);
   }
   return ok;
 }
@@ -290,8 +292,9 @@ auto parse_json_object(simdjson::ondemand::object object,
 
 auto parse_json_value(simdjson::ondemand::document& document,
                       EventBuilder::Field field, diagnostic_handler& dh,
-                      std::string_view source) -> bool {
-  return parse_value_impl(document, std::move(field), dh, source);
+                      std::string_view source, JsonDecodingOptions options)
+  -> bool {
+  return parse_value_impl(document, std::move(field), dh, source, options);
 }
 
 auto JsonParser::make(Settings settings, diagnostic_handler& dh)
