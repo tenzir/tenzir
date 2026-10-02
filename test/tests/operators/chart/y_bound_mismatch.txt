@@ -1,0 +1,29 @@
+warning: limit has a different type `double` from `y` type `duration`
+ --> tests/operators/chart/y_bound_mismatch.tql:2:48
+  |
+2 | chart_line x=x, y=sum(y), resolution=1s, y_min=0
+  |                                                ~
+  |
+  = note: skipping y
+{
+  chart: {
+    kind: "line",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y_min: "0.0",
+    types: {
+      y: "duration",
+      x: "duration",
+    },
+  },
+}
+{
+  x: 1s,
+  y: 2s,
+}
+{
+  x: 2s,
+  y: 3s,
+}

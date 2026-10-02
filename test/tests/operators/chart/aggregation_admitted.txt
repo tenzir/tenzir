@@ -1,0 +1,34 @@
+warning: got more than 1 data points
+ --> tests/operators/chart/aggregation_admitted.tql:2:13
+  |
+2 | chart_bar x=x, y=sum(1 / v), _limit=1
+  |             ~
+  |
+  = note: skipping excess data points
+  = hint: consider filtering data or aggregating over a bigger `resolution`
+
+warning: cannot plot different types on the x-axis
+ --> tests/operators/chart/aggregation_admitted.tql:2:13
+  |
+2 | chart_bar x=x, y=sum(1 / v), _limit=1
+  |             ~
+  |
+  = note: skipping invalid events
+{
+  chart: {
+    kind: "bar",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y: "y",
+    types: {
+      y: "double",
+      x: "int64",
+    },
+  },
+}
+{
+  x: 1,
+  y: 0.5,
+}

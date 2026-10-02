@@ -1,0 +1,7 @@
+api "/serve", {
+  serve_id: "serve_chart",
+  min_events: 2,
+  max_events: 2,
+  schema: "exact",
+}
+write_json

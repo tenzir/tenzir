@@ -1,0 +1,92 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema_id": "9c9e89fef2d8fa79",
+      "data": {
+        "x": "a",
+        "red": 1.0,
+        "blue": null
+      }
+    },
+    {
+      "schema_id": "9c9e89fef2d8fa79",
+      "data": {
+        "x": "b",
+        "red": null,
+        "blue": 2.0
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "schema_id": "9c9e89fef2d8fa79",
+      "definition": {
+        "name": "tenzir.chart",
+        "kind": "record",
+        "attributes": [
+          {
+            "key": "chart",
+            "value": "bar"
+          },
+          {
+            "key": "position",
+            "value": "grouped"
+          },
+          {
+            "key": "x",
+            "value": "x"
+          },
+          {
+            "key": "x_axis_type",
+            "value": "linear"
+          },
+          {
+            "key": "y",
+            "value": "red"
+          },
+          {
+            "key": "y1",
+            "value": "blue"
+          },
+          {
+            "key": "y_axis_type",
+            "value": "linear"
+          }
+        ],
+        "state": {
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": null,
+                "kind": "string",
+                "attributes": [],
+                "state": null
+              }
+            },
+            {
+              "name": "red",
+              "type": {
+                "name": null,
+                "kind": "double",
+                "attributes": [],
+                "state": null
+              }
+            },
+            {
+              "name": "blue",
+              "type": {
+                "name": null,
+                "kind": "double",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -531,6 +531,7 @@ struct managed_serve_operator {
   /// one representation, selected by its first put.
   std::vector<table_slice> buffer = {};
   std::vector<nova::Events> events = {};
+  Option<nova::Events> chart = None{};
   bool nova = false;
   uint64_t buffer_size = defaults::api::serve::max_events;
   /// Stop applying backpressure after a Nova sink begins graceful shutdown.
@@ -597,6 +598,15 @@ struct managed_serve_operator {
                 : serve_results{std::vector<table_slice>{}};
   }
 
+  // The metadata row is not a result event. Repeat it internally on every
+  // response so pagination and retries can reconstruct the same chart schema.
+  auto with_chart(std::vector<nova::Events> result) const -> serve_results {
+    if (chart and not result.empty()) {
+      result.insert(result.begin(), *chart);
+    }
+    return result;
+  }
+
   /// Attempt to deliver up to the number of requested results.
   /// @param force_underful Return underful result sets instead of failing when
   /// not enough results are buffered.
@@ -657,7 +667,9 @@ struct managed_serve_operator {
       done = true;
       for (auto&& get_rp : std::exchange(get_rps, {})) {
         TENZIR_ASSERT(get_rp.pending());
-        get_rp.deliver(std::make_tuple(std::string{}, results));
+        get_rp.deliver(std::make_tuple(
+          std::string{},
+          nova ? with_chart(as<std::vector<nova::Events>>(results)) : results));
       }
       if (stop_rp.pending()) {
         stop_rp.deliver();
@@ -674,7 +686,9 @@ struct managed_serve_operator {
                  escape_operator_arg(serve_id), continuation_token);
     for (auto&& get_rp : std::exchange(get_rps, {})) {
       TENZIR_ASSERT(get_rp.pending());
-      get_rp.deliver(std::make_tuple(continuation_token, results));
+      get_rp.deliver(std::make_tuple(
+        continuation_token,
+        nova ? with_chart(as<std::vector<nova::Events>>(results)) : results));
     }
     return true;
   }
@@ -997,6 +1011,23 @@ struct serve_manager_state {
                                          *self, escape_operator_arg(serve_id)));
     }
     found->nova = true;
+    auto mask = nova::storage::BitMap::Mutable{input.mask};
+    for (auto index : nova::storage::true_bits(input.mask)) {
+      auto row = input.data.get(index);
+      auto it = row.begin();
+      if (it == row.end() or (*it).first != "chart") {
+        continue;
+      }
+      if (++it != row.end()) {
+        continue;
+      }
+      found->chart = nova::subslice(input, index, index + 1);
+      mask.set(index, false);
+    }
+    input.mask = std::move(mask).finish();
+    if (not input.mask.any()) {
+      return {};
+    }
     if (found->discard_when_full) {
       const auto buffered = found->buffered_rows();
       if (buffered >= found->buffer_size) {
@@ -1124,9 +1155,9 @@ struct serve_manager_state {
           ? std::make_tuple(op.continuation_token,
                             [&] {
                               auto events = op.last_events;
-                              return serve_results{
+                              return op.with_chart(
                                 managed_serve_operator::take_events(
-                                  events, request.max_events)};
+                                  events, request.max_events));
                             }())
           : std::make_tuple(
               op.continuation_token,
@@ -1636,10 +1667,67 @@ struct serve_handler_state {
     auto out = std::back_inserter(result);
     auto seen_types = std::unordered_set<type>{};
     auto first = true;
+    auto chart_attributes = std::vector<std::pair<std::string, std::string>>{};
+    auto chart_types = std::unordered_map<std::string, std::string>{};
     for (const auto& events : results) {
       for (auto index : nova::storage::true_bits(events.mask)) {
+        auto row = events.data.get(index);
+        auto it = row.begin();
+        if (it != row.end() and (*it).first == "chart") {
+          auto next = it;
+          if (++next == row.end()) {
+            chart_attributes.clear();
+            chart_types.clear();
+            auto chart = nova::materialize_legacy((*it).second);
+            if (auto* fields = try_as<record>(&chart)) {
+              for (auto const& [key, value] : *fields) {
+                if (key == "types") {
+                  if (auto* types = try_as<record>(&value)) {
+                    for (auto const& [field, kind] : *types) {
+                      if (auto* text = try_as<std::string>(&kind)) {
+                        chart_types.emplace(field, *text);
+                      }
+                    }
+                  }
+                } else if (auto* text = try_as<std::string>(&value)) {
+                  chart_attributes.emplace_back(key == "kind" ? "chart" : key,
+                                                *text);
+                }
+              }
+            }
+            continue;
+          }
+        }
         auto builder = series_builder{};
-        builder.data(nova::materialize_legacy(events.data.get(index)));
+        auto value = nova::materialize_legacy(row);
+        if (auto* fields = try_as<record>(&value)) {
+          for (auto& [field, cell] : *fields) {
+            if (not is<caf::none_t>(cell)) {
+              continue;
+            }
+            if (auto found = chart_types.find(field);
+                found != chart_types.end()) {
+              if (found->second == "int64") {
+                cell = int64_t{0};
+              } else if (found->second == "uint64") {
+                cell = uint64_t{0};
+              } else if (found->second == "double") {
+                cell = 0.0;
+              } else if (found->second == "duration") {
+                cell = duration{0};
+              } else if (found->second == "time") {
+                cell = time{duration{0}};
+              } else if (found->second == "string") {
+                cell = std::string{};
+              } else if (found->second == "ip") {
+                cell = ip{};
+              } else if (found->second == "subnet") {
+                cell = subnet{};
+              }
+            }
+          }
+        }
+        builder.data(std::move(value));
         auto array = builder.finish_assert_one_array();
         auto event_type = std::move(array.type);
         auto name = std::string{*events.meta.name.get(index)};
@@ -1650,6 +1738,14 @@ struct serve_handler_state {
           .name = std::string{*events.meta.name.get(index)},
           .internal = *events.meta.internal.get(index),
         }.apply(std::move(event_type));
+        if (not chart_attributes.empty()) {
+          auto attributes = std::vector<type::attribute_view>{};
+          attributes.reserve(chart_attributes.size());
+          for (auto const& [key, value] : chart_attributes) {
+            attributes.push_back({key, value});
+          }
+          event_type = type{std::move(event_type), std::move(attributes)};
+        }
         seen_types.insert(event_type);
         if (first) {
           out = fmt::format_to(out, "{{");

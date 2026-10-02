@@ -1,4 +1,18 @@
 {
+  chart: {
+    kind: "bar",
+    x: "category",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y: "n",
+    types: {
+      n: "double",
+      category: "string",
+    },
+  },
+}
+{
   category: "critical",
   n: 3.0,
 }

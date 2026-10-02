@@ -15,6 +15,13 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/stable_set.hpp"
+#include "tenzir/nova/aggregation.hpp"
+#include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova/record_array_builder.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
@@ -864,6 +871,559 @@ private:
   variant<OrderedGroupMap, CategoricalGroupMap> groups_ = OrderedGroupMap{};
 };
 
+// The chart's groups retain their first-seen order within each x value.
+struct EventBucket {
+  std::vector<Box<nova::AggregationState>> states;
+  std::vector<nova::storage::Index> rows;
+};
+
+struct EventGroups {
+  detail::stable_map<std::string, EventBucket> groups;
+};
+
+template <chart_type Ty>
+class ChartEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit ChartEvents(ChartArgs<Ty> args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (ctx.checkpoint_settings()) {
+      diagnostic::error("`chart_{}` does not support checkpointing with "
+                        "`--nova` yet",
+                        to_string(Ty))
+        .primary(args_.x)
+        .emit(ctx);
+      co_return;
+    }
+    if (args_.res) {
+      args_.res->inner = duration{std::abs(args_.res->inner.count())};
+    }
+    auto sp = session_provider::make(ctx.dh());
+    auto calls = call_map{};
+    auto loc = location{};
+    auto y = args_.y;
+    if (not handle_y<Ty>(calls, loc, args_.res, y, sp.as_session())) {
+      co_return;
+    }
+    y_loc_ = loc;
+    for (auto const& [name, call] : calls) {
+      auto invocation = ast::expression{call};
+      if (not dynamic_cast<aggregation_plugin const*>(
+            &sp.as_session().reg().get(call))) {
+        invocation = ast::function_call{
+          make_once_entity(), {invocation}, call.get_location(), false};
+        if (not resolve_entities(invocation, sp.as_session())) {
+          co_return;
+        }
+      }
+      auto aggregation
+        = co_await nova::Aggregation::make(std::move(invocation), ctx);
+      if (not aggregation) {
+        co_return;
+      }
+      names_.push_back(name);
+      aggregations_.push_back(std::move(*aggregation));
+    }
+    x_name_ = args_.x.path()[0].id.name;
+    for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
+      x_name_ += ".";
+      x_name_ += args_.x.path()[i].id.name;
+    }
+    auto x = co_await nova::Evaluator::make(args_.x.inner(), ctx);
+    if (not x) {
+      co_return;
+    }
+    x_.emplace(std::move(*x));
+    if (args_.group) {
+      auto group = co_await nova::Evaluator::make(*args_.group, ctx);
+      if (not group) {
+        co_return;
+      }
+      group_.emplace(std::move(*group));
+    }
+    if (args_.x_min) {
+      auto limit = handle_xlimit(args_, ast::binary_op::geq, *args_.x_min);
+      if (not limit) {
+        co_return;
+      }
+      x_min_ = std::move(limit->rounded);
+      auto evaluator
+        = co_await nova::Evaluator::make(std::move(limit->expr), ctx);
+      if (not evaluator) {
+        co_return;
+      }
+      x_min_filter_.emplace(std::move(*evaluator));
+    }
+    if (args_.x_max) {
+      auto limit = handle_xlimit(args_, ast::binary_op::leq, *args_.x_max);
+      if (not limit) {
+        co_return;
+      }
+      x_max_ = std::move(limit->rounded);
+      auto evaluator
+        = co_await nova::Evaluator::make(std::move(limit->expr), ctx);
+      if (not evaluator) {
+        co_return;
+      }
+      x_max_filter_.emplace(std::move(*evaluator));
+    }
+    ready_ = true;
+  }
+
+  auto process(nova::Events input, Push<nova::Events>&, OpCtx& ctx)
+    -> Task<void> override {
+    if (not ready_ or not input.mask.any()) {
+      co_return;
+    }
+    // Evaluate bounds with the regular comparison semantics before bucketing.
+    for (auto* limit : {&x_min_filter_, &x_max_filter_}) {
+      if (not *limit) {
+        continue;
+      }
+      auto predicate = (*limit)
+                         ->eval(input, nova::EvalCtx{ctx.dh()})
+                         .template get_alternative<nova::Bool>();
+      if (not predicate) {
+        co_return;
+      }
+      input.mask = input.mask & predicate->present
+                   & as<nova::storage::BitMap>(predicate->data.storage());
+      if (not input.mask.any()) {
+        co_return;
+      }
+    }
+    auto xs = x_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto admitted = nova::storage::BitMap::Mutable{input.length()};
+    auto selected = std::vector<std::pair<nova::storage::Index, data>>{};
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      auto x = nova::materialize_legacy(xs.get(row));
+      if (not valid_x(x, ctx.dh())) {
+        continue;
+      }
+      if (args_.res and not is<caf::none_t>(x)) {
+        auto const step = std::abs(args_.res->inner.count());
+        if (auto* d = try_as<duration>(&x)) {
+          auto const n = d->count();
+          auto const remainder = n % step;
+          x = duration{n - (remainder < 0 ? remainder + step : remainder)};
+        } else if (auto* t = try_as<time>(&x)) {
+          auto const n = t->time_since_epoch().count();
+          auto const remainder = n % step;
+          x = time{
+            duration{n - (remainder < 0 ? remainder + step : remainder)}};
+        }
+      }
+      // The two maps differ in ordering, not in the buckets they store.
+      auto admit = [&](auto& map) -> bool {
+        if (map.find(x) != map.end()) {
+          return true;
+        }
+        if (map.size() >= args_.limit.inner) {
+          diagnostic::warning("got more than {} data points", args_.limit.inner)
+            .primary(args_.x)
+            .note("skipping excess data points")
+            .hint("consider filtering data or aggregating over a bigger "
+                  "`resolution`")
+            .emit(ctx);
+          return false;
+        }
+        map.try_emplace(x);
+        return true;
+      };
+      if (not(categorical_ ? admit(categorical_groups_)
+                           : admit(ordered_groups_))) {
+        continue;
+      }
+      admitted.set(row, true);
+      selected.emplace_back(row, std::move(x));
+    }
+    input.mask = std::move(admitted).finish();
+    if (not input.mask.any()) {
+      co_return;
+    }
+    auto gs = group_ ? Option{group_->eval(input, nova::EvalCtx{ctx.dh()})}
+                     : Option<nova::Array<nova::Data>>{None{}};
+    auto touched = std::vector<std::pair<data, std::string>>{};
+    for (auto const& [row, x] : selected) {
+      auto group_name = std::string{};
+      if (gs) {
+        auto value = nova::materialize_legacy(gs->get(row));
+        if (is<caf::none_t>(value)) {
+          diagnostic::warning("got group name `null`")
+            .primary(*args_.group)
+            .note("using `\"null\"` instead")
+            .emit(ctx);
+          group_name = "null";
+        } else if (auto* str = try_as<std::string>(&value)) {
+          group_name = *str;
+        } else if (is<int64_t>(value) or is<uint64_t>(value)
+                   or is<double>(value)) {
+          group_name = fmt::to_string(value);
+        } else {
+          diagnostic::warning("cannot group this type")
+            .primary(*args_.group)
+            .emit(ctx);
+          group_name = "null";
+        }
+      }
+      auto& groups
+        = categorical_ ? categorical_groups_.at(x) : ordered_groups_.at(x);
+      auto& members = groups.groups;
+      auto member = members.find(group_name);
+      if (member == members.end()) {
+        auto fresh = EventBucket{};
+        for (auto const& aggregation : aggregations_) {
+          fresh.states.push_back(aggregation->make_state());
+        }
+        member = members.try_emplace(group_name, std::move(fresh)).first;
+      }
+      auto& bucket = member->second;
+      if (bucket.rows.empty()) {
+        touched.emplace_back(x, group_name);
+      }
+      bucket.rows.push_back(row);
+    }
+    auto buckets = std::vector<EventBucket*>{};
+    buckets.reserve(touched.size());
+    for (auto const& [x, group] : touched) {
+      auto& groups
+        = categorical_ ? categorical_groups_.at(x) : ordered_groups_.at(x);
+      buckets.push_back(&groups.groups.at(group));
+    }
+    for (auto index = size_t{0}; index < aggregations_.size(); ++index) {
+      auto groups = std::vector<nova::AggregationGroup>{};
+      for (auto* bucket : buckets) {
+        groups.push_back({*bucket->states[index], bucket->rows});
+      }
+      aggregations_[index]->update(input, groups, nova::EvalCtx{ctx.dh()});
+    }
+    for (auto* bucket : buckets) {
+      bucket->rows.clear();
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    if (not ready_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (ordered_groups_.empty() and categorical_groups_.empty()) {
+      diagnostic::warning("chart_{} received no valid data", to_string(Ty))
+        .primary(args_.x)
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+    auto ynames = detail::stable_map<std::string, bool>{};
+    auto group_names = detail::stable_set<std::string>{};
+    auto collect = [&](auto const& groups) {
+      for (auto const& [_, gb] : groups) {
+        for (auto const& [group, bucket] : gb.groups) {
+          group_names.emplace(group);
+        }
+      }
+    };
+    if (categorical_) {
+      collect(categorical_groups_);
+    } else {
+      collect(ordered_groups_);
+    }
+    auto name_for = [&](std::string_view group, std::string_view name) {
+      if (not args_.group) {
+        return std::string{name};
+      }
+      if (names_.size() == 1) {
+        return std::string{group};
+      }
+      return fmt::format("{}_{}", group, name);
+    };
+    auto fill = args_.fill ? to_double(args_.fill->inner) : data{};
+    auto warned_y_bounds = detail::stable_set<std::string>{};
+    auto validate_names = [&](auto const& groups) {
+      for (auto const& [_, gb] : groups) {
+        for (auto const& [group, bucket] : gb.groups) {
+          for (auto i = size_t{0}; i < names_.size(); ++i) {
+            auto value
+              = to_double(nova::materialize_legacy(bucket.states[i]->get()));
+            if (args_.fill and is<caf::none_t>(value)) {
+              value = fill;
+            }
+            auto const yname = name_for(group, names_[i]);
+            auto valid = is<caf::none_t>(value) or is<double>(value)
+                         or is<duration>(value);
+            if (valid and (args_.y_min or args_.y_max)) {
+              auto const& limit = args_.y_min ? args_.y_min : args_.y_max;
+              auto const converted = to_double(limit->inner);
+              auto const value_type = type::infer(value);
+              auto const limit_type = type::infer(converted);
+              valid = value_type == limit_type;
+              if (not valid and value_type and limit_type
+                  and warned_y_bounds.emplace(yname).second) {
+                diagnostic::warning("limit has a different type `{}` from `y` "
+                                    "type `{}`",
+                                    limit_type->kind(), value_type->kind())
+                  .primary(limit->source)
+                  .note(fmt::format("skipping {}", yname))
+                  .emit(ctx);
+              }
+            }
+            auto [it, inserted] = ynames.try_emplace(yname, valid);
+            if (not inserted) {
+              it->second &= valid;
+            }
+          }
+        }
+      }
+    };
+    if (categorical_) {
+      validate_names(categorical_groups_);
+    } else {
+      validate_names(ordered_groups_);
+    }
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    // The first row is a chart specification, not a point.
+    auto spec = builder.record().field("chart").record();
+    spec.field("kind").data(to_string(Ty));
+    spec.field("x").data(x_name_);
+    if constexpr (Ty != chart_type::pie) {
+      spec.field("position").data(args_.position.inner);
+      spec.field("x_axis_type").data(args_.x_log ? "log" : "linear");
+      spec.field("y_axis_type").data(args_.y_log ? "log" : "linear");
+    }
+    auto add_limit
+      = [&](std::string_view name, Option<located<data>> const& limit) {
+          if (limit) {
+            spec.field(name).data(jsonify_limit(limit->inner));
+          }
+        };
+    add_limit("x_min", args_.x_min);
+    add_limit("x_max", args_.x_max);
+    if (args_.y_min) {
+      spec.field("y_min").data(jsonify_limit(to_double(args_.y_min->inner)));
+    }
+    if (args_.y_max) {
+      spec.field("y_max").data(jsonify_limit(to_double(args_.y_max->inner)));
+    }
+    auto index = size_t{0};
+    for (auto const& [name, valid] : ynames) {
+      if (valid) {
+        spec.field(index == 0 ? "y" : fmt::format("y{}", index)).data(name);
+        ++index;
+      }
+    }
+    // A nullable point still belongs to the same typed column as its peers.
+    // Carry the column types with the spec so serve can reconstruct its schema
+    // even when the points arrive on separate pages.
+    auto column_types = detail::stable_map<std::string, std::string>{};
+    auto collect_types = [&](auto const& groups) {
+      for (auto const& [_, gb] : groups) {
+        for (auto const& [group, bucket] : gb.groups) {
+          for (auto i = size_t{0}; i < names_.size(); ++i) {
+            auto value
+              = to_double(nova::materialize_legacy(bucket.states[i]->get()));
+            auto kind = is<double>(value)     ? "double"
+                        : is<duration>(value) ? "duration"
+                                              : "";
+            if (kind[0] == '\0') {
+              continue;
+            }
+            auto [it, inserted]
+              = column_types.try_emplace(name_for(group, names_[i]), kind);
+            if (not inserted and it->second != kind) {
+              it->second.clear();
+            }
+          }
+        }
+      }
+    };
+    if (categorical_) {
+      collect_types(categorical_groups_);
+    } else {
+      collect_types(ordered_groups_);
+    }
+    // A nullable x column needs the same schema on every serve page.
+    if (x_type_) {
+      auto const& kind = x_type_->kind();
+      auto x_kind = std::string_view{};
+      if (kind.is<int64_type>()) {
+        x_kind = "int64";
+      } else if (kind.is<uint64_type>()) {
+        x_kind = "uint64";
+      } else if (kind.is<double_type>()) {
+        x_kind = "double";
+      } else if (kind.is<duration_type>()) {
+        x_kind = "duration";
+      } else if (kind.is<time_type>()) {
+        x_kind = "time";
+      } else if (kind.is<string_type>()) {
+        x_kind = "string";
+      } else if (kind.is<ip_type>()) {
+        x_kind = "ip";
+      } else if (kind.is<subnet_type>()) {
+        x_kind = "subnet";
+      }
+      if (not x_kind.empty()) {
+        column_types.try_emplace(x_name_, x_kind);
+      }
+    }
+    if (not column_types.empty()) {
+      auto types = spec.field("types").record();
+      for (auto const& [name, kind] : column_types) {
+        if (not kind.empty()) {
+          types.field(name).data(kind);
+        }
+      }
+    }
+    auto insert = [&](data const& x, EventGroups const* gb) {
+      auto record = builder.record();
+      nova::append_legacy_data(record.field(x_name_), x, ctx.dh());
+      for (auto const& group : group_names) {
+        auto const* bucket = static_cast<EventBucket const*>(nullptr);
+        if (gb) {
+          if (auto it = gb->groups.find(group); it != gb->groups.end()) {
+            bucket = &it->second;
+          }
+        }
+        for (auto i = size_t{0}; i < names_.size(); ++i) {
+          auto value
+            = bucket
+                ? to_double(nova::materialize_legacy(bucket->states[i]->get()))
+                : fill;
+          if (args_.fill and is<caf::none_t>(value)) {
+            value = fill;
+          }
+          auto valid = is<caf::none_t>(value) or is<double>(value)
+                       or is<duration>(value);
+          if (not valid) {
+            diagnostic::warning("y-axis cannot have this type")
+              .primary(y_loc_)
+              .emit(ctx);
+          }
+          nova::append_legacy_data(record.field(name_for(group, names_[i])),
+                                   value, ctx.dh());
+        }
+      }
+    };
+    if (categorical_) {
+      for (auto const& [x, gb] : categorical_groups_) {
+        insert(x, &gb);
+      }
+    } else {
+      auto prev = Option<data>{};
+      auto gap_until = [&](data const& next) {
+        if (not args_.res or not prev) {
+          return;
+        }
+        auto const step = duration{std::abs(args_.res->inner.count())};
+        while (true) {
+          auto gap = match(
+            std::tie(next, *prev),
+            [&](duration const& n, duration const& p) -> Option<data> {
+              if (n - p > step) {
+                return p + step;
+              }
+              return None{};
+            },
+            [&](time const& n, time const& p) -> Option<data> {
+              if (n - p > step) {
+                return p + step;
+              }
+              return None{};
+            },
+            [](auto const&, auto const&) -> Option<data> {
+              return None{};
+            });
+          if (not gap) {
+            break;
+          }
+          insert(*gap, nullptr);
+          prev = std::move(*gap);
+        }
+      };
+      if (x_min_ and args_.res) {
+        prev = *x_min_;
+        if (*prev != ordered_groups_.begin()->first) {
+          insert(*prev, nullptr);
+        }
+      }
+      for (auto const& [x, gb] : ordered_groups_) {
+        gap_until(x);
+        insert(x, &gb);
+        prev = x;
+      }
+      if (x_max_ and args_.res) {
+        gap_until(*x_max_);
+        if (*prev != *x_max_) {
+          insert(*x_max_, nullptr);
+        }
+      }
+    }
+    auto length = builder.length();
+    co_await push(
+      nova::Events{builder.finish(), nova::storage::BitMap{length, true},
+                   nova::Events::Meta::make_empty(length, "tenzir.chart")});
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  auto valid_x(data const& x, diagnostic_handler& dh) -> bool {
+    auto valid = is<int64_t>(x) or is<uint64_t>(x) or is<double>(x)
+                 or is<duration>(x) or is<time>(x);
+    if constexpr (Ty == chart_type::bar or Ty == chart_type::pie) {
+      valid |= is<caf::none_t>(x) or is<ip>(x) or is<subnet>(x)
+               or is<std::string>(x);
+    }
+    if (not valid
+        or (args_.res
+            and not(is<duration>(x) or is<time>(x) or is<caf::none_t>(x)))) {
+      diagnostic::warning("x-axis cannot have this type")
+        .primary(args_.x)
+        .note("skipping invalid events")
+        .emit(dh);
+      return false;
+    }
+    if (is<caf::none_t>(x)) {
+      return true;
+    }
+    if (not x_type_) {
+      x_type_ = type::infer(x);
+      categorical_ = is<ip>(x) or is<subnet>(x) or is<std::string>(x);
+      if (categorical_ and not ordered_groups_.empty()) {
+        // Leading null buckets belong before the first categorical value.
+        TENZIR_ASSERT(ordered_groups_.size() == 1);
+        auto it = ordered_groups_.begin();
+        TENZIR_ASSERT(is<caf::none_t>(it->first));
+        categorical_groups_.try_emplace(it->first, std::move(it->second));
+        ordered_groups_.clear();
+      }
+    } else if (type::infer(x) != x_type_) {
+      diagnostic::warning("cannot plot different types on the x-axis")
+        .primary(args_.x)
+        .note("skipping invalid events")
+        .emit(dh);
+      return false;
+    }
+    return true;
+  }
+
+  ChartArgs<Ty> args_;
+  bool ready_ = false;
+  bool categorical_ = false;
+  Option<type> x_type_;
+  Option<nova::Evaluator> x_;
+  Option<nova::Evaluator> group_;
+  Option<nova::Evaluator> x_min_filter_;
+  Option<nova::Evaluator> x_max_filter_;
+  std::vector<Box<nova::Aggregation>> aggregations_;
+  std::vector<std::string> names_;
+  std::string x_name_;
+  location y_loc_;
+  Option<data> x_min_;
+  Option<data> x_max_;
+  std::map<data, EventGroups> ordered_groups_;
+  detail::stable_map<data, EventGroups> categorical_groups_;
+};
+
 // Helper validation for x limit types
 auto validate_x_limit_type(located<data> const& d,
                            Option<located<duration>> const& res,
@@ -1093,7 +1653,7 @@ class PluginArea final : public virtual OperatorPlugin {
 
   auto describe() const -> Description override {
     constexpr auto Ty = chart_type::area;
-    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>, ChartEvents<Ty>>{};
 
     d.named("x", &ChartArgs<Ty>::x);
     auto y = d.named("y", &ChartArgs<Ty>::y, "any");
@@ -1126,7 +1686,7 @@ class PluginBar final : public virtual OperatorPlugin {
 
   auto describe() const -> Description override {
     constexpr auto Ty = chart_type::bar;
-    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>, ChartEvents<Ty>>{};
 
     d.named({"x", "label"}, &ChartArgs<Ty>::x);
     auto y = d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");
@@ -1159,7 +1719,7 @@ class PluginLine final : public virtual OperatorPlugin {
 
   auto describe() const -> Description override {
     constexpr auto Ty = chart_type::line;
-    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>, ChartEvents<Ty>>{};
 
     d.named("x", &ChartArgs<Ty>::x);
     auto y = d.named("y", &ChartArgs<Ty>::y, "any");
@@ -1190,7 +1750,7 @@ class PluginPie final : public virtual OperatorPlugin {
 
   auto describe() const -> Description override {
     constexpr auto Ty = chart_type::pie;
-    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>>{};
+    auto d = tenzir::Describer<ChartArgs<Ty>, Chart<Ty>, ChartEvents<Ty>>{};
 
     d.named({"x", "label"}, &ChartArgs<Ty>::x);
     auto y = d.named({"y", "value"}, &ChartArgs<Ty>::y, "any");

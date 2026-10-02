@@ -1,0 +1,114 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema_id": "279baa093fef6410",
+      "data": {
+        "x": 0.0,
+        "y": 0.0
+      }
+    },
+    {
+      "schema_id": "279baa093fef6410",
+      "data": {
+        "x": 1.0,
+        "y": 2.0
+      }
+    },
+    {
+      "schema_id": "279baa093fef6410",
+      "data": {
+        "x": 2.0,
+        "y": 0.0
+      }
+    },
+    {
+      "schema_id": "279baa093fef6410",
+      "data": {
+        "x": 3.0,
+        "y": 4.0
+      }
+    },
+    {
+      "schema_id": "279baa093fef6410",
+      "data": {
+        "x": 4.0,
+        "y": 0.0
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "schema_id": "279baa093fef6410",
+      "definition": {
+        "name": "tenzir.chart",
+        "kind": "record",
+        "attributes": [
+          {
+            "key": "chart",
+            "value": "area"
+          },
+          {
+            "key": "position",
+            "value": "grouped"
+          },
+          {
+            "key": "x",
+            "value": "x"
+          },
+          {
+            "key": "x_axis_type",
+            "value": "log"
+          },
+          {
+            "key": "x_max",
+            "value": "4.0"
+          },
+          {
+            "key": "x_min",
+            "value": "0.0"
+          },
+          {
+            "key": "y",
+            "value": "y"
+          },
+          {
+            "key": "y_axis_type",
+            "value": "log"
+          },
+          {
+            "key": "y_max",
+            "value": "100.0"
+          },
+          {
+            "key": "y_min",
+            "value": "0.0"
+          }
+        ],
+        "state": {
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": null,
+                "kind": "duration",
+                "attributes": [],
+                "state": null
+              }
+            },
+            {
+              "name": "y",
+              "type": {
+                "name": null,
+                "kind": "double",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,4 +1,20 @@
 {
+  chart: {
+    kind: "bar",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y: "red",
+    y1: "blue",
+    types: {
+      red: "double",
+      blue: "double",
+      x: "string",
+    },
+  },
+}
+{
   x: "a",
   red: 4.0,
   blue: 2.0,

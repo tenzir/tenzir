@@ -1,0 +1,196 @@
+{
+  "serve_chart_multi_pie": {
+    "next_continuation_token": null,
+    "state": "completed",
+    "events": [
+      {
+        "schema_id": "60a2916861c4f2de",
+        "data": {
+          "x": "a",
+          "value": 1.0
+        }
+      },
+      {
+        "schema_id": "60a2916861c4f2de",
+        "data": {
+          "x": "b",
+          "value": 1.0
+        }
+      }
+    ]
+  },
+  "serve_chart_multi_area": {
+    "next_continuation_token": null,
+    "state": "completed",
+    "events": [
+      {
+        "schema_id": "efecab2e5dd31927",
+        "data": {
+          "x": 1,
+          "y": 2.0
+        }
+      },
+      {
+        "schema_id": "efecab2e5dd31927",
+        "data": {
+          "x": 2,
+          "y": 3.0
+        }
+      }
+    ],
+    "schemas": [
+      {
+        "schema_id": "efecab2e5dd31927",
+        "definition": {
+          "name": "tenzir.chart",
+          "kind": "record",
+          "attributes": [
+            {
+              "key": "chart",
+              "value": "area"
+            },
+            {
+              "key": "position",
+              "value": "stacked"
+            },
+            {
+              "key": "x",
+              "value": "x"
+            },
+            {
+              "key": "x_axis_type",
+              "value": "linear"
+            },
+            {
+              "key": "y",
+              "value": "y"
+            },
+            {
+              "key": "y_axis_type",
+              "value": "linear"
+            }
+          ],
+          "state": {
+            "fields": [
+              {
+                "name": "x",
+                "type": {
+                  "name": null,
+                  "kind": "int64",
+                  "attributes": [],
+                  "state": null
+                }
+              },
+              {
+                "name": "y",
+                "type": {
+                  "name": null,
+                  "kind": "double",
+                  "attributes": [],
+                  "state": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "area": {
+    "next_continuation_token": null,
+    "state": "completed",
+    "events": [
+      {
+        "schema_id": "efecab2e5dd31927",
+        "data": {
+          "x": 1,
+          "y": 2.0
+        }
+      },
+      {
+        "schema_id": "efecab2e5dd31927",
+        "data": {
+          "x": 2,
+          "y": 3.0
+        }
+      }
+    ],
+    "schemas": [
+      {
+        "schema_id": "efecab2e5dd31927",
+        "definition": {
+          "name": "tenzir.chart",
+          "kind": "record",
+          "attributes": [
+            {
+              "key": "chart",
+              "value": "area"
+            },
+            {
+              "key": "position",
+              "value": "stacked"
+            },
+            {
+              "key": "x",
+              "value": "x"
+            },
+            {
+              "key": "x_axis_type",
+              "value": "linear"
+            },
+            {
+              "key": "y",
+              "value": "y"
+            },
+            {
+              "key": "y_axis_type",
+              "value": "linear"
+            }
+          ],
+          "state": {
+            "fields": [
+              {
+                "name": "x",
+                "type": {
+                  "name": null,
+                  "kind": "int64",
+                  "attributes": [],
+                  "state": null
+                }
+              },
+              {
+                "name": "y",
+                "type": {
+                  "name": null,
+                  "kind": "double",
+                  "attributes": [],
+                  "state": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "pie": {
+    "next_continuation_token": null,
+    "state": "completed",
+    "events": [
+      {
+        "schema_id": "60a2916861c4f2de",
+        "data": {
+          "x": "a",
+          "value": 1.0
+        }
+      },
+      {
+        "schema_id": "60a2916861c4f2de",
+        "data": {
+          "x": "b",
+          "value": 1.0
+        }
+      }
+    ]
+  }
+}

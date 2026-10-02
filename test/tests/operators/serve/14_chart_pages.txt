@@ -1,0 +1,1 @@
+chart metadata persists across pages

@@ -9,6 +9,79 @@ tenzir:
           {i: 42},
           {s: "str 1", i: 0}
         serve "serve-1"
+    serve_chart:
+      name: serve chart
+      definition: |
+        from {x: 12, y: 3.5}, {x: 13, y: 4.01}
+        chart_line x=x, y=y
+        serve "serve_chart"
+    serve_chart_renamed:
+      name: serve chart renamed
+      definition: |
+        from {x: 12, y: 3.5}, {x: 13, y: 4.01}
+        chart_line x=x, y=y
+        @name = "renamed.chart"
+        serve "serve_chart_renamed"
+    serve_chart_multi_renamed:
+      name: serve chart multi renamed
+      definition: |
+        from {x: 12, y: 3.5}, {x: 13, y: 4.01}
+        chart_line x=x, y=y
+        @name = "renamed.chart"
+        serve "serve_chart_multi_renamed"
+    serve_chart_options:
+      name: serve chart options
+      definition: |
+        from {x: 1s, y: 2}, {x: 3s, y: 4}
+        chart_area x=x, y=sum(y), resolution=1s, x_min=0s, x_max=4s, fill=0, y_min=0.0, y_max=100.0, x_log=true, y_log=true
+        serve "serve_chart_options"
+    serve_chart_grouped:
+      name: serve chart grouped
+      definition: |
+        from {x: "a", g: "red", v: 1}, {x: "b", g: "blue", v: 2}
+        chart_bar x=x, y=sum(v), group=g
+        serve "serve_chart_grouped"
+    serve_chart_grouped_pages:
+      name: serve chart grouped pages
+      definition: |
+        from {x: "a", g: "red", v: 1}, {x: "b", g: "blue", v: 2}
+        chart_bar x=x, y=sum(v), group=g
+        serve "serve_chart_grouped_pages"
+    serve_chart_multi_area:
+      name: serve chart multi area
+      definition: |
+        from {x: 1, y: 2}, {x: 2, y: 3}
+        chart_area x=x, y=sum(y), position="stacked"
+        serve "serve_chart_multi_area"
+    serve_chart_multi_pie:
+      name: serve chart multi pie
+      definition: |
+        from {x: "a"}, {x: "b"}
+        chart_pie x=x, y=count()
+        serve "serve_chart_multi_pie"
+    serve_chart_null_string:
+      name: serve chart null string
+      definition: |
+        from {x: null, v: 1}, {x: "a", v: 2}
+        chart_bar x=x, y=sum(v)
+        serve "serve_chart_null_string"
+    serve_chart_null_x:
+      name: serve chart null x
+      definition: |
+        from {x: null, v: 1}, {x: 1s, v: 2}
+        chart_bar x=x, y=sum(v), resolution=1s
+        serve "serve_chart_null_x"
+    serve_chart_pages:
+      name: serve chart pages
+      definition: |
+        from {x: 12, y: 3.5}, {x: 13, y: 4.01}
+        chart_line x=x, y=y
+        serve "serve_chart_pages"
+    serve_chart_field:
+      name: serve chart field
+      definition: |
+        from {chart: "value", other: 1}
+        serve "serve_chart_field"
     serve_masked:
       name: serve masked
       definition: |

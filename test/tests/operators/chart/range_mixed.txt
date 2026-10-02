@@ -1,4 +1,20 @@
 {
+  chart: {
+    kind: "line",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    x_min: "2",
+    x_max: "4",
+    y: "v",
+    types: {
+      v: "double",
+      x: "double",
+    },
+  },
+}
+{
   x: 2.0,
   v: 20.0,
 }

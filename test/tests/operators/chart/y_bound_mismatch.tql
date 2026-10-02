@@ -1,0 +1,2 @@
+from {x: 1s, y: 2s}, {x: 2s, y: 3s}
+chart_line x=x, y=sum(y), resolution=1s, y_min=0

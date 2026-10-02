@@ -1,4 +1,18 @@
 {
+  chart: {
+    kind: "bar",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y: "y",
+    types: {
+      y: "double",
+      x: "ip",
+    },
+  },
+}
+{
   x: 10.0.0.2,
   y: 4.0,
 }

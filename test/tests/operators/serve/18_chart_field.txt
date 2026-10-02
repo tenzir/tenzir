@@ -1,0 +1,13 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema_id": "7edfdf2785e6aea0",
+      "data": {
+        "chart": "value",
+        "other": 1
+      }
+    }
+  ]
+}

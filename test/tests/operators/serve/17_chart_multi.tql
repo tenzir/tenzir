@@ -1,0 +1,24 @@
+api "/serve-multi", {
+  requests: [
+    {
+      serve_id: "serve_chart_multi_area",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+      schema: "exact",
+    },
+    {
+      serve_id: "serve_chart_multi_pie",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+      schema: "never",
+    },
+  ],
+  min_events: 4,
+  max_events: 4,
+  timeout: 5s,
+}
+area = serve_chart_multi_area
+pie = serve_chart_multi_pie
+assert area.events.length() == 2
+assert pie.events.length() == 2
+assert area.schemas.length() == 1
+assert not pie.has("schemas")
+write_json

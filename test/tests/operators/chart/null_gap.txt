@@ -1,4 +1,18 @@
 {
+  chart: {
+    kind: "bar",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y: "y",
+    types: {
+      y: "double",
+      x: "duration",
+    },
+  },
+}
+{
   x: null,
   y: 1.0,
 }

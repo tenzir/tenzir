@@ -1,0 +1,2 @@
+from {x: null}, {x: 2}, {x: 1}
+chart_pie x=x, y=count()

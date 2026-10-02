@@ -1,0 +1,2 @@
+from {x: 2026-01-01T01:00:00Z, y: 1}, {x: 2026-01-01T03:00:00Z, y: 3}
+chart_line x=x, y=sum(y), resolution=-1h, fill=0, x_min=2026-01-01T00:00:00Z, x_max=2026-01-01T04:00:00Z

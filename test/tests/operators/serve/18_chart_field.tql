@@ -1,0 +1,10 @@
+api "/serve", {
+  serve_id: "serve_chart_field",
+  min_events: 1,
+  max_events: 1,
+  schema: "never",
+}
+assert events.length() == 1
+assert events[0].data.chart == "value"
+assert events[0].data.other == 1
+write_json

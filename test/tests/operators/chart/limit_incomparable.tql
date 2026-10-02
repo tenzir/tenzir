@@ -1,0 +1,2 @@
+from {x: "a"}, {x: null}, {x: 1}
+chart_bar x=x, y=count(), x_max=2

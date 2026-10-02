@@ -1,8 +1,8 @@
 {
   chart: {
-    kind: "bar",
+    kind: "area",
     x: "x",
-    position: "grouped",
+    position: "stacked",
     x_axis_type: "linear",
     y_axis_type: "linear",
     y: "y",
@@ -14,13 +14,5 @@
 }
 {
   x: 1,
-  y: 1.0,
-}
-{
-  x: 2,
-  y: 1.0,
-}
-{
-  x: 3,
-  y: 1.0,
+  y: 5.0,
 }

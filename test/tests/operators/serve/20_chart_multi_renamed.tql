@@ -1,0 +1,19 @@
+api "/serve-multi", {
+  requests: [
+    {
+      serve_id: "serve_chart_multi_renamed",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+      schema: "exact",
+    },
+  ],
+  min_events: 2,
+  max_events: 2,
+  timeout: 5s,
+}
+result = serve_chart_multi_renamed
+assert result.events.length() == 2
+assert result.schemas.length() == 1
+assert result.schemas[0].definition.name == "renamed.chart"
+assert result.schemas[0].definition.attributes[0].key == "chart"
+assert result.schemas[0].definition.attributes[0].value == "line"
+write_json

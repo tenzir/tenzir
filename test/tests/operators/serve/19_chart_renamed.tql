@@ -1,0 +1,12 @@
+api "/serve", {
+  serve_id: "serve_chart_renamed",
+  min_events: 2,
+  max_events: 2,
+  schema: "exact",
+}
+assert events.length() == 2
+assert schemas.length() == 1
+assert schemas[0].definition.name == "renamed.chart"
+assert schemas[0].definition.attributes[0].key == "chart"
+assert schemas[0].definition.attributes[0].value == "line"
+write_json

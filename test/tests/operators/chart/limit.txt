@@ -7,6 +7,17 @@ warning: got more than 2 data points
   = note: skipping excess data points
   = hint: consider filtering data or aggregating over a bigger `resolution`
 {
+  chart: {
+    kind: "pie",
+    x: "x",
+    y: "value",
+    types: {
+      value: "double",
+      x: "int64",
+    },
+  },
+}
+{
   x: 1,
   value: 1.0,
 }

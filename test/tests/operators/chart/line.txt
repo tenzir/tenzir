@@ -1,4 +1,20 @@
 {
+  chart: {
+    kind: "line",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    x_min: "0.0",
+    x_max: "60.0",
+    y: "y",
+    types: {
+      y: "double",
+      x: "duration",
+    },
+  },
+}
+{
   x: 0ns,
   y: null,
 }

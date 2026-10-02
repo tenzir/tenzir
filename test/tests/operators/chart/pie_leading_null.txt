@@ -5,15 +5,19 @@
     y: "value",
     types: {
       value: "double",
-      x: "subnet",
+      x: "int64",
     },
   },
 }
 {
-  x: 10.0.2.0/24,
-  value: 2.0,
+  x: null,
+  value: 1.0,
 }
 {
-  x: 10.0.1.0/24,
+  x: 1,
+  value: 1.0,
+}
+{
+  x: 2,
   value: 1.0,
 }

@@ -1,4 +1,24 @@
 {
+  chart: {
+    kind: "line",
+    x: "x",
+    position: "grouped",
+    x_axis_type: "linear",
+    y_axis_type: "linear",
+    y_min: "-10.0",
+    y_max: "10.0",
+    y: "a_y",
+    y1: "a_fill",
+    y2: "b_y",
+    y3: "b_fill",
+    types: {
+      a_y: "double",
+      b_y: "double",
+      x: "duration",
+    },
+  },
+}
+{
   x: 1s,
   a_y: 1.0,
   a_fill: -5.0,
