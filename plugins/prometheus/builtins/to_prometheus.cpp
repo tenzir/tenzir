@@ -14,8 +14,13 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/generator.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/stringify.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -42,6 +47,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -415,6 +421,76 @@ auto to_timestamp_ms(data_view3 value) -> Option<int64_t> {
     });
 }
 
+auto is_null(data_view3 const& value) -> bool {
+  return is<view<caf::none_t>>(value);
+}
+
+auto is_null(nova::RowView<nova::Data> const& value) -> bool {
+  return is<nova::RowView<nova::Null>>(value);
+}
+
+auto to_record(data_view3 const& value) -> Option<view3<record>> {
+  if (auto const* result = try_as<view3<record>>(value)) {
+    return *result;
+  }
+  return {};
+}
+
+auto to_record(nova::RowView<nova::Data> const& value)
+  -> Option<nova::RowView<nova::Record>> {
+  if (auto const* result = try_as<nova::RowView<nova::Record>>(value)) {
+    return *result;
+  }
+  return {};
+}
+
+auto to_string_value(nova::RowView<nova::Data> const& value,
+                     ast::expression const& expr, diagnostic_handler& dh)
+  -> Option<std::string> {
+  if (is_null(value)) {
+    return {};
+  }
+  auto result = nova::stringify(value);
+  if (not result) {
+    diagnostic::warning("expected `blob` to contain valid UTF-8 data")
+      .primary(expr)
+      .emit(dh);
+  }
+  return result;
+}
+
+auto to_double(nova::RowView<nova::Data> const& value) -> Option<double> {
+  return match(value, []<class T>(nova::RowView<T> const& x) -> Option<double> {
+    if constexpr (std::same_as<T, nova::Float> or std::same_as<T, nova::Int>
+                  or std::same_as<T, nova::UInt>) {
+      return static_cast<double>(*x);
+    } else {
+      return {};
+    }
+  });
+}
+
+auto to_timestamp_ms(nova::RowView<nova::Data> const& value)
+  -> Option<int64_t> {
+  return match(
+    value, []<class T>(nova::RowView<T> const& x) -> Option<int64_t> {
+      if constexpr (std::same_as<T, nova::Time>) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                 (*x).time_since_epoch())
+          .count();
+      } else if constexpr (std::same_as<T, nova::Int>) {
+        return *x;
+      } else if constexpr (std::same_as<T, nova::UInt>) {
+        if (*x > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+          return {};
+        }
+        return static_cast<int64_t>(*x);
+      } else {
+        return {};
+      }
+    });
+}
+
 /// Returns true for Prometheus' stale-marker NaN. Remote Write reserves this
 /// exact IEEE-754 bit pattern to mark a time series as no longer appended to;
 /// other NaNs remain invalid sample values.
@@ -629,12 +705,60 @@ auto resolve_secrets(OpCtx& ctx, ToPrometheusArgs& args,
   co_return {};
 }
 
-class ToPrometheus final : public Operator<table_slice, void> {
+template <class Input>
+class ToPrometheus final : public Operator<Input, void> {
 public:
   explicit ToPrometheus(ToPrometheusArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      if (ctx.checkpoint_settings()) {
+        diagnostic::error("`to_prometheus` does not support checkpoints")
+          .primary(args_.operator_location)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      }
+      auto prepare = [&](ast::expression const& expression,
+                         Option<nova::Evaluator>& target) -> Task<bool> {
+        auto evaluator = co_await nova::Evaluator::make(expression, ctx);
+        if (not evaluator) {
+          done_ = true;
+          co_return false;
+        }
+        target.emplace(std::move(*evaluator));
+        co_return true;
+      };
+      if (not co_await prepare(args_.name, name_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.value, value_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.timestamp, timestamp_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.labels, labels_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.type, type_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.help, help_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.unit, unit_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.family, family_evaluator_)) {
+        co_return;
+      }
+      if (not co_await prepare(args_.start_timestamp,
+                               start_timestamp_evaluator_)) {
+        co_return;
+      }
+    }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_prometheus"},
                          MetricsDirection::write, MetricsVisibility::external_,
@@ -677,27 +801,12 @@ public:
     }
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (done_ or input.rows() == 0) {
+  auto process(Input input, OpCtx& ctx) -> Task<void> override {
+    if (done_) {
       co_return;
     }
-    auto name = eval(args_.name, input, ctx.dh());
-    auto value = eval(args_.value, input, ctx.dh());
-    auto timestamp = eval(args_.timestamp, input, ctx.dh());
-    auto labels = eval(args_.labels, input, ctx.dh());
-    auto type = eval(args_.type, input, ctx.dh());
-    auto help = eval(args_.help, input, ctx.dh());
-    auto unit = eval(args_.unit, input, ctx.dh());
-    auto family = eval(args_.family, input, ctx.dh());
-    auto start_timestamp = eval(args_.start_timestamp, input, ctx.dh());
-    for (auto row = int64_t{0}; row < detail::narrow<int64_t>(input.rows());
-         ++row) {
-      auto sample = make_sample(row, name, value, timestamp, labels, type, help,
-                                unit, family, start_timestamp, ctx);
-      if (not sample) {
-        continue;
-      }
-      add_sample(std::move(*sample));
+    for (auto&& sample : to_samples(input, ctx)) {
+      add_sample(std::move(sample));
       if (pending_sample_count_ >= args_.max_samples_per_request.inner) {
         if (not co_await send_request(ctx)) {
           done_ = true;
@@ -765,23 +874,75 @@ private:
     Metadata metadata;
   };
 
+  auto to_samples(table_slice const& input, OpCtx& ctx)
+    -> generator<PendingSample> {
+    if (input.rows() == 0) {
+      co_return;
+    }
+    auto name = eval(args_.name, input, ctx.dh());
+    auto value = eval(args_.value, input, ctx.dh());
+    auto timestamp = eval(args_.timestamp, input, ctx.dh());
+    auto labels = eval(args_.labels, input, ctx.dh());
+    auto type = eval(args_.type, input, ctx.dh());
+    auto help = eval(args_.help, input, ctx.dh());
+    auto unit = eval(args_.unit, input, ctx.dh());
+    auto family = eval(args_.family, input, ctx.dh());
+    auto start_timestamp = eval(args_.start_timestamp, input, ctx.dh());
+    for (auto row = int64_t{0}; row < detail::narrow<int64_t>(input.rows());
+         ++row) {
+      auto sample = make_sample(name.view3_at(row), value.view3_at(row),
+                                timestamp.view3_at(row), labels.view3_at(row),
+                                type.view3_at(row), help.view3_at(row),
+                                unit.view3_at(row), family.view3_at(row),
+                                start_timestamp.view3_at(row), ctx);
+      if (sample) {
+        co_yield std::move(*sample);
+      }
+    }
+  }
+
+  auto to_samples(nova::Events const& input, OpCtx& ctx)
+    -> generator<PendingSample> {
+    if (not input.mask.any()) {
+      co_return;
+    }
+    auto name = name_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto value = value_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto timestamp = timestamp_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto labels = labels_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto type = type_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto help = help_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto unit = unit_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto family = family_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto start_timestamp
+      = start_timestamp_evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    for (auto row : nova::storage::true_bits(input.mask)) {
+      auto sample = make_sample(name.get(row), value.get(row),
+                                timestamp.get(row), labels.get(row),
+                                type.get(row), help.get(row), unit.get(row),
+                                family.get(row), start_timestamp.get(row), ctx);
+      if (sample) {
+        co_yield std::move(*sample);
+      }
+    }
+  }
+
   /// Converts one input row into a pending Prometheus sample. This is where the
   /// operator applies v1/v2 naming rules, row-level validation, timestamp
   /// fallback, and metadata extraction before the sample joins a pending series.
-  auto make_sample(int64_t row, multi_series const& names,
-                   multi_series const& values, multi_series const& timestamps,
-                   multi_series const& labels, multi_series const& types,
-                   multi_series const& helps, multi_series const& units,
-                   multi_series const& families,
-                   multi_series const& start_timestamps, OpCtx& ctx)
+  template <class Row>
+  auto make_sample(Row const& names, Row const& values, Row const& timestamps,
+                   Row const& labels, Row const& types, Row const& helps,
+                   Row const& units, Row const& families,
+                   Row const& start_timestamps, OpCtx& ctx)
     -> Option<PendingSample> {
-    if (names.is_null(row)) {
+    if (is_null(names)) {
       diagnostic::warning("metric name is `null`, skipping event")
         .primary(args_.name)
         .emit(ctx);
       return {};
     }
-    auto name = to_string_value(names.view3_at(row), args_.name, ctx.dh());
+    auto name = to_string_value(names, args_.name, ctx.dh());
     if (not name or name->empty()) {
       diagnostic::warning("metric name must be a non-empty string")
         .primary(args_.name)
@@ -798,13 +959,13 @@ private:
         .emit(ctx);
       return {};
     }
-    if (values.is_null(row)) {
+    if (is_null(values)) {
       diagnostic::warning("metric value is `null`, skipping event")
         .primary(args_.value)
         .emit(ctx);
       return {};
     }
-    auto value = to_double(values.view3_at(row));
+    auto value = to_double(values);
     if (not value
         or (std::isnan(*value) and not is_prometheus_stale_marker(*value))) {
       diagnostic::warning(
@@ -816,9 +977,9 @@ private:
     }
     auto result = PendingSample{};
     result.labels.emplace_back("__name__", *name);
-    if (not labels.is_null(row)) {
-      auto label_value = labels.view3_at(row);
-      auto* record = try_as<view3<tenzir::record>>(&label_value);
+    if (not is_null(labels)) {
+      auto label_value = labels;
+      auto record = to_record(label_value);
       if (not record) {
         diagnostic::warning(
           "`labels` must evaluate to a record, skipping event")
@@ -878,9 +1039,9 @@ private:
       return label.first;
     });
     result.sample.value = *value;
-    if (timestamps.is_null(row)) {
+    if (is_null(timestamps)) {
       result.sample.timestamp_ms = now_ms();
-    } else if (auto timestamp = to_timestamp_ms(timestamps.view3_at(row))) {
+    } else if (auto timestamp = to_timestamp_ms(timestamps)) {
       result.sample.timestamp_ms = *timestamp;
     } else {
       diagnostic::warning("invalid metric timestamp, skipping event")
@@ -888,9 +1049,8 @@ private:
         .emit(ctx);
       return {};
     }
-    if (protocol_ == Protocol::v2 and not start_timestamps.is_null(row)) {
-      if (auto start_timestamp
-          = to_timestamp_ms(start_timestamps.view3_at(row))) {
+    if (protocol_ == Protocol::v2 and not is_null(start_timestamps)) {
+      if (auto start_timestamp = to_timestamp_ms(start_timestamps)) {
         result.sample.start_timestamp_ms = *start_timestamp;
       } else {
         diagnostic::warning("invalid metric start timestamp, skipping event")
@@ -900,13 +1060,11 @@ private:
       }
     }
     result.metadata.family
-      = families.is_null(row)
+      = is_null(families)
           ? *name
-          : to_string_value(families.view3_at(row), args_.family, ctx.dh())
-              .unwrap_or(*name);
-    if (not types.is_null(row)) {
-      auto type_text
-        = to_string_value(types.view3_at(row), args_.type, ctx.dh());
+          : to_string_value(families, args_.family, ctx.dh()).unwrap_or(*name);
+    if (not is_null(types)) {
+      auto type_text = to_string_value(types, args_.type, ctx.dh());
       if (type_text) {
         auto type = parse_metric_type(*type_text);
         if (protocol_ == Protocol::v2 and not type) {
@@ -920,15 +1078,13 @@ private:
         result.metadata.type = type.unwrap_or(MetricType::unknown);
       }
     }
-    if (not helps.is_null(row)) {
+    if (not is_null(helps)) {
       result.metadata.help
-        = to_string_value(helps.view3_at(row), args_.help, ctx.dh())
-            .unwrap_or("");
+        = to_string_value(helps, args_.help, ctx.dh()).unwrap_or("");
     }
-    if (not units.is_null(row)) {
+    if (not is_null(units)) {
       result.metadata.unit
-        = to_string_value(units.view3_at(row), args_.unit, ctx.dh())
-            .unwrap_or("");
+        = to_string_value(units, args_.unit, ctx.dh()).unwrap_or("");
     }
     return result;
   }
@@ -1116,6 +1272,15 @@ private:
   }
 
   ToPrometheusArgs args_;
+  Option<nova::Evaluator> name_evaluator_;
+  Option<nova::Evaluator> value_evaluator_;
+  Option<nova::Evaluator> timestamp_evaluator_;
+  Option<nova::Evaluator> labels_evaluator_;
+  Option<nova::Evaluator> type_evaluator_;
+  Option<nova::Evaluator> help_evaluator_;
+  Option<nova::Evaluator> unit_evaluator_;
+  Option<nova::Evaluator> family_evaluator_;
+  Option<nova::Evaluator> start_timestamp_evaluator_;
   Protocol protocol_ = Protocol::v1;
   std::string url_;
   Headers headers_;
@@ -1136,7 +1301,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToPrometheusArgs, ToPrometheus>{};
+    auto d = Describer<ToPrometheusArgs, ToPrometheus<table_slice>,
+                       ToPrometheus<nova::Events>>{};
     d.positional("url", &ToPrometheusArgs::url);
     auto protobuf_message = d.named_optional(
       "protobuf_message", &ToPrometheusArgs::protobuf_message);

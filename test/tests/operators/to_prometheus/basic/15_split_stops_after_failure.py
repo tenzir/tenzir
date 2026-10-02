@@ -73,7 +73,7 @@ to_prometheus "http://127.0.0.1:{port}/write",
             pipe_path = Path(tmpdir) / "pipeline.tql"
             pipe_path.write_text(pipeline, encoding="utf-8")
             result = subprocess.run(
-                [*_resolve_tenzir_binary(), "-f", str(pipe_path)],
+                [*_resolve_tenzir_binary(), "--nova=true", "-f", str(pipe_path)],
                 capture_output=True,
                 text=True,
                 timeout=60,
