@@ -5,4 +5,4 @@ from {id: 0, ts: 1990-01-01T00:00:00},
 delay ts
 batch 2, timeout=200ms
 measure
-drop timestamp
+drop timestamp, schema_id, schema

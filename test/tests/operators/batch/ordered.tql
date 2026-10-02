@@ -2,4 +2,4 @@ from {kind: "alert", id: 1}, {kind: "flow", id: 2}, {kind: "alert", id: 3}
 repeat 3
 batch 4
 measure
-drop timestamp
+drop timestamp, schema_id, schema

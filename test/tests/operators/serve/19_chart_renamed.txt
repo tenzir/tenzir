@@ -3,14 +3,14 @@
   "state": "completed",
   "events": [
     {
-      "schema_id": "33b2a6d0d7e71228",
+      "schema_id": "97b110e4b0998e8b",
       "data": {
         "x": 12,
         "y": 3.5
       }
     },
     {
-      "schema_id": "33b2a6d0d7e71228",
+      "schema_id": "97b110e4b0998e8b",
       "data": {
         "x": 13,
         "y": 4.01
@@ -19,7 +19,7 @@
   ],
   "schemas": [
     {
-      "schema_id": "33b2a6d0d7e71228",
+      "schema_id": "97b110e4b0998e8b",
       "definition": {
         "name": "renamed.chart",
         "kind": "record",

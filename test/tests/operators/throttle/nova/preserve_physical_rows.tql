@@ -3,4 +3,4 @@ write_json
 read_json
 throttle rate=2, window=100ms
 measure cumulative=true
-drop timestamp
+drop timestamp, schema_id, schema

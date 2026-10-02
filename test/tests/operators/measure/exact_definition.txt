@@ -1,0 +1,116 @@
+{
+  schema: {
+    name: "tenzir.unknown",
+    kind: "record",
+    attributes: [],
+    state: {
+      fields: [
+        {
+          name: "a",
+          type: {
+            name: null,
+            kind: "int64",
+            attributes: [],
+            state: null,
+          },
+        },
+        {
+          name: "l",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "int64",
+                attributes: [],
+                state: null,
+              },
+            },
+          },
+        },
+        {
+          name: "m",
+          type: {
+            name: null,
+            kind: "record",
+            attributes: [],
+            state: {
+              fields: [
+                {
+                  name: "n",
+                  type: {
+                    name: null,
+                    kind: "int64",
+                    attributes: [],
+                    state: null,
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          name: "o",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "record",
+                attributes: [],
+                state: {
+                  fields: [
+                    {
+                      name: "p",
+                      type: {
+                        name: null,
+                        kind: "int64",
+                        attributes: [],
+                        state: null,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          name: "mixed",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "union",
+                attributes: [],
+                state: {
+                  types: [
+                    {
+                      name: null,
+                      kind: "int64",
+                      attributes: [],
+                      state: null,
+                    },
+                    {
+                      name: null,
+                      kind: "string",
+                      attributes: [],
+                      state: null,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+  },
+}

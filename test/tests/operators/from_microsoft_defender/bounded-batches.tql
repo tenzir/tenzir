@@ -14,4 +14,4 @@ from_microsoft_defender "many-rows",
   tls=false
 
 measure
-drop timestamp
+drop timestamp, schema_id, schema

@@ -1,8 +1,6 @@
 {
-  events: 2,
-  selected: 1,
+  events: 1,
 }
 {
-  events: 3,
-  selected: 2,
+  events: 2,
 }

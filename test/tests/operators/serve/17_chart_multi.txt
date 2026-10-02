@@ -4,14 +4,14 @@
     "state": "completed",
     "events": [
       {
-        "schema_id": "60a2916861c4f2de",
+        "schema_id": "292d88911b3bbdff",
         "data": {
           "x": "a",
           "value": 1.0
         }
       },
       {
-        "schema_id": "60a2916861c4f2de",
+        "schema_id": "292d88911b3bbdff",
         "data": {
           "x": "b",
           "value": 1.0
@@ -24,14 +24,14 @@
     "state": "completed",
     "events": [
       {
-        "schema_id": "efecab2e5dd31927",
+        "schema_id": "9af3750eeec0c2f1",
         "data": {
           "x": 1,
           "y": 2.0
         }
       },
       {
-        "schema_id": "efecab2e5dd31927",
+        "schema_id": "9af3750eeec0c2f1",
         "data": {
           "x": 2,
           "y": 3.0
@@ -40,7 +40,7 @@
     ],
     "schemas": [
       {
-        "schema_id": "efecab2e5dd31927",
+        "schema_id": "9af3750eeec0c2f1",
         "definition": {
           "name": "tenzir.chart",
           "kind": "record",
@@ -101,14 +101,14 @@
     "state": "completed",
     "events": [
       {
-        "schema_id": "efecab2e5dd31927",
+        "schema_id": "9af3750eeec0c2f1",
         "data": {
           "x": 1,
           "y": 2.0
         }
       },
       {
-        "schema_id": "efecab2e5dd31927",
+        "schema_id": "9af3750eeec0c2f1",
         "data": {
           "x": 2,
           "y": 3.0
@@ -117,7 +117,7 @@
     ],
     "schemas": [
       {
-        "schema_id": "efecab2e5dd31927",
+        "schema_id": "9af3750eeec0c2f1",
         "definition": {
           "name": "tenzir.chart",
           "kind": "record",
@@ -178,14 +178,14 @@
     "state": "completed",
     "events": [
       {
-        "schema_id": "60a2916861c4f2de",
+        "schema_id": "292d88911b3bbdff",
         "data": {
           "x": "a",
           "value": 1.0
         }
       },
       {
-        "schema_id": "60a2916861c4f2de",
+        "schema_id": "292d88911b3bbdff",
         "data": {
           "x": "b",
           "value": 1.0

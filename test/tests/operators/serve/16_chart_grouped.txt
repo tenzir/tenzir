@@ -3,7 +3,7 @@
   "state": "completed",
   "events": [
     {
-      "schema_id": "9c9e89fef2d8fa79",
+      "schema_id": "cb241236afefa7f0",
       "data": {
         "x": "a",
         "red": 1.0,
@@ -11,7 +11,7 @@
       }
     },
     {
-      "schema_id": "9c9e89fef2d8fa79",
+      "schema_id": "cb241236afefa7f0",
       "data": {
         "x": "b",
         "red": null,
@@ -21,7 +21,7 @@
   ],
   "schemas": [
     {
-      "schema_id": "9c9e89fef2d8fa79",
+      "schema_id": "cb241236afefa7f0",
       "definition": {
         "name": "tenzir.chart",
         "kind": "record",

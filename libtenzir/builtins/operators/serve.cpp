@@ -60,11 +60,15 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/hash/hash.hpp>
+#include <tenzir/hash/legacy_hash.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova/type_definition.hpp>
+#include <tenzir/nova/type_id.hpp>
 #include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -1644,11 +1648,102 @@ struct serve_handler_state {
     return result;
   }
 
+  /// A stable identifier for the schema that a chart describes. Every event
+  /// of a chart belongs to that one schema, even when a row leaves a field
+  /// null or a page holds only some of its rows, so the identifier comes from
+  /// the definition instead of the structure of a single row.
+  static auto definition_id(nova::Data const& definition) -> std::string {
+    auto printer = nova::json_printer{{
+      .indentation = 0,
+      .oneline = true,
+      .numeric_durations = true,
+    }};
+    printer.print(nova::RowView<nova::Data>{definition});
+    auto bytes = printer.bytes();
+    auto hash = legacy_hash{};
+    hash_append(hash,
+                std::string_view{reinterpret_cast<const char*>(bytes.data()),
+                                 bytes.size()});
+    return fmt::format("{:x}", std::move(hash).finish());
+  }
+
+  /// Folds the metadata of a chart into the definition of its schema: the
+  /// chart attributes become attributes of the schema, and a field that only
+  /// holds nulls takes the kind that the chart intends for it.
+  static auto apply_chart(
+    nova::Record& definition, enum schema schema,
+    std::vector<std::pair<std::string, std::string>> const& chart_attributes,
+    std::unordered_map<std::string, std::string> const& chart_types) -> void {
+    if (chart_attributes.empty() and chart_types.empty()) {
+      return;
+    }
+    auto* root = &definition;
+    const auto legacy = schema == schema::legacy;
+    // A type sorts its attributes by key, and so does this definition.
+    auto sorted = chart_attributes;
+    std::ranges::sort(sorted, std::less<>{},
+                      &std::pair<std::string, std::string>::first);
+    if (legacy) {
+      if (auto* attributes = try_as<nova::Record>((*root)["attributes"])) {
+        for (auto const& [key, value] : sorted) {
+          (*attributes)[key] = value;
+        }
+      }
+    } else {
+      if (auto* attributes = try_as<nova::List>((*root)["attributes"])) {
+        for (auto const& [key, value] : sorted) {
+          attributes->emplace_back(nova::Record{
+            {"key", key},
+            {"value", value},
+          });
+        }
+      }
+    }
+    // The legacy shape holds the fields of a record next to its kind, while
+    // the modern one holds them in its state.
+    auto* fields = [&]() -> nova::List* {
+      if (legacy) {
+        return try_as<nova::List>((*root)["fields"]);
+      }
+      auto* state = try_as<nova::Record>((*root)["state"]);
+      return state ? try_as<nova::List>((*state)["fields"]) : nullptr;
+    }();
+    if (not fields) {
+      return;
+    }
+    for (auto& entry : *fields) {
+      auto* field = try_as<nova::Record>(entry);
+      if (not field) {
+        continue;
+      }
+      auto* name = try_as<std::string>((*field)["name"]);
+      if (not name) {
+        continue;
+      }
+      auto intended = chart_types.find(*name);
+      if (intended == chart_types.end()) {
+        continue;
+      }
+      auto* type = legacy ? field : try_as<nova::Record>((*field)["type"]);
+      if (not type) {
+        continue;
+      }
+      auto* kind = try_as<std::string>((*type)["kind"]);
+      if (not kind or *kind != "null") {
+        continue;
+      }
+      *kind = intended->second;
+      if (legacy) {
+        (*type)["type"] = intended->second;
+      }
+    }
+  }
+
   static auto create_response(const std::string& next_continuation_token,
                               const std::vector<nova::Events>& results,
                               serve_state state, enum schema schema)
     -> std::string {
-    auto definitions_printer = json_printer{{
+    auto definitions_printer = nova::json_printer{{
       .indentation = 0,
       .oneline = true,
       .numeric_durations = true,
@@ -1665,11 +1760,16 @@ struct serve_handler_state {
               R"({{"next_continuation_token":"{}","state":"{}","events":[)",
               next_continuation_token, state);
     auto out = std::back_inserter(result);
-    auto seen_types = std::unordered_set<type>{};
+    // The definition of every schema that occurs in the events, which is only
+    // computed when the response carries definitions.
+    auto definitions = std::unordered_map<std::string, nova::Data>{};
     auto first = true;
     auto chart_attributes = std::vector<std::pair<std::string, std::string>>{};
     auto chart_types = std::unordered_map<std::string, std::string>{};
+    auto chart_id = Option<std::string>{};
     for (const auto& events : results) {
+      const auto ids
+        = nova::type_id(nova::Array<nova::Data>{events.data}, events.mask);
       for (auto index : nova::storage::true_bits(events.mask)) {
         auto row = events.data.get(index);
         auto it = row.begin();
@@ -1678,6 +1778,7 @@ struct serve_handler_state {
           if (++next == row.end()) {
             chart_attributes.clear();
             chart_types.clear();
+            chart_id = None{};
             auto chart = nova::materialize_legacy((*it).second);
             if (auto* fields = try_as<record>(&chart)) {
               for (auto const& [key, value] : *fields) {
@@ -1698,63 +1799,33 @@ struct serve_handler_state {
             continue;
           }
         }
-        auto builder = series_builder{};
-        auto value = nova::materialize_legacy(row);
-        if (auto* fields = try_as<record>(&value)) {
-          for (auto& [field, cell] : *fields) {
-            if (not is<caf::none_t>(cell)) {
-              continue;
-            }
-            if (auto found = chart_types.find(field);
-                found != chart_types.end()) {
-              if (found->second == "int64") {
-                cell = int64_t{0};
-              } else if (found->second == "uint64") {
-                cell = uint64_t{0};
-              } else if (found->second == "double") {
-                cell = 0.0;
-              } else if (found->second == "duration") {
-                cell = duration{0};
-              } else if (found->second == "time") {
-                cell = time{duration{0}};
-              } else if (found->second == "string") {
-                cell = std::string{};
-              } else if (found->second == "ip") {
-                cell = ip{};
-              } else if (found->second == "subnet") {
-                cell = subnet{};
-              }
-            }
-          }
+        auto const name = *events.meta.name.get(index);
+        auto const internal = *events.meta.internal.get(index);
+        auto const charted
+          = not chart_attributes.empty() or not chart_types.empty();
+        if (charted and not chart_id) {
+          // The identifier of a chart must not depend on the requested shape
+          // of its definition, so it always comes from the exact one.
+          auto definition = nova::type_definition(row, name, internal);
+          apply_chart(definition, schema::exact, chart_attributes, chart_types);
+          chart_id = definition_id(std::move(definition));
         }
-        builder.data(std::move(value));
-        auto array = builder.finish_assert_one_array();
-        auto event_type = std::move(array.type);
-        auto name = std::string{*events.meta.name.get(index)};
-        if (name != event_type.name()) {
-          event_type = type{std::move(name), std::move(event_type)};
+        auto id = charted ? *chart_id : std::string{*ids.get(index)};
+        if (schema != schema::never and not definitions.contains(id)) {
+          auto definition
+            = schema == schema::legacy
+                ? nova::legacy_type_definition(row, name, internal)
+                : nova::type_definition(row, name, internal);
+          apply_chart(definition, schema, chart_attributes, chart_types);
+          definitions.emplace(id, std::move(definition));
         }
-        event_type = nova::ArrowMetadata{
-          .name = std::string{*events.meta.name.get(index)},
-          .internal = *events.meta.internal.get(index),
-        }.apply(std::move(event_type));
-        if (not chart_attributes.empty()) {
-          auto attributes = std::vector<type::attribute_view>{};
-          attributes.reserve(chart_attributes.size());
-          for (auto const& [key, value] : chart_attributes) {
-            attributes.push_back({key, value});
-          }
-          event_type = type{std::move(event_type), std::move(attributes)};
-        }
-        seen_types.insert(event_type);
         if (first) {
           out = fmt::format_to(out, "{{");
         } else {
           out = fmt::format_to(out, "}},{{");
         }
         first = false;
-        out = fmt::format_to(out, R"("schema_id":"{}","data":)",
-                             event_type.make_fingerprint());
+        out = fmt::format_to(out, R"("schema_id":"{}","data":)", id);
         events_printer.print(events.data.get(index));
         auto bytes = events_printer.bytes();
         result.append(reinterpret_cast<const char*>(bytes.data()),
@@ -1763,32 +1834,30 @@ struct serve_handler_state {
       }
     }
     if (schema == schema::never) {
-      if (not seen_types.empty()) {
+      if (not first) {
         *out++ = '}';
       }
       *out++ = ']';
       *out++ = '}';
       return result;
     }
-    if (seen_types.empty()) {
+    if (definitions.empty()) {
       out = fmt::format_to(out, R"(],"schemas":[]}}{})", '\n');
       return result;
     }
     out = fmt::format_to(out, R"(}}],"schemas":[)");
-    for (bool first = true; const auto& event_type : seen_types) {
+    for (bool first = true; const auto& [id, definition] : definitions) {
       if (first) {
         out = fmt::format_to(out, "{{");
       } else {
         out = fmt::format_to(out, "}},{{");
       }
       first = false;
-      out = fmt::format_to(out, R"("schema_id":"{}","definition":)",
-                           event_type.make_fingerprint());
-      const auto ok
-        = definitions_printer.print(out, schema == schema::legacy
-                                           ? event_type.to_legacy_definition()
-                                           : event_type.to_definition());
-      TENZIR_ASSERT(ok);
+      out = fmt::format_to(out, R"("schema_id":"{}","definition":)", id);
+      definitions_printer.print(nova::RowView<nova::Data>{definition});
+      auto bytes = definitions_printer.bytes();
+      result.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      out = std::back_inserter(result);
     }
     out = fmt::format_to(out, R"(}}]}})");
     return result;

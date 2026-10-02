@@ -14,7 +14,8 @@
 namespace tenzir::nova {
 
 /// Computes a stable structural type fingerprint for every selected row.
-/// Rows outside `mask` have unspecified values.
+/// Rows outside `mask` have unspecified values. This is the `schema_id` that
+/// `measure` and the serve endpoints report, and what `type_id` returns.
 auto type_id(Array<Data> const& array, storage::BitMap const& mask)
   -> Array<String>;
 

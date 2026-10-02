@@ -5,4 +5,4 @@ ts = 2025-03-03T12:12:10 + id * 1s
 where id > 0
 delay ts, start=2025-03-03T12:12:10, speed=10.0
 measure cumulative=true
-drop timestamp
+drop timestamp, schema_id, schema

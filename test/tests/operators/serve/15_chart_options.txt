@@ -3,35 +3,35 @@
   "state": "completed",
   "events": [
     {
-      "schema_id": "279baa093fef6410",
+      "schema_id": "97608d9312eb943a",
       "data": {
         "x": 0.0,
         "y": 0.0
       }
     },
     {
-      "schema_id": "279baa093fef6410",
+      "schema_id": "97608d9312eb943a",
       "data": {
         "x": 1.0,
         "y": 2.0
       }
     },
     {
-      "schema_id": "279baa093fef6410",
+      "schema_id": "97608d9312eb943a",
       "data": {
         "x": 2.0,
         "y": 0.0
       }
     },
     {
-      "schema_id": "279baa093fef6410",
+      "schema_id": "97608d9312eb943a",
       "data": {
         "x": 3.0,
         "y": 4.0
       }
     },
     {
-      "schema_id": "279baa093fef6410",
+      "schema_id": "97608d9312eb943a",
       "data": {
         "x": 4.0,
         "y": 0.0
@@ -40,7 +40,7 @@
   ],
   "schemas": [
     {
-      "schema_id": "279baa093fef6410",
+      "schema_id": "97608d9312eb943a",
       "definition": {
         "name": "tenzir.chart",
         "kind": "record",

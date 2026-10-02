@@ -2,4 +2,4 @@ api "/ping"
 where @name == "tenzir.api"
 where version != ""
 measure
-drop timestamp
+drop timestamp, schema_id, schema

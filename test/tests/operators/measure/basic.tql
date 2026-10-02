@@ -1,4 +1,4 @@
 from {x: 1}, {x: 2}
 batch
 measure
-drop timestamp, schema_id, schema
+drop timestamp, schema_id

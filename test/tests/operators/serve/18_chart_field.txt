@@ -3,7 +3,7 @@
   "state": "completed",
   "events": [
     {
-      "schema_id": "7edfdf2785e6aea0",
+      "schema_id": "867d5c0a35841141",
       "data": {
         "chart": "value",
         "other": 1

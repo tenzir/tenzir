@@ -4,4 +4,4 @@ read_json
 where x < 3
 throttle rate=2, window=100ms
 measure cumulative=true
-drop timestamp
+drop timestamp, schema_id, schema

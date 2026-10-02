@@ -1,12 +1,9 @@
 {
   events: 4,
-  selected: 4,
 }
 {
   events: 4,
-  selected: 4,
 }
 {
   events: 1,
-  selected: 1,
 }

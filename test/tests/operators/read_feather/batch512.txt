@@ -1,68 +1,51 @@
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 512,
-  selected: 512,
 }
 {
   events: 270,
-  selected: 270,
 }

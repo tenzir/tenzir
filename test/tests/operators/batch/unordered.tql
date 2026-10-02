@@ -4,4 +4,4 @@ unordered {
   batch 4
 }
 measure
-drop timestamp
+drop timestamp, schema_id, schema

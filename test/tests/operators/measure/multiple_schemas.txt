@@ -2,3 +2,7 @@
   events: 2,
   schema: "tenzir.unknown",
 }
+{
+  events: 1,
+  schema: "tenzir.unknown",
+}

@@ -1,0 +1,10 @@
+// `measure` reports one metric per schema, identifies every schema with a
+// stable `schema_id`, and emits the definition only when it first sees it.
+from {x: 1}, {y: "a"}, {x: 2}
+measure _exact_definition=true, cumulative=true
+summarize schema_id,
+  metrics=count(),
+  events=events.max(),
+  definitions=schema.count()
+select metrics, events, definitions
+sort -events
