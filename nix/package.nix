@@ -136,6 +136,15 @@ rec {
           };
           pkg = tenzir-de.override {
             inherit tenzir-plugins-source;
+            # Include deployment in dynamic monorepo builds. The public mirror
+            # has no sibling deployment project.
+            deployment-source =
+              if
+                !linkPkgs.stdenv.hostPlatform.isStatic && builtins.pathExists ../../deployment/CMakeLists.txt
+              then
+                deployment-source
+              else
+                null;
           };
         in
         pkg.withPlugins builtins.attrValues;
@@ -163,14 +172,15 @@ rec {
     else
       x // { unchecked = x; };
   tenzir-de = toChecked (unchecked pkgs).tenzir-de;
+  deployment-source = lib.fileset.toSource {
+    root = ../../deployment;
+    fileset = ../../deployment;
+  };
   # Unchecked: the integration tests exercise `tenzir`, which this carries
-  # unchanged. The deployment has unit tests of its own in CI.
+  # unchanged. The deployment unit tests run in the package build.
   tenzir-up =
     ((unchecked pkgs).tenzir-de.override {
-      deployment-source = lib.fileset.toSource {
-        root = ../../deployment;
-        fileset = ../../deployment;
-      };
+      inherit deployment-source;
     }).overrideAttrs
       (old: {
         meta = old.meta // {

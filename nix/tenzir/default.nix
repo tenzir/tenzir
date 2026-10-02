@@ -20,6 +20,7 @@ let
       # The sibling `deployment/` project. When set, the build includes the
       # `tenzir-up` persona.
       deployment-source ? null,
+      catch2_3,
       extraPlugins ? [ ],
       symlinkJoin,
       extraCmakeFlags ? [ ],
@@ -33,6 +34,11 @@ let
     }:
     let
       inherit (stdenv.hostPlatform) isStatic;
+      deploymentTests =
+        deployment-source != null
+        && !isStatic
+        && stdenv.hostPlatform.isLinux
+        && stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 
       version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
 
@@ -164,7 +170,7 @@ let
 
           inherit (deps) nativeBuildInputs;
           inherit (deps) propagatedNativeBuildInputs;
-          inherit (deps) buildInputs;
+          buildInputs = deps.buildInputs ++ lib.optional deploymentTests catch2_3;
           inherit (deps) propagatedBuildInputs;
 
           env = {
@@ -196,6 +202,7 @@ let
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
             "-DTENZIR_ENABLE_DEPLOYMENT=${lib.boolToString (deployment-source != null)}"
+            "-DTENZIR_ENABLE_DEPLOYMENT_TESTS=${lib.boolToString deploymentTests}"
           ]
           ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [
             "-DTENZIR_INSTALL_ARCHIVEDIR=${placeholder "dev"}/lib"
@@ -297,8 +304,15 @@ let
             ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
           '';
 
-          # Checking is done in a dedicated derivation, see check.nix.
-          doCheck = false;
+          # Deployment unit tests need the build tree; integration tests run
+          # against the installed package in check.nix.
+          doCheck = deploymentTests;
+          checkPhase = ''
+            runHook preCheck
+            ctest --tests-regex '^deployment/' --parallel "$NIX_BUILD_CORES" \
+              --output-on-failure --no-tests=error
+            runHook postCheck
+          '';
           doInstallCheck = false;
 
           dontStrip = true;
