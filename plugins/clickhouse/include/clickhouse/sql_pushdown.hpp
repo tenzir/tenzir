@@ -117,7 +117,8 @@ private:
 
   auto render_ip(pushdown::IpValue const& x) const -> Option<Fragment> override;
 
-  auto render_call(pushdown::Operation op, std::span<Fragment const> args) const
+  auto
+  render_call(pushdown::Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment> override;
 
   auto render_conditional(Fragment const& condition, Fragment const& then,

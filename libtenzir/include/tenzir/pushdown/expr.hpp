@@ -20,8 +20,9 @@
 /// The intermediate representation of pushed filters.
 ///
 /// Translation turns a TQL predicate into an `Expr` that keeps and drops the
-/// same rows, except where `Operation::fold_case` approximates TQL, and a
-/// source's renderer spells it in the target's query language. The IR names
+/// same rows, except where an operation says that it approximates TQL, such as
+/// `Operation::fold_case`, and a source's renderer spells it in the target's
+/// query language. The IR names
 /// what to compute, never how to spell it: `WHERE x > 1`, `| where x > 1`, and
 /// `Table.SelectRows(t, each [x] > 1)` are all renderings of `Binary{gt,
 /// Column{x}, Literal{1}}`.
@@ -94,6 +95,14 @@ enum class Operation {
   /// exactly: translation emits it only where the user asked to ignore case,
   /// and accepts the difference there.
   fold_case,
+  /// `match_regex(string, pattern) -> bool`, whether RE2 with its default
+  /// options finds a match of `pattern` anywhere in the string. `pattern` is a
+  /// string literal that RE2 accepts. With these options, `.` does not match a
+  /// newline, and `^` and `$` match only at the ends of the string. Like
+  /// `fold_case`, this one need not match TQL exactly: a target that builds
+  /// on its own release of RE2 may disagree on rare syntax, and a target may
+  /// match invalid UTF-8 differently. Translation accepts these differences.
+  match_regex,
 };
 
 /// A call of an operation.
@@ -115,8 +124,9 @@ struct Call {
 /// `INTEGER + 1` and `FLOAT + 1.0`, does not deliver these result types by
 /// itself: the former overflows past 32 bits, and the latter rounds to single
 /// precision. Its renderer must spell arithmetic so that it delivers them, for
-/// example by widening the operands, or veto it. A target that yields the
-/// exact integer result in a narrower type that holds it delivers them too.
+/// example by widening the operands to `Binary::type`, or veto it. A target
+/// that yields the exact integer result in a narrower type that holds it
+/// delivers them too.
 enum class BinaryOp {
   eq,
   neq,
@@ -128,6 +138,14 @@ enum class BinaryOp {
   sub,
   mul,
   div,
+};
+
+/// The result type of arithmetic, as `BinaryOp` defines it.
+enum class ArithmeticType {
+  /// The exact result as a 64-bit integer.
+  integer,
+  /// The result in `double`, with IEEE 754 rounding.
+  floating,
 };
 
 /// A comparison or an arithmetic operation.
@@ -145,6 +163,11 @@ struct Binary {
   /// its elements are literals, which are never `NaN`, and `NaN` equals no
   /// other value in any target.
   bool may_be_nan = false;
+  /// The result type of arithmetic, which is meaningful only for the
+  /// arithmetic operators. Translation derives it from the operand types,
+  /// which a renderer does not see, so that a dialect that computes in the
+  /// operand types can widen them to it.
+  ArithmeticType type = ArithmeticType::integer;
 };
 
 /// Whether all of at least two operands are `true`.

@@ -22,7 +22,7 @@ where severity >= 3 and rule.starts_with("ET ")
 head 100
 ```
 
-Predicates that DuckDB would evaluate differently from TQL, such as comparisons of floating-point values, run in the pipeline instead.
+Where DuckDB's semantics differ from TQL, as for `NaN`, arithmetic, struct fields, and strings under a collation, the query spells out TQL's semantics. Predicates that DuckDB cannot evaluate like TQL, such as comparisons on `DECIMAL` columns, run in the pipeline instead.
 
 Excel workbooks can be read offline without downloading or loading an extension:
 

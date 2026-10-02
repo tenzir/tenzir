@@ -310,10 +310,10 @@ auto ClickHouseRenderer::render_ip(pushdown::IpValue const& x) const
   return sql_call(x.v4 ? "toIPv4" : "toIPv6", std::array{std::move(address)});
 }
 
-auto ClickHouseRenderer::render_call(pushdown::Operation op,
+auto ClickHouseRenderer::render_call(pushdown::Call const& x,
                                      std::span<Fragment const> args) const
   -> Option<Fragment> {
-  switch (op) {
+  switch (x.op) {
     case pushdown::Operation::starts_with:
       TENZIR_ASSERT(args.size() == 2);
       return sql_call("startsWith", args);
@@ -336,6 +336,22 @@ auto ClickHouseRenderer::render_call(pushdown::Operation op,
       // `ss`.
       TENZIR_ASSERT(args.size() == 1);
       return sql_call("lowerUTF8", args);
+    case pushdown::Operation::match_regex: {
+      // `match` searches anywhere in the string with RE2, like TQL, but lets
+      // `.` match a newline unless the pattern disables that with `(?-s)`.
+      // It rejects patterns with NUL bytes, and its behavior on invalid UTF-8
+      // is undefined, which the IR accepts.
+      TENZIR_ASSERT(args.size() == 2);
+      auto const* literal = try_as<pushdown::Literal>(x.args[1]);
+      auto const* pattern
+        = literal ? try_as<std::string>(literal->value) : nullptr;
+      if (not pattern or pattern->find('\0') != std::string::npos) {
+        return None{};
+      }
+      return sql_call("match",
+                      std::array{args[0],
+                                 sql_atom(quote_string("(?-s)" + *pattern))});
+    }
   }
   TENZIR_UNREACHABLE();
 }

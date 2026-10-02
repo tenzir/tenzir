@@ -67,9 +67,9 @@ protected:
     return SqlRenderer::render_comparison(x, left, right);
   }
 
-  auto render_call(Operation op, std::span<Fragment const> args) const
+  auto render_call(Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment> override {
-    if (op != Operation::starts_with) {
+    if (x.op != Operation::starts_with) {
       return None{};
     }
     return sql_call("starts_with", args);
@@ -111,16 +111,19 @@ private:
     return None{};
   }
 
-  auto render_call(Operation op, std::span<Fragment const> args) const
+  auto render_call(Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment> override {
-    if (op == Operation::contains) {
+    if (x.op == Operation::contains) {
       return sql_binary(">", sql_call("position", args), sql_atom("0"),
                         Fragment::Kind::predicate);
     }
-    if (op == Operation::fold_case) {
+    if (x.op == Operation::fold_case) {
       return sql_call("casefold", args);
     }
-    return TestRenderer::render_call(op, args);
+    if (x.op == Operation::match_regex) {
+      return sql_call("regexp_matches", args);
+    }
+    return TestRenderer::render_call(x, args);
   }
 };
 
@@ -370,4 +373,77 @@ TEST("matching that ignores case folds both sides") {
   // The flag must be a constant, and a dialect without folding vetoes.
   CHECK(not translate_guarded("s.starts_with(\"A\", ignore_case=x > 0)"));
   CHECK(not translate("s.starts_with(\"A\", ignore_case=true)"));
+}
+
+TEST("arithmetic records its result type") {
+  auto arithmetic_type = [](std::string_view source) -> Option<ArithmeticType> {
+    auto expr = translate_predicate(parse(source), make_columns());
+    REQUIRE(expr);
+    auto const* comparison = try_as<Binary>(*expr);
+    REQUIRE(comparison);
+    auto const* arithmetic = try_as<Binary>(*comparison->left);
+    if (not arithmetic) {
+      return None{};
+    }
+    return arithmetic->type;
+  };
+  CHECK(arithmetic_type("i + 1 > 0") == ArithmeticType::integer);
+  CHECK(arithmetic_type("1 - i < 0") == ArithmeticType::integer);
+  CHECK(arithmetic_type("i * 0.5 > 0") == ArithmeticType::floating);
+  CHECK(arithmetic_type("i / 2 > 0") == ArithmeticType::floating);
+  CHECK(arithmetic_type("r.a + 1 > 0") == ArithmeticType::floating);
+}
+
+TEST("floating-point values compare with double literals") {
+  auto right_literal = [](std::string_view source) -> Literal {
+    auto expr = translate_predicate(parse(source), make_columns());
+    REQUIRE(expr);
+    auto const* comparison = try_as<Binary>(*expr);
+    REQUIRE(comparison);
+    auto const* literal = try_as<Literal>(*comparison->right);
+    REQUIRE(literal);
+    return *literal;
+  };
+  CHECK(is<double>(right_literal("r.a > 1").value));
+  CHECK(is<double>(right_literal("1 < r.a").value));
+  CHECK(is<double>(right_literal("i / 2 > 1").value));
+  CHECK(is<int64_t>(right_literal("r.i > 1").value));
+  auto set = translate_predicate(parse("r.a in [1, 2]"), make_columns());
+  REQUIRE(set);
+  auto const* membership = try_as<In>(*set);
+  REQUIRE(membership);
+  for (auto const& element : membership->list) {
+    CHECK(is<double>(as<Literal>(element).value));
+  }
+}
+
+TEST("match_regex pushes valid patterns on string columns") {
+  CHECK_EQUAL(translate_guarded("s.match_regex(\"^a.c$\")"),
+              std::string{"regexp_matches(\"s\", '^a.c$')"});
+  CHECK_EQUAL(translate_guarded("not match_regex(s, \"a\")"),
+              std::string{"NOT regexp_matches(\"s\", 'a')"});
+  // TQL rejects an invalid pattern, which therefore stays local, and so does
+  // a pattern that is not a constant or a subject that is not a string.
+  CHECK(not translate_guarded("s.match_regex(\"(\")"));
+  CHECK(not translate_guarded("s.match_regex(s)"));
+  CHECK(not translate_guarded("x.match_regex(\"1\")"));
+  // A dialect without regular expressions vetoes.
+  CHECK(not translate("s.match_regex(\"a\")"));
+}
+
+TEST("sql renderer lets dialects spell columns") {
+  class Collating final : public TestRenderer {
+    auto render_column(std::span<std::string const> path) const
+      -> Option<Fragment> override {
+      TRY(auto column, TestRenderer::render_column(path));
+      return sql_collate(column, "\"binary\"");
+    }
+  };
+  auto expr
+    = translate_predicate(parse("s == \"a\" and r.i > 1"), make_columns());
+  REQUIRE(expr);
+  CHECK_EQUAL(Collating{}.render(*expr),
+              std::string{"((\"s\" COLLATE \"binary\" IS NOT NULL AND \"s\" "
+                          "COLLATE \"binary\" = 'a') AND \"r\".\"i\" COLLATE "
+                          "\"binary\" > 1)"});
 }

@@ -131,7 +131,7 @@ TEST("comparisons against non-nullable columns") {
   CHECK_EQUAL(translate("flag == true"), std::string{"`flag` = true"});
   CHECK_EQUAL(translate("flag"), std::string{"`flag`"});
   CHECK_EQUAL(translate("f < 2.5"), std::string{"`f` < 2.5"});
-  CHECK_EQUAL(translate("f == 1"), std::string{"`f` = 1"});
+  CHECK_EQUAL(translate("f == 1"), std::string{"`f` = 1."});
   CHECK_EQUAL(translate("x in [1.0, 2.5]"), std::string{"`x` IN (1., 2.5)"});
 }
 
@@ -164,11 +164,12 @@ TEST("mixed integer and floating-point comparisons stop at 2^53") {
   CHECK(not translate("x < -9007199254740992.0"));
   CHECK(not translate("x in [9007199254740992.0]"));
   // An integer literal against a floating column only needs to be exactly
-  // representable, which holds for 2^53 and for larger powers of two.
+  // representable, which holds for 2^53 and for larger powers of two. It is
+  // spelled as a `double`, as TQL compares it.
   CHECK_EQUAL(translate("f == 9007199254740992"),
-              std::string{"`f` = 9007199254740992"});
+              std::string{"`f` = 9007199254740992."});
   CHECK_EQUAL(translate("f in [1, 1152921504606846976]"),
-              std::string{"`f` IN (1, 1152921504606846976)"});
+              std::string{"`f` IN (1., 1.152921504606847e+18)"});
   CHECK(not translate("f >= 9007199254740993"));
   CHECK(not translate("f in [1, 9007199254740993]"));
   CHECK(not translate("f == 18446744073709551615"));
@@ -249,6 +250,17 @@ TEST("string functions") {
   CHECK(not translate("y.length_chars() > 3"));
   CHECK(not translate("x.length_bytes() > 3"));
   CHECK(not translate("y.to_upper() == \"A\""));
+}
+
+TEST("regular expressions disable dot-all") {
+  // ClickHouse lets `.` match a newline unless the pattern turns that off.
+  CHECK_EQUAL(translate("y.match_regex(\"a.b\")"),
+              std::string{"match(`y`, '(?-s)a.b')"});
+  CHECK_EQUAL(translate(R"(not s.match_regex("it's\\d"))"),
+              std::string{R"(NOT match(`s`, '(?-s)it\'s\\d'))"});
+  // A pattern with a NUL byte, which ClickHouse rejects, stays local.
+  CHECK(not translate("y.match_regex(\"a\\u0000\")"));
+  CHECK(not translate("status.match_regex(\"h\")"));
 }
 
 TEST("enum, uuid, and fixed string equality") {
@@ -492,18 +504,18 @@ TEST("arithmetic on small integers and floats") {
   CHECK_EQUAL(translate("5 - u32 == -1"),
               std::string{"((5 - `u32`) IS NOT NULL AND (5 - `u32`) = -1)"});
   // Division yields a double on both sides.
-  CHECK_EQUAL(translate("x / 2 > 3"), std::string{"(`x` / 2) > 3"});
-  CHECK_EQUAL(translate("id / 3.5 > 3"), std::string{"(`id` / 3.5) > 3"});
-  CHECK_EQUAL(translate("f64 * 2 > 3"), std::string{"(`f64` * 2) > 3"});
-  CHECK_EQUAL(translate("f - 0.5 <= 3"), std::string{"(`f` - 0.5) <= 3"});
-  CHECK_EQUAL(translate("x + 0.5 <= 3"), std::string{"(`x` + 0.5) <= 3"});
+  CHECK_EQUAL(translate("x / 2 > 3"), std::string{"(`x` / 2) > 3."});
+  CHECK_EQUAL(translate("id / 3.5 > 3"), std::string{"(`id` / 3.5) > 3."});
+  CHECK_EQUAL(translate("f64 * 2 > 3"), std::string{"(`f64` * 2) > 3."});
+  CHECK_EQUAL(translate("f - 0.5 <= 3"), std::string{"(`f` - 0.5) <= 3."});
+  CHECK_EQUAL(translate("x + 0.5 <= 3"), std::string{"(`x` + 0.5) <= 3."});
   // A `double` literal with an integral value keeps a fraction, so ClickHouse
   // computes in `Float64` like TQL does, instead of exact integer arithmetic.
   CHECK_EQUAL(translate("id + 0.0 == 9007199254740992"),
-              std::string{"(`id` + 0.) = 9007199254740992"});
-  CHECK_EQUAL(translate("x * 2.0 > 3"), std::string{"(`x` * 2.) > 3"});
-  CHECK_EQUAL(translate("x / 2.0 > 3"), std::string{"(`x` / 2.) > 3"});
-  CHECK_EQUAL(translate("1e16 - x > 3"), std::string{"(1e+16 - `x`) > 3"});
+              std::string{"(`id` + 0.) = 9007199254740992."});
+  CHECK_EQUAL(translate("x * 2.0 > 3"), std::string{"(`x` * 2.) > 3."});
+  CHECK_EQUAL(translate("x / 2.0 > 3"), std::string{"(`x` / 2.) > 3."});
+  CHECK_EQUAL(translate("1e16 - x > 3"), std::string{"(1e+16 - `x`) > 3."});
   CHECK_EQUAL(translate("(x + 1.5) == 1e300"),
               std::string{"(`x` + 1.5) = 1e+300"});
   // The result of integer arithmetic is a 64-bit integer, so a literal

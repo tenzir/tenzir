@@ -58,7 +58,9 @@ return d.without_optimize();
   Order-only: `OptimizationArgs<opt::Order>`. Rewrite-only: no bundle.
 - Binding enables no propagation. Keep user arguments outside the bundle.
 - Filters: enforce every accepted predicate in order; push exact translations,
-  evaluate the rest with `filter2`.
+  evaluate the rest with `filter2`. The approximations that the pushdown IR
+  names count as exact: case-insensitive matching, `match_regex`, and `ip`
+  literals compared against string columns (see `database-operators.md`).
 - Limits: require filter binding; count after filtering. Push into SQL only
   with the entire chain. Track progress separately from immutable arguments.
 - Projections: `None` means all fields; empty means none. Retain filter and

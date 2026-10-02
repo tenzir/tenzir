@@ -67,6 +67,19 @@ auto SqlRenderer::render(Expr const& expr) const -> Option<std::string> {
   return wrap(result, Slot::logical);
 }
 
+auto SqlRenderer::render_column(std::span<std::string const> path) const
+  -> Option<Fragment> {
+  TENZIR_ASSERT(not path.empty());
+  auto result = std::string{};
+  for (auto const& segment : path) {
+    if (not result.empty()) {
+      result += '.';
+    }
+    result += quote_identifier(segment);
+  }
+  return sql_atom(std::move(result));
+}
+
 auto SqlRenderer::render_string(std::string_view text) const
   -> Option<Fragment> {
   return sql_atom(quote_string(text));
@@ -84,7 +97,7 @@ auto SqlRenderer::render_ip(IpValue const&) const -> Option<Fragment> {
   return None{};
 }
 
-auto SqlRenderer::render_call(Operation, std::span<Fragment const>) const
+auto SqlRenderer::render_call(Call const&, std::span<Fragment const>) const
   -> Option<Fragment> {
   return None{};
 }
@@ -148,6 +161,25 @@ auto SqlRenderer::sql_not(Fragment const& operand) const -> Fragment {
           Fragment::Kind::predicate};
 }
 
+auto SqlRenderer::sql_is_null(Fragment const& operand, bool negated) const
+  -> Fragment {
+  return {fmt::format("{} IS {}NULL", wrap(operand, Slot::operand),
+                      negated ? "NOT " : ""),
+          Fragment::Kind::predicate};
+}
+
+auto SqlRenderer::sql_cast(Fragment const& operand, std::string_view type) const
+  -> Fragment {
+  return sql_atom(
+    fmt::format("CAST({} AS {})", wrap(operand, Slot::delimited), type));
+}
+
+auto SqlRenderer::sql_collate(Fragment const& operand,
+                              std::string_view collation) const -> Fragment {
+  return sql_atom(
+    fmt::format("{} COLLATE {}", wrap(operand, Slot::operand), collation));
+}
+
 auto SqlRenderer::sql_conditional(Fragment const& condition,
                                   Fragment const& then,
                                   Fragment const& otherwise) const -> Fragment {
@@ -196,19 +228,11 @@ auto SqlRenderer::render_fragment(Expr const& expr) const -> Option<Fragment> {
       return render_literal(x);
     },
     [&](Column const& x) -> Option<Fragment> {
-      TENZIR_ASSERT(not x.path.empty());
-      auto result = std::string{};
-      for (auto const& segment : x.path) {
-        if (not result.empty()) {
-          result += '.';
-        }
-        result += quote_identifier(segment);
-      }
-      return sql_atom(std::move(result));
+      return render_column(x.path);
     },
     [&](Call const& x) -> Option<Fragment> {
       TRY(auto args, render_all(x.args));
-      return render_call(x.op, args);
+      return render_call(x, args);
     },
     [&](Binary const& x) -> Option<Fragment> {
       TRY(auto left, render_fragment(*x.left));
@@ -254,8 +278,7 @@ auto SqlRenderer::render_fragment(Expr const& expr) const -> Option<Fragment> {
     },
     [&](IsNull const& x) -> Option<Fragment> {
       TRY(auto inner, render_fragment(*x.expr));
-      return predicate(fmt::format("{} IS {}NULL", wrap(inner, Slot::operand),
-                                   x.negated ? "NOT " : ""));
+      return sql_is_null(inner, x.negated);
     },
     [&](Conditional const& x) -> Option<Fragment> {
       TRY(auto condition, render_fragment(*x.condition));

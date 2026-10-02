@@ -1,7 +1,8 @@
-// `id > 1` goes into the query, but `score < 0` runs locally. The limit counts
-// events after both, so it runs locally, too: with `LIMIT 1` in the query,
-// only row 2 would arrive, which `score < 0` then drops.
+// `id > 1` goes into the query, but `score.round() < 0` has no translation and
+// runs locally. The limit counts events after both, so it runs locally, too:
+// with `LIMIT 1` in the query, only row 2 would arrive, which the local
+// predicate then drops.
 from_duckdb env("DUCKDB_SEED"), table="events"
-where id > 1 and score < 0
+where id > 1 and score.round() < 0
 head 1
 select id

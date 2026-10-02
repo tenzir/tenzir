@@ -20,6 +20,7 @@
 #include "tenzir/variant_traits.hpp"
 
 #include <fmt/format.h>
+#include <re2/re2.h>
 
 #include <algorithm>
 #include <array>
@@ -133,6 +134,30 @@ auto numeric_literal_fits(bool integer_column, ast::constant const& literal)
     },
     [](auto const&) {
       return false;
+    });
+}
+
+/// Converts a numeric constant into a `double` literal, for comparing it with
+/// a floating-point value. TQL converts an integer operand to `double`, while a
+/// target may convert it to the type of the other operand instead: DuckDB, for
+/// example, compares a `FLOAT` with an integer in single precision, so that
+/// `16777217` equals `16777216`. A `double` literal makes the target widen
+/// the other operand, as TQL does. Requires `numeric_literal_fits` to hold
+/// for a floating-point column, so that the conversion is exact.
+auto to_double_literal(ast::constant const& constant) -> Expr {
+  return match(
+    constant.value,
+    [](int64_t x) {
+      return lit(static_cast<double>(x));
+    },
+    [](uint64_t x) {
+      return lit(static_cast<double>(x));
+    },
+    [](double x) {
+      return lit(x);
+    },
+    [](auto const&) -> Expr {
+      TENZIR_UNREACHABLE();
     });
 }
 
@@ -643,10 +668,17 @@ auto translate_arithmetic(ast::binary_expr const& expr,
     return None{};
   }
   auto operand = to_literal(*literal);
-  auto result = column_left ? binary(arithmetic_op(op), std::move(column->expr),
-                                     std::move(operand))
-                            : binary(arithmetic_op(op), std::move(operand),
-                                     std::move(column->expr));
+  auto left = std::move(column->expr);
+  if (not column_left) {
+    std::swap(left, operand);
+  }
+  auto result = Binary{
+    .op = arithmetic_op(op),
+    .left = std::move(left),
+    .right = std::move(operand),
+    .type = is<FloatType>(*result_type) ? ArithmeticType::floating
+                                        : ArithmeticType::integer,
+  };
   return Scalar{.expr = std::move(result),
                 .type = std::move(*result_type),
                 .nullable = column->nullable};
@@ -728,14 +760,15 @@ auto translate_literal_comparison(Scalar const& scalar, ast::binary_op op,
     }
     // Only a floating-point scalar can be `nan`; literals are finite.
     auto may_be_nan = not integer;
+    auto value = integer ? to_literal(literal) : to_double_literal(literal);
     if (is_equality(op)) {
-      return equality(scalar.expr, scalar.nullable, op, to_literal(literal),
+      return equality(scalar.expr, scalar.nullable, op, std::move(value),
                       may_be_nan);
     }
     // Ordering yields `null` for `null` operands in both TQL and the IR, so
     // no guard is needed. Both sides agree on the order, including IEEE 754
     // semantics for `nan`, which neither of them orders.
-    return compare(scalar.expr, op, to_literal(literal), may_be_nan);
+    return compare(scalar.expr, op, std::move(value), may_be_nan);
   };
   return match(
     scalar.type,
@@ -1031,7 +1064,7 @@ auto translate_in_list(Scalar const& scalar, ast::list const& list)
         if (not numeric_literal_fits(false, constant)) {
           return false;
         }
-        literals.push_back(to_literal(constant));
+        literals.push_back(to_double_literal(constant));
       }
       return true;
     },
@@ -1177,6 +1210,25 @@ auto translate_predicate_function(ast::function_call const& call,
     return pushdown::call(*name == "starts_with" ? Operation::starts_with
                                                  : Operation::ends_with,
                           std::move(subject), std::move(affix));
+  }
+  if (*name == "match_regex") {
+    // Both yield `null` for a `null` subject. TQL rejects a pattern that RE2
+    // does not accept before it evaluates anything, so such a pattern stays
+    // local, where the user gets that error.
+    if (call.args.size() != 2) {
+      return None{};
+    }
+    auto column = resolve_column(call.args[0], columns);
+    if (not column or not is<StringType>(column->type)) {
+      return None{};
+    }
+    auto pattern = as_literal(call.args[1]);
+    auto const* text = pattern ? try_as<std::string>(pattern->value) : nullptr;
+    if (not text or not re2::RE2{*text, re2::RE2::CannedOptions::Quiet}.ok()) {
+      return None{};
+    }
+    return pushdown::call(Operation::match_regex, std::move(column->expr),
+                          lit(*text));
   }
   return None{};
 }

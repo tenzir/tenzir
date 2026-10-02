@@ -50,8 +50,22 @@ Database source operators should use this common query surface:
   `tracking_column` for that API.
 - In `table` mode, act on the optimizer's filter, limit, and projection hints
   by rewriting the generated query, following `from_clickhouse`. Push only
-  predicates whose backend semantics match TQL exactly and evaluate the rest
-  locally. Leave a user-provided `sql` query untouched.
+  predicates whose backend semantics match TQL, including for nulls, type
+  mismatches, and `NaN`, and evaluate the rest locally. Leave a user-provided
+  `sql` query untouched.
+- The shared pushdown translation (`tenzir/pushdown/`) sanctions a few
+  approximations, which are not bugs:
+  - Case-insensitive matching uses the backend's lowercase mapping
+    (`Operation::fold_case`), which differs from TQL's case folding on rare
+    characters such as `ß`.
+  - `match_regex` uses the backend's RE2 (`Operation::match_regex`), which may
+    differ in its release and on invalid UTF-8.
+  - An `ip` literal compared for equality or membership with a string column
+    compares as its canonical text (`adapt_to_columns`), where TQL alone would
+    report a type mismatch.
+
+  A dialect may still veto each of them. Document the ones a backend uses on
+  its reference page and in the changelog.
 
 ## Destination operators
 

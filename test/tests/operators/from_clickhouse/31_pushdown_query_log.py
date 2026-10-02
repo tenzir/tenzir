@@ -143,7 +143,7 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     # Two columns compare directly; arithmetic and literal folding translate.
     _run_pipeline(tenzir, source + "where x < meta.level and x / 2 > 1 - 2")
     assert _last_select() == (
-        f"SELECT * FROM {TABLE} WHERE `x` < `meta`.`level` AND (`x` / 2) > -1"
+        f"SELECT * FROM {TABLE} WHERE `x` < `meta`.`level` AND (`x` / 2) > -1."
     ), _last_select()
     # A nested projection narrows the tuple to the requested elements.
     output = _run_pipeline(

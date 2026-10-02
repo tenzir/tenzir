@@ -35,10 +35,14 @@
 /// of the same kind. Where TQL yields `null` (with a warning) for a type
 /// mismatch, a target would attempt a conversion or fail the query.
 ///
-/// One rule trades exactness for coverage: matching that ignores case, as in
-/// `starts_with(x, "a", ignore_case=true)`, uses the target's notion of case
-/// (see `Operation::fold_case`). It agrees with TQL on ASCII, but a target may
-/// not match `Straße` against `strasse`, where TQL does.
+/// Two rules trade exactness for coverage, where the differences are confined
+/// to rare inputs:
+/// - Matching that ignores case, as in `starts_with(x, "a", ignore_case=true)`,
+///   uses the target's notion of case (see `Operation::fold_case`). It agrees
+///   with TQL on ASCII, but a target may not match `Straße` against `strasse`,
+///   where TQL does.
+/// - `match_regex` uses the target's RE2 (see `Operation::match_regex`),
+///   which may differ from TQL's in its release and on invalid UTF-8.
 ///
 /// The rules do not model how each target compares mixed numbers, handles
 /// integer overflow, or divides by zero. They are conservative bounds that

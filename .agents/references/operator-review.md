@@ -30,7 +30,9 @@ Review TQL operators for correctness, resource handling, and executor behavior.
 
 - Bundle matches runtime capabilities; binding is separate from policy?
 - Every accepted predicate enforced in order, remotely or with `filter2`?
-- Pushed predicates exact for nulls and type mismatches?
+- Pushed predicates exact for nulls, type mismatches, and `NaN`? Case-insensitive
+  matching, `match_regex`, and `ip` literals against string columns are
+  sanctioned approximations; see `database-operators.md`.
 - SQL limit pushed only with the entire filter chain?
 - Tests assert backend requests, not just output?
 - Reference page documents `## Optimizations`? See `operators.md`.

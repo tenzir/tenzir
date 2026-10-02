@@ -39,8 +39,8 @@ public:
 /// The part of rendering that SQL dialects share.
 ///
 /// Spells comparisons, arithmetic, `AND`, `OR`, `NOT`, `IS NULL`, `IN`, and
-/// `BETWEEN`, and leaves identifiers, literals, operations, and conditionals to
-/// the dialect.
+/// `BETWEEN`, and leaves identifiers, columns, literals, operations, and
+/// conditionals to the dialect.
 ///
 /// Hooks exchange `Fragment`s: rendered text together with its syntactic kind.
 /// Only this class places grouping parentheses, based on a fragment's kind and
@@ -95,6 +95,12 @@ protected:
 
   // -- Expressions ------------------------------------------------------------
 
+  /// Spells the column at `path`, or vetoes it. Defaults to the quoted
+  /// segments joined with `.`, which a dialect overrides where that is
+  /// ambiguous or where the column needs a conversion to compare like TQL.
+  virtual auto render_column(std::span<std::string const> path) const
+    -> Option<Fragment>;
+
   /// Spells a string literal, or vetoes it if the target cannot spell some
   /// of its bytes. Defaults to `quote_string`.
   virtual auto render_string(std::string_view text) const -> Option<Fragment>;
@@ -108,10 +114,10 @@ protected:
   /// Spells an IP literal in its column's family. Vetoes by default.
   virtual auto render_ip(IpValue const& x) const -> Option<Fragment>;
 
-  /// Spells a call of `op` on its rendered `args`. A predicate operation may
+  /// Spells the call `x` on its rendered `args`. A predicate operation may
   /// be spelled as a comparison, such as `position(x, 'a') > 0` with
   /// `sql_binary`. Vetoes by default.
-  virtual auto render_call(Operation op, std::span<Fragment const> args) const
+  virtual auto render_call(Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment>;
 
   /// Spells the comparison `x` on its rendered operands, or vetoes it. A
@@ -157,6 +163,19 @@ protected:
 
   /// Spells `NOT operand`, a predicate.
   auto sql_not(Fragment const& operand) const -> Fragment;
+
+  /// Spells `operand IS NULL`, or `operand IS NOT NULL` if `negated` is set, a
+  /// predicate.
+  auto sql_is_null(Fragment const& operand, bool negated) const -> Fragment;
+
+  /// Spells `CAST(operand AS type)`, an atom.
+  auto sql_cast(Fragment const& operand, std::string_view type) const
+    -> Fragment;
+
+  /// Spells `operand COLLATE collation`, an atom: `COLLATE` binds tighter
+  /// than every operator that this class places around it.
+  auto sql_collate(Fragment const& operand, std::string_view collation) const
+    -> Fragment;
 
   /// Spells `CASE WHEN condition THEN then ELSE otherwise END`, an atom. A
   /// dialect with a conditional function spells it with `sql_call` instead.
