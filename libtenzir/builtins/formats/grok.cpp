@@ -12,8 +12,15 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/array.hpp>
+#include <tenzir/nova/bitmap.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/function_plugin.hpp>
+#include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova/type_system.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -1092,7 +1099,71 @@ public:
   }
 };
 
-class parse_grok_plugin final : public virtual function_plugin {
+struct ParseGrokArgs {
+  nova::ValueArgument input;
+  located<std::string> pattern;
+  Option<nova::ConstantArgument> pattern_definitions;
+  bool indexed_captures = false;
+  bool include_unnamed = false;
+  nova::EventBuilder::Settings settings;
+  /// The parser, built from the constant arguments in `validate`.
+  Option<grok_parser> parser;
+  location call;
+};
+
+struct ParseGrokFunction {
+  static auto eval(ParseGrokArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    TENZIR_ASSERT(args.parser);
+    auto const& mask = frame.mask();
+    auto const length = args.input.data.length();
+    auto strings = args.input.data.get_alternative<nova::String>();
+    auto nulls = args.input.data.get_alternative<nova::Null>();
+    auto accepted = nova::storage::BitMap{length, false};
+    if (strings) {
+      accepted = accepted | strings->present;
+    }
+    if (nulls) {
+      accepted = accepted | nulls->present;
+    }
+    if (auto invalid = mask.and_not(accepted); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.input.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("expected string, got `{}`",
+                            nova::Type<T>::static_name)
+          .primary(args.input.source)
+          .emit(frame);
+      });
+    }
+    auto dh = transforming_diagnostic_handler{
+      frame.dh(), [call = args.call](diagnostic diag) {
+        diag.message = fmt::format("grok parser: {}", diag.message);
+        if (call and not diag.has_location()) {
+          diag.annotations.emplace_back(true, std::string{}, call);
+        }
+        return diag;
+      }};
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not mask.get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not strings or not strings->present.get(row)) {
+        builder.value().null();
+        continue;
+      }
+      auto const line = std::string_view{*strings->data.get(row)};
+      if (not args.parser->parse_line(builder, dh, line)) {
+        // The parser emitted the warning, but did not start a row.
+        builder.value().null();
+      }
+    }
+    return builder.finish_data();
+  }
+};
+
+class parse_grok_plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_grok";
@@ -1100,6 +1171,40 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseGrokArgs, ParseGrokFunction>{};
+    d.positional("input", &ParseGrokArgs::input, "string");
+    d.positional("pattern", &ParseGrokArgs::pattern);
+    d.named("pattern_definitions", &ParseGrokArgs::pattern_definitions,
+            "record|string");
+    d.named("indexed_captures", &ParseGrokArgs::indexed_captures);
+    d.named("include_unnamed", &ParseGrokArgs::include_unnamed);
+    d.call_location(&ParseGrokArgs::call);
+    auto event_builder
+      = nova::add_event_builder_to_describer(d, &ParseGrokArgs::settings);
+    d.validate(
+      [event_builder](ParseGrokArgs& args,
+                      nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+        TRY(event_builder(args, ctx));
+        auto pattern_definitions = Option<located<data>>{};
+        if (args.pattern_definitions) {
+          pattern_definitions
+            = located{nova::materialize_legacy(args.pattern_definitions->inner),
+                      args.pattern_definitions->source};
+        }
+        TRY(auto parser,
+            make_grok_parser(args.pattern, std::move(pattern_definitions),
+                             args.indexed_captures, args.include_unnamed,
+                             multi_series_builder::options{}, ctx));
+        args.settings.infer_numbers = true;
+        args.settings.string_fields
+          = parser.string_fields(args.settings.unflatten_separator);
+        args.parser = std::move(parser);
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
