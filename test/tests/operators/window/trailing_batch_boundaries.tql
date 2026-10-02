@@ -1,0 +1,7 @@
+// A trailing window replays retained events from earlier input batches.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+batch 2
+window size=3, trailing=true {
+  summarize xs=collect(x)
+  finish = $window.finish
+}

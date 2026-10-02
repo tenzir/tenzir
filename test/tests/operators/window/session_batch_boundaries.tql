@@ -1,0 +1,12 @@
+// Events that the reorder buffer holds back across input batches reach their
+// session in event-time order.
+from {ts: 1s.from_epoch(), x: 1},
+     {ts: 0s.from_epoch(), x: 0},
+     {ts: 3s.from_epoch(), x: 3},
+     {ts: 2s.from_epoch(), x: 2},
+     {ts: 20s.from_epoch(), x: 20}
+batch 2
+window gap=5s, on=ts, tolerance=10s {
+  summarize xs=collect(x)
+  start = $window.start
+}

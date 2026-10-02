@@ -15,6 +15,12 @@
 #include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/multi_series.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/data_array_builder.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
@@ -30,10 +36,13 @@
 #include <algorithm>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <limits>
 #include <map>
 #include <mutex>
+#include <ranges>
 #include <set>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -87,13 +96,6 @@ struct WindowConfig {
   uint64_t count_stride = 0;
   Option<duration> session_max_duration;
   Option<uint64_t> session_max_events;
-};
-
-/// Rows admitted to the open session under one event time, awaiting their
-/// batched push into the session's subpipeline.
-struct PendingSessionRows {
-  time event_time;
-  table_slice rows;
 };
 
 struct SessionWindowState {
@@ -197,6 +199,49 @@ struct TimeWindowState {
 
 struct CountWindowState {
   uint64_t finish;
+};
+
+/// The inclusive range of epoch-aligned fixed time-window indices that contain
+/// `timestamp`.
+auto time_window_bounds(WindowConfig const& config, time timestamp)
+  -> std::pair<int64_t, int64_t> {
+  auto timestamp_ns = timestamp.time_since_epoch().count();
+  auto stride_ns = config.time_stride.count();
+  auto size_ns = config.time_size.count();
+  auto last = floor_div(timestamp_ns, stride_ns);
+  // Near the minimum timestamp, `timestamp_ns - size_ns` is not
+  // representable. All indices below the representable range clamp to the
+  // same minimal window start, so the earliest such index covers them.
+  constexpr auto min_ns = std::numeric_limits<int64_t>::min();
+  auto first = timestamp_ns < min_ns + size_ns
+                 ? floor_div(min_ns, stride_ns)
+                 : floor_div(timestamp_ns - size_ns, stride_ns) + 1;
+  return {first, last};
+}
+
+auto time_window_start(WindowConfig const& config, int64_t index) -> time {
+  return time{}
+         + duration{detail::saturating_mul(index, config.time_stride.count())};
+}
+
+/// The inclusive range of fixed count-window indices that contain `offset`.
+/// Count windows start at offset zero, so no pre-stream windows are created.
+auto count_window_bounds(WindowConfig const& config, uint64_t offset)
+  -> std::pair<uint64_t, uint64_t> {
+  auto last = offset / config.count_stride;
+  auto first = offset < config.count_size
+                 ? uint64_t{0}
+                 : (offset - config.count_size) / config.count_stride + 1;
+  return {first, last};
+}
+
+namespace legacy {
+
+/// Rows admitted to the open session under one event time, awaiting their
+/// batched push into the session's subpipeline.
+struct PendingSessionRows {
+  time event_time;
+  table_slice rows;
 };
 
 struct TrailingReorderEntry {
@@ -811,14 +856,14 @@ private:
     co_await close_processing_time_windows(ctx, arrival);
     auto groups = std::map<time, std::vector<int64_t>>{};
     auto row_count = detail::narrow<int64_t>(input.rows());
-    auto [first, last] = time_window_bounds(arrival);
+    auto [first, last] = time_window_bounds(config_, arrival);
     // Iterate inclusively without incrementing past `last`, which can be the
     // maximum index.
     auto span = static_cast<uint64_t>(last) - static_cast<uint64_t>(first);
     auto offset = uint64_t{0};
     do {
       auto index = static_cast<int64_t>(static_cast<uint64_t>(first) + offset);
-      auto& rows = groups[time_window_start(index)];
+      auto& rows = groups[time_window_start(config_, index)];
       rows.reserve(input.rows());
       for (auto row = int64_t{0}; row < row_count; ++row) {
         rows.push_back(row);
@@ -838,7 +883,7 @@ private:
         diagnostic::error("`window` exhausted its event offset range").emit(ctx);
         co_return;
       }
-      auto [first, last] = count_window_bounds(sequence_offset_);
+      auto [first, last] = count_window_bounds(config_, sequence_offset_);
       for (auto index = first; index <= last; ++index) {
         auto begin = index * config_.count_stride;
         if (not co_await route_count_row(input, row, begin, ctx)) {
@@ -1176,7 +1221,7 @@ private:
                            : *timestamp;
       auto any_open = false;
       auto any_late = false;
-      auto [first, last] = time_window_bounds(*timestamp);
+      auto [first, last] = time_window_bounds(config_, *timestamp);
       // Iterate inclusively without incrementing past `last`, which can be the
       // maximum index. `continue` re-evaluates the do-while condition.
       auto span = static_cast<uint64_t>(last) - static_cast<uint64_t>(first);
@@ -1184,7 +1229,7 @@ private:
       do {
         auto index
           = static_cast<int64_t>(static_cast<uint64_t>(first) + offset);
-        auto start = time_window_start(index);
+        auto start = time_window_start(config_, index);
         auto end = detail::saturating_add(start, config_.time_size);
         if (clock and *clock >= detail::saturating_add(end, args_.tolerance)) {
           any_late = true;
@@ -1285,40 +1330,6 @@ private:
     std::ignore = co_await as<SubHandle<table_slice>>(*sub).push(
       subslice(input, row, row + 1));
     co_return true;
-  }
-
-  /// The inclusive range of epoch-aligned fixed time-window indices that
-  /// contain `timestamp`.
-  auto time_window_bounds(time timestamp) const -> std::pair<int64_t, int64_t> {
-    auto timestamp_ns = timestamp.time_since_epoch().count();
-    auto stride_ns = config_.time_stride.count();
-    auto size_ns = config_.time_size.count();
-    auto last = floor_div(timestamp_ns, stride_ns);
-    // Near the minimum timestamp, `timestamp_ns - size_ns` is not
-    // representable. All indices below the representable range clamp to the
-    // same minimal window start, so the earliest such index covers them.
-    constexpr auto min_ns = std::numeric_limits<int64_t>::min();
-    auto first = timestamp_ns < min_ns + size_ns
-                   ? floor_div(min_ns, stride_ns)
-                   : floor_div(timestamp_ns - size_ns, stride_ns) + 1;
-    return {first, last};
-  }
-
-  auto time_window_start(int64_t index) const -> time {
-    return time{}
-           + duration{
-             detail::saturating_mul(index, config_.time_stride.count())};
-  }
-
-  /// The inclusive range of fixed count-window indices that contain `offset`.
-  /// Count windows start at offset zero, so no pre-stream windows are created.
-  auto count_window_bounds(uint64_t offset) const
-    -> std::pair<uint64_t, uint64_t> {
-    auto last = offset / config_.count_stride;
-    auto first = offset < config_.count_size
-                   ? uint64_t{0}
-                   : (offset - config_.count_size) / config_.count_stride + 1;
-    return {first, last};
   }
 
   auto close_time_window(OpCtx& ctx, time start) -> Task<void> {
@@ -1660,6 +1671,1547 @@ public:
   }
 };
 
+} // namespace legacy
+
+/// A selection smaller than this fraction of its source batch is copied into a
+/// dense batch instead of sharing the source batch under a narrowed mask. This
+/// keeps the work of a subpipeline proportional to the events it receives.
+constexpr auto sparse_selection_divisor = size_t{16};
+
+/// An event that a window retains, as a row of its shared source batch.
+struct EventRef {
+  Arc<nova::Events> batch{std::in_place};
+  nova::storage::Index row = 0;
+
+  /// Serializes only the referenced row instead of the entire source batch.
+  friend auto inspect(auto& f, EventRef& x) -> bool {
+    constexpr auto is_loading
+      = std::remove_reference_t<decltype(f)>::is_loading;
+    auto event = nova::Events{};
+    if constexpr (not is_loading) {
+      event = nova::subslice(*x.batch, x.row, x.row + 1);
+    }
+    if (not f.object(x).fields(f.field("event", event))) {
+      return false;
+    }
+    if constexpr (is_loading) {
+      x = EventRef{Arc<nova::Events>{std::move(event)}, 0};
+    }
+    return true;
+  }
+};
+
+/// Copies rows of other batches into one dense batch, in order.
+class DenseEventsBuilder {
+public:
+  auto append(nova::Events const& batch, nova::storage::Index row) -> void {
+    auto output = data_.record();
+    for (auto [name, value] : batch.data.get(row)) {
+      nova::append_row(output.field(name), value);
+    }
+    names_.data(*batch.meta.name.get(row));
+    import_times_.data(*batch.meta.import_time.get(row));
+    internal_.data(*batch.meta.internal.get(row));
+  }
+
+  auto finish() && -> nova::Events {
+    auto data = data_.finish();
+    auto mask = nova::storage::BitMap{data.length(), true};
+    return {std::move(data),
+            std::move(mask),
+            {names_.finish(), import_times_.finish(), internal_.finish()}};
+  }
+
+private:
+  nova::ArrayBuilder<nova::Record> data_;
+  nova::ArrayBuilder<nova::String> names_;
+  nova::ArrayBuilder<nova::Time> import_times_;
+  nova::ArrayBuilder<nova::Bool> internal_;
+};
+
+/// Selects the ascending physical `rows` of `batch`, sharing the batch under a
+/// narrowed mask unless the selection is sparse.
+auto select_events(nova::Events const& batch,
+                   std::span<nova::storage::Index const> rows) -> nova::Events {
+  if (rows.size() * sparse_selection_divisor
+      < detail::narrow<size_t>(batch.length())) {
+    auto builder = DenseEventsBuilder{};
+    for (auto row : rows) {
+      builder.append(batch, row);
+    }
+    return std::move(builder).finish();
+  }
+  auto mask = nova::storage::BitMap::Mutable{batch.length()};
+  for (auto row : rows) {
+    mask.set(row, true);
+  }
+  return nova::Events{batch.data, std::move(mask).finish(), batch.meta};
+}
+
+/// Gathers the non-empty range of `events` into one batch, in order. Events
+/// that are ascending rows of a single source batch are selected from it, and
+/// all others are copied.
+template <std::ranges::forward_range Range, class Proj = std::identity>
+auto gather_events(Range const& events, Proj proj = {}) -> nova::Events {
+  TENZIR_ASSERT(not std::ranges::empty(events));
+  auto const& source = std::invoke(proj, *std::ranges::begin(events)).batch;
+  auto rows = std::vector<nova::storage::Index>{};
+  for (auto const& entry : events) {
+    auto const& event = std::invoke(proj, entry);
+    if (&*event.batch != &*source
+        or (not rows.empty() and event.row <= rows.back())) {
+      auto builder = DenseEventsBuilder{};
+      for (auto const& other : events) {
+        auto const& copy = std::invoke(proj, other);
+        builder.append(*copy.batch, copy.row);
+      }
+      return std::move(builder).finish();
+    }
+    rows.push_back(event.row);
+  }
+  return select_events(*source, rows);
+}
+
+/// Materializes `event` for binding it as `$window.event`.
+auto materialize_event(EventRef const& event) -> record {
+  auto value = nova::materialize_legacy(
+    nova::RowView<nova::Data>{event.batch->data.get(event.row)});
+  auto result = try_as<record>(&value);
+  TENZIR_ASSERT(result);
+  return std::move(*result);
+}
+
+/// An event admitted to the open session under its event time, awaiting the
+/// batched push into the session's subpipeline.
+struct PendingSessionEvent {
+  time event_time;
+  EventRef event;
+};
+
+struct TrailingReorderEntry {
+  EventRef event;
+  bool trigger_matches = false;
+
+  friend auto inspect(auto& f, TrailingReorderEntry& x) -> bool {
+    return f.object(x).fields(f.field("event", x.event),
+                              f.field("trigger_matches", x.trigger_matches));
+  }
+};
+
+/// The timestamps that `on` yields for a batch.
+struct EventTimes {
+  Option<nova::MaskedArray<nova::Array<nova::Time>>> values;
+  /// The active rows for which `on` yields a timestamp.
+  nova::storage::BitMap valid;
+  /// The number of active rows for which `on` yields no timestamp.
+  int64_t invalid = 0;
+
+  auto get(nova::storage::Index row) const -> time {
+    TENZIR_ASSERT(valid.get(row));
+    return *values->data.get(row);
+  }
+};
+
+/// The values that `trigger` yields for a batch, if it is set.
+using TriggerValues = Option<nova::MaskedArray<nova::Array<nova::Bool>>>;
+
+/// The result of assigning the rows of a batch to event-time windows: which
+/// rows go into which window (by window start), plus the count of late events
+/// and the largest observed timestamp in the batch.
+struct TimeWindowAssignment {
+  std::map<time, std::vector<nova::storage::Index>> groups;
+  int64_t late_events = 0;
+  Option<time> batch_max;
+};
+
+class WindowBase {
+public:
+  explicit WindowBase(WindowArgs args)
+    : args_{std::move(args)},
+      config_{resolve_config(args_)},
+      trailing_reorder_{args_.tolerance} {
+  }
+
+protected:
+  auto is_trailing() const -> bool {
+    return config_.shape == WindowShape::trailing;
+  }
+
+  auto is_session() const -> bool {
+    return config_.shape == WindowShape::session;
+  }
+
+  auto next_ordered_sequence() const -> uint64_t {
+    TENZIR_ASSERT(is_trailing() or is_session());
+    return is_trailing() ? trailing_sequence_ : session_sequence_;
+  }
+
+  auto start_impl(OpCtx& ctx) -> Task<void> {
+    if (args_.on) {
+      auto evaluator = co_await nova::Evaluator::make(*args_.on, ctx);
+      if (not evaluator) {
+        co_return;
+      }
+      on_.emplace(std::move(*evaluator));
+    }
+    if (args_.trigger) {
+      auto evaluator = co_await nova::Evaluator::make(*args_.trigger, ctx);
+      if (not evaluator) {
+        co_return;
+      }
+      trigger_.emplace(std::move(*evaluator));
+    }
+    if (not needs_timer()) {
+      co_return;
+    }
+    ctx.spawn_task([frontier = frontier_queue_,
+                    ticks = tick_queue_]() mutable -> Task<void> {
+      auto deadline = co_await frontier->dequeue();
+      while (true) {
+        while (auto more = frontier->try_dequeue()) {
+          deadline = std::min(deadline, *more);
+        }
+        co_await sleep_until(deadline);
+        co_await ticks->enqueue(TimerTick{deadline});
+        deadline = co_await frontier->dequeue();
+      }
+    });
+    if (is_session()) {
+      if (config_.clock == WindowClock::event_time) {
+        if (session_ or not session_reorder_.empty()) {
+          last_session_activity_ = steady_clock::now();
+        }
+      } else {
+        co_await close_passed_processing_time_session(ctx, wall_now());
+      }
+      if (has_timed_state()) {
+        arm_timer();
+      }
+      co_return;
+    }
+    if (config_.clock == WindowClock::event_time) {
+      auto now = steady_clock::now();
+      for (auto& [start, state] : open_time_) {
+        state.last_event = now;
+      }
+    } else {
+      co_await close_processing_time_windows(ctx, wall_now());
+      prune_time_seen(wall_now());
+    }
+    if (not open_time_.empty()) {
+      arm_timer();
+    }
+  }
+
+  auto await_task_impl() const -> Task<Any> {
+    if (not needs_timer()) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return co_await tick_queue_->dequeue();
+  }
+
+  auto process_impl(nova::Events input, OpCtx& ctx) -> Task<void> {
+    if (not input.mask.any()) {
+      co_return;
+    }
+    if (config_.shape == WindowShape::session) {
+      co_await process_session(std::move(input), ctx);
+      co_return;
+    }
+    if (config_.shape == WindowShape::trailing) {
+      if (config_.basis == WindowBasis::time) {
+        co_await process_trailing_time(std::move(input), ctx);
+      } else {
+        co_await process_trailing_count(std::move(input), ctx);
+      }
+      co_return;
+    }
+    if (config_.basis == WindowBasis::count) {
+      co_await process_fixed_count(std::move(input), ctx);
+      co_return;
+    }
+    if (config_.clock == WindowClock::event_time) {
+      co_await process_fixed_event_time(std::move(input), ctx);
+    } else {
+      co_await process_fixed_processing_time(std::move(input), ctx);
+    }
+  }
+
+  auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
+    std::ignore = result.as<TimerTick>();
+    if (is_session()) {
+      if (config_.clock == WindowClock::processing_time) {
+        co_await close_passed_processing_time_session(ctx, wall_now());
+      } else if (last_session_activity_
+                 and *last_session_activity_ + *args_.idle_timeout
+                       <= steady_clock::now()) {
+        co_await flush_session(ctx);
+      }
+      if (has_timed_state()) {
+        arm_timer();
+      } else {
+        timer_idle_ = true;
+      }
+      co_return;
+    }
+    if (config_.clock == WindowClock::processing_time) {
+      auto now = std::max(wall_now(), current_time_.unwrap_or(time::min()));
+      current_time_ = now;
+      co_await close_processing_time_windows(ctx, now);
+      prune_time_seen(now);
+    } else {
+      auto now = steady_clock::now();
+      auto to_close = std::vector<time>{};
+      for (auto const& [start, state] : open_time_) {
+        if (state.last_event + *args_.idle_timeout <= now) {
+          to_close.push_back(start);
+        }
+      }
+      for (auto start : to_close) {
+        co_await close_time_window(ctx, start);
+      }
+    }
+    if (open_time_.empty()) {
+      timer_idle_ = true;
+    } else {
+      arm_timer();
+    }
+  }
+
+  auto snapshot_impl(Serde& serde) -> void {
+    serde("current_time", current_time_);
+    serde("seen", seen_time_);
+    auto open_starts = std::vector<time>{};
+    open_starts.reserve(open_time_.size());
+    for (auto const& [start, state] : open_time_) {
+      open_starts.push_back(start);
+    }
+    serde("open_starts", open_starts);
+    auto now = steady_clock::now();
+    auto rebuilt_time = std::map<time, TimeWindowState>{};
+    for (auto const& start : open_starts) {
+      auto it = open_time_.find(start);
+      auto last_event = it != open_time_.end() ? it->second.last_event : now;
+      rebuilt_time.emplace(
+        start, TimeWindowState{detail::saturating_add(start, config_.time_size),
+                               last_event});
+    }
+    open_time_ = std::move(rebuilt_time);
+    serde("sequence_offset", sequence_offset_);
+    serde("seen_count", seen_count_);
+    auto open_begins = std::vector<uint64_t>{};
+    open_begins.reserve(open_count_.size());
+    for (auto const& [begin, state] : open_count_) {
+      open_begins.push_back(begin);
+    }
+    serde("open_begins", open_begins);
+    auto rebuilt_count = std::map<uint64_t, CountWindowState>{};
+    for (auto begin : open_begins) {
+      rebuilt_count.emplace(begin,
+                            CountWindowState{begin + config_.count_size});
+    }
+    open_count_ = std::move(rebuilt_count);
+    serde("trailing_rows", trailing_rows_);
+    serde("trailing_times", trailing_times_);
+    trailing_reorder_.snapshot(serde);
+    serde("trailing_time_origin", trailing_time_origin_);
+    serde("trailing_count_since_fire", trailing_count_since_fire_);
+    serde("trailing_sequence", trailing_sequence_);
+    serde("warned_trailing_cost", warned_trailing_cost_);
+    serde("warned_trailing_children", warned_trailing_children_);
+    serde("session", session_);
+    serde("session_reorder", session_reorder_);
+    serde("session_last_emitted", session_last_emitted_);
+    serde("session_sequence", session_sequence_);
+    serde("warned_session_reorder_cost", warned_session_reorder_cost_);
+    if (serde.is_loading()) {
+      // `prepare_snapshot_impl` closes sessions before saving. An open session
+      // could not be resumed anyway, as its subpipeline is not restored.
+      session_ = None{};
+      if (not session_reorder_.empty()) {
+        last_session_activity_ = steady_clock::now();
+      }
+    }
+  }
+
+private:
+  auto needs_timer() const -> bool {
+    if (config_.shape == WindowShape::trailing) {
+      return false;
+    }
+    if (config_.shape == WindowShape::session) {
+      return config_.clock == WindowClock::processing_time
+             or args_.idle_timeout.has_value();
+    }
+    return config_.clock == WindowClock::processing_time
+           or (config_.clock == WindowClock::event_time and args_.idle_timeout);
+  }
+
+  auto has_timed_state() const -> bool {
+    if (is_session()) {
+      return session_.has_value() or not session_reorder_.empty();
+    }
+    return not open_time_.empty();
+  }
+
+  /// Evaluates `on` for the active rows of `input`.
+  auto eval_event_times(nova::Events const& input, OpCtx& ctx) -> EventTimes {
+    TENZIR_ASSERT(on_);
+    auto values = on_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto result = EventTimes{};
+    result.values = values.get_alternative<nova::Time>();
+    result.valid = result.values ? input.mask & result.values->present
+                                 : nova::storage::BitMap{input.length(), false};
+    result.invalid = input.active_count() - result.valid.true_count();
+    return result;
+  }
+
+  /// Evaluates `trigger` for the active rows of `input`, if it is set.
+  auto eval_triggers(nova::Events const& input, OpCtx& ctx) -> TriggerValues {
+    if (not trigger_) {
+      return None{};
+    }
+    return trigger_->eval(input, nova::EvalCtx{ctx.dh()})
+      .get_alternative<nova::Bool>();
+  }
+
+  auto warn_about_invalid_events(EventTimes const& times, OpCtx& ctx) -> void {
+    if (times.invalid == 0) {
+      return;
+    }
+    diagnostic::warning("`window` dropped {} event(s) where `on` did not "
+                        "evaluate to a timestamp",
+                        times.invalid)
+      .primary(*args_.on)
+      .emit(ctx);
+  }
+
+  auto process_session(nova::Events input, OpCtx& ctx) -> Task<void> {
+    if (config_.clock == WindowClock::processing_time) {
+      auto arrival = std::max(wall_now(), current_time_.unwrap_or(time::min()));
+      current_time_ = arrival;
+      // Admission applies the inclusive boundary rules itself: an event exactly
+      // at `end + gap` or `start + max_duration` joins the session. The `>=`
+      // deadline check in `close_passed_processing_time_session` is only
+      // correct for timer expiry, so it must not run before admission.
+      auto batch = Arc<nova::Events>{std::move(input)};
+      auto events = std::vector<EventRef>{};
+      events.reserve(batch->active_count());
+      nova::storage::for_each_true(batch->mask, [&](nova::storage::Index row) {
+        events.push_back(EventRef{batch, row});
+      });
+      co_await admit_session_events(std::move(events), arrival, ctx);
+      co_await flush_session_pending(ctx);
+      if (timer_idle_ and has_timed_state()) {
+        arm_timer();
+      }
+      co_return;
+    }
+    auto times = eval_event_times(input, ctx);
+    auto batch = Arc<nova::Events>{std::move(input)};
+    auto late_events = int64_t{0};
+    for (auto row : nova::storage::true_bits(times.valid)) {
+      auto timestamp = times.get(row);
+      auto watermark
+        = current_time_
+            ? Option{detail::saturating_sub(*current_time_, args_.tolerance)}
+            : None{};
+      if ((watermark and timestamp < *watermark)
+          or (session_last_emitted_ and timestamp < *session_last_emitted_)) {
+        late_events += 1;
+        continue;
+      }
+      current_time_
+        = current_time_ ? std::max(*current_time_, timestamp) : timestamp;
+      session_reorder_.emplace(timestamp, EventRef{batch, row});
+      last_session_activity_ = steady_clock::now();
+      warn_about_session_cost(ctx);
+      auto cutoff = detail::saturating_sub(*current_time_, args_.tolerance);
+      co_await drain_session_reorder_buffer(cutoff, ctx);
+      co_await close_passed_event_time_session(ctx, cutoff);
+    }
+    warn_about_invalid_events(times, ctx);
+    co_await flush_session_pending(ctx);
+    warn_about_late_events(late_events, ctx);
+    if (args_.idle_timeout and timer_idle_ and has_timed_state()) {
+      arm_timer();
+    }
+  }
+
+  auto drain_session_reorder_buffer(Option<time> cutoff, OpCtx& ctx)
+    -> Task<void> {
+    while (not session_reorder_.empty()
+           and (not cutoff or session_reorder_.begin()->first <= *cutoff)) {
+      auto entry = session_reorder_.extract(session_reorder_.begin());
+      session_last_emitted_ = entry.key();
+      co_await admit_session_events(std::vector{std::move(entry.mapped())},
+                                    entry.key(), ctx);
+    }
+  }
+
+  /// Admits events that all carry `event_time` into the session, splitting at
+  /// the gap and the optional caps. Events accumulate in `session_pending_`
+  /// and reach the subpipeline in batches via `flush_session_pending`.
+  auto admit_session_events(std::vector<EventRef> events, time event_time,
+                            OpCtx& ctx) -> Task<void> {
+    auto offset = size_t{0};
+    auto remaining = events.size();
+    while (remaining > 0) {
+      if (session_
+          and (event_time
+                 > detail::saturating_add(session_->end, config_.time_size)
+               or (config_.session_max_duration
+                   and event_time > detail::saturating_add(
+                         session_->start, *config_.session_max_duration)))) {
+        co_await close_session(ctx);
+      }
+      if (not session_) {
+        if (not co_await spawn_session(event_time, ctx)) {
+          // Drop this event, but keep trying for the remaining ones.
+          offset += 1;
+          remaining -= 1;
+          continue;
+        }
+      }
+      auto take = remaining;
+      if (config_.session_max_events) {
+        auto capacity = detail::saturating_sub(*config_.session_max_events,
+                                               session_->events);
+        TENZIR_ASSERT(capacity > 0);
+        if (capacity < take) {
+          take = detail::narrow<size_t>(capacity);
+        }
+      }
+      // An event exactly at the duration boundary joins and closes the
+      // session, so it must not share a chunk with later events.
+      if (config_.session_max_duration
+          and event_time >= detail::saturating_add(
+                session_->start, *config_.session_max_duration)) {
+        take = 1;
+      }
+      for (auto i = offset; i < offset + take; ++i) {
+        session_pending_.push_back({event_time, std::move(events[i])});
+      }
+      session_->end = event_time;
+      session_->events = detail::saturating_add(session_->events,
+                                                detail::narrow<uint64_t>(take));
+      offset += take;
+      remaining -= take;
+      auto reached_max_events
+        = config_.session_max_events
+          and session_->events >= *config_.session_max_events;
+      auto reached_max_duration
+        = config_.session_max_duration
+          and event_time >= detail::saturating_add(
+                session_->start, *config_.session_max_duration);
+      if (reached_max_events or reached_max_duration) {
+        co_await close_session(ctx);
+      }
+    }
+  }
+
+  /// Spawns a fresh session subpipeline whose window starts at `event_time`.
+  auto spawn_session(time event_time, OpCtx& ctx) -> Task<bool> {
+    TENZIR_ASSERT(not session_);
+    auto sequence = session_sequence_;
+    auto window = record{};
+    window.emplace("start", data{event_time});
+    auto copy = args_.pipe.inner;
+    copy.bind(args_.let, ast::constant::kind{std::move(window)});
+    auto sub = co_await ctx.plan_and_spawn_sub<nova::Events>(data{sequence},
+                                                             std::move(copy));
+    if (not sub) {
+      co_return false;
+    }
+    session_sequence_ += 1;
+    session_ = SessionWindowState{event_time, event_time, 0, sequence};
+    co_return true;
+  }
+
+  /// Pushes the pending events into the session's subpipeline as one batch.
+  auto flush_session_pending(OpCtx& ctx) -> Task<void> {
+    if (session_pending_.empty()) {
+      co_return;
+    }
+    auto pending = std::exchange(session_pending_, {});
+    TENZIR_ASSERT(session_);
+    auto sequence = session_->sequence;
+    if (auto sub = ctx.get_sub(make_view(data{sequence}))) {
+      auto batch = gather_events(pending, &PendingSessionEvent::event);
+      auto result
+        = co_await as<SubHandle<nova::Events>>(*sub).push(std::move(batch));
+      if (not result.is_err()) {
+        co_return;
+      }
+    }
+    // The subpipeline completed before the session boundary. Retry the events
+    // it did not accept in fresh sessions instead of silently dropping them,
+    // replaying the event times recorded at admission.
+    if (session_ and session_->sequence == sequence) {
+      session_ = None{};
+    }
+    for (auto& entry : pending) {
+      co_await process_session_event(std::move(entry.event), entry.event_time,
+                                     ctx);
+    }
+  }
+
+  /// Pushes a single event directly into the session's subpipeline. Only the
+  /// retry path uses this; regular admission batches events through
+  /// `admit_session_events` and `flush_session_pending`.
+  auto process_session_event(EventRef event, time event_time, OpCtx& ctx)
+    -> Task<void> {
+    if (session_
+        and event_time
+              > detail::saturating_add(session_->end, config_.time_size)) {
+      co_await close_session(ctx);
+    }
+    if (session_ and config_.session_max_duration
+        and event_time > detail::saturating_add(
+              session_->start, *config_.session_max_duration)) {
+      co_await close_session(ctx);
+    }
+    auto spawned_for_event = false;
+    if (not session_) {
+      if (not co_await spawn_session(event_time, ctx)) {
+        co_return;
+      }
+      spawned_for_event = true;
+    }
+    auto sub = ctx.get_sub(make_view(data{session_->sequence}));
+    if (not sub) {
+      // A freshly spawned subpipeline is always present.
+      TENZIR_ASSERT(not spawned_for_event);
+      // The subpipeline may terminate before the session boundary. Start a
+      // fresh session for this event instead of silently dropping it.
+      session_ = None{};
+      co_await process_session_event(std::move(event), event_time, ctx);
+      co_return;
+    }
+    TENZIR_ASSERT(session_);
+    session_->end = event_time;
+    session_->events = detail::saturating_add(session_->events, uint64_t{1});
+    auto sequence = session_->sequence;
+    auto result = co_await as<SubHandle<nova::Events>>(*sub).push(
+      select_events(*event.batch, std::span{&event.row, 1}));
+    if (result.is_err()) {
+      if (session_ and session_->sequence == sequence) {
+        session_ = None{};
+      }
+      // A newly spawned child that rejects its first event cannot make
+      // progress.
+      if (not spawned_for_event) {
+        co_await process_session_event(std::move(event), event_time, ctx);
+      }
+      co_return;
+    }
+    auto reached_max_events
+      = config_.session_max_events and session_
+        and session_->sequence == sequence
+        and session_->events >= *config_.session_max_events;
+    auto reached_max_duration
+      = config_.session_max_duration and session_
+        and session_->sequence == sequence
+        and event_time >= detail::saturating_add(session_->start,
+                                                 *config_.session_max_duration);
+    if (reached_max_events or reached_max_duration) {
+      co_await close_session(ctx);
+    }
+  }
+
+  auto close_passed_event_time_session(OpCtx& ctx, time watermark)
+    -> Task<void> {
+    if (session_
+        and watermark
+              > detail::saturating_add(session_->end, config_.time_size)) {
+      co_await close_session(ctx);
+    }
+  }
+
+  auto close_passed_processing_time_session(OpCtx& ctx, time now)
+    -> Task<void> {
+    if (not session_) {
+      co_return;
+    }
+    auto deadline = detail::saturating_add(session_->end, config_.time_size);
+    if (config_.session_max_duration) {
+      deadline
+        = std::min(deadline, detail::saturating_add(
+                               session_->start, *config_.session_max_duration));
+    }
+    if (now >= deadline) {
+      co_await close_session(ctx);
+    }
+  }
+
+  auto close_session(OpCtx& ctx) -> Task<void> {
+    if (not session_) {
+      co_return;
+    }
+    auto sequence = session_->sequence;
+    co_await flush_session_pending(ctx);
+    // Flushing may have replaced the session while retrying events that a
+    // completed subpipeline rejected. The replacement has a fresh start and
+    // event count, so the original session's boundary must not close it.
+    if (not session_ or session_->sequence != sequence) {
+      co_return;
+    }
+    session_ = None{};
+    if (auto sub = ctx.get_sub(make_view(data{sequence}))) {
+      co_await as<SubHandle<nova::Events>>(*sub).close();
+    }
+  }
+
+  auto warn_about_session_cost(OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = size_t{100'000};
+    auto retained = session_reorder_.size();
+    if (warned_session_reorder_cost_ or retained < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`window` retained {} events for session reordering",
+                        retained)
+      .primary(args_.operator_location)
+      .note("reduce `tolerance` to bound the reorder buffer more tightly")
+      .emit(ctx);
+    warned_session_reorder_cost_ = true;
+  }
+
+  auto process_fixed_event_time(nova::Events input, OpCtx& ctx) -> Task<void> {
+    auto times = eval_event_times(input, ctx);
+    auto pre_clock = current_time_;
+    auto assignment = assign_event_time_windows(times, pre_clock);
+    if (assignment.batch_max) {
+      current_time_ = pre_clock ? std::max(*pre_clock, *assignment.batch_max)
+                                : *assignment.batch_max;
+    }
+    warn_about_invalid_events(times, ctx);
+    warn_about_late_events(assignment.late_events, ctx);
+    auto now = steady_clock::now();
+    for (auto const& [start, rows] : assignment.groups) {
+      if (auto sub = co_await time_window_sub(start, now, ctx)) {
+        std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
+          select_events(input, rows));
+      }
+    }
+    co_await close_passed_event_time_windows(ctx);
+    prune_event_time_seen();
+    if (args_.idle_timeout and timer_idle_ and not open_time_.empty()) {
+      arm_timer();
+    }
+  }
+
+  auto process_fixed_processing_time(nova::Events input, OpCtx& ctx)
+    -> Task<void> {
+    auto arrival = std::max(wall_now(), current_time_.unwrap_or(time::min()));
+    current_time_ = arrival;
+    co_await close_processing_time_windows(ctx, arrival);
+    auto now = steady_clock::now();
+    auto [first, last] = time_window_bounds(config_, arrival);
+    // Iterate inclusively without incrementing past `last`, which can be the
+    // maximum index.
+    auto span = static_cast<uint64_t>(last) - static_cast<uint64_t>(first);
+    auto offset = uint64_t{0};
+    do {
+      auto index = static_cast<int64_t>(static_cast<uint64_t>(first) + offset);
+      auto start = time_window_start(config_, index);
+      if (auto sub = co_await time_window_sub(start, now, ctx)) {
+        std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(input);
+      }
+    } while (offset++ != span);
+    prune_time_seen(arrival);
+    if (timer_idle_ and not open_time_.empty()) {
+      arm_timer();
+    }
+  }
+
+  /// Routes the active rows of `input` to the fixed count windows, in batches
+  /// of contiguous event offsets per window.
+  auto process_fixed_count(nova::Events input, OpCtx& ctx) -> Task<void> {
+    auto rows = std::vector<nova::storage::Index>{};
+    rows.reserve(input.active_count());
+    nova::storage::for_each_true(input.mask, [&](nova::storage::Index row) {
+      rows.push_back(row);
+    });
+    // The maximum offset itself is never assigned, so that the offset after
+    // the last event remains representable.
+    auto available = std::numeric_limits<uint64_t>::max() - sequence_offset_;
+    auto exhausted = detail::narrow<uint64_t>(rows.size()) > available;
+    if (exhausted) {
+      rows.resize(detail::narrow<size_t>(available));
+    }
+    if (not rows.empty()) {
+      auto first_offset = sequence_offset_;
+      auto end_offset = first_offset + detail::narrow<uint64_t>(rows.size());
+      auto first = count_window_bounds(config_, first_offset).first;
+      auto last = count_window_bounds(config_, end_offset - 1).second;
+      for (auto index = first; index <= last; ++index) {
+        auto begin = index * config_.count_stride;
+        auto finish = detail::saturating_add(begin, config_.count_size);
+        auto from = std::max(begin, first_offset) - first_offset;
+        auto to = std::min(finish, end_offset) - first_offset;
+        TENZIR_ASSERT(from < to);
+        auto window_rows = std::span{rows}.subspan(
+          detail::narrow<size_t>(from), detail::narrow<size_t>(to - from));
+        if (not co_await route_count_window(input, window_rows, begin, ctx)) {
+          co_return;
+        }
+      }
+      sequence_offset_ = end_offset;
+      co_await close_passed_count_windows(ctx);
+      prune_count_seen();
+    }
+    if (exhausted) {
+      diagnostic::error("`window` exhausted its event offset range").emit(ctx);
+    }
+  }
+
+  auto process_trailing_time(nova::Events input, OpCtx& ctx) -> Task<void> {
+    auto times = config_.clock == WindowClock::event_time
+                   ? Option{eval_event_times(input, ctx)}
+                   : None{};
+    auto triggers = eval_triggers(input, ctx);
+    auto batch = Arc<nova::Events>{std::move(input)};
+    auto late_events = int64_t{0};
+    auto invalid_triggers = int64_t{0};
+    for (auto row : nova::storage::true_bits(batch->mask)) {
+      auto event = EventRef{batch, row};
+      auto event_time = wall_now();
+      if (times) {
+        if (not times->valid.get(row)) {
+          continue;
+        }
+        event_time = times->get(row);
+        auto watermark = trailing_reorder_.watermark();
+        if ((watermark and event_time < *watermark)
+            or trailing_reorder_.is_late(event_time)) {
+          late_events += 1;
+          continue;
+        }
+        auto trigger_matches
+          = evaluate_trigger(triggers, row, invalid_triggers);
+        auto result = trailing_reorder_.insert(
+          event_time, TrailingReorderEntry{std::move(event), trigger_matches});
+        TENZIR_ASSERT(result
+                      == detail::EventTimeReorderBuffer<
+                        TrailingReorderEntry>::InsertResult::accepted);
+        current_time_ = trailing_reorder_.largest_observed_time();
+        warn_about_trailing_cost(ctx);
+        co_await drain_trailing_reorder_buffer(false, ctx);
+        continue;
+      }
+      if (current_time_ and event_time < *current_time_) {
+        event_time = *current_time_;
+      }
+      current_time_ = event_time;
+      auto trigger_matches = evaluate_trigger(triggers, row, invalid_triggers);
+      co_await process_trailing_time_event(std::move(event), event_time,
+                                           trigger_matches, ctx);
+    }
+    warn_about_invalid_triggers(invalid_triggers, ctx);
+    if (times) {
+      warn_about_invalid_events(*times, ctx);
+    }
+    warn_about_late_events(late_events, ctx);
+  }
+
+  auto drain_trailing_reorder_buffer(bool final, OpCtx& ctx) -> Task<void> {
+    auto ready = final ? trailing_reorder_.flush() : trailing_reorder_.drain();
+    for (auto& entry : ready) {
+      co_await process_trailing_time_event(std::move(entry.payload.event),
+                                           entry.timestamp,
+                                           entry.payload.trigger_matches, ctx);
+    }
+  }
+
+  auto process_trailing_time_event(EventRef event, time event_time,
+                                   bool trigger_matches, OpCtx& ctx)
+    -> Task<void> {
+    auto cutoff = detail::saturating_sub(event_time, config_.time_size);
+    while (not trailing_times_.empty() and trailing_times_.front() < cutoff) {
+      trailing_times_.pop_front();
+      trailing_rows_.pop_front();
+    }
+    trailing_times_.push_back(event_time);
+    trailing_rows_.push_back(event);
+    warn_about_trailing_cost(ctx);
+    if (not should_fire_trailing_time(event_time, trigger_matches)) {
+      co_return;
+    }
+    auto window = record{};
+    window.emplace("start", data{cutoff});
+    window.emplace("end", data{event_time});
+    window.emplace("event", data{materialize_event(event)});
+    co_await run_trailing_window(std::move(window), ctx);
+  }
+
+  auto warn_about_late_events(int64_t late_events, OpCtx& ctx) -> void {
+    if (late_events == 0) {
+      return;
+    }
+    diagnostic::warning("`window` dropped {} late event(s) that arrived "
+                        "after their window had closed",
+                        late_events)
+      .primary(*args_.on)
+      .emit(ctx);
+  }
+
+  auto process_trailing_count(nova::Events input, OpCtx& ctx) -> Task<void> {
+    auto triggers = eval_triggers(input, ctx);
+    auto batch = Arc<nova::Events>{std::move(input)};
+    auto invalid_triggers = int64_t{0};
+    for (auto row : nova::storage::true_bits(batch->mask)) {
+      if (sequence_offset_ == std::numeric_limits<uint64_t>::max()) {
+        diagnostic::error("`window` exhausted its event offset range").emit(ctx);
+        co_return;
+      }
+      auto event = EventRef{batch, row};
+      trailing_rows_.push_back(event);
+      if (trailing_rows_.size() > config_.count_size) {
+        trailing_rows_.pop_front();
+      }
+      warn_about_trailing_cost(ctx);
+      auto trigger_matches = evaluate_trigger(triggers, row, invalid_triggers);
+      if (not should_fire_trailing_count(trigger_matches)) {
+        sequence_offset_ += 1;
+        continue;
+      }
+      auto finish = sequence_offset_ + 1;
+      auto begin
+        = finish > config_.count_size ? finish - config_.count_size : 0;
+      auto window = record{};
+      window.emplace("begin", data{begin});
+      window.emplace("finish", data{finish});
+      window.emplace("event", data{materialize_event(event)});
+      co_await run_trailing_window(std::move(window), ctx);
+      sequence_offset_ += 1;
+    }
+    warn_about_invalid_triggers(invalid_triggers, ctx);
+  }
+
+  /// Applies a duration cadence to trailing-window candidates. The first event
+  /// starts the cadence. Once it elapses, the next event whose trigger matches
+  /// fires the window and starts the next cadence.
+  auto should_fire_trailing_time(time event_time, bool trigger_matches)
+    -> bool {
+    if (not args_.every) {
+      return trigger_matches;
+    }
+    if (not trailing_time_origin_) {
+      trailing_time_origin_ = event_time;
+      return false;
+    }
+    auto origin = trailing_time_origin_->time_since_epoch();
+    if (origin > duration::max() - config_.time_stride
+        or event_time < *trailing_time_origin_ + config_.time_stride
+        or not trigger_matches) {
+      return false;
+    }
+    trailing_time_origin_ = event_time;
+    return true;
+  }
+
+  /// Applies an event-count cadence to trailing-window candidates. Every input
+  /// event advances the cadence. Once it elapses, the next event whose trigger
+  /// matches fires the window and starts the next cadence.
+  auto should_fire_trailing_count(bool trigger_matches) -> bool {
+    if (not args_.every) {
+      return trigger_matches;
+    }
+    if (trailing_count_since_fire_ < config_.count_stride) {
+      trailing_count_since_fire_ += 1;
+    }
+    if (trailing_count_since_fire_ < config_.count_stride
+        or not trigger_matches) {
+      return false;
+    }
+    trailing_count_since_fire_ = 0;
+    return true;
+  }
+
+  /// Decides whether the trailing window can fire for `row`. Without a
+  /// `trigger` argument every event qualifies. Events whose trigger expression
+  /// does not evaluate to `true` never qualify; non-boolean results are counted
+  /// for a batched warning. All events enter retained history and advance an
+  /// optional cadence regardless.
+  auto evaluate_trigger(TriggerValues const& triggers, nova::storage::Index row,
+                        int64_t& invalid_triggers) const -> bool {
+    if (not args_.trigger) {
+      return true;
+    }
+    if (not triggers or not triggers->present.get(row)) {
+      invalid_triggers += 1;
+      return false;
+    }
+    return *triggers->data.get(row);
+  }
+
+  auto warn_about_invalid_triggers(int64_t invalid_triggers, OpCtx& ctx)
+    -> void {
+    if (invalid_triggers == 0) {
+      return;
+    }
+    diagnostic::warning("`window` did not fire for {} event(s) where "
+                        "`trigger` did not evaluate to `bool`",
+                        invalid_triggers)
+      .primary(*args_.trigger)
+      .emit(ctx);
+  }
+
+  auto run_trailing_window(record window, OpCtx& ctx) -> Task<void> {
+    auto key = data{trailing_sequence_};
+    auto copy = args_.pipe.inner;
+    copy.bind(args_.let, ast::constant::kind{std::move(window)});
+    auto sub
+      = co_await ctx.plan_and_spawn_sub<nova::Events>(key, std::move(copy));
+    if (not sub) {
+      // Do not advance the sequence: no child owns this key, and the ordered
+      // output release requires the finished sequences to stay contiguous.
+      co_return;
+    }
+    trailing_in_flight_ += 1;
+    warn_about_trailing_children(ctx);
+    auto& handle = as<SubHandle<nova::Events>>(*sub);
+    auto result = co_await handle.push(gather_events(trailing_rows_));
+    if (not result.is_err()) {
+      co_await handle.close();
+    }
+    trailing_sequence_ += 1;
+  }
+
+  auto warn_about_trailing_cost(OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = size_t{100'000};
+    auto retained = trailing_rows_.size() + trailing_reorder_.size();
+    if (warned_trailing_cost_ or retained < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`window` retained {} events for trailing evaluation",
+                        retained)
+      .note("generic trailing windows replay all retained events for every "
+            "window invocation")
+      .emit(ctx);
+    warned_trailing_cost_ = true;
+  }
+
+  auto warn_about_trailing_children(OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = uint64_t{1'000};
+    if (warned_trailing_children_ or trailing_in_flight_ < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`window` has {} trailing subpipelines in flight",
+                        trailing_in_flight_)
+      .note("the subpipeline completes slower than events arrive; memory "
+            "grows until it catches up")
+      .emit(ctx);
+    warned_trailing_children_ = true;
+  }
+
+protected:
+  auto prepare_snapshot_impl(OpCtx& ctx) -> Task<void> {
+    if (is_session()) {
+      // Dynamically spawned subpipelines cannot be recreated from a checkpoint.
+      // Close the session before serialization so its admitted events are
+      // emitted instead of being lost on restore.
+      co_await flush_session(ctx);
+    }
+  }
+
+  auto finalize_impl(OpCtx& ctx) -> Task<FinalizeBehavior> {
+    if (config_.shape == WindowShape::trailing
+        and config_.clock == WindowClock::event_time) {
+      co_await drain_trailing_reorder_buffer(true, ctx);
+    }
+    if (config_.shape == WindowShape::session) {
+      co_await flush_session(ctx);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  /// Called by the operator variants when a trailing child completes. The
+  /// in-flight count is derived from live children, so it is intentionally not
+  /// serialized and may already be zero after a restore.
+  auto on_trailing_child_finished() -> void {
+    if (trailing_in_flight_ > 0) {
+      trailing_in_flight_ -= 1;
+    }
+  }
+
+private:
+  auto flush_session(OpCtx& ctx) -> Task<void> {
+    co_await drain_session_reorder_buffer(None{}, ctx);
+    // Closing may leave a replacement session behind when a completed
+    // subpipeline rejected events, so close until nothing remains open.
+    while (session_) {
+      co_await close_session(ctx);
+    }
+  }
+
+  /// Assigns each row with a timestamp to the fixed event-time windows that
+  /// contain it. The clock advances per event in stream order, independent of
+  /// batch boundaries.
+  auto assign_event_time_windows(EventTimes const& times,
+                                 Option<time> pre_clock) const
+    -> TimeWindowAssignment {
+    auto result = TimeWindowAssignment{};
+    auto clock = pre_clock;
+    for (auto row : nova::storage::true_bits(times.valid)) {
+      auto timestamp = times.get(row);
+      result.batch_max
+        = result.batch_max ? std::max(*result.batch_max, timestamp) : timestamp;
+      auto any_open = false;
+      auto any_late = false;
+      auto [first, last] = time_window_bounds(config_, timestamp);
+      // Iterate inclusively without incrementing past `last`, which can be the
+      // maximum index. `continue` re-evaluates the do-while condition.
+      auto span = static_cast<uint64_t>(last) - static_cast<uint64_t>(first);
+      auto offset = uint64_t{0};
+      do {
+        auto index
+          = static_cast<int64_t>(static_cast<uint64_t>(first) + offset);
+        auto start = time_window_start(config_, index);
+        auto end = detail::saturating_add(start, config_.time_size);
+        if (clock and *clock >= detail::saturating_add(end, args_.tolerance)) {
+          any_late = true;
+          continue;
+        }
+        if (open_time_.contains(start)) {
+          result.groups[start].push_back(row);
+          any_open = true;
+          continue;
+        }
+        if (seen_time_.contains(start)) {
+          any_late = true;
+          continue;
+        }
+        result.groups[start].push_back(row);
+        any_open = true;
+      } while (offset++ != span);
+      clock = clock ? std::max(*clock, timestamp) : timestamp;
+      if (not any_open and any_late) {
+        result.late_events += 1;
+      }
+    }
+    return result;
+  }
+
+  /// Returns the subpipeline of the fixed time window at `start`, spawning it
+  /// for the first events of the window. Returns `None` when the window does
+  /// not accept events anymore.
+  auto time_window_sub(time start, steady_clock::time_point now, OpCtx& ctx)
+    -> Task<Option<AnySubHandle&>> {
+    auto sub = ctx.get_sub(make_view(data{start}));
+    if (not sub) {
+      if (open_time_.contains(start)) {
+        open_time_.erase(start);
+        co_return None{};
+      }
+      if (seen_time_.contains(start)) {
+        co_return None{};
+      }
+      auto end = detail::saturating_add(start, config_.time_size);
+      auto window = record{};
+      window.emplace("start", data{start});
+      window.emplace("end", data{end});
+      auto copy = args_.pipe.inner;
+      copy.bind(args_.let, ast::constant::kind{std::move(window)});
+      sub = co_await ctx.plan_and_spawn_sub<nova::Events>(data{start},
+                                                          std::move(copy));
+      if (not sub) {
+        co_return None{};
+      }
+      seen_time_.insert(start);
+      open_time_.emplace(start, TimeWindowState{end, now});
+    }
+    if (auto it = open_time_.find(start); it != open_time_.end()) {
+      it->second.last_event = now;
+    }
+    co_return sub;
+  }
+
+  /// Pushes the `rows` of `input` into the fixed count window at `begin`.
+  /// Returns `false` after emitting an error.
+  auto route_count_window(nova::Events const& input,
+                          std::span<nova::storage::Index const> rows,
+                          uint64_t begin, OpCtx& ctx) -> Task<bool> {
+    auto sub = ctx.get_sub(make_view(data{begin}));
+    if (not sub) {
+      if (open_count_.contains(begin)) {
+        open_count_.erase(begin);
+        co_return true;
+      }
+      if (seen_count_.contains(begin)) {
+        co_return true;
+      }
+      if (begin > std::numeric_limits<uint64_t>::max() - config_.count_size) {
+        diagnostic::error(
+          "the count window's finish exceeds the event offset range")
+          .primary(args_.size.source, "window begins at offset {} with size {}",
+                   begin, config_.count_size)
+          .emit(ctx);
+        co_return false;
+      }
+      auto finish = begin + config_.count_size;
+      auto window = record{};
+      window.emplace("begin", data{begin});
+      window.emplace("finish", data{finish});
+      auto copy = args_.pipe.inner;
+      copy.bind(args_.let, ast::constant::kind{std::move(window)});
+      sub = co_await ctx.plan_and_spawn_sub<nova::Events>(data{begin},
+                                                          std::move(copy));
+      if (not sub) {
+        co_return true;
+      }
+      seen_count_.insert(begin);
+      open_count_.emplace(begin, CountWindowState{finish});
+    }
+    TENZIR_ASSERT(sub);
+    std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
+      select_events(input, rows));
+    co_return true;
+  }
+
+  auto close_time_window(OpCtx& ctx, time start) -> Task<void> {
+    open_time_.erase(start);
+    if (auto sub = ctx.get_sub(make_view(data{start}))) {
+      co_await as<SubHandle<nova::Events>>(*sub).close();
+    }
+  }
+
+  auto close_count_window(OpCtx& ctx, uint64_t begin) -> Task<void> {
+    open_count_.erase(begin);
+    if (auto sub = ctx.get_sub(make_view(data{begin}))) {
+      co_await as<SubHandle<nova::Events>>(*sub).close();
+    }
+  }
+
+  auto close_passed_event_time_windows(OpCtx& ctx) -> Task<void> {
+    if (not current_time_) {
+      co_return;
+    }
+    auto to_close = std::vector<time>{};
+    for (auto const& [start, state] : open_time_) {
+      if (*current_time_
+          >= detail::saturating_add(state.end, args_.tolerance)) {
+        to_close.push_back(start);
+      } else {
+        break;
+      }
+    }
+    for (auto start : to_close) {
+      co_await close_time_window(ctx, start);
+    }
+  }
+
+  auto close_processing_time_windows(OpCtx& ctx, time now) -> Task<void> {
+    auto to_close = std::vector<time>{};
+    for (auto const& [start, state] : open_time_) {
+      if (now >= state.end) {
+        to_close.push_back(start);
+      } else {
+        break;
+      }
+    }
+    for (auto start : to_close) {
+      co_await close_time_window(ctx, start);
+    }
+  }
+
+  auto close_passed_count_windows(OpCtx& ctx) -> Task<void> {
+    auto to_close = std::vector<uint64_t>{};
+    for (auto const& [begin, state] : open_count_) {
+      if (sequence_offset_ >= state.finish) {
+        to_close.push_back(begin);
+      } else {
+        break;
+      }
+    }
+    for (auto begin : to_close) {
+      co_await close_count_window(ctx, begin);
+    }
+  }
+
+  auto prune_event_time_seen() -> void {
+    if (not current_time_) {
+      return;
+    }
+    while (not seen_time_.empty()) {
+      auto start = *seen_time_.begin();
+      auto end = detail::saturating_add(start, config_.time_size);
+      if (*current_time_ >= detail::saturating_add(end, args_.tolerance)) {
+        seen_time_.erase(seen_time_.begin());
+      } else {
+        break;
+      }
+    }
+  }
+
+  auto prune_time_seen(time now) -> void {
+    while (not seen_time_.empty()) {
+      auto start = *seen_time_.begin();
+      if (now >= detail::saturating_add(start, config_.time_size)) {
+        seen_time_.erase(seen_time_.begin());
+      } else {
+        break;
+      }
+    }
+  }
+
+  auto prune_count_seen() -> void {
+    while (not seen_count_.empty()) {
+      auto begin = *seen_count_.begin();
+      if (sequence_offset_ >= begin + config_.count_size) {
+        seen_count_.erase(seen_count_.begin());
+      } else {
+        break;
+      }
+    }
+  }
+
+  auto arm_timer() -> void {
+    TENZIR_ASSERT(has_timed_state());
+    auto earliest = steady_clock::time_point::max();
+    if (is_session()) {
+      if (config_.clock == WindowClock::processing_time) {
+        TENZIR_ASSERT(session_);
+        auto deadline
+          = detail::saturating_add(session_->end, config_.time_size);
+        if (config_.session_max_duration) {
+          deadline = std::min(
+            deadline, detail::saturating_add(session_->start,
+                                             *config_.session_max_duration));
+        }
+        auto delay = detail::saturating_sub(deadline.time_since_epoch(),
+                                            wall_now().time_since_epoch());
+        earliest = detail::saturating_add(steady_clock::now(),
+                                          std::max(delay, duration::zero()));
+      } else {
+        TENZIR_ASSERT(args_.idle_timeout);
+        TENZIR_ASSERT(last_session_activity_);
+        earliest = detail::saturating_add(*last_session_activity_,
+                                          *args_.idle_timeout);
+      }
+    } else if (config_.clock == WindowClock::processing_time) {
+      auto delay = detail::saturating_sub(
+        open_time_.begin()->second.end.time_since_epoch(),
+        wall_now().time_since_epoch());
+      earliest = detail::saturating_add(steady_clock::now(),
+                                        std::max(delay, duration::zero()));
+    } else {
+      TENZIR_ASSERT(args_.idle_timeout);
+      for (auto const& [start, state] : open_time_) {
+        earliest = std::min(earliest, detail::saturating_add(
+                                        state.last_event, *args_.idle_timeout));
+      }
+    }
+    frontier_queue_->enqueue(earliest);
+    timer_idle_ = false;
+  }
+
+  using FrontierQueue = folly::coro::UnboundedQueue<steady_clock::time_point>;
+  using TickQueue = folly::coro::BoundedQueue<TimerTick>;
+
+  WindowArgs args_;
+  WindowConfig config_;
+  Option<nova::Evaluator> on_;
+  Option<nova::Evaluator> trigger_;
+  std::map<time, TimeWindowState> open_time_;
+  std::set<time> seen_time_;
+  Option<time> current_time_;
+  std::map<uint64_t, CountWindowState> open_count_;
+  std::set<uint64_t> seen_count_;
+  uint64_t sequence_offset_ = 0;
+  std::deque<EventRef> trailing_rows_;
+  std::deque<time> trailing_times_;
+  detail::EventTimeReorderBuffer<TrailingReorderEntry> trailing_reorder_;
+  Option<time> trailing_time_origin_;
+  uint64_t trailing_count_since_fire_ = 0;
+  uint64_t trailing_sequence_ = 0;
+  uint64_t trailing_in_flight_ = 0;
+  bool warned_trailing_cost_ = false;
+  bool warned_trailing_children_ = false;
+  Option<SessionWindowState> session_;
+  /// Events admitted to the open session but not yet pushed to its
+  /// subpipeline. Always empty between calls into the operator.
+  std::vector<PendingSessionEvent> session_pending_;
+  /// A multimap preserves arrival order among equal timestamps.
+  std::multimap<time, EventRef> session_reorder_;
+  Option<time> session_last_emitted_;
+  Option<steady_clock::time_point> last_session_activity_;
+  uint64_t session_sequence_ = 0;
+  bool warned_session_reorder_cost_ = false;
+  bool timer_idle_ = true;
+  Arc<FrontierQueue> frontier_queue_{std::in_place};
+  mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
+};
+
+struct OrderedOutputState {
+  // `process_sub` may run concurrently. Keep the critical section limited to
+  // moving batches into the per-window output buffer.
+  std::mutex mutex;
+  std::map<uint64_t, std::vector<nova::Events>> pending;
+  std::set<uint64_t> finished;
+  uint64_t next = 0;
+};
+
+template <class Output>
+class Window;
+
+template <>
+class Window<nova::Events> final : public Operator<nova::Events, nova::Events>,
+                                   private WindowBase {
+public:
+  explicit Window(WindowArgs args) : WindowBase{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return process_impl(std::move(input), ctx);
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return process_task_impl(std::move(result), ctx);
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    return finalize_impl(ctx);
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return prepare_snapshot_impl(ctx);
+  }
+
+  auto process_sub(SubKeyView key, nova::Events events,
+                   Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not is_trailing() and not is_session()) {
+      co_await push(std::move(events));
+      co_return;
+    }
+    auto key_data = materialize(key);
+    auto sequence = try_as<uint64_t>(&key_data);
+    TENZIR_ASSERT(sequence);
+    auto guard = std::lock_guard{ordered_output_->mutex};
+    if (*sequence < ordered_output_->next) {
+      co_return;
+    }
+    ordered_output_->pending[*sequence].push_back(std::move(events));
+  }
+
+  auto finish_sub(SubKeyView key, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not is_trailing() and not is_session()) {
+      co_return;
+    }
+    if (is_trailing()) {
+      on_trailing_child_finished();
+    }
+    auto key_data = materialize(key);
+    auto sequence = try_as<uint64_t>(&key_data);
+    TENZIR_ASSERT(sequence);
+    auto ready = std::vector<nova::Events>{};
+    {
+      auto guard = std::lock_guard{ordered_output_->mutex};
+      if (*sequence < ordered_output_->next) {
+        co_return;
+      }
+      ordered_output_->finished.insert(*sequence);
+      while (ordered_output_->finished.contains(ordered_output_->next)) {
+        auto it = ordered_output_->pending.find(ordered_output_->next);
+        if (it != ordered_output_->pending.end()) {
+          ready.insert(ready.end(), std::make_move_iterator(it->second.begin()),
+                       std::make_move_iterator(it->second.end()));
+          ordered_output_->pending.erase(it);
+        }
+        ordered_output_->finished.erase(ordered_output_->next);
+        ordered_output_->next += 1;
+      }
+    }
+    for (auto& events : ready) {
+      co_await push(std::move(events));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    snapshot_impl(serde);
+    if (serde.is_loading()) {
+      // Subpipelines do not survive a restore. Drop their partial output and
+      // resume ordered release at the first sequence that has not been spawned.
+      auto guard = std::lock_guard{ordered_output_->mutex};
+      ordered_output_->pending.clear();
+      ordered_output_->finished.clear();
+      if (is_trailing() or is_session()) {
+        ordered_output_->next = next_ordered_sequence();
+      }
+    }
+  }
+
+private:
+  Arc<OrderedOutputState> ordered_output_{std::in_place};
+};
+
+template <>
+class Window<void> final : public Operator<nova::Events, void>,
+                           private WindowBase {
+public:
+  explicit Window(WindowArgs args) : WindowBase{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
+    return process_impl(std::move(input), ctx);
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    return process_task_impl(std::move(result), ctx);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    return finalize_impl(ctx);
+  }
+
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    return prepare_snapshot_impl(ctx);
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key, ctx);
+    if (is_trailing()) {
+      on_trailing_child_finished();
+    }
+    co_return;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    snapshot_impl(serde);
+  }
+};
+
 class window_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -1823,7 +3375,42 @@ public:
           [](tag<table_slice>)
             -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
             return [](WindowArgs args) {
-              return Window<table_slice>{std::move(args)};
+              return legacy::Window<table_slice>{std::move(args)};
+            };
+          },
+          [](tag<void>) -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            return [](WindowArgs args) {
+              return legacy::Window<void>{std::move(args)};
+            };
+          },
+          [&](tag<chunk_ptr>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce bytes")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          },
+          [&](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce nova_events")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          },
+          [](tag<FileHandle>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            // Files only feed readers, so no subpipeline produces them.
+            TENZIR_UNREACHABLE();
+          });
+      } else if constexpr (std::same_as<Input, nova::Events>) {
+        TRY(auto p, ctx.get(pipe));
+        TRY(auto output, p.inner.infer_type(tag_v<nova::Events>, ctx));
+        return match(
+          output,
+          [](tag<nova::Events>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            return [](WindowArgs args) {
+              return Window<nova::Events>{std::move(args)};
             };
           },
           [](tag<void>) -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
@@ -1838,9 +3425,9 @@ public:
               .emit(ctx);
             return failure::promise();
           },
-          [&](tag<nova::Events>)
+          [&](tag<table_slice>)
             -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
-            diagnostic::error("subpipeline must not produce nova_events")
+            diagnostic::error("subpipeline must not produce legacy events")
               .primary(p.source)
               .emit(ctx);
             return failure::promise();

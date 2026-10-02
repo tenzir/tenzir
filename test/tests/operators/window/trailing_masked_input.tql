@@ -1,0 +1,7 @@
+// Events that an upstream filter removed neither fire nor enter a trailing
+// window.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+where x != 2
+window size=2, trailing=true {
+  summarize xs=collect(x)
+}

@@ -1,0 +1,11 @@
+// Events that an upstream filter removed do not reach any window.
+from {ts: 0s.from_epoch(), x: 1},
+     {ts: 1s.from_epoch(), x: 2},
+     {ts: 2s.from_epoch(), x: 3},
+     {ts: 3s.from_epoch(), x: 4}
+where x != 2
+window size=2s, on=ts {
+  summarize xs=collect(x)
+  start = $window.start
+}
+sort start

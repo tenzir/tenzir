@@ -1,0 +1,12 @@
+// Each window receives exactly its own events, also when they make up only a
+// small part of a large input batch.
+from {}
+repeat 40
+enumerate x
+batch 40
+window size=1 {
+  summarize n=count(), x=min(x)
+  begin = $window.begin
+}
+assert n == 1 and x == begin
+summarize windows=count(), events=sum(n)

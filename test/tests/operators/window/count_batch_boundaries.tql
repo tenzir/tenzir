@@ -1,0 +1,8 @@
+// A count window collects its events across input batch boundaries.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}, {x: 6}, {x: 7}
+batch 3
+window size=2 {
+  summarize xs=collect(x)
+  begin = $window.begin
+}
+sort begin
