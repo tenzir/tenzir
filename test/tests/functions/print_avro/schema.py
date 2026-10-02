@@ -1,4 +1,5 @@
 # runner: python
+# timeout: 90
 
 import base64
 from collections import Counter
