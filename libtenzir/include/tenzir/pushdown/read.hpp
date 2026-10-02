@@ -14,7 +14,13 @@
 #include <string>
 #include <vector>
 
-namespace tenzir {
+/// Application of optimizer hints inside a reader.
+///
+/// A reader that decodes events itself, such as `read_parquet`, has no target
+/// to hand the optimizer's hints to. It applies them while reading instead: it
+/// decodes only the columns that the projection and the filters reference,
+/// and applies the filters and the limit to each batch before emitting it.
+namespace tenzir::pushdown {
 
 /// Resolve conservative top-level column requirements for a reader, including
 /// the columns referenced by pushed-down filter predicates.
@@ -33,15 +39,14 @@ auto read_projection_paths(Option<ir::OptimizeProjection> projection,
 /// Apply pushed-down filter predicates and then the remaining row limit.
 /// The limit counts only events that survive every predicate, and `remaining`
 /// is decremented by the number of rows returned.
-auto apply_read_pushdown(table_slice slice, ir::OptimizeFilter const& filter,
-                         Option<uint64_t>& remaining, diagnostic_handler& dh)
+auto apply_read(table_slice slice, ir::OptimizeFilter const& filter,
+                Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> table_slice;
 
 /// Apply prepared predicates and the remaining limit by narrowing the active
 /// mask. Columns and metadata stay intact; only surviving rows count.
-auto apply_read_pushdown(nova::Events events,
-                         std::span<nova::Evaluator> filters,
-                         Option<uint64_t>& remaining, diagnostic_handler& dh)
+auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
+                Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> nova::Events;
 
-} // namespace tenzir
+} // namespace tenzir::pushdown

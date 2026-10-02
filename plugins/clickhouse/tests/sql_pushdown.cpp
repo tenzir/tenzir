@@ -11,6 +11,7 @@
 #include "clickhouse/block_to_table_slice.hpp"
 
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/pushdown/translate.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/test/test.hpp>
 #include <tenzir/tql2/parser.hpp>
@@ -72,15 +73,23 @@ auto parse(std::string_view source) -> ast::expression {
   return std::move(*expr);
 }
 
+auto render(Option<pushdown::Expr> const& expr) -> Option<std::string> {
+  if (not expr) {
+    return None{};
+  }
+  return ClickHouseRenderer{}.render(*expr);
+}
+
 auto translate(std::string_view source) -> Option<std::string> {
-  return translate_predicate(parse(source), make_schema());
+  return render(
+    pushdown::translate_predicate(parse(source), make_schema().model()));
 }
 
 /// Adapts `source` to the schema and returns whether the left-hand side of the
 /// resulting binary expression is a call of `ip`.
 auto adapts_to_ip_call(std::string_view source) -> bool {
   auto expr = parse(source);
-  adapt_to_schema(expr, make_schema());
+  pushdown::adapt_to_columns(expr, make_schema().model());
   auto const* binary = try_as<ast::binary_expr>(expr);
   if (not binary) {
     return false;
@@ -93,16 +102,18 @@ auto adapts_to_ip_call(std::string_view source) -> bool {
 
 /// Adapts `source` and returns its exact translation.
 auto adapt_translate(std::string_view source) -> Option<std::string> {
+  auto schema = make_schema();
   auto expr = parse(source);
-  adapt_to_schema(expr, make_schema());
-  return translate_predicate(expr, make_schema());
+  pushdown::adapt_to_columns(expr, schema.model());
+  return render(pushdown::translate_predicate(expr, schema.model()));
 }
 
 /// Adapts `source` and returns its prefilter.
 auto prefilter(std::string_view source) -> Option<std::string> {
+  auto schema = make_schema();
   auto expr = parse(source);
-  adapt_to_schema(expr, make_schema());
-  return translate_prefilter(expr, make_schema());
+  pushdown::adapt_to_columns(expr, schema.model());
+  return render(pushdown::translate_prefilter(expr, schema.model()));
 }
 
 } // namespace
@@ -256,7 +267,8 @@ TEST("enum, uuid, and fixed string equality") {
   // not readable at all and nothing on it is pushed.
   auto quoted = SqlSchema{};
   quoted.add_column("e", "Enum8('it\\'s' = 1)");
-  CHECK(not translate_predicate(parse("e == \"it's\""), quoted));
+  CHECK(
+    not pushdown::translate_predicate(parse("e == \"it's\""), quoted.model()));
   // An unknown name never matches, and ClickHouse might reject it.
   CHECK_EQUAL(translate("status == \"nope\""), std::string{"false"});
   CHECK_EQUAL(translate("status != \"nope\""), std::string{"true"});
@@ -686,7 +698,9 @@ TEST("conjunctions are split into pushed and remaining parts") {
   filter.push_back(parse("x > 0 and y.to_upper() == \"F\" and n == null"));
   filter.push_back(parse("flag"));
   filter.push_back(parse("y == 1.1.1.1 and y in 10.0.0.0/8"));
-  auto split = split_filter_for_sql(std::move(filter), make_schema());
+  auto schema = make_schema();
+  auto split = pushdown::split_filter(std::move(filter), schema.model(),
+                                      ClickHouseRenderer{});
   REQUIRE_EQUAL(split.pushed.size(), size_t{5});
   CHECK_EQUAL(split.pushed[0], std::string{"`x` > 0"});
   CHECK_EQUAL(split.pushed[1], std::string{"`n` IS NULL"});

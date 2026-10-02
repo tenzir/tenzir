@@ -2,12 +2,11 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/read_pushdown.hpp"
-
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/serialize.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/pushdown/read.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -93,35 +92,36 @@ TEST("reader projection includes filter columns and retains top-level "
      "records") {
   auto filter = ir::OptimizeFilter{};
   filter.push_back(expression_from("nested.x >= 4"));
-  auto result = read_projection(projection_from("id"), filter);
+  auto result = pushdown::read_projection(projection_from("id"), filter);
   REQUIRE(result);
   CHECK_EQUAL(*result, (std::vector<std::string>{"id", "nested"}));
-  result = read_projection(projection_from("nested.x"), {});
+  result = pushdown::read_projection(projection_from("nested.x"), {});
   REQUIRE(result);
   CHECK_EQUAL(*result, (std::vector<std::string>{"nested"}));
 }
 
 TEST("reader projection conservatively handles whole events and functions") {
-  CHECK(not read_projection(projection_from("this"), {}));
+  CHECK(not pushdown::read_projection(projection_from("this"), {}));
   auto filter = ir::OptimizeFilter{};
   filter.push_back(expression_from("string(id) == \"4\""));
-  CHECK(not read_projection(projection_from("id"), filter));
-  CHECK(not read_projection({}, {}));
+  CHECK(not pushdown::read_projection(projection_from("id"), filter));
+  CHECK(not pushdown::read_projection({}, {}));
 }
 
 TEST("path-preserving reader projection keeps nested paths and filter "
      "fields") {
   auto filter = ir::OptimizeFilter{};
   filter.push_back(expression_from("nested.y >= 4"));
-  auto result = read_projection_paths(projection_from("nested.x"), filter);
+  auto result
+    = pushdown::read_projection_paths(projection_from("nested.x"), filter);
   CHECK_EQUAL(projection_paths(result), (std::vector<std::vector<std::string>>{
                                           {"nested", "x"}, {"nested", "y"}}));
   // As for top-level columns, functions and whole events keep everything.
   filter.clear();
   filter.push_back(expression_from("string(id) == \"4\""));
-  CHECK(not read_projection_paths(projection_from("id"), filter));
-  CHECK(not read_projection_paths(projection_from("this"), {}));
-  CHECK(not read_projection_paths({}, {}));
+  CHECK(not pushdown::read_projection_paths(projection_from("id"), filter));
+  CHECK(not pushdown::read_projection_paths(projection_from("this"), {}));
+  CHECK(not pushdown::read_projection_paths({}, {}));
 }
 
 TEST("reader limit counts matching rows across batches") {
@@ -129,16 +129,16 @@ TEST("reader limit counts matching rows across batches") {
   filter.push_back(expression_from("id >= 4"));
   auto remaining = Option<uint64_t>{3};
   auto dh = collecting_diagnostic_handler{};
-  CHECK_EQUAL(apply_read_pushdown(slice_from(0), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(0), filter, remaining, dh).rows(),
               0u);
   CHECK_EQUAL(*remaining, 3u);
-  CHECK_EQUAL(apply_read_pushdown(slice_from(3), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(3), filter, remaining, dh).rows(),
               2u);
   CHECK_EQUAL(*remaining, 1u);
-  CHECK_EQUAL(apply_read_pushdown(slice_from(6), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(6), filter, remaining, dh).rows(),
               1u);
   CHECK_EQUAL(*remaining, 0u);
-  CHECK_EQUAL(apply_read_pushdown(slice_from(9), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(9), filter, remaining, dh).rows(),
               0u);
 }
 
@@ -211,7 +211,7 @@ TEST("refined reader projection includes accumulated filter dependencies") {
   auto filter = ir::OptimizeFilter{};
   filter.push_back(expression_from("nested.x >= 4"));
   filter.push_back(expression_from("other == 1"));
-  auto columns = read_projection(projection, filter);
+  auto columns = pushdown::read_projection(projection, filter);
   REQUIRE(columns);
   CHECK_EQUAL(*columns, (std::vector<std::string>{"id", "nested", "other"}));
 }

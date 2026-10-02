@@ -27,8 +27,8 @@
 #include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/pushdown/read.hpp>
 #include <tenzir/read_detection.hpp>
-#include <tenzir/read_pushdown.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -792,8 +792,8 @@ class ReadFeather final : public Operator<chunk_ptr, nova::Events> {
 public:
   explicit ReadFeather(ReadFeatherArgs args)
     : args_{std::move(args)},
-      projection_{read_projection(args_.optimization.projection,
-                                  args_.optimization.filter)},
+      projection_{pushdown::read_projection(args_.optimization.projection,
+                                            args_.optimization.filter)},
       remaining_{args_.optimization.limit},
       done_{remaining_ == uint64_t{0}},
       listener_{std::make_shared<Listener>()},
@@ -1150,8 +1150,8 @@ private:
       report_error(result.unwrap_err(), dh);
       co_return;
     }
-    auto events = apply_read_pushdown(std::move(result).unwrap(), filters_,
-                                      remaining_, dh);
+    auto events = pushdown::apply_read(std::move(result).unwrap(), filters_,
+                                       remaining_, dh);
     if (events.active_count() != 0) {
       co_await push(std::move(events));
     }
@@ -1239,8 +1239,8 @@ class ReadFeather final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadFeather(ReadFeatherArgs args)
     : args_{std::move(args)},
-      projection_{read_projection(args_.optimization.projection,
-                                  args_.optimization.filter)},
+      projection_{pushdown::read_projection(args_.optimization.projection,
+                                            args_.optimization.filter)},
       remaining_{args_.optimization.limit},
       done_{remaining_ == uint64_t{0}},
       listener_{std::make_shared<callback_listener>()},
@@ -1434,8 +1434,8 @@ private:
 
   auto emit_slice(table_slice slice, Push<table_slice>& push,
                   diagnostic_handler& dh) -> Task<void> {
-    slice = apply_read_pushdown(std::move(slice), args_.optimization.filter,
-                                remaining_, dh);
+    slice = pushdown::apply_read(std::move(slice), args_.optimization.filter,
+                                 remaining_, dh);
     if (slice.rows() != 0) {
       co_await push(std::move(slice));
     }

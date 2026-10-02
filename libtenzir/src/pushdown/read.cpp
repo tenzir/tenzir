@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/read_pushdown.hpp"
+#include "tenzir/pushdown/read.hpp"
 
 #include "tenzir/tql2/filter.hpp"
 
-namespace tenzir {
+namespace tenzir::pushdown {
 
 namespace {
 
@@ -76,8 +76,8 @@ auto read_projection_paths(Option<ir::OptimizeProjection> projection,
   return projection;
 }
 
-auto apply_read_pushdown(table_slice slice, ir::OptimizeFilter const& filter,
-                         Option<uint64_t>& remaining, diagnostic_handler& dh)
+auto apply_read(table_slice slice, ir::OptimizeFilter const& filter,
+                Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> table_slice {
   for (auto const& expr : filter) {
     if (slice.rows() == 0) {
@@ -92,9 +92,8 @@ auto apply_read_pushdown(table_slice slice, ir::OptimizeFilter const& filter,
   return slice;
 }
 
-auto apply_read_pushdown(nova::Events events,
-                         std::span<nova::Evaluator> filters,
-                         Option<uint64_t>& remaining, diagnostic_handler& dh)
+auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
+                Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> nova::Events {
   for (auto& filter : filters) {
     if (not events.mask.any()) {
@@ -125,4 +124,4 @@ auto apply_read_pushdown(nova::Events events,
   return events;
 }
 
-} // namespace tenzir
+} // namespace tenzir::pushdown

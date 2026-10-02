@@ -23,8 +23,8 @@
 #include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/pushdown/read.hpp>
 #include <tenzir/read_detection.hpp>
-#include <tenzir/read_pushdown.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -214,8 +214,8 @@ protected:
                                               args.decimal_format->inner)
                                               .value_or(decimal_format::string)
                                           : decimal_format::string},
-      projection_{read_projection_paths(std::move(args.optimization.projection),
-                                        filter_)} {
+      projection_{pushdown::read_projection_paths(
+        std::move(args.optimization.projection), filter_)} {
   }
 
   /// Prepares the pushed-down filters, once per reader.
@@ -278,10 +278,10 @@ protected:
     TENZIR_ASSERT(records);
     auto length = records->length();
     auto meta = metadata.to_meta(length);
-    return apply_read_pushdown(nova::Events{std::move(*records),
-                                            nova::storage::BitMap{length, true},
-                                            std::move(meta)},
-                               filters_, remaining_, dh);
+    return pushdown::apply_read(
+      nova::Events{std::move(*records), nova::storage::BitMap{length, true},
+                   std::move(meta)},
+      filters_, remaining_, dh);
   }
 
   ir::OptimizeFilter filter_;
@@ -1033,8 +1033,8 @@ public:
                                           : decimal_format::string},
       filter_{std::move(args.optimization.filter)},
       remaining_{args.optimization.limit},
-      projection_{
-        read_projection(std::move(args.optimization.projection), filter_)} {
+      projection_{pushdown::read_projection(
+        std::move(args.optimization.projection), filter_)} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
@@ -1154,8 +1154,8 @@ public:
           .emit(ctx);
         co_return FinalizeBehavior::done;
       }
-      auto slice = apply_read_pushdown(std::move(*maybe_slice), filter_,
-                                       remaining_, ctx.dh());
+      auto slice = pushdown::apply_read(std::move(*maybe_slice), filter_,
+                                        remaining_, ctx.dh());
       if (slice.rows() != 0) {
         co_await push(std::move(slice));
       }

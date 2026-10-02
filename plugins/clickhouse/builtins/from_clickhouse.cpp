@@ -18,6 +18,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/pushdown/translate.hpp"
 #include "tenzir/tql2/filter.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -356,8 +357,8 @@ private:
       };
     }
     auto schema = fetch_schema(client, *plan.table);
-    auto split
-      = split_filter_for_sql(std::move(plan.optimization.filter), schema);
+    auto split = pushdown::split_filter(std::move(plan.optimization.filter),
+                                        schema.model(), ClickHouseRenderer{});
     // The limit counts events after the whole filter chain, so it can only go
     // into the query if the chain did.
     auto limit = Option<uint64_t>{};

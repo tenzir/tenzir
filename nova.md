@@ -125,7 +125,7 @@ aliases first and do not use borrowed views after the transfer. Use the
 `arrow::Array const&` overload when retaining the original input.
 
 Handle the returned `Result` and keep diagnostics and format-specific conversions
-in the reader. Use the Nova overload of `apply_read_pushdown()` for prepared
+in the reader. Use the Nova overload of `pushdown::apply_read()` for prepared
 filters and limits, preserving standalone filtering diagnostics.
 
 ## Evaluator
