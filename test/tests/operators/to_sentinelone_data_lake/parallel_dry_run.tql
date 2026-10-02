@@ -1,6 +1,3 @@
----
-skip: deferred until the Nova executor supports multi-lane routing
----
 // parallelism: 4
 // Dry runs print their request transcript to stdout, so the operator must not
 // be replicated: the output stays a deterministic single-instance transcript

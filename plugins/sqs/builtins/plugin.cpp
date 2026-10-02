@@ -10,7 +10,6 @@
 
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
-#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
@@ -111,11 +110,7 @@ public:
     // concurrency-safe broker: standard queues never guaranteed order across
     // messages, and this sink does not set a message group ID. Replicating the
     // operator therefore weakens no guarantee that a single instance provided.
-    // TODO(TNZ-1409): The executor cannot yet route events across multiple
-    // lanes, so the event implementation must run as a single instance.
-    d.parallelizable([](const ToSqsArgs&) {
-      return not nova_enabled();
-    });
+    d.parallelizable();
     return d.without_optimize();
   }
 };

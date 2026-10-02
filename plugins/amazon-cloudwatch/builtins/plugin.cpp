@@ -8,7 +8,6 @@
 
 #include "cloudwatch/operators.hpp"
 
-#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
@@ -491,11 +490,7 @@ public:
     // requires sequence tokens, so concurrent writers to the same log stream
     // are safe; events from different instances may interleave out of input
     // order, which parallelism waives by design.
-    // TODO(TNZ-1409): The executor cannot yet route events across multiple
-    // lanes, so the event implementation must run as a single instance.
-    d.parallelizable([](const ToCloudWatchArgs&) {
-      return not nova_enabled();
-    });
+    d.parallelizable();
     return d.without_optimize();
   }
 };

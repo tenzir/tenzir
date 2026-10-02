@@ -20,7 +20,6 @@
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
-#include <tenzir/nova_flag.hpp>
 #include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -998,11 +997,7 @@ public:
     // With multiple instances publishing to the same subject, messages from
     // different instances interleave, so subscribers may observe events out
     // of input order. Parallelism waives that ordering by design.
-    // TODO(TNZ-1409): The executor cannot yet route events across multiple
-    // lanes, so the event implementation must run as a single instance.
-    d.parallelizable([](const ToNatsArgs&) {
-      return not nova_enabled();
-    });
+    d.parallelizable();
     return d.without_optimize();
   }
 };
