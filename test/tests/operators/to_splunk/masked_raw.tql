@@ -1,0 +1,22 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/collector/raw
+      query: host=a&sourcetype=_json&time=1
+      body: first
+    - method: POST
+      path: /services/collector/raw
+      query: host=c&sourcetype=_json&time=3
+      body: third
+---
+
+from {n: 1, h: "a", text: "first", ts: 1},
+     {n: 2, h: "skip", text: "excluded", ts: 2},
+     {n: 3, h: "null-row", text: null, ts: 99},
+     {n: 4, h: "c", text: "third", ts: 3}
+where n != 2
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="test-token", raw=text, host=h, time=ts,
+  compress=false, parallel=1

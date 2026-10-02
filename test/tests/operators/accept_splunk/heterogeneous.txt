@@ -1,0 +1,35 @@
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: "one",
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+  },
+}
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: {
+      xs: [
+        1,
+        null,
+        "three",
+      ],
+      _raw: "{\"x\":1}",
+    },
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+  },
+}
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: "two",
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+    extra: true,
+  },
+}

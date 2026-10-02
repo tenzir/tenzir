@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/collector/raw
+      query: sourcetype=_json
+      header_name: Content-Encoding
+      header_value: gzip
+      body: |-
+        first
+        second
+---
+
+from {text: "first"}, {text: "second"}
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="test-token", raw=text

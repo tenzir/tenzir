@@ -1,0 +1,21 @@
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: {
+      message: "café",
+      _raw: "{\"n\":1}",
+    },
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+  },
+}
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: "second",
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+  },
+}

@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_request:
+      path: /services/collector/event
+      body: '[{"event":"one"},{"event":{"xs":[1,null,"three"],"_raw":"{\"x\":1}"}},{"event":"two","extra":true}]'
+      headers:
+        Authorization: Splunk test-token
+      expected_status: 200
+      expected_body: '{"text":"Success","code":0}'
+      stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 3
+this = {schema: @name, data: this}

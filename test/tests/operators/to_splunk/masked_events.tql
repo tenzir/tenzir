@@ -1,0 +1,20 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/collector/event
+      header_name: Authorization
+      header_value: Splunk test-token
+      body: '{"host":"a","sourcetype":"_json","time":1735689600.0,"fields":{"tenant":"acme","tags":["one","two"]},"event":{"n":1,"nested":{"text":"first"}}}{"host":"c","sourcetype":"_json","time":3,"fields":{"tenant":"acme","tags":["one","two"]},"event":{"n":3,"nested":{"text":"third"}}}'
+---
+
+from {n: 1, h: "a", ts: 2025-01-01T00:00:00Z, text: "first"},
+     {n: 2, h: "skip", ts: null, text: "excluded"},
+     {n: 3, h: "c", ts: 3, text: "third"}
+where n != 2
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="test-token", host=h, time=ts,
+  fields={tenant: "acme", tags: ["one", "two"]},
+  event={n: n, nested: {text: text}, omitted: null},
+  compress=false, parallel=1

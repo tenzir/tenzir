@@ -12,6 +12,7 @@
 #include "tenzir/co_match.hpp"
 #include "tenzir/curl.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
@@ -20,6 +21,9 @@
 #include "tenzir/http_pool.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/multi_series_builder.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/json_parser.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
@@ -34,6 +38,7 @@
 #include <caf/message.hpp>
 #include <folly/CancellationToken.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Collect.h>
 #include <folly/coro/Invoke.h>
 #include <folly/coro/WithCancellation.h>
 
@@ -233,6 +238,42 @@ auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
   return result;
 }
 
+auto extract_messages(nova::RowView<nova::Record> envelope)
+  -> std::vector<SplunkMessage> {
+  auto result = std::vector<SplunkMessage>{};
+  for (auto const& [name, value] : envelope) {
+    if (name != "messages") {
+      continue;
+    }
+    auto const* messages = try_as<nova::RowView<nova::List>>(value);
+    if (not messages) {
+      continue;
+    }
+    for (auto const& message : *messages) {
+      auto const* fields = try_as<nova::RowView<nova::Record>>(message);
+      if (not fields) {
+        continue;
+      }
+      auto parsed = SplunkMessage{};
+      for (auto const& [key, item] : *fields) {
+        auto const* text = try_as<nova::RowView<nova::String>>(item);
+        if (not text) {
+          continue;
+        }
+        if (key == "type") {
+          parsed.type = **text;
+        } else if (key == "text") {
+          parsed.text = **text;
+        }
+      }
+      if (not parsed.type.empty() or not parsed.text.empty()) {
+        result.push_back(std::move(parsed));
+      }
+    }
+  }
+  return result;
+}
+
 auto response_body_text(std::string_view text) -> std::string {
   if (auto parsed = from_json(text)) {
     if (auto const* envelope = try_as<record>(*parsed)) {
@@ -356,6 +397,16 @@ using StreamMessage
             SearchRejected, RequestFailed, ParseFailed, StreamDone>;
 
 using StreamQueue = folly::coro::BoundedQueue<StreamMessage, false, true>;
+
+struct EventResultBatch {
+  std::vector<nova::Array<nova::Record>> records;
+};
+
+using EventStreamMessage = variant<EventResultBatch, FlushTick, StreamWarning,
+                                   RetryWarning, SearchFailed, SearchRejected,
+                                   RequestFailed, ParseFailed, StreamDone>;
+using EventStreamQueue
+  = folly::coro::BoundedQueue<EventStreamMessage, false, true>;
 
 // Streams the Splunk export response and forwards results through the queue.
 // Runs detached from the operator, so it must not touch the operator or its
@@ -701,6 +752,366 @@ private:
   bool done_ = false;
 };
 
+auto run_export_request_events(
+  std::string url, std::string target, std::string body,
+  std::vector<http::Header> headers, HttpPoolConfig config,
+  Arc<EventStreamQueue> queue,
+  folly::Executor::KeepAlive<folly::IOExecutor> executor) -> Task<void> {
+  auto success = false;
+  auto stopped = false;
+  auto error_body = std::string{};
+  auto buffer = std::string{};
+  auto records = std::vector<nova::Array<nova::Record>>{};
+  auto parser_dh = collecting_diagnostic_handler{};
+  auto settings = nova::JsonParser::Settings{};
+  settings.builder.infer_booleans = false;
+  settings.decoding.first_duplicate_wins = true;
+  settings.decoding.reject_oversized_integers = true;
+  auto parser = nova::JsonParser::make(std::move(settings), parser_dh);
+  TENZIR_ASSERT(parser);
+  // Processes one newline-delimited response envelope, collecting `result`
+  // records into `records`. Returns true to stop consuming the stream.
+  auto process_line = [&](std::string_view line) -> Task<bool> {
+    line = detail::trim(line);
+    if (line.empty()) {
+      co_return false;
+    }
+    // Strict whole-frame decoding: never expose a partial result.
+    auto parsed = parser->parse_document_value(line);
+    if (not parsed) {
+      auto diagnostics = std::move(parser_dh).collect();
+      auto detail
+        = diagnostics.empty()
+            ? Option<std::string>{None{}}
+            : Option<std::string>{std::move(diagnostics.front().message)};
+      co_await queue->enqueue(ParseFailed{
+        "failed to parse Splunk response as JSON", std::move(detail)});
+      co_return true;
+    }
+    auto envelope = parsed->get_alternative<nova::Record>();
+    if (not envelope) {
+      co_await queue->enqueue(
+        ParseFailed{"expected Splunk response to be a JSON object", {}});
+      co_return true;
+    }
+    for (auto const& message : extract_messages(envelope->data.get(0))) {
+      auto text = message.text.empty() ? std::string{"no details provided"}
+                                       : message.text;
+      if (detail::ascii_icase_equal(message.type, "ERROR")
+          or detail::ascii_icase_equal(message.type, "FATAL")) {
+        co_await queue->enqueue(SearchFailed{std::move(text)});
+        co_return true;
+      }
+      auto type = message.type.empty() ? std::string{"message"} : message.type;
+      if (detail::ascii_icase_equal(message.type, "WARN")) {
+        co_await queue->enqueue(
+          StreamWarning{std::move(type), std::move(text)});
+        continue;
+      }
+      TENZIR_DEBUG("from_splunk: search returned {}: {}", type, text);
+    }
+    auto result = envelope->data.field("result");
+    if (result) {
+      if (auto values
+          = std::move(result->data).get_alternative<nova::Record>()) {
+        records.push_back(std::move(values->data));
+      }
+    }
+    co_return false;
+  };
+  auto callbacks = HttpStreamCallbacks{};
+  callbacks.on_headers = [&](http::Response const& response) {
+    success = response.is_status_success();
+  };
+  callbacks.on_body = [&](std::string chunk) -> Task<bool> {
+    if (not success) {
+      constexpr auto max_error_body_size = size_t{65536};
+      if (error_body.size() < max_error_body_size) {
+        error_body += chunk;
+      }
+      co_return false;
+    }
+    buffer += chunk;
+    auto pos = size_t{};
+    while ((pos = buffer.find('\n')) != std::string::npos) {
+      auto const line = std::string_view{buffer.data(), pos};
+      if (co_await process_line(line)) {
+        stopped = true;
+        co_return true;
+      }
+      buffer.erase(0, pos + 1);
+    }
+    if (not records.empty()) {
+      co_await queue->enqueue(EventResultBatch{std::move(records)});
+      records.clear();
+    }
+    co_return false;
+  };
+  auto pool = HttpPool::make(std::move(executor), url, std::move(config));
+  auto result
+    = co_await pool->stream_post(std::move(target), std::move(body),
+                                 std::move(headers), std::move(callbacks));
+  if (stopped) {
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  if (result.is_err()) {
+    co_await queue->enqueue(RequestFailed{std::move(result).unwrap_err()});
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  auto response = std::move(result).unwrap();
+  if (not response.is_status_success()) {
+    auto message = response_body_text(error_body);
+    if (message.empty()) {
+      message = "HTTP request failed without a response body";
+    }
+    co_await queue->enqueue(SearchRejected{std::move(message)});
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  if (not buffer.empty()) {
+    if (co_await process_line(buffer)) {
+      co_await queue->enqueue(StreamDone{});
+      co_return;
+    }
+  }
+  if (not records.empty()) {
+    co_await queue->enqueue(EventResultBatch{std::move(records)});
+  }
+  co_await queue->enqueue(StreamDone{});
+}
+
+class FromSplunkEvents final : public Operator<void, nova::Events> {
+public:
+  explicit FromSplunkEvents(FromSplunkArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    events_read_
+      = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    auto resolved_headers = std::vector<http::Header>{};
+    auto header_requests = http::make_header_secret_requests(
+      Option<located<data>>{args_.headers}, resolved_headers, ctx.dh());
+    if (auto result = co_await ctx.resolve_secrets(std::move(header_requests));
+        result.is_error()) {
+      done_ = true;
+      co_return;
+    }
+    auto url = make_export_url(args_.url.inner);
+    auto const request_timeout
+      = args_.timeout ? std::chrono::duration_cast<std::chrono::milliseconds>(
+                          args_.timeout->inner)
+                      : std::chrono::milliseconds{http::default_timeout};
+    auto config = http::make_http_pool_config(args_.tls, url, args_.url.source,
+                                              ctx.dh(), request_timeout,
+                                              ctx.actor_system().config());
+    if (not config) {
+      done_ = true;
+      co_return;
+    }
+    if (args_.connection_timeout) {
+      config->connection_timeout
+        = std::chrono::duration_cast<std::chrono::milliseconds>(
+          args_.connection_timeout->inner);
+    }
+    config->max_retry_count
+      = args_.max_retry_count
+          ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
+          : http::default_max_retry_count;
+    config->retry_delay
+      = args_.retry_delay
+          ? std::chrono::duration_cast<std::chrono::milliseconds>(
+              args_.retry_delay->inner)
+          : std::chrono::milliseconds{http::default_retry_delay};
+    auto target = make_request_target(url, args_.url.source, ctx.dh());
+    if (not target) {
+      done_ = true;
+      co_return;
+    }
+    if (not http::find(resolved_headers, "content-type")) {
+      resolved_headers.emplace_back("Content-Type",
+                                    "application/x-www-form-urlencoded");
+    }
+    if (not http::find(resolved_headers, "accept")) {
+      resolved_headers.emplace_back("Accept", "application/json");
+    }
+    auto queue = Arc<EventStreamQueue>{std::in_place, 64};
+    queue_ = queue;
+    config->on_retry = [queue](std::string_view message) mutable {
+      std::ignore = queue->try_enqueue(RetryWarning{std::string{message}});
+    };
+    url_ = url;
+    TENZIR_DEBUG("from_splunk: submitting streaming search without "
+                 "pagination: {}",
+                 args_.search.inner);
+    ctx.spawn_task([url = std::move(url), target = std::move(*target),
+                    body = make_form_body(args_),
+                    headers = std::move(resolved_headers),
+                    config = std::move(*config), queue = std::move(queue),
+                    executor = ctx.io_executor(),
+                    cancel = cancel_.getToken()]() mutable -> Task<void> {
+      auto token = folly::cancellation_token_merge(
+        co_await folly::coro::co_current_cancellation_token, cancel);
+      co_await folly::coro::co_withCancellation(
+        token, run_export_request_events(std::move(url), std::move(target),
+                                         std::move(body), std::move(headers),
+                                         std::move(config), std::move(queue),
+                                         std::move(executor)));
+    });
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_ or not queue_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    if (not next_flush_) {
+      co_return Any{co_await (*queue_)->dequeue()};
+    }
+    // Keep a concurrently completed dequeue even if the flush timer also fires.
+    auto [message, timer] = co_await folly::coro::collectAnyNoDiscard(
+      (*queue_)->dequeue(), sleep_until(*next_flush_));
+    if (message.hasValue()) {
+      co_return Any{std::move(message).value()};
+    }
+    timer.value();
+    co_return Any{EventStreamMessage{FlushTick{}}};
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    co_await co_match(
+      std::move(result).as<EventStreamMessage>(),
+      [&](EventResultBatch msg) -> Task<void> {
+        for (auto const& value : msg.records) {
+          if (not next_flush_) {
+            next_flush_ = std::chrono::steady_clock::now()
+                          + defaults::import::batch_timeout;
+          }
+          auto row = builder_.record();
+          for (auto const& [name, field] : value.get(0)) {
+            nova::append_row(row.field(name), field);
+          }
+          if (builder_.length() >= detail::narrow<nova::storage::Index>(
+                defaults::import::table_slice_size)) {
+            co_await flush(push);
+          }
+        }
+      },
+      [&](FlushTick) -> Task<void> {
+        co_await flush(push);
+      },
+      [&](StreamWarning msg) -> Task<void> {
+        diagnostic::warning("Splunk search returned {}: {}", msg.type, msg.text)
+          .primary(args_.search.source)
+          .note("search: {}", args_.search.inner)
+          .emit(ctx);
+        co_return;
+      },
+      [&](RetryWarning msg) -> Task<void> {
+        diagnostic::warning("{}", msg.message)
+          .primary(args_.url.source)
+          .emit(ctx);
+        co_return;
+      },
+      [&](SearchFailed msg) -> Task<void> {
+        diagnostic::error("Splunk search failed: {}", msg.text)
+          .primary(args_.search.source)
+          .note("search: {}", args_.search.inner)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](SearchRejected msg) -> Task<void> {
+        diagnostic::error("Splunk rejected the search: {}", msg.text)
+          .primary(args_.search.source)
+          .note("search: {}", args_.search.inner)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](RequestFailed msg) -> Task<void> {
+        diagnostic::error("HTTP request to `{}` failed: {}", url_, msg.message)
+          .primary(args_.url.source)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](ParseFailed msg) -> Task<void> {
+        auto builder
+          = diagnostic::error("{}", msg.message).primary(args_.url.source);
+        if (msg.detail) {
+          builder = std::move(builder).note("{}", *msg.detail);
+        }
+        std::move(builder).emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](StreamDone) -> Task<void> {
+        co_await flush(push);
+        done_ = true;
+        co_return;
+      });
+    // Any continuously ready message kind can starve the latency deadline.
+    // Process the dequeued message first, but never flush after a fatal error.
+    if (not done_ and next_flush_
+        and std::chrono::steady_clock::now() >= *next_flush_) {
+      co_await flush(push);
+    }
+  }
+
+  auto flush(Push<nova::Events>& push) -> Task<void> {
+    auto length = builder_.length();
+    if (length == 0) {
+      co_return;
+    }
+    next_flush_ = None{};
+    // finish() consumes the builder; start subsequent batches with fresh state.
+    auto data
+      = std::exchange(builder_, nova::ArrayBuilder<nova::Record>{}).finish();
+    auto events
+      = nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                     nova::Events::Meta::make_empty(length, "tenzir.splunk")};
+    events_read_.add(events.active_count());
+    co_await push(std::move(events));
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    cancel_.requestCancellation();
+    if (queue_) {
+      std::ignore = (*queue_)->try_enqueue(StreamDone{});
+    }
+    done_ = true;
+    co_return;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // Restarting a streaming search would duplicate already committed results.
+    diagnostic::error("from_splunk does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
+private:
+  FromSplunkArgs args_;
+  std::string url_;
+  mutable Option<Arc<EventStreamQueue>> queue_;
+  nova::ArrayBuilder<nova::Record> builder_;
+  Option<std::chrono::steady_clock::time_point> next_flush_;
+  folly::CancellationSource cancel_;
+  MetricsCounter events_read_;
+  bool done_ = false;
+};
+
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -708,7 +1119,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromSplunkArgs, FromSplunk>{};
+    auto d = Describer<FromSplunkArgs, FromSplunk, FromSplunkEvents>{};
     auto url = d.positional("url", &FromSplunkArgs::url);
     auto search = d.named("search", &FromSplunkArgs::search, "string");
     auto earliest

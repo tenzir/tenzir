@@ -1,0 +1,7 @@
+error: failed to parse Splunk response as JSON
+ --> tests/operators/from_splunk/malformed_truncated.tql:6:13
+  |
+6 | from_splunk env("HTTP_FIXTURE_URL") + "/splunk/malformed-truncated",
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: failed to parse a JSON key-value pair

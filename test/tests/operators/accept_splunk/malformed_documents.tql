@@ -1,0 +1,53 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body: '{"event":"must not escape"}{"event":{"broken":[1,]}}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '[{"event":"must not escape"},{"event":{"x":1,"x":[1,]}}]'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"must not escape"}{"event":'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"must not escape"} trailing'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":{"x":18446744073709551616}}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '[{"event":"must not escape"},42]'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"accepted"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 1

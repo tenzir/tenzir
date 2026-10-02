@@ -1,0 +1,14 @@
+---
+error: true
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/transport-failure/services/collector/event
+      body: '{"sourcetype":"_json","event":{"text":"first"}}'
+---
+
+from {text: "first"}, {text: "other"}, {text: "third"}
+to_splunk env("HTTP_FIXTURE_URL") + "splunk/transport-failure",
+  hec_token="test-token", max_content_length=50,
+  compress=false, parallel=1

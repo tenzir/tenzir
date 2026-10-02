@@ -1,0 +1,6 @@
+error: failed to send data to Splunk: proxygen::coro::HTTPError: Error receiving response headers, err=HTTP source aborted err=TRANSPORT_EOF
+  --> tests/operators/to_splunk/raw_transport_failure.tql:12:1
+   |
+12 | to_splunk env("HTTP_FIXTURE_URL") + "splunk/transport-failure",
+   | ^^^^^^^^^
+   |

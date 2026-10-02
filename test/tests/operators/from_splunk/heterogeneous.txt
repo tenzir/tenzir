@@ -1,0 +1,15 @@
+{
+  x: 1,
+  nested: {
+    a: "first",
+  },
+}
+{
+  x: "two",
+  xs: [
+    1,
+    null,
+    "three",
+  ],
+  flag: true,
+}

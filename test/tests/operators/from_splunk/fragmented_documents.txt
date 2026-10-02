@@ -1,0 +1,49 @@
+{
+  _raw: "{\"count\":42}",
+  ip: 192.0.2.1,
+  net: 192.0.2.0/24,
+  time: 2026-07-14T14:54:45Z,
+  duration: 5s,
+  bool_string: "true",
+  number_string: "42",
+  signed: -1,
+  unsigned: 18446744073709551615,
+  real: 1.25,
+  "null": null,
+  duplicate: "first",
+  nested: {
+    key: 1,
+  },
+  "dotted.key": "literal",
+  unicode: "café",
+  escaped: "line\nquote\"slash\\",
+}
+{
+  _raw: 192.0.2.2,
+  ip: false,
+  nested: [
+    1,
+    null,
+    2s,
+  ],
+  duplicate: true,
+}
+{
+  _raw: null,
+  empty: {},
+  list: [],
+}
+{
+  _raw: 42,
+}
+{
+  _raw: {
+    nested: true,
+  },
+}
+{
+  _raw: "",
+}
+{
+  last: "no final newline",
+}

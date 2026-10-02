@@ -1,0 +1,14 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/collector/event
+      header_name: Content-Encoding
+      header_value: gzip
+      body: '{"sourcetype":"_json","event":{"text":"compressed","nullable":null}}'
+---
+
+from {text: "compressed", nullable: null}
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="test-token", include_nulls=true

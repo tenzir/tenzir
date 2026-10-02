@@ -1,0 +1,192 @@
+{
+  schema: "tenzir.splunk",
+  event: {
+    _raw: "{\"count\":42}",
+    ip: 192.0.2.1,
+    net: 192.0.2.0/24,
+    time: 2026-07-14T14:54:45Z,
+    duration: 5s,
+    bool_string: "true",
+    number_string: "42",
+    signed: -1,
+    unsigned: 18446744073709551615,
+    real: 1.25,
+    "null": null,
+    duplicate: "first",
+    nested: {
+      key: 1,
+    },
+    "dotted.key": "literal",
+    unicode: "café",
+    escaped: "line\nquote\"slash\\",
+  },
+  types: [
+    {
+      name: "_raw",
+      kind: "string",
+    },
+    {
+      name: "ip",
+      kind: "ip",
+    },
+    {
+      name: "net",
+      kind: "subnet",
+    },
+    {
+      name: "time",
+      kind: "time",
+    },
+    {
+      name: "duration",
+      kind: "duration",
+    },
+    {
+      name: "bool_string",
+      kind: "string",
+    },
+    {
+      name: "number_string",
+      kind: "string",
+    },
+    {
+      name: "signed",
+      kind: "int",
+    },
+    {
+      name: "unsigned",
+      kind: "uint",
+    },
+    {
+      name: "real",
+      kind: "float",
+    },
+    {
+      name: "null",
+      kind: "null",
+    },
+    {
+      name: "duplicate",
+      kind: "string",
+    },
+    {
+      name: "nested",
+      kind: "record",
+    },
+    {
+      name: "dotted.key",
+      kind: "string",
+    },
+    {
+      name: "unicode",
+      kind: "string",
+    },
+    {
+      name: "escaped",
+      kind: "string",
+    },
+  ],
+}
+{
+  schema: "tenzir.splunk",
+  event: {
+    _raw: 192.0.2.2,
+    ip: false,
+    nested: [
+      1,
+      null,
+      2s,
+    ],
+    duplicate: true,
+  },
+  types: [
+    {
+      name: "_raw",
+      kind: "ip",
+    },
+    {
+      name: "ip",
+      kind: "bool",
+    },
+    {
+      name: "nested",
+      kind: "list",
+    },
+    {
+      name: "duplicate",
+      kind: "bool",
+    },
+  ],
+}
+{
+  schema: "tenzir.splunk",
+  event: {
+    _raw: null,
+    empty: {},
+    list: [],
+  },
+  types: [
+    {
+      name: "_raw",
+      kind: "null",
+    },
+    {
+      name: "empty",
+      kind: "record",
+    },
+    {
+      name: "list",
+      kind: "list",
+    },
+  ],
+}
+{
+  schema: "tenzir.splunk",
+  event: {
+    _raw: 42,
+  },
+  types: [
+    {
+      name: "_raw",
+      kind: "int",
+    },
+  ],
+}
+{
+  schema: "tenzir.splunk",
+  event: {
+    _raw: {
+      nested: true,
+    },
+  },
+  types: [
+    {
+      name: "_raw",
+      kind: "record",
+    },
+  ],
+}
+{
+  schema: "tenzir.splunk",
+  event: {
+    _raw: "",
+  },
+  types: [
+    {
+      name: "_raw",
+      kind: "string",
+    },
+  ],
+}
+{
+  schema: "tenzir.splunk",
+  event: {
+    last: "no final newline",
+  },
+  types: [
+    {
+      name: "last",
+      kind: "string",
+    },
+  ],
+}

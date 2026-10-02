@@ -1,0 +1,19 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/collector/raw
+      query: host=a&sourcetype=_json
+      body: |-
+        first
+        second
+---
+
+from {text: "", h: "leading"},
+     {text: "first", h: "a"},
+     {text: "", h: "between"},
+     {text: "second", h: "a"},
+     {text: "", h: "trailing"}
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="test-token", raw=text, host=h, compress=false, parallel=1

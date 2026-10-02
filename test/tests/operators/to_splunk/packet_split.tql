@@ -1,0 +1,19 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/collector/event
+      body: '{"sourcetype":"_json","event":{"n":1}}'
+    - method: POST
+      path: /services/collector/event
+      body: '{"sourcetype":"_json","event":{"n":2}}'
+    - method: POST
+      path: /services/collector/event
+      body: '{"sourcetype":"_json","event":{"n":3}}'
+---
+
+from {n: 1}, {n: 2}, {n: 3}
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="test-token", max_content_length=40,
+  compress=false, parallel=1

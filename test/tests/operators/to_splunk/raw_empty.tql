@@ -1,0 +1,8 @@
+---
+fixtures:
+- http_server:
+    expected_count: 0
+---
+
+from {text: ""}, {text: ""}
+to_splunk env("HTTP_FIXTURE_URL"), hec_token="test-token", raw=text

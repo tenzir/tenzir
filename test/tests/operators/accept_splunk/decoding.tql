@@ -1,0 +1,24 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body: '{"event":{"_raw":"{\"n\":1}","ip":"192.0.2.1","net":"192.0.2.0/24","duration":"2s","time":"2026-07-14T14:54:45Z","boolean":"true","number":"42","key":1,"key":2,"nested":{"x":true,"x":false}},"time":1777019400.125,"fields":{"tag":["a","b"]},"receiver":"client"}{"event":"second","time":"1777019400.25","host":"vpn-01"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+        - path: /services/collector/event
+          body: '[{"event":{"message":"third"},"time":"2026-07-14T14:54:45Z","extra":null}]'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 3
+this = {schema: @name, data: this}

@@ -1,0 +1,22 @@
+---
+fixtures:
+  - http_request_chunked:
+      requests:
+        - path: /services/collector/event
+          body_chunks_base64:
+            - eyJldmVudCI6eyJtZXNzYWdlIjoiY2FmXHU=
+            - MDBl
+            - OSIsIl9yYXciOiJ7XCJuXA==
+            - IjoxfSJ9fXs=
+            - ImV2ZW50Ijoic2Vjb25kIn0=
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 2
+this = {schema: @name, data: this}

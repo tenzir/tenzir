@@ -1,0 +1,4 @@
+{
+  events: 100,
+  coalesced: true,
+}

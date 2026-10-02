@@ -38,6 +38,7 @@ import gzip
 import json
 import os
 import shutil
+import socket
 import ssl
 import tempfile
 import threading
@@ -91,6 +92,25 @@ _SPLUNK_RESULTS = (
 )
 
 
+# Literal JSON keeps duplicate keys, field order, and numeric tokens intact.
+_SPLUNK_COMPATIBILITY = (
+    b' \r\n{"result":{"_raw":"{\\"count\\":42}","ip":"192.0.2.1",'
+    b'"net":"192.0.2.0/24","time":"2026-07-14T14:54:45Z",'
+    b'"duration":"5s","bool_string":"true","number_string":"42",'
+    b'"signed":-1,"unsigned":18446744073709551615,"real":1.25,'
+    b'"null":null,"duplicate":"first","duplicate":"second",'
+    b'"nested":{"key":1,"key":2},"dotted.key":"literal",'
+    b'"unicode":"caf\\u00e9","escaped":"line\\nquote\\"slash\\\\"}}\r\n'
+    b'{"result":{"_raw":"192.0.2.2","ip":false,"nested":[1,null,"2s"],'
+    b'"duplicate":true}}\n'
+    b'{"result":{"_raw":null,"empty":{},"list":[]}}\n'
+    b'{"result":{"_raw":42}}\n'
+    b'{"result":{"_raw":{"nested":true}}}\n'
+    b'{"result":{"_raw":""}}\n'
+    b'{"result":{"last":"no final newline"}}'
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class HttpServerOptions:
     @dataclasses.dataclass(frozen=True)
@@ -98,6 +118,7 @@ class HttpServerOptions:
         count: int = 1
         method: str = ""
         path: str = ""
+        query: str = ""
         body: str = ""
         body_alt: str = ""
         header_name: str = ""
@@ -105,6 +126,7 @@ class HttpServerOptions:
 
     tls: bool = False
     proxy: bool = False
+    expected_count: int | None = None
     expected: list[ExpectedRequest | dict[str, object]] = dataclasses.field(
         default_factory=list
     )
@@ -127,6 +149,7 @@ def _normalize_expected_request(
         count=count,
         method=str(value.get("method", "")),
         path=str(value.get("path", "")),
+        query=str(value.get("query", "")),
         body=str(value.get("body", "")),
         body_alt=str(value.get("body_alt", "")),
         header_name=str(value.get("header_name", "")),
@@ -156,6 +179,8 @@ def _make_handler(
     retry_503_backoff_attempts = [0]
     retry_503_backoff_first_gap_at = [0.0]
     retry_503_backoff_second_gap_at = [0.0]
+    splunk_warnings_ready = threading.Event()
+    splunk_warnings_finished = threading.Event()
 
     class RecordingEchoHandler(BaseHTTPRequestHandler):
         def _validate_request(self, path: str, body: bytes) -> None:
@@ -177,6 +202,13 @@ def _make_handler(
                 errors.append(
                     f"expected request path {expected_request.path}, got {path}"
                 )
+            query = urlsplit(self.path).query
+            if expected_request.query and query != expected_request.query:
+                errors.append(
+                    f"expected query {expected_request.query!r}, got {query!r}"
+                )
+            if self.headers.get("Content-Encoding", "").lower() == "gzip":
+                body = gzip.decompress(body)
             body_text = body.decode("utf-8", errors="replace")
             if expected_request.body:
                 body_matches = body_text == expected_request.body
@@ -288,6 +320,23 @@ def _make_handler(
         def _handle_request(self, body: bytes) -> None:
             path = urlsplit(self.path).path
             self._validate_request(path, body)
+            if path == "/splunk/warnings/start":
+                splunk_warnings_ready.set()
+                self._reply(b"{}\n")
+                return
+            if path == "/splunk/warnings/finish":
+                splunk_warnings_ready.set()
+                splunk_warnings_finished.set()
+                self._reply(b"{}\n")
+                return
+            if path in {
+                "/splunk/transport-failure/services/collector/event",
+                "/splunk/transport-failure/services/collector/raw",
+            }:
+                # Accept the payload, then fail without an HTTP response.
+                self.close_connection = True
+                self.connection.shutdown(socket.SHUT_RDWR)
+                return
             if path == "/options/method":
                 self._reply(f'{{"method":"{self.command}"}}\n'.encode())
                 return
@@ -412,6 +461,83 @@ def _make_handler(
                 ]
                 self._reply_stream(chunks, delay=0.01)
                 return
+            if path == "/splunk/large" + _SPLUNK_EXPORT:
+                self._reply(
+                    b"".join(
+                        ('{"result":{"number":%d}}\n' % number).encode()
+                        for number in range(8193)
+                    )
+                )
+                return
+            if path == "/splunk/idle" + _SPLUNK_EXPORT:
+                # The first result must reach head before the late parse error.
+                self._reply_stream(
+                    [b'{"result":{"number":1}}\n', b"not json\n"], delay=3
+                )
+                return
+            if path == "/splunk/warnings" + _SPLUNK_EXPORT:
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.close_connection = True
+                try:
+                    self.wfile.write(
+                        b'{"result":{"number":1},"messages":'
+                        b'[{"type":"WARN","text":"ready"}]}\n'
+                    )
+                    self.wfile.flush()
+                    if not splunk_warnings_ready.wait(10):
+                        return
+                    # Each warning exceeds a stderr pipe's capacity. The test
+                    # can hold the first diagnostic past the flush deadline
+                    # while another warning is already queued.
+                    messages = [
+                        {"type": "WARN", "text": name + ": " + "x" * 131072}
+                        for name in ("first", "second")
+                    ]
+                    self.wfile.write(
+                        json.dumps({"messages": messages}).encode() + b"\n"
+                    )
+                    self.wfile.flush()
+                    splunk_warnings_finished.wait(10)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
+            if path == "/splunk/heterogeneous" + _SPLUNK_EXPORT:
+                self._reply(
+                    b'{"result":{"x":1,"nested":{"a":"first"}}}\n'
+                    b'{"result":{"x":"two","xs":[1,null,"three"],"flag":true}}\n'
+                )
+                return
+            if path == "/splunk/decoding" + _SPLUNK_EXPORT:
+                self._reply(_SPLUNK_COMPATIBILITY)
+                return
+            if path == "/splunk/fragmented-documents" + _SPLUNK_EXPORT:
+                # Split inside JSON escapes, numeric tokens, keys, and CRLF.
+                self._reply_stream([bytes([byte]) for byte in _SPLUNK_COMPATIBILITY])
+                return
+            if path == "/splunk/envelopes" + _SPLUNK_EXPORT:
+                self._reply(
+                    b'{"result":null}\n{"result":42}\n{"result":[{}]}\n'
+                    b'{"result":{},"result":{"ignored":true}}\n'
+                    b'{"messages":[null,42,{"type":42,"text":false}]}\n'
+                    b'{"messages":"ignored","result":{"ok":true}}\n'
+                    b'{"preview":true,"result":{"kept":true}}'
+                )
+                return
+            malformed_frames = {
+                "trailing": b'{"result":{"leak":true}} {"result":{"other":1}}\n',
+                "nested": b'{"result":{"leak":true,"broken":[1,]}}\n',
+                "duplicate": b'{"result":{"ok":1,"ok":[1,]}}\n',
+                "truncated": b'{"result":{"leak":true}',
+                "non-object": b'[{"result":{"leak":true}}]\n',
+                "oversized": b'{"result":{"leak":true,"n":18446744073709551616}}\n',
+            }
+            for name, payload in malformed_frames.items():
+                if path == f"/splunk/malformed-{name}" + _SPLUNK_EXPORT:
+                    self._reply_stream([payload[:13], payload[13:]])
+                    return
             if path == _SPLUNK_EXPORT:
                 self._reply(_SPLUNK_RESULTS)
                 return
@@ -620,6 +746,10 @@ def run() -> Iterator[dict[str, str]]:
         worker.join()
         if temp_dir is not None:
             shutil.rmtree(temp_dir, ignore_errors=True)
+        if opts.expected_count is not None and request_count[0] != opts.expected_count:
+            errors.append(
+                f"expected request count {opts.expected_count}, got {request_count[0]}"
+            )
         if opts.expected and request_count[0] != len(opts.expected):
             errors.append(
                 f"expected request count {len(opts.expected)}, got {request_count[0]}"

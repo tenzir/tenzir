@@ -1,0 +1,23 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/search/v2/jobs/export
+      header_name: Authorization
+      header_value: Splunk search-token
+    - method: POST
+      path: /services/collector/event
+      header_name: Authorization
+      header_value: Splunk hec-token
+      body: '{"sourcetype":"_json","event":{"raw":"raw-two","number":43}}'
+---
+
+from_splunk env("HTTP_FIXTURE_URL"),
+  search="fixture", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk search-token"}, tls=false
+where number == 43
+to_splunk env("HTTP_FIXTURE_URL"),
+  hec_token="hec-token",
+  event={raw: _raw, number: number},
+  compress=false

@@ -1,0 +1,7 @@
+error: failed to parse Splunk response as JSON
+ --> tests/operators/from_splunk/malformed_oversized.tql:6:13
+  |
+6 | from_splunk env("HTTP_FIXTURE_URL") + "/splunk/malformed-oversized",
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: JSON integer does not fit into 64 bits

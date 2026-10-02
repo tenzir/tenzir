@@ -1,0 +1,11 @@
+---
+fixtures: [http_server]
+timeout: 60
+---
+
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/large",
+  search="fixture", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+measure
+summarize events=sum(events), max_batch=max(events)
+this = {events: events, bounded: max_batch <= 8192}

@@ -27,6 +27,8 @@
 #include "tenzir/http_server.hpp"
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/json_parser.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
@@ -1059,6 +1061,687 @@ private:
   Option<std::chrono::steady_clock::time_point> drain_deadline_ = None{};
 };
 
+auto normalize_time(nova::RowView<nova::Data> const& value) -> Option<time> {
+  if (auto const* x = try_as<nova::RowView<nova::Time>>(value)) {
+    return **x;
+  }
+  if (auto const* x = try_as<nova::RowView<nova::String>>(value)) {
+    auto parsed = time{};
+    if (parsers::unix_ts(**x, parsed) and parsed >= time{}) {
+      return parsed;
+    }
+    return None{};
+  }
+  auto seconds = match(
+    value,
+    [](nova::RowView<nova::Int> x) -> Option<double> {
+      return *x >= 0 ? Option<double>{static_cast<double>(*x)} : None{};
+    },
+    [](nova::RowView<nova::UInt> x) -> Option<double> {
+      return static_cast<double>(*x);
+    },
+    [](nova::RowView<nova::Float> x) -> Option<double> {
+      return *x >= 0 ? Option<double>{*x} : None{};
+    },
+    [](auto const&) -> Option<double> {
+      return None{};
+    });
+  return seconds ? from_unix_timestamp(*seconds) : None{};
+}
+
+auto validate_event(nova::RowView<nova::Record> event) -> Option<Response> {
+  auto has_event = false;
+  for (auto const& [key, value] : event) {
+    if (key == "event") {
+      has_event = true;
+      auto const* text = try_as<nova::RowView<nova::String>>(value);
+      if (is<nova::RowView<nova::Null>>(value) or (text and (**text).empty())) {
+        return hec_response(400, 13, "Event field cannot be blank");
+      }
+      if (not text and not is<nova::RowView<nova::Record>>(value)) {
+        return hec_response(400, 6, "Invalid data format");
+      }
+    }
+  }
+  if (not has_event) {
+    return hec_response(400, 12, "Event field is required");
+  }
+  for (auto const& [key, value] : event) {
+    if (key == "time" and not normalize_time(value)) {
+      return hec_response(400, 6, "Invalid data format");
+    }
+  }
+  for (auto const& [key, value] : event) {
+    if (key != "fields") {
+      continue;
+    }
+    auto const* fields = try_as<nova::RowView<nova::Record>>(value);
+    if (not fields) {
+      return hec_response(400, 15, "Error in handling indexed fields");
+    }
+    for (auto const& [name, field] : *fields) {
+      if (is<nova::RowView<nova::String>>(field)) {
+        continue;
+      }
+      auto const* list = try_as<nova::RowView<nova::List>>(field);
+      if (not list) {
+        return hec_response(400, 15, "Error in handling indexed fields");
+      }
+      for (auto const& item : *list) {
+        if (not is<nova::RowView<nova::String>>(item)) {
+          return hec_response(400, 15, "Error in handling indexed fields");
+        }
+      }
+    }
+  }
+  return None{};
+}
+
+auto make_receiver_events(RequestMetadata const& metadata) -> nova::Record {
+  auto receiver = nova::Record{};
+  auto peer_ip = ip{};
+  if (parsers::ip(metadata.peer_ip, peer_ip)) {
+    receiver["peer_ip"] = peer_ip;
+  } else {
+    receiver["peer_ip"] = metadata.peer_ip;
+  }
+  if (metadata.channel) {
+    receiver["channel"] = *metadata.channel;
+  }
+  return receiver;
+}
+
+// The HEC builder historically keeps the first encountered field order for
+// each record path within a request, including across heterogeneous rows.
+auto order_hec_fields(nova::Array<nova::Data> data) -> nova::Array<nova::Data> {
+  data = std::move(data).map_alternative<nova::Record>(
+    [](nova::MaskedArray<nova::Array<nova::Record>> records) {
+      auto primary = std::move(records.data).to_primary();
+      auto const& storage
+        = *as<nova::storage::RecordStorage>(primary.storage());
+      if (storage.names_by_index.empty()) {
+        return primary;
+      }
+      auto fields = std::vector<
+        std::pair<std::string_view, nova::Array<nova::Record>::MaskedArray>>{};
+      fields.reserve(storage.names_by_index.size());
+      for (auto name : storage.names_by_index) {
+        auto field = primary.field(name);
+        TENZIR_ASSERT(field);
+        field->data = order_hec_fields(std::move(field->data));
+        fields.emplace_back(name, std::move(*field));
+      }
+      return nova::Array<nova::Record>::from_fields(fields);
+    });
+  return std::move(data).map_alternative<nova::List>(
+    [](nova::MaskedArray<nova::Array<nova::List>> lists) {
+      auto primary = lists.data.to_primary();
+      auto storage
+        = as<nova::storage::ListStorage>(std::move(primary).storage());
+      auto values = order_hec_fields(std::move(storage).values());
+      return nova::Array<nova::List>{std::move(storage).spans(),
+                                     std::move(values)};
+    });
+}
+
+auto parse_event_body_events(SimdjsonPaddedBuffer const& body,
+                             RequestMetadata const& metadata)
+  -> Result<nova::Array<nova::Record>, Response> {
+  auto text = detail::trim_front(
+    std::string_view{reinterpret_cast<char const*>(body.data()), body.size()},
+    json_whitespace);
+  if (text.empty()) {
+    return Err{hec_response(400, 5, "No data")};
+  }
+  // Requests are bounded by max_request_size. Decode and validate the entire
+  // request before emitting any rows or acknowledging it.
+  auto dh = null_diagnostic_handler{};
+  auto settings = nova::JsonParser::Settings{};
+  settings.builder.infer_booleans = false;
+  settings.decoding.first_duplicate_wins = true;
+  settings.decoding.reject_oversized_integers = true;
+  auto parser = nova::JsonParser::make(std::move(settings), dh);
+  TENZIR_ASSERT(parser);
+  auto documents = std::vector<nova::Array<nova::Record>>{};
+  if (text.front() == '[') {
+    auto parsed = parser->parse_document_value(text);
+    if (not parsed) {
+      return Err{hec_response(400, 6, "Invalid data format")};
+    }
+    auto list = parsed->get_alternative<nova::List>();
+    TENZIR_ASSERT(list);
+    auto primary = list->data.to_primary();
+    auto const& values
+      = as<nova::storage::ListStorage>(primary.storage()).values();
+    if (values.length() == 0) {
+      return Err{hec_response(400, 5, "No data")};
+    }
+    auto records = values.get_alternative<nova::Record>();
+    if (not records or records->present.true_count() != values.length()) {
+      return Err{hec_response(400, 6, "Invalid data format")};
+    }
+    documents.push_back(std::move(records->data));
+  } else {
+    // simdjson only frames concatenated documents; the shared parser performs
+    // all JSON-to-event decoding and validates each complete document.
+    auto framer = simdjson::ondemand::parser{};
+    auto stream = simdjson::ondemand::document_stream{};
+    auto const* data = reinterpret_cast<char const*>(body.data());
+    if (framer.iterate_many(data, body.size(), body.size()).get(stream)) {
+      return Err{hec_response(400, 6, "Invalid data format")};
+    }
+    for (auto it = stream.begin(); it != stream.end(); ++it) {
+      if (it.error()) {
+        return Err{hec_response(400, 6, "Invalid data format")};
+      }
+      auto document = *it;
+      auto raw = document->raw_json();
+      if (raw.error()) {
+        return Err{hec_response(400, 6, "Invalid data format")};
+      }
+      auto parsed = parser->parse_document(raw.value_unsafe());
+      if (not parsed) {
+        return Err{hec_response(400, 6, "Invalid data format")};
+      }
+      documents.push_back(std::move(parsed->data));
+    }
+    if (stream.truncated_bytes() != 0) {
+      return Err{hec_response(400, 6, "Invalid data format")};
+    }
+  }
+  if (documents.empty()) {
+    return Err{hec_response(400, 5, "No data")};
+  }
+  auto receiver = make_receiver_events(metadata);
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  for (auto const& document : documents) {
+    for (auto i = nova::storage::Index{0}; i < document.length(); ++i) {
+      auto input = document.get(i);
+      if (auto error = validate_event(input)) {
+        return Err{std::move(*error)};
+      }
+      auto row = builder.record();
+      auto has_receiver = false;
+      for (auto const& [key, value] : input) {
+        if (key == "time") {
+          row.field(key).data(*normalize_time(value));
+        } else {
+          nova::append_row(row.field(key), value);
+        }
+        has_receiver |= key == "receiver";
+      }
+      if (not has_receiver) {
+        nova::append_data(row.field("receiver"), nova::Data{receiver});
+      }
+    }
+  }
+  auto result = order_hec_fields(nova::Array<nova::Data>{builder.finish()});
+  return std::move(result).get_alternative<nova::Record>()->data;
+}
+
+auto make_raw_event_events(std::span<std::byte const> body,
+                           RequestMetadata const& metadata)
+  -> Result<nova::Array<nova::Record>, Response> {
+  if (body.empty()) {
+    return Err{hec_response(400, 5, "No data")};
+  }
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  auto row = builder.record();
+  row.field("raw").data(blob_view{body});
+  for (auto const* key : {"host", "source", "sourcetype", "index"}) {
+    if (auto it = metadata.query.find(key); it != metadata.query.end()) {
+      row.field(key).data(as<std::string>(it->second));
+    }
+  }
+  if (auto it = metadata.query.find("time"); it != metadata.query.end()) {
+    auto const* value = try_as<std::string>(&it->second);
+    if (not value) {
+      return Err{hec_response(400, 6, "Invalid data format")};
+    }
+    auto parsed = normalize_time(
+      nova::RowView<nova::Data>{nova::RowView<nova::String>{*value}});
+    if (not parsed) {
+      return Err{hec_response(400, 6, "Invalid data format")};
+    }
+    row.field("time").data(*parsed);
+  }
+  nova::append_data(row.field("receiver"),
+                    nova::Data{make_receiver_events(metadata)});
+  return builder.finish();
+}
+
+class AcceptSplunkEvents final : public Operator<void, nova::Events> {
+public:
+  explicit AcceptSplunkEvents(AcceptSplunkArgs args)
+    : args_{std::move(args)},
+      request_slots_{std::in_place, args_.get_max_concurrent_requests()} {
+  }
+
+  ~AcceptSplunkEvents() noexcept override {
+    force_stop();
+  }
+  AcceptSplunkEvents(AcceptSplunkEvents const&) = delete;
+  AcceptSplunkEvents(AcceptSplunkEvents&&) noexcept = default;
+  auto operator=(AcceptSplunkEvents const&) -> AcceptSplunkEvents& = delete;
+  auto operator=(AcceptSplunkEvents&&) -> AcceptSplunkEvents& = delete;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto token = std::string{};
+    auto requests = std::vector<secret_request>{
+      make_secret_request("hec_token", args_.hec_token, token, ctx.dh()),
+    };
+    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
+        result.is_error()) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (token.empty()) {
+      diagnostic::error("`hec_token` must not be empty")
+        .primary(args_.hec_token)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto config = make_config(ctx);
+    if (not config) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto request_id_generator
+      = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
+    auto handler = std::make_shared<RequestHandler>(
+      args_.get_max_request_size(), std::move(token), args_.ack, message_queue_,
+      request_id_generator, request_slots_);
+    auto server = co_await http_server::Server::start(std::move(*config),
+                                                      std::move(handler));
+    if (server.is_err()) {
+      diagnostic::error("failed to start HTTP server: {}",
+                        std::move(server).unwrap_err())
+        .primary(args_.endpoint)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    server_ = std::move(server).unwrap();
+    bytes_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_splunk"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_splunk"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    lifecycle_ = Lifecycle::running;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](RequestStarted message) -> Task<void> {
+        auto decompressor
+          = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
+        if (not message.content_encoding.empty()) {
+          decompressor
+            = http::make_decompressor(message.content_encoding, ctx.dh());
+          if (not decompressor) {
+            message.response_signal->send(
+              hec_response(415, 6, "Invalid data format"));
+            co_return;
+          }
+        }
+        active_requests_.emplace(message.request_id,
+                                 InFlightRequest{
+                                   .metadata = std::move(message.metadata),
+                                   .response_signal
+                                   = std::move(message.response_signal),
+                                   .decompressor = std::move(decompressor),
+                                   .body = {},
+                                   .output_bytes = 0,
+                                   .decompression_finished = false,
+                                 });
+      },
+      [&](RequestBody message) -> Task<void> {
+        auto it = active_requests_.find(message.request_id);
+        if (it == active_requests_.end()
+            or it->second.response_signal->has_sent()) {
+          co_return;
+        }
+        auto& request = it->second;
+        bytes_read_counter_.add(message.data.size());
+        auto data = std::move(message.data);
+        if (request.decompressor) {
+          auto remaining
+            = checked_sub(args_.get_max_request_size(), request.output_bytes);
+          TENZIR_ASSERT(remaining);
+          auto decompressed = http::decompress_chunk_with_status(
+            **request.decompressor, data.view(), ctx.dh(), *remaining);
+          if (decompressed.is_err()) {
+            auto status = std::move(decompressed).unwrap_err();
+            request.response_signal->send(
+              status == 413 ? hec_response(413, 6, "Data payload too large")
+                            : hec_response(status, 6, "Invalid data format"));
+            co_return;
+          }
+          auto decoded = std::move(decompressed).unwrap();
+          request.decompression_finished = decoded.finished;
+          request.output_bytes += decoded.bytes.size();
+          request.body.append(decoded.bytes);
+          co_return;
+        }
+        auto output_bytes = checked_add(request.output_bytes, data.size());
+        if (not output_bytes or *output_bytes > args_.get_max_request_size()) {
+          request.response_signal->send(
+            hec_response(413, 6, "Data payload too large"));
+          co_return;
+        }
+        request.output_bytes = *output_bytes;
+        request.body.append(data.view());
+      },
+      [&](RequestFinished message) -> Task<void> {
+        auto it = active_requests_.find(message.request_id);
+        if (it == active_requests_.end()) {
+          co_return;
+        }
+        auto request = std::move(it->second);
+        active_requests_.erase(it);
+        if (request.response_signal->has_sent()) {
+          co_return;
+        }
+        if (request.decompressor and not request.decompression_finished) {
+          diagnostic::warning("rejected incomplete gzip request")
+            .primary(args_.endpoint)
+            .emit(ctx);
+          request.response_signal->send(
+            hec_response(400, 6, "Invalid data format"));
+          co_return;
+        }
+        if (args_.ack) {
+          expire_acks();
+        }
+        if (request.metadata.kind == EndpointKind::ack) {
+          TENZIR_ASSERT(request.metadata.channel);
+          auto parsed = parse_ack_ids(request.body);
+          if (parsed.is_err()) {
+            request.response_signal->send(std::move(parsed).unwrap_err());
+            co_return;
+          }
+          request.response_signal->send(ack_response(
+            *request.metadata.channel, std::move(parsed).unwrap()));
+          co_return;
+        }
+        if (args_.ack and acks_.count >= args_.get_max_pending_acks()) {
+          request.response_signal->send(hec_response(503, 9, "Server is busy"));
+          co_return;
+        }
+        auto parsed
+          = request.metadata.kind == EndpointKind::event
+              ? parse_event_body_events(request.body, request.metadata)
+              : make_raw_event_events(request.body.view(), request.metadata);
+        if (parsed.is_err()) {
+          request.response_signal->send(std::move(parsed).unwrap_err());
+          co_return;
+        }
+        auto data = std::move(parsed).unwrap();
+        auto length = data.length();
+        auto schema_name = request.metadata.kind == EndpointKind::event
+                             ? "splunk.hec.event"
+                             : "splunk.hec.raw";
+        auto events
+          = nova::Events{std::move(data), nova::storage::BitMap{length, true},
+                         nova::Events::Meta::make_empty(length, schema_name)};
+        auto const batch_size = detail::narrow<nova::storage::Index>(
+          defaults::import::table_slice_size);
+        for (auto begin = nova::storage::Index{0}; begin < length;
+             begin += batch_size) {
+          co_await push(nova::subslice(events, begin,
+                                       std::min(length, begin + batch_size)));
+        }
+        auto rows = static_cast<uint64_t>(length);
+        events_read_counter_.add(rows);
+        if (args_.ack) {
+          TENZIR_ASSERT(request.metadata.channel);
+          auto ack_id = make_ack_id(*request.metadata.channel);
+          acks_.pending[*request.metadata.channel].emplace(
+            ack_id, detail::saturating_add(time::clock::now(),
+                                           args_.get_ack_timeout()));
+          acks_.count += 1;
+          request.response_signal->send(Response{
+            .status = 200,
+            .body = fmt::format(R"({{"text":"Success","code":0,"ackId":{}}})",
+                                ack_id),
+          });
+          co_return;
+        }
+        request.response_signal->send(
+          Response{.status = 200, .body = std::string{success_body}});
+      },
+      [&](Noop) -> Task<void> {
+        maybe_finish_draining();
+        co_return;
+      });
+  }
+
+  auto prepare_snapshot(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push, ctx);
+    TENZIR_ASSERT(acks_.committing.empty());
+    acks_.committing = std::move(acks_.pending);
+    acks_.pending.clear();
+    co_return;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("ready_acks", acks_.ready);
+    serde("checkpoint_acks", acks_.committing);
+    if (serde.is_loading()) {
+      merge_acks(acks_.ready, acks_.committing);
+      acks_.committing.clear();
+      acks_.count = count_acks(acks_.ready);
+    }
+  }
+
+  auto post_commit(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    merge_acks(acks_.ready, acks_.committing);
+    acks_.committing.clear();
+    co_return;
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    begin_draining(ctx);
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    begin_draining(ctx);
+    maybe_finish_draining();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
+  }
+
+private:
+  static auto merge_acks(AckMap& destination, AckMap& source) -> void {
+    for (auto& [channel, ids] : source) {
+      destination[channel].merge(ids);
+    }
+  }
+
+  static auto count_acks(AckMap const& acks) -> uint64_t {
+    auto result = uint64_t{0};
+    for (auto const& entry : acks) {
+      result += entry.second.size();
+    }
+    return result;
+  }
+
+  auto expire_acks() -> void {
+    auto const now = time::clock::now();
+    auto expired = uint64_t{0};
+    auto expire = [&](AckMap& acks) {
+      for (auto channel = acks.begin(); channel != acks.end();) {
+        expired += std::erase_if(channel->second, [&](auto const& entry) {
+          return entry.second <= now;
+        });
+        if (channel->second.empty()) {
+          channel = acks.erase(channel);
+        } else {
+          ++channel;
+        }
+      }
+    };
+    expire(acks_.pending);
+    expire(acks_.committing);
+    expire(acks_.ready);
+    TENZIR_ASSERT(expired <= acks_.count);
+    acks_.count -= expired;
+  }
+
+  auto contains_ack(std::string const& channel, uint64_t id) const -> bool {
+    auto contains = [&](AckMap const& acks) {
+      auto it = acks.find(channel);
+      return it != acks.end() and it->second.contains(id);
+    };
+    return contains(acks_.pending) or contains(acks_.committing)
+           or contains(acks_.ready);
+  }
+
+  auto make_ack_id(std::string const& channel) const -> uint64_t {
+    // Random IDs prevent a restored checkpoint from reusing IDs that the
+    // previous process returned for post-checkpoint requests.
+    // JSON clients commonly parse numbers as IEEE-754 doubles, which represent
+    // integers exactly only up to 2^53 - 1.
+    constexpr auto mask = (uint64_t{1} << 53) - 1;
+    for (;;) {
+      auto id = hash(uuid::random()) & mask;
+      if (id > 0 and not contains_ack(channel, id)) {
+        return id;
+      }
+    }
+  }
+
+  auto ack_response(std::string const& channel, std::vector<uint64_t> ids)
+    -> Response {
+    auto body = std::string{R"({"acks":{)"};
+    auto separator = std::string_view{};
+    auto channel_it = acks_.ready.find(channel);
+    auto requested = std::set<uint64_t>{};
+    for (auto id : ids) {
+      if (not requested.insert(id).second) {
+        continue;
+      }
+      auto ready
+        = channel_it != acks_.ready.end() and channel_it->second.contains(id);
+      fmt::format_to(std::back_inserter(body), R"({}"{}":{})", separator, id,
+                     ready);
+      separator = ",";
+    }
+    body += "}}";
+    return Response{.status = 200, .body = std::move(body)};
+  }
+
+  enum class Lifecycle {
+    starting,
+    running,
+    draining,
+    done,
+  };
+
+  static constexpr auto drain_timeout = std::chrono::seconds{5};
+
+  auto make_config(OpCtx& ctx) const
+    -> Option<proxygen::coro::HTTPServer::Config> {
+    auto config
+      = http_server::make_config(args_.endpoint.inner, args_.endpoint.source,
+                                 args_.tls, ctx.actor_system().config(),
+                                 ctx.dh());
+    if (not config) {
+      return None{};
+    }
+    return std::move(*config);
+  }
+
+  auto force_stop() -> void {
+    if (lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::done;
+    drain_deadline_ = None{};
+    if (server_) {
+      (*server_)->force_stop();
+      server_ = None{};
+    }
+  }
+
+  auto begin_draining(OpCtx& ctx) -> void {
+    if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    drain_deadline_ = std::chrono::steady_clock::now() + drain_timeout;
+    ctx.spawn_task([queue = message_queue_,
+                    deadline = *drain_deadline_]() mutable -> Task<void> {
+      co_await sleep_until(deadline);
+      co_await queue->enqueue(Noop{});
+    });
+    if (server_) {
+      (*server_)->drain();
+    }
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining) {
+      return;
+    }
+    if (drain_deadline_
+        and std::chrono::steady_clock::now() >= *drain_deadline_) {
+      force_stop();
+      return;
+    }
+    if (not active_requests_.empty()
+        or request_slots_->available_permits()
+             != detail::narrow<size_t>(args_.get_max_concurrent_requests())
+        or not message_queue_->empty()) {
+      return;
+    }
+    drain_deadline_ = None{};
+    if (server_) {
+      (*server_)->finish();
+      server_ = None{};
+    }
+    lifecycle_ = Lifecycle::done;
+  }
+
+  AcceptSplunkArgs args_;
+  Arc<Semaphore> request_slots_;
+  Option<Box<http_server::Server>> server_;
+  std::unordered_map<uint64_t, InFlightRequest> active_requests_;
+  AckState acks_;
+  MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
+  mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  Option<std::chrono::steady_clock::time_point> drain_deadline_ = None{};
+};
+
 class AcceptSplunkPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -1066,7 +1749,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto describer = Describer<AcceptSplunkArgs, AcceptSplunk>{};
+    auto describer
+      = Describer<AcceptSplunkArgs, AcceptSplunk, AcceptSplunkEvents>{};
     auto endpoint
       = describer.optional_positional("endpoint", &AcceptSplunkArgs::endpoint);
     describer.named("hec_token", &AcceptSplunkArgs::hec_token);

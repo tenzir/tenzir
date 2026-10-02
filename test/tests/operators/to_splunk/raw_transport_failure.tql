@@ -1,0 +1,14 @@
+---
+error: true
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/transport-failure/services/collector/raw
+      body: 'first'
+---
+
+from {text: "first"}, {text: "other"}, {text: "third"}
+to_splunk env("HTTP_FIXTURE_URL") + "splunk/transport-failure",
+  hec_token="test-token", raw=text, max_content_length=5,
+  compress=false, parallel=1

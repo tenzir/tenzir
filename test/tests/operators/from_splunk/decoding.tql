@@ -1,0 +1,15 @@
+---
+fixtures: [http_server]
+---
+
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/decoding",
+  search="fixture", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+this = {
+  schema: @name,
+  event: this,
+  types: type_of(this).state.fields.map(field => {
+    name: field.name,
+    kind: field.type.kind,
+  }),
+}

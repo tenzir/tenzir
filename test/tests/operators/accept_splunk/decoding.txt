@@ -1,0 +1,50 @@
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: {
+      _raw: "{\"n\":1}",
+      ip: 192.0.2.1,
+      net: 192.0.2.0/24,
+      duration: 2s,
+      time: 2026-07-14T14:54:45Z,
+      boolean: "true",
+      number: "42",
+      key: 1,
+      nested: {
+        x: true,
+      },
+    },
+    time: 2026-04-24T08:30:00.125Z,
+    fields: {
+      tag: [
+        "a",
+        "b",
+      ],
+    },
+    receiver: "client",
+  },
+}
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: "second",
+    time: 2026-04-24T08:30:00.250Z,
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+    host: "vpn-01",
+  },
+}
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: {
+      message: "third",
+    },
+    time: 2026-07-14T14:54:45Z,
+    extra: null,
+    receiver: {
+      peer_ip: 127.0.0.1,
+    },
+  },
+}

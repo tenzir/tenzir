@@ -1,0 +1,13 @@
+---
+fixtures: [http_server]
+timeout: 60
+---
+
+from_splunk env("HTTP_FIXTURE_SPLUNK_STREAM_URL"),
+  search="fixture", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+measure
+// The fixture sends 100 individually flushed lines. A bounded latency flush
+// may split the stream, but must not produce one batch per HTTP callback.
+summarize events=sum(events), batches=count()
+this = {events: events, coalesced: batches < 20}

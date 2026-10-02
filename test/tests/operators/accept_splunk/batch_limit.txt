@@ -1,0 +1,5 @@
+{
+  events: 8193,
+  batches: 2,
+  bounded: true,
+}
