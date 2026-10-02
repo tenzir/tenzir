@@ -517,9 +517,10 @@ auto prepare_runtime(const config& config, std::string_view requirements,
     auto install_err = bp::ipstream{};
     TENZIR_VERBOSE("installing python modules with: '{}'",
                    fmt::join(invocation, "' '"));
-    auto child = bp::child{invocation, runtime.env, bp::std_err > install_err,
-                           detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                           bp::detail::limit_handles_{}};
+    auto child
+      = bp::child{invocation, runtime.env, bp::std_err > install_err,
+                  detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                  bp::detail::limit_handles_{}};
     auto error = drain_pipe(install_err);
     child.wait();
     if (child.exit_code() != 0) {
