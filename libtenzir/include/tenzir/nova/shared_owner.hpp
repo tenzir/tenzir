@@ -494,8 +494,12 @@ public:
     /// Drops every element at index `count` and beyond.
     auto truncate(Index count) -> void {
       TENZIR_ASSERT_LEQ(0, count);
-      TENZIR_ASSERT_LEQ(count, size());
-      std::destroy_n(owner_.data_ + count, size() - count);
+      const auto old_size = size();
+      TENZIR_ASSERT_LEQ(count, old_size);
+      if (count == old_size) {
+        return;
+      }
+      std::destroy_n(owner_.data_ + count, old_size - count);
       owner_.control_->element_count = count;
     }
 

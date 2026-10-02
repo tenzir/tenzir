@@ -3045,6 +3045,12 @@ TEST("take_last pops fundamental builders and keeps earlier rows") {
   REQUIRE_EQUAL(int_array.length(), 2);
   CHECK_EQUAL(*int_array.get(1), 3);
 
+  auto empty_strings = ArrayBuilder<String>{};
+  empty_strings.data("");
+  CHECK(materialize_legacy(empty_strings.take_last())
+        == materialize_legacy(Data{String{""}}));
+  CHECK_EQUAL(empty_strings.finish().length(), 0);
+
   auto strings = ArrayBuilder<String>{};
   strings.data("keep");
   strings.data("drop");
