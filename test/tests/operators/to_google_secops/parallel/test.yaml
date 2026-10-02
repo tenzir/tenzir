@@ -4,4 +4,8 @@ suite:
 fixtures:
   - google_secops
 timeout: 60
-skip: deferred until the Nova executor supports multi-lane routing
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable
+  reason: requires the to_google_secops plugin

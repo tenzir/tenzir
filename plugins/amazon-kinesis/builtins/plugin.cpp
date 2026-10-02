@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 
@@ -169,11 +168,7 @@ public:
     // therefore land in their shard out of input order. Parallelism waives
     // that per-key ordering by design — routing affects placement, not
     // correctness.
-    // TODO(TNZ-1409): The executor cannot yet route events across multiple
-    // lanes, so the event implementation must run as a single instance.
-    d.parallelizable([](const ToAmazonKinesisArgs&) {
-      return not nova_enabled();
-    });
+    d.parallelizable();
     return d.without_optimize();
   }
 };
