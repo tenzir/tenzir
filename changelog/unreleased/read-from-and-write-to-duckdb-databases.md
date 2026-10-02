@@ -14,6 +14,16 @@ Read a table, run a query with `sql`, or follow new rows with `live=true`:
 from_duckdb "events.duckdb", table="alerts"
 ```
 
+When reading a table, `from_duckdb` hands downstream filters and limits to DuckDB, so that only the matching rows leave the database:
+
+```tql
+from_duckdb "events.duckdb", table="alerts"
+where severity >= 3 and rule.starts_with("ET ")
+head 100
+```
+
+Predicates that DuckDB would evaluate differently from TQL, such as comparisons of floating-point values, run in the pipeline instead.
+
 Excel workbooks can be read offline without downloading or loading an extension:
 
 ```tql

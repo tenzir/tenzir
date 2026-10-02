@@ -1,0 +1,4 @@
+// Predicates go into the query that the server runs.
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="events"
+where name == "one" or id > 5
+select id, name

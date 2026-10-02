@@ -1,0 +1,7 @@
+// `name != "alpha"` goes into the query and keeps the row where `name` is
+// null, as in TQL. `score` may be `NaN`, which DuckDB orders differently, so
+// its comparison runs locally, and the query selects `score` for it.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where name != "alpha"
+where score < 0 or score == null
+select id, name

@@ -95,6 +95,10 @@ protected:
 
   // -- Expressions ------------------------------------------------------------
 
+  /// Spells a string literal, or vetoes it if the target cannot spell some
+  /// of its bytes. Defaults to `quote_string`.
+  virtual auto render_string(std::string_view text) const -> Option<Fragment>;
+
   /// Spells an enum label. Vetoes by default.
   virtual auto render_enum(EnumLabel const& x) const -> Option<Fragment>;
 

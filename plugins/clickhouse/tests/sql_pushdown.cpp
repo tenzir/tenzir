@@ -237,8 +237,13 @@ TEST("string functions") {
   CHECK_EQUAL(translate("length_bytes(s) in [1, 2]"),
               std::string{"(length(`s`) IS NOT NULL AND length(`s`) IN (1, "
                           "2))"});
-  // Case folding, non-string subjects, and other functions stay local.
-  CHECK(not translate("y.starts_with(\"f\", ignore_case=true)"));
+  // Matching that ignores case lowercases both sides.
+  CHECK_EQUAL(translate("y.starts_with(\"F\", ignore_case=true)"),
+              std::string{"startsWith(lowerUTF8(`y`), lowerUTF8('F'))"});
+  CHECK_EQUAL(translate("y.ends_with(\"F\", ignore_case=false)"),
+              std::string{"endsWith(`y`, 'F')"});
+  // Non-string subjects, non-constant flags, and other functions stay local.
+  CHECK(not translate("y.starts_with(\"f\", ignore_case=flag)"));
   CHECK(not translate("status.starts_with(\"h\")"));
   CHECK(not translate("y.starts_with(s)"));
   CHECK(not translate("y.length_chars() > 3"));

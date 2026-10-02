@@ -334,7 +334,11 @@ TYPE_CASES: list[Case | StringCase] = [
     ("s != t", "`s` != `t`"),
     ("s < t", "`s` < `t`"),
     ("s <= t", "`s` <= `t`"),
-    ('s.starts_with("A", ignore_case=true)', None),
+    (
+        's.starts_with("A", ignore_case=true)',
+        "startsWith(lowerUTF8(`s`), lowerUTF8('A'))",
+    ),
+    ('t.ends_with("É", ignore_case=true)', "endsWith(lowerUTF8(`t`), lowerUTF8('É'))"),
     ("s.length_chars() > 2", None),
     # Arithmetic on small integers and floats; overflow-prone forms stay local.
     ("i32 + 1 > 0", "(`i32` + 1) > 0"),

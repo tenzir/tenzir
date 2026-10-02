@@ -77,9 +77,10 @@ protected:
 };
 
 /// A dialect like `TestRenderer` that guards comparisons that may be `NaN`
-/// instead of vetoing them, which turns them into junctions, and spells
-/// `contains` as a comparison. It computes arithmetic in the types of the
-/// operands and has no way to widen them, so it vetoes all arithmetic.
+/// instead of vetoing them, which turns them into junctions, spells
+/// `contains` as a comparison, and folds case. It computes arithmetic in the
+/// types of the operands and has no way to widen them, so it vetoes all
+/// arithmetic.
 class GuardingRenderer final : public TestRenderer {
 private:
   auto render_comparison(Binary const& x, Fragment const& left,
@@ -115,6 +116,9 @@ private:
     if (op == Operation::contains) {
       return sql_binary(">", sql_call("position", args), sql_atom("0"),
                         Fragment::Kind::predicate);
+    }
+    if (op == Operation::fold_case) {
+      return sql_call("casefold", args);
     }
     return TestRenderer::render_call(op, args);
   }
@@ -356,4 +360,14 @@ TEST("vetoed arithmetic keeps its conjunct local") {
   auto const* null_check = try_as<ast::binary_expr>(split.remaining[1]);
   REQUIRE(null_check);
   CHECK(null_check->op == ast::binary_op::eq);
+}
+
+TEST("matching that ignores case folds both sides") {
+  CHECK_EQUAL(translate_guarded("s.starts_with(\"A\", ignore_case=true)"),
+              std::string{"starts_with(casefold(\"s\"), casefold('A'))"});
+  CHECK_EQUAL(translate_guarded("s.starts_with(\"A\", ignore_case=false)"),
+              std::string{"starts_with(\"s\", 'A')"});
+  // The flag must be a constant, and a dialect without folding vetoes.
+  CHECK(not translate_guarded("s.starts_with(\"A\", ignore_case=x > 0)"));
+  CHECK(not translate("s.starts_with(\"A\", ignore_case=true)"));
 }

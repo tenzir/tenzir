@@ -331,6 +331,11 @@ auto ClickHouseRenderer::render_call(pushdown::Operation op,
       // Maps IPv4 text into IPv6, and yields `NULL` for text it cannot parse.
       TENZIR_ASSERT(args.size() == 1);
       return sql_call("toIPv6OrNull", args);
+    case pushdown::Operation::fold_case:
+      // Lowercases per code point, so `ß` stays `ß` where TQL folds it to
+      // `ss`.
+      TENZIR_ASSERT(args.size() == 1);
+      return sql_call("lowerUTF8", args);
   }
   TENZIR_UNREACHABLE();
 }

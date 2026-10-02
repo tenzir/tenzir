@@ -1,0 +1,9 @@
+warning: expected `bool`
+ --> tests/operators/from_duckdb/table_filter_limit.tql:5:18
+  |
+5 | where id > 1 and score < 0
+  |                  ~~~~~~~~~
+  |
+{
+  id: 3,
+}

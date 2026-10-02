@@ -67,6 +67,11 @@ auto SqlRenderer::render(Expr const& expr) const -> Option<std::string> {
   return wrap(result, Slot::logical);
 }
 
+auto SqlRenderer::render_string(std::string_view text) const
+  -> Option<Fragment> {
+  return sql_atom(quote_string(text));
+}
+
 auto SqlRenderer::render_enum(EnumLabel const&) const -> Option<Fragment> {
   return None{};
 }
@@ -279,7 +284,7 @@ auto SqlRenderer::render_literal(Literal const& x) const -> Option<Fragment> {
       return sql_atom(render_double(y));
     },
     [&](std::string const& y) -> Option<Fragment> {
-      return sql_atom(quote_string(y));
+      return render_string(y);
     },
     [&](EnumLabel const& y) -> Option<Fragment> {
       return render_enum(y);

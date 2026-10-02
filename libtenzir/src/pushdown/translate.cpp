@@ -1135,10 +1135,27 @@ auto translate_predicate_function(ast::function_call const& call,
     return None{};
   }
   if (*name == "starts_with" or *name == "ends_with") {
-    // Exactly the subject and the prefix; `ignore_case` would be a third
-    // argument and stays local.
-    if (call.args.size() != 2) {
+    // The subject, the affix, and optionally `ignore_case`.
+    if (call.args.size() < 2 or call.args.size() > 3) {
       return None{};
+    }
+    auto ignore_case = false;
+    if (call.args.size() == 3) {
+      auto const* named = try_as<ast::assignment>(call.args[2]);
+      if (not named) {
+        return None{};
+      }
+      auto label = ast::field_path::try_from(named->left);
+      if (not label or label->path().size() != 1
+          or label->path().front().id.name != "ignore_case") {
+        return None{};
+      }
+      auto flag = as_literal(named->right);
+      auto const* value = flag ? try_as<bool>(flag->value) : nullptr;
+      if (not value) {
+        return None{};
+      }
+      ignore_case = *value;
     }
     auto column = resolve_column(call.args[0], columns);
     if (not column or not is<StringType>(column->type)) {
@@ -1149,9 +1166,17 @@ auto translate_predicate_function(ast::function_call const& call,
     if (not text) {
       return None{};
     }
+    auto subject = std::move(column->expr);
+    auto affix = lit(*text);
+    if (ignore_case) {
+      // The target folds both sides, so that the two foldings agree with each
+      // other even where they differ from TQL's.
+      subject = pushdown::call(Operation::fold_case, std::move(subject));
+      affix = pushdown::call(Operation::fold_case, std::move(affix));
+    }
     return pushdown::call(*name == "starts_with" ? Operation::starts_with
                                                  : Operation::ends_with,
-                          std::move(column->expr), lit(*text));
+                          std::move(subject), std::move(affix));
   }
   return None{};
 }

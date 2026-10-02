@@ -1,0 +1,6 @@
+// A user-provided query stays as it is, and the operator applies the filter
+// and the limit itself.
+from_duckdb env("DUCKDB_SEED"), sql="SELECT * FROM keyed ORDER BY id"
+where n > 100
+head 1
+select id

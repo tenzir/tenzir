@@ -1,0 +1,5 @@
+// Live mode pushes predicates into every window, and the limit ends the read.
+from_duckdb env("DUCKDB_SEED"), table="keyed", live=true
+where n > 100
+head 1
+select name

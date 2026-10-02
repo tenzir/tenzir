@@ -20,10 +20,11 @@
 /// The intermediate representation of pushed filters.
 ///
 /// Translation turns a TQL predicate into an `Expr` that keeps and drops the
-/// same rows, and a source's renderer spells it in the target's query
-/// language. The IR names what to compute, never how to spell it: `WHERE x >
-/// 1`, `| where x > 1`, and `Table.SelectRows(t, each [x] > 1)` are all
-/// renderings of `Binary{gt, Column{x}, Literal{1}}`.
+/// same rows, except where `Operation::fold_case` approximates TQL, and a
+/// source's renderer spells it in the target's query language. The IR names
+/// what to compute, never how to spell it: `WHERE x > 1`, `| where x > 1`, and
+/// `Table.SelectRows(t, each [x] > 1)` are all renderings of `Binary{gt,
+/// Column{x}, Literal{1}}`.
 ///
 /// An `Expr` evaluates with SQL's three-valued logic. Comparisons, arithmetic,
 /// `In`, `Between`, and operations yield `NULL` when an operand is `NULL`;
@@ -86,6 +87,13 @@ enum class Operation {
   /// `parse_ip(string) -> ip`, an IPv6 address with IPv4 mapped into it, or
   /// `NULL` if the target cannot parse the string.
   parse_ip,
+  /// `fold_case(string) -> string`, the caseless form of a string. TQL
+  /// applies Unicode's full case folding, which maps `ß` to `ss`, and a target
+  /// may approximate it with its lowercase mapping, which agrees on ASCII and
+  /// on most other text. Unlike every other node, this one need not match TQL
+  /// exactly: translation emits it only where the user asked to ignore case,
+  /// and accepts the difference there.
+  fold_case,
 };
 
 /// A call of an operation.
