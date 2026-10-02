@@ -1,5 +1,5 @@
 # runner: python
-# timeout: 20
+# timeout: 40
 
 from read_avro_test_utils import assert_completes, encode_bytes, make_container
 

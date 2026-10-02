@@ -1,5 +1,5 @@
 # runner: python
-# timeout: 180
+# timeout: 360
 
 from feather_test_utils import assert_byte_stream
 

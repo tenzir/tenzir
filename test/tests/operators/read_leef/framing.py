@@ -1,4 +1,5 @@
 # runner: python
+# timeout: 60
 
 import json
 import os

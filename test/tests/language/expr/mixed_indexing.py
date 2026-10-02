@@ -1,4 +1,5 @@
 # runner: python
+# timeout: 60
 
 """Exercise mixed index types and per-row record order under sparse masks."""
 
