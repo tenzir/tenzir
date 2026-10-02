@@ -1,0 +1,12 @@
+{
+  asset: "edge-01",
+  owner: "secops",
+  risk_score: 7.5,
+  active: true,
+}
+{
+  asset: "edge-02",
+  owner: null,
+  risk_score: 3.0,
+  active: false,
+}

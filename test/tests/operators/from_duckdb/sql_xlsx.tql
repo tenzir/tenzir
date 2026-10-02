@@ -1,0 +1,6 @@
+---
+fixtures: [xlsx]
+---
+
+from_duckdb ":memory:",
+  sql=f"SELECT * FROM read_xlsx('{env("XLSX_PATH")}', header=true)"

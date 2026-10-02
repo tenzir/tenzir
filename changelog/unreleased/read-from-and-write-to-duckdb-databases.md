@@ -14,6 +14,15 @@ Read a table, run a query with `sql`, or follow new rows with `live=true`:
 from_duckdb "events.duckdb", table="alerts"
 ```
 
+Excel workbooks can be read offline without downloading or loading an extension:
+
+```tql
+from_duckdb ":memory:",
+  sql="SELECT * FROM read_xlsx('assets.xlsx', sheet='Assets', header=true)"
+```
+
+Use `sheet` to select a worksheet and `header=true` to turn its first row into field names.
+
 Write events to a remote table, creating it if needed:
 
 ```tql

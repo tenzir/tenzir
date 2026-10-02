@@ -3,8 +3,12 @@
   stdenv,
   writeText,
   fetchzip,
+  fetchFromGitHub,
   pkg-config,
   curl-ws,
+  expat,
+  minizip-ng,
+  zlib,
   duckdb,
 }:
 let
@@ -18,6 +22,12 @@ let
   httpfs = fetchzip {
     url = "https://github.com/duckdb/duckdb-httpfs/archive/827222fb45a043a7a852d1f7aae46901492a3cda.tar.gz";
     hash = "sha256-sUp7gHI7NzvNUdqpnODmpVgWb5gY0PsIqUXpnKuAzYw=";
+  };
+  excel = fetchFromGitHub {
+    owner = "duckdb";
+    repo = "duckdb-excel";
+    rev = "f4c72b5ef04a03b3a78a95b5a2ee94ba93e3178d";
+    hash = "sha256-hyHTiTfRR+hXJ7hZKt/h/Hu1zNgEYEbMozIv6WZbnfA=";
   };
   extensions = writeText "duckdb-extensions.cmake" (
     # A static binary cannot load extensions. ICU vendors symbols that clash
@@ -37,6 +47,9 @@ let
     + ''
       duckdb_extension_load(httpfs SOURCE_DIR "''${CMAKE_CURRENT_SOURCE_DIR}/extension/httpfs")
       duckdb_extension_load(quack SOURCE_DIR "''${CMAKE_CURRENT_SOURCE_DIR}/extension/quack")
+      duckdb_extension_load(excel
+        SOURCE_DIR "${excel}"
+        INCLUDE_DIR "${excel}/src/excel/include")
     ''
   );
 in
@@ -48,6 +61,12 @@ duckdb.overrideAttrs (orig: {
   nativeBuildInputs = (orig.nativeBuildInputs or [ ]) ++ [ pkg-config ];
   # httpfs supplies Quack's HTTP/TLS client. Reuse Tenzir's curl variant.
   buildInputs = (orig.buildInputs or [ ]) ++ [ curl-ws ];
+  # Static extension archives do not carry their external link dependencies.
+  propagatedBuildInputs = (orig.propagatedBuildInputs or [ ]) ++ [
+    expat
+    minizip-ng
+    zlib
+  ];
   cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
     (lib.cmakeBool "BUILD_UNITTESTS" false)
     (lib.cmakeFeature "DUCKDB_EXTENSION_CONFIGS" "${extensions}")

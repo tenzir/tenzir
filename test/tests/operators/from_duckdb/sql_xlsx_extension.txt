@@ -1,0 +1,8 @@
+{
+  extension_name: "excel",
+  loaded: true,
+  installed: true,
+  install_path: "(BUILT-IN)",
+  autoinstall: false,
+  community_extensions: false,
+}

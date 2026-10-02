@@ -1,4 +1,5 @@
 {
+  pkgsBuildBuild,
   python3Packages,
   fetchFromGitHub,
   curl,
@@ -58,6 +59,10 @@ rec {
   });
 
   tenzir-integration-test-deps = [
+    # The static DuckDB regression configures a CMake consumer.
+    pkgsBuildBuild.cmake
+    pkgsBuildBuild.ninja
+    pkgsBuildBuild.stdenv.cc
     curl
     duckdb
     jq

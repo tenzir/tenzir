@@ -13,6 +13,7 @@ stdenvNoCC.mkDerivation {
   inherit (unchecked) pname version meta;
   inherit src;
 
+  dontConfigure = true;
   dontBuild = true;
   strictDeps = true;
 

@@ -1,0 +1,8 @@
+{
+  indicator: "198.51.100.7",
+  kind: "ip",
+}
+{
+  indicator: "example.test",
+  kind: "domain",
+}

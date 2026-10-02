@@ -152,6 +152,8 @@ rec {
           fileset = lib.fileset.unions [
             integration-test-tree
             ../tenzir.yaml.example
+            # The DuckDB regression configures against the actual find module.
+            ../plugins/duckdb/cmake/FindDuckDB.cmake
             # The `velociraptor` fixture compiles the plugin's schema into the
             # stubs of its mock server.
             ../plugins/from_velociraptor/velociraptor.proto

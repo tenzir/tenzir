@@ -1,0 +1,6 @@
+---
+fixtures: [xlsx]
+---
+
+from_duckdb ":memory:",
+  sql="SELECT extension_name, loaded, installed, install_path, current_setting('autoinstall_known_extensions') AS autoinstall, current_setting('allow_community_extensions') AS community_extensions FROM duckdb_extensions() WHERE extension_name = 'excel'"
