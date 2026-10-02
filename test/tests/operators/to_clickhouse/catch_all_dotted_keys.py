@@ -55,7 +55,7 @@ to_clickhouse table="dotted_keys",
                mode="append", _jobs=2, max_batch_rows=2
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
         input="".join(json.dumps(event) + "\n" for event in events),
         capture_output=True,
         text=True,
@@ -94,7 +94,7 @@ extra = extra.parse_json(raw=true)
 write_ndjson
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=false", program],
         capture_output=True,
         text=True,
         timeout=60,

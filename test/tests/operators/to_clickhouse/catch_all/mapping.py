@@ -46,7 +46,7 @@ to_clickhouse table={table},
               mode="append", _jobs={jobs}, max_batch_rows=2
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
         capture_output=True,
         text=True,
         timeout=60,

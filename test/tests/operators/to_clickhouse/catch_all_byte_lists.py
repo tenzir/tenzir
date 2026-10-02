@@ -47,7 +47,7 @@ to_clickhouse table="mapped_byte_lists", host=env("CLICKHOUSE_HOST"),
               mode="append", _jobs=1
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
         capture_output=True,
         text=True,
         timeout=60,

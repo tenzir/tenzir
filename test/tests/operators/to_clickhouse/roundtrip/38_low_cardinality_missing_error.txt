@@ -1,4 +1,4 @@
-error: `low_cardinality` column `absent` is missing from the first event
+error: `low_cardinality` column `absent` is missing from the input
   --> tests/operators/to_clickhouse/roundtrip/38_low_cardinality_missing_error.tql:15:31
    |
 15 |               low_cardinality=absent

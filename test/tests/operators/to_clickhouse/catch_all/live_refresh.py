@@ -57,7 +57,7 @@ to_clickhouse table="sa_live", host=env("CLICKHOUSE_HOST"),
   tls=false, mode="append", max_batch_rows=1, batch_timeout=20ms
 """
     writer = subprocess.Popen(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), pipeline],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", pipeline],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

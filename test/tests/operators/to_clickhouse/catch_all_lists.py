@@ -48,7 +48,7 @@ to_clickhouse table={table},
               mode="append", _jobs={jobs}, max_batch_rows=2
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
         capture_output=True,
         text=True,
         timeout=60,
@@ -104,7 +104,7 @@ extra = extra.parse_json(raw=true)
 write_ndjson
 """
         result = subprocess.run(
-            [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+            [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=false", program],
             capture_output=True,
             text=True,
             timeout=60,
@@ -113,21 +113,13 @@ write_ndjson
         assert "warning:" not in result.stderr, result.stderr
         assert json.loads(result.stdout) == {"extra": expected}, result.stdout
 
-    # A mixed list is coerced upstream with a diagnostic. The writer cannot
-    # recover the original types from the resulting list of strings.
-    result = subprocess.run(
-        [
-            *shlex.split(os.environ["TENZIR_BINARY"]),
-            'from {input:r#"[1, "two", null, true]"#} '
-            "| parsed = input.parse_json(raw=true) | write_ndjson",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
+    # A mixed list keeps the types of its elements.
+    query("TRUNCATE TABLE ca_list_contract")
+    run('{items:[1,"two",null,true]}', '"ca_list_contract"', no_warnings=True)
+    stored = json.loads(
+        query("SELECT toJSONString(extra) FROM ca_list_contract FORMAT TSVRaw")
     )
-    assert result.returncode == 0, result.stderr
-    assert "type mismatch between list elements" in result.stderr, result.stderr
-    assert json.loads(result.stdout)["parsed"] == ["1", "two", None, "true"]
+    assert stored == {"items": [1, "two", True]}, stored
     print("ok")
 
 

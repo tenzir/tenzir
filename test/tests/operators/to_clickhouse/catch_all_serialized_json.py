@@ -48,7 +48,7 @@ to_clickhouse table="{table}",
               mode="append", _jobs=1
 """
         result = subprocess.run(
-            [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+            [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
             capture_output=True,
             text=True,
             timeout=60,
@@ -75,7 +75,7 @@ to_clickhouse table="json_catch_all",
               mode="append", _jobs=1
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
         capture_output=True,
         text=True,
         timeout=60,

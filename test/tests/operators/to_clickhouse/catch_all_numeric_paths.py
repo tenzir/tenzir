@@ -73,7 +73,7 @@ to_clickhouse table="{table}", host=env("CLICKHOUSE_HOST"),
                     "\nto_clickhouse", "\nselect payload\nto_clickhouse"
                 )
             result = subprocess.run(
-                [*shlex.split(os.environ["TENZIR_BINARY"]), program],
+                [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
                 capture_output=True,
                 text=True,
                 timeout=60,
