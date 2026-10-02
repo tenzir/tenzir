@@ -1,0 +1,8 @@
+from {x: {first: 0}, active: false},
+  {x: {second: 1}, active: true},
+  {x: null, active: false},
+  {x: [1, "text"], active: true},
+  {x: {last: 2}, active: false}
+y = x.print_yaml(include_document_markers=true) if active else null
+where active
+z = x.print_yaml()

@@ -1,0 +1,4 @@
+from {x: "[unterminated"}, {x: "? [a, b]\n: value"},
+  {x: "&loop [*loop]"}, {x: 42}, {x: null},
+  {x: "valid: true"}
+y = x.parse_yaml()

@@ -1,0 +1,8 @@
+from {x: {numbers: [1, 2, 3], nested: {text: "hello", enabled: true}, empty: []}},
+  {x: {different: "world", null_value: null}},
+  {x: [1, "text", true, null, {a: 1}, {a: "hello", b: 2}]},
+  {x: [{a: 1}, {b: "text"}, {a: false}, {a: null}, {}]},
+  {x: [{a: 1, b: 2}, {b: 3, a: 4}]}
+yaml = x.print_yaml()
+y = yaml.parse_yaml()
+matches = x == y

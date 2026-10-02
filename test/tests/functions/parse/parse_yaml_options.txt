@@ -1,0 +1,37 @@
+warning: selected schema not found
+ --> tests/functions/parse/parse_yaml_options.tql:5:12
+  |
+5 | selector = x.parse_yaml(selector="event_type:suricata")
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: `suricata.unknown` does not refer to a known schema
+{
+  x: "src_port: \"53\"\nextra: 1\nevent_type: dns",
+  port: 53,
+  extra: 1,
+  only_port: 53,
+  only_extra: null,
+  selected_port: 53,
+  selected_value: null,
+  unflatten: {
+    a: {
+      b: 1,
+      c: "text",
+    },
+  },
+}
+{
+  x: "event_type: unknown\nvalue: 10.0.0.1",
+  port: null,
+  extra: null,
+  only_port: null,
+  only_extra: null,
+  selected_port: null,
+  selected_value: 10.0.0.1,
+  unflatten: {
+    a: {
+      b: 1,
+      c: "text",
+    },
+  },
+}

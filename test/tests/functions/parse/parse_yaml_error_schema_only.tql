@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {}
+x = parse_yaml("x: 1", schema_only=true)

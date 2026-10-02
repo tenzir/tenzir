@@ -1,0 +1,17 @@
+{
+  x: {
+    second: 1,
+  },
+  active: true,
+  y: "---\nsecond: 1\n...\n",
+  z: "second: 1",
+}
+{
+  x: [
+    1,
+    "text",
+  ],
+  active: true,
+  y: "---\n- 1\n- text\n...\n",
+  z: "- 1\n- text",
+}

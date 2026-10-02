@@ -1,2 +1,3 @@
 tests:
   - print_kv.tql
+  - print_yaml*.tql

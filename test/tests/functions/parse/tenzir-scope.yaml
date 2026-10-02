@@ -2,3 +2,4 @@ tests:
   - parse_kv.tql
   - parse_xml*.tql
   - parse_winlog.tql
+  - parse_yaml*.tql

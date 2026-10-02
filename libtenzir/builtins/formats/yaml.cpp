@@ -18,9 +18,11 @@
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/nova/array.hpp>
+#include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
@@ -737,7 +739,72 @@ private:
   }
 };
 
-class parse_yaml final : public virtual function_plugin {
+struct ParseYamlArgs {
+  nova::ValueArgument x;
+  nova::EventBuilder::Settings settings;
+  location call;
+};
+
+class ParseYamlFunction {
+public:
+  static auto eval(ParseYamlArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const length = frame.length();
+    auto strings = args.x.data.get_alternative<nova::String>();
+    auto accepted
+      = strings ? strings->present : nova::storage::BitMap{length, false};
+    if (auto nulls = args.x.data.get_alternative<nova::Null>()) {
+      accepted = accepted | nulls->present;
+    }
+    if (auto invalid = frame.mask().and_not(accepted); invalid.any()) {
+      auto row = *nova::storage::true_bits(invalid).begin();
+      match(args.x.data.get(row), [&]<class Tag>(nova::RowView<Tag>) {
+        diagnostic::warning("`parse_yaml` expected `string`, got `{}`",
+                            nova::Type<Tag>::static_name)
+          .primary(args.x.source)
+          .emit(frame);
+      });
+    }
+    auto dh = transforming_diagnostic_handler{
+      frame, [&](diagnostic d) {
+        if (not d.has_location()) {
+          d.annotations.emplace_back(true, std::string{}, args.call);
+        }
+        return d;
+      }};
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      if (not frame.mask().get(row)) {
+        builder.skip();
+        continue;
+      }
+      if (not strings or not strings->present.get(row)) {
+        builder.value().null();
+        continue;
+      }
+      try {
+        auto node = YAML::Load(std::string{*strings->data.get(row)});
+        if (not node.IsDefined()) {
+          diagnostic::warning("document is not valid").emit(dh);
+          builder.value().null();
+          continue;
+        }
+        if (not validate_yaml_node(node, dh)) {
+          builder.value().null();
+          continue;
+        }
+        append_yaml_node(builder.value(), node, dh);
+      } catch (YAML::Exception const& err) {
+        diagnostic::warning("failed to load YAML document: {}", err.what())
+          .emit(dh);
+        builder.value().null();
+      }
+    }
+    return builder.finish_data();
+  }
+};
+
+class parse_yaml final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "parse_yaml";
@@ -745,6 +812,15 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<ParseYamlArgs, ParseYamlFunction>{};
+    d.positional("x", &ParseYamlArgs::x, "string");
+    d.call_location(&ParseYamlArgs::call);
+    d.validate(
+      nova::add_event_builder_to_describer(d, &ParseYamlArgs::settings));
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -844,13 +920,61 @@ public:
   }
 };
 
-class print_yaml final : public virtual function_plugin {
+struct PrintYamlArgs {
+  nova::ValueArgument input;
+  bool include_document_markers = false;
+};
+
+class PrintYamlFunction {
+public:
+  static auto eval(PrintYamlArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    for (auto row : nova::storage::true_bits(frame.mask())) {
+      builder.skip_n(row - builder.length());
+      auto value = args.input.data.get(row);
+      if (is<nova::RowView<nova::Null>>(value)) {
+        builder.data(std::string_view{"null"});
+        continue;
+      }
+      auto out = YAML::Emitter{};
+      out.SetNullFormat(YAML::LowerNull);
+      if (args.include_document_markers) {
+        out << YAML::BeginDoc;
+      }
+      print_event_node(out, value);
+      if (args.include_document_markers) {
+        out << YAML::EndDoc;
+      }
+      if (not out.good()) {
+        diagnostic::warning("failed to format YAML document")
+          .primary(args.input.source)
+          .emit(frame);
+        builder.null();
+        continue;
+      }
+      builder.data(std::string_view{out.c_str(), out.size()});
+    }
+    builder.skip_n(frame.length() - builder.length());
+    return builder.finish();
+  }
+};
+
+class print_yaml final : public virtual nova::FunctionPlugin {
   auto name() const -> std::string override {
     return "print_yaml";
   }
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<PrintYamlArgs, PrintYamlFunction>{};
+    d.positional("input", &PrintYamlArgs::input, "any");
+    d.named("include_document_markers",
+            &PrintYamlArgs::include_document_markers);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

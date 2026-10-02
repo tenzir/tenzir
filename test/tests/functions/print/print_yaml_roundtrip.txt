@@ -1,0 +1,128 @@
+{
+  x: {
+    numbers: [
+      1,
+      2,
+      3,
+    ],
+    nested: {
+      text: "hello",
+      enabled: true,
+    },
+    empty: [],
+  },
+  yaml: "numbers:\n  - 1\n  - 2\n  - 3\nnested:\n  text: hello\n  enabled: true\nempty:\n  []",
+  y: {
+    numbers: [
+      1,
+      2,
+      3,
+    ],
+    nested: {
+      text: "hello",
+      enabled: true,
+    },
+    empty: [],
+  },
+  matches: true,
+}
+{
+  x: {
+    different: "world",
+    null_value: null,
+  },
+  yaml: "different: world\nnull_value: null",
+  y: {
+    different: "world",
+    null_value: null,
+  },
+  matches: true,
+}
+{
+  x: [
+    1,
+    "text",
+    true,
+    null,
+    {
+      a: 1,
+    },
+    {
+      a: "hello",
+      b: 2,
+    },
+  ],
+  yaml: "- 1\n- text\n- true\n- null\n- a: 1\n- a: hello\n  b: 2",
+  y: [
+    1,
+    "text",
+    true,
+    null,
+    {
+      a: 1,
+    },
+    {
+      a: "hello",
+      b: 2,
+    },
+  ],
+  matches: true,
+}
+{
+  x: [
+    {
+      a: 1,
+    },
+    {
+      b: "text",
+    },
+    {
+      a: false,
+    },
+    {
+      a: null,
+    },
+    {},
+  ],
+  yaml: "- a: 1\n- b: text\n- a: false\n- a: null\n- {}",
+  y: [
+    {
+      a: 1,
+    },
+    {
+      b: "text",
+    },
+    {
+      a: false,
+    },
+    {
+      a: null,
+    },
+    {},
+  ],
+  matches: true,
+}
+{
+  x: [
+    {
+      a: 1,
+      b: 2,
+    },
+    {
+      b: 3,
+      a: 4,
+    },
+  ],
+  yaml: "- a: 1\n  b: 2\n- b: 3\n  a: 4",
+  y: [
+    {
+      a: 1,
+      b: 2,
+    },
+    {
+      b: 3,
+      a: 4,
+    },
+  ],
+  matches: true,
+}

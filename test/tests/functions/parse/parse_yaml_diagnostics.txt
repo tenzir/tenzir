@@ -1,0 +1,53 @@
+warning: failed to load YAML document: yaml-cpp: error at line 1, column 1: end of sequence flow not found
+ --> tests/functions/parse/parse_yaml_diagnostics.tql:4:5
+  |
+4 | y = x.parse_yaml()
+  |     ~~~~~~~~~~~~~~
+  |
+
+warning: failed to load YAML document: yaml-cpp: error at line 1, column 3: bad conversion
+ --> tests/functions/parse/parse_yaml_diagnostics.tql:4:5
+  |
+4 | y = x.parse_yaml()
+  |     ~~~~~~~~~~~~~~
+  |
+
+warning: document nesting exceeds limit of 64 levels
+ --> tests/functions/parse/parse_yaml_diagnostics.tql:4:5
+  |
+4 | y = x.parse_yaml()
+  |     ~~~~~~~~~~~~~~
+  |
+
+warning: `parse_yaml` expected `string`, got `int`
+ --> tests/functions/parse/parse_yaml_diagnostics.tql:4:5
+  |
+4 | y = x.parse_yaml()
+  |     ~
+  |
+{
+  x: "[unterminated",
+  y: null,
+}
+{
+  x: "? [a, b]\n: value",
+  y: null,
+}
+{
+  x: "&loop [*loop]",
+  y: null,
+}
+{
+  x: 42,
+  y: null,
+}
+{
+  x: null,
+  y: null,
+}
+{
+  x: "valid: true",
+  y: {
+    valid: true,
+  },
+}

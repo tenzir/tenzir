@@ -1,0 +1,7 @@
+from {x: "[unterminated", active: false},
+  {x: "event_type: dns\nsrc_port: \"53\"", active: true},
+  {x: 42, active: false},
+  {x: "event_type: dns\nvalue: ok", active: true},
+  {x: "&loop [*loop]", active: false}
+y = x.parse_yaml(selector="event_type:suricata") if active else null
+select active, port=y.src_port?, value=y.value?

@@ -1,0 +1,9 @@
+from {x: "src_port: \"53\"\nextra: 1\nevent_type: dns"},
+  {x: "event_type: unknown\nvalue: 10.0.0.1"}
+schema = x.parse_yaml(schema="suricata.dns")
+schema_only = x.parse_yaml(schema="suricata.dns", schema_only=true, raw=true)
+selector = x.parse_yaml(selector="event_type:suricata")
+unflatten = parse_yaml("a.b: 1\na.c: text", unflatten_separator=".")
+select x, port=schema.src_port?, extra=schema.extra?,
+  only_port=schema_only.src_port?, only_extra=schema_only.extra?,
+  selected_port=selector.src_port?, selected_value=selector.value?, unflatten

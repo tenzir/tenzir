@@ -1,0 +1,152 @@
+{
+  x: "null",
+  y: null,
+  raw: null,
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "",
+  y: null,
+  raw: null,
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "[]",
+  y: [],
+  raw: [],
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "{}",
+  y: {},
+  raw: {},
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "[1, text, null, {nested: true}]",
+  y: [
+    1,
+    "text",
+    null,
+    {
+      nested: true,
+    },
+  ],
+  raw: [
+    1,
+    "text",
+    null,
+    {
+      nested: true,
+    },
+  ],
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "[{a: 1}, {b: text}, {a: hello}, {a: null}, {}]",
+  y: [
+    {
+      a: 1,
+    },
+    {
+      b: "text",
+    },
+    {
+      a: "hello",
+    },
+    {
+      a: null,
+    },
+    {},
+  ],
+  raw: [
+    {
+      a: 1,
+    },
+    {
+      b: "text",
+    },
+    {
+      a: "hello",
+    },
+    {
+      a: null,
+    },
+    {},
+  ],
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "18446744073709551615",
+  y: 18446744073709551615,
+  raw: 18446744073709551615,
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "first: 1\nsecond: text\nfirst: true",
+  y: {
+    first: [
+      1,
+      true,
+    ],
+    second: "text",
+  },
+  raw: {
+    first: [
+      1,
+      true,
+    ],
+    second: "text",
+  },
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}
+{
+  x: "src: 10.0.0.1\nquoted_number: \"42\"\nperiod: 1s",
+  y: {
+    src: 10.0.0.1,
+    quoted_number: 42,
+    period: 1s,
+  },
+  raw: {
+    src: "10.0.0.1",
+    quoted_number: 42,
+    period: "1s",
+  },
+  constant: [
+    1,
+    "text",
+    null,
+  ],
+}

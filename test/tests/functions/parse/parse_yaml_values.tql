@@ -1,0 +1,9 @@
+from {x: "null"}, {x: ""}, {x: "[]"}, {x: "{}"},
+  {x: "[1, text, null, {nested: true}]"},
+  {x: "[{a: 1}, {b: text}, {a: hello}, {a: null}, {}]"},
+  {x: "18446744073709551615"},
+  {x: "first: 1\nsecond: text\nfirst: true"},
+  {x: "src: 10.0.0.1\nquoted_number: \"42\"\nperiod: 1s"}
+y = x.parse_yaml()
+raw = x.parse_yaml(raw=true)
+constant = parse_yaml("[1, text, null]")

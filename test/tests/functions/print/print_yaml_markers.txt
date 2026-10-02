@@ -1,0 +1,38 @@
+{
+  x: {
+    first: 1,
+  },
+  default: "first: 1",
+  enabled: "---\nfirst: 1\n...\n",
+  disabled: "first: 1",
+}
+{
+  x: {
+    second: 2,
+  },
+  default: "second: 2",
+  enabled: "---\nsecond: 2\n...\n",
+  disabled: "second: 2",
+}
+{
+  x: [
+    1,
+    null,
+    "text",
+  ],
+  default: "- 1\n- null\n- text",
+  enabled: "---\n- 1\n- null\n- text\n...\n",
+  disabled: "- 1\n- null\n- text",
+}
+{
+  x: "scalar",
+  default: "scalar",
+  enabled: "---\nscalar\n...\n",
+  disabled: "scalar",
+}
+{
+  x: null,
+  default: "null",
+  enabled: "null",
+  disabled: "null",
+}

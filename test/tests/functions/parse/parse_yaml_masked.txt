@@ -1,0 +1,25 @@
+{
+  active: false,
+  port: null,
+  value: null,
+}
+{
+  active: true,
+  port: 53,
+  value: null,
+}
+{
+  active: false,
+  port: null,
+  value: null,
+}
+{
+  active: true,
+  port: null,
+  value: "ok",
+}
+{
+  active: false,
+  port: null,
+  value: null,
+}

@@ -1,0 +1,8 @@
+from {x: true}, {x: false}, {x: 1}, {x: 2},
+  {x: "first"}, {x: "second"}, {x: null},
+  {x: b"abc"}, {x: 1.25}, {x: 1s},
+  {x: 2024-01-02T03:04:05Z}, {x: 10.0.0.1}, {x: 10.0.0.0/24},
+  {x: []}, {x: {}}, {x: [1, "text", null, {nested: [true, false]}]},
+  {x: {first: 1, second: null}}, {x: {second: "text", third: []}}
+y = x.print_yaml()
+constant = print_yaml({nested: [1, null, "text"]})

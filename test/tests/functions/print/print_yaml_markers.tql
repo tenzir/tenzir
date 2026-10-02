@@ -1,0 +1,5 @@
+from {x: {first: 1}}, {x: {second: 2}}, {x: [1, null, "text"]},
+  {x: "scalar"}, {x: null}
+default = x.print_yaml()
+enabled = x.print_yaml(include_document_markers=true)
+disabled = x.print_yaml(include_document_markers=false)

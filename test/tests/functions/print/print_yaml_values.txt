@@ -1,0 +1,106 @@
+{
+  x: true,
+  y: "true",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: false,
+  y: "false",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 1,
+  y: "1",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 2,
+  y: "2",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: "first",
+  y: "first",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: "second",
+  y: "second",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: null,
+  y: "null",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: b"abc",
+  y: "YWJj",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 1.25,
+  y: "1.25",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 1s,
+  y: "1s",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 2024-01-02T03:04:05Z,
+  y: "2024-01-02T03:04:05Z",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 10.0.0.1,
+  y: "10.0.0.1",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: 10.0.0.0/24,
+  y: "10.0.0.0/24",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: [],
+  y: "[]",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: {},
+  y: "{}",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: [
+    1,
+    "text",
+    null,
+    {
+      nested: [
+        true,
+        false,
+      ],
+    },
+  ],
+  y: "- 1\n- text\n- null\n- nested:\n    - true\n    - false",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: {
+    first: 1,
+    second: null,
+  },
+  y: "first: 1\nsecond: null",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}
+{
+  x: {
+    second: "text",
+    third: [],
+  },
+  y: "second: text\nthird:\n  []",
+  constant: "nested:\n  - 1\n  - null\n  - text",
+}

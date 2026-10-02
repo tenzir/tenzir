@@ -1,0 +1,11 @@
+error: `schema` and `selector` cannot be combined
+ --> tests/functions/parse/parse_yaml_error_schema_and_selector.tql:5:31
+  |
+5 | x = parse_yaml("x: 1", schema="suricata.dns", selector="event_type")
+  |                               ^^^^^^^^^^^^^^
+  ⋮
+5 | x = parse_yaml("x: 1", schema="suricata.dns", selector="event_type")
+  |                                                        ^^^^^^^^^^^^
+  |
+  = usage: parse_yaml(x:string, [schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_yaml
