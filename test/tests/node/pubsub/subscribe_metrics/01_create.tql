@@ -1,0 +1,6 @@
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000021", definition: "subscribe \"subscribe-metrics-topic\"\nhead 1\ndiscard"}
+discard
+// Keep publishing until the node fixture stops so the subscriber can attach
+// regardless of when its start request finishes.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000022", definition: "every 10ms {\n  from {value: 42}\n  @name = \"subscribe.metric.events\"\n}\npublish \"subscribe-metrics-topic\""}
+discard

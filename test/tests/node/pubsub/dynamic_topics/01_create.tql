@@ -1,0 +1,4 @@
+// Keep publishing until the node fixture stops so both subscriptions can
+// exercise distinct dynamically selected topics.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000032", definition: "every 10ms {\n  from {}\n  repeat 32\n  enumerate index\n  topic = index.string()\n  batch 32\n}\npublish topic"}
+discard

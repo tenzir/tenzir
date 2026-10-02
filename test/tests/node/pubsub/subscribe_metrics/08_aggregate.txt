@@ -1,0 +1,4 @@
+{
+  topic: "subscribe-metrics-aggregate",
+  aggregated: true,
+}

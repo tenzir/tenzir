@@ -1,0 +1,4 @@
+// Keep publishing until the node fixture stops so subscriber startup timing
+// cannot exhaust the input before all physical-path patterns are exercised.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000008", definition: "every 10ms {\n  from {marker: \"physical-a\", foo: {a: 1}, b: 2}, {marker: \"qualified\", a: 1, b: 2}, {marker: \"physical-both\", foo: {a: 1, b: 2}}\n  @name = \"foo\"\n}\npublish \"schema-patterns\""}
+discard

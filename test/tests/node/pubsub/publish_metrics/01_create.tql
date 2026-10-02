@@ -1,0 +1,2 @@
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000013", definition: "from {value: 42}\n@name = \"publish.metric.events\"\npublish \"metric-topic\""}
+discard

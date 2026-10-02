@@ -1,0 +1,6 @@
+every 1s {
+  metrics "subscribe"
+  where topic? == "subscribe-metrics-aggregate" and events > 1
+}
+head 1
+select topic, aggregated=(events > 1)

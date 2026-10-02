@@ -1,0 +1,9 @@
+{
+  marker: "physical-a",
+}
+{
+  marker: "physical-both",
+}
+{
+  marker: "qualified",
+}

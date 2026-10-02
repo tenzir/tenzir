@@ -1,0 +1,3 @@
+suite: publish-invalid-topic
+fixtures: [node]
+timeout: 20

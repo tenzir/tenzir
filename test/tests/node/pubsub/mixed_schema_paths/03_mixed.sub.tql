@@ -1,0 +1,3 @@
+subscribe "mixed-schema-paths"
+where foo.a == 1 and foo.b == 2
+head 1

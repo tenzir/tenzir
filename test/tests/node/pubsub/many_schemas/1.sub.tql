@@ -1,0 +1,4 @@
+subscribe "many-schemas"
+where index >= 0
+head 1024
+summarize count()

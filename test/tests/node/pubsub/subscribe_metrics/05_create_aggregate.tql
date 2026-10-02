@@ -1,0 +1,4 @@
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000024", definition: "subscribe \"subscribe-metrics-aggregate\"\nhead 20\ndiscard"}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000025", definition: "every 10ms {\n  from {value: 1}\n}\npublish \"subscribe-metrics-aggregate\""}
+discard

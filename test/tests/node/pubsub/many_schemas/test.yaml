@@ -1,0 +1,4 @@
+suite:
+  name: subscribe-many-schemas
+  mode: parallel
+  min_jobs: 2

@@ -1,0 +1,8 @@
+// Keep each publisher running until the node fixture stops so subscribers
+// cannot miss its input during startup.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000031", definition: "every 10ms {\n  from {foo: {a: 1}, b: 2}\n  @name = \"foo\"\n}\npublish \"mixed-schema-paths\""}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000032", definition: "every 10ms {\n  from {enabled: false}\n  @name = \"foo\"\n}\npublish \"schema-negation\""}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000033", definition: "every 10ms {\n  from {enabled: true}\n  @name = \"foo\"\n}\npublish \"schema-standalone\""}
+discard

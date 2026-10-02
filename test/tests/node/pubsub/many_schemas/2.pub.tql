@@ -1,0 +1,9 @@
+every 10ms {
+  from {}
+  repeat 1024
+  enumerate index
+  @name = "schema" + index.string()
+  batch 1024
+}
+head 10240
+publish "many-schemas"

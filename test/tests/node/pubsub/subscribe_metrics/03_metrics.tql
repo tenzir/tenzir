@@ -1,0 +1,6 @@
+every 1s {
+  metrics "subscribe"
+  where topic? == "subscribe-metrics-topic"
+}
+head 1
+select topic, schema, events, has_schema_id=(schema_id != "")

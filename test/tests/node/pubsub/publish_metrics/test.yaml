@@ -1,0 +1,3 @@
+suite: publish-metrics
+fixtures: [node]
+timeout: 60

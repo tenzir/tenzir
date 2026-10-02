@@ -1,0 +1,7 @@
+warning: expected `string`
+ --> tests/node/pubsub/invalid_topic/01_non_string.tql:2:9
+  |
+2 | publish topic
+  |         ~~~~~
+  |
+  = note: events will be dropped

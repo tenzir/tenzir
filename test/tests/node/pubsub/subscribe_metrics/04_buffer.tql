@@ -1,0 +1,5 @@
+every 1s {
+  metrics "subscribe_buffer"
+}
+head 1
+select bytes, events, batches

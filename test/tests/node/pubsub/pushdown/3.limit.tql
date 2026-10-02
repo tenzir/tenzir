@@ -1,3 +1,4 @@
 subscribe "pushdown"
+where nested.keep == "rejected-value"
 head 1
 select nested.keep

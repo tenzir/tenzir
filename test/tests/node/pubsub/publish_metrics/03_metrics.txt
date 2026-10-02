@@ -1,0 +1,6 @@
+{
+  topic: "metric-topic",
+  schema: "publish.metric.events",
+  events: 1,
+  has_schema_id: true,
+}

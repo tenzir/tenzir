@@ -1,0 +1,5 @@
+{
+  bytes: 0,
+  events: 0,
+  batches: 0,
+}
