@@ -1,0 +1,9 @@
+// Predicates fold once they no longer read the event, and lose the operands
+// that cannot change the result.
+export
+class_uid = 3002
+activity_id = 1
+type_uid = class_uid * 100 + activity_id
+where type_uid == 300201 and x == 60 * 60
+where (y == 1 and class_uid == 3002) or (y == 2 and class_uid == 4001)
+where "a" + "b" == "ab" or z == 1

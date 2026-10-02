@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// The left operand runs for every event, and fails for a string.
+from {x: "ab"}
+where slice(x, stride=-1) == "" or true

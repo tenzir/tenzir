@@ -52,6 +52,16 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   return result;
 }
 
+namespace {
+
+/// The number of expression nodes beyond which a substitution may not grow a
+/// predicate. Every substitution can replace each field reference with an
+/// expression, so a chain of operators could otherwise grow a predicate
+/// exponentially.
+constexpr auto max_substituted_predicate_size = size_t{4096};
+
+} // namespace
+
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
                                       ast::FieldSubstitution const& fields,
                                       ast::MetaSubstitution const& meta)
@@ -59,11 +69,20 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
   auto const reg = global_registry();
   auto result = split_filter_result{};
   for (auto& expr : filter) {
-    if (auto substituted = ast::substitute_refs(expr, *reg, fields, meta)) {
-      result.independent.push_back(std::move(*substituted));
-    } else {
+    auto substituted = ast::substitute_refs(expr, *reg, fields, meta);
+    if (not substituted) {
       result.dependent.push_back(std::move(expr));
+      continue;
     }
+    auto simplified = simplify_predicate(std::move(*substituted));
+    // A predicate that grows past the bound stays behind the operator.
+    auto const size = expression_size(simplified);
+    if (size > max_substituted_predicate_size
+        and size > expression_size(expr)) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
+    result.independent.push_back(std::move(simplified));
   }
   return result;
 }
@@ -462,6 +481,8 @@ auto ir::pipeline::optimize(OptimizeRequest req,
     if (octx.can_any_op_reorder and op->parallelizable()) {
       req.order = EventOrder::unordered;
     }
+    // Operators see and forward only simplified predicates.
+    req.filter = simplify_filter(std::move(req.filter));
     auto opt = std::move(*op).optimize(std::move(req), octx);
     req = OptimizeRequest{
       .filter = std::move(opt.filter),
@@ -475,7 +496,7 @@ auto ir::pipeline::optimize(OptimizeRequest req,
       std::move_iterator{opt.replacement.operators.end()});
   }
   return {
-    .filter = std::move(req.filter),
+    .filter = simplify_filter(std::move(req.filter)),
     .order = req.order,
     .replacement = std::move(replacement),
     .limit = req.limit,

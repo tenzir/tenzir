@@ -20,13 +20,7 @@
          ]
        },
        filter: [
--        
-+        binary_expr {
-+          left: constant none_t {} @ [1]:22..29 from 0,
-+          op: "eq",
-+          right: constant none_t {} @ [1]:33..37 from 0,
-+          location: [1]:22..37 from 0
-+        }
+         
        ],
        order: "ordered"
      },

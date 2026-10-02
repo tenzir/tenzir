@@ -9,6 +9,6 @@
 from {x: 1}
 repeat
 optimize_barrier
-where true
+where x != null
 parallel 2 { where x > 0 }
 discard

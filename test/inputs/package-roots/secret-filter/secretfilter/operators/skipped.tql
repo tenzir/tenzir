@@ -1,0 +1,9 @@
+---
+description: "Filter on a secret in a branch that the condition skips"
+args:
+  positional:
+    - name: value
+      type: secret
+---
+
+where true if true else $value

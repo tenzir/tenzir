@@ -1,0 +1,256 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:111..117 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ [1]:221..222 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 3600 @ [1]:226..233 from 0,
++          location: [1]:221..233 from 0
++        },
++        binary_expr {
++          left: root_field {
++            id: `y` @ [1]:241..242 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:246..247 from 0,
++          location: [1]:241..247 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `class_uid` @ [1]:118..127 from 0,
+             has_question_mark: false
+           },
+           right: constant int64 3002 @ [1]:130..134 from 0,
+           location: [1]:118..134 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `activity_id` @ [1]:135..146 from 0,
+             has_question_mark: false
+           },
+           right: constant int64 1 @ [1]:149..150 from 0,
+           location: [1]:135..150 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `type_uid` @ [1]:151..159 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: binary_expr {
+               left: root_field {
+                 id: `class_uid` @ [1]:162..171 from 0,
+                 has_question_mark: false
+               },
+               op: "mul",
+               right: constant int64 100 @ [1]:174..177 from 0,
+               location: [1]:162..177 from 0
+             },
+             op: "add",
+             right: root_field {
+               id: `activity_id` @ [1]:180..191 from 0,
+               has_question_mark: false
+             },
+             location: [1]:162..191 from 0
+           },
+           location: [1]:151..191 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:192..197 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:338..338 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `type_uid` @ [1]:198..206 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 300201 @ [1]:210..216 from 0,
+-            location: [1]:198..216 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `x` @ [1]:221..222 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: binary_expr {
+-              left: constant int64 60 @ [1]:226..228 from 0,
+-              op: "mul",
+-              right: constant int64 60 @ [1]:231..233 from 0,
+-              location: [1]:226..233 from 0
+-            },
+-            location: [1]:221..233 from 0
+-          },
+-          location: [1]:198..233 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:234..239 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: binary_expr {
+-              left: root_field {
+-                id: `y` @ [1]:241..242 from 0,
+-                has_question_mark: false
+-              },
+-              op: "eq",
+-              right: constant int64 1 @ [1]:246..247 from 0,
+-              location: [1]:241..247 from 0
+-            },
+-            op: "and_",
+-            right: binary_expr {
+-              left: root_field {
+-                id: `class_uid` @ [1]:252..261 from 0,
+-                has_question_mark: false
+-              },
+-              op: "eq",
+-              right: constant int64 3002 @ [1]:265..269 from 0,
+-              location: [1]:252..269 from 0
+-            },
+-            location: [1]:241..269 from 0
+-          },
+-          op: "or_",
+-          right: binary_expr {
+-            left: binary_expr {
+-              left: root_field {
+-                id: `y` @ [1]:275..276 from 0,
+-                has_question_mark: false
+-              },
+-              op: "eq",
+-              right: constant int64 2 @ [1]:280..281 from 0,
+-              location: [1]:275..281 from 0
+-            },
+-            op: "and_",
+-            right: binary_expr {
+-              left: root_field {
+-                id: `class_uid` @ [1]:286..295 from 0,
+-                has_question_mark: false
+-              },
+-              op: "eq",
+-              right: constant int64 4001 @ [1]:299..303 from 0,
+-              location: [1]:286..303 from 0
+-            },
+-            location: [1]:275..303 from 0
+-          },
+-          location: [1]:241..303 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:305..310 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: binary_expr {
+-              left: constant string "a" @ [1]:311..314 from 0,
+-              op: "add",
+-              right: constant string "b" @ [1]:317..320 from 0,
+-              location: [1]:311..320 from 0
+-            },
+-            op: "eq",
+-            right: constant string "ab" @ [1]:324..328 from 0,
+-            location: [1]:311..328 from 0
+-          },
+-          op: "or_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `z` @ [1]:332..333 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 1 @ [1]:337..338 from 0,
+-            location: [1]:332..338 from 0
+-          },
+-          location: [1]:311..338 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ]
+ }

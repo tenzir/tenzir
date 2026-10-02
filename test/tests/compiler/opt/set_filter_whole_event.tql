@@ -1,4 +1,4 @@
 from {x: 1}
-this = {x: 2}
-where x == 2
+this = {x: 2, y: x}
+where x == 2 and y == 1
 discard

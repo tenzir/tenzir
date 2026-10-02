@@ -1,0 +1,8 @@
+error: expected a selector
+ --> tests/operators/where/simplify/selector.tql:7:27
+  |
+7 | where drop_null_fields(x, a if true) == y
+  |                           ^^^^^^^^^
+  |
+  = usage: drop_null_fields(record:record, [fields:field...])
+  = docs: https://tenzir.com/docs/reference/functions/drop_null_fields

@@ -65,29 +65,13 @@
 -      ]
 +        },
 +        binary_expr {
-+          left: binary_expr {
-+            left: root_field {
-+              id: `a` @ [1]:114..115 from 0,
-+              has_question_mark: false
-+            },
-+            op: "eq",
-+            right: constant ip 203.0.113.7 @ [1]:156..167 from 0,
-+            location: [1]:137..167 from 0
++          left: root_field {
++            id: `a` @ [1]:114..115 from 0,
++            has_question_mark: false
 +          },
-+          op: "and_",
-+          right: binary_expr {
-+            left: constant none_t {} @ [1]:185..193 from 0,
-+            op: "eq",
-+            right: constant none_t {} @ [1]:197..201 from 0,
-+            location: [1]:172..201 from 0
-+          },
-+          location: [1]:137..201 from 0
-+        },
-+        binary_expr {
-+          left: constant none_t {} @ [1]:208..209 from 0,
 +          op: "eq",
-+          right: constant none_t {} @ [1]:213..217 from 0,
-+          location: [1]:208..217 from 0
++          right: constant ip 203.0.113.7 @ [1]:156..167 from 0,
++          location: [1]:137..167 from 0
 +        },
 +        binary_expr {
 +          left: binary_expr {
@@ -182,28 +166,13 @@
 +          location: [1]:298..332 from 0
 +        },
 +        binary_expr {
-+          left: binary_expr {
-+            left: binary_expr {
-+              left: constant string "ocsf.authentication" @ [1]:391..396 from 0,
-+              op: "eq",
-+              right: constant string "ocsf.authentication" @ [1]:400..421 from 0,
-+              location: [1]:391..421 from 0
-+            },
-+            op: "and_",
-+            right: binary_expr {
-+              left: meta {
-+                kind: "import_time",
-+                source: [1]:426..438 from 0
-+              },
-+              op: "neq",
-+              right: constant none_t {} @ [1]:442..446 from 0,
-+              location: [1]:426..446 from 0
-+            },
-+            location: [1]:391..446 from 0
++          left: meta {
++            kind: "import_time",
++            source: [1]:426..438 from 0
 +          },
-+          op: "and_",
-+          right: constant bool true @ [1]:451..460 from 0,
-+          location: [1]:391..460 from 0
++          op: "neq",
++          right: constant none_t {} @ [1]:442..446 from 0,
++          location: [1]:426..446 from 0
 +        }
 +      ],
 +      order: "ordered"

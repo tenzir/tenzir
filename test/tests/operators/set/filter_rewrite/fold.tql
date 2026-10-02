@@ -1,0 +1,8 @@
+// Filters over assigned constants fold, and prune the guards of other classes.
+from {EventID: 4624, x: 1}, {EventID: 4625, x: 2}, {EventID: 4624, x: null}, {EventID: 4634, x: 3}
+class_uid = 3002
+type_uid = class_uid * 100 + 1
+src = {ip: x}
+where (EventID == 4624 and class_uid == 3002) or (EventID == 4625 and class_uid == 4001)
+where type_uid == 300201 and src.port? == null
+where not (src.ip == 1 and class_uid != 3002)

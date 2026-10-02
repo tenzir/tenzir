@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// `drop_null_fields` requires a field after its first argument.
+from {x: {a: null}, y: {}}
+where drop_null_fields(x, a if true) == y

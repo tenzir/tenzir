@@ -1,0 +1,4 @@
+export
+winlog::ocsf::normalize
+where class_uid == 3002 and src_endpoint.ip == 203.0.113.7
+where class_uid == 4001 or src_endpoint.port == null

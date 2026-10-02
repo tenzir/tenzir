@@ -1,0 +1,9 @@
+---
+description: "Filter on a secret in an operand that the runtime evaluates"
+args:
+  positional:
+    - name: value
+      type: secret
+---
+
+where {a: $value} == null or true

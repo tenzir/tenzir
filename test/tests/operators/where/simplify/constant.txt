@@ -1,0 +1,8 @@
+error: expected a constant expression
+ --> tests/operators/where/simplify/constant.tql:7:35
+  |
+7 | where int(y, base=16 if true else x) == 1
+  |                                   ^
+  |
+  = usage: int(x:number|string, [base=int])
+  = docs: https://tenzir.com/docs/reference/functions/int

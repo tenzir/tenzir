@@ -1,0 +1,6 @@
+// Operations that warn at runtime stay, and so do nondeterministic operands
+// and `null`, for which `where` warns.
+export
+where x == 1 / 0
+where now() > 2020-01-01 or 1 == 1
+where y == 1 or not null

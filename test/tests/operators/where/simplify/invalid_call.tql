@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// The right operand never runs, but its invalid call still fails the pipeline.
+from {x: "1"}
+where true or int(x, base=3) == 1

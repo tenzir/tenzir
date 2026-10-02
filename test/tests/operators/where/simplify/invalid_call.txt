@@ -1,0 +1,8 @@
+error: `base` must be 10 or 16
+ --> tests/operators/where/simplify/invalid_call.tql:7:27
+  |
+7 | where true or int(x, base=3) == 1
+  |                           ^
+  |
+  = usage: int(x:number|string, [base=int])
+  = docs: https://tenzir.com/docs/reference/functions/int

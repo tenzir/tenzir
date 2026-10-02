@@ -1,0 +1,155 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:117..123 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:124..129 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `x` @ [1]:130..131 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: binary_expr {
+             left: constant int64 1 @ [1]:135..136 from 0,
+             op: "div",
+             right: constant int64 0 @ [1]:139..140 from 0,
+             location: [1]:135..140 from 0
+           },
+           location: [1]:130..140 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:141..146 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: binary_expr {
+             left: function_call {
+               fn: {
+                 path: [
+                   `now` @ [1]:147..150 from 0
+                 ],
+                 ref: std::now/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:147..152 from 0
+             },
+             op: "gt",
+             right: constant time 2020-01-01T00:00:00Z @ [1]:155..165 from 0,
+             location: [1]:147..165 from 0
+           },
+           op: "or_",
+-          right: binary_expr {
+-            left: constant int64 1 @ [1]:169..170 from 0,
+-            op: "eq",
+-            right: constant int64 1 @ [1]:174..175 from 0,
+-            location: [1]:169..175 from 0
+-          },
++          right: constant bool true @ [1]:169..175 from 0,
+           location: [1]:147..175 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:176..181 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: binary_expr {
+             left: root_field {
+               id: `y` @ [1]:182..183 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: constant int64 1 @ [1]:187..188 from 0,
+             location: [1]:182..188 from 0
+           },
+           op: "or_",
+-          right: unary_expr {
+-            op: "not_",
+-            expr: constant none_t {} @ [1]:196..200 from 0,
+-            location: [1]:192..200 from 0
+-          },
++          right: constant none_t {} @ [1]:192..200 from 0,
+           location: [1]:182..200 from 0
+         }
+       ],
+-      named_args: [
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:200..200 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
+     }
+   ]
+ }

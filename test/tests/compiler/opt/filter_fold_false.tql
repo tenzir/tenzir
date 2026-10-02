@@ -1,0 +1,6 @@
+// A predicate that never holds replaces the whole filter.
+export
+class_uid = 3002
+where x == 1
+where class_uid == 4001
+where y == 2

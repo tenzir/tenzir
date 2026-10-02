@@ -1,0 +1,6 @@
+error: `stride` must be greater 0, but got -1
+ --> tests/operators/where/simplify/runtime_error.tql:7:23
+  |
+7 | where slice(x, stride=-1) == "" or true
+  |                       ^^
+  |

@@ -1,0 +1,3 @@
+id: secretfilter
+name: Secret Filter
+description: Operators that filter on a secret argument, which the evaluator rejects.

@@ -1,0 +1,4 @@
+tenzir:
+  nova: true
+  package-dirs:
+    - inputs/package-roots/secret-filter

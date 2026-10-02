@@ -1,2 +1,2 @@
 version
-if name == "x" { where true } else { tail 1 }
+if name == "x" { where version != null } else { tail 1 }

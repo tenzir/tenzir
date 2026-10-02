@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// `count_if` requires a lambda, not an expression that evaluates to one.
+from {x: 1}
+where count_if([1], (x => true) if true) == 1

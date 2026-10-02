@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// The `base` of `int` must be constant, even in a branch that never runs.
+from {x: 1, y: "1"}
+where int(y, base=16 if true else x) == 1

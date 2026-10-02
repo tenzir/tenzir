@@ -1,0 +1,8 @@
+error: expected a lambda
+ --> tests/operators/where/simplify/lambda.tql:7:22
+  |
+7 | where count_if([1], (x => true) if true) == 1
+  |                      ^^^^^^^^^^^^^^^^^^
+  |
+  = usage: count_if(x:any, predicate:any -> bool)
+  = docs: https://tenzir.com/docs/reference/functions/count_if

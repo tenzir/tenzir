@@ -325,12 +325,45 @@ auto split_filter_by_dependents(ir::OptimizeFilter filter,
   -> split_filter_result;
 
 /// Splits a filter chain by substituting the references of every predicate,
-/// as in `ast::substitute_refs`. The substituted predicates are independent.
-/// The others stay dependent and unchanged.
+/// as in `ast::substitute_refs`, and simplifying the result as in
+/// `simplify_predicate`. The substituted predicates are independent. The
+/// others stay dependent and unchanged, including those that the substitution
+/// would grow beyond a fixed bound.
 auto split_filter_by_substitution(OptimizeFilter filter,
                                   ast::FieldSubstitution const& fields,
                                   ast::MetaSubstitution const& meta = {})
   -> split_filter_result;
+
+/// Simplifies a predicate without changing which events it keeps.
+///
+/// Folds subexpressions that read neither the event nor a variable into
+/// constants, provided that they are deterministic and evaluate without
+/// diagnostics. Prunes the operands of `and`, `or`, `not`, `if`, and `else`
+/// that cannot affect the result, following TQL's three-valued logic. A
+/// predicate that is `true` for every event becomes `true`, and one that is
+/// `false` for every event becomes `false`.
+///
+/// The simplified predicate may skip subexpressions that the original one
+/// evaluates, and with them their warnings, but not their errors. It keeps an
+/// operand that the runtime evaluates if the operand calls a function, which
+/// may fail depending on its input. It keeps an operand that the runtime skips
+/// if a call in it fails to instantiate, such as `int(x, base=3)`, because the
+/// evaluator instantiates every call up front. For the same reason, the
+/// arguments of such a call stay as they are. It also keeps an operand with a
+/// constant that the evaluator rejects, such as a secret that a user-defined
+/// operator receives as an argument, unless the runtime never evaluates the
+/// operand. The runtime evaluates the branch of an `if` that the condition
+/// skips for no rows, which suffices to fail.
+auto simplify_predicate(ast::expression predicate) -> ast::expression;
+
+/// Simplifies every predicate of a filter chain as in `simplify_predicate`.
+/// Drops the predicates that keep every event. If a predicate keeps no event,
+/// the chain reduces to `false` and the predicates that could fail the
+/// pipeline.
+auto simplify_filter(OptimizeFilter filter) -> OptimizeFilter;
+
+/// Returns the number of expression nodes in `expr`.
+auto expression_size(ast::expression const& expr) -> size_t;
 
 /// Returns whether `prefix` is a prefix of `path` (or equal to it), comparing
 /// segment names. An empty `prefix` is a prefix of every path.

@@ -1,4 +1,4 @@
 from {x: 1}
 @name = "foo"
-where @name == "foo"
+where @name == "foo" and x == 1
 discard
