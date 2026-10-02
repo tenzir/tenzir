@@ -1,0 +1,3 @@
+from {tsv: "1\t-\ta,b", ssv: "1 - \"x y\""}
+select tsv = tsv.parse_tsv(header=["a", "b", "c"]),
+  ssv = ssv.parse_ssv(header="a b c")

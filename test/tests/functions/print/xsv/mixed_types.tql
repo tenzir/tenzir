@@ -1,0 +1,5 @@
+from {x: {a: 1, b: "hi"}},
+  {x: 42},
+  {x: null},
+  {x: {a: [{y: 1}], b: [1, 2]}}
+select result = x.print_csv()

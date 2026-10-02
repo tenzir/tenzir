@@ -1,2 +1,5 @@
+---
+error: true
+---
 from { input: "1,2,3" }
 output = input.parse_csv(header=["a","b","a"])

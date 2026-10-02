@@ -1,0 +1,6 @@
+---
+error: true
+---
+from {x: "1,2"}
+y = x.parse_xsv(field_separator=",", list_separator=",", null_value="",
+  header="a,b")

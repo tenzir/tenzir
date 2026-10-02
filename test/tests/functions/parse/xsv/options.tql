@@ -1,0 +1,7 @@
+from {x: "1;2,'a,b',3"}
+select list = x.parse_csv(header="a,b,c"),
+  expanded = x.parse_csv(header="a,b", auto_expand=true),
+  filled = "1".parse_csv(header="a,b", auto_fill=true),
+  quoted = x.parse_csv(header="a,b,c", quotes="'"),
+  raw = x.parse_csv(header="a,b,c", raw=true),
+  nested = "1,2".parse_csv(header="a.b,a.c", unflatten_separator=".")

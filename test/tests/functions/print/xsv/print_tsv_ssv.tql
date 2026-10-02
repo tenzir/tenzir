@@ -1,0 +1,2 @@
+from {x: {a: "x y", b: null, c: [1, 2], d: {e: true}}}
+select tsv = x.print_tsv(), ssv = x.print_ssv(null_value="NULL")

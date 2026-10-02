@@ -1,0 +1,4 @@
+{
+  tsv: "x y\t-\t1,2\ttrue",
+  ssv: "\"x y\" NULL 1,2 true",
+}

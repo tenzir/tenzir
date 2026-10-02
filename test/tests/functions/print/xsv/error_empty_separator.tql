@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: 1}
+y = this.print_xsv(field_separator="", list_separator=";", null_value="")

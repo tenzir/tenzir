@@ -19,9 +19,13 @@
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/nova/array.hpp"
+#include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/read_detection.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -103,21 +107,46 @@ struct xsv_parser_options {
   }
 };
 
-auto warn_on_duplicate_fields(std::vector<std::string> fields, location loc,
-                              diagnostic_handler& dh) -> void {
+/// How to treat a field name that occurs more than once in a header.
+enum class duplicate_fields {
+  /// Warn, for headers that come from the data.
+  warn,
+  /// Fail, for headers that are known statically.
+  reject,
+};
+
+auto check_duplicate_fields(std::vector<std::string> fields, location loc,
+                            duplicate_fields duplicates, diagnostic_handler& dh)
+  -> failure_or<void> {
   std::ranges::sort(fields);
+  auto found = false;
   for (auto it = std::ranges::adjacent_find(fields); it != fields.end();
        it = std::ranges::adjacent_find(std::next(it), fields.end())) {
-    diagnostic::warning("duplicate field name `{}` in header", *it)
+    found = true;
+    diagnostic::builder(duplicates == duplicate_fields::reject
+                          ? severity::error
+                          : severity::warning,
+                        "duplicate field name `{}` in header", *it)
       .primary(loc)
       .emit(dh);
   }
+  if (found and duplicates == duplicate_fields::reject) {
+    return failure::promise();
+  }
+  return {};
+}
+
+auto warn_on_duplicate_fields(std::vector<std::string> fields, location loc,
+                              diagnostic_handler& dh) -> void {
+  (void)check_duplicate_fields(std::move(fields), loc, duplicate_fields::warn,
+                               dh);
 }
 
 auto parse_header(std::string_view line, location loc,
                   const xsv_parser_options& args,
                   const detail::quoting_escaping_policy& quoting,
-                  diagnostic_handler& dh)
+                  diagnostic_handler& dh,
+                  duplicate_fields duplicates = duplicate_fields::warn)
   -> failure_or<std::vector<std::string>> {
   auto fields = std::vector<std::string>{};
   auto field_text = std::string_view{};
@@ -130,27 +159,26 @@ auto parse_header(std::string_view line, location loc,
     diagnostic::error("failed to parse header").primary(loc).emit(dh);
     return failure::promise();
   }
-  warn_on_duplicate_fields(fields, loc, dh);
+  TRY(check_duplicate_fields(fields, loc, duplicates, dh));
   return fields;
 }
 
-auto extract_header(ast::expression& header_expr,
-                    const xsv_parser_options& opts,
-                    const detail::quoting_escaping_policy& quoting_options,
-                    session ctx) -> failure_or<std::vector<std::string>> {
-  TRY(auto header_data, const_eval(header_expr, ctx));
+/// Converts the constant value of the `header` argument, located at `loc`.
+auto header_from_data(data& header_data, location loc,
+                      const xsv_parser_options& opts,
+                      const detail::quoting_escaping_policy& quoting_options,
+                      diagnostic_handler& dh,
+                      duplicate_fields duplicates = duplicate_fields::warn)
+  -> failure_or<std::vector<std::string>> {
   using ret_t = failure_or<std::vector<std::string>>;
   return match(
-    header_data.inner,
+    header_data,
     [&](const std::string& s) -> ret_t {
-      return parse_header(s, header_expr.get_location(), opts, quoting_options,
-                          ctx);
+      return parse_header(s, loc, opts, quoting_options, dh, duplicates);
     },
     [&](list& l) -> ret_t {
       if (l.empty() and not opts.auto_expand) {
-        diagnostic::error("`header` list is empty")
-          .primary(header_expr)
-          .emit(ctx);
+        diagnostic::error("`header` list is empty").primary(loc).emit(dh);
         return failure::promise();
       }
       auto fields = std::vector<std::string>{};
@@ -162,28 +190,111 @@ auto extract_header(ast::expression& header_expr,
             fields.push_back(std::move(s));
             return true;
           },
-          [&header_expr, &ctx](auto& v) {
+          [&](auto& v) {
             auto t = type::infer(v);
             diagnostic::error("expected `list<string>`, but got `{}` in list",
                               t ? t->kind() : type_kind{})
-              .primary(header_expr)
-              .emit(ctx);
+              .primary(loc)
+              .emit(dh);
             return false;
           });
         if (not good) {
           return failure::promise();
         }
       }
-      warn_on_duplicate_fields(fields, header_expr.get_location(), ctx);
+      TRY(check_duplicate_fields(fields, loc, duplicates, dh));
       return fields;
     },
     [&](const auto&) -> ret_t {
-      const auto t = type::infer(header_data.inner);
+      const auto t = type::infer(header_data);
       diagnostic::error("`header` must be a `string` or `list<string>`")
-        .primary(header_expr, "got `{}`", t ? t->kind() : type_kind{})
-        .emit(ctx);
+        .primary(loc, "got `{}`", t ? t->kind() : type_kind{})
+        .emit(dh);
       return failure::promise();
     });
+}
+
+auto extract_header(ast::expression& header_expr,
+                    const xsv_parser_options& opts,
+                    const detail::quoting_escaping_policy& quoting_options,
+                    session ctx) -> failure_or<std::vector<std::string>> {
+  TRY(auto header_data, const_eval(header_expr, ctx));
+  return header_from_data(header_data.inner, header_expr.get_location(), opts,
+                          quoting_options, ctx);
+}
+
+/// Checks that the separators, the null value, and the quote characters of an
+/// XSV parser do not conflict.
+auto validate_xsv_parser_separators(
+  const Option<located<std::string>>& field_separator,
+  const Option<located<std::string>>& list_separator,
+  const Option<located<std::string>>& null_value,
+  const Option<located<std::string>>& quotes, diagnostic_handler& dh)
+  -> failure_or<void> {
+  constexpr static auto npos = std::string::npos;
+  constexpr static auto overlap = [](const Option<located<std::string>>& lhs,
+                                     const Option<located<std::string>>& rhs) {
+    return not lhs->inner.empty() and not rhs->inner.empty()
+           and (lhs->inner.find(rhs->inner) != npos
+                or rhs->inner.find(lhs->inner) != npos);
+  };
+  if (list_separator and overlap(field_separator, list_separator)) {
+    diagnostic::error("`field_sep` and `list_sep` must not overlap")
+      .note("field_sep=`{}`, list_sep=`{}`", field_separator->inner,
+            list_separator->inner)
+      .primary(field_separator->source)
+      .primary(list_separator->source)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (overlap(field_separator, null_value)) {
+    diagnostic::error("`field_sep` and `null_value` must not overlap")
+      .note("field_sep=`{}`, null_value=`{}`", field_separator->inner,
+            null_value->inner)
+      .primary(field_separator->source)
+      .primary(null_value->source)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (list_separator and overlap(list_separator, null_value)) {
+    diagnostic::error("`list_sep` and `null_value` must not overlap")
+      .note("list_sep=`{}`, null_value=`{}`", list_separator->inner,
+            null_value->inner)
+      .primary(null_value->source)
+      .primary(list_separator->source)
+      .emit(dh);
+    return failure::promise();
+  }
+  for (const auto q : quotes->inner) {
+    if (field_separator->inner.find(q) != npos) {
+      diagnostic::error("quote character `{}`conflicts with "
+                        "`field_sep=\"{}\"`",
+                        q, field_separator->inner)
+        .primary(quotes->source)
+        .primary(null_value->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (list_separator and list_separator->inner.find(q) != npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`list_sep=\"{}\"`",
+                        q, list_separator->inner)
+        .primary(quotes->source)
+        .primary(list_separator->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (null_value->inner.find(q) != npos) {
+      diagnostic::error("quote character `{}` conflicts with "
+                        "`null_value=\"{}\"`",
+                        q, null_value->inner)
+        .primary(quotes->source)
+        .primary(null_value->source)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
 }
 
 struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
@@ -236,70 +347,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   }
 
   auto get_options(session ctx) -> failure_or<xsv_parser_options> {
-    constexpr static auto npos = std::string::npos;
-    constexpr static auto overlap
-      = [](const Option<located<std::string>>& lhs,
-           const Option<located<std::string>>& rhs) {
-          return not lhs->inner.empty() and not rhs->inner.empty()
-                 and (lhs->inner.find(rhs->inner) != npos
-                      or rhs->inner.find(lhs->inner) != npos);
-        };
-    if (list_separator_ and overlap(field_separator_, list_separator_)) {
-      diagnostic::error("`field_sep` and `list_sep` must not overlap")
-        .note("field_sep=`{}`, list_sep=`{}`", field_separator_->inner,
-              list_separator_->inner)
-        .primary(field_separator_->source)
-        .primary(list_separator_->source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    if (overlap(field_separator_, null_value_)) {
-      diagnostic::error("`field_sep` and `null_value` must not overlap")
-        .note("field_sep=`{}`, null_value=`{}`", field_separator_->inner,
-              null_value_->inner)
-        .primary(field_separator_->source)
-        .primary(null_value_->source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    if (list_separator_ and overlap(list_separator_, null_value_)) {
-      diagnostic::error("`list_sep` and `null_value` must not overlap")
-        .note("list_sep=`{}`, null_value=`{}`", list_separator_->inner,
-              null_value_->inner)
-        .primary(null_value_->source)
-        .primary(list_separator_->source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    for (const auto q : quotes_->inner) {
-      if (field_separator_->inner.find(q) != npos) {
-        diagnostic::error("quote character `{}`conflicts with "
-                          "`field_sep=\"{}\"`",
-                          q, field_separator_->inner)
-          .primary(quotes_->source)
-          .primary(null_value_->source)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (list_separator_ and list_separator_->inner.find(q) != npos) {
-        diagnostic::error("quote character `{}` conflicts with "
-                          "`list_sep=\"{}\"`",
-                          q, list_separator_->inner)
-          .primary(quotes_->source)
-          .primary(list_separator_->source)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (null_value_->inner.find(q) != npos) {
-        diagnostic::error("quote character `{}` conflicts with "
-                          "`null_value=\"{}\"`",
-                          q, null_value_->inner)
-          .primary(quotes_->source)
-          .primary(null_value_->source)
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
+    TRY(validate_xsv_parser_separators(field_separator_, list_separator_,
+                                       null_value_, quotes_, ctx));
     TRY(auto opts, multi_series_builder_argument_parser::get_options(ctx));
     auto header = Option<std::vector<std::string>>{};
     auto ret = xsv_parser_options{
@@ -724,6 +773,218 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
   }
 }
 
+auto collect_xsv_header(nova::Array<nova::Record> const& records,
+                        nova::storage::BitMap const& active,
+                        nova::storage::Index baseline, std::string_view prefix,
+                        std::vector<std::string>& out,
+                        std::vector<std::string>& record_paths) -> void {
+  for (auto [name, value] : records.get(baseline)) {
+    auto path = fmt::format("{}{}", prefix, name);
+    auto field = records.field(name);
+    TENZIR_ASSERT(field);
+    auto nested = field->data.get_alternative<nova::Record>();
+    auto nested_active = nested ? active & field->present & nested->present
+                                : nova::storage::BitMap{active.length(), false};
+    match(value, [&]<class T>(nova::RowView<T>) {
+      if constexpr (std::same_as<T, nova::Record>) {
+        TENZIR_ASSERT(nested);
+        record_paths.push_back(path);
+        collect_xsv_header(nested->data, nested_active, baseline,
+                           fmt::format("{}.", path), out, record_paths);
+      } else if constexpr (std::same_as<T, nova::Null>) {
+        if (nested_active.any()) {
+          auto const first = *nova::storage::true_bits(nested_active).begin();
+          record_paths.push_back(path);
+          collect_xsv_header(nested->data, nested_active, first,
+                             fmt::format("{}.", path), out, record_paths);
+        } else {
+          out.push_back(std::move(path));
+        }
+      } else {
+        out.push_back(std::move(path));
+      }
+    });
+  }
+}
+
+/// Collects the columns of every active record, unlike `collect_xsv_header`,
+/// which follows a single baseline row. Inspects columns, not rows.
+auto collect_xsv_columns(nova::Array<nova::Record> const& records,
+                         nova::storage::BitMap const& active,
+                         std::string_view prefix, std::vector<std::string>& out,
+                         std::vector<std::string>& record_paths) -> void {
+  auto visit = [&](std::string_view name,
+                   nova::storage::BitMap const& field_active,
+                   nova::Array<nova::Data> const& data) {
+    auto path = fmt::format("{}{}", prefix, name);
+    auto nested = data.get_alternative<nova::Record>();
+    auto nested_active = nested ? field_active & nested->present
+                                : nova::storage::BitMap{active.length(), false};
+    if (nested_active.any()) {
+      if (std::ranges::find(record_paths, path) == record_paths.end()) {
+        record_paths.push_back(path);
+      }
+      collect_xsv_columns(nested->data, nested_active, fmt::format("{}.", path),
+                          out, record_paths);
+    } else if (std::ranges::find(out, path) == out.end()) {
+      out.push_back(std::move(path));
+    }
+  };
+  match(
+    records.storage(),
+    [&](nova::storage::RecordStorage const& storage) {
+      auto const& fields = *storage;
+      for (auto index = size_t{0}; index < fields.arrays.size(); ++index) {
+        auto const& field = fields.arrays[index];
+        auto const field_active = active & field.present;
+        if (field_active.any()) {
+          visit(fields.names_by_index[index], field_active, field.data);
+        }
+      }
+    },
+    [&](nova::storage::ConstantStorage<nova::Record,
+                                       nova::RowView<nova::Record>> const&) {
+      // Every row shares one shape, so any active row is representative.
+      if (active.any()) {
+        auto const first = *nova::storage::true_bits(active).begin();
+        collect_xsv_header(records, active, first, prefix, out, record_paths);
+      }
+    });
+}
+
+auto flatten_xsv_row(
+  nova::RowView<nova::Record> record, std::string_view prefix,
+  Option<std::vector<std::string>> const& header,
+  Option<std::vector<std::string>> const& record_paths,
+  std::vector<std::pair<std::string, nova::RowView<nova::Data>>>& out) -> void {
+  for (auto [name, value] : record) {
+    auto path = fmt::format("{}{}", prefix, name);
+    match(value, [&]<class T>(nova::RowView<T> nested) {
+      if constexpr (std::same_as<T, nova::Record>) {
+        flatten_xsv_row(nested, fmt::format("{}.", path), header, record_paths,
+                        out);
+      } else if constexpr (std::same_as<T, nova::Null>) {
+        auto expanded = false;
+        if (header) {
+          auto const descendant_prefix = fmt::format("{}.", path);
+          for (auto const& column : *header) {
+            if (column.starts_with(descendant_prefix)) {
+              out.emplace_back(column, value);
+              expanded = true;
+            }
+          }
+        }
+        auto const known_record
+          = record_paths
+            and std::ranges::find(*record_paths, path) != record_paths->end();
+        if (not expanded and not known_record) {
+          out.emplace_back(std::move(path), value);
+        }
+      } else {
+        out.emplace_back(std::move(path), value);
+      }
+    });
+  }
+}
+
+template <class Iterator, class T>
+auto print_xsv_scalar(Iterator& out, T const& value,
+                      xsv_printer_impl const& printer) -> void {
+  auto formatted = std::string{};
+  if constexpr (std::same_as<T, std::int64_t>) {
+    formatted = std::to_string(value);
+  } else if constexpr (std::same_as<T, std::string_view>) {
+    formatted = value;
+  } else {
+    formatted = fmt::format("{}", data_view{value});
+  }
+  auto needs_quoting = formatted.find(printer.sep) != formatted.npos;
+  needs_quoting |= formatted.find(printer.list_sep) != formatted.npos;
+  needs_quoting |= formatted == printer.null;
+  constexpr static auto escaper = [](auto& f, auto out) {
+    switch (*f) {
+      default:
+        *out++ = *f++;
+        return;
+      case '\\':
+        *out++ = '\\';
+        *out++ = '\\';
+        break;
+      case '"':
+        *out++ = '\\';
+        *out++ = '"';
+        break;
+      case '\n':
+        *out++ = '\\';
+        *out++ = 'n';
+        break;
+      case '\r':
+        *out++ = '\\';
+        *out++ = 'r';
+        break;
+    }
+    ++f;
+  };
+  constexpr static auto p = printers::escape(escaper);
+  if (needs_quoting) {
+    *out++ = '"';
+  }
+  TENZIR_ASSERT(p.print(out, formatted));
+  if (needs_quoting) {
+    *out++ = '"';
+  }
+}
+
+/// Prints a single field value and returns whether it printed anything. Records
+/// cannot be represented within lists, so they print as `{..}` and set
+/// `found_records_in_lists` for the caller to warn.
+template <class Iterator>
+auto print_xsv_value(Iterator& out, nova::RowView<nova::Data> value,
+                     xsv_printer_impl const& printer,
+                     bool& found_records_in_lists) -> bool {
+  return match(value, [&]<class T>(nova::RowView<T> x) -> bool {
+    if constexpr (std::same_as<T, nova::Null>) {
+      out = std::copy(printer.null.begin(), printer.null.end(), out);
+      return not printer.null.empty();
+    } else if constexpr (std::same_as<T, nova::List>) {
+      // Like the legacy printer, separate an element only from an earlier one
+      // that printed something, and skip empty lists entirely. An element that
+      // prints nothing otherwise still takes its place after the first one.
+      auto printed = false;
+      for (auto element : x) {
+        auto const empty_list = match(element, []<class U>(nova::RowView<U> y) {
+          if constexpr (std::same_as<U, nova::List>) {
+            return y.length() == 0;
+          } else {
+            return false;
+          }
+        });
+        if (empty_list) {
+          continue;
+        }
+        if (printed) {
+          out = fmt::format_to(out, "{}", printer.list_sep);
+        }
+        printed
+          |= print_xsv_value(out, element, printer, found_records_in_lists);
+      }
+      return printed;
+    } else {
+      if constexpr (std::same_as<T, nova::Record>) {
+        print_xsv_scalar(out, std::string_view{"{..}"}, printer);
+        found_records_in_lists = true;
+      } else if constexpr (std::same_as<T, nova::Blob>) {
+        print_xsv_scalar(out, detail::base64::encode(*x), printer);
+      } else if constexpr (std::same_as<T, nova::Secret>) {
+        print_xsv_scalar(out, std::string_view{"***"}, printer);
+      } else {
+        print_xsv_scalar(out, *x, printer);
+      }
+      return true;
+    }
+  });
+}
+
 } // namespace
 
 // ── WriteXsv ────────────────────────────────────────────────────────────────
@@ -757,7 +1018,8 @@ public:
       auto const first = *nova::storage::true_bits(input.mask).begin();
       auto header = std::vector<std::string>{};
       auto record_paths = std::vector<std::string>{};
-      collect_header(input.data, input.mask, first, "", header, record_paths);
+      collect_xsv_header(input.data, input.mask, first, "", header,
+                         record_paths);
       header_ = std::move(header);
       record_paths_ = std::move(record_paths);
       if (not args_.no_header) {
@@ -768,7 +1030,8 @@ public:
     for (auto index : nova::storage::true_bits(input.mask)) {
       auto fields
         = std::vector<std::pair<std::string, nova::RowView<nova::Data>>>{};
-      flatten(input.data.get(index), "", header_, record_paths_, fields);
+      flatten_xsv_row(input.data.get(index), "", header_, record_paths_,
+                      fields);
       if (not args_.no_header and header_) {
         auto names = std::vector<std::string>{};
         names.reserve(fields.size());
@@ -784,13 +1047,19 @@ public:
         }
       }
       auto first = true;
+      auto found_records_in_lists = false;
       for (auto const& [_, value] : fields) {
         if (not first) {
           out = fmt::format_to(out, "{}", args_.field_separator.inner);
         } else {
           first = false;
         }
-        print_value(out, value, printer, ctx.dh());
+        print_xsv_value(out, value, printer, found_records_in_lists);
+      }
+      if (found_records_in_lists and not warned_records_in_lists_) {
+        diagnostic::warning("records in lists cannot be written to CSV")
+          .emit(ctx);
+        warned_records_in_lists_ = true;
       }
       out = fmt::format_to(out, "\n");
     }
@@ -810,163 +1079,7 @@ private:
       } else {
         first = false;
       }
-      print_scalar(out, std::string_view{name}, printer);
-    }
-  }
-
-  static auto
-  collect_header(nova::Array<nova::Record> const& records,
-                 nova::storage::BitMap const& active,
-                 nova::storage::Index baseline, std::string_view prefix,
-                 std::vector<std::string>& out,
-                 std::vector<std::string>& record_paths) -> void {
-    for (auto [name, value] : records.get(baseline)) {
-      auto path = fmt::format("{}{}", prefix, name);
-      auto field = records.field(name);
-      TENZIR_ASSERT(field);
-      auto nested = field->data.get_alternative<nova::Record>();
-      auto nested_active = nested
-                             ? active & field->present & nested->present
-                             : nova::storage::BitMap{active.length(), false};
-      match(value, [&]<class T>(nova::RowView<T>) {
-        if constexpr (std::same_as<T, nova::Record>) {
-          TENZIR_ASSERT(nested);
-          record_paths.push_back(path);
-          collect_header(nested->data, nested_active, baseline,
-                         fmt::format("{}.", path), out, record_paths);
-        } else if constexpr (std::same_as<T, nova::Null>) {
-          if (nested_active.any()) {
-            auto const first = *nova::storage::true_bits(nested_active).begin();
-            record_paths.push_back(path);
-            collect_header(nested->data, nested_active, first,
-                           fmt::format("{}.", path), out, record_paths);
-          } else {
-            out.push_back(std::move(path));
-          }
-        } else {
-          out.push_back(std::move(path));
-        }
-      });
-    }
-  }
-
-  static auto
-  flatten(nova::RowView<nova::Record> record, std::string_view prefix,
-          Option<std::vector<std::string>> const& header,
-          Option<std::vector<std::string>> const& record_paths,
-          std::vector<std::pair<std::string, nova::RowView<nova::Data>>>& out)
-    -> void {
-    for (auto [name, value] : record) {
-      auto path = fmt::format("{}{}", prefix, name);
-      match(value, [&]<class T>(nova::RowView<T> nested) {
-        if constexpr (std::same_as<T, nova::Record>) {
-          flatten(nested, fmt::format("{}.", path), header, record_paths, out);
-        } else if constexpr (std::same_as<T, nova::Null>) {
-          auto expanded = false;
-          if (header) {
-            auto const descendant_prefix = fmt::format("{}.", path);
-            for (auto const& column : *header) {
-              if (column.starts_with(descendant_prefix)) {
-                out.emplace_back(column, value);
-                expanded = true;
-              }
-            }
-          }
-          auto const known_record
-            = record_paths
-              and std::ranges::find(*record_paths, path) != record_paths->end();
-          if (not expanded and not known_record) {
-            out.emplace_back(std::move(path), value);
-          }
-        } else {
-          out.emplace_back(std::move(path), value);
-        }
-      });
-    }
-  }
-
-  template <class Iterator>
-  auto print_value(Iterator& out, nova::RowView<nova::Data> value,
-                   xsv_printer_impl const& printer, diagnostic_handler& dh)
-    -> void {
-    match(value, [&]<class T>(nova::RowView<T> x) {
-      if constexpr (std::same_as<T, nova::Null>) {
-        if (not printer.null.empty()) {
-          out = std::copy(printer.null.begin(), printer.null.end(), out);
-        }
-      } else if constexpr (std::same_as<T, nova::List>) {
-        auto first = true;
-        for (auto element : x) {
-          if (not first) {
-            out = fmt::format_to(out, "{}", printer.list_sep);
-          } else {
-            first = false;
-          }
-          print_value(out, element, printer, dh);
-        }
-      } else if constexpr (std::same_as<T, nova::Record>) {
-        print_scalar(out, std::string_view{"{..}"}, printer);
-        if (not warned_records_in_lists_) {
-          diagnostic::warning("records in lists cannot be written to CSV")
-            .emit(dh);
-          warned_records_in_lists_ = true;
-        }
-      } else if constexpr (std::same_as<T, nova::Blob>) {
-        print_scalar(out, detail::base64::encode(*x), printer);
-      } else if constexpr (std::same_as<T, nova::Secret>) {
-        print_scalar(out, std::string_view{"***"}, printer);
-      } else {
-        print_scalar(out, *x, printer);
-      }
-    });
-  }
-
-  template <class Iterator, class T>
-  static auto
-  print_scalar(Iterator& out, T const& value, xsv_printer_impl const& printer)
-    -> void {
-    auto formatted = std::string{};
-    if constexpr (std::same_as<T, std::int64_t>) {
-      formatted = std::to_string(value);
-    } else if constexpr (std::same_as<T, std::string_view>) {
-      formatted = value;
-    } else {
-      formatted = fmt::format("{}", data_view{value});
-    }
-    auto needs_quoting = formatted.find(printer.sep) != formatted.npos;
-    needs_quoting |= formatted.find(printer.list_sep) != formatted.npos;
-    needs_quoting |= formatted == printer.null;
-    constexpr static auto escaper = [](auto& f, auto out) {
-      switch (*f) {
-        default:
-          *out++ = *f++;
-          return;
-        case '\\':
-          *out++ = '\\';
-          *out++ = '\\';
-          break;
-        case '"':
-          *out++ = '\\';
-          *out++ = '"';
-          break;
-        case '\n':
-          *out++ = '\\';
-          *out++ = 'n';
-          break;
-        case '\r':
-          *out++ = '\\';
-          *out++ = 'r';
-          break;
-      }
-      ++f;
-    };
-    constexpr static auto p = printers::escape(escaper);
-    if (needs_quoting) {
-      *out++ = '"';
-    }
-    TENZIR_ASSERT(p.print(out, formatted));
-    if (needs_quoting) {
-      *out++ = '"';
+      print_xsv_scalar(out, std::string_view{name}, printer);
     }
   }
 
@@ -1608,6 +1721,107 @@ public:
   }
 };
 
+template <detail::string_literal Sep, detail::string_literal ListSep,
+          detail::string_literal Null>
+struct ParseXsvArgs {
+  nova::ValueArgument input;
+  located<std::string> field_separator = {std::string{Sep}, location::unknown};
+  located<std::string> list_separator
+    = {std::string{ListSep}, location::unknown};
+  located<std::string> null_value = {std::string{Null}, location::unknown};
+  nova::ConstantArgument header;
+  located<std::string> quotes
+    = {xsv_parser_options{}.quotes, location::unknown};
+  bool allow_comments = false;
+  bool auto_expand = false;
+  bool auto_fill = false;
+  nova::EventBuilder::Settings settings;
+  location call;
+  // Derived from the arguments above in `validate`.
+  xsv_parser_options opts;
+  detail::quoting_escaping_policy quoting;
+};
+
+/// Checks the arguments of an XSV parsing function and derives the parser
+/// options from them.
+template <class Args>
+auto validate_parse_xsv_args(Args& args, std::string name,
+                             diagnostic_handler& dh) -> failure_or<void> {
+  TRY(validate_xsv_parser_separators(args.field_separator, args.list_separator,
+                                     args.null_value, args.quotes, dh));
+  args.opts = xsv_parser_options{
+    .name = std::move(name),
+    .field_separator = args.field_separator.inner,
+    .list_separator = args.list_separator.inner,
+    .null_value = args.null_value.inner,
+    .quotes = args.quotes.inner,
+    .auto_expand = args.auto_expand,
+    .auto_fill = args.auto_fill,
+    .allow_comments = args.allow_comments,
+  };
+  args.quoting = detail::quoting_escaping_policy{
+    .quotes = args.opts.quotes,
+    .backslashes_escape = true,
+    .doubled_quotes_escape = true,
+  };
+  auto header = nova::materialize_legacy(args.header.inner);
+  // The header is a constant, so a repeated field name is a mistake.
+  TRY(args.opts.header,
+      header_from_data(header, args.header.source, args.opts, args.quoting, dh,
+                       duplicate_fields::reject));
+  args.settings.infer_numbers = true;
+  return {};
+}
+
+template <class Args>
+struct ParseXsvFunction {
+  static auto eval(Args const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const& mask = frame.mask();
+    auto const length = mask.length();
+    auto strings = args.input.data.template get_alternative<nova::String>();
+    auto nulls = args.input.data.template get_alternative<nova::Null>();
+    auto const string_rows = strings ? mask & strings->present
+                                     : nova::storage::BitMap{length, false};
+    auto const null_rows
+      = nulls ? mask & nulls->present : nova::storage::BitMap{length, false};
+    if (auto invalid = mask.and_not(string_rows).and_not(null_rows);
+        invalid.any()) {
+      auto const row = *nova::storage::true_bits(invalid).begin();
+      match(args.input.data.get(row), [&]<class T>(nova::RowView<T>) {
+        diagnostic::warning("expected `string`, got `{}`",
+                            nova::Type<T>::static_name)
+          .primary(args.input.source)
+          .emit(frame);
+      });
+    }
+    auto dh = transforming_diagnostic_handler{
+      frame, [call = args.call](diagnostic d) {
+        if (call and not d.has_location()) {
+          d.annotations.emplace_back(true, std::string{}, call);
+        }
+        return d;
+      }};
+    auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
+    TENZIR_ASSERT(args.opts.header);
+    // `auto_expand` adds the names of excess values to the header.
+    auto header = *args.opts.header;
+    for (auto index : nova::storage::bitmap_iteration(mask)) {
+      if (not index) {
+        builder.skip();
+        continue;
+      }
+      if (not string_rows.get(*index)) {
+        builder.value().null();
+        continue;
+      }
+      parse_line(*strings->data.get(*index), header, args.opts.header->size(),
+                 builder.value().record(), args.opts, 0, args.quoting, dh);
+    }
+    return builder.finish_data();
+  }
+};
+
 auto make_xsv_parsing_function(ast::expression input, xsv_parser_options opts,
                                detail::quoting_escaping_policy quoting_options)
   -> function_ptr {
@@ -1640,13 +1854,43 @@ auto make_xsv_parsing_function(ast::expression input, xsv_parser_options opts,
     });
 }
 
-class parse_xsv : public function_plugin {
+/// Registers the arguments that all XSV parsing functions share.
+template <class Args>
+auto add_parse_xsv_args(nova::FunctionDescriber<Args, ParseXsvFunction<Args>>& d)
+  -> nova::EventBuilderValidator<Args> {
+  d.named("header", &Args::header, "list<string>|string");
+  d.named_optional("quotes", &Args::quotes);
+  d.named_optional("comments", &Args::allow_comments);
+  d.named_optional("auto_expand", &Args::auto_expand);
+  d.named_optional("auto_fill", &Args::auto_fill);
+  d.call_location(&Args::call);
+  return nova::add_event_builder_to_describer(d, &Args::settings);
+}
+
+class parse_xsv final : public virtual nova::FunctionPlugin {
+  using Args = ParseXsvArgs<"", "", "">;
+
   auto name() const -> std::string override {
     return "parse_xsv";
   }
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<Args, ParseXsvFunction<Args>>{};
+    d.positional("input", &Args::input, "string");
+    d.named("field_separator", &Args::field_separator);
+    d.named("list_separator", &Args::list_separator);
+    d.named("null_value", &Args::null_value);
+    auto builder = add_parse_xsv_args(d);
+    d.validate([builder](Args& args,
+                         nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      TRY(builder(args, ctx));
+      return validate_parse_xsv_args(args, "xsv", ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -1672,7 +1916,9 @@ class parse_xsv : public function_plugin {
 
 template <detail::string_literal Name, detail::string_literal Sep,
           detail::string_literal ListSep, detail::string_literal Null>
-class configured_parse_xsv_plugin final : public function_plugin {
+class configured_parse_xsv_plugin final : public virtual nova::FunctionPlugin {
+  using Args = ParseXsvArgs<Sep, ListSep, Null>;
+
 public:
   auto name() const -> std::string override {
     return fmt::format("parse_{}", Name);
@@ -1680,6 +1926,20 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<Args, ParseXsvFunction<Args>>{};
+    d.positional("input", &Args::input, "string");
+    d.named_optional("list_separator", &Args::list_separator);
+    d.named_optional("null_value", &Args::null_value);
+    auto builder = add_parse_xsv_args(d);
+    d.validate([builder](Args& args,
+                         nova::FunctionValidateCtx& ctx) -> failure_or<void> {
+      TRY(builder(args, ctx));
+      return validate_parse_xsv_args(args, std::string{Name}, ctx);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -1705,6 +1965,97 @@ public:
     };
     return make_xsv_parsing_function(std::move(input), std::move(opts),
                                      std::move(quoting_options));
+  }
+};
+
+template <detail::string_literal Sep, detail::string_literal ListSep,
+          detail::string_literal Null>
+struct PrintXsvArgs {
+  nova::ValueArgument input;
+  located<std::string> field_separator = {std::string{Sep}, location::unknown};
+  located<std::string> list_separator
+    = {std::string{ListSep}, location::unknown};
+  located<std::string> null_value = {std::string{Null}, location::unknown};
+  location call;
+};
+
+auto print_xsv_rows(nova::ValueArgument const& input,
+                    xsv_printer_impl const& printer, nova::EvalFrame frame)
+  -> nova::Array<nova::Data> {
+  auto const& mask = frame.mask();
+  auto const length = mask.length();
+  auto records = input.data.get_alternative<nova::Record>();
+  auto nulls = input.data.get_alternative<nova::Null>();
+  auto const record_rows
+    = records ? mask & records->present : nova::storage::BitMap{length, false};
+  auto const null_rows
+    = nulls ? mask & nulls->present : nova::storage::BitMap{length, false};
+  if (auto invalid = mask.and_not(record_rows).and_not(null_rows);
+      invalid.any()) {
+    auto const row = *nova::storage::true_bits(invalid).begin();
+    match(input.data.get(row), [&]<class T>(nova::RowView<T>) {
+      diagnostic::warning("expected `record`, got `{}`",
+                          nova::Type<T>::static_name)
+        .primary(input.source)
+        .emit(frame);
+    });
+  }
+  // A `null` nested record expands to the columns that the nested record has
+  // in any active row of the batch, regardless of row order.
+  auto header = Option<std::vector<std::string>>{};
+  auto record_paths = Option<std::vector<std::string>>{};
+  if (record_rows.any()) {
+    collect_xsv_columns(records->data, record_rows, "", header.emplace(),
+                        record_paths.emplace());
+  }
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  auto buffer = std::string{};
+  auto fields
+    = std::vector<std::pair<std::string, nova::RowView<nova::Data>>>{};
+  auto found_records_in_lists = false;
+  for (auto index : nova::storage::bitmap_iteration(mask)) {
+    if (not index) {
+      builder.skip();
+      continue;
+    }
+    if (not record_rows.get(*index)) {
+      builder.null();
+      continue;
+    }
+    fields.clear();
+    flatten_xsv_row(records->data.get(*index), "", header, record_paths,
+                    fields);
+    buffer.clear();
+    auto out = std::back_inserter(buffer);
+    auto first = true;
+    for (auto const& [_, value] : fields) {
+      if (not first) {
+        out = fmt::format_to(out, "{}", printer.sep);
+      } else {
+        first = false;
+      }
+      print_xsv_value(out, value, printer, found_records_in_lists);
+    }
+    builder.data(std::string_view{buffer});
+  }
+  if (found_records_in_lists) {
+    diagnostic::warning("records in lists cannot be printed")
+      .primary(input.source)
+      .emit(frame);
+  }
+  return builder.finish();
+}
+
+template <class Args>
+struct PrintXsvFunction {
+  static auto eval(Args const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto printer = xsv_printer_impl{
+      args.field_separator.inner,
+      args.list_separator.inner,
+      args.null_value.inner,
+    };
+    return print_xsv_rows(args.input, printer, frame);
   }
 };
 
@@ -1751,13 +2102,33 @@ auto make_xsv_printing_function(ast::expression input, xsv_printer_options opts)
   });
 }
 
-class print_xsv : public function_plugin {
+class print_xsv final : public virtual nova::FunctionPlugin {
+  using Args = PrintXsvArgs<"", "", "">;
+
   auto name() const -> std::string override {
     return "print_xsv";
   }
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<Args, PrintXsvFunction<Args>>{};
+    d.positional("input", &Args::input, "record");
+    d.named("field_separator", &Args::field_separator);
+    d.named("list_separator", &Args::list_separator);
+    d.named("null_value", &Args::null_value);
+    d.call_location(&Args::call);
+    d.validate([](Args& args, diagnostic_handler& dh) -> failure_or<void> {
+      return xsv_printer_options{
+        .field_separator = args.field_separator,
+        .list_separator = args.list_separator,
+        .null_value = args.null_value,
+      }
+        .validate(dh);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -1777,7 +2148,9 @@ class print_xsv : public function_plugin {
 
 template <detail::string_literal Name, detail::string_literal Sep,
           detail::string_literal ListSep, detail::string_literal Null>
-class configured_print_xsv_plugin final : public function_plugin {
+class configured_print_xsv_plugin final : public virtual nova::FunctionPlugin {
+  using Args = PrintXsvArgs<Sep, ListSep, Null>;
+
 public:
   auto name() const -> std::string override {
     return fmt::format("print_{}", Name);
@@ -1785,6 +2158,30 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<Args, PrintXsvFunction<Args>>{};
+    d.positional("input", &Args::input, "record");
+    d.named_optional("list_separator", &Args::list_separator);
+    d.named_optional("null_value", &Args::null_value);
+    d.call_location(&Args::call);
+    d.validate([](Args& args, diagnostic_handler& dh) -> failure_or<void> {
+      // Defaults point at the call, like in the legacy implementation.
+      for (auto* arg :
+           {&args.field_separator, &args.list_separator, &args.null_value}) {
+        if (not arg->source) {
+          arg->source = args.call;
+        }
+      }
+      return xsv_printer_options{
+        .field_separator = args.field_separator,
+        .list_separator = args.list_separator,
+        .null_value = args.null_value,
+      }
+        .validate(dh);
+    });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

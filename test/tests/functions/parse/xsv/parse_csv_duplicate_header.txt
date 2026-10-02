@@ -1,0 +1,8 @@
+error: duplicate field name `a` in header
+ --> tests/functions/parse/xsv/parse_csv_duplicate_header.tql:5:33
+  |
+5 | output = input.parse_csv(header=["a","b","a"])
+  |                                 ^^^^^^^^^^^^^
+  |
+  = usage: parse_csv(input:string, header=list<string>|string, [list_separator=string, null_value=string, quotes=string, comments=bool, auto_expand=bool, auto_fill=bool, schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_csv

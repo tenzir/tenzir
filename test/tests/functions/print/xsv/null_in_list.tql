@@ -1,0 +1,7 @@
+// Elements that print nothing, such as a `null` with an empty `null_value`,
+// take no separator before the first element that prints something. Empty
+// nested lists take no separator at all.
+from {x: {a: [null, 1], b: [null, null], c: [1, null],
+          d: [[null], [2]], e: [[1], [null]], f: [[1], []],
+          g: [[1], [null], [2]], h: [[1], [], [2], []], i: [[1, null], [2]]}}
+select csv = x.print_csv(), tsv = x.print_tsv()

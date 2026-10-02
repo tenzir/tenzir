@@ -1,0 +1,8 @@
+{
+  active: true,
+  result: "1",
+}
+{
+  active: false,
+  result: null,
+}

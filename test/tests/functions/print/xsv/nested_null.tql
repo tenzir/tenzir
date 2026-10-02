@@ -1,0 +1,7 @@
+// Within a batch, a `null` nested record expands to the columns of the
+// nested record, even if the first row lacks it. `unroll` keeps the rows in
+// one batch.
+from {xs: [{a: 1, b: {c: 2, d: 3}}, {a: 4, b: null}]},
+     {xs: [{z: 0}, {z: 1, a: {b: 2, c: 3}}, {z: 2, a: null}]}
+unroll xs
+select result = xs.print_csv()

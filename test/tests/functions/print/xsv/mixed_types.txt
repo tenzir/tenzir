@@ -1,0 +1,25 @@
+warning: expected `record`, got `int`
+ --> tests/functions/print/xsv/mixed_types.tql:5:17
+  |
+5 | select result = x.print_csv()
+  |                 ~
+  |
+
+warning: records in lists cannot be printed
+ --> tests/functions/print/xsv/mixed_types.tql:5:17
+  |
+5 | select result = x.print_csv()
+  |                 ~
+  |
+{
+  result: "1,hi",
+}
+{
+  result: null,
+}
+{
+  result: null,
+}
+{
+  result: "{..},1;2",
+}

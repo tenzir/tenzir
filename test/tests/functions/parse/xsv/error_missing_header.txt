@@ -1,0 +1,8 @@
+error: required argument `header` was not provided
+ --> tests/functions/parse/xsv/error_missing_header.tql:5:5
+  |
+5 | y = x.parse_csv()
+  |     ^^^^^^^^^^^^^
+  |
+  = usage: parse_csv(input:string, header=list<string>|string, [list_separator=string, null_value=string, quotes=string, comments=bool, auto_expand=bool, auto_fill=bool, schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_csv

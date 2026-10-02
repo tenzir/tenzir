@@ -1,0 +1,4 @@
+// `parse_csv` only sees the active row, so the inactive one must not warn.
+from {x: "1,2", active: true},
+  {x: "1", active: false}
+select active, result = x.parse_csv(header="a,b") if active else null

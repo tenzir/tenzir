@@ -1,0 +1,4 @@
+// `print_csv` only sees the active row, so the inactive one must not warn.
+from {x: {a: 1}, active: true},
+  {x: 42, active: false}
+select active, result = x.print_csv() if active else null

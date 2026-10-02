@@ -1,0 +1,18 @@
+warning: expected `string`, got `int`
+ --> tests/functions/parse/xsv/mixed_types.tql:2:17
+  |
+2 | select result = x.parse_csv(header="a,b")
+  |                 ~
+  |
+{
+  result: {
+    a: 1,
+    b: 2,
+  },
+}
+{
+  result: null,
+}
+{
+  result: null,
+}

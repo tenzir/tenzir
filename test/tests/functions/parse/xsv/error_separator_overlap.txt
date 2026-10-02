@@ -1,0 +1,12 @@
+error: `field_sep` and `list_sep` must not overlap
+ --> tests/functions/parse/xsv/error_separator_overlap.tql:5:33
+  |
+5 | y = x.parse_xsv(field_separator=",", list_separator=",", null_value="",
+  |                                 ^^^
+  ⋮
+5 | y = x.parse_xsv(field_separator=",", list_separator=",", null_value="",
+  |                                                     ^^^
+  |
+  = note: field_sep=`,`, list_sep=`,`
+  = usage: parse_xsv(input:string, field_separator=string, list_separator=string, null_value=string, header=list<string>|string, [quotes=string, comments=bool, auto_expand=bool, auto_fill=bool, schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string])
+  = docs: https://tenzir.com/docs/reference/functions/parse_xsv

@@ -1,0 +1,12 @@
+error: `field_separator` and `list_separator` conflict
+ --> tests/functions/print/xsv/error_substring.tql:5:5
+  |
+5 | y = this.print_csv(list_separator=",")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ⋮
+5 | y = this.print_csv(list_separator=",")
+  |                                   ^^^
+  |
+  = note: `,` is a substring of `,`
+  = usage: print_csv(input:record, [list_separator=string, null_value=string])
+  = docs: https://tenzir.com/docs/reference/functions/print_csv

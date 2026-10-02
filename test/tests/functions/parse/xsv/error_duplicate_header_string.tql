@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: "1,2,3"}
+y = x.parse_csv(header="a,b,a")

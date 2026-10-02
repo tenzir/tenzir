@@ -1,0 +1,8 @@
+error: `field_separator` must not be empty
+ --> tests/functions/print/xsv/error_empty_separator.tql:5:36
+  |
+5 | y = this.print_xsv(field_separator="", list_separator=";", null_value="")
+  |                                    ^^
+  |
+  = usage: print_xsv(input:record, field_separator=string, list_separator=string, null_value=string)
+  = docs: https://tenzir.com/docs/reference/functions/print_xsv
