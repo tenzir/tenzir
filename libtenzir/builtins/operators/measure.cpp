@@ -37,6 +37,7 @@ namespace {
 
 struct MeasureArgs {
   bool cumulative = false;
+  bool by_schema = true;
   bool definition = false;
   bool exact_definition = false;
 };
@@ -115,6 +116,25 @@ public:
   auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    if (not args_.by_schema) {
+      const auto events = input.mask.true_count();
+      if (events == 0) {
+        co_return;
+      }
+      auto& total = events_[""];
+      total = args_.cumulative ? total + events : events;
+      auto builder = nova::ArrayBuilder<nova::Record>{};
+      auto metric = builder.record();
+      metric.field("timestamp").data(time::clock::now());
+      metric.field("events").data(total);
+      auto result = builder.finish();
+      auto const rows = result.length();
+      auto mask = nova::storage::BitMap{rows, true};
+      co_await push(nova::Events{
+        std::move(result), std::move(mask),
+        nova::Events::Meta::make_empty(rows, "tenzir.measure.events")});
+      co_return;
+    }
     // A batch can hold events of multiple schemas, so we group its active
     // rows by their schema identifier and report one metric per group. Schemas
     // are identified by their structure, so events that share a structure but
@@ -196,6 +216,7 @@ public:
       = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk, MeasureEvents>{
         MeasureArgs{}};
     d.named("cumulative", &MeasureArgs::cumulative);
+    d.named("by_schema", &MeasureArgs::by_schema);
     d.named("_definition", &MeasureArgs::definition);
     d.named("_exact_definition", &MeasureArgs::exact_definition);
     return d.without_optimize();
