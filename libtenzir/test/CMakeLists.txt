@@ -42,6 +42,11 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE
     LINKER:--wrap=free)
 endif ()
 TenzirTargetEnableTooling(tenzir-unit-test)
+# Tests of builtins that keep their headers next to their sources.
+target_include_directories(
+  tenzir-unit-test
+  PRIVATE
+    "${PROJECT_SOURCE_DIR}/libtenzir/builtins/operators/from_mysql/include")
 target_link_libraries(
   tenzir-unit-test PRIVATE tenzir::test tenzir::libtenzir tenzir::internal
                            ${CMAKE_THREAD_LIBS_INIT})

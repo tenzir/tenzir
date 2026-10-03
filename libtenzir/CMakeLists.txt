@@ -424,6 +424,13 @@ set_property(
   APPEND
   PROPERTY INCLUDE_DIRECTORIES
            "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sort/include")
+set_property(
+  SOURCE
+    "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/from_mysql.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/from_mysql/pushdown.cpp"
+  APPEND
+  PROPERTY INCLUDE_DIRECTORIES
+           "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/from_mysql/include")
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_property(

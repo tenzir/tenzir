@@ -1,0 +1,5 @@
+// `from_mysql` takes the filter, the limit, and the projection.
+from_mysql table="users", host="localhost"
+where age > 30
+select name
+head 2

@@ -9,6 +9,9 @@ Environment variables yielded:
 - MSSQL_USER: Test username
 - MSSQL_PASSWORD: Test password
 - MSSQL_DATABASE: Pre-created test database
+- MSSQL_ADMIN_USER: Administrator username, for tests that create tables or
+  inspect the server
+- MSSQL_ADMIN_PASSWORD: Administrator password
 """
 
 from __future__ import annotations
@@ -386,6 +389,8 @@ def microsoft_sql() -> Iterator[dict[str, str]]:
             "MSSQL_USER": MSSQL_USER,
             "MSSQL_PASSWORD": MSSQL_PASSWORD,
             "MSSQL_DATABASE": MSSQL_DATABASE,
+            "MSSQL_ADMIN_USER": "sa",
+            "MSSQL_ADMIN_PASSWORD": MSSQL_SA_PASSWORD,
             "MSSQL_CONTAINER_ID": container.container_id,
             "MSSQL_CONTAINER_RUNTIME": runtime.binary,
         }

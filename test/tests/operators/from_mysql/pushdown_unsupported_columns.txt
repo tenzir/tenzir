@@ -1,0 +1,4 @@
+{
+  float_val: 3.14,
+  decimal_val: 12345.6789,
+}

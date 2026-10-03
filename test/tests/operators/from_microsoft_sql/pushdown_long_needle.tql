@@ -1,0 +1,10 @@
+// `CHARINDEX` takes needles of up to 8,000 bytes, so a longer one stays with
+// the operator instead of failing the query.
+from_microsoft_sql table="users",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where not ("x".repeat(8001) in name)
+select name

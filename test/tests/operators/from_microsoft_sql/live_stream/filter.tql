@@ -1,0 +1,11 @@
+// Live mode pushes the filter into every window, and the limit ends the read.
+from_microsoft_sql table=env("MSSQL_LIVE_STREAM_TABLE"),
+                   live=true,
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where id > 0 and payload == env("MSSQL_LIVE_STREAM_TOKEN")
+select payload
+head 3

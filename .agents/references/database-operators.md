@@ -66,6 +66,12 @@ Database source operators should use this common query surface:
 
   A dialect may still veto each of them. Document the ones a backend uses on
   its reference page and in the changelog.
+- Compare text by the bytes that TQL sees. Default collations often ignore
+  case and accents, and some comparisons pad the shorter operand: SQL Server
+  treats `N'a' = N'a '` and `0x61 = 0x6100` as true. See the MySQL and SQL
+  Server dialects for byte-exact spellings, and test them against rows that
+  differ only in case, accents, trailing spaces, control characters, and NUL
+  bytes.
 
 ## Destination operators
 

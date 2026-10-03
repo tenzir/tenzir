@@ -1,0 +1,9 @@
+{
+  name: "Alice",
+}
+{
+  name: "Bob",
+}
+{
+  name: "Charlie",
+}

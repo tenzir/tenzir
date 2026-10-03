@@ -1,0 +1,12 @@
+// The filter, projection, and limit go into the query. Text compares by bytes,
+// as in TQL, not under SQL Server's case-insensitive collation, which would
+// match `Alice` and make it the first row.
+from_microsoft_sql table="users",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where name == "alice" or age > 30
+select name, age
+head 1

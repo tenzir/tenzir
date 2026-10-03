@@ -1,0 +1,11 @@
+// TQL sees a FLOAT with six significant digits and a DECIMAL as a double, so
+// these predicates stay local. MySQL would compare 3.1400001 and an exact
+// decimal and match nothing.
+from_mysql table="numbers",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+where float_val == 3.14 and decimal_val == 12345.6789
+select float_val, decimal_val

@@ -1,0 +1,10 @@
+// A predicate without a translation runs locally, and so does the limit.
+from_microsoft_sql table="users",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where age >= 25 and name.to_upper() != "ALICE"
+head 1
+select name

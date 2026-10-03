@@ -1,0 +1,4 @@
+{
+  id: 2,
+  nullable_val: null,
+}

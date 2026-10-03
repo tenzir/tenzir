@@ -1,0 +1,156 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_mysql",
+       store: {
+         op: {
+           path: [
+             `from_mysql` @ [1]:65..75 from 0
+           ],
+           ref: std::from_mysql/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "users" @ [1]:82..89 from 0
+           },
+           {
+             index: 1,
+             value: located "localhost" @ [1]:96..107 from 0
+           }
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:108..113 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `age` @ [1]:114..117 from 0,
+             has_question_mark: false
+           },
+           op: "gt",
+           right: constant int64 30 @ [1]:120..122 from 0,
+           location: [1]:114..122 from 0
+         }
+       ],
+-      named_args: [
+-        
++      order: "ordered",
++      limit: 2,
++      projection: [
++        {
++          expr: root_field {
++            id: `name` @ [1]:130..134 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `name` @ [1]:130..134 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `age` @ [1]:114..117 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `age` @ [1]:114..117 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `name` @ [1]:130..134 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `name` @ [1]:130..134 from 0,
+             has_question_mark: false
+           },
+           location: [1]:130..134 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:135..139 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:140..141 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:141..141 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

@@ -1,0 +1,6 @@
+// DuckDB's `LIMIT` takes a `BIGINT`, so a limit beyond it stays with the
+// operator instead of failing the query.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where id > 1
+head 18446744073709551615
+select id

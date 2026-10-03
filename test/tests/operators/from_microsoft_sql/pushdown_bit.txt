@@ -1,0 +1,8 @@
+{
+  name: "Bob",
+  is_active: true,
+}
+{
+  name: "Charlie",
+  is_active: false,
+}
