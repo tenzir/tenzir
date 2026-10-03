@@ -31,6 +31,7 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
+#include "tenzir/unicode.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
 
@@ -1594,8 +1595,8 @@ public:
 private:
   static auto detect_xsv(read_detection_input input) -> read_detection_result {
     namespace rd = read_detection;
-    if (not detail::is_valid_utf8(input.bytes)) {
-      if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+    if (not unicode::is_valid_utf8(input.bytes)) {
+      if (not input.eof and unicode::is_valid_utf8_prefix(input.bytes)) {
         return rd::need_more();
       }
       return rd::reject();

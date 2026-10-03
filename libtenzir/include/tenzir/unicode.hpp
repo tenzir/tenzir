@@ -11,15 +11,21 @@
 #include "tenzir/option.hpp"
 
 #include <array>
+#include <bit>
+#include <cstddef>
 #include <cstdint>
+#include <span>
+#include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
-/// Code point properties and UTF-8 coding for the string functions.
+/// Unicode code point properties, case folding, and UTF-8 and UTF-16 coding.
 ///
 /// The classification follows Arrow's `utf8_*` compute functions, which the
 /// string functions were originally built on, so that their results do not
 /// depend on the evaluator.
-namespace tenzir::detail::unicode {
+namespace tenzir::unicode {
 
 /// The properties of one code point.
 ///
@@ -130,6 +136,11 @@ private:
   std::array<char32_t, size> lower_;
 };
 
+/// Returns whether `byte` continues a multi-byte UTF-8 sequence.
+constexpr auto is_continuation_byte(char byte) -> bool {
+  return (static_cast<std::uint8_t>(byte) & 0xc0) == 0x80;
+}
+
 /// Returns whether `input` consists of ASCII bytes only. The loop has no
 /// early exit, so that it vectorizes.
 inline auto is_ascii(std::string_view input) -> bool {
@@ -149,7 +160,7 @@ inline auto decode_multibyte(char const*& pos, char const* end)
     return static_cast<char32_t>(static_cast<std::uint8_t>(pos[i]));
   };
   auto const continues = [&](std::ptrdiff_t i) {
-    return (byte(i) & 0xc0) == 0x80;
+    return is_continuation_byte(pos[i]);
   };
   auto const lead = byte(0);
   if (lead < 0xc2) {
@@ -207,8 +218,7 @@ inline auto decode(char const*& pos, char const* end) -> Option<char32_t> {
 inline auto decode_backward(char const* begin, char const*& end)
   -> Option<char32_t> {
   auto start = end - 1;
-  while (start > begin and end - start < 4
-         and (static_cast<std::uint8_t>(*start) & 0xc0) == 0x80) {
+  while (start > begin and end - start < 4 and is_continuation_byte(*start)) {
     --start;
   }
   auto pos = start;
@@ -228,8 +238,9 @@ constexpr auto encoded_size(char32_t code_point) -> std::size_t {
                                 : 4;
 }
 
-/// Writes the UTF-8 encoding of a valid code point to `output`, which must
-/// have room for it, and returns the position after it.
+/// Writes the UTF-8 encoding of a code point up to U+10FFFF to `output`,
+/// which must have room for it, and returns the position after it. A surrogate
+/// code point produces its three-byte form, which is not valid UTF-8.
 inline auto encode(char32_t code_point, char* output) -> char* {
   auto const put = [&](char32_t value) {
     *output++ = static_cast<char>(value);
@@ -252,4 +263,99 @@ inline auto encode(char32_t code_point, char* output) -> char* {
   return output;
 }
 
-} // namespace tenzir::detail::unicode
+/// Appends the UTF-8 encoding of a code point up to U+10FFFF to `output`, like
+/// `encode`.
+inline auto append_utf8(std::string& output, char32_t code_point) -> void {
+  if (code_point < 0x80) {
+    output.push_back(static_cast<char>(code_point));
+    return;
+  }
+  auto buffer = std::array<char, 4>{};
+  output.append(buffer.data(), encode(code_point, buffer.data()));
+}
+
+/// Returns the UTF-16 byte order mark in byte order `order`.
+constexpr auto utf16_byte_order_mark(std::endian order) -> std::string_view {
+  return order == std::endian::little ? std::string_view{"\xff\xfe", 2}
+                                      : std::string_view{"\xfe\xff", 2};
+}
+
+/// UTF-8 text decoded from UTF-16.
+struct Utf16Decoded {
+  std::string text;
+  /// The number of invalid code units replaced with U+FFFD.
+  size_t replacements = 0;
+};
+
+/// Decodes UTF-16 in byte order `order` into UTF-8. Returns `None` for input
+/// with an unpaired surrogate or an odd number of bytes. A byte order mark
+/// decodes as U+FEFF, so strip it beforehand if the format has one.
+auto decode_utf16(std::span<std::byte const> input, std::endian order)
+  -> Option<std::string>;
+
+/// Like `decode_utf16`, but replaces each unpaired surrogate and a trailing odd
+/// byte with U+FFFD instead of failing.
+auto decode_utf16_lossy(std::span<std::byte const> input, std::endian order)
+  -> Utf16Decoded;
+
+/// Encodes UTF-8 as UTF-16 bytes in byte order `order`, without a byte order
+/// mark. Returns `None` for input that is not valid UTF-8.
+auto encode_utf16(std::string_view input, std::endian order)
+  -> Option<std::string>;
+
+/// Like `encode_utf16`, but replaces each byte that does not start a valid
+/// UTF-8 sequence with U+FFFD instead of failing.
+auto encode_utf16_lossy(std::string_view input, std::endian order)
+  -> std::string;
+
+/// Validates whether a string contains well-formed UTF-8.
+auto is_valid_utf8(std::string_view bytes) -> bool;
+
+/// Returns the number of trailing bytes that form an incomplete UTF-8 sequence.
+auto count_trailing_partial_utf8(std::string_view bytes) -> size_t;
+
+/// Validates whether a string is well-formed UTF-8 after ignoring one trailing
+/// incomplete UTF-8 sequence.
+auto is_valid_utf8_prefix(std::string_view bytes) -> bool;
+
+/// Counts UTF-8 code points in `value`.
+///
+/// This assumes valid UTF-8 and counts every byte that does not continue a
+/// multi-byte sequence.
+[[nodiscard]] constexpr auto
+utf8_codepoint_count(std::string_view value) noexcept -> size_t {
+  auto result = size_t{0};
+  for (auto byte : value) {
+    if (not is_continuation_byte(byte)) {
+      ++result;
+    }
+  }
+  return result;
+}
+
+/// Returns whether `input` encodes exactly one alphanumeric Unicode code
+/// point.
+[[nodiscard]] auto utf8_code_point_isalnum(std::string_view input) noexcept
+  -> bool;
+
+/// Returns the full Unicode case folding of `input`.
+///
+/// Unlike lowercasing, full case folding maps characters so that
+/// case-insensitive comparison works across scripts, e.g. the German "ß"
+/// folds to "ss", so "STRASSE" and "straße" fold to the same string. Use this
+/// for case-insensitive string comparison rather than `ascii_tolower`.
+[[nodiscard]] auto utf8_fold_case(std::string_view input) -> std::string;
+
+/// Finds all non-overlapping, left-to-right occurrences of `folded_pattern`
+/// within `input` using full Unicode case folding, and returns their byte
+/// ranges `[start, end)` in `input`.
+///
+/// `folded_pattern` must already be case-folded (see `utf8_fold_case`). Matches
+/// are aligned to code point boundaries in `input`, so a pattern of `"s"` does
+/// not match half of a `"ß"` (which folds to `"ss"`). An empty pattern yields
+/// no matches.
+[[nodiscard]] auto
+utf8_fold_case_find(std::string_view input, std::string_view folded_pattern)
+  -> std::vector<std::pair<size_t, size_t>>;
+
+} // namespace tenzir::unicode

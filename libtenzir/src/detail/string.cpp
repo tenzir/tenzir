@@ -12,116 +12,14 @@
 #include "tenzir/detail/escapers.hpp"
 #include "tenzir/detail/narrow.hpp"
 
-#include <unicode/ucasemap.h>
-#include <unicode/uchar.h>
-#include <unicode/utf8.h>
-#include <unicode/utypes.h>
-
 #include <algorithm>
 #include <cstring>
-#include <simdjson.h>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace tenzir {
 namespace detail {
-
-auto utf8_code_point_isalnum(std::string_view input) noexcept -> bool {
-  auto const length = narrow<int32_t>(input.size());
-  auto offset = int32_t{0};
-  auto code_point = UChar32{};
-  U8_NEXT(input.data(), offset, length, code_point);
-  auto const category = u_charType(code_point);
-  return offset == length
-         and (u_isalnum(code_point) or category == U_LETTER_NUMBER
-              or category == U_OTHER_NUMBER);
-}
-
-auto utf8_fold_case(std::string_view input) -> std::string {
-  if (input.empty()) {
-    return {};
-  }
-  auto status = U_ZERO_ERROR;
-  auto* csm = ucasemap_open("", 0, &status);
-  if (U_FAILURE(status)) {
-    return std::string{input};
-  }
-  const auto src_length = narrow_cast<int32_t>(input.size());
-  auto result = std::string{};
-  // Full case folding can grow the string (e.g. "ß" -> "ss"), so size up front
-  // and retry once if the initial buffer is too small.
-  result.resize(input.size());
-  auto dest_length = ucasemap_utf8FoldCase(csm, result.data(),
-                                           narrow_cast<int32_t>(result.size()),
-                                           input.data(), src_length, &status);
-  if (status == U_BUFFER_OVERFLOW_ERROR) {
-    status = U_ZERO_ERROR;
-    result.resize(narrow_cast<size_t>(dest_length));
-    dest_length = ucasemap_utf8FoldCase(csm, result.data(),
-                                        narrow_cast<int32_t>(result.size()),
-                                        input.data(), src_length, &status);
-  }
-  ucasemap_close(csm);
-  if (U_FAILURE(status)) {
-    return std::string{input};
-  }
-  result.resize(narrow_cast<size_t>(dest_length));
-  return result;
-}
-
-auto utf8_fold_case_find(std::string_view input,
-                         std::string_view folded_pattern)
-  -> std::vector<std::pair<size_t, size_t>> {
-  auto result = std::vector<std::pair<size_t, size_t>>{};
-  if (folded_pattern.empty() or input.empty()) {
-    return result;
-  }
-  // Decompose `input` into its code points, recording each one's byte range and
-  // its full case folding. Folding per code point matches folding the whole
-  // string for Unicode's default full case folding, while letting us map match
-  // boundaries back to the original byte offsets.
-  struct code_point {
-    size_t start;
-    size_t end;
-    std::string folded;
-  };
-  auto cps = std::vector<code_point>{};
-  for (size_t i = 0; i < input.size();) {
-    auto j = i + 1;
-    while (j < input.size()
-           and (static_cast<unsigned char>(input[j]) & 0xC0) == 0x80) {
-      ++j;
-    }
-    cps.push_back({i, j, utf8_fold_case(input.substr(i, j - i))});
-    i = j;
-  }
-  for (size_t i = 0; i < cps.size();) {
-    auto acc = std::string{};
-    auto matched_end = std::string_view::npos;
-    auto next = i;
-    for (auto j = i; j < cps.size(); ++j) {
-      acc += cps[j].folded;
-      if (acc.size() > folded_pattern.size()
-          or folded_pattern.compare(0, acc.size(), acc) != 0) {
-        // The accumulated folding overshoots or diverges from the pattern.
-        break;
-      }
-      if (acc.size() == folded_pattern.size()) {
-        matched_end = cps[j].end;
-        next = j + 1;
-        break;
-      }
-    }
-    if (matched_end != std::string_view::npos) {
-      result.emplace_back(cps[i].start, matched_end);
-      i = next;
-    } else {
-      ++i;
-    }
-  }
-  return result;
-}
 
 auto quoting_escaping_policy::basic_unescape_operation(
   std::string_view::iterator begin, std::string_view::iterator end,
@@ -571,37 +469,6 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
     out.emplace_back(std::move(current));
   }
   return out;
-}
-
-auto is_valid_utf8(std::string_view bytes) -> bool {
-  return simdjson::validate_utf8(bytes.data(), bytes.size());
-}
-
-auto count_trailing_partial_utf8(std::string_view bytes) -> size_t {
-  if (bytes.empty()) {
-    return 0;
-  }
-  auto buf = reinterpret_cast<const uint8_t*>(bytes.data());
-  auto len = bytes.size();
-  if (buf[len - 1] >= 0xC0) {
-    return 1;
-  }
-  if (len >= 2 and buf[len - 2] >= 0xE0) {
-    return 2;
-  }
-  if (len >= 3 and buf[len - 3] >= 0xF0) {
-    return 3;
-  }
-  return 0;
-}
-
-auto is_valid_utf8_prefix(std::string_view bytes) -> bool {
-  auto partial = count_trailing_partial_utf8(bytes);
-  if (partial == 0) {
-    return is_valid_utf8(bytes);
-  }
-  bytes.remove_suffix(partial);
-  return is_valid_utf8(bytes);
 }
 
 std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {

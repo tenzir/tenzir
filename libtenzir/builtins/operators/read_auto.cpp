@@ -25,6 +25,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/unicode.hpp"
 #include "tenzir/variant.hpp"
 
 #include <algorithm>
@@ -231,8 +232,8 @@ private:
         .emit(ctx);
       return failure::promise();
     }
-    auto valid_utf8 = input.eof ? detail::is_valid_utf8(probe_)
-                                : detail::is_valid_utf8_prefix(probe_);
+    auto valid_utf8 = input.eof ? unicode::is_valid_utf8(probe_)
+                                : unicode::is_valid_utf8_prefix(probe_);
     if (args_.fallback == "lines") {
       if (not valid_utf8) {
         diagnostic::error("read_auto fallback `lines` requires UTF-8 input")
@@ -472,8 +473,8 @@ private:
         .emit(ctx);
       return failure::promise();
     }
-    auto valid_utf8 = input.eof ? detail::is_valid_utf8(probe_)
-                                : detail::is_valid_utf8_prefix(probe_);
+    auto valid_utf8 = input.eof ? unicode::is_valid_utf8(probe_)
+                                : unicode::is_valid_utf8_prefix(probe_);
     if (args_.fallback == "lines") {
       if (not valid_utf8) {
         diagnostic::error("read_auto fallback `lines` requires UTF-8 input")

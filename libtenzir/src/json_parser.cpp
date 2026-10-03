@@ -11,6 +11,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/try_simdjson.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <unicode/utf8.h>
 
@@ -381,7 +382,7 @@ auto default_parser::handle_truncated_bytes() -> void {
   // sequences from the end of the input. We need to add those bytes back to
   // avoid losing them, which would cause UTF-8 validation errors when the
   // continuation bytes arrive in the next chunk.
-  auto partial_utf8_bytes = detail::count_trailing_partial_utf8(view);
+  auto partial_utf8_bytes = unicode::count_trailing_partial_utf8(view);
   auto bytes_to_keep
     = std::min(truncated_bytes + partial_utf8_bytes, view.size());
   if (bytes_to_keep == 0) {

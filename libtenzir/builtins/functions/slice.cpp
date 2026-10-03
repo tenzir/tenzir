@@ -10,6 +10,7 @@
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -126,8 +127,7 @@ public:
         auto const value = *strings->data.get(row);
         code_points.clear();
         for (auto offset = size_t{0}; offset < value.size(); ++offset) {
-          if ((static_cast<unsigned char>(value[offset]) & 0b1100'0000)
-              != 0b1000'0000) {
+          if (not unicode::is_continuation_byte(value[offset])) {
             code_points.push_back(offset);
           }
         }

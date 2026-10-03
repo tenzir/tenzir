@@ -17,6 +17,7 @@
 #include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <arrow/util/utf8.h>
 
@@ -969,32 +970,12 @@ public:
                 brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
               .throw_();
           }
-          // Encode codepoint as UTF-8
-          if (codepoint <= 0x7F) {
-            result.push_back(static_cast<char>(codepoint));
-          } else if (codepoint <= 0x7FF) {
-            result.push_back(
-              static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else if (codepoint <= 0xFFFF) {
-            result.push_back(
-              static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else if (codepoint <= 0x10FFFF) {
-            result.push_back(
-              static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else {
+          if (codepoint > 0x10FFFF) {
             diagnostic::error("unicode codepoint out of range")
               .primary(input.source.subloc(backslash - f, it + 1 - backslash))
               .throw_();
           }
+          unicode::append_utf8(result, codepoint);
           // it is at '}', loop will ++it
         } else {
           // Handle \uXXXX or \UXXXXXXXX
@@ -1027,32 +1008,12 @@ public:
               .primary(input.source.subloc(backslash - f, digits + 2))
               .throw_();
           }
-          // Encode codepoint as UTF-8
-          if (codepoint <= 0x7F) {
-            result.push_back(static_cast<char>(codepoint));
-          } else if (codepoint <= 0x7FF) {
-            result.push_back(
-              static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else if (codepoint <= 0xFFFF) {
-            result.push_back(
-              static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else if (codepoint <= 0x10FFFF) {
-            result.push_back(
-              static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else {
+          if (codepoint > 0x10FFFF) {
             diagnostic::error("unicode codepoint out of range")
               .primary(input.source.subloc(backslash - f, digits + 2))
               .throw_();
           }
+          unicode::append_utf8(result, codepoint);
         }
       } else if (x == 'x') {
         // Hexadecimal byte escape: \xHH

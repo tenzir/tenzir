@@ -52,31 +52,6 @@ constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
   return ascii_isalpha(c) or ascii_isdigit(c);
 }
 
-/// Returns whether `input` encodes exactly one alphanumeric Unicode code
-/// point.
-[[nodiscard]] auto utf8_code_point_isalnum(std::string_view input) noexcept
-  -> bool;
-
-/// Returns the full Unicode case folding of `input`.
-///
-/// Unlike lowercasing, full case folding maps characters so that
-/// case-insensitive comparison works across scripts, e.g. the German "ß"
-/// folds to "ss", so "STRASSE" and "straße" fold to the same string. Use this
-/// for case-insensitive string comparison rather than `ascii_tolower`.
-[[nodiscard]] auto utf8_fold_case(std::string_view input) -> std::string;
-
-/// Finds all non-overlapping, left-to-right occurrences of `folded_pattern`
-/// within `input` using full Unicode case folding, and returns their byte
-/// ranges `[start, end)` in `input`.
-///
-/// `folded_pattern` must already be case-folded (see `utf8_fold_case`). Matches
-/// are aligned to code point boundaries in `input`, so a pattern of `"s"` does
-/// not match half of a `"ß"` (which folds to `"ss"`). An empty pattern yields
-/// no matches.
-[[nodiscard]] auto
-utf8_fold_case_find(std::string_view input, std::string_view folded_pattern)
-  -> std::vector<std::pair<size_t, size_t>>;
-
 /// Returns a copy of `input` with ASCII bytes folded to lowercase.
 [[nodiscard]] inline auto ascii_tolower(std::string_view input) -> std::string {
   auto result = std::string{input};
@@ -99,21 +74,6 @@ ascii_icase_equal(std::string_view lhs, std::string_view rhs) noexcept -> bool {
     }
   }
   return true;
-}
-
-/// Counts UTF-8 code points in `value`.
-///
-/// This assumes valid UTF-8 and counts every byte that does not continue a
-/// multi-byte sequence.
-[[nodiscard]] inline constexpr auto
-utf8_codepoint_count(std::string_view value) noexcept -> size_t {
-  auto result = size_t{0};
-  for (auto byte : value) {
-    if ((static_cast<unsigned char>(byte) & 0b1100'0000) != 0b1000'0000) {
-      ++result;
-    }
-  }
-  return result;
 }
 
 /// Trims leading whitespace of string according to the given whitespace
@@ -443,16 +403,6 @@ split_once(std::string_view str, std::string_view sep);
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits = -1);
-
-/// Validates whether a string contains well-formed UTF-8.
-auto is_valid_utf8(std::string_view bytes) -> bool;
-
-/// Returns the number of trailing bytes that form an incomplete UTF-8 sequence.
-auto count_trailing_partial_utf8(std::string_view bytes) -> size_t;
-
-/// Validates whether a string is well-formed UTF-8 after ignoring one trailing
-/// incomplete UTF-8 sequence.
-auto is_valid_utf8_prefix(std::string_view bytes) -> bool;
 
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.

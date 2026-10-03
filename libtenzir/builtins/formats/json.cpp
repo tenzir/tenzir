@@ -18,6 +18,7 @@
 #include "tenzir/nova/json_parser.hpp"
 #include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova/type_system.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/async/pusher.hpp>
@@ -795,7 +796,7 @@ private:
       buffer_.reset();
       return;
     }
-    auto partial_utf8 = detail::count_trailing_partial_utf8(view);
+    auto partial_utf8 = unicode::count_trailing_partial_utf8(view);
     auto keep = std::min(truncated + partial_utf8, view.size());
     if (keep == 0) {
       buffer_.reset();

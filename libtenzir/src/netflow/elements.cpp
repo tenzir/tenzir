@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/string.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <fmt/format.h>
 
@@ -278,8 +279,8 @@ auto decode_value(InformationElementType type, std::span<const std::byte> bytes,
       }
       auto const value = std::string_view{
         reinterpret_cast<char const*>(bytes.data()), bytes.size()};
-      return tenzir::detail::is_valid_utf8(value) ? data{std::string{value}}
-                                                  : as_blob(original);
+      return unicode::is_valid_utf8(value) ? data{std::string{value}}
+                                           : as_blob(original);
     }
     case InformationElementType::date_time_seconds:
       if (auto value = decode_unix_seconds(bytes, reference_unix_seconds)) {

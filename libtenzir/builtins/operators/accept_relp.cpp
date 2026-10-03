@@ -32,6 +32,7 @@
 #include <tenzir/si_literals.hpp>
 #include <tenzir/socket.hpp>
 #include <tenzir/tls_options.hpp>
+#include <tenzir/unicode.hpp>
 
 #include <folly/CancellationToken.h>
 #include <folly/SocketAddress.h>
@@ -593,7 +594,7 @@ public:
       std::move(message),
       [&](SyslogBatch batch) -> Task<void> {
         for (auto& msg : batch.messages) {
-          if (not detail::is_valid_utf8(msg.payload)) {
+          if (not unicode::is_valid_utf8(msg.payload)) {
             diagnostic::warning(
               "dropped RELP syslog payload with invalid UTF-8")
               .primary(args_.endpoint)

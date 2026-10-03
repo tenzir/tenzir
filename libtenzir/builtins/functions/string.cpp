@@ -15,11 +15,11 @@
 #include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova/type_system.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/detail/string.hpp>
-#include <tenzir/detail/unicode.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/to_string.hpp>
@@ -62,7 +62,7 @@ auto fold_case(const arrow::StringArray& array)
       check(b.AppendNull());
       continue;
     }
-    check(b.Append(detail::utf8_fold_case(array.Value(i))));
+    check(b.Append(unicode::utf8_fold_case(array.Value(i))));
   }
   return finish(b);
 }
@@ -85,7 +85,7 @@ auto replace_literal_ignore_case(std::string_view input,
   auto result = std::string{};
   auto pos = size_t{0};
   auto count = int64_t{0};
-  for (auto [s, e] : detail::utf8_fold_case_find(input, folded_pattern)) {
+  for (auto [s, e] : unicode::utf8_fold_case_find(input, folded_pattern)) {
     if (max >= 0 and count >= max) {
       break;
     }
@@ -113,7 +113,7 @@ auto replace_literal(std::string_view input, std::string_view pattern,
     return std::string{input};
   }
   if (ignore_case) {
-    return replace_literal_ignore_case(input, detail::utf8_fold_case(pattern),
+    return replace_literal_ignore_case(input, unicode::utf8_fold_case(pattern),
                                        replacement, max, size_limit);
   }
   auto result = std::string{};
@@ -207,11 +207,9 @@ template <class T>
 concept StringOrNull
   = std::same_as<T, std::string_view> or std::same_as<T, nova::Null>;
 
-namespace unicode = detail::unicode;
-
 /// Whether `input` is valid UTF-8. ASCII input skips the full validation.
 auto valid_utf8(std::string_view input) -> bool {
-  return unicode::is_ascii(input) or detail::is_valid_utf8(input);
+  return unicode::is_ascii(input) or unicode::is_valid_utf8(input);
 }
 
 /// Evaluates a scalar-valued `f` for the string rows of `args.x`. Null rows
@@ -290,8 +288,8 @@ auto append_replacements(std::string_view input, std::string_view pattern,
     return true;
   };
   if (ignore_case) {
-    auto const folded = detail::utf8_fold_case(pattern);
-    for (auto [begin, end] : detail::utf8_fold_case_find(input, folded)) {
+    auto const folded = unicode::utf8_fold_case(pattern);
+    for (auto [begin, end] : unicode::utf8_fold_case_find(input, folded)) {
       if (not replace(begin, end)) {
         break;
       }
@@ -681,7 +679,7 @@ auto code_point_size(char const* pos, char const* end) -> size_t {
                     : lead < 0xf8 ? size_t{4}
                                   : size_t{1};
   if (size > static_cast<size_t>(end - pos)
-      or not detail::is_valid_utf8({pos, size})) {
+      or not unicode::is_valid_utf8({pos, size})) {
     return 1;
   }
   return size;
@@ -837,8 +835,8 @@ public:
                                        std::string_view subject,
                                        std::string_view arg) -> Option<Bool> {
         if (ignore_case) {
-          auto const subject_folded = detail::utf8_fold_case(subject);
-          auto const arg_folded = detail::utf8_fold_case(arg);
+          auto const subject_folded = unicode::utf8_fold_case(subject);
+          auto const arg_folded = unicode::utf8_fold_case(arg);
           return StartsWith ? subject_folded.starts_with(arg_folded)
                             : subject_folded.ends_with(arg_folded);
         }
@@ -1262,7 +1260,7 @@ public:
                                 .primary(args.x.source));
           return false;
         }
-        auto const str_length = detail::utf8_codepoint_count(str);
+        auto const str_length = unicode::utf8_codepoint_count(str);
         auto const padding = str_length < target ? target - str_length : 0;
         auto const remaining
           = max_string_size - static_cast<size_t>(output.size());
@@ -1322,7 +1320,7 @@ public:
             .emit(dh);
           return failure::promise();
         }
-        auto const length = detail::utf8_codepoint_count(args.pad_char->inner);
+        auto const length = unicode::utf8_codepoint_count(args.pad_char->inner);
         if (length != 1) {
           diagnostic::error("`{}` expected single character for padding, "
                             "but got `{}` with length {}",
@@ -1351,15 +1349,8 @@ public:
       = pad_char_arg.value_or(located<std::string>{" ", location::unknown});
     // Validate pad character is single character
     if (pad_char_arg.has_value()) {
-      int64_t pad_char_length = 0;
-      auto ptr = pad_char.inner.data();
-      auto end = ptr + pad_char.inner.size();
-      while (ptr < end) {
-        if ((*ptr & 0xC0) != 0x80) {
-          pad_char_length++;
-        }
-        ptr++;
-      }
+      auto const pad_char_length = detail::narrow<int64_t>(
+        unicode::utf8_codepoint_count(pad_char.inner));
       if (pad_char_length != 1) {
         diagnostic::error("`{}` expected single character for padding, "
                           "but got `{}` with length {}",
@@ -1411,18 +1402,8 @@ public:
             }
             auto str = subject_array->GetView(i);
             auto target_length = detail::narrow<int64_t>(length_array.Value(i));
-            // For simple string length, we can use the string view's size
-            // for ASCII or count UTF-8 characters manually.
-            auto str_length = int64_t{0};
-            auto ptr = str.data();
-            auto end = ptr + str.size();
-            while (ptr < end) {
-              // Skip UTF-8 continuation bytes (10xxxxxx)
-              if ((*ptr & 0xC0) != 0x80) {
-                str_length++;
-              }
-              ptr++;
-            }
+            auto const str_length
+              = detail::narrow<int64_t>(unicode::utf8_codepoint_count(str));
             if (str_length >= target_length) {
               // String is already long enough.
               check(b.Append(str));
@@ -1793,7 +1774,7 @@ public:
             if (not valid_utf8(input)) {
               return None{};
             }
-            return static_cast<int64_t>(detail::utf8_codepoint_count(input));
+            return static_cast<int64_t>(unicode::utf8_codepoint_count(input));
           });
     }
     TENZIR_UNREACHABLE();
@@ -2099,7 +2080,7 @@ public:
                 auto folded_pattern
                   = literal_pattern->empty()
                       ? std::string{}
-                      : detail::utf8_fold_case(*literal_pattern);
+                      : unicode::utf8_fold_case(*literal_pattern);
                 auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
                 check(b.Reserve(array.length()));
                 auto total_size = size_t{0};
@@ -2432,13 +2413,13 @@ public:
     auto const max
       = args.max ? Option<int64_t>{args.max->inner} : Option<int64_t>{};
     auto const folded = args.ignore_case
-                          ? detail::utf8_fold_case(args.pattern.inner)
+                          ? unicode::utf8_fold_case(args.pattern.inner)
                           : std::string{};
     return split_strings(
       "split", args.x, frame,
       [&](std::string_view v, storage::Index base, PieceRanges& ranges) {
         if (args.ignore_case and not args.pattern.inner.empty()) {
-          auto const found = detail::utf8_fold_case_find(v, folded);
+          auto const found = unicode::utf8_fold_case_find(v, folded);
           append_pieces(v, base, found, max, args.reverse.has_value(), ranges);
           return;
         }
@@ -2636,7 +2617,7 @@ public:
             // we match the delimiter with full Unicode case folding ourselves
             // and split the original bytes.
             if (ignore_case and not regex_ and not pattern.inner.empty()) {
-              auto fp = detail::utf8_fold_case(pattern.inner);
+              auto fp = unicode::utf8_fold_case(pattern.inner);
               auto max = max_splits ? max_splits->inner : -1;
               auto value_builder = std::make_shared<arrow::StringBuilder>(
                 tenzir::arrow_memory_pool());
@@ -2649,7 +2630,7 @@ public:
                 }
                 check(b.Append());
                 auto v = array.Value(i);
-                auto ranges = detail::utf8_fold_case_find(v, fp);
+                auto ranges = unicode::utf8_fold_case_find(v, fp);
                 // `max` bounds the number of splits; `reverse` keeps the
                 // rightmost ones. The output order stays left to right.
                 auto first = size_t{0};
@@ -2908,7 +2889,7 @@ public:
         [&](diagnostic_handler&, std::string_view x,
             std::string_view y) -> Option<Bool> {
           if (args.ignore_case) {
-            return detail::utf8_fold_case(x) == detail::utf8_fold_case(y);
+            return unicode::utf8_fold_case(x) == unicode::utf8_fold_case(y);
           }
           return x == y;
         },

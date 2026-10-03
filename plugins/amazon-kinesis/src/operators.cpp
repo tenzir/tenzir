@@ -21,6 +21,7 @@
 #include <tenzir/result.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/unicode.hpp>
 #include <tenzir/uuid.hpp>
 #include <tenzir/variant.hpp>
 
@@ -274,7 +275,7 @@ auto validate_partition_key(std::string_view key, const location& loc,
       .emit(dh);
     return false;
   }
-  const auto characters = detail::utf8_codepoint_count(key);
+  const auto characters = unicode::utf8_codepoint_count(key);
   if (characters > max_partition_key_size) {
     diagnostic::warning("partition key must be at most {} characters",
                         max_partition_key_size)

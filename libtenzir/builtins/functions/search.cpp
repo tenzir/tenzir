@@ -17,6 +17,7 @@
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/unicode.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
 
@@ -47,7 +48,7 @@ auto fold_case(const arrow::StringArray& array)
       check(b.AppendNull());
       continue;
     }
-    check(b.Append(detail::utf8_fold_case(array.Value(i))));
+    check(b.Append(unicode::utf8_fold_case(array.Value(i))));
   }
   return std::static_pointer_cast<arrow::StringArray>(finish(b));
 }
@@ -164,7 +165,7 @@ auto contains(nova::RowView<nova::Data> input, const data& target, bool exact,
         if constexpr (std::same_as<T, nova::String>) {
           if (ignore_case and is<std::string>(target)) {
             const auto& needle = as<std::string>(target);
-            const auto folded = detail::utf8_fold_case(*value);
+            const auto folded = unicode::utf8_fold_case(*value);
             return exact ? folded == needle : folded.contains(needle);
           }
         }
@@ -243,7 +244,7 @@ class Plugin final : public nova::FunctionPlugin {
         }
         args.target = nova::materialize_legacy(target.inner);
         if (args.ignore_case and is<std::string>(args.target)) {
-          args.target = detail::utf8_fold_case(as<std::string>(args.target));
+          args.target = unicode::utf8_fold_case(as<std::string>(args.target));
         }
         return {};
       });
@@ -275,7 +276,7 @@ class Plugin final : public nova::FunctionPlugin {
       return failure::promise();
     }
     if (ignore_case and is<std::string>(target.inner)) {
-      target.inner = detail::utf8_fold_case(as<std::string>(target.inner));
+      target.inner = unicode::utf8_fold_case(as<std::string>(target.inner));
     }
     return function_use::make(
       [in = std::move(input), what = std::move(target.inner), exact,

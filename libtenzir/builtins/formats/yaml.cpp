@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/multi_series_builder_argument_parser.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -682,8 +683,8 @@ public:
 private:
   static auto detect_yaml(read_detection_input input) -> read_detection_result {
     namespace rd = read_detection;
-    if (not detail::is_valid_utf8(input.bytes)) {
-      if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+    if (not unicode::is_valid_utf8(input.bytes)) {
+      if (not input.eof and unicode::is_valid_utf8_prefix(input.bytes)) {
         return rd::need_more();
       }
       return rd::reject();

@@ -9,6 +9,7 @@
 #include "sigma/ocsf.hpp"
 #include "sigma/plan_cache.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/unicode.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -162,7 +163,7 @@ auto windash_interchangeable(std::string_view str, size_t i) -> bool {
     return (static_cast<unsigned char>(c) & 0xC0u) == 0x80u;
   };
   auto is_word = [](std::string_view code_point) {
-    return code_point == "_" or detail::utf8_code_point_isalnum(code_point);
+    return code_point == "_" or unicode::utf8_code_point_isalnum(code_point);
   };
   auto boundary_before = true;
   if (i > 0) {
@@ -328,61 +329,15 @@ auto make_binary_expr(ast::expression left, ast::binary_op op,
 
 // -- lowering: Sigma IR -> TQL expressions -------------------------------
 
-/// Encodes one UTF-8 Sigma string as UTF-16 code units in the requested byte
-/// order, optionally with a byte-order mark.
-auto encode_utf16(std::string_view str, bool big_endian, bool bom)
+/// Encodes one UTF-8 Sigma string as UTF-16 in the requested byte order,
+/// optionally with a byte order mark.
+auto encode_utf16(std::string_view str, std::endian order, bool bom)
   -> std::string {
-  // Interpret the value as UTF-8 and produce UTF-16 code units. Sigma values
-  // are overwhelmingly ASCII; non-BMP code points produce surrogate pairs.
-  auto units = std::vector<uint16_t>{};
-  if (bom) {
-    units.push_back(0xFEFF);
-  }
-  auto i = size_t{0};
-  while (i < str.size()) {
-    auto const c = static_cast<unsigned char>(str[i]);
-    auto code_point = uint32_t{0};
-    auto length = size_t{1};
-    if (c < 0x80) {
-      code_point = c;
-    } else if ((c >> 5) == 0x6 and i + 1 < str.size()) {
-      code_point = ((c & 0x1Fu) << 6u)
-                   | (static_cast<unsigned char>(str[i + 1]) & 0x3Fu);
-      length = 2;
-    } else if ((c >> 4) == 0xE and i + 2 < str.size()) {
-      code_point = ((c & 0x0Fu) << 12u)
-                   | ((static_cast<unsigned char>(str[i + 1]) & 0x3Fu) << 6u)
-                   | (static_cast<unsigned char>(str[i + 2]) & 0x3Fu);
-      length = 3;
-    } else if ((c >> 3) == 0x1E and i + 3 < str.size()) {
-      code_point = ((c & 0x07u) << 18u)
-                   | ((static_cast<unsigned char>(str[i + 1]) & 0x3Fu) << 12u)
-                   | ((static_cast<unsigned char>(str[i + 2]) & 0x3Fu) << 6u)
-                   | (static_cast<unsigned char>(str[i + 3]) & 0x3Fu);
-      length = 4;
-    } else {
-      code_point = 0xFFFD;
-    }
-    i += length;
-    if (code_point >= 0x10000) {
-      code_point -= 0x10000;
-      units.push_back(static_cast<uint16_t>(0xD800 + (code_point >> 10u)));
-      units.push_back(static_cast<uint16_t>(0xDC00 + (code_point & 0x3FFu)));
-    } else {
-      units.push_back(static_cast<uint16_t>(code_point));
-    }
-  }
   auto result = std::string{};
-  result.reserve(units.size() * 2);
-  for (auto const unit : units) {
-    if (big_endian) {
-      result.push_back(static_cast<char>(unit >> 8u));
-      result.push_back(static_cast<char>(unit & 0xFFu));
-    } else {
-      result.push_back(static_cast<char>(unit & 0xFFu));
-      result.push_back(static_cast<char>(unit >> 8u));
-    }
+  if (bom) {
+    result = unicode::utf16_byte_order_mark(order);
   }
+  result += unicode::encode_utf16_lossy(str, order);
   return result;
 }
 
@@ -490,12 +445,13 @@ auto parse_semantics(ir::DetectionItem const& item)
         });
     } else if (modifier == "utf16le" or modifier == "wide"
                or modifier == "utf16be" or modifier == "utf16") {
-      auto const big_endian = modifier == "utf16be";
+      auto const order
+        = modifier == "utf16be" ? std::endian::big : std::endian::little;
       auto const bom = modifier == "utf16";
       result.transforms.emplace_back(
-        [big_endian, bom](data const& x) -> ParseResult<std::vector<data>> {
+        [order, bom](data const& x) -> ParseResult<std::vector<data>> {
           if (auto const* str = try_as<std::string>(&x)) {
-            return std::vector<data>{encode_utf16(*str, big_endian, bom)};
+            return std::vector<data>{encode_utf16(*str, order, bom)};
           }
           return parse_failure("Sigma UTF-16 modifiers only work with strings");
         });

@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/unicode.hpp"
+#include "tenzir/unicode.hpp"
 
 #include "tenzir/detail/string.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <string>
 
-using namespace tenzir::detail::unicode;
+using namespace tenzir::unicode;
 
 namespace {
 
@@ -24,7 +24,7 @@ auto decodes_like_validator(std::string_view bytes) -> bool {
   auto const* const end = bytes.data() + bytes.size();
   while (pos < end and decode(pos, end)) {
   }
-  return (pos == end) == tenzir::detail::is_valid_utf8(bytes);
+  return (pos == end) == is_valid_utf8(bytes);
 }
 
 } // namespace
@@ -144,4 +144,99 @@ TEST("ASCII detection") {
   CHECK(is_ascii("hello, world"));
   CHECK(not is_ascii("héllo"));
   CHECK(not is_ascii(std::string(100, 'a') + "\xff"));
+}
+
+TEST("UTF-8 code point alphanumeric classification") {
+  CHECK(utf8_code_point_isalnum("a"));
+  CHECK(utf8_code_point_isalnum("é"));
+  CHECK(utf8_code_point_isalnum("²"));
+  CHECK(utf8_code_point_isalnum("Ⅻ"));
+  CHECK(not utf8_code_point_isalnum("_"));
+  CHECK(not utf8_code_point_isalnum("ab"));
+}
+
+TEST("UTF-8 code point counting") {
+  CHECK_EQUAL(utf8_codepoint_count(""), 0u);
+  CHECK_EQUAL(utf8_codepoint_count("tenzir"), 6u);
+  CHECK_EQUAL(utf8_codepoint_count("ä"), 1u);
+  CHECK_EQUAL(utf8_codepoint_count("äöü"), 3u);
+  CHECK_EQUAL(utf8_codepoint_count("日本語"), 3u);
+  CHECK_EQUAL(utf8_codepoint_count("🤖"), 1u);
+  CHECK_EQUAL(utf8_codepoint_count("a🤖b"), 3u);
+}
+
+namespace {
+
+auto bytes(std::string_view text) -> std::span<std::byte const> {
+  return std::as_bytes(std::span{text});
+}
+
+} // namespace
+
+TEST("UTF-16 coding round-trips every code point") {
+  for (auto order : {std::endian::little, std::endian::big}) {
+    auto text = std::string{};
+    for (auto code_point = char32_t{0}; code_point <= 0x10ffff; ++code_point) {
+      if (code_point >= 0xd800 and code_point <= 0xdfff) {
+        continue;
+      }
+      append_utf8(text, code_point);
+    }
+    auto const encoded = encode_utf16(text, order);
+    REQUIRE(encoded);
+    CHECK_EQUAL(decode_utf16(bytes(*encoded), order), text);
+  }
+}
+
+TEST("UTF-16 coding respects the byte order") {
+  // U+1F642 needs a surrogate pair: D83D DE42.
+  auto const text = std::string_view{"A\xf0\x9f\x99\x82"};
+  CHECK_EQUAL(encode_utf16(text, std::endian::little),
+              std::string("A\0\x3d\xd8\x42\xde", 6));
+  CHECK_EQUAL(encode_utf16(text, std::endian::big),
+              std::string("\0A\xd8\x3d\xde\x42", 6));
+  CHECK_EQUAL(utf16_byte_order_mark(std::endian::little), "\xff\xfe");
+  CHECK_EQUAL(utf16_byte_order_mark(std::endian::big), "\xfe\xff");
+}
+
+TEST("UTF-16 decoding rejects or replaces invalid input") {
+  // A lone high surrogate, a lone low surrogate, and a trailing odd byte.
+  for (auto input : {std::string_view{"a\0\x00\xd8", 4},
+                     std::string_view{"\x00\xdc"
+                                      "b\0",
+                                      4},
+                     std::string_view{"a\0b", 3}}) {
+    CHECK(not decode_utf16(bytes(input), std::endian::little));
+  }
+  auto const lossy = decode_utf16_lossy(bytes(std::string_view{"a\0\x00\xd8"
+                                                               "b\0\x01",
+                                                               7}),
+                                        std::endian::little);
+  CHECK_EQUAL(lossy.text, "a\xef\xbf\xbd"
+                          "b\xef\xbf\xbd");
+  CHECK_EQUAL(lossy.replacements, size_t{2});
+  // A byte order mark is not stripped.
+  CHECK_EQUAL(decode_utf16(bytes(std::string_view{"\xff\xfe"
+                                                  "a\0",
+                                                  4}),
+                           std::endian::little),
+              "\xef\xbb\xbf"
+              "a");
+}
+
+TEST("UTF-16 encoding rejects or replaces invalid UTF-8") {
+  auto const invalid = std::string_view{"a\xc3"
+                                        "b\xed\xa0\x80"};
+  CHECK(not encode_utf16(invalid, std::endian::little));
+  auto const lossy = encode_utf16_lossy(invalid, std::endian::little);
+  CHECK_EQUAL(decode_utf16(bytes(lossy), std::endian::little),
+              "a\xef\xbf\xbd"
+              "b\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd");
+}
+
+TEST("continuation bytes") {
+  CHECK(not is_continuation_byte('a'));
+  CHECK(not is_continuation_byte('\xc3'));
+  CHECK(is_continuation_byte('\xa4'));
+  CHECK(not is_continuation_byte('\xf0'));
 }

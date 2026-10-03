@@ -27,6 +27,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/unicode.hpp>
 #include <tenzir/view3.hpp>
 
 #include <arrow/api.h>
@@ -1413,8 +1414,8 @@ public:
 private:
   static auto detect_kv(read_detection_input input) -> read_detection_result {
     namespace rd = read_detection;
-    if (not detail::is_valid_utf8(input.bytes)) {
-      if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+    if (not unicode::is_valid_utf8(input.bytes)) {
+      if (not input.eof and unicode::is_valid_utf8_prefix(input.bytes)) {
         return rd::need_more();
       }
       return rd::reject();
