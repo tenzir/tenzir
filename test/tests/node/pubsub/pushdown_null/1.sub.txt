@@ -1,0 +1,15 @@
+warning: expected `bool`
+ --> tests/node/pubsub/pushdown_null/1.sub.tql:4:7
+  |
+4 | where flag
+  |       ~~~~
+  |
+{
+  flag: true,
+}
+{
+  flag: true,
+}
+{
+  flag: true,
+}

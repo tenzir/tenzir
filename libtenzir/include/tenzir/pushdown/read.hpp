@@ -49,4 +49,12 @@ auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
                 Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> nova::Events;
 
+/// Drop the top-level fields that `projection` does not reference. A nested
+/// path keeps its whole top-level field, and a path that refers to `this`
+/// keeps every field. Rows, the active mask, and metadata stay intact.
+/// Apply this after `apply_read`, since filters may reference fields that the
+/// projection drops.
+auto project(nova::Events events, ir::OptimizeProjection const& projection)
+  -> nova::Events;
+
 } // namespace tenzir::pushdown

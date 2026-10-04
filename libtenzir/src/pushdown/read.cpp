@@ -4,7 +4,10 @@
 
 #include "tenzir/pushdown/read.hpp"
 
+#include "tenzir/nova/structured_storage.hpp"
 #include "tenzir/tql2/filter.hpp"
+
+#include <string_view>
 
 namespace tenzir::pushdown {
 
@@ -121,6 +124,36 @@ auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
     }
     *remaining -= count;
   }
+  return events;
+}
+
+auto project(nova::Events events, ir::OptimizeProjection const& projection)
+  -> nova::Events {
+  if (std::ranges::any_of(projection, [](auto const& field) {
+        return field.path().empty();
+      })) {
+    return events;
+  }
+  auto data = std::move(events.data).to_primary();
+  auto const& storage = *as<nova::storage::RecordStorage>(data.storage());
+  auto dropped = std::vector<std::string>{};
+  for (auto const& [name, _] : storage.names) {
+    auto const view = std::string_view{name};
+    auto keep = std::ranges::any_of(projection, [&](auto const& field) {
+      return field.path().front().id.name == view;
+    });
+    if (not keep) {
+      dropped.emplace_back(view);
+    }
+  }
+  if (not dropped.empty()) {
+    auto names = std::vector<std::string_view>{dropped.begin(), dropped.end()};
+    // Dropping the fields from every physical row, not only the active ones,
+    // lets the record array forget them entirely.
+    auto all_rows = nova::storage::BitMap{data.length(), true};
+    data = std::move(data).without_fields(names, std::move(all_rows));
+  }
+  events.data = std::move(data);
   return events;
 }
 

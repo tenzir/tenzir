@@ -9,6 +9,7 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -16,6 +17,53 @@
 using namespace tenzir;
 
 namespace {
+
+auto field_names(nova::RowView<nova::Record> row) -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto [name, value] : row) {
+    static_cast<void>(value);
+    result.emplace_back(name);
+  }
+  return result;
+}
+
+auto projection_from(std::initializer_list<std::string_view> fields)
+  -> ir::OptimizeProjection {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto session = provider.as_session();
+  auto result = ir::OptimizeProjection{};
+  for (auto field : fields) {
+    auto expr = parse_expression_with_location_override(
+      field, location::unknown, session);
+    REQUIRE(expr);
+    auto path = ast::field_path::try_from(std::move(*expr));
+    REQUIRE(path);
+    result.push_back(std::move(*path));
+  }
+  return result;
+}
+
+/// Three records with differing shapes; the middle one is inactive.
+auto nested_events() -> nova::Events {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  auto first = builder.record();
+  first.field("a").data(int64_t{0});
+  auto first_b = first.field("b").record();
+  first_b.field("c").data(int64_t{1});
+  first_b.field("d").data(int64_t{2});
+  first.field("e").data("x");
+  builder.record().field("e").data("only");
+  auto third = builder.record();
+  third.field("b").record().field("c").data(int64_t{3});
+  third.field("a").data(int64_t{2});
+  third.field("e").data("y");
+  auto mask = nova::storage::BitMap::Mutable{3};
+  mask.set(0, true);
+  mask.set(2, true);
+  return nova::Events{builder.finish(), std::move(mask).finish(),
+                      nova::Events::Meta::make_empty(3, "test.project")};
+}
 
 auto events() -> nova::Events {
   auto builder = nova::ArrayBuilder<nova::Record>{};
@@ -130,4 +178,53 @@ TEST("reader limits count active rows across batches") {
   CHECK_EQUAL(third.active_count(), 0);
   CHECK_EQUAL(third.length(), 6);
   CHECK(dh.empty());
+}
+
+TEST("projection keeps whole top-level fields in each row's order") {
+  auto result
+    = pushdown::project(nested_events(), projection_from({"b.c", "a"}));
+  REQUIRE_EQUAL(result.length(), 3);
+  CHECK_EQUAL(result.active_count(), 2);
+  CHECK(result.mask.get(0));
+  CHECK(not result.mask.get(1));
+  CHECK(result.mask.get(2));
+  CHECK_EQUAL(*result.meta.name.get(2), "test.project");
+  CHECK(not result.data.field("e"));
+  CHECK_EQUAL(field_names(result.data.get(0)),
+              (std::vector<std::string>{"a", "b"}));
+  CHECK_EQUAL(field_names(result.data.get(1)), std::vector<std::string>{});
+  CHECK_EQUAL(field_names(result.data.get(2)),
+              (std::vector<std::string>{"b", "a"}));
+  auto b = result.data.field("b");
+  REQUIRE(b);
+  auto records = b->data.get_alternative<nova::Record>();
+  REQUIRE(records);
+  CHECK_EQUAL(field_names(records->data.get(0)),
+              (std::vector<std::string>{"c", "d"}));
+}
+
+TEST("empty projection keeps rows without fields") {
+  auto result = pushdown::project(nested_events(), ir::OptimizeProjection{});
+  REQUIRE_EQUAL(result.length(), 3);
+  CHECK_EQUAL(result.active_count(), 2);
+  for (auto row : {0, 1, 2}) {
+    CHECK_EQUAL(field_names(result.data.get(row)), std::vector<std::string>{});
+  }
+}
+
+TEST("projection of this keeps every field") {
+  auto result = pushdown::project(nested_events(), projection_from({"this"}));
+  REQUIRE_EQUAL(result.length(), 3);
+  CHECK_EQUAL(field_names(result.data.get(0)),
+              (std::vector<std::string>{"a", "b", "e"}));
+  CHECK_EQUAL(field_names(result.data.get(1)), std::vector<std::string>{"e"});
+}
+
+TEST("projection does not modify shared input") {
+  auto input = nested_events();
+  auto result = pushdown::project(input, projection_from({"a"}));
+  CHECK_EQUAL(field_names(result.data.get(0)), std::vector<std::string>{"a"});
+  CHECK_EQUAL(field_names(input.data.get(0)),
+              (std::vector<std::string>{"a", "b", "e"}));
+  CHECK(input.data.field("e"));
 }

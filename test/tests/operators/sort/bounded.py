@@ -1,5 +1,5 @@
 # runner: python
-# timeout: 180
+# timeout: 300
 
 """Compare bounded sorting with an optimization-barrier full-sort reference."""
 

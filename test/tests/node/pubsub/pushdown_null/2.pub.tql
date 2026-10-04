@@ -1,0 +1,8 @@
+// Publish single-event batches so that every other batch is all `null`.
+every 10ms {
+  from {}
+}
+enumerate tick
+flag = true if bit_and(tick, 1) == 0 else null
+head 1000
+publish "pushdown-null"

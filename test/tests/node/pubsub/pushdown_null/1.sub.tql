@@ -1,0 +1,6 @@
+// The publisher alternates between batches where `flag` is `true` and batches
+// where it is `null`, so the pushed-down filter is `null` for whole batches.
+subscribe "pushdown-null"
+where flag
+head 3
+select flag
