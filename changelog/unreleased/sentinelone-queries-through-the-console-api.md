@@ -1,6 +1,6 @@
 ---
 title: SentinelOne queries through the console API
-type: breaking
+type: change
 authors:
   - mavam
 created: 2026-10-03T18:20:47.761563Z
