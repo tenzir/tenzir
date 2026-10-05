@@ -1,0 +1,6 @@
+error: `account_ids` must contain only strings
+ --> tests/operators/from_sentinelone_data_lake/validate_account_type.tql:6:40
+  |
+6 |   token="test", query="*", account_ids=[42]
+  |                                        ^^^^
+  |

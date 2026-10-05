@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_sentinelone_data_lake "https://xdr.eu1.sentinelone.net",
+  token="test", query="*"

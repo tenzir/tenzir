@@ -1,0 +1,7 @@
+error: the regional Data Lake URL is no longer supported
+ --> tests/operators/from_sentinelone_data_lake/validate_regional_url.tql:5:28
+  |
+5 | from_sentinelone_data_lake "https://xdr.eu1.sentinelone.net",
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use your console URL: https://<tenant>.sentinelone.net

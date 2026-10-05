@@ -13,6 +13,7 @@
 #include "tenzir/http.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <chrono>
 #include <map>
 #include <span>
 #include <string_view>
@@ -144,6 +145,25 @@ TEST("HTTP header") {
   CHECK(hdr.name == "CONTENT-TYPE");
   CHECK(hdr.value == "application/pdf");
   CHECK(f == l);
+}
+
+TEST("parse HTTP Retry-After numeric bounds") {
+  for (auto expected : {std::chrono::seconds{0}, std::chrono::seconds{20},
+                        std::chrono::seconds::max()}) {
+    auto parsed = http::parse_retry_after(fmt::to_string(expected.count()));
+    REQUIRE(parsed);
+    CHECK_EQUAL(parsed->count(), expected.count());
+  }
+  for (auto value : {"", "-1", "-0", "1.5", "invalid", "9223372036854775808",
+                     "18446744073709551615", "18446744073709551616"}) {
+    CHECK(not http::parse_retry_after(value));
+  }
+}
+
+TEST("parse HTTP Retry-After past date") {
+  auto parsed = http::parse_retry_after("Thu, 01 Jan 1970 00:00:00 GMT");
+  REQUIRE(parsed);
+  CHECK_EQUAL(parsed->count(), 0);
 }
 
 TEST("compress request body") {

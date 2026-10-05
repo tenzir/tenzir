@@ -231,4 +231,16 @@ auto http_get(folly::EventBase* evb, std::string url,
               std::chrono::milliseconds timeout = std::chrono::seconds{90})
   -> Task<Result<http::Response, std::string>>;
 
+/// One-shot HTTP DELETE without a connection pool.
+auto http_delete(folly::EventBase* evb, std::string url,
+                 std::vector<http::Header> headers,
+                 std::chrono::milliseconds timeout = std::chrono::seconds{90})
+  -> Task<Result<http::Response, std::string>>;
+
+/// One-shot HTTP DELETE without a connection pool.
+auto http_delete(folly::EventBase* evb, std::string url,
+                 std::map<std::string, std::string> headers,
+                 std::chrono::milliseconds timeout = std::chrono::seconds{90})
+  -> Task<Result<http::Response, std::string>>;
+
 } // namespace tenzir

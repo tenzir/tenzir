@@ -5,15 +5,20 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import re
 import shutil
+import socket
 import ssl
 import subprocess
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import FixtureHandle, fixture
 from tenzir_test.fixtures import FixtureUnavailable, current_options
@@ -32,11 +37,12 @@ class SentinelOneOptions:
 @dataclass(frozen=True)
 class SentinelOneAssertions:
     expected_add_events: list[dict[str, object]] | None = None
+    queries_cancelled: bool = False
 
 
-# Predefined columnar responses keyed by the `query` field in the POST body.
+# Predefined result data blocks keyed by `pq.query` in the launch body.
 #
-# The SentinelOne response format is:
+# The final LRQ poll nests this tabular payload in `data`:
 #   { "columns": [{"name": "col"},...], "values": [[val,...],...]  }
 #
 # Special floating-point values that cannot be expressed in JSON are encoded
@@ -226,8 +232,17 @@ def _validate_add_events_payload(payload: object) -> str | None:
     return None
 
 
-def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
+def _make_handler(
+    capture_path: str, lrq_capture_path: str
+) -> type[BaseHTTPRequestHandler]:
     lock = threading.Lock()
+    queries: dict[str, dict[str, Any]] = {}
+    launches: dict[str, int] = {}
+
+    def capture(**entry: Any) -> None:
+        with lock:
+            with open(lrq_capture_path, "a") as file:
+                file.write(json.dumps(entry | {"time": time.monotonic()}) + "\n")
 
     class SentinelOneHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: object) -> None:
@@ -235,7 +250,7 @@ def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
             pass
 
         def do_POST(self) -> None:
-            if self.path not in {"/api/powerQuery", "/api/addEvents"}:
+            if self.path not in {"/sdl/v2/api/queries", "/api/addEvents"}:
                 self._respond(404, {"error": f"unknown path: {self.path}"})
                 return
 
@@ -274,38 +289,253 @@ def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
                 self._respond(200, {})
                 return
 
-            query = payload.get("query", "")
-
+            error = self._validate_launch(payload)
+            if error:
+                capture(method="POST", payload=payload, status=400, error=error)
+                self._respond(400, {"error": error})
+                return
+            query = payload["pq"]["query"]
+            launches[query] = launches.get(query, 0) + 1
             if query == "select_http_error":
+                capture(method="POST", payload=payload, status=500)
                 self._respond(500, {"error": "internal server error"})
                 return
+            retry_after = {
+                "select_launch_retry": "1",
+                "select_launch_long_retry": "20",
+                "select_launch_retry_timeout": "60",
+                "select_launch_retry_overflow": str(2**63 - 1),
+                "select_launch_retry_signed_overflow": str(2**63),
+                "select_launch_retry_unsigned_max": str(2**64 - 1),
+                "select_launch_retry_beyond_unsigned": str(2**64),
+                "select_launch_retry_invalid": "invalid",
+            }.get(query)
+            if retry_after is not None and launches[query] == 1:
+                capture(method="POST", payload=payload, status=429)
+                self._respond(
+                    429, {"error": "rate limited"}, {"Retry-After": retry_after}
+                )
+                return
+            qid = str(len(queries) + 1)
+            tag = f"route-{qid}"
+            queries[qid] = {
+                "payload": payload,
+                "tag": tag,
+                "polls": 0,
+                "progress": 0,
+                "last_step": 0,
+                "deleted": False,
+                "deletes": 0,
+            }
+            # The query exists, but the client never receives its ID. Replaying
+            # either launch creates another query that the client cannot cancel.
+            if query == "select_launch_transport_error":
+                capture(method="POST", payload=payload, status=0, id=qid)
+                self.close_connection = True
+                self.connection.shutdown(socket.SHUT_RDWR)
+                self.connection.close()
+                return
+            if query == "select_launch_server_error":
+                capture(method="POST", payload=payload, status=503, id=qid)
+                self._respond(503, {"error": "response failed after query creation"})
+                return
+            capture(method="POST", payload=payload, status=200, id=qid)
+            self._respond(
+                200,
+                {"id": qid, "stepsCompleted": 0, "stepsTotal": 2},
+                {"X-Dataset-Query-Forward-Tag": tag},
+            )
 
-            # The echo-times query reads startTime/endTime from the request
-            # body and returns them as data columns so the test can verify that
-            # the operator correctly encodes the start/end arguments.
-            if query == "select_echo_times":
-                start_ns = payload.get("startTime")
-                end_ns = payload.get("endTime")
+        def _validate_launch(self, payload: dict[str, Any]) -> str | None:
+            if payload.get("queryType") != "PQ":
+                return "expected queryType PQ"
+            if payload.get("queryPriority") != "LOW":
+                return "expected LOW priority"
+            pq = payload.get("pq", {})
+            if pq.get("resultType") != "TABLE" or not isinstance(pq.get("query"), str):
+                return "expected a TABLE PowerQuery"
+            if "accountIds" in payload:
+                ids = payload["accountIds"]
+                if (
+                    payload.get("tenant") is not False
+                    or not ids
+                    or not all(isinstance(x, str) for x in ids)
+                ):
+                    return "expected non-empty accountIds with tenant false"
+            elif payload.get("tenant") is not True:
+                return "expected tenant true"
+            bounds = []
+            for key in ("startTime", "endTime"):
+                value = payload.get(key)
+                if not isinstance(value, str) or not re.fullmatch(
+                    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z", value
+                ):
+                    return f"expected an ISO-8601 {key}"
+                bounds.append(datetime.fromisoformat(value))
+            if bounds[0] > bounds[1]:
+                return "invalid query window"
+            return None
+
+        def _active_query(self) -> tuple[str, dict[str, Any]] | None:
+            qid = urlsplit(self.path).path.removeprefix("/sdl/v2/api/queries/")
+            state = queries.get(qid)
+            if (
+                not state
+                or self.headers.get("Authorization") != f"Bearer {_EXPECTED_TOKEN}"
+                or self.headers.get("X-Dataset-Query-Forward-Tag") != state["tag"]
+            ):
+                capture(method=self.command, id=qid, status=400, error="bad routing")
+                self._respond(400, {"error": "missing query, token, or forward tag"})
+                return None
+            return qid, state
+
+        def do_GET(self) -> None:
+            active = self._active_query()
+            if active is None:
+                return
+            qid, state = active
+            seen = parse_qs(urlsplit(self.path).query).get("lastStepSeen")
+            if seen != [str(state["last_step"])] or state["deleted"]:
+                capture(method="GET", id=qid, status=400, error="bad poll")
+                self._respond(400, {"error": "invalid lastStepSeen or deleted query"})
+                return
+            state["polls"] += 1
+            query = state["payload"]["pq"]["query"]
+            if query == "select_retry" and state["polls"] == 1:
+                capture(method="GET", id=qid, status=429)
+                self._respond(429, {"error": "rate limited"}, {"Retry-After": "1"})
+                return
+            if query == "select_poll_retry_overflow" and state["polls"] == 1:
+                capture(method="GET", id=qid, status=429)
+                self._respond(
+                    429, {"error": "rate limited"}, {"Retry-After": str(2**64 - 1)}
+                )
+                return
+            if query == "select_transport_retry" and state["polls"] == 1:
+                capture(method="GET", id=qid, status=0)
+                self.close_connection = True
+                self.connection.shutdown(socket.SHUT_RDWR)
+                self.connection.close()
+                return
+            if query == "select_deadline_retry":
+                capture(method="GET", id=qid, status=429)
+                self._respond(429, {"error": "rate limited"}, {"Retry-After": "10"})
+                return
+            if query == "select_hung_poll":
+                capture(method="GET", id=qid, status=0)
+                # Send no response. Wait for the client to time out and close
+                # this connection before serving its cleanup DELETE.
+                self.close_connection = True
+                self.connection.settimeout(15)
+                try:
+                    if self.connection.recv(1):
+                        capture(method="GET", id=qid, error="unexpected request data")
+                except ConnectionResetError:
+                    # Timing out can reset the connection instead of sending EOF.
+                    pass
+                return
+            if query == "select_slow_retry":
+                capture(method="GET", id=qid, status=429)
+                self._respond(429, {"error": "rate limited"}, {"Retry-After": "60"})
+                return
+            if query == "select_expired":
+                capture(method="GET", id=qid, status=404)
+                self._respond(404, {"code": "not_found"})
+                return
+            if query == "select_poll_error":
+                capture(method="GET", id=qid, status=400)
+                self._respond(400, {"error": "invalid PowerQuery"})
+                return
+            if query == "select_retry_exhausted":
+                capture(method="GET", id=qid, status=503)
+                self._respond(503, {"error": "temporarily unavailable"})
+                return
+            # Two in-progress polls before the final result.
+            # Do not expose partial rows: LRQ results belong to the final poll.
+            state["progress"] += 1
+            step = 0 if query == "select_running" else min(state["progress"] - 1, 2)
+            total = 0 if state["progress"] == 1 or query == "select_running" else 2
+            if query == "select_stalled":
+                step, total = 1, 2
+            state["last_step"] = step
+            capture(method="GET", id=qid, status=200, step=step)
+            if total == 0 or step < total:
                 self._respond(
                     200,
                     {
-                        "columns": [{"name": "start_ns"}, {"name": "end_ns"}],
-                        "values": [[start_ns, end_ns]],
+                        "stepsCompleted": step,
+                        "stepsTotal": total,
+                        "data": {"columns": [{"name": "partial"}], "values": [[True]]},
                     },
                 )
                 return
-
-            if query not in _STATIC_RESPONSES:
+            if query == "select_echo_times":
+                data = {
+                    "columns": [{"name": "start"}, {"name": "end"}],
+                    "values": [
+                        [state["payload"]["startTime"], state["payload"]["endTime"]]
+                    ],
+                }
+            elif query in {
+                "select_retry",
+                "select_launch_retry",
+                "select_launch_long_retry",
+                "select_launch_retry_signed_overflow",
+                "select_launch_retry_unsigned_max",
+                "select_launch_retry_beyond_unsigned",
+                "select_launch_retry_invalid",
+                "select_poll_retry_overflow",
+                "select_transport_retry",
+                "select_delete_retry",
+            }:
+                data = _STATIC_RESPONSES["select_basic"]
+            else:
+                data = _STATIC_RESPONSES.get(query)
+            if data is None:
                 self._respond(400, {"error": f"unknown query: {query!r}"})
                 return
+            if isinstance(data, str):
+                # Keep malformed JSON fixtures byte-for-byte to retain their
+                # parser diagnostics while exercising cleanup after a poll.
+                self._respond(200, data)
+                return
+            data = dict(data)
+            data["columns"] = [
+                dict(column, cellType="UNKNOWN", decimalPlaces=0)
+                for column in data["columns"]
+            ]
+            data["matchCount"] = len(data["values"])
+            self._respond(
+                200, {"stepsCompleted": step, "stepsTotal": total, "data": data}
+            )
 
-            self._respond(200, _STATIC_RESPONSES[query])
+        def do_DELETE(self) -> None:
+            active = self._active_query()
+            if active is None:
+                return
+            qid, state = active
+            state["deletes"] += 1
+            if (
+                state["payload"]["pq"]["query"] == "select_delete_retry"
+                and state["deletes"] == 1
+            ):
+                capture(method="DELETE", id=qid, status=503)
+                self._respond(503, {"error": "temporarily unavailable"})
+                return
+            state["deleted"] = True
+            code = 404 if state["payload"]["pq"]["query"] == "select_expired" else 200
+            capture(method="DELETE", id=qid, status=code)
+            self._respond(code, {})
 
-        def _respond(self, code: int, obj: object) -> None:
+        def _respond(
+            self, code: int, obj: object, headers: dict[str, str] | None = None
+        ) -> None:
             body = obj.encode() if isinstance(obj, str) else json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -324,11 +554,16 @@ def sentinelone() -> FixtureHandle:
       S1_FIXTURE_URL   - base URL of the mock server
       S1_FIXTURE_TOKEN - bearer token expected by the server
       S1_FIXTURE_CAPTURE_FILE - JSONL file containing captured addEvents calls
+      S1_FIXTURE_LRQ_CAPTURE_FILE - JSONL file containing LRQ requests
       S1_FIXTURE_CAFILE - CA certificate path when tls=true
     """
     opts = current_options("sentinelone")
     fd, capture_path = tempfile.mkstemp(prefix="sentinelone-capture-", suffix=".jsonl")
     os.close(fd)
+    lrq_fd, lrq_capture_path = tempfile.mkstemp(
+        prefix="sentinelone-lrq-", suffix=".jsonl"
+    )
+    os.close(lrq_fd)
     temp_dir: Path | None = None
     tls_env: dict[str, str] = {}
     if opts.tls:
@@ -343,11 +578,12 @@ def sentinelone() -> FixtureHandle:
             shutil.rmtree(temp_dir, ignore_errors=True)
             if os.path.exists(capture_path):
                 os.remove(capture_path)
+            os.remove(lrq_capture_path)
             raise FixtureUnavailable(f"openssl unavailable: {exc}") from exc
         tls_env = {
             "S1_FIXTURE_CAFILE": str(ca_path),
         }
-    server = HTTPServer((_HOST, 0), _make_handler(capture_path))
+    server = HTTPServer((_HOST, 0), _make_handler(capture_path, lrq_capture_path))
     if opts.tls:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
@@ -360,6 +596,7 @@ def sentinelone() -> FixtureHandle:
         "S1_FIXTURE_URL": f"{scheme}://{_HOST}:{port}",
         "S1_FIXTURE_TOKEN": _EXPECTED_TOKEN,
         "S1_FIXTURE_CAPTURE_FILE": capture_path,
+        "S1_FIXTURE_LRQ_CAPTURE_FILE": lrq_capture_path,
     }
     env.update(tls_env)
 
@@ -368,6 +605,27 @@ def sentinelone() -> FixtureHandle:
     ) -> None:
         if isinstance(assertions, dict):
             assertions = SentinelOneAssertions(**assertions)
+        if assertions.queries_cancelled:
+            calls = [
+                json.loads(line)
+                for line in Path(lrq_capture_path).read_text().splitlines()
+                if line
+            ]
+            errors = [call for call in calls if "error" in call]
+            assert not errors, errors
+            # Only acknowledged launches expose an ID that can be cancelled.
+            # Ambiguous launches are checked for non-replay by lifecycle.py.
+            launched = {
+                call["id"]
+                for call in calls
+                if call["method"] == "POST" and call["status"] == 200 and "id" in call
+            }
+            cancelled = {
+                call["id"]
+                for call in calls
+                if call["method"] == "DELETE" and call["status"] in {200, 404}
+            }
+            assert launched == cancelled, (launched, cancelled)
         if assertions.expected_add_events is None:
             return
         captured = [
@@ -400,6 +658,8 @@ def sentinelone() -> FixtureHandle:
         thread.join(timeout=2)
         if os.path.exists(capture_path):
             os.remove(capture_path)
+        if os.path.exists(lrq_capture_path):
+            os.remove(lrq_capture_path)
         if temp_dir is not None:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

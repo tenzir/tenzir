@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token="test", query="*", account_ids=[42]

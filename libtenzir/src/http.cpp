@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <mutex>
 #include <string_view>
+#include <utility>
 
 namespace tenzir::http {
 
@@ -82,6 +83,10 @@ auto parse_retry_after(std::string_view value) -> Option<std::chrono::seconds> {
   auto* end = value.data() + value.size();
   if (auto [ptr, ec] = std::from_chars(begin, end, seconds);
       ec == std::errc{} and ptr == end) {
+    // Do not wrap an unsigned header value into a negative retry delay.
+    if (not std::in_range<std::chrono::seconds::rep>(seconds)) {
+      return None{};
+    }
     return std::chrono::seconds{seconds};
   }
   auto retry_at = parse_http_date(value);

@@ -736,4 +736,20 @@ auto http_get(folly::EventBase* evb, std::string url,
                   timeout);
 }
 
+auto http_delete(folly::EventBase* evb, std::string url,
+                 std::vector<http::Header> headers,
+                 std::chrono::milliseconds timeout)
+  -> Task<Result<http::Response, std::string>> {
+  return http_request(evb, proxygen::HTTPMethod::DELETE, std::move(url), None{},
+                      std::move(headers), timeout);
+}
+
+auto http_delete(folly::EventBase* evb, std::string url,
+                 std::map<std::string, std::string> headers,
+                 std::chrono::milliseconds timeout)
+  -> Task<Result<http::Response, std::string>> {
+  return http_delete(evb, std::move(url), to_header_vector(std::move(headers)),
+                     timeout);
+}
+
 } // namespace tenzir

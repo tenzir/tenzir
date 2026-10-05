@@ -1,7 +1,11 @@
 suite: from-sentinelone-data-lake
 fixtures:
   - sentinelone
-timeout: 60
+timeout: 180
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
 requires:
   operators:
     - from_sentinelone_data_lake

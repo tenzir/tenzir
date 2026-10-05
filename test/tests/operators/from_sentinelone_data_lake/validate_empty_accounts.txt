@@ -1,0 +1,6 @@
+error: `account_ids` must not be empty
+ --> tests/operators/from_sentinelone_data_lake/validate_empty_accounts.tql:6:40
+  |
+6 |   token="test", query="*", account_ids=[]
+  |                                        ^^
+  |
