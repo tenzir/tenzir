@@ -1,9 +1,15 @@
-error: unsupported Avro schema
- --> tests/functions/parse_avro/dynamic_array_item_schema.tql:6:45
-  |
-6 | parsed = raw.decode_hex().parse_avro(schema={
-  |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: Avro array item types must have a fixed Tenzir type
-  = usage: parse_avro(input:blob|string, schema=record|string)
-  = docs: https://tenzir.com/docs/reference/functions/parse_avro
+{
+  raw: "00",
+  parsed: [],
+}
+{
+  raw: "040202610200020262040000",
+  parsed: [
+    {
+      a: 1,
+    },
+    {
+      b: 2,
+    },
+  ],
+}

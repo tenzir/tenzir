@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package google.pubsub.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// The wire-compatible subset used by the Pub/Sub integration fixture.
+service Subscriber {
+  rpc GetSubscription(GetSubscriptionRequest) returns (Subscription);
+  rpc StreamingPull(stream StreamingPullRequest)
+      returns (stream StreamingPullResponse);
+  rpc Acknowledge(AcknowledgeRequest) returns (google.protobuf.Empty);
+  rpc ModifyAckDeadline(ModifyAckDeadlineRequest) returns (google.protobuf.Empty);
+}
+
+service Publisher {
+  rpc Publish(PublishRequest) returns (PublishResponse);
+}
+
+message PubsubMessage {
+  bytes data = 1;
+  map<string, string> attributes = 2;
+  string message_id = 3;
+  google.protobuf.Timestamp publish_time = 4;
+  string ordering_key = 5;
+}
+
+message GetSubscriptionRequest {
+  string subscription = 1;
+}
+
+message Subscription {
+  string name = 1;
+  string topic = 2;
+  int32 ack_deadline_seconds = 5;
+  bool enable_message_ordering = 10;
+}
+
+message StreamingPullRequest {
+  string subscription = 1;
+  repeated string ack_ids = 2;
+}
+
+message ReceivedMessage {
+  string ack_id = 1;
+  PubsubMessage message = 2;
+}
+
+message StreamingPullResponse {
+  repeated ReceivedMessage received_messages = 1;
+}
+
+message AcknowledgeRequest {
+  string subscription = 1;
+  repeated string ack_ids = 2;
+}
+
+message ModifyAckDeadlineRequest {
+  string subscription = 1;
+  int32 ack_deadline_seconds = 3;
+  repeated string ack_ids = 4;
+}
+
+message PublishRequest {
+  string topic = 1;
+  repeated PubsubMessage messages = 2;
+}
+
+message PublishResponse {
+  repeated string message_ids = 1;
+}

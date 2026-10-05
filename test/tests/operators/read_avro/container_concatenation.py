@@ -10,6 +10,25 @@ from read_avro_test_utils import (
 
 
 def main() -> None:
+    mixed = (
+        encode_long(3)
+        + encode_long(0)
+        + encode_long(1)
+        + encode_long(42)
+        + encode_long(2)
+        + encode_bytes(b"x")
+        + encode_long(0)
+    )
+    for codec in ["null", "deflate"]:
+        assert_completes(
+            make_container(
+                codec,
+                b'{"type":"array","items":["null","long","string"]}',
+                [(1, mixed)],
+            ),
+            "from_stdin { split_bytes 1 | read_auto } | to_stdout { write_ndjson }",
+            [{"value": [None, 42, "x"]}],
+        )
     assert_completes(
         make_container(
             "null",
@@ -22,7 +41,7 @@ def main() -> None:
         ),
         "from_stdin { read_avro }"
         " | kind = type_of(value).kind | select kind | to_stdout { write_ndjson }",
-        [{"kind": "record"}, {"kind": "record"}, {"kind": "record"}],
+        [{"kind": "record"}, {"kind": "null"}, {"kind": "record"}],
     )
     first = make_container(
         "null",

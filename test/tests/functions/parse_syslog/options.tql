@@ -1,0 +1,5 @@
+from {x: r#"<34>1 - host app - - [sd@1 n="42" nested.key="true"] message"#}
+select raw = x.parse_syslog(raw=true).structured_data,
+       inferred = x.parse_syslog().structured_data,
+       unflattened = x.parse_syslog(unflatten_separator=".").structured_data,
+       trimmed = x.parse_syslog(schema_only=true).structured_data

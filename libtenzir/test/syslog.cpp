@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/test/test.hpp"
+#include "tenzir/detail/syslog.hpp"
 
-#include <tenzir/detail/syslog.hpp>
+#include "tenzir/test/test.hpp"
 
 namespace tenzir {
 

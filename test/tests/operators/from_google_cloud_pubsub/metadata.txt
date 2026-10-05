@@ -1,0 +1,36 @@
+{
+  message: "first",
+  meta: {
+    "literal.path": {
+      message_id: "0",
+      publish_time: 2024-01-01T00:00:00Z,
+      attributes: {
+        "literal.key": "42",
+      },
+    },
+  },
+}
+{
+  message: "",
+  meta: {
+    "literal.path": {
+      message_id: "1",
+      publish_time: 2024-01-01T00:00:01Z,
+      attributes: {
+        "literal.key": "42",
+      },
+    },
+  },
+}
+{
+  message: "third",
+  meta: {
+    "literal.path": {
+      message_id: "2",
+      publish_time: 2024-01-01T00:00:02Z,
+      attributes: {
+        "literal.key": "42",
+      },
+    },
+  },
+}

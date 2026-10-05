@@ -1,0 +1,8 @@
+suite: to-google-cloud-pubsub
+fixtures:
+  - google_cloud_pubsub
+timeout: 30
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

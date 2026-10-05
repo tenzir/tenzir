@@ -1,10 +1,10 @@
 {
   value: null,
-  item_type: "string",
+  item_type: null,
 }
 {
   value: [],
-  item_type: "string",
+  item_type: "null",
 }
 {
   value: [

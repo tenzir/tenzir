@@ -1,0 +1,23 @@
+{
+  raw: {
+    "sd@1": {
+      n: "42",
+      "nested.key": "true",
+    },
+  },
+  inferred: {
+    "sd@1": {
+      n: 42,
+      "nested.key": true,
+    },
+  },
+  unflattened: {
+    "sd@1": {
+      n: 42,
+      nested: {
+        key: true,
+      },
+    },
+  },
+  trimmed: {},
+}

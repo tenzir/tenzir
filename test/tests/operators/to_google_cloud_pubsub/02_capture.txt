@@ -1,0 +1,12 @@
+{
+  topic: "projects/project/topics/topic",
+  message: "prefix:",
+}
+{
+  topic: "projects/project/topics/topic",
+  message: "prefix:one",
+}
+{
+  topic: "projects/project/topics/topic",
+  message: "prefix:three",
+}

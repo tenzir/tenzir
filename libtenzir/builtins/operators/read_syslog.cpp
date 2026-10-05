@@ -609,32 +609,6 @@ private:
     return builder_->event();
   }
 
-  template <class T>
-  static auto add_optional(nova::EventBuilder::Record& record,
-                           std::string_view name, Option<T> const& value)
-    -> void {
-    auto field = record.exact_field(name);
-    if (not value) {
-      field.null();
-    } else if constexpr (std::same_as<T, uint16_t>) {
-      field.data(uint64_t{*value});
-    } else {
-      field.data(*value);
-    }
-  }
-
-  static auto add_structured_data(
-    nova::EventBuilder::Record& record,
-    std::vector<syslog::structured_data_element> const& elements) -> void {
-    auto structured = record.exact_field("structured_data").record();
-    for (auto const& element : elements) {
-      auto fields = structured.field(element.id).record();
-      for (auto const& [key, value] : element.params) {
-        fields.field(key).data_unparsed(value);
-      }
-    }
-  }
-
   auto add_raw(nova::EventBuilder::Record record,
                std::span<ast::field_path::segment const> path) -> void {
     TENZIR_ASSERT(not path.empty());
@@ -653,30 +627,10 @@ private:
     match(
       *pending_,
       [&](syslog::message& message) {
-        record.exact_field("facility").data(uint64_t{message.hdr.facility});
-        record.exact_field("severity").data(uint64_t{message.hdr.severity});
-        record.exact_field("version").data(uint64_t{message.hdr.version});
-        add_optional(record, "timestamp", message.hdr.ts);
-        add_optional(record, "hostname", message.hdr.hostname);
-        add_optional(record, "app_name", message.hdr.app_name);
-        add_optional(record, "process_id", message.hdr.process_id);
-        add_optional(record, "message_id", message.hdr.msg_id);
-        syslog::merge_duplicate_sd_ids(message.data);
-        add_structured_data(record, message.data);
-        add_optional(record, "message", message.msg);
+        syslog::append_message(record, message);
       },
       [&](syslog::legacy_message& message) {
-        add_optional(record, "facility", message.facility);
-        add_optional(record, "severity", message.severity);
-        record.exact_field("timestamp").data(message.timestamp);
-        add_optional(record, "hostname", message.host);
-        add_optional(record, "app_name", message.tag);
-        add_optional(record, "process_id", message.process_id);
-        if (last_ == syslog::builder_tag::legacy_structured_syslog_builder) {
-          syslog::merge_duplicate_sd_ids(message.data);
-          add_structured_data(record, message.data);
-        }
-        record.exact_field("content").data(message.content);
+        syslog::append_message(record, message);
       });
     if (args_.raw_message) {
       add_raw(record, args_.raw_message->path());

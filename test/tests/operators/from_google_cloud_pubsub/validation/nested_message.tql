@@ -1,0 +1,5 @@
+---
+error: true
+---
+from_google_cloud_pubsub project_id="project", subscription_id="subscription",
+  metadata_field=message.id

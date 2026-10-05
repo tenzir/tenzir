@@ -12,6 +12,8 @@
 #include <tenzir/async/notify.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/nova/data_array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -128,7 +130,8 @@ struct SessionHandle {
   }
 };
 
-class FromGoogleCloudPubsub final : public Operator<void, table_slice> {
+template <class Output>
+class FromGoogleCloudPubsub final : public Operator<void, Output> {
 public:
   explicit FromGoogleCloudPubsub(from_args args) : args_{std::move(args)} {
   }
@@ -213,7 +216,7 @@ public:
     co_return {};
   }
 
-  auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     // Drain all available messages from the queue.
     auto messages = std::vector<MessageData>{};
@@ -222,13 +225,19 @@ public:
     }
 
     if (not messages.empty()) {
-      auto msb = multi_series_builder{
-        {.settings={
-           .ordered = ordering_enabled_,
-           .raw = true,
-         }},
-        ctx.dh(),
-      };
+      auto msb = [&] {
+        if constexpr (std::same_as<Output, nova::Events>) {
+          return nova::ArrayBuilder<nova::Record>{};
+        } else {
+          return multi_series_builder{
+            {.settings = {
+               .ordered = ordering_enabled_,
+               .raw = true,
+             }},
+            ctx.dh(),
+          };
+        }
+      }();
       for (const auto& msg : messages) {
         if (not msg.data.empty()) {
           bytes_read_counter_.add(msg.data.size());
@@ -236,7 +245,18 @@ public:
         auto event = msb.record();
         event.field("message").data(msg.data);
         if (args_.metadata_field) {
-          auto meta = event.field(*args_.metadata_field).record();
+          auto meta = [&] {
+            if constexpr (std::same_as<Output, nova::Events>) {
+              auto path = args_.metadata_field->path();
+              auto parent = event;
+              for (auto const& segment : path.first(path.size() - 1)) {
+                parent = parent.field(segment.id.name).record();
+              }
+              return parent.field(path.back().id.name).record();
+            } else {
+              return event.field(*args_.metadata_field).record();
+            }
+          }();
           meta.field("message_id").data(msg.message_id);
           meta.field("publish_time").data(msg.publish_time);
           auto attrs = meta.field("attributes").record();
@@ -245,10 +265,19 @@ public:
           }
         }
       }
-      for (auto&& slice : msb.finalize_as_table_slice()) {
-        auto const rows = slice.rows();
-        co_await push(std::move(slice));
-        events_read_counter_.add(rows);
+      if constexpr (std::same_as<Output, nova::Events>) {
+        auto records = msb.finish();
+        auto length = records.length();
+        co_await push(nova::Events{std::move(records),
+                                   nova::storage::BitMap{length, true},
+                                   nova::Events::Meta::make_empty(length)});
+        events_read_counter_.add(length);
+      } else {
+        for (auto&& slice : msb.finalize_as_table_slice()) {
+          auto const rows = slice.rows();
+          co_await push(std::move(slice));
+          events_read_counter_.add(rows);
+        }
       }
     }
 
@@ -302,12 +331,26 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<from_args, FromGoogleCloudPubsub>{};
+    auto d = Describer<from_args, FromGoogleCloudPubsub<table_slice>,
+                       FromGoogleCloudPubsub<nova::Events>>{};
     d.operator_location(&from_args::operator_location);
     d.named("project_id", &from_args::project_id);
     d.named("subscription_id", &from_args::subscription_id);
-    d.named("metadata_field", &from_args::metadata_field);
+    auto metadata_field_arg
+      = d.named("metadata_field", &from_args::metadata_field);
     d.named_optional("_yield_timeout", &from_args::yield_timeout);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      if (auto field = ctx.get(metadata_field_arg)) {
+        auto const path = field->path();
+        if (path.empty() or path.front().id.name == "message") {
+          diagnostic::error("`metadata_field` must not overlap with `message`")
+            .primary(
+              ctx.get_location(metadata_field_arg).value_or(location::unknown))
+            .emit(ctx);
+        }
+      }
+      return {};
+    });
     // Pub/Sub distributes messages among concurrent pullers attached to the
     // same subscription instead of broadcasting a copy to every puller.
     d.parallelizable();

@@ -1,8 +1,4 @@
----
-error: true
----
-
-from {data: "00".decode_hex()}
+from {data: "00040202610200020262040000".decode_hex()}
 write_chunks
 read_avro schema={
   type: "array",

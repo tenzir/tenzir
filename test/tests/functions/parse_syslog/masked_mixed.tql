@@ -1,0 +1,8 @@
+from {keep: true, x: "<34>1 - host app - - - first"},
+     {keep: false, x: 42},
+     {keep: true, x: "<34>Oct 11 22:14:15 host app: second"},
+     {keep: true, x: null},
+     {keep: false, x: "invalid"},
+     {keep: true, x: "<34>1 - host app - - - third"}
+where keep
+select parsed = x.parse_syslog()

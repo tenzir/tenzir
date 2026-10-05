@@ -1,0 +1,34 @@
+from {data: "0c0a656d7074790006736f6102046e730e046d780414086d61696c0e696e7465676572065408746578740808746578740a62797465730a06726177000406736f6102046e730e0a656d707479000006046d780414086d61696c0874657874080a6f746865720a62797465730a0672617700".decode_hex()}
+write_chunks
+split_bytes 1
+read_avro schema={
+  type: "record",
+  name: "acme.dns.Dns",
+  fields: [
+    {
+      name: "answers",
+      type: {type: "array", items: {
+        type: "record", name: "Answer", fields: [
+          {name: "name", type: "string"},
+          {name: "extraData", type: [
+            "null",
+            {type: "record", name: "SoaRecordType", fields: [
+              {name: "primary", type: "string"},
+              {name: "serial", type: "long"},
+            ]},
+            {type: "record", name: "MxRecordType", fields: [
+              {name: "preference", type: "int"},
+              {name: "exchange", type: "string"},
+            ]},
+            "int", "string", "bytes",
+          ]},
+        ],
+      }},
+    },
+    {name: "authoritativeNameservers", type: {type: "array", items: "Answer"}},
+    {name: "additionalRecords", type: {type: "array", items: "Answer"}},
+  ],
+}
+answers = answers.map(a => a.extraData)
+authoritativeNameservers = authoritativeNameservers.map(a => a.extraData)
+additionalRecords = additionalRecords.map(a => a.extraData)

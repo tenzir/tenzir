@@ -17,6 +17,7 @@ from . import files_permission_tree  # noqa: F401
 from . import ftp  # noqa: F401
 from . import gcs  # noqa: F401
 from . import google_cloud_logging  # noqa: F401
+from . import google_cloud_pubsub  # noqa: F401
 from . import google_secops  # noqa: F401
 from . import http  # noqa: F401
 from . import http_connect_proxy  # noqa: F401
@@ -71,6 +72,7 @@ __all__ = [
     "ftp",
     "gcs",
     "google_cloud_logging",
+    "google_cloud_pubsub",
     "google_secops",
     "http",
     "http_connect_proxy",

@@ -1,8 +1,4 @@
----
-error: true
----
-
-from {raw: "00"}
+from {raw: "00"}, {raw: "040202610200020262040000"}
 parsed = raw.decode_hex().parse_avro(schema={
   type: "array",
   items: {type: "map", values: "long"},

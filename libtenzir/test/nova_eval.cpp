@@ -542,7 +542,7 @@ TEST("nested field access masks values by the parent record alternative") {
   static_cast<void>(builder.record().field("flow").record());
   auto data = builder.finish();
   auto events = make_events(data);
-  auto dh = tenzir::null_diagnostic_handler{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
   auto reg = tenzir::registry{};
   auto field = tenzir::ast::expression{tenzir::ast::field_access{
     root_field("flow"),
@@ -564,6 +564,29 @@ TEST("nested field access masks values by the parent record alternative") {
   CHECK_EQUAL(*values->get(0), true);
   CHECK_EQUAL(*values->get(1), false);
   CHECK_EQUAL(*values->get(2), false);
+  CHECK_EQUAL(std::move(dh).collect().size(), 0u);
+}
+
+TEST("optional nested field access still warns on active scalar rows") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("x").record().field("y").data(int64_t{1});
+  builder.record().field("x").null();
+  builder.record().field("x").data(int64_t{2});
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto expr = tenzir::ast::expression{tenzir::ast::field_access{
+    root_field("x"), tenzir::location::unknown, true,
+    tenzir::ast::identifier{"y", tenzir::location::unknown}}};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto result = eval(expr, events, all_rows(events), dh, reg);
+  CHECK_EQUAL(std::move(dh).collect().size(), 1u);
+  CHECK_EQUAL(materialize_legacy(result.get(0)), tenzir::data{int64_t{1}});
+  CHECK_EQUAL(materialize_legacy(result.get(1)), tenzir::data{caf::none});
+  CHECK_EQUAL(materialize_legacy(result.get(2)), tenzir::data{caf::none});
+  auto mask = all_rows(events).keep_first(2);
+  auto masked_dh = tenzir::collecting_diagnostic_handler{};
+  std::ignore = eval(expr, events, std::move(mask), masked_dh, reg);
+  CHECK_EQUAL(std::move(masked_dh).collect().size(), 0u);
 }
 
 TEST("binary add kernel over a field absent from some rows' shape") {

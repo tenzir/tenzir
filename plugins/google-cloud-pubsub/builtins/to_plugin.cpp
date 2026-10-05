@@ -10,6 +10,8 @@
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -52,7 +54,8 @@ struct to_args {
 // flush would be insufficient since it doesn't wait for inflight futures
 // to complete.
 
-class ToGoogleCloudPubsub final : public Operator<table_slice, void> {
+template <class Input>
+class ToGoogleCloudPubsub final : public Operator<Input, void> {
 public:
   using publish_future
     = google::cloud::future<google::cloud::StatusOr<std::string>>;
@@ -66,6 +69,13 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto evaluator = co_await nova::Evaluator::make(args_.message, ctx);
+      if (not evaluator) {
+        co_return;
+      }
+      evaluator_ = std::move(*evaluator);
+    }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_google_cloud_pubsub"},
                          MetricsDirection::write, MetricsVisibility::external_,
@@ -79,37 +89,58 @@ public:
     co_return;
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (input.rows() == 0 or not publisher_) {
+  auto process(Input input, OpCtx& ctx) -> Task<void> override {
+    if (not publisher_) {
       co_return;
     }
     auto& dh = ctx.dh();
-    for (const auto& messages : eval(args_.message, input, dh)) {
-      match(
-        *messages.array,
-        [&](const arrow::StringArray& array) {
-          for (auto i = int64_t{}; i < array.length(); ++i) {
-            if (array.IsNull(i)) {
-              diagnostic::warning("expected `string`, got `null`")
-                .primary(args_.message)
-                .emit(dh);
-              continue;
-            }
-            const auto data = array.GetView(i);
+    if constexpr (std::same_as<Input, nova::Events>) {
+      auto messages = evaluator_->eval(input, nova::EvalCtx{dh});
+      for (auto row : nova::storage::true_bits(input.mask)) {
+        match(messages.get(row), [&]<class Tag>(nova::RowView<Tag> value) {
+          if constexpr (std::same_as<Tag, nova::String>) {
             inflight_.push_back(InflightPublish{
               .future = publisher_->Publish(
-                pubsub::MessageBuilder{}.SetData(std::string{data}).Build()),
-              .bytes = data.size(),
+                pubsub::MessageBuilder{}.SetData(std::string{*value}).Build()),
+              .bytes = (*value).size(),
             });
+          } else {
+            diagnostic::warning("expected `string`, got `{}`",
+                                nova::Type<Tag>::static_name)
+              .primary(args_.message)
+              .note("event is skipped")
+              .emit(dh);
           }
-        },
-        [&](const auto&) {
-          diagnostic::warning("expected `string`, got `{}`",
-                              messages.type.kind())
-            .primary(args_.message)
-            .note("event is skipped")
-            .emit(dh);
         });
+      }
+    } else {
+      for (const auto& messages : eval(args_.message, input, dh)) {
+        match(
+          *messages.array,
+          [&](const arrow::StringArray& array) {
+            for (auto i = int64_t{}; i < array.length(); ++i) {
+              if (array.IsNull(i)) {
+                diagnostic::warning("expected `string`, got `null`")
+                  .primary(args_.message)
+                  .emit(dh);
+                continue;
+              }
+              const auto data = array.GetView(i);
+              inflight_.push_back(InflightPublish{
+                .future = publisher_->Publish(
+                  pubsub::MessageBuilder{}.SetData(std::string{data}).Build()),
+                .bytes = data.size(),
+              });
+            }
+          },
+          [&](const auto&) {
+            diagnostic::warning("expected `string`, got `{}`",
+                                messages.type.kind())
+              .primary(args_.message)
+              .note("event is skipped")
+              .emit(dh);
+          });
+      }
     }
     // Prune completed publish futures to prevent unbounded memory growth.
     while (not inflight_.empty() and inflight_.front().future.is_ready()) {
@@ -157,6 +188,7 @@ private:
   }
 
   to_args args_;
+  Option<nova::Evaluator> evaluator_;
   Option<pubsub::Publisher> publisher_;
   std::deque<InflightPublish> inflight_;
   MetricsCounter bytes_write_counter_;
@@ -172,7 +204,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<to_args, ToGoogleCloudPubsub>{};
+    auto d = Describer<to_args, ToGoogleCloudPubsub<table_slice>,
+                       ToGoogleCloudPubsub<nova::Events>>{};
     d.operator_location(&to_args::op);
     d.named("project_id", &to_args::project_id);
     d.named("topic_id", &to_args::topic_id);

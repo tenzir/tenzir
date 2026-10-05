@@ -1,0 +1,42 @@
+{
+  parsed: {
+    facility: 4,
+    severity: 2,
+    version: 1,
+    timestamp: null,
+    hostname: "host",
+    app_name: "app",
+    process_id: null,
+    message_id: null,
+    structured_data: {},
+    message: "first",
+  },
+}
+{
+  parsed: {
+    facility: 4,
+    severity: 2,
+    timestamp: "Oct 11 22:14:15",
+    hostname: "host",
+    app_name: "app",
+    process_id: null,
+    content: "second",
+  },
+}
+{
+  parsed: null,
+}
+{
+  parsed: {
+    facility: 4,
+    severity: 2,
+    version: 1,
+    timestamp: null,
+    hostname: "host",
+    app_name: "app",
+    process_id: null,
+    message_id: null,
+    structured_data: {},
+    message: "third",
+  },
+}

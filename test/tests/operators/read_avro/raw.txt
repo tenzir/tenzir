@@ -23,5 +23,5 @@
   },
   choice: null,
   optional_meta: null,
-  choice_kind: "string",
+  choice_kind: "null",
 }

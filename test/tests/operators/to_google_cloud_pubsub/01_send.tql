@@ -1,0 +1,5 @@
+from {keep: true, value: "one"}, {keep: false, value: 42},
+     {keep: true, value: ""}, {keep: true, value: "three"}
+where keep
+to_google_cloud_pubsub project_id="project", topic_id="topic",
+  message=f"prefix:{value}"

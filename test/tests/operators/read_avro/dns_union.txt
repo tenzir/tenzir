@@ -1,0 +1,31 @@
+{
+  answers: [
+    null,
+    {
+      primary: "ns",
+      serial: 7,
+    },
+    {
+      preference: 10,
+      exchange: "mail",
+    },
+    42,
+    "text",
+    b"raw",
+  ],
+  authoritativeNameservers: [
+    {
+      primary: "ns",
+      serial: 7,
+    },
+    null,
+  ],
+  additionalRecords: [
+    {
+      preference: 10,
+      exchange: "mail",
+    },
+    "other",
+    b"raw",
+  ],
+}

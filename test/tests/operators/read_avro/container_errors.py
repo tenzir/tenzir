@@ -1,10 +1,28 @@
 # runner: python
 # timeout: 20
 
-from read_avro_test_utils import assert_rejected, make_container
+from read_avro_test_utils import (
+    assert_rejected,
+    encode_bytes,
+    encode_long,
+    make_container,
+)
 
 
 def main() -> None:
+    for keys, error in [
+        ([b"x", b"x"], "duplicate Avro map key"),
+        ([b"\xff"], "invalid UTF-8 in Avro map key"),
+    ]:
+        payload = (
+            encode_long(len(keys))
+            + b"".join(encode_bytes(key) + encode_long(1) for key in keys)
+            + encode_long(0)
+        )
+        assert_rejected(
+            make_container("null", b'{"type":"map","values":"long"}', [(1, payload)]),
+            error,
+        )
     excessive_depth = b'"null"'
     for _ in range(101):
         excessive_depth = b'{"type":"array","items":' + excessive_depth + b"}"

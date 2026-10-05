@@ -18,7 +18,7 @@ def main() -> None:
                 b'{"type":"string"}',
                 [(1, encode_bytes(b"hello"))],
             ),
-            "from_stdin { read_avro } | head 1 | to_stdout { write_ndjson }",
+            "from_stdin { read_auto } | head 1 | to_stdout { write_ndjson }",
             {"value": "hello"},
         )
     print("streams_before_eof: true")

@@ -1,0 +1,6 @@
+error: `metadata_field` must not overlap with `message`
+ --> tests/operators/from_google_cloud_pubsub/validation/empty.tql:5:18
+  |
+5 |   metadata_field=this
+  |                  ^^^^
+  |

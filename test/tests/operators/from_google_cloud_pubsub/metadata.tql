@@ -1,0 +1,4 @@
+from_google_cloud_pubsub project_id="project", subscription_id="subscription",
+  metadata_field=meta["literal.path"]
+head 3
+sort meta["literal.path"].message_id

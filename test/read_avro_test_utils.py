@@ -50,7 +50,12 @@ def make_container(
 
 def assert_streams(payload: bytes, pipeline: str, expected: object) -> None:
     process = subprocess.Popen(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), "--bare-mode", pipeline],
+        [
+            *shlex.split(os.environ["TENZIR_BINARY"]),
+            "--bare-mode",
+            "--nova=true",
+            pipeline,
+        ],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -81,7 +86,12 @@ def assert_completes(
     expected_stderr: tuple[str, ...] = (),
 ) -> None:
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), "--bare-mode", pipeline],
+        [
+            *shlex.split(os.environ["TENZIR_BINARY"]),
+            "--bare-mode",
+            "--nova=true",
+            pipeline,
+        ],
         input=payload,
         capture_output=True,
         timeout=10,
@@ -101,12 +111,17 @@ def assert_completes(
     assert actual == expected, actual
 
 
-def assert_rejected(payload: bytes, expected: str) -> None:
+def assert_rejected(
+    payload: bytes,
+    expected: str,
+    pipeline: str = "from_stdin { read_avro }",
+) -> None:
     result = subprocess.run(
         [
             *shlex.split(os.environ["TENZIR_BINARY"]),
             "--bare-mode",
-            "from_stdin { read_avro }",
+            "--nova=true",
+            pipeline,
         ],
         input=payload,
         capture_output=True,

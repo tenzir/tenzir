@@ -25,6 +25,7 @@
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/nova/event_builder.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <string_view>
@@ -1098,6 +1099,62 @@ struct syslog_row {
                               f.field("raw_message", x.raw_message));
   }
 };
+
+template <class T>
+auto add_optional(nova::EventBuilder::Record& record, std::string_view name,
+                  Option<T> const& value) -> void {
+  auto field = record.exact_field(name);
+  if (not value) {
+    field.null();
+  } else if constexpr (std::same_as<T, uint16_t>) {
+    field.data(uint64_t{*value});
+  } else {
+    field.data(*value);
+  }
+}
+
+inline auto
+add_structured_data(nova::EventBuilder::Record& record,
+                    std::vector<structured_data_element> const& elements)
+  -> void {
+  auto structured = record.exact_field("structured_data").record();
+  for (auto const& element : elements) {
+    auto fields = structured.field(element.id).record();
+    for (auto const& [key, value] : element.params) {
+      fields.field(key).data_unparsed(value);
+    }
+  }
+}
+
+inline auto append_message(nova::EventBuilder::Record record, message& message)
+  -> void {
+  record.exact_field("facility").data(uint64_t{message.hdr.facility});
+  record.exact_field("severity").data(uint64_t{message.hdr.severity});
+  record.exact_field("version").data(uint64_t{message.hdr.version});
+  add_optional(record, "timestamp", message.hdr.ts);
+  add_optional(record, "hostname", message.hdr.hostname);
+  add_optional(record, "app_name", message.hdr.app_name);
+  add_optional(record, "process_id", message.hdr.process_id);
+  add_optional(record, "message_id", message.hdr.msg_id);
+  merge_duplicate_sd_ids(message.data);
+  add_structured_data(record, message.data);
+  add_optional(record, "message", message.msg);
+}
+
+inline auto append_message(nova::EventBuilder::Record record,
+                           legacy_message& message) -> void {
+  add_optional(record, "facility", message.facility);
+  add_optional(record, "severity", message.severity);
+  record.exact_field("timestamp").data(message.timestamp);
+  add_optional(record, "hostname", message.host);
+  add_optional(record, "app_name", message.tag);
+  add_optional(record, "process_id", message.process_id);
+  if (not message.data.empty()) {
+    merge_duplicate_sd_ids(message.data);
+    add_structured_data(record, message.data);
+  }
+  record.exact_field("content").data(message.content);
+}
 
 struct syslog_builder {
 public:

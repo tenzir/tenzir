@@ -32,8 +32,13 @@ auto _::EvalRun::eval(const ast::field_access& x, EvalFrame frame)
     maybe_warn();
     return frame.null();
   }
-  auto const any_non_record = frame.mask().and_not(rec->present).any();
-  if (any_non_record) {
+  auto non_record = frame.mask().and_not(rec->present);
+  if (x.has_question_mark) {
+    if (auto nulls = subject.get_alternative<Null>()) {
+      non_record = std::move(non_record).and_not(nulls->present);
+    }
+  }
+  if (non_record.any()) {
     diagnostic::warning("cannot access field of non-record type")
       .primary(x.left, "not a record")
       .secondary(x.name)
