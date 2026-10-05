@@ -1,0 +1,3 @@
+# The Kerberos tests run a KDC, which needs the MIT Kerberos tools.
+skip:
+  on: fixture-unavailable

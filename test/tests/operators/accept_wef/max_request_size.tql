@@ -1,0 +1,29 @@
+---
+fixtures:
+  - wef:
+      steps:
+        # Clients learn the limit from the subscriptions.
+        - enumerate:
+            expect: {max_envelope_size: 20000}
+        # Kerberos wraps envelopes, so the limit has some slack.
+        - raw: {body_size: 40000, expect: {status: 400}}
+        # The limit also applies after decompression, even though the
+        # compressed request is small.
+        - raw: {body_size: 100000, compression: sldc1, expect: {status: 400}}
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}],
+  max_request_size=20000
+head 1
+select record=data.parse_winlog().System.EventRecordID

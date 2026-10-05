@@ -1,0 +1,40 @@
+{
+  System: {
+    Provider: {
+      Name: "Microsoft-Windows-EventForwarder",
+    },
+    EventID: 111,
+    TimeCreated: {
+      SystemTime: 2026-01-01T00:00:00Z,
+    },
+    Computer: "win10.example.org",
+  },
+  SubscriptionBookmarkEvent: {
+    SubscriptionId: null,
+  },
+}
+{
+  System: {
+    Provider: {
+      Name: "Microsoft-Windows-Security-Auditing",
+    },
+    EventID: 4624,
+    Version: 0,
+    Level: 0,
+    Task: 12544,
+    Opcode: 0,
+    Keywords: "0x8020000000000000",
+    TimeCreated: {
+      SystemTime: 2026-01-01T00:00:00Z,
+    },
+    EventRecordID: 72207,
+    Channel: "Security",
+    Computer: "win10.example.org",
+    Security: null,
+  },
+  EventData: {
+    SubjectUserSid: "S-1-5-18",
+    TargetUserName: "SYSTEM",
+    LogonType: 5,
+  },
+}

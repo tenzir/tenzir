@@ -1,0 +1,33 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate:
+            expect: {subscriptions: [workstations, everyone]}
+        - enumerate:
+            uri: /wsman/SubscriptionManager/servers
+            expect: {subscriptions: [servers, everyone]}
+        # Subscriptions match the path, regardless of a query.
+        - enumerate:
+            uri: /wsman/SubscriptionManager/servers?Refresh=60
+            expect: {subscriptions: [servers, everyone]}
+        - events:
+            subscription: servers
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "workstations", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", uri: "/wsman/SubscriptionManager/WEC"},
+    {id: "servers", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", uri: "/wsman/SubscriptionManager/servers"},
+    {id: "everyone", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+  ]
+head 1
+select subscription=wef.subscription_id

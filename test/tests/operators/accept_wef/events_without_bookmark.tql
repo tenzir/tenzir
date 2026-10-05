@@ -1,0 +1,42 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        # Subscriptions request bookmarks, so a batch without one would leave
+        # no restart position after its events. The collector rejects it
+        # before it emits them.
+        - events:
+            subscription: security
+            events: [{record: 4}]
+            bookmark: false
+            expect: {status: 400}
+        # Neither does an empty one.
+        - events:
+            subscription: security
+            events: [{record: 4}]
+            bookmark: ""
+            expect: {status: 400}
+        - events:
+            subscription: security
+            events: [{record: 4}]
+            bookmark: " \n "
+            expect: {status: 400}
+        - enumerate:
+            expect: {bookmarks: {security: null}}
+        - events:
+            subscription: security
+            events: [{record: 5}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select record=data.parse_winlog().System.EventRecordID

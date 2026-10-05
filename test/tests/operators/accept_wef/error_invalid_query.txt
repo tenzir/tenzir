@@ -1,0 +1,8 @@
+error: invalid `query` in subscription `x`
+  --> tests/operators/accept_wef/error_invalid_query.tql:15:17
+   |
+15 |   subscriptions=[{id: "x", query: "<QueryList><Query>"}]
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no element found at line 1, column 18
+   = hint: provide a `QueryList` element, e.g., as exported from the Windows Event Viewer

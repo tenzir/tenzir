@@ -1,0 +1,39 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate:
+            expect:
+              bookmarks:
+                backfill: http://schemas.dmtf.org/wbem/wsman/1/wsman/bookmark/earliest
+                live: null
+              options:
+                backfill: {ReadExistingEvents: null}
+                live: {ReadExistingEvents: <missing>}
+        - events:
+            subscription: backfill
+            events: [{record: 1}]
+            bookmark: {Security: 1}
+        # A stored bookmark takes precedence.
+        - enumerate:
+            expect:
+              bookmarks: {backfill: {Security: 1}}
+        - events:
+            subscription: backfill
+            events: [{record: 2}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "backfill", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", read_existing_events: true},
+    {id: "live", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+  ]
+head 2
+select record=data.parse_winlog().System.EventRecordID

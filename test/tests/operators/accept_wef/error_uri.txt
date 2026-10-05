@@ -1,0 +1,7 @@
+error: `uri` must be a path that starts with `/`
+  --> tests/operators/accept_wef/error_uri.tql:16:17
+   |
+16 |   subscriptions=[{
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = hint: use the path of the subscription manager URL, e.g., `/wsman/SubscriptionManager/WEC`

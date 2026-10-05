@@ -1,0 +1,54 @@
+---
+fixtures:
+  - wef:
+      clients: [win10.example.org, win11.example.org]
+      steps:
+        - enumerate: {}
+        # A client that did not receive the subscriptions, here because they
+        # exceed its envelope size, cannot have replaced its old one.
+        - enumerate:
+            client: win11.example.org
+            max_envelope_size: 8192
+            expect: {status: 400}
+        # After a restart with changed subscriptions, a client keeps its old
+        # subscription until it enumerates again, so its deliveries count.
+        - events:
+            client: win11.example.org
+            subscription: security
+            events: [{record: 3}]
+            version: 00000000-0000-0000-0000-000000000000
+        - enumerate:
+            client: win11.example.org
+            expect: {bookmarks: {security: {Security: 3}}}
+        # Once it enumerated the current version, the client replaced the old
+        # subscription, whose late batch must not overwrite the bookmark.
+        - events:
+            client: win11.example.org
+            subscription: security
+            events: [{record: 9}]
+            version: 00000000-0000-0000-0000-000000000000
+            expect: {status: 503}
+        - enumerate:
+            client: win11.example.org
+            expect: {bookmarks: {security: {Security: 3}}}
+        - events:
+            client: win11.example.org
+            subscription: security
+            events: [{record: 4}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+    {id: "system", query: "<QueryList><Query Id='0'><Select Path='System'>*</Select></Query></QueryList>"},
+    {id: "application", query: "<QueryList><Query Id='0'><Select Path='Application'>*</Select></Query></QueryList>"},
+  ]
+head 2
+select record=data.parse_winlog().System.EventRecordID

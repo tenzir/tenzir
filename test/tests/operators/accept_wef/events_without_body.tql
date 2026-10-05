@@ -1,0 +1,36 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        # A batch without `w:Events` must not advance the bookmark, because
+        # the client never delivered its events.
+        - events:
+            subscription: security
+            body: ""
+            bookmark: {Security: 5}
+            expect: {status: 400}
+        - events:
+            subscription: security
+            body: <Events xmlns="urn:wrong"/>
+            bookmark: {Security: 5}
+            expect: {status: 400}
+        - enumerate:
+            expect: {bookmarks: {security: null}}
+        - events:
+            subscription: security
+            events: [{record: 5}]
+            bookmark: {Security: 5}
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select record=data.parse_winlog().System.EventRecordID

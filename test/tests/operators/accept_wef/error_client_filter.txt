@@ -1,0 +1,6 @@
+error: `clients` must have either an `only` or an `except` field
+  --> tests/operators/accept_wef/error_client_filter.tql:15:17
+   |
+15 |   subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", clients: {only: ["a"], except: ["b"]}}]
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |

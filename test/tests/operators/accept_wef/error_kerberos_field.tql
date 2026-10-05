@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+accept_wef "127.0.0.1:0",
+  kerberos={keytab: "wec.keytab", realm: "EXAMPLE.ORG"},
+  subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]

@@ -1,0 +1,12 @@
+warning: rejected request: client may not use subscription `domain-controllers`
+  --> tests/operators/accept_wef/kerberos/client_filter.tql:22:12
+   |
+22 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `WIN10$@TENZIR.TEST`
+   = note: peer: 127.0.0.1
+{
+  client: "DC01$@TENZIR.TEST",
+  subscription: "domain-controllers",
+}

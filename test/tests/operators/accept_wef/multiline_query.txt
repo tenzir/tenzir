@@ -1,0 +1,3 @@
+{
+  client: "win10.example.org",
+}

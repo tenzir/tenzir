@@ -1,0 +1,6 @@
+error: `name` contains a character that XML does not allow
+  --> tests/operators/accept_wef/error_control_character.tql:17:17
+   |
+17 |   subscriptions=[{
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |

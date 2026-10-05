@@ -1,0 +1,28 @@
+---
+fixtures:
+  - wef:
+      kerberos: true
+      clients: [WIN10$]
+      steps:
+        - enumerate: {}
+        # With Kerberos, the versions count once the response is encrypted.
+        # Then a late batch of the replaced subscription cannot overwrite the
+        # bookmark.
+        - events:
+            subscription: security
+            events: [{record: 9}]
+            version: 00000000-0000-0000-0000-000000000000
+            expect: {status: 503}
+        - enumerate:
+            expect: {bookmarks: {security: null}}
+        - events:
+            subscription: security
+            events: [{record: 4}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  kerberos={keytab: env("WEF_KEYTAB"), principal: env("WEF_PRINCIPAL")},
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select record=data.parse_winlog().System.EventRecordID

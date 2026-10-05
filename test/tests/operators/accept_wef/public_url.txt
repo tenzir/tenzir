@@ -1,0 +1,11 @@
+warning: rejected request: invalid SOAP envelope: root element is not a SOAP envelope
+  --> tests/operators/accept_wef/public_url.tql:20:12
+   |
+20 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+{
+  subscription: "932DD38F-4629-5D5A-BA33-FC97807F43E8",
+}

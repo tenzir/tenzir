@@ -1,0 +1,3 @@
+initial bookmark: None
+after a graceful stop: <BookmarkList><Bookmark Channel="Security" RecordId="2" IsCurrent="true" /></BookmarkList>
+after a crash: <BookmarkList><Bookmark Channel="Security" RecordId="3" IsCurrent="true" /></BookmarkList>

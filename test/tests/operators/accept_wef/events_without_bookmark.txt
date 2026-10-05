@@ -1,0 +1,20 @@
+warning: rejected request: delivery message has no `w:Bookmark`
+  --> tests/operators/accept_wef/events_without_bookmark.tql:33:12
+   |
+33 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: delivery message has an empty `w:Bookmark`
+  --> tests/operators/accept_wef/events_without_bookmark.tql:33:12
+   |
+33 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+{
+  record: 5,
+}

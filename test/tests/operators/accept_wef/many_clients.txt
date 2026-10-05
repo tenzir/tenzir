@@ -1,0 +1,5 @@
+{
+  events: 3200,
+  clients: 32,
+  records: 100,
+}

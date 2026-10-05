@@ -1,0 +1,37 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        - heartbeat:
+            subscription: security
+            compression: sldc1
+        - events:
+            subscription: security
+            events: [{id: 1, record: 1}, {id: 1, record: 2}, {id: 1, record: 3}]
+            compression: sldc1
+        - events:
+            subscription: security
+            events: [{id: 2, record: 4}]
+            compression: sldc2
+        # Windows declares SLDC for some uncompressed bodies.
+        - end:
+            subscription: security
+        - events:
+            subscription: security
+            events: [{id: 3, record: 5}]
+            compression: claimed
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 5
+event = data.parse_winlog()
+select id=event.System.EventID, record=event.System.EventRecordID

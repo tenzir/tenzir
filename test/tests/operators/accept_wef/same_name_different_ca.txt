@@ -1,0 +1,2 @@
+other tenant: None
+same tenant: <BookmarkList><Bookmark Channel="Security" RecordId="42" IsCurrent="true" /></BookmarkList>

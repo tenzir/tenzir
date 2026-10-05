@@ -1,0 +1,19 @@
+warning: rejected request: request body exceeds `max_request_size` of 20000 bytes
+  --> tests/operators/accept_wef/max_request_size.tql:19:12
+   |
+19 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: peer: 127.0.0.1
+
+warning: rejected request: decompressed request body exceeds `max_request_size` of 20000 bytes
+  --> tests/operators/accept_wef/max_request_size.tql:19:12
+   |
+19 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+{
+  record: 1,
+}

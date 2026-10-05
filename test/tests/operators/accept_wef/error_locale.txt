@@ -1,0 +1,7 @@
+error: `data_locale` must be a language tag, but got `en_US`
+  --> tests/operators/accept_wef/error_locale.tql:17:17
+   |
+17 |   subscriptions=[{
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = hint: use a tag such as `en-US`

@@ -1,0 +1,6 @@
+error: `state` must be a name of letters, digits, `.`, `-`, and `_`
+  --> tests/operators/accept_wef/error_invalid_state.tql:16:9
+   |
+16 |   state="../escape"
+   |         ^^^^^^^^^^^
+   |

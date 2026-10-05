@@ -113,6 +113,10 @@ public:
     return server_;
   }
 
+  auto server() const -> proxygen::coro::HTTPServer const& {
+    return server_;
+  }
+
 private:
   ScopedServer(proxygen::coro::HTTPServer::Config config,
                std::shared_ptr<proxygen::coro::HTTPHandler> handler);
@@ -144,6 +148,10 @@ public:
   auto drain() -> void;
   auto finish() -> void;
   auto force_stop() -> void;
+
+  /// Returns the port that the server listens on, which the OS picks for an
+  /// endpoint with port 0.
+  auto port() const -> Option<uint16_t>;
 
 private:
   Option<Box<ScopedServer>> server_;

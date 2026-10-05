@@ -1,0 +1,7 @@
+error: `accept_wef` requires client certificates
+ --> tests/operators/accept_wef/error_requires_client_certificates.tql:8:12
+  |
+8 | accept_wef "127.0.0.1:0",
+  |            ^^^^^^^^^^^^^
+  |
+  = hint: set `tls.require_client_cert` to `true`

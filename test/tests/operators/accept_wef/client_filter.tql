@@ -1,0 +1,38 @@
+---
+fixtures:
+  - wef:
+      clients: [win10.example.org, DC01.EXAMPLE.ORG]
+      steps:
+        - enumerate:
+            client: DC01.EXAMPLE.ORG
+            expect: {subscriptions: [domain-controllers, everyone]}
+        - enumerate:
+            expect: {subscriptions: [workstations, everyone]}
+        # A client may not use a subscription that excludes it.
+        - heartbeat:
+            subscription: domain-controllers
+            expect: {status: 403}
+        - events:
+            client: DC01.EXAMPLE.ORG
+            subscription: domain-controllers
+            events: [{computer: dc01.example.org, record: 1}]
+        - events:
+            subscription: workstations
+            events: [{record: 2}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "domain-controllers", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", clients: {only: ["dc*"]}},
+    {id: "workstations", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", clients: {except: ["DC*"]}},
+    {id: "everyone", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+  ]
+head 2
+select client=wef.client, subscription=wef.subscription_id

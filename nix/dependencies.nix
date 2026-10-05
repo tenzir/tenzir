@@ -60,6 +60,7 @@
   liburing,
   snappy,
   expat,
+  libkrb5,
   makeBinaryWrapper,
   uv,
   ...
@@ -106,6 +107,9 @@ in
     expat
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [ pfs ]
+  # Kerberos for `accept_wef`. Static MIT Kerberos does not link on macOS, so
+  # that build ships without it, like `cyrus_sasl` does.
+  ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [ libkrb5 ]
   ++ lib.optionals (stdenv.cc.isClang && isStatic) [ empty-libgcc_eh ]
   ++ [ yara-x ]
   ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [ jansson ];

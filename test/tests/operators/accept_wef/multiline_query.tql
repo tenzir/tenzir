@@ -1,0 +1,36 @@
+---
+fixtures:
+  - wef:
+      steps:
+        # Windows receives the query with its line breaks and indentation.
+        - enumerate:
+            expect:
+              queries:
+                security: >-
+                  <QueryList><Query Id="0"><Select Path="Security">*</Select><Select
+                  Path="System">*</Select></Query></QueryList>
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+let $query = r#"
+<QueryList>
+  <Query Id="0">
+    <Select Path="Security">*</Select>
+    <Select Path="System">*</Select>
+  </Query>
+</QueryList>
+"#
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: $query}]
+head 1
+select client=wef.client

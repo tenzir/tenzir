@@ -1,0 +1,29 @@
+---
+fixtures:
+  - wef:
+      # Windows Server 2025 and Windows 11 24H2 use SPNEGO.
+      kerberos: negotiate
+      clients: [SERVER2025$]
+      steps:
+        - enumerate: {}
+        - events:
+            subscription: security
+            events: [{record: 1}, {record: 2}]
+            bookmark: {Security: 2}
+            compression: sldc1
+        - enumerate:
+            expect: {bookmarks: {security: {Security: 2}}}
+        - events:
+            subscription: security
+            events: [{record: 3}]
+            compression: sldc2
+timeout: 60
+---
+
+// Without a principal, the keytab may hold the keys of several service
+// principals, such as `HTTP/` and `HOST/`.
+accept_wef env("WEF_ENDPOINT"),
+  kerberos={keytab: env("WEF_KEYTAB")},
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 3
+select client=wef.client, record=data.parse_winlog().System.EventRecordID

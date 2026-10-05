@@ -1,0 +1,7 @@
+error: unknown subscription field `max_time`
+  --> tests/operators/accept_wef/error_unknown_field.tql:15:17
+   |
+15 |   subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", max_time: 30s}]
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = hint: valid fields are `id`, `name`, `query`, `content_format`, `batch_timeout`, `heartbeat`, `read_existing_events`, `ignore_channel_error`, `max_events`, `connection_retry`, `locale`, `data_locale`, `uri`, `clients`

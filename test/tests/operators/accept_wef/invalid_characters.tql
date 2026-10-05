@@ -1,0 +1,26 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        # Events can contain characters that XML does not allow, and old
+        # Windows hosts send invalid UTF-16.
+        - events:
+            subscription: security
+            events:
+              - {record: 1, provider: "Microsoft-Windows-WinRM \x05 "}
+              - {record: 2, data: {Message: "lone \uD800 surrogate"}}
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 2
+event = data.parse_winlog()
+select provider=event.System.Provider.Name, data=event.EventData

@@ -1,0 +1,7 @@
+error: `accept_wef` requires `tls` or `kerberos`
+ --> tests/operators/accept_wef/error_requires_tls.tql:5:1
+  |
+5 | accept_wef "127.0.0.1:0", subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+  | ^^^^^^^^^^
+  |
+  = hint: use `kerberos` for domain-joined hosts, and `tls` with client certificates for all others

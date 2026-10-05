@@ -104,6 +104,9 @@ let
         pkgs.just
         test-deps.tenzir-test
         pkgs.yara-x
+        # The `accept_wef` tests run a KDC and use GSSAPI as a client.
+        pkgs.krb5
+        pkgs.krb5.dev
       ]
       ++ clang-shims
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [

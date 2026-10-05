@@ -1,0 +1,29 @@
+---
+fixtures:
+  - wef:
+      kerberos: true
+      clients: [WIN10$, DC01$]
+      steps:
+        - enumerate:
+            client: DC01$
+            expect: {subscriptions: [domain-controllers, everyone]}
+        - enumerate:
+            expect: {subscriptions: [everyone]}
+        - heartbeat:
+            subscription: domain-controllers
+            expect: {status: 403}
+        - events:
+            client: DC01$
+            subscription: domain-controllers
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  kerberos={keytab: env("WEF_KEYTAB")},
+  subscriptions=[
+    {id: "domain-controllers", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", clients: {only: ["dc*$@tenzir.test"]}},
+    {id: "everyone", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+  ]
+head 1
+select client=wef.client, subscription=wef.subscription_id

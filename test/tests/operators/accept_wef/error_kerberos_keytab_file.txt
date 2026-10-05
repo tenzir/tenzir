@@ -1,0 +1,7 @@
+error: failed to set up Kerberos
+ --> tests/operators/accept_wef/error_kerberos_keytab_file.tql:6:12
+  |
+6 |   kerberos={keytab: "/nonexistent/wec.keytab"},
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: keytab `/nonexistent/wec.keytab` is not a file

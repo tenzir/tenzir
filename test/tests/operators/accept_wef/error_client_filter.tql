@@ -1,0 +1,15 @@
+---
+error: true
+fixtures:
+  - wef:
+      steps: []
+---
+
+accept_wef "127.0.0.1:0",
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", clients: {only: ["a"], except: ["b"]}}]

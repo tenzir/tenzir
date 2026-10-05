@@ -1,0 +1,74 @@
+warning: rejected request: invalid SOAP envelope: root element is not a SOAP envelope
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: invalid SOAP envelope: unclosed token at line 1, column 0
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: request body is not valid UTF-8
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: unsupported content encoding `gzip`
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: failed to decompress SLDC body: SLDC data does not select a scheme
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: unsupported action `http://schemas.xmlsoap.org/ws/2004/09/transfer/Get`
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: delivery message has no `e:Identifier`
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+
+warning: rejected request: unknown subscription `00000000-0000-0000-0000-000000000000`
+  --> tests/operators/accept_wef/protocol_errors.tql:37:12
+   |
+37 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+{
+  record: 1,
+}

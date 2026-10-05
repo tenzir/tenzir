@@ -1,0 +1,44 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate:
+            expect:
+              subscriptions: [security]
+              thumbprint: ca
+              bookmarks: {security: null}
+              options:
+                security:
+                  SubscriptionName: security
+                  Compression: SLDC
+                  ContentFormat: Raw
+                  IgnoreChannelError: null
+                  CDATA: null
+                  ReadExistingEvents: <missing>
+        - heartbeat:
+            subscription: security
+        - events:
+            subscription: security
+            events:
+              - {id: 4624, record: 1}
+              - {id: 4625, record: 2, data: {TargetUserName: alice}}
+            bookmark: {Security: 2}
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{
+    id: "security",
+    query: r#"<QueryList><Query Id="0"><Select Path="Security">*</Select></Query></QueryList>"#,
+  }]
+head 2
+select data, wef
+// The version covers the delivery address and the client's CA, which differ in
+// every run.
+wef.subscription_version = wef.subscription_version.match_regex("^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$")

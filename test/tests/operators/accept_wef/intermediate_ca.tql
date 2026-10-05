@@ -1,0 +1,26 @@
+---
+fixtures:
+  - wef:
+      # Clients send the intermediate CA along with their certificate, while
+      # `client_ca` holds only the root CA. The subscriptions must name the
+      # intermediate CA, which issued the client certificates.
+      intermediate_ca: true
+      steps:
+        - enumerate:
+            expect: {thumbprint: ca}
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select client=wef.client

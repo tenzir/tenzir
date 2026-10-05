@@ -1,0 +1,8 @@
+error: invalid `query` in subscription `x`
+  --> tests/operators/accept_wef/error_query_structure.tql:16:17
+   |
+16 |   subscriptions=[{id: "x", query: "<Select Path='Security'>*</Select>"}]
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected a `QueryList` element, got `Select`
+   = hint: provide a `QueryList` element, e.g., as exported from the Windows Event Viewer

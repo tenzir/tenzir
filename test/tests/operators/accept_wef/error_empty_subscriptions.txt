@@ -1,0 +1,6 @@
+error: `subscriptions` must not be empty
+  --> tests/operators/accept_wef/error_empty_subscriptions.tql:15:17
+   |
+15 |   subscriptions=[]
+   |                 ^^
+   |

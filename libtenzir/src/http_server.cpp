@@ -18,6 +18,8 @@
 #include <proxygen/lib/http/coro/HTTPSourceFilter.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
+#include <wangle/ssl/SSLCacheOptions.h>
+#include <wangle/ssl/SSLContextManager.h>
 
 #include <exception>
 #include <utility>
@@ -227,10 +229,12 @@ auto make_ssl_context_config(TlsConfig const& tls, location primary,
       .emit(dh);
     return failure::promise();
   }
+  // Optional client certificates serve no purpose without a CA chosen for
+  // them, so only request them with `client_ca`.
   if (tls.tls_require_client_cert.inner) {
     config.clientVerification
       = folly::SSLContext::VerifyClientCertificate::ALWAYS;
-  } else if (tls.skip_peer_verification.inner) {
+  } else if (tls.skip_peer_verification.inner or not tls.tls_client_ca) {
     config.clientVerification
       = folly::SSLContext::VerifyClientCertificate::DO_NOT_REQUEST;
   } else {
@@ -240,11 +244,18 @@ auto make_ssl_context_config(TlsConfig const& tls, location primary,
   if (auto& ciphers = tls.tls_ciphers) {
     config.sslCiphers = ciphers->inner;
   }
-  if (auto& client_ca = tls.tls_client_ca) {
-    config.clientCAFiles.push_back(client_ca->inner);
-  }
-  if (auto& cacert = tls.cacert) {
-    config.clientCAFiles.push_back(cacert->inner);
+  // Only `client_ca` vouches for clients, not `cacert`, which defaults to the
+  // CA bundle of the system. Requiring client certificates requires a
+  // `client_ca`, which `tls_options` checks.
+  if (config.clientVerification
+      != folly::SSLContext::VerifyClientCertificate::DO_NOT_REQUEST) {
+    if (not tls.tls_client_ca) {
+      diagnostic::error("`tls.require_client_cert` requires `tls.client_ca`")
+        .primary(primary)
+        .emit(dh);
+      return failure::promise();
+    }
+    config.clientCAFiles.push_back(tls.tls_client_ca->inner);
   }
   return config;
 }
@@ -405,6 +416,19 @@ ScopedServer::ScopedServer(proxygen::coro::HTTPServer::Config config,
 auto ScopedServer::start(proxygen::coro::HTTPServer::Config config,
                          std::shared_ptr<proxygen::coro::HTTPHandler> handler)
   -> Result<std::unique_ptr<ScopedServer>, std::string> {
+  // Set up TLS the way the server does, so that errors surface here. A failure
+  // during the startup of the server would leave it hanging instead. This
+  // loads files, so it runs where the server starts, off the executor.
+  for (auto const& tls : config.socketConfig.sslContextConfigs) {
+    try {
+      auto manager = wangle::SSLContextManager{
+        "tenzir-tls-check", wangle::SSLContextManagerSettings{}, nullptr};
+      manager.addSSLContextConfig(tls, wangle::SSLCacheOptions{}, nullptr,
+                                  folly::SocketAddress{}, nullptr);
+    } catch (std::exception const& ex) {
+      return Err{fmt::format("failed to set up TLS: {}", ex.what())};
+    }
+  }
   auto s = std::unique_ptr<ScopedServer>{
     new ScopedServer{std::move(config), std::move(handler)}};
   try {
@@ -470,6 +494,17 @@ auto Server::start(proxygen::coro::HTTPServer::Config config,
     co_return Err{std::move(result).unwrap_err()};
   }
   co_return Box<Server>{std::in_place, std::move(result).unwrap()};
+}
+
+auto Server::port() const -> Option<uint16_t> {
+  if (not server_) {
+    return None{};
+  }
+  auto address = (*server_)->server().address();
+  if (not address) {
+    return None{};
+  }
+  return address->getPort();
 }
 
 auto Server::drain() -> void {

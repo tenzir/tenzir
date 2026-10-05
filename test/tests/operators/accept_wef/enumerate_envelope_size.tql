@@ -1,0 +1,31 @@
+---
+fixtures:
+  - wef:
+      steps:
+        # The three subscriptions do not fit into the smallest envelope that
+        # WS-Management allows.
+        - enumerate:
+            max_envelope_size: 8192
+            expect: {status: 400}
+        - enumerate:
+            expect: {subscriptions: [security, system, application]}
+        - events:
+            subscription: system
+            events: [{channel: System, id: 7036, record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+    {id: "system", query: "<QueryList><Query Id='0'><Select Path='System'>*</Select></Query></QueryList>"},
+    {id: "application", query: "<QueryList><Query Id='0'><Select Path='Application'>*</Select></Query></QueryList>"},
+  ]
+head 1
+select subscription=wef.subscription_id

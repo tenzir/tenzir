@@ -1,0 +1,26 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        - subscription_end:
+            subscription: security
+        - end:
+            subscription: security
+        - enumerate: {}
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select record=data.parse_winlog().System.EventRecordID

@@ -1,0 +1,6 @@
+default bundle with another CA
+client_ca: 200
+default CA: rejected
+missing default bundle
+client_ca: 200
+default CA: rejected

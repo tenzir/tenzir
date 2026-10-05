@@ -1,0 +1,20 @@
+{
+  data: "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name=\"Microsoft-Windows-Security-Auditing\"/><EventID>4624</EventID><Version>0</Version><Level>0</Level><Task>12544</Task><Opcode>0</Opcode><Keywords>0x8020000000000000</Keywords><TimeCreated SystemTime='2026-01-01T00:00:00.0000000Z'/><EventRecordID>1</EventRecordID><Channel>Security</Channel><Computer>win10.example.org</Computer><Security/></System><EventData></EventData></Event>",
+  wef: {
+    client: "win10.example.org",
+    machine_id: "win10.example.org",
+    subscription_id: "security",
+    subscription_uuid: "932DD38F-4629-5D5A-BA33-FC97807F43E8",
+    subscription_version: true,
+  },
+}
+{
+  data: "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name=\"Microsoft-Windows-Security-Auditing\"/><EventID>4625</EventID><Version>0</Version><Level>0</Level><Task>12544</Task><Opcode>0</Opcode><Keywords>0x8020000000000000</Keywords><TimeCreated SystemTime='2026-01-01T00:00:00.0000000Z'/><EventRecordID>2</EventRecordID><Channel>Security</Channel><Computer>win10.example.org</Computer><Security/></System><EventData><Data Name=\"TargetUserName\">alice</Data></EventData></Event>",
+  wef: {
+    client: "win10.example.org",
+    machine_id: "win10.example.org",
+    subscription_id: "security",
+    subscription_uuid: "932DD38F-4629-5D5A-BA33-FC97807F43E8",
+    subscription_version: true,
+  },
+}

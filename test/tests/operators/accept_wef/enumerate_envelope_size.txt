@@ -1,0 +1,13 @@
+warning: rejected request: subscriptions exceed the client's `MaxEnvelopeSize`
+  --> tests/operators/accept_wef/enumerate_envelope_size.tql:18:12
+   |
+18 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: the response has 20612 bytes, but the client accepts 8192
+   = note: peer: 127.0.0.1
+   = hint: offer fewer or shorter subscriptions to this client, e.g., with `clients` or `uri`
+{
+  subscription: "system",
+}

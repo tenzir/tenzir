@@ -1,0 +1,11 @@
+error: `tls` and `kerberos` are mutually exclusive
+  --> tests/operators/accept_wef/error_tls_and_kerberos.tql:9:7
+   |
+ 9 |   tls={
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ⋮
+15 |   kerberos={keytab: "wec.keytab"},
+   |            ----------------------
+   |
+   = note: Kerberos encrypts the messages itself
+   = hint: run one pipeline per authentication method

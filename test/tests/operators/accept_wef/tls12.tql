@@ -1,0 +1,25 @@
+---
+fixtures:
+  - wef:
+      # Windows 10 and Windows Server 2019 and earlier offer at most TLS 1.2.
+      tls_max_version: "1.2"
+      intermediate_ca: true
+      steps:
+        - enumerate:
+            expect: {thumbprint: ca}
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select client=wef.client

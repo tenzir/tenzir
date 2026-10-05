@@ -1,0 +1,44 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        - events:
+            subscription: security
+            events:
+              # After creating a subscription without a bookmark, Windows sends
+              # this synthetic event, which has no record ID.
+              - >-
+                <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'>
+                <System><Provider Name='Microsoft-Windows-EventForwarder'/>
+                <EventID>111</EventID><TimeCreated SystemTime='2026-01-01T00:00:00.000Z'/>
+                <Computer>win10.example.org</Computer></System>
+                <SubscriptionBookmarkEvent><SubscriptionId></SubscriptionId>
+                </SubscriptionBookmarkEvent></Event>
+            bookmark: >-
+              <BookmarkList Direction='backward'><Bookmark Channel='Security'
+              RecordId='0' IsCurrent='true'/></BookmarkList>
+        - events:
+            subscription: security
+            events:
+              - id: 4624
+                record: 72207
+                computer: win10.example.org
+                data:
+                  SubjectUserSid: S-1-5-18
+                  TargetUserName: SYSTEM
+                  LogonType: "5"
+            bookmark: {Security: 72207}
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 2
+this = data.parse_winlog()

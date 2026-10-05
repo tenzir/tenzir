@@ -1,0 +1,46 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate: {}
+        # Windows only sends POST requests.
+        - raw: {method: GET, expect: {status: 404}}
+        # The first leg of Kerberos authentication has an empty body.
+        - raw: {expect: {status: 200}}
+        - raw: {body: "<not-soap>", expect: {status: 400}}
+        - raw: {body: "<s:Envelope", expect: {status: 400}}
+        - raw: {body_hex: "3cffff3e", content_type: application/soap+xml, expect: {status: 400}}
+        - raw: {body: "<x/>", content_encoding: gzip, expect: {status: 400}}
+        - raw: {body_hex: "0102", content_encoding: SLDC, expect: {status: 400}}
+        - raw:
+            body: >-
+              <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+              xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"><s:Header>
+              <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>
+              <a:MessageID>uuid:1</a:MessageID></s:Header><s:Body/></s:Envelope>
+            expect: {status: 500}
+        # Delivery messages need a known subscription.
+        - heartbeat:
+            subscription: security
+            identifier: ""
+            expect: {status: 400}
+        - heartbeat:
+            subscription: security
+            identifier: 00000000-0000-0000-0000-000000000000
+            expect: {status: 404}
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select record=data.parse_winlog().System.EventRecordID

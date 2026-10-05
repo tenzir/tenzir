@@ -1,0 +1,7 @@
+error: failed to parse `tls.client_ca`
+  --> tests/operators/accept_wef/error_client_ca.tql:10:7
+   |
+10 |   tls={
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no certificates found

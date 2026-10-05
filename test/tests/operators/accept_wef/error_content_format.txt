@@ -1,0 +1,6 @@
+error: `content_format` must be `"Raw"` or `"RenderedText"`
+  --> tests/operators/accept_wef/error_content_format.tql:15:17
+   |
+15 |   subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>", content_format: "Json"}]
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |

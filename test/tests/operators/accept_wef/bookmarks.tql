@@ -1,0 +1,45 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate:
+            expect: {bookmarks: {security: null, system: null}}
+        - events:
+            subscription: security
+            events: [{record: 41}, {record: 42}]
+            bookmark: {Security: 42}
+        - events:
+            subscription: system
+            events: [{channel: System, id: 7036, record: 9}]
+            bookmark: {System: 9}
+        # Bookmarks are per client and subscription.
+        - enumerate:
+            expect:
+              bookmarks:
+                security: {Security: 42}
+                system: {System: 9}
+        - enumerate:
+            client: server01.example.org
+            expect: {bookmarks: {security: null, system: null}}
+        - events:
+            subscription: security
+            events: [{record: 43}]
+            bookmark: {Security: 43}
+      clients: [win10.example.org, server01.example.org]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+    {id: "system", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+  ]
+head 4
+event = data.parse_winlog()
+select subscription=wef.subscription_id, record=event.System.EventRecordID

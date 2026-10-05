@@ -13,6 +13,7 @@
   uv,
   parallel,
   openssl,
+  krb5,
 }:
 rec {
   tenzir-test = python3Packages.buildPythonPackage (finalAttrs: {
@@ -79,6 +80,9 @@ rec {
     uv
     parallel
     openssl
+    # The `accept_wef` tests run a KDC and use GSSAPI as a client.
+    krb5
+    krb5.dev
     tenzir-test
   ];
 }

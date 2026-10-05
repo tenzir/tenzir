@@ -1,0 +1,11 @@
+warning: client `win10.example.org` ended a subscription
+  --> tests/operators/accept_wef/subscription_end.tql:17:12
+   |
+17 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: status: http://schemas.xmlsoap.org/ws/2004/08/eventing/SourceCancelling
+   = note: fault: Windows Event Forward Plugin failed to read events.
+{
+  record: 1,
+}

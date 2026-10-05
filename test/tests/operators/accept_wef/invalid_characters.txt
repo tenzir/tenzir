@@ -1,0 +1,25 @@
+warning: replaced invalid UTF-16 in request from `win10.example.org`
+  --> tests/operators/accept_wef/invalid_characters.tql:16:12
+   |
+16 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: replaced 1 code units with U+FFFD
+
+warning: escaped invalid XML characters in request from `win10.example.org`
+  --> tests/operators/accept_wef/invalid_characters.tql:16:12
+   |
+16 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: replaced 1 characters with `\u{<hex>}`
+{
+  provider: "Microsoft-Windows-WinRM \\u{5} ",
+  data: {},
+}
+{
+  provider: "Microsoft-Windows-Security-Auditing",
+  data: {
+    Message: "lone � surrogate",
+  },
+}

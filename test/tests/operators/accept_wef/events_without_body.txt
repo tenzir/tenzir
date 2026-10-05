@@ -1,0 +1,11 @@
+warning: rejected request: delivery message has no `w:Events`
+  --> tests/operators/accept_wef/events_without_body.tql:27:12
+   |
+27 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+{
+  record: 5,
+}

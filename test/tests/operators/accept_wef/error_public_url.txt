@@ -1,0 +1,6 @@
+error: `public_url` must use `https://`
+ --> tests/operators/accept_wef/error_public_url.tql:9:14
+  |
+9 |   public_url="http://wef.example.org:5985",
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

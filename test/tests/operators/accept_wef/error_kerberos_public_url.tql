@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// Kerberos encrypts the messages itself, so clients use HTTP.
+accept_wef "127.0.0.1:0",
+  public_url="https://wec.example.org:5986",
+  kerberos={keytab: "wec.keytab"},
+  subscriptions=[{id: "x", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]

@@ -1,0 +1,9 @@
+unauthenticated: 401 ['Kerberos', 'Negotiate']
+invalid token: 401
+other scheme: 401
+ticket for another service: 401
+enumerate: 200
+unencrypted body: 400
+{
+  client: "WIN10$@TENZIR.TEST",
+}

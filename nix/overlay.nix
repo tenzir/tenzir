@@ -67,6 +67,14 @@ in
   # itself would rebuild cmake, git and the compilers, so only Tenzir and the
   # libraries it links take this one, which keeps a single libcurl per binary.
   curl-ws = finalPkgs.curl.override { websocketSupport = true; };
+  # The GSSAPI of `accept_wef` pulls the kernel keyring credential cache of
+  # libkrb5.a into static binaries. That cache needs libkeyutils, which the
+  # pkg-config files of krb5 omit, so static Linux builds use a krb5 without
+  # keyutils, which leaves the cache out. All packages must share this krb5,
+  # because the link uses the first one that pkg-config finds.
+  krb5 = prevPkgs.krb5.override (
+    lib.optionalAttrs (isStatic && finalPkgs.stdenv.hostPlatform.isLinux) { keyutils = null; }
+  );
 
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };

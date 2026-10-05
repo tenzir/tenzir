@@ -1,0 +1,7 @@
+error: `max_request_size` must be at least 8192
+ --> tests/operators/accept_wef/error_max_request_size.tql:9:20
+  |
+9 |   max_request_size=4Ki,
+  |                    ^^^
+  |
+  = note: WS-Management requires envelopes of at least this size

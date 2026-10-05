@@ -1,0 +1,30 @@
+---
+fixtures:
+  - wef:
+      steps:
+        - enumerate:
+            expect:
+              address:
+                security: https://wef.example.org:5986/wsman/subscriptions/932DD38F-4629-5D5A-BA33-FC97807F43E8
+        - raw:
+            path: /wsman/subscriptions/932DD38F-4629-5D5A-BA33-FC97807F43E8
+            body: <x/>
+            expect: {status: 400}
+        - enumerate: {}
+        - events:
+            subscription: security
+            events: [{record: 1}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  public_url="https://wef.example.org:5986",
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 1
+select subscription=wef.subscription_uuid

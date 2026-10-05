@@ -1,0 +1,7 @@
+error: unknown field `kerberos.realm`
+ --> tests/operators/accept_wef/error_kerberos_field.tql:6:12
+  |
+6 |   kerberos={keytab: "wec.keytab", realm: "EXAMPLE.ORG"},
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: valid fields are `keytab` and `principal`

@@ -1,0 +1,16 @@
+warning: rejected request: client may not use subscription `domain-controllers`
+  --> tests/operators/accept_wef/client_filter.tql:25:12
+   |
+25 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `win10.example.org`
+   = note: peer: 127.0.0.1
+{
+  client: "DC01.EXAMPLE.ORG",
+  subscription: "domain-controllers",
+}
+{
+  client: "win10.example.org",
+  subscription: "workstations",
+}

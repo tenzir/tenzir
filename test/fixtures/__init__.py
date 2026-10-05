@@ -54,6 +54,7 @@ from . import tcp  # noqa: F401
 from . import uds  # noqa: F401
 from . import udp  # noqa: F401
 from . import velociraptor  # noqa: F401
+from . import wef  # noqa: F401
 from . import xlsx  # noqa: F401
 from . import zmq  # noqa: F401
 from . import mock_s3  # noqa: F401
@@ -108,6 +109,7 @@ __all__ = [
     "uds",
     "udp",
     "velociraptor",
+    "wef",
     "xlsx",
     "zmq",
 ]

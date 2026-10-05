@@ -1,0 +1,29 @@
+---
+fixtures:
+  - wef:
+      kerberos: true
+      clients: [WIN10$]
+      steps:
+        - enumerate:
+            expect:
+              subscriptions: [security]
+              authentication: kerberos
+              address:
+                security: http://localhost:{port}/wsman/subscriptions/932DD38F-4629-5D5A-BA33-FC97807F43E8
+        - heartbeat:
+            subscription: security
+        - events:
+            subscription: security
+            events: [{id: 4624, record: 1}, {id: 4625, record: 2}]
+            bookmark: {Security: 2}
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  kerberos={keytab: env("WEF_KEYTAB"), principal: env("WEF_PRINCIPAL")},
+  subscriptions=[{id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"}]
+head 2
+select id=data.parse_winlog().System.EventID, wef
+// The version covers the delivery address and the client's authentication, which differ in
+// every run.
+wef.subscription_version = wef.subscription_version.match_regex("^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$")

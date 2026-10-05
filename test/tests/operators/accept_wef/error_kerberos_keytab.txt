@@ -1,0 +1,7 @@
+error: `kerberos` requires a `keytab`
+ --> tests/operators/accept_wef/error_kerberos_keytab.tql:6:12
+  |
+6 |   kerberos={principal: "HTTP/wec.example.org@EXAMPLE.ORG"},
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: export the keys of the service principal into a keytab

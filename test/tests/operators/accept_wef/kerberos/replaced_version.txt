@@ -1,0 +1,11 @@
+warning: rejected request: delivery message is for a replaced version of subscription `security`
+  --> tests/operators/accept_wef/kerberos/replaced_version.tql:24:12
+   |
+24 | accept_wef env("WEF_ENDPOINT"),
+   |            ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: client: `WIN10$@TENZIR.TEST`
+   = note: peer: 127.0.0.1
+{
+  record: 4,
+}
