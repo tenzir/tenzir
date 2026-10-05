@@ -1,0 +1,7 @@
+error: failed to read Avro input
+ --> tests/operators/read_avro/container_deflate_invalid_block.tql:7:1
+  |
+7 | read_avro
+  | ^^^^^^^^^
+  |
+  = note: invalid Avro deflate block

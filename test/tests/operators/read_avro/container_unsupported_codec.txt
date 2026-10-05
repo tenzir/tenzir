@@ -1,0 +1,7 @@
+error: unsupported Avro container codec `snappy`
+ --> tests/operators/read_avro/container_unsupported_codec.tql:7:1
+  |
+7 | read_avro
+  | ^^^^^^^^^
+  |
+  = note: supported codecs are `null` and `deflate`

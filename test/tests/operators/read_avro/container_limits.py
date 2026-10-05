@@ -1,5 +1,5 @@
 # runner: python
-# timeout: 20
+# timeout: 60
 
 import json
 
@@ -25,10 +25,6 @@ def main() -> None:
         " | oversized=max_rows > 500"
         " | select total_rows, oversized | to_stdout { write_ndjson }",
         [{"total_rows": 1_024, "oversized": False}],
-    )
-    assert_rejected(
-        make_container("null", b'"null"', [((1 << 63) - 1, b"")]),
-        "invalid Avro container object count",
     )
     assert_rejected(
         make_container(

@@ -41,8 +41,11 @@ def main():
         (b"\r\n\n\r", ["", "", ""]),
         ("alpha\r\n\r\nβ\rlast".encode(), ["alpha", "", "β", "last"]),
     ]
-    for jobs in (0, 1, 3):
-        for size in (1, 2, 7, 4096):
+    # Single-byte chunks split every payload at every position, including
+    # between `\r` and `\n`; 4096-byte chunks never split it. Any number of
+    # jobs takes the parallel path.
+    for jobs in (0, 3):
+        for size in (1, 4096):
             for payload, expected in cases:
                 lines, stderr = read(payload, size, jobs)
                 assert not stderr, stderr

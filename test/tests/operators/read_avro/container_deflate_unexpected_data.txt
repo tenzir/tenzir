@@ -1,0 +1,7 @@
+error: failed to read Avro input
+ --> tests/operators/read_avro/container_deflate_unexpected_data.tql:8:1
+  |
+8 | read_avro
+  | ^^^^^^^^^
+  |
+  = note: Avro container block contains unexpected decoded data
