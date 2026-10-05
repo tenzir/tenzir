@@ -1,20 +1,20 @@
 {
   value: 1,
   previous: null,
-  previous_type: "int64",
+  previous_type: "null",
 }
 {
   value: 2,
   previous: null,
-  previous_type: "int64",
+  previous_type: "null",
 }
 {
   value: 3,
   previous: 1,
-  previous_type: "int64",
+  previous_type: "int",
 }
 {
   value: 4,
   previous: 2,
-  previous_type: "int64",
+  previous_type: "int",
 }

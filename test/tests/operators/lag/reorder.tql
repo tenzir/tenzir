@@ -3,7 +3,7 @@ from {time: 2025-01-01T10:01:00, user: "alice", value: 2},
      {time: 2025-01-01T10:00:00, user: "alice", value: 1},
      {time: 2025-01-01T10:00:30, user: "bob", value: 10}
 group user {
-  reorder on=time, tolerance=2min
+  sort time
   lag value=value, into=previous
 }
 sort user, time

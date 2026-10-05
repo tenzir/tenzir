@@ -9,6 +9,11 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/eval_util.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -221,6 +226,115 @@ private:
   uint64_t history_length_ = 0;
 };
 
+class LagEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit LagEvents(LagArgs args)
+    : value_{args.value ? std::move(*args.value)
+                        : ast::expression{ast::this_{}}},
+      offset_{args.offset ? args.offset->inner : default_offset},
+      into_{std::move(args.into)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto evaluator = co_await nova::Evaluator::make(std::move(value_), ctx);
+    if (not evaluator) {
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not input.mask.any()) {
+      co_return;
+    }
+    auto current = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto rows = std::vector<nova::storage::Index>{};
+    rows.reserve(input.active_count());
+    nova::storage::for_each_true(input.mask, [&](auto row) {
+      rows.push_back(row);
+    });
+    auto const count = detail::narrow<uint64_t>(rows.size());
+    TENZIR_ASSERT(history_length_ <= offset_);
+    auto const missing = std::min(count, offset_ - history_length_);
+    auto builder = nova::ArrayBuilder<nova::Data>{};
+    auto part = history_.begin();
+    auto history_row = front_row_;
+    auto values = part != history_.end() ? part->data.field("value") : None{};
+    for (auto i = uint64_t{0}; i < count; ++i) {
+      builder.skip_n(rows[i] - builder.length());
+      if (i < missing) {
+        builder.null();
+      } else if (i - missing < history_length_) {
+        TENZIR_ASSERT(values);
+        nova::append_row(builder, values->data.get(history_row++));
+        if (history_row == part->length()) {
+          ++part;
+          history_row = 0;
+          values = part != history_.end() ? part->data.field("value") : None{};
+        }
+      } else {
+        nova::append_row(builder, current.get(rows[i - offset_]));
+      }
+    }
+    builder.skip_n(input.length() - builder.length());
+    // Copy only the retained tail. History never pins an input batch, and
+    // keeping it columnar avoids materializing each retained value separately.
+    auto const retained = std::min(count, offset_);
+    trim_history(offset_ - retained);
+    auto tail = nova::ArrayBuilder<nova::Data>{};
+    for (auto i = count - retained; i < count; ++i) {
+      nova::append_row(tail, current.get(rows[i]));
+    }
+    auto tail_length = detail::narrow<nova::storage::Index>(retained);
+    auto mask = nova::storage::BitMap{tail_length, true};
+    auto data = nova::Array<nova::Record>::make_empty(tail_length)
+                  .with_field_overwrite("value", {tail.finish(), mask});
+    history_.emplace_back(std::move(data), std::move(mask),
+                          nova::Events::Meta::make_empty(tail_length));
+    history_length_ += retained;
+    auto lagged = nova::MaskedArray<nova::Array<nova::Data>>{builder.finish(),
+                                                             input.mask};
+    if (into_.path().empty()) {
+      input.data = nova::records_or_empty(std::move(lagged), input.length(),
+                                          into_.get_location(), ctx.dh());
+    } else {
+      input.data = nova::assign_nested_field(
+        std::move(input.data), into_.path(), std::move(lagged), ctx.dh());
+    }
+    co_await push(std::move(input));
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("history", history_);
+    serde("front_row", front_row_);
+    serde("history_length", history_length_);
+  }
+
+private:
+  auto trim_history(uint64_t keep) -> void {
+    while (history_length_ > keep) {
+      auto const available
+        = detail::narrow<uint64_t>(history_.front().length() - front_row_);
+      auto const removed = std::min(available, history_length_ - keep);
+      history_length_ -= removed;
+      front_row_ += detail::narrow<nova::storage::Index>(removed);
+      if (front_row_ == history_.front().length()) {
+        history_.pop_front();
+        front_row_ = 0;
+      }
+    }
+  }
+
+  ast::expression value_;
+  uint64_t offset_;
+  ast::field_path into_;
+  Option<nova::Evaluator> evaluator_;
+  std::deque<nova::Events> history_;
+  nova::storage::Index front_row_ = 0;
+  uint64_t history_length_ = 0;
+};
+
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -228,7 +342,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<LagArgs, Lag>{};
+    auto d = Describer<LagArgs, Lag, LagEvents>{};
     auto value = d.named("value", &LagArgs::value, "any");
     auto offset = d.named("offset", &LagArgs::offset);
     auto into = d.named("into", &LagArgs::into);
