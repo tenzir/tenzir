@@ -59,6 +59,13 @@ class _S3ProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server: _ProxyServer
 
+    def handle(self) -> None:
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):
+            # Fault-injection clients may stop reading once they see an error.
+            return
+
     def do_DELETE(self) -> None:
         self._proxy()
 
@@ -78,10 +85,37 @@ class _S3ProxyHandler(BaseHTTPRequestHandler):
         logger.debug("s3 proxy: " + format, *args)
 
     def _read_body(self) -> bytes:
-        expect = self.headers.get("Expect", "")
-        if expect.lower() == "100-continue":
-            self.send_response_only(100)
-            self.end_headers()
+        # BaseHTTPRequestHandler already handles Expect: 100-continue.
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            body = bytearray()
+            while True:
+                size_line = self.rfile.readline()
+                if not size_line:
+                    raise ConnectionResetError(
+                        "client disconnected during chunked body"
+                    )
+                size = int(size_line.split(b";", 1)[0].strip(), 16)
+                if size < 0:
+                    raise ValueError("negative chunk size")
+                if size == 0:
+                    # Consume trailers so the next request starts at its request line.
+                    while True:
+                        trailer = self.rfile.readline()
+                        if not trailer:
+                            raise ConnectionResetError(
+                                "client disconnected during chunked trailers"
+                            )
+                        if trailer in (b"\r\n", b"\n"):
+                            return bytes(body)
+                chunk = self.rfile.read(size)
+                ending = self.rfile.read(2)
+                if len(chunk) != size or len(ending) != 2:
+                    raise ConnectionResetError(
+                        "client disconnected during chunked body"
+                    )
+                if ending != b"\r\n":
+                    raise ValueError("invalid chunk framing")
+                body.extend(chunk)
         length = int(self.headers.get("Content-Length", "0"))
         if length == 0:
             return b""

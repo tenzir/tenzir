@@ -27,8 +27,6 @@ from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import FixtureHandle, fixture
 
-from ._utils import find_free_port
-
 logger = logging.getLogger(__name__)
 
 _HOST = "127.0.0.1"
@@ -536,7 +534,11 @@ class GraphAssertions:
 @fixture(name="microsoft_graph", assertions=GraphAssertions)
 def run() -> FixtureHandle:
     token_server = _TokenServer((_HOST, 0), _TokenHandler)
-    graph_server = _GraphServer((_HOST, find_free_port()), _GraphHandler)
+    try:
+        graph_server = _GraphServer((_HOST, 0), _GraphHandler)
+    except BaseException:
+        token_server.server_close()
+        raise
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     graph_thread = threading.Thread(target=graph_server.serve_forever, daemon=True)
     token_thread.start()
@@ -570,5 +572,7 @@ def run() -> FixtureHandle:
         graph_server.shutdown()
         token_thread.join(timeout=2)
         graph_thread.join(timeout=2)
+        token_server.server_close()
+        graph_server.server_close()
 
     return FixtureHandle(env=env, teardown=teardown, hooks={"assert_test": assert_test})

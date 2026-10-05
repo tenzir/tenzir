@@ -1,5 +1,7 @@
 # runner: python
-# timeout: 90
+# timeout: 240
+
+"""Allow ten bounded engine starts, including startup under static CI load."""
 
 import json
 import os

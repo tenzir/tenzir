@@ -56,6 +56,13 @@ _INFER_HTTP_ERROR = "/infer/http-error.bin"
 
 def _make_handler(capture_path: Path):
     class RecordingEchoHandler(BaseHTTPRequestHandler):
+        def handle(self) -> None:
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError):
+                # Error-response and cancellation tests may close the socket early.
+                return
+
         def _read_body(self) -> bytes:
             length_header = self.headers.get("Content-Length")
             try:
@@ -324,6 +331,7 @@ def run() -> Iterator[dict[str, str]]:
         }
     finally:
         server.shutdown()
+        server.server_close()
         worker.join()
         if capture_path.exists():
             capture_path.unlink()

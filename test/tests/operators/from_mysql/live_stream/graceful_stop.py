@@ -10,12 +10,13 @@ clean exit.
 from __future__ import annotations
 
 import os
+import selectors
 import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
-import time
 from pathlib import Path
 
 PIPELINE = """\
@@ -27,7 +28,7 @@ from_mysql table=env("MYSQL_LIVE_STREAM_TABLE"),
   password=env("MYSQL_PASSWORD"),
   database=env("MYSQL_DATABASE")
 where payload == env("MYSQL_LIVE_STREAM_TOKEN")
-discard
+write_ndjson
 """
 
 
@@ -59,11 +60,22 @@ def main() -> None:
             text=True,
             env=os.environ.copy(),
         )
-        # The operator polls every second; wait for a few polls.
-        time.sleep(3)
-        assert process.poll() is None, process.communicate()
-        process.send_signal(signal.SIGTERM)
-        _, stderr = process.communicate(timeout=30)
+        try:
+            # A streamed row proves startup and a live database read completed.
+            assert process.stdout is not None
+            with selectors.DefaultSelector() as selector:
+                selector.register(process.stdout, selectors.EVENT_READ)
+                assert selector.select(timeout=60), "live read produced no data"
+                assert process.stdout.readline(), process.communicate()
+            process.send_signal(signal.SIGTERM)
+            _, stderr = process.communicate(timeout=30)
+        except BaseException:
+            # Reap the child and retain diagnostics if startup or shutdown fails.
+            if process.poll() is None:
+                process.kill()
+            _, stderr = process.communicate()
+            print(stderr, file=sys.stderr)
+            raise
     assert "internal error" not in stderr, stderr
     assert process.returncode == 0, f"rc={process.returncode}\n{stderr}"
     print("ok")

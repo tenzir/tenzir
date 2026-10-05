@@ -17,14 +17,15 @@
 rec {
   tenzir-test = python3Packages.buildPythonPackage (finalAttrs: {
     pname = "tenzir-test";
-    version = "2.0.2";
+    # Keep this version in sync with .github/workflows/nix-build.py.
+    version = "2.3.0";
     pyproject = true;
 
     src = fetchFromGitHub {
       owner = "tenzir";
       repo = "test";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-3vwc99fU75++xkJZ9ZxVv4Slpw88Bd3IKtwCIuzvUr8=";
+      hash = "sha256-sGrNcur0bsS/nLfhd58458jrbOGuuCmqXxatgEDQagA=";
     };
 
     build-system = with python3Packages; [ hatchling ];

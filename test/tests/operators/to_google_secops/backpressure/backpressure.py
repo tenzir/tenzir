@@ -152,7 +152,7 @@ from {text: "a", type: "DRY_A"},
         check=False,
         capture_output=True,
         text=True,
-        timeout=3,
+        timeout=15,
     )
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
     requests = [
@@ -178,7 +178,7 @@ from {text: "a", type: "KEEP"},
         check=False,
         capture_output=True,
         text=True,
-        timeout=3,
+        timeout=15,
     )
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
     requests = [

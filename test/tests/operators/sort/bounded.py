@@ -1,7 +1,11 @@
 # runner: python
-# timeout: 300
+# timeout: 600
 
-"""Compare bounded sorting with an optimization-barrier full-sort reference."""
+"""Compare bounded sorting with an optimization-barrier full-sort reference.
+
+Each comparison starts two engine processes; allow their cumulative startup
+cost on busy static-build runners without relaxing the per-process timeout.
+"""
 
 from __future__ import annotations
 

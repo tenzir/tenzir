@@ -29,6 +29,8 @@ stdenvNoCC.mkDerivation {
           echo "running ${path} integration tests"
           tenzir-test \
             --root "${src}/test" \
+            --summary \
+            --report-json - \
             -j $NIX_BUILD_CORES \
             "${path}/test"
         fi
@@ -54,15 +56,32 @@ stdenvNoCC.mkDerivation {
       # Remove tests that want networking
       rm -rf test/tests/operators/sockets
       ${template "."}
+      # Run plugin suites from a checkout-shaped tree so reports use repository
+      # paths rather than references to unrelated Nix store directories.
+      mkdir -p plugins
       # Discover bundled suites at build time, matching CMake's plugin glob.
       for plugin in "${unchecked.bundledPluginRoot}"/*; do
         [ -f "$plugin/CMakeLists.txt" ] || continue
         case " ${lib.concatStringsSep " " unchecked.excludedBundledPluginNames} " in
           *" ''${plugin##*/} "*) continue ;;
         esac
-        ${template "$plugin"}
+        [ -d "$plugin/test/tests" ] || continue
+        plugin_name=''${plugin##*/}
+        cp -R "$plugin" plugins/
+        ${template "plugins/$plugin_name"}
       done
-      ${lib.concatMapStrings template (map (x: x.src or x) (builtins.concatLists unchecked.plugins))}
+      ${lib.concatMapStrings (
+        plugin:
+        let
+          path = plugin.src or plugin;
+        in
+        ''
+          if [ -d "${path}/test/tests" ]; then
+            cp -R "${path}" plugins/
+            ${template "plugins/${baseNameOf path}"}
+          fi
+        ''
+      ) (builtins.concatLists unchecked.plugins)}
     '';
 
   # We just symlink all outputs of the unchecked derivation.
