@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/nova/array.hpp"
+#include "tenzir/nova/type_definition.hpp"
 #include "tenzir/nova/type_system.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/variant.hpp"
@@ -200,6 +201,8 @@ private:
         }
       },
       [&](nova::RowView<nova::List> const& list) {
+        auto const stringify = options_.stringify_heterogeneous_lists
+                               and list_is_heterogeneous(list);
         put(options_.style.array, "[");
         auto printed_once = false;
         for (auto element : list) {
@@ -213,6 +216,10 @@ private:
           } else {
             list_separator();
             newline();
+          }
+          if (stringify and not is<nova::RowView<nova::Null>>(element)) {
+            print_stringified(element);
+            continue;
           }
           print_row(element);
         }
@@ -259,6 +266,26 @@ private:
         }
         put(options_.style.object, "}");
       });
+  }
+
+  /// Prints `row` as a JSON string holding its compact rendering, which is
+  /// how the elements of a heterogeneous list reach a consumer that expects
+  /// one type per list.
+  auto print_stringified(nova::RowView<nova::Data> const& row) -> void {
+    auto options = options_;
+    options.style = no_style();
+    options.oneline = true;
+    options.indentation = 0;
+    options.trailing_commas = false;
+    // The string already describes the value, so what it contains stays
+    // verbatim: a nested heterogeneous list prints as `[1,"x"]`.
+    options.stringify_heterogeneous_lists = false;
+    auto printer = json_printer{std::move(options)};
+    printer.print(row);
+    auto const bytes = printer.bytes();
+    put_string(options_.style.string,
+               std::string_view{reinterpret_cast<char const*>(bytes.data()),
+                                bytes.size()});
   }
 
   auto should_skip(nova::RowView<nova::Data> const& row, bool in_list) -> bool {

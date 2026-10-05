@@ -79,6 +79,11 @@ struct json_printer_options {
   /// Omit empty lists when printing.
   bool omit_empty_lists = false;
 
+  /// Print the elements of a heterogeneous list as strings, so that the data
+  /// matches a definition that describes the list as `list<string>`. Only the
+  /// columnar printer honors this; nulls stay null.
+  bool stringify_heterogeneous_lists = false;
+
   /// Omit empty maps when printing.
   /// TODO: Remove this when removing the import command.
   bool omit_empty_maps = false;

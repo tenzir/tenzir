@@ -1,0 +1,219 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema_id": "d2132397f7698aa9",
+      "data": {
+        "xs": [
+          1,
+          null
+        ]
+      }
+    },
+    {
+      "schema_id": "b61aa19dcb711f78",
+      "data": {
+        "xs": [
+          "1",
+          "\"x\""
+        ]
+      }
+    },
+    {
+      "schema_id": "5b23afb9c61671f2",
+      "data": {
+        "xs": [
+          {
+            "a": 1
+          },
+          {
+            "b": 2
+          }
+        ]
+      }
+    },
+    {
+      "schema_id": "1f42d661e064f94d",
+      "data": {
+        "xs": [
+          "[1]",
+          "[\"x\"]"
+        ]
+      }
+    },
+    {
+      "schema_id": "35676ef71e44a4eb",
+      "data": {
+        "xs": [
+          "1",
+          null,
+          "{\"a\":2}"
+        ]
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "schema_id": "35676ef71e44a4eb",
+      "definition": {
+        "name": "tenzir.unknown",
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "xs",
+              "type": {
+                "name": null,
+                "kind": "list",
+                "attributes": [],
+                "state": {
+                  "type": {
+                    "name": null,
+                    "kind": "string",
+                    "attributes": [],
+                    "state": null
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema_id": "5b23afb9c61671f2",
+      "definition": {
+        "name": "tenzir.unknown",
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "xs",
+              "type": {
+                "name": null,
+                "kind": "list",
+                "attributes": [],
+                "state": {
+                  "type": {
+                    "name": null,
+                    "kind": "record",
+                    "attributes": [],
+                    "state": {
+                      "fields": [
+                        {
+                          "name": "a",
+                          "type": {
+                            "name": null,
+                            "kind": "int64",
+                            "attributes": [],
+                            "state": null
+                          }
+                        },
+                        {
+                          "name": "b",
+                          "type": {
+                            "name": null,
+                            "kind": "int64",
+                            "attributes": [],
+                            "state": null
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema_id": "b61aa19dcb711f78",
+      "definition": {
+        "name": "tenzir.unknown",
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "xs",
+              "type": {
+                "name": null,
+                "kind": "list",
+                "attributes": [],
+                "state": {
+                  "type": {
+                    "name": null,
+                    "kind": "string",
+                    "attributes": [],
+                    "state": null
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema_id": "1f42d661e064f94d",
+      "definition": {
+        "name": "tenzir.unknown",
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "xs",
+              "type": {
+                "name": null,
+                "kind": "list",
+                "attributes": [],
+                "state": {
+                  "type": {
+                    "name": null,
+                    "kind": "string",
+                    "attributes": [],
+                    "state": null
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema_id": "d2132397f7698aa9",
+      "definition": {
+        "name": "tenzir.unknown",
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "xs",
+              "type": {
+                "name": null,
+                "kind": "list",
+                "attributes": [],
+                "state": {
+                  "type": {
+                    "name": null,
+                    "kind": "int64",
+                    "attributes": [],
+                    "state": null
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

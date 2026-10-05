@@ -80,6 +80,91 @@
           },
         },
         {
+          name: "empty",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "null",
+                attributes: [],
+                state: null,
+              },
+            },
+          },
+        },
+        {
+          name: "nulls",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "null",
+                attributes: [],
+                state: null,
+              },
+            },
+          },
+        },
+        {
+          name: "nullable",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "int64",
+                attributes: [],
+                state: null,
+              },
+            },
+          },
+        },
+        {
+          name: "records",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "record",
+                attributes: [],
+                state: {
+                  fields: [
+                    {
+                      name: "a",
+                      type: {
+                        name: null,
+                        kind: "int64",
+                        attributes: [],
+                        state: null,
+                      },
+                    },
+                    {
+                      name: "b",
+                      type: {
+                        name: null,
+                        kind: "int64",
+                        attributes: [],
+                        state: null,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
           name: "mixed",
           type: {
             name: null,
@@ -88,24 +173,41 @@
             state: {
               type: {
                 name: null,
-                kind: "union",
+                kind: "string",
                 attributes: [],
-                state: {
-                  types: [
-                    {
-                      name: null,
-                      kind: "int64",
-                      attributes: [],
-                      state: null,
-                    },
-                    {
-                      name: null,
-                      kind: "string",
-                      attributes: [],
-                      state: null,
-                    },
-                  ],
-                },
+                state: null,
+              },
+            },
+          },
+        },
+        {
+          name: "mixed_lists",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "string",
+                attributes: [],
+                state: null,
+              },
+            },
+          },
+        },
+        {
+          name: "mixed_records",
+          type: {
+            name: null,
+            kind: "list",
+            attributes: [],
+            state: {
+              type: {
+                name: null,
+                kind: "string",
+                attributes: [],
+                state: null,
               },
             },
           },

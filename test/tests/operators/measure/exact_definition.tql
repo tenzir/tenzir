@@ -1,4 +1,18 @@
-// The definition of a schema, as the `/serve` endpoints report it.
-from {a: 1, l: [1], m: {n: 1}, o: [{p: 1}], mixed: [1, "x"]}
+// The definition of a schema, as the `/serve` endpoints report it. Nulls are
+// neutral and records unify, so only a genuine disagreement of kinds makes a
+// list a `list<string>`.
+from {
+  a: 1,
+  l: [1],
+  m: {n: 1},
+  o: [{p: 1}],
+  empty: [],
+  nulls: [null],
+  nullable: [1, null],
+  records: [{a: 1}, {b: 2}],
+  mixed: [1, "x"],
+  mixed_lists: [[1], ["x"]],
+  mixed_records: [1, {a: 2}],
+}
 measure _exact_definition=true
 select schema

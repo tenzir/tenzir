@@ -88,6 +88,15 @@ tenzir:
         from {kind: "first"}, {discard: true}, {kind: "last"}
         where kind == "first" or kind == "last"
         serve "serve_masked"
+    serve_heterogeneous:
+      name: serve heterogeneous
+      definition: |
+        from {xs: [1, null]},
+          {xs: [1, "x"]},
+          {xs: [{a: 1}, {b: 2}]},
+          {xs: [[1], ["x"]]},
+          {xs: [1, null, {a: 2}]}
+        serve "serve_heterogeneous"
     serve-2:
       name: serve 2
       definition: |

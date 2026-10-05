@@ -49,11 +49,102 @@ auto definition(std::string_view kind, Data state = Null{}) -> Record {
 
 auto definition(RowView<Data> const& row, TypeNaming naming) -> Record;
 
-/// The definition of the type that all elements of a list share, or a `union`
-/// of their types. Lists may be heterogeneous; distinct element types keep
-/// their first-occurrence order.
+/// The kind of a definition, which every definition carries.
+auto kind_of(Record const& type) -> std::string_view {
+  return as<std::string>(type.at("kind"));
+}
+
+/// The fields of a record definition, or the element type of a list
+/// definition, which both live in its state.
+auto state_of(Record const& type, std::string_view key) -> Data const& {
+  return as<Record>(type.at("state")).at(key);
+}
+
+/// The definition that describes both `lhs` and `rhs`, if there is one.
+///
+/// `null` is neutral: every type describes it. Records unify into the union of
+/// their fields, and lists into a list of the unified element. Everything else
+/// must match exactly, as no single legacy type can describe two kinds at
+/// once.
+auto unify(Record lhs, Record const& rhs) -> Option<Record> {
+  if (equal(RowView<Record>{lhs}, RowView<Record>{rhs})) {
+    return lhs;
+  }
+  constexpr auto null_kind = Type<Null>::static_name;
+  auto const lhs_kind = kind_of(lhs);
+  auto const rhs_kind = kind_of(rhs);
+  if (lhs_kind == null_kind) {
+    return rhs;
+  }
+  if (rhs_kind == null_kind) {
+    return lhs;
+  }
+  if (lhs_kind != rhs_kind) {
+    return None{};
+  }
+  if (lhs_kind == Type<Record>::static_name) {
+    auto fields = as<List>(state_of(lhs, "fields"));
+    for (auto const& field : as<List>(state_of(rhs, "fields"))) {
+      auto const& rhs_field = as<Record>(field);
+      auto const& name = as<std::string>(rhs_field.at("name"));
+      auto const it = std::ranges::find_if(fields, [&](Data const& existing) {
+        return as<std::string>(as<Record>(existing).at("name")) == name;
+      });
+      if (it == fields.end()) {
+        fields.emplace_back(field);
+        continue;
+      }
+      auto& lhs_field = as<Record>(*it);
+      auto type = unify(as<Record>(lhs_field.at("type")),
+                        as<Record>(rhs_field.at("type")));
+      if (not type) {
+        return None{};
+      }
+      lhs_field["type"] = std::move(*type);
+    }
+    return definition(lhs_kind, Record{{"fields", std::move(fields)}});
+  }
+  if (lhs_kind == Type<List>::static_name) {
+    auto type = unify(as<Record>(state_of(lhs, "type")),
+                      as<Record>(state_of(rhs, "type")));
+    if (not type) {
+      return None{};
+    }
+    return definition(lhs_kind, Record{{"type", std::move(*type)}});
+  }
+  return None{};
+}
+
+/// The definition that describes every element of `list`, if there is one.
+/// Nulls are neutral, so a list of nulls is described as `null`.
+auto unified_element_definition(RowView<List> const& list) -> Option<Record> {
+  auto result = definition(Type<Null>::static_name);
+  for (auto element : list) {
+    auto unified
+      = unify(std::move(result), definition(element, TypeNaming::legacy));
+    if (not unified) {
+      return None{};
+    }
+    result = std::move(*unified);
+  }
+  return result;
+}
+
+/// The definition of the type that all elements of a list share.
+///
+/// Lists may be heterogeneous. With `TypeNaming::nova`, such a list describes
+/// its element as a `union` of the distinct element types, in their
+/// first-occurrence order. With `TypeNaming::legacy`, which no union can pass
+/// through, it describes its element as `string` instead, matching the
+/// stringified data that `json_printer` produces for it.
 auto element_definition(RowView<List> const& list, TypeNaming naming)
   -> Record {
+  if (naming == TypeNaming::legacy) {
+    if (auto unified = unified_element_definition(list)) {
+      return std::move(*unified);
+    }
+    return definition(kind_name<String>(naming));
+  }
   auto types = List{};
   for (auto element : list) {
     auto type = definition(element, naming);
@@ -106,6 +197,10 @@ auto attributes(bool internal) -> List {
 }
 
 } // namespace
+
+auto list_is_heterogeneous(RowView<List> const& list) -> bool {
+  return not unified_element_definition(list).has_value();
+}
 
 auto type_definition(RowView<Data> const& row, std::string_view name,
                      bool internal, TypeNaming naming) -> Record {

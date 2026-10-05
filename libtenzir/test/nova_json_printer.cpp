@@ -483,6 +483,43 @@ TEST("print DEL unescaped unless styled") {
   CHECK_EQUAL(text(styled), "\x1b[32m\"a\\u007Fb\"\x1b[0m");
 }
 
+TEST("print stringifies the elements of a heterogeneous list") {
+  auto dh = collecting_diagnostic_handler{};
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  nova::append_legacy_data(
+    builder,
+    data{record{
+      {"nullable", list{int64_t{1}, data{}}},
+      {"records", list{record{{"a", int64_t{1}}}, record{{"b", int64_t{2}}}}},
+      {"mixed", list{int64_t{1}, data{}, "x", record{{"a", int64_t{2}}}}},
+      {"mixed_lists", list{list{int64_t{1}}, list{"x"}}},
+      {"nested", list{list{int64_t{1}, "x"}, true}},
+    }},
+    dh);
+  auto array = builder.finish();
+  auto text = [&](bool stringify) {
+    auto options = plain(true);
+    options.stringify_heterogeneous_lists = stringify;
+    auto printer = nova::json_printer{std::move(options)};
+    printer.print(array.get(0));
+    auto const bytes = printer.bytes();
+    return std::string{reinterpret_cast<char const*>(bytes.data()),
+                       bytes.size()};
+  };
+  CHECK_EQUAL(text(false), R"({"nullable":[1,null],"records":[{"a":1},{"b":2}])"
+                           R"(,"mixed":[1,null,"x",{"a":2}])"
+                           R"(,"mixed_lists":[[1],["x"]])"
+                           R"(,"nested":[[1,"x"],true]})");
+  // Nulls are neutral and records unify, so only the lists whose elements
+  // genuinely disagree turn into lists of strings.
+  CHECK_EQUAL(text(true), R"({"nullable":[1,null],"records":[{"a":1},{"b":2}])"
+                          R"(,"mixed":["1",null,"\"x\"","{\"a\":2}"])"
+                          R"(,"mixed_lists":["[1]","[\"x\"]"])"
+                          // A stringified element keeps its verbatim
+                          // rendering, however heterogeneous it is itself.
+                          R"(,"nested":["[1,\"x\"]","true"]})");
+}
+
 TEST("print replaces the previous row") {
   auto dh = collecting_diagnostic_handler{};
   auto builder = nova::ArrayBuilder<nova::Data>{};

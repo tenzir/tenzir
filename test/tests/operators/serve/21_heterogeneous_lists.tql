@@ -1,0 +1,12 @@
+// A list whose elements disagree is described as `list<string>`, because no
+// legacy type can express a union. The data must say the same, so the
+// elements of such a list go out as strings. Nulls stay null, and lists that
+// only mix in nulls or unify into one record keep their values.
+api "/serve", {
+  serve_id: "serve_heterogeneous",
+  min_events: 5,
+  max_events: 5,
+  timeout: 5s,
+  schema: "exact",
+}
+write_json

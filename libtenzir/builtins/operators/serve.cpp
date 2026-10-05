@@ -1721,6 +1721,10 @@ struct serve_handler_state {
     }};
     auto events_printer = nova::json_printer{{
       .numeric_durations = true,
+      // The definition describes a heterogeneous list as `list<string>`,
+      // because no legacy type can express a union. The data must say the
+      // same, so its elements go out as strings.
+      .stringify_heterogeneous_lists = true,
     }};
     auto result
       = next_continuation_token.empty()
