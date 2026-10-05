@@ -578,7 +578,14 @@ def _run_batch(
         pipe_path = Path(tmpdir) / "pipe.tql"
         pipe_path.write_text(pipeline, encoding="utf-8")
         result = subprocess.run(
-            [*tenzir, "--bare-mode", "--console-verbosity=error", "-f", str(pipe_path)],
+            [
+                *tenzir,
+                "--nova=true",
+                "--bare-mode",
+                "--console-verbosity=error",
+                "-f",
+                str(pipe_path),
+            ],
             capture_output=True,
             text=True,
             timeout=120,

@@ -8,7 +8,7 @@
 
 #include "clickhouse/sql_pushdown.hpp"
 
-#include "clickhouse/block_to_table_slice.hpp"
+#include "clickhouse/block_decoding.hpp"
 
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/pushdown/translate.hpp>

@@ -9,7 +9,7 @@
 #include "clickhouse/sql_pushdown.hpp"
 
 #include "clickhouse/arguments.hpp"
-#include "clickhouse/block_to_table_slice.hpp"
+#include "clickhouse/block_decoding.hpp"
 #include "clickhouse/transformers.hpp"
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/escapers.hpp"

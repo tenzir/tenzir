@@ -62,6 +62,7 @@ def _run_pipeline(tenzir: tuple[str, ...], pipeline: str) -> str:
         result = subprocess.run(
             [
                 *tenzir,
+                "--nova=true",
                 "--bare-mode",
                 "--console-verbosity=warning",
                 "-f",

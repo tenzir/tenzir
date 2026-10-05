@@ -1,0 +1,7 @@
+// `LowCardinality` columns decode through their dictionary, and `Array(UInt8)`
+// columns become blobs.
+from_clickhouse sql="SELECT toLowCardinality('x') AS s, toLowCardinality(toNullable(if(number = 0, NULL, 'y'))) AS ns, CAST([104, 105] AS Array(UInt8)) AS bytes FROM numbers(2) ORDER BY number",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

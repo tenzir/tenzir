@@ -1,0 +1,10 @@
+{
+  s: "x",
+  ns: null,
+  bytes: b"hi",
+}
+{
+  s: "x",
+  ns: "y",
+  bytes: b"hi",
+}

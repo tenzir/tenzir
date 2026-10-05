@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "clickhouse/arguments.hpp"
+#include "clickhouse/block_to_events.hpp"
 #include "clickhouse/block_to_table_slice.hpp"
+#include "clickhouse/connection.hpp"
 #include "clickhouse/easy_client.hpp"
 #include "clickhouse/sql_pushdown.hpp"
 #include "tenzir/arc.hpp"
@@ -15,9 +17,13 @@
 #include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/pushdown/read.hpp"
 #include "tenzir/pushdown/translate.hpp"
 #include "tenzir/tql2/filter.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -126,6 +132,96 @@ struct RuntimeState {
     }
   }
 };
+
+auto split_validated_table_name(std::string_view table)
+  -> split_table_name_result {
+  if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
+    return {split->first, split->second};
+  }
+  return {None{}, table};
+}
+
+auto make_schema_name_from_table(std::string_view table) -> std::string {
+  auto split = split_validated_table_name(table);
+  auto table_name = unquote_identifier_component(split.table);
+  if (split.database) {
+    return fmt::format("clickhouse.{}.{}",
+                       unquote_identifier_component(*split.database),
+                       table_name);
+  }
+  return fmt::format("clickhouse.{}", table_name);
+}
+
+/// Reads the columns of `table` that `SELECT *` returns.
+auto fetch_schema(::clickhouse::Client& client, std::string_view table)
+  -> SqlSchema {
+  // Any privilege on the table grants `DESCRIBE`, so this cannot fail where
+  // the `SELECT` that follows would succeed.
+  auto query = ::clickhouse::Query{fmt::format("DESCRIBE TABLE {}", table)};
+  auto schema = SqlSchema{};
+  query.OnData([&](::clickhouse::Block const& block) {
+    if (block.GetColumnCount() < 3) {
+      return;
+    }
+    auto names = block[0]->As<::clickhouse::ColumnString>();
+    auto types = block[1]->As<::clickhouse::ColumnString>();
+    auto default_types = block[2]->As<::clickhouse::ColumnString>();
+    if (not names or not types or not default_types) {
+      return;
+    }
+    for (auto i = size_t{0}; i < block.GetRowCount(); ++i) {
+      // Whether `SELECT *` returns a generated column depends on the
+      // session's `asterisk_include_*` settings, so the schema keeps them
+      // apart: predicates on them stay local and projections that name them
+      // fall back to `*`, which matches the local result under any setting.
+      auto default_type = default_types->At(i);
+      auto generated = default_type == "ALIAS" or default_type == "MATERIALIZED"
+                       or default_type == "EPHEMERAL";
+      schema.add_column(names->At(i), types->At(i), generated);
+    }
+  });
+  client.Execute(query);
+  return schema;
+}
+
+struct PreparedQuery {
+  std::string text;
+  ir::OptimizeFilter local_filter;
+};
+
+/// Decides the query text and which predicates stay local. Runs on the
+/// query thread because it may need a round-trip for the schema.
+auto prepare_query(::clickhouse::Client& client, QueryPlan& plan)
+  -> PreparedQuery {
+  if (not plan.table) {
+    // TODO: Weaving hints into user-provided SQL requires parsing it. Until
+    // then, everything runs locally.
+    return {.text = std::move(plan.sql),
+            .local_filter = std::move(plan.optimization.filter)};
+  }
+  // A limit alone needs no schema; only filter and projection do.
+  if (plan.optimization.filter.empty() and not plan.optimization.projection) {
+    return {
+      .text = make_select_query(*plan.table, nullptr, None{}, {},
+                                plan.optimization.limit),
+      .local_filter = {},
+    };
+  }
+  auto schema = fetch_schema(client, *plan.table);
+  auto split = pushdown::split_filter(std::move(plan.optimization.filter),
+                                      schema.model(), ClickHouseRenderer{});
+  // The limit counts events after the whole filter chain, so it can only go
+  // into the query if the chain did.
+  auto limit = Option<uint64_t>{};
+  if (split.remaining.empty()) {
+    limit = plan.optimization.limit;
+  }
+  return {
+    .text = make_select_query(
+      *plan.table, &schema, plan.optimization.projection, split.pushed, limit),
+    .local_filter = std::move(split.remaining),
+  };
+}
 
 class FromClickhouse final : public Operator<void, table_slice> {
 public:
@@ -280,99 +376,6 @@ public:
   }
 
 private:
-  static auto split_validated_table_name(std::string_view table)
-    -> split_table_name_result {
-    if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
-      return {split->first, split->second};
-    }
-    return {None{}, table};
-  }
-
-  static auto make_schema_name_from_table(std::string_view table)
-    -> std::string {
-    auto split = split_validated_table_name(table);
-    auto table_name = unquote_identifier_component(split.table);
-    if (split.database) {
-      return fmt::format("clickhouse.{}.{}",
-                         unquote_identifier_component(*split.database),
-                         table_name);
-    }
-    return fmt::format("clickhouse.{}", table_name);
-  }
-
-  /// Reads the columns of `table` that `SELECT *` returns.
-  static auto fetch_schema(::clickhouse::Client& client, std::string_view table)
-    -> SqlSchema {
-    // Any privilege on the table grants `DESCRIBE`, so this cannot fail where
-    // the `SELECT` that follows would succeed.
-    auto query = ::clickhouse::Query{fmt::format("DESCRIBE TABLE {}", table)};
-    auto schema = SqlSchema{};
-    query.OnData([&](::clickhouse::Block const& block) {
-      if (block.GetColumnCount() < 3) {
-        return;
-      }
-      auto names = block[0]->As<::clickhouse::ColumnString>();
-      auto types = block[1]->As<::clickhouse::ColumnString>();
-      auto default_types = block[2]->As<::clickhouse::ColumnString>();
-      if (not names or not types or not default_types) {
-        return;
-      }
-      for (auto i = size_t{0}; i < block.GetRowCount(); ++i) {
-        // Whether `SELECT *` returns a generated column depends on the
-        // session's `asterisk_include_*` settings, so the schema keeps them
-        // apart: predicates on them stay local and projections that name them
-        // fall back to `*`, which matches the local result under any setting.
-        auto default_type = default_types->At(i);
-        auto generated = default_type == "ALIAS"
-                         or default_type == "MATERIALIZED"
-                         or default_type == "EPHEMERAL";
-        schema.add_column(names->At(i), types->At(i), generated);
-      }
-    });
-    client.Execute(query);
-    return schema;
-  }
-
-  struct PreparedQuery {
-    std::string text;
-    ir::OptimizeFilter local_filter;
-  };
-
-  /// Decides the query text and which predicates stay local. Runs on the
-  /// query thread because it may need a round-trip for the schema.
-  static auto prepare_query(::clickhouse::Client& client, QueryPlan& plan)
-    -> PreparedQuery {
-    if (not plan.table) {
-      // TODO: Weaving hints into user-provided SQL requires parsing it. Until
-      // then, everything runs locally.
-      return {.text = std::move(plan.sql),
-              .local_filter = std::move(plan.optimization.filter)};
-    }
-    // A limit alone needs no schema; only filter and projection do.
-    if (plan.optimization.filter.empty() and not plan.optimization.projection) {
-      return {
-        .text = make_select_query(*plan.table, nullptr, None{}, {},
-                                  plan.optimization.limit),
-        .local_filter = {},
-      };
-    }
-    auto schema = fetch_schema(client, *plan.table);
-    auto split = pushdown::split_filter(std::move(plan.optimization.filter),
-                                        schema.model(), ClickHouseRenderer{});
-    // The limit counts events after the whole filter chain, so it can only go
-    // into the query if the chain did.
-    auto limit = Option<uint64_t>{};
-    if (split.remaining.empty()) {
-      limit = plan.optimization.limit;
-    }
-    return {
-      .text
-      = make_select_query(*plan.table, &schema, plan.optimization.projection,
-                          split.pushed, limit),
-      .local_filter = std::move(split.remaining),
-    };
-  }
-
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
                  diagnostic_handler& dh) -> Task<void> {
     try {
@@ -446,6 +449,262 @@ private:
   uint64_t emitted_ = 0;
 };
 
+class FromClickhouseEvents final : public Operator<void, nova::Events> {
+public:
+  FromClickhouseEvents() = default;
+
+  explicit FromClickhouseEvents(FromClickhouseArgs args)
+    : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto& dh = ctx.dh();
+    remaining_ = args_.optimization.limit;
+    auto tls = tls_options::from_optional(args_.tls).resolve(
+      ctx.actor_system().config(), dh);
+    if (not tls) {
+      done_ = true;
+      co_return;
+    }
+    auto const tls_enabled = tls->tls.inner;
+    auto connection = ConnectionArgs{};
+    connection.tls = std::move(*tls);
+    auto const default_port
+      = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
+    connection.port = detail::narrow_cast<uint16_t>(
+      args_.port ? args_.port->inner : default_port);
+    auto uri = std::string{};
+    auto requests = std::vector<secret_request>{};
+    auto const has_uri = args_.uri.inner != secret::make_literal("");
+    if (has_uri) {
+      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
+    } else {
+      requests.push_back(
+        make_secret_request("host", args_.host, connection.host, dh));
+      requests.push_back(
+        make_secret_request("user", args_.user, connection.user, dh));
+      requests.push_back(make_secret_request("password", args_.password,
+                                             connection.password, dh));
+    }
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      done_ = true;
+      co_return;
+    }
+    if (has_uri) {
+      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
+      if (not parsed) {
+        done_ = true;
+        co_return;
+      }
+      connection.port = detail::narrow_cast<uint16_t>(default_port);
+      connection.apply_uri(*parsed);
+    }
+    // The query text is only decided on the query thread: with optimizer hints
+    // in table mode, it depends on the table's schema.
+    auto plan = QueryPlan{
+      .table = None{},
+      .sql = {},
+      .schema_name = "clickhouse.query",
+      .optimization = args_.optimization,
+    };
+    if (args_.table) {
+      plan.table = args_.table->inner;
+      plan.schema_name = make_schema_name_from_table(args_.table->inner);
+    } else {
+      plan.sql = args_.sql->inner;
+    }
+    // Helper task to shut down our query on cancellation.
+    ctx.spawn_task([shared = shared_]() mutable -> Task<void> {
+      if (not co_await catch_cancellation(wait_forever())) {
+        shared->request_cancellation();
+      }
+    });
+    // The actual query task.
+    ctx.spawn_task([shared = shared_, connection = std::move(connection),
+                    plan = std::move(plan), tls_enabled, &dh,
+                    loc = args_.operator_location]() mutable -> Task<void> {
+      auto transformed_dh = transforming_diagnostic_handler{
+        dh, [loc](diagnostic diag) {
+          if (not has_primary_annotation(diag)) {
+            diag.annotations.emplace_back(true, std::string{}, loc);
+          }
+          return diag;
+        }};
+      co_await run_query(std::move(shared), std::move(connection),
+                         std::move(plan), tls_enabled, transformed_dh);
+    });
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_return co_await shared_->queue.dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](PlanMessage x) -> Task<void> {
+        for (auto& expr : x.local_filter) {
+          auto filter = co_await nova::Evaluator::make(std::move(expr), ctx);
+          if (not filter) {
+            shared_->request_cancellation();
+            done_ = true;
+            co_return;
+          }
+          filters_.push_back(std::move(*filter));
+        }
+      },
+      [&](EventsMessage x) -> Task<void> {
+        if (done_ or shared_->should_cancel()) {
+          co_return;
+        }
+        // Predicates without an exact SQL translation run here, with the same
+        // semantics as the `where` they came from. The limit counts events
+        // after them; when it went into the SQL query this is a no-op.
+        auto events = pushdown::apply_read(std::move(x.events), filters_,
+                                           remaining_, ctx.dh());
+        if (events.active_count() > 0) {
+          co_await push(std::move(events));
+        }
+        if (remaining_ == uint64_t{0}) {
+          shared_->request_cancellation();
+          done_ = true;
+        }
+      },
+      [&](DoneMessage) -> Task<void> {
+        done_ = true;
+        co_return;
+      });
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    shared_->request_cancellation();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // A query has no cursor to resume from, so a restored operator would run
+    // it again and repeat the events that earlier checkpoints committed.
+    diagnostic::error("from_clickhouse does not support checkpoints yet")
+      .primary(args_.operator_location)
+      .throw_();
+  }
+
+private:
+  struct EventsMessage {
+    nova::Events events;
+  };
+
+  using Message = variant<PlanMessage, EventsMessage, DoneMessage>;
+
+  /// The state shared with the query thread.
+  struct Shared {
+    Shared() : queue{message_queue_capacity} {
+    }
+
+    folly::coro::BoundedQueue<Message, true, true> queue;
+    Atomic<bool> stop_requested = false;
+
+    /// Enqueues from the blocking query thread, giving up once downstream has
+    /// declared that it needs no more data.
+    auto produce(Message message) -> void {
+      while (not should_cancel()) {
+        if (queue.try_enqueue(message)) {
+          return;
+        }
+        std::this_thread::sleep_for(message_queue_backoff);
+      }
+    }
+
+    auto should_cancel() const -> bool {
+      return stop_requested.load(std::memory_order::acquire);
+    }
+
+    auto request_cancellation() -> void {
+      stop_requested.store(true, std::memory_order_release);
+      while (queue.try_dequeue()) {
+        // Drop buffered events; downstream has already declared it needs no
+        // more.
+      }
+    }
+  };
+
+  static auto
+  run_query(Arc<Shared> shared, ConnectionArgs connection, QueryPlan plan,
+            bool tls_enabled, diagnostic_handler& dh) -> Task<void> {
+    try {
+      auto on_data = [&](::clickhouse::Block const& block) {
+        if (shared->should_cancel()) {
+          return false;
+        }
+        auto events = block_to_events(block, plan.schema_name, dh);
+        if (not events) {
+          return not shared->should_cancel();
+        }
+        shared->produce(EventsMessage{std::move(*events)});
+        return not shared->should_cancel();
+      };
+      co_await spawn_blocking([&]() {
+        // Tables without a database, in `table` and in `sql`, refer to the
+        // database of the URI.
+        auto options = connection.to_client_options();
+        if (connection.default_database) {
+          options.SetDefaultDatabase(*connection.default_database);
+        }
+        auto client = ::clickhouse::Client{options};
+        auto prepared = prepare_query(client, plan);
+        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared.text);
+        shared->produce(PlanMessage{std::move(prepared.local_filter)});
+        auto query = ::clickhouse::Query{std::move(prepared.text)};
+        query.SetSetting("max_block_size",
+                         {std::to_string(defaults::import::table_slice_size),
+                          ::clickhouse::QuerySettingsField::IMPORTANT});
+        // Without this, MergeTree's byte-based cap overrides max_block_size
+        // on wide tables.
+        query.SetSetting("preferred_block_size_bytes",
+                         {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
+        // `block_to_events` cannot decode ClickHouse's native `JSON` column
+        // type; this makes the server send such columns as plain strings
+        // instead, matching how `to_clickhouse` writes JSON columns.
+        query.SetSetting("output_format_native_write_json_as_string",
+                         {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
+        query.OnDataCancelable(on_data);
+        client.Select(query);
+      });
+    } catch (const panic_exception&) {
+      throw;
+    } catch (const ::clickhouse::ServerError& e) {
+      if (not shared->should_cancel()) {
+        add_tls_client_diagnostic_hints(
+          diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what()),
+          tls_enabled, "ClickHouse", clickhouse_plaintext_port,
+          clickhouse_tls_port)
+          .emit(dh);
+      }
+    } catch (const std::exception& e) {
+      if (not shared->should_cancel()) {
+        add_tls_client_diagnostic_hints(
+          diagnostic::error("ClickHouse error: {}", e.what()), tls_enabled,
+          "ClickHouse", clickhouse_plaintext_port, clickhouse_tls_port)
+          .emit(dh);
+      }
+    }
+    co_await shared->queue.enqueue(DoneMessage{});
+  }
+
+  FromClickhouseArgs args_;
+  mutable Arc<Shared> shared_ = Arc<Shared>{std::in_place};
+  bool done_ = false;
+  std::vector<nova::Evaluator> filters_;
+  Option<uint64_t> remaining_;
+};
+
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -453,7 +712,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromClickhouseArgs, FromClickhouse>{};
+    auto d
+      = Describer<FromClickhouseArgs, FromClickhouse, FromClickhouseEvents>{};
     auto uri_arg = d.named_optional("uri", &FromClickhouseArgs::uri);
     auto table_arg = d.named("table", &FromClickhouseArgs::table);
     auto host_arg = d.named_optional("host", &FromClickhouseArgs::host);

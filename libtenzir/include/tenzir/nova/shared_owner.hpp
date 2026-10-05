@@ -622,6 +622,10 @@ public:
   };
 
   static auto make_uninitialized(Index capacity) -> Builder {
+    if (capacity == 0) {
+      // The builder allocates on its first element.
+      return {SharedOwner{}, 0};
+    }
     auto [control_ptr, data_ptr, actual_capacity]
       = _::allocate<T, AllocFn>(capacity);
     return {

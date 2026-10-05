@@ -1,4 +1,4 @@
-warning: field `nope` not found
+warning: event does not have field
  --> tests/operators/from_clickhouse/29_pushdown_unknown_column.tql:8:12
   |
 8 | select id, nope

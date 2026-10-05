@@ -8,6 +8,7 @@
 
 #include "clickhouse/block_to_table_slice.hpp"
 
+#include "clickhouse/block_decoding.hpp"
 #include "clickhouse/column_variant_traits.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/detail/string.hpp"
@@ -21,7 +22,6 @@
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/decimal.h>
 #include <clickhouse/columns/enum.h>
-#include <clickhouse/columns/factory.h>
 #include <clickhouse/columns/ip4.h>
 #include <clickhouse/columns/ip6.h>
 #include <clickhouse/columns/json.h>
@@ -45,100 +45,6 @@ namespace tenzir::plugins::clickhouse {
 namespace {
 
 using ConstColumnRef = std::shared_ptr<::clickhouse::Column const>;
-
-auto format_uint128(::clickhouse::UInt128 value) -> std::string {
-  auto result = std::string{};
-  while (value != 0) {
-    auto digit = static_cast<uint8_t>(value % absl::uint128{10});
-    result += static_cast<char>('0' + digit);
-    value /= absl::uint128{10};
-  }
-  if (result.empty()) {
-    result = "0";
-  }
-  std::reverse(result.begin(), result.end());
-  return result;
-}
-
-auto format_int128(::clickhouse::Int128 value) -> std::string {
-  if (value >= 0) {
-    return format_uint128(static_cast<absl::uint128>(value));
-  }
-  auto magnitude = static_cast<absl::uint128>(-(value + 1));
-  ++magnitude;
-  return fmt::format("-{}", format_uint128(magnitude));
-}
-
-auto format_scaled_integer(std::string digits, size_t scale) -> std::string {
-  auto negative = false;
-  if (not digits.empty() and digits.front() == '-') {
-    negative = true;
-    digits.erase(digits.begin());
-  }
-  if (scale > 0) {
-    if (digits.size() <= scale) {
-      digits.insert(0, scale - digits.size() + 1, '0');
-    }
-    digits.insert(digits.size() - scale, 1, '.');
-  }
-  if (negative) {
-    digits.insert(digits.begin(), '-');
-  }
-  return digits;
-}
-
-auto format_uuid(::clickhouse::UUID value) -> std::string {
-  return fmt::format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", value.first >> 32,
-                     (value.first >> 16) & 0xffff, value.first & 0xffff,
-                     value.second >> 48, value.second & 0xffffffffffffULL);
-}
-
-auto format_uuid(std::string_view data) -> std::string {
-  auto first = uint64_t{0};
-  auto second = uint64_t{0};
-  std::memcpy(&first, data.data(), sizeof(first));
-  std::memcpy(&second, data.data() + sizeof(first), sizeof(second));
-  return format_uuid(::clickhouse::UUID{first, second});
-}
-
-auto pow10(size_t exponent) -> int64_t {
-  auto result = int64_t{1};
-  for (auto i = size_t{0}; i < exponent; ++i) {
-    result *= 10;
-  }
-  return result;
-}
-
-auto check_time_nanos_range(::clickhouse::Int128 value) -> Option<int64_t> {
-  auto min = ::clickhouse::Int128{std::numeric_limits<int64_t>::min()};
-  auto max = ::clickhouse::Int128{std::numeric_limits<int64_t>::max()};
-  if (value < min or value > max) {
-    return None{};
-  }
-  return static_cast<int64_t>(value);
-}
-
-auto rescale_decimal_to_nanos(int64_t value, size_t precision)
-  -> Option<int64_t> {
-  if (precision == 9) {
-    return value;
-  }
-  if (precision < 9) {
-    auto factor = ::clickhouse::Int128{pow10(9 - precision)};
-    return check_time_nanos_range(::clickhouse::Int128{value} * factor);
-  }
-  return value / pow10(precision - 9);
-}
-
-auto seconds_to_nanos(int64_t seconds) -> Option<int64_t> {
-  return check_time_nanos_range(::clickhouse::Int128{seconds}
-                                * ::clickhouse::Int128{1'000'000'000});
-}
-
-auto days_to_nanos(int64_t days) -> Option<int64_t> {
-  auto seconds = ::clickhouse::Int128{days} * ::clickhouse::Int128{86400};
-  return check_time_nanos_range(seconds * ::clickhouse::Int128{1'000'000'000});
-}
 
 auto duration_from_nanos(Option<int64_t> nanos) -> Option<duration> {
   if (not nanos) {
@@ -198,196 +104,52 @@ auto parse_ip_bytes(std::string_view bytes) -> Option<ip> {
   }
 }
 
-auto decimal_from_bytes(std::string_view bytes, size_t scale)
-  -> Option<std::string> {
-  switch (bytes.size()) {
-    case 4: {
-      auto value = int32_t{0};
-      std::memcpy(&value, bytes.data(), sizeof(value));
-      return format_scaled_integer(std::to_string(value), scale);
-    }
-    case 8: {
-      auto value = int64_t{0};
-      std::memcpy(&value, bytes.data(), sizeof(value));
-      return format_scaled_integer(std::to_string(value), scale);
-    }
-    case 16: {
-      auto value = ::clickhouse::Int128{};
-      std::memcpy(&value, bytes.data(), sizeof(value));
-      return format_scaled_integer(format_int128(value), scale);
-    }
-    default:
-      return None{};
-  }
-}
-
-struct unwrapped_type {
-  ::clickhouse::TypeRef type;
-  bool nullable = false;
-  bool low_cardinality = false;
-};
-
-auto unwrap_type(::clickhouse::TypeRef type) -> unwrapped_type {
-  auto result = unwrapped_type{.type = std::move(type)};
-  while (result.type) {
-    switch (result.type->GetCode()) {
-      case ::clickhouse::Type::Nullable:
-        result.nullable = true;
-        result.type
-          = result.type->As<::clickhouse::NullableType>()->GetNestedType();
-        continue;
-      case ::clickhouse::Type::LowCardinality:
-        result.low_cardinality = true;
-        result.type
-          = result.type->As<::clickhouse::LowCardinalityType>()->GetNestedType();
-        continue;
-      default:
-        return result;
-    }
-  }
-  return result;
-}
-
-auto tuple_field_names(::clickhouse::TupleType const& type)
-  -> std::vector<std::string> {
-  auto names = std::vector<std::string>{};
-  // Unnamed tuples (e.g. `Tuple(UInt8, String)`) expose an empty
-  // `GetItemNames()` while `GetTupleType()` still carries the element types, so
-  // we drive the loop off the tuple arity and synthesize `field0`, `field1`,
-  // ... when names are missing.
-  auto arity = type.GetTupleType().size();
-  auto const& item_names = type.GetItemNames();
-  names.reserve(arity);
-  for (auto i = size_t{0}; i < arity; ++i) {
-    if (i < item_names.size() and not item_names[i].empty()) {
-      names.push_back(item_names[i]);
-    } else {
-      names.push_back(fmt::format("field{}", i));
-    }
-  }
-  return names;
-}
-
-auto emit_unsupported_column_warning(value_path path, std::string_view text,
-                                     diagnostic_handler& dh) -> void {
-  diagnostic::warning("dropping ClickHouse column `{}` with unsupported type "
-                      "`{}`",
-                      path, text)
-    .hint("cast unsupported columns in SQL or omit them from the result")
-    .emit(dh);
-}
-
-auto emit_empty_block_warning(std::string_view schema_name,
-                              diagnostic_handler& dh) -> void {
-  diagnostic::warning("dropping ClickHouse block for schema `{}` because no "
-                      "supported columns remained",
-                      schema_name)
-    .emit(dh);
-}
-
-auto infer_type(::clickhouse::TypeRef const& type_ref, value_path path,
-                diagnostic_handler& dh) -> Option<type> {
-  auto unwrapped = unwrap_type(type_ref);
-  auto code = unwrapped.type->GetCode();
-  switch (code) {
-    case ::clickhouse::Type::Void:
+auto to_legacy_type(DecodedType const& decoded) -> type {
+  switch (decoded.kind) {
+    case DecodedKind::null:
       return type{null_type{}};
-    case ::clickhouse::Type::Bool:
+    case DecodedKind::bool_:
       return type{bool_type{}};
-    case ::clickhouse::Type::Int8:
-    case ::clickhouse::Type::Int16:
-    case ::clickhouse::Type::Int32:
-    case ::clickhouse::Type::Int64:
+    case DecodedKind::int64:
       return type{int64_type{}};
-    case ::clickhouse::Type::UInt8:
-    case ::clickhouse::Type::UInt16:
-    case ::clickhouse::Type::UInt32:
-    case ::clickhouse::Type::UInt64:
+    case DecodedKind::uint64:
       return type{uint64_type{}};
-    case ::clickhouse::Type::Float32:
-    case ::clickhouse::Type::Float64:
+    case DecodedKind::double_:
       return type{double_type{}};
-    case ::clickhouse::Type::String:
-    case ::clickhouse::Type::FixedString:
-    case ::clickhouse::Type::UUID:
-    case ::clickhouse::Type::Int128:
-    case ::clickhouse::Type::UInt128:
-    case ::clickhouse::Type::Enum8:
-    case ::clickhouse::Type::Enum16:
-    case ::clickhouse::Type::JSON:
+    case DecodedKind::string:
       return type{string_type{}};
-    case ::clickhouse::Type::Date:
-    case ::clickhouse::Type::Date32:
-    case ::clickhouse::Type::DateTime:
-    case ::clickhouse::Type::DateTime64:
+    case DecodedKind::time:
       return type{time_type{}};
-    case ::clickhouse::Type::Time:
-    case ::clickhouse::Type::Time64:
+    case DecodedKind::duration:
       return type{duration_type{}};
-    case ::clickhouse::Type::IPv4:
-    case ::clickhouse::Type::IPv6:
+    case DecodedKind::ip:
       return type{ip_type{}};
-    case ::clickhouse::Type::Decimal:
-    case ::clickhouse::Type::Decimal32:
-    case ::clickhouse::Type::Decimal64:
-    case ::clickhouse::Type::Decimal128: {
-      auto precision
-        = unwrapped.type->As<::clickhouse::DecimalType>()->GetPrecision();
-      if (precision > 38) {
-        return None{};
-      }
-      return type{string_type{}};
-    }
-    case ::clickhouse::Type::Array: {
-      auto child = unwrap_type(
-        unwrapped.type->As<::clickhouse::ArrayType>()->GetItemType());
-      if (not child.nullable and not child.low_cardinality
-          and child.type->GetCode() == ::clickhouse::Type::UInt8) {
-        return type{blob_type{}};
-      }
-      auto value_type = infer_type(
-        unwrapped.type->As<::clickhouse::ArrayType>()->GetItemType(),
-        path.list(), dh);
-      if (not value_type) {
-        return None{};
-      }
-      return type{list_type{*value_type}};
-    }
-    case ::clickhouse::Type::Tuple: {
-      auto tuple = unwrapped.type->As<::clickhouse::TupleType>();
-      auto item_types = tuple->GetTupleType();
-      if (item_types.empty()) {
-        return None{};
-      }
-      auto names = tuple_field_names(*tuple);
+    case DecodedKind::blob:
+      return type{blob_type{}};
+    case DecodedKind::list:
+      return type{list_type{to_legacy_type(decoded.children[0])}};
+    case DecodedKind::record: {
       auto fields = std::vector<struct record_type::field>{};
-      fields.reserve(item_types.size());
-      for (auto i = size_t{0}; i < item_types.size(); ++i) {
-        auto field_type = infer_type(item_types[i], path.field(names[i]), dh);
-        if (not field_type) {
-          return None{};
-        }
-        fields.emplace_back(names[i], *field_type);
+      fields.reserve(decoded.children.size());
+      for (auto i = size_t{0}; i < decoded.children.size(); ++i) {
+        fields.emplace_back(decoded.names[i],
+                            to_legacy_type(decoded.children[i]));
       }
       return type{record_type{fields}};
     }
-    case ::clickhouse::Type::Map:
-    case ::clickhouse::Type::Point:
-    case ::clickhouse::Type::Ring:
-    case ::clickhouse::Type::Polygon:
-    case ::clickhouse::Type::MultiPolygon:
-    case ::clickhouse::Type::Nullable:
-    case ::clickhouse::Type::LowCardinality:
-      return None{};
   }
-  return None{};
+  TENZIR_UNREACHABLE();
+}
+
+auto infer_type(::clickhouse::TypeRef const& type_ref) -> Option<type> {
+  return classify(type_ref).transform(to_legacy_type);
 }
 
 struct normalized_column {
   ConstColumnRef original;
   ConstColumnRef effective;
   std::shared_ptr<::clickhouse::ColumnNullable const> nullable = nullptr;
-  unwrapped_type logical_type = {};
+  UnwrappedType logical_type = {};
   type output_type = {};
 };
 
@@ -395,9 +157,9 @@ struct warning_state {
   bool malformed = false;
 };
 
-auto normalize_column(ConstColumnRef const& column, value_path path,
-                      diagnostic_handler& dh) -> Option<normalized_column> {
-  auto output_type = infer_type(column->Type(), path, dh);
+auto normalize_column(ConstColumnRef const& column)
+  -> Option<normalized_column> {
+  auto output_type = infer_type(column->Type());
   if (not output_type) {
     return None{};
   }
@@ -1065,7 +827,7 @@ auto build_low_cardinality_series(normalized_column const& column,
 
 auto build_series(ConstColumnRef const& column, value_path path,
                   diagnostic_handler& dh) -> Option<series> {
-  auto normalized = normalize_column(column, path, dh);
+  auto normalized = normalize_column(column);
   if (not normalized) {
     emit_unsupported_column_warning(path, column->Type()->GetName(), dh);
     return None{};
@@ -1128,21 +890,6 @@ auto block_to_table_slice(::clickhouse::Block const& block,
     runtime_schema.to_arrow_schema(),
     detail::narrow<std::int64_t>(block.GetRowCount()), std::move(arrays));
   return table_slice{std::move(batch), std::move(runtime_schema)};
-}
-
-auto is_decodable_type(std::string_view type) -> bool {
-  // The client builds the columns it receives with the same factory, so a type
-  // it rejects never reaches the decoder either.
-  try {
-    auto column = ::clickhouse::CreateColumnByType(std::string{type});
-    if (not column) {
-      return false;
-    }
-    auto dh = null_diagnostic_handler{};
-    return infer_type(column->Type(), value_path{}, dh).has_value();
-  } catch (std::exception const&) {
-    return false;
-  }
 }
 
 } // namespace tenzir::plugins::clickhouse

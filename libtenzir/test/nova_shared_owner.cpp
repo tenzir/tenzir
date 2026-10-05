@@ -26,6 +26,17 @@ TEST("bulk append handles transformed values without dangling") {
   }
 }
 
+TEST("uninitialized owners may start empty") {
+  auto empty = DataOwner<int[]>::make_uninitialized(0);
+  CHECK_EQUAL(empty.capacity(), 0);
+  CHECK_EQUAL(empty.finish().length(), 0);
+  auto builder = DataOwner<int[]>::make_uninitialized(0);
+  builder.emplace_back(42);
+  auto result = builder.finish();
+  CHECK_EQUAL(result.length(), 1);
+  CHECK_EQUAL(result[0], 42);
+}
+
 TEST("bulk append handles nontrivial transformed values") {
   auto values = std::views::iota(0, 5) | std::views::transform([](int value) {
                   return std::string(100, 'x') + std::to_string(value);
