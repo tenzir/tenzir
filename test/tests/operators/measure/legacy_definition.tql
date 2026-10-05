@@ -1,4 +1,0 @@
-// The definition of a schema in the legacy shape, with field paths.
-from {a: 1, l: [1], m: {n: 1}, o: [{p: 1}]}
-measure _definition=true
-select schema

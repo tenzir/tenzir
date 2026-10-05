@@ -8,14 +8,12 @@
 
 #include "tenzir/nova/type_definition.hpp"
 
-#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/list_array.hpp"
 #include "tenzir/nova/type_system.hpp"
 
 #include <fmt/format.h>
 
 #include <algorithm>
-#include <vector>
 
 namespace tenzir::nova {
 
@@ -107,96 +105,6 @@ auto attributes(bool internal) -> List {
   return result;
 }
 
-/// The attributes of the outermost type, in the shape of a legacy definition.
-auto legacy_attributes(bool internal) -> Record {
-  auto result = Record{};
-  if (internal) {
-    result.emplace("internal", Null{});
-  }
-  return result;
-}
-
-auto path_definition(std::span<std::int64_t const> path) -> List {
-  auto result = List{};
-  for (auto index : path) {
-    result.emplace_back(index);
-  }
-  return result;
-}
-
-/// The element of a list, as one value that stands for all of them, plus the
-/// name of their common kind. A heterogeneous list has no such element, which
-/// a legacy definition cannot express beyond naming the kind `union`.
-struct ListElement {
-  Data value = Null{};
-  std::string kind;
-};
-
-auto list_element(RowView<List> const& list) -> ListElement {
-  auto type = element_definition(list, TypeNaming::legacy);
-  auto kind = as<std::string>(type["kind"]);
-  if (kind == union_kind) {
-    return {Null{}, std::move(kind)};
-  }
-  for (auto element : list) {
-    return {to_data(element), std::move(kind)};
-  }
-  return {Null{}, std::move(kind)};
-}
-
-/// The legacy definition of one type. `name` names the type itself, which is
-/// the schema name at the top level and the field name below it. `type_name`
-/// reports the name of the type, which only a schema has.
-auto legacy_definition(RowView<Data> const& row, std::string_view name,
-                       std::string_view type_name, Record attributes,
-                       std::vector<std::int64_t>& path) -> Record {
-  return match(row, [&]<class Tag>(RowView<Tag> const& value) -> Record {
-    auto kind = std::string{kind_name<Tag>(TypeNaming::legacy)};
-    auto fields = List{};
-    if constexpr (std::same_as<Tag, Record>) {
-      path.push_back(-1);
-      for (auto [field_name, field] : value) {
-        ++path.back();
-        fields.emplace_back(legacy_definition(field, field_name, {}, {}, path));
-      }
-      path.pop_back();
-    } else if constexpr (std::same_as<Tag, List>) {
-      // The legacy definition of a list is the definition of its element,
-      // with the list only showing in the kind and the type. Records in a
-      // list get a `-1` in their path for the elements.
-      auto element = list_element(value);
-      if (element.kind == union_kind) {
-        kind = fmt::format("list<{}>", union_kind);
-      } else {
-        auto const records
-          = element.kind == kind_name<Record>(TypeNaming::legacy);
-        if (records) {
-          path.push_back(-1);
-        }
-        auto result
-          = legacy_definition(RowView<Data>{element.value}, name, {}, {}, path);
-        if (records) {
-          path.pop_back();
-        }
-        result["kind"]
-          = fmt::format("list<{}>", as<std::string>(result["kind"]));
-        result["type"]
-          = type_name.empty()
-              ? fmt::format("list<{}>", as<std::string>(result["type"]))
-              : std::string{type_name};
-        result["attributes"] = std::move(attributes);
-        return result;
-      }
-    }
-    auto type = type_name.empty() ? kind : std::string{type_name};
-    return {
-      {"name", std::string{name}},     {"kind", std::move(kind)},
-      {"type", std::move(type)},       {"attributes", std::move(attributes)},
-      {"path", path_definition(path)}, {"fields", std::move(fields)},
-    };
-  });
-}
-
 } // namespace
 
 auto type_definition(RowView<Data> const& row, std::string_view name,
@@ -207,12 +115,6 @@ auto type_definition(RowView<Data> const& row, std::string_view name,
   }
   result["attributes"] = attributes(internal);
   return result;
-}
-
-auto legacy_type_definition(RowView<Data> const& row, std::string_view name,
-                            bool internal) -> Record {
-  auto path = std::vector<std::int64_t>{};
-  return legacy_definition(row, name, name, legacy_attributes(internal), path);
 }
 
 } // namespace tenzir::nova

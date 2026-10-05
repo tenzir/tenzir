@@ -96,7 +96,7 @@
 namespace tenzir::plugins::serve {
 
 TENZIR_ENUM(serve_state, running, completed, failed);
-TENZIR_ENUM(schema, legacy, exact, never);
+TENZIR_ENUM(schema, exact, never);
 
 namespace {
 
@@ -152,10 +152,10 @@ constexpr auto serve_spec = R"_(
                 description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
               schema:
                 type: string
-                enum: [legacy, exact, never]
+                enum: [exact, never]
                 example: "exact"
-                default: "legacy"
-                description: The schema representation to include in the response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
+                default: "exact"
+                description: The schema representation to include in the response. Use `never` to omit schema definitions.
           example:
             serve_id: "query-1"
             max_events: 1024
@@ -198,26 +198,23 @@ constexpr auto serve_spec = R"_(
                   example:
                   - schema_id: c631d301e4b18f4
                     definition:
-                    - name: tenzir.summarize
+                      name: tenzir.summarize
                       kind: record
-                      type: tenzir.summarize
-                      attributes: {}
-                      path: []
-                      fields:
-                      - name: severity
-                        kind: string
-                        type: string
-                        attributes: {}
-                        path:
-                        - 0
-                        fields: []
-                      - name: pipeline_id
-                        kind: string
-                        type: string
-                        attributes: {}
-                        path:
-                        - 1
-                        fields: []
+                      attributes: []
+                      state:
+                        fields:
+                        - name: severity
+                          type:
+                            name: null
+                            kind: string
+                            attributes: []
+                            state: null
+                        - name: pipeline_id
+                          type:
+                            name: null
+                            kind: string
+                            attributes: []
+                            state: null
                 events:
                   type: array
                   items:
@@ -251,10 +248,9 @@ constexpr auto serve_spec = R"_(
                   definition:
                     name: tenzir.summarize
                     kind: record
-                    type: tenzir.summarize
-                    attributes: {}
-                    path: []
-                    fields: []
+                    attributes: []
+                    state:
+                      fields: []
               events:
                 - schema_id: c631d301e4b18f4
                   data:
@@ -308,7 +304,7 @@ constexpr auto serve_multi_spec = R"_(
                       description: The continuation token from the previous response for this output stream. Pass `00000000-0000-0000-0000-000000000000` for the initial request.
                     schema:
                       type: string
-                      enum: [legacy, exact, never]
+                      enum: [exact, never]
                       example: "exact"
                       description: The schema representation to include in this output stream's response. Overrides the request-wide `schema` for this stream only.
               max_events:
@@ -330,10 +326,10 @@ constexpr auto serve_multi_spec = R"_(
                 description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
               schema:
                 type: string
-                enum: [legacy, exact, never]
+                enum: [exact, never]
                 example: "exact"
-                default: "legacy"
-                description: The default schema representation to include in each response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions. Individual output streams can override this with their own `schema` field.
+                default: "exact"
+                description: The default schema representation to include in each response. Use `never` to omit schema definitions. Individual output streams can override this with their own `schema` field.
           example:
             requests:
               - serve_id: "query-1"
@@ -384,26 +380,23 @@ constexpr auto serve_multi_spec = R"_(
                     example:
                     - schema_id: c631d301e4b18f4
                       definition:
-                      - name: tenzir.summarize
+                        name: tenzir.summarize
                         kind: record
-                        type: tenzir.summarize
-                        attributes: {}
-                        path: []
-                        fields:
-                        - name: severity
-                          kind: string
-                          type: string
-                          attributes: {}
-                          path:
-                          - 0
-                          fields: []
-                        - name: pipeline_id
-                          kind: string
-                          type: string
-                          attributes: {}
-                          path:
-                          - 1
-                          fields: []
+                        attributes: []
+                        state:
+                          fields:
+                          - name: severity
+                            type:
+                              name: null
+                              kind: string
+                              attributes: []
+                              state: null
+                          - name: pipeline_id
+                            type:
+                              name: null
+                              kind: string
+                              attributes: []
+                              state: null
                   events:
                     type: array
                     items:
@@ -498,7 +491,7 @@ struct request_meta {
   uint64_t max_events = defaults::api::serve::max_events;
   uint64_t min_events = defaults::api::serve::min_events;
   duration timeout = defaults::api::serve::timeout;
-  enum schema schema = schema::legacy;
+  enum schema schema = schema::exact;
 };
 
 struct request_base {
@@ -1639,9 +1632,7 @@ struct serve_handler_state {
       first = false;
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 type.make_fingerprint());
-      const auto ok = printer.print(out_iter, schema == schema::legacy
-                                                ? type.to_legacy_definition()
-                                                : type.to_definition());
+      const auto ok = printer.print(out_iter, type.to_definition());
       TENZIR_ASSERT(ok);
     }
     out_iter = fmt::format_to(out_iter, R"(}}]}})");
@@ -1671,43 +1662,26 @@ struct serve_handler_state {
   /// chart attributes become attributes of the schema, and a field that only
   /// holds nulls takes the kind that the chart intends for it.
   static auto apply_chart(
-    nova::Record& definition, enum schema schema,
+    nova::Record& definition,
     std::vector<std::pair<std::string, std::string>> const& chart_attributes,
     std::unordered_map<std::string, std::string> const& chart_types) -> void {
     if (chart_attributes.empty() and chart_types.empty()) {
       return;
     }
-    auto* root = &definition;
-    const auto legacy = schema == schema::legacy;
     // A type sorts its attributes by key, and so does this definition.
     auto sorted = chart_attributes;
     std::ranges::sort(sorted, std::less<>{},
                       &std::pair<std::string, std::string>::first);
-    if (legacy) {
-      if (auto* attributes = try_as<nova::Record>((*root)["attributes"])) {
-        for (auto const& [key, value] : sorted) {
-          (*attributes)[key] = value;
-        }
-      }
-    } else {
-      if (auto* attributes = try_as<nova::List>((*root)["attributes"])) {
-        for (auto const& [key, value] : sorted) {
-          attributes->emplace_back(nova::Record{
-            {"key", key},
-            {"value", value},
-          });
-        }
+    if (auto* attributes = try_as<nova::List>(definition["attributes"])) {
+      for (auto const& [key, value] : sorted) {
+        attributes->emplace_back(nova::Record{
+          {"key", key},
+          {"value", value},
+        });
       }
     }
-    // The legacy shape holds the fields of a record next to its kind, while
-    // the modern one holds them in its state.
-    auto* fields = [&]() -> nova::List* {
-      if (legacy) {
-        return try_as<nova::List>((*root)["fields"]);
-      }
-      auto* state = try_as<nova::Record>((*root)["state"]);
-      return state ? try_as<nova::List>((*state)["fields"]) : nullptr;
-    }();
+    auto* state = try_as<nova::Record>(definition["state"]);
+    auto* fields = state ? try_as<nova::List>((*state)["fields"]) : nullptr;
     if (not fields) {
       return;
     }
@@ -1724,7 +1698,7 @@ struct serve_handler_state {
       if (intended == chart_types.end()) {
         continue;
       }
-      auto* type = legacy ? field : try_as<nova::Record>((*field)["type"]);
+      auto* type = try_as<nova::Record>((*field)["type"]);
       if (not type) {
         continue;
       }
@@ -1733,9 +1707,6 @@ struct serve_handler_state {
         continue;
       }
       *kind = intended->second;
-      if (legacy) {
-        (*type)["type"] = intended->second;
-      }
     }
   }
 
@@ -1804,19 +1775,16 @@ struct serve_handler_state {
         auto const charted
           = not chart_attributes.empty() or not chart_types.empty();
         if (charted and not chart_id) {
-          // The identifier of a chart must not depend on the requested shape
-          // of its definition, so it always comes from the exact one.
+          // The identifier of a chart must not depend on whether the response
+          // carries definitions, so it always comes from one.
           auto definition = nova::type_definition(row, name, internal);
-          apply_chart(definition, schema::exact, chart_attributes, chart_types);
+          apply_chart(definition, chart_attributes, chart_types);
           chart_id = definition_id(std::move(definition));
         }
         auto id = charted ? *chart_id : std::string{*ids.get(index)};
         if (schema != schema::never and not definitions.contains(id)) {
-          auto definition
-            = schema == schema::legacy
-                ? nova::legacy_type_definition(row, name, internal)
-                : nova::type_definition(row, name, internal);
-          apply_chart(definition, schema, chart_attributes, chart_types);
+          auto definition = nova::type_definition(row, name, internal);
+          apply_chart(definition, chart_attributes, chart_types);
           definitions.emplace(id, std::move(definition));
         }
         if (first) {

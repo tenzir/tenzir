@@ -37,11 +37,4 @@ auto type_definition(RowView<Data> const& row, std::string_view name = {},
                      bool internal = false,
                      TypeNaming naming = TypeNaming::legacy) -> Record;
 
-/// Like `type_definition()`, but in the shape of
-/// `type::to_legacy_definition()`, which the serve endpoints report by
-/// default. A type is always named the legacy way here.
-auto legacy_type_definition(RowView<Data> const& row,
-                            std::string_view name = {}, bool internal = false)
-  -> Record;
-
 } // namespace tenzir::nova

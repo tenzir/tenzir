@@ -31,15 +31,12 @@
 
 namespace tenzir::plugins::measure {
 
-TENZIR_ENUM(schema, name_only, legacy, exact);
-
 namespace {
 
 struct MeasureArgs {
   bool cumulative = false;
   bool by_schema = true;
   bool definition = false;
-  bool exact_definition = false;
 };
 
 class MeasureTableSlice final : public Operator<table_slice, table_slice> {
@@ -59,13 +56,9 @@ public:
     metric.field("timestamp", time::clock::now());
     metric.field("events", events);
     metric.field("schema_id", input.schema().make_fingerprint());
-    if (args_.exact_definition) {
+    if (args_.definition) {
       metric.field("schema",
                    is_new ? data{input.schema().to_definition()} : data{});
-    } else if (args_.definition) {
-      metric.field("schema", is_new
-                               ? data{input.schema().to_legacy_definition()}
-                               : data{});
     } else {
       metric.field("schema", input.schema().name());
     }
@@ -171,7 +164,7 @@ public:
       metric.field("events").data(total);
       metric.field("schema_id").data(id);
       const auto name = *input.meta.name.get(first_row);
-      if (not args_.definition and not args_.exact_definition) {
+      if (not args_.definition) {
         metric.field("schema").data(name);
         continue;
       }
@@ -183,9 +176,7 @@ public:
       const auto row = input.data.get(first_row);
       const auto internal = *input.meta.internal.get(first_row);
       nova::append_data(metric.field("schema"),
-                        args_.exact_definition
-                          ? nova::type_definition(row, name, internal)
-                          : nova::legacy_type_definition(row, name, internal));
+                        nova::type_definition(row, name, internal));
     }
     auto result = builder.finish();
     auto const rows = result.length();
@@ -217,8 +208,7 @@ public:
         MeasureArgs{}};
     d.named("cumulative", &MeasureArgs::cumulative);
     d.named("by_schema", &MeasureArgs::by_schema);
-    d.named("_definition", &MeasureArgs::definition);
-    d.named("_exact_definition", &MeasureArgs::exact_definition);
+    d.named("_exact_definition", &MeasureArgs::definition);
     return d.without_optimize();
   }
 };
