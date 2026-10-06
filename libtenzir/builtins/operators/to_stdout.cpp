@@ -389,21 +389,25 @@ public:
     d.operator_location(&ToStdoutArgs::self);
     auto pipe_arg
       = d.pipeline(&ToStdoutArgs::pipe, SubOptimize::from_downstream);
-    d.validate([=](DescribeCtx& ctx) -> Empty {
-      auto pipe = ctx.get(pipe_arg);
-      if (not pipe) {
-        return {};
+    // `validate` runs without an input type. Check the pipeline here so that it
+    // receives the actual input type during type inference.
+    d.spawner([pipe_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ToStdoutArgs, Input>>> {
+      if constexpr (std::same_as<Input, table_slice>
+                    or std::same_as<Input, nova::Events>) {
+        auto pipe = ctx.get(pipe_arg);
+        if (not pipe) {
+          return None{};
+        }
+        TRY(auto output, pipe->inner.infer_type(tag_v<Input>, ctx));
+        if (output.template is_not<chunk_ptr>()) {
+          diagnostic::error("pipeline must return bytes")
+            .primary(pipe->source.subloc(0, 1))
+            .emit(ctx);
+          return failure::promise();
+        }
       }
-      auto output = pipe->inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<chunk_ptr>()) {
-        diagnostic::error("pipeline must return bytes")
-          .primary(pipe->source.subloc(0, 1))
-          .emit(ctx);
-      }
-      return {};
+      return None{};
     });
     return d.invariant_order_filter();
   }

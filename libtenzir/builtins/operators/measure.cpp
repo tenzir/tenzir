@@ -101,6 +101,36 @@ private:
   uint64_t counter_ = 0;
 };
 
+class MeasureBytes final : public Operator<chunk_ptr, nova::Events> {
+public:
+  explicit MeasureBytes(MeasureArgs args) : args_{args} {
+  }
+
+  auto process(chunk_ptr input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    counter_ = args_.cumulative ? counter_ + input->size() : input->size();
+    auto builder = nova::ArrayBuilder<nova::Record>{};
+    auto metric = builder.record();
+    metric.field("timestamp").data(time::clock::now());
+    metric.field("bytes").data(counter_);
+    auto result = builder.finish();
+    auto const rows = result.length();
+    auto mask = nova::storage::BitMap{rows, true};
+    co_await push(nova::Events{
+      std::move(result), std::move(mask),
+      nova::Events::Meta::make_empty(rows, "tenzir.measure.bytes")});
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("counter", counter_);
+  }
+
+private:
+  MeasureArgs args_;
+  uint64_t counter_ = 0;
+};
+
 class MeasureEvents final : public Operator<nova::Events, nova::Events> {
 public:
   explicit MeasureEvents(MeasureArgs args) : args_{args} {
@@ -203,9 +233,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk, MeasureEvents>{
-        MeasureArgs{}};
+    auto d = Describer<MeasureArgs, MeasureTableSlice, MeasureChunk,
+                       MeasureBytes, MeasureEvents>{MeasureArgs{}};
     d.named("cumulative", &MeasureArgs::cumulative);
     d.named("by_schema", &MeasureArgs::by_schema);
     d.named("_exact_definition", &MeasureArgs::definition);

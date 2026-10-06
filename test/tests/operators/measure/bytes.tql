@@ -1,0 +1,5 @@
+from {x: 1}, {x: 2}
+write_ndjson
+split_bytes 6
+measure
+drop timestamp
