@@ -1,0 +1,6 @@
+export
+summarize key=src.ip, n=count_if(value, x => x > threshold), total=sum(bytes),
+  entropy=entropy(category, normalize=true), unused=sum(hidden)
+where n > 1
+select total
+head 1

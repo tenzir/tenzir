@@ -1,0 +1,20 @@
+{
+  id: 0,
+  nested: {
+    x: 50,
+    sibling: "keep",
+  },
+  "literal.dot": 0,
+  import_time: 100,
+  n: 3,
+}
+{
+  id: 1,
+  nested: {
+    x: 51,
+    sibling: "keep",
+  },
+  "literal.dot": 1,
+  import_time: 101,
+  n: 3,
+}

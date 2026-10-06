@@ -1,0 +1,191 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `bytes` @ [1]:50..55 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `bytes` @ [1]:50..55 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `k` @ [1]:13..14 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `k` @ [1]:13..14 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "group",
+       store: {
+         op: {
+           path: [
+             `group` @ [1]:7..12 from 0
+           ],
+           ref: std::group/op
+         },
+         args: [
+           expression root_field {
+             id: `k` @ [1]:13..14 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               summarize {
+                 self: [1]:19..28 from 0,
+                 cfg: {
+                   aggregates: [
+                     {
+                       dest: {
+                         expr: root_field {
+                           id: `n` @ [1]:29..30 from 0,
+                           has_question_mark: false
+                         },
+                         has_this: false,
+                         path: [
+                           {
+                             id: `n` @ [1]:29..30 from 0,
+                             has_question_mark: false
+                           }
+                         ]
+                       },
+                       call: {
+                         fn: {
+                           path: [
+                             `count` @ [1]:31..36 from 0
+                           ],
+                           ref: std::count/fn
+                         },
+                         args: [
+                           
+                         ],
+                         method: false,
+                         location: [1]:31..38 from 0
+                       }
+                     },
+                     {
+                       dest: {
+                         expr: root_field {
+                           id: `total` @ [1]:40..45 from 0,
+                           has_question_mark: false
+                         },
+                         has_this: false,
+                         path: [
+                           {
+                             id: `total` @ [1]:40..45 from 0,
+                             has_question_mark: false
+                           }
+                         ]
+                       },
+                       call: {
+                         fn: {
+                           path: [
+                             `sum` @ [1]:46..49 from 0
+                           ],
+                           ref: std::sum/fn
+                         },
+                         args: [
+                           root_field {
+                             id: `bytes` @ [1]:50..55 from 0,
+                             has_question_mark: false
+                           }
+                         ],
+                         method: false,
+                         location: [1]:46..56 from 0
+                       }
+                     }
+                   ],
+                   groups: [
+                     
+                   ],
+                   indices: [
+                     0,
+                     1
+                   ],
+                   emission: "final",
+                   mode: "reset",
+                   output: "summary",
+                   emit_every: 1
+                 }
+               }
+             ]
+           } @ [1]:15..58 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:58..58 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

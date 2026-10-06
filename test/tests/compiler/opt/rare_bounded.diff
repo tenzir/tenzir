@@ -22,7 +22,23 @@
        filter: [
          
        ],
-       order: "ordered"
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `x` @ [1]:12..13 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `x` @ [1]:12..13 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
      },
      summarize {
        self: [1]:7..11 from 0,

@@ -1,0 +1,5 @@
+// A summary without field references reads no columns but counts every row.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+summarize n=count()

@@ -25,35 +25,23 @@
 -      order: "ordered"
 +      order: "ordered",
 +      projection: [
-+        {
-+          expr: root_field {
-+            id: `x` @ [1]:11..12 from 0,
-+            has_question_mark: false
-+          },
-+          has_this: false,
-+          path: [
-+            {
-+              id: `x` @ [1]:11..12 from 0,
-+              has_question_mark: false
-+            }
-+          ]
-+        }
++        
 +      ]
      },
      summarize {
-       self: [1]:7..10 from 0,
+       self: [1]:7..16 from 0,
        cfg: {
          aggregates: [
            {
              dest: {
                expr: root_field {
-                 id: `count` @ [1]:7..10 from 0,
+                 id: `n` @ [1]:17..18 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `count` @ [1]:7..10 from 0,
+                   id: `n` @ [1]:17..18 from 0,
                    has_question_mark: false
                  }
                ]
@@ -61,7 +49,7 @@
              call: {
                fn: {
                  path: [
-                   `count` @ [1]:7..10 from 0
+                   `count` @ [1]:19..24 from 0
                  ],
                  ref: std::count/fn
                },
@@ -69,29 +57,14 @@
                  
                ],
                method: false,
-               location: [1]:7..10 from 0
+               location: [1]:19..26 from 0
              }
            }
          ],
          groups: [
-           {
-             expr: {
-               expr: root_field {
-                 id: `x` @ [1]:11..12 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `x` @ [1]:11..12 from 0,
-                   has_question_mark: false
-                 }
-               ]
-             }
-           }
+           
          ],
          indices: [
-           -1,
            0
          ],
          emission: "final",
@@ -100,42 +73,17 @@
          emit_every: 1
        }
      },
-     sort {
-       args: {
-         op: {
-           path: [
-             `sort` @ [1]:7..10 from 0
-           ],
-           ref: unresolved
-         },
-         args: [
-           expression unary_expr {
-             op: "neg",
-             expr: root_field {
-               id: `count` @ [1]:7..10 from 0,
-               has_question_mark: false
-             },
-             location: [1]:7..10 from 0
-           }
-         ],
-         named_args: [
-           
-         ]
--      }
-+      },
-+      limit: 2
-     },
      GenericIr {
        desc: "head",
        store: {
          op: {
            path: [
-             `head` @ [1]:13..17 from 0
+             `head` @ [1]:27..31 from 0
            ],
            ref: std::head/op
          },
          args: [
-           located 2 @ [1]:18..19 from 0
+           located 1 @ [1]:32..33 from 0
          ],
          named_args: [
            
@@ -151,7 +99,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:19..19 from 0
++            `to_stdout` @ [1]:33..33 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },

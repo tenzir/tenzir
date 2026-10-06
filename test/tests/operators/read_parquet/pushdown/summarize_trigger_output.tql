@@ -1,0 +1,9 @@
+// Trigger output forwards the input events, so `summarize` must not narrow its
+// input, even if the options depend on a binding of the subpipeline.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_parquet
+}
+group floor(id / 3) {
+  summarize n=count(), options={emit: int($group) + 1, mode: "cumulative"}
+}
+sort id

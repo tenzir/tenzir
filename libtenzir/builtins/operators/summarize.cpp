@@ -1999,6 +1999,30 @@ private:
   mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
 };
 
+/// Returns the input fields that a summary depends on, or `None` if it may
+/// observe entire input events.
+auto input_projection(Config const& config) -> Option<ir::OptimizeProjection> {
+  // Only the default policy, a single summary after the input ends, is
+  // independent of the shape of the input events: options can select event or
+  // trigger output, which forward input fields. We check for the option
+  // expressions rather than the evaluated policy because operators such as
+  // `group` optimize their subpipeline before instantiating it.
+  if (config.emit_expr or config.mode_expr or config.output_expr
+      or config.legacy_frequency_expr) {
+    return None{};
+  }
+  auto projection = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
+  for (auto const& group : config.groups) {
+    ir::add_refs_to_projection(projection, group.expr.inner());
+  }
+  // Aggregates whose results go unused downstream still count, because
+  // evaluating their arguments can emit diagnostics.
+  for (auto const& aggregate : config.aggregates) {
+    ir::add_refs_to_projection(projection, ast::expression{aggregate.call});
+  }
+  return projection;
+}
+
 class SummarizeIr final : public ir::Operator {
 public:
   SummarizeIr() = default;
@@ -2099,6 +2123,18 @@ public:
       }
     }
     return std::move(*this).ir::Operator::plan(builder, std::move(input), dh);
+  }
+
+  auto optimize(ir::OptimizeRequest req,
+                ir::OptimizeCtx const& ctx) && -> ir::OptimizeResult override {
+    // The summary consists of new fields, so the downstream projection does not
+    // matter. Filters, limits, and ordering stay behind the operator: a number
+    // of groups says nothing about the number of input events, and aggregates
+    // such as `first` observe the input order.
+    auto projection = input_projection(config_);
+    auto result = std::move(*this).ir::Operator::optimize(std::move(req), ctx);
+    result.projection = std::move(projection);
+    return result;
   }
 
   auto parallelizable() const -> bool override {

@@ -1,0 +1,10 @@
+// Event output forwards the input events, so `summarize` must not narrow its
+// input, even before `group` binds the options of its subpipeline.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
+  read_parquet
+}
+group floor(id / 3) {
+  summarize n=count(), options={output: "events"}
+}
+sort id
+head 2

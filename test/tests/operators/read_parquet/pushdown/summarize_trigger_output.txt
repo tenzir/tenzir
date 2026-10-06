@@ -1,0 +1,60 @@
+{
+  id: 0,
+  nested: {
+    x: 50,
+    sibling: "keep",
+  },
+  "literal.dot": 0,
+  import_time: 100,
+  n: 1,
+}
+{
+  id: 1,
+  nested: {
+    x: 51,
+    sibling: "keep",
+  },
+  "literal.dot": 1,
+  import_time: 101,
+  n: 2,
+}
+{
+  id: 2,
+  nested: {
+    x: 52,
+    sibling: "keep",
+  },
+  "literal.dot": 2,
+  import_time: 102,
+  n: 3,
+}
+{
+  id: 4,
+  nested: {
+    x: 54,
+    sibling: "keep",
+  },
+  "literal.dot": 4,
+  import_time: 104,
+  n: 2,
+}
+{
+  id: 5,
+  nested: {
+    x: 55,
+    sibling: "keep",
+  },
+  "literal.dot": 5,
+  import_time: 105,
+  n: 3,
+}
+{
+  id: 8,
+  nested: {
+    x: 58,
+    sibling: "keep",
+  },
+  "literal.dot": 8,
+  import_time: 108,
+  n: 3,
+}

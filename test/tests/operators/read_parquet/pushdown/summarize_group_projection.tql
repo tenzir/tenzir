@@ -1,0 +1,8 @@
+// Summaries in subpipelines narrow the input of the enclosing pipeline.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+group floor(id / 3) {
+  summarize n=count(), total=sum(id)
+}
+sort total

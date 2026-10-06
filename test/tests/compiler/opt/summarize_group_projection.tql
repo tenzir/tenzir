@@ -1,0 +1,4 @@
+export
+group k {
+  summarize n=count(), total=sum(bytes)
+}

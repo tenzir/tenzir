@@ -1,0 +1,10 @@
+// `summarize` reads only its grouping keys and aggregate arguments, including
+// those of unused aggregates, so the unsupported column never reaches event
+// conversion. The filter and limit apply to summary rows, not input events.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+summarize nested.sibling, n=count(), total=sum(id), unused=max(nested.x)
+where n > 1
+select n, total
+head 1

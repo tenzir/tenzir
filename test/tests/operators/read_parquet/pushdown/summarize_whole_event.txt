@@ -1,0 +1,11 @@
+{
+  event: {
+    id: 0,
+    nested: {
+      x: 50,
+      sibling: "keep",
+    },
+    "literal.dot": 0,
+    import_time: 100,
+  },
+}
