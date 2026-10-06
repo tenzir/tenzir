@@ -107,6 +107,12 @@ auto translate_predicate(ast::expression const& expr,
 /// agreeing on the strings that both of them accept. Supersets compose:
 /// `and` takes the prefilters of the conjuncts that have one, `or` needs one
 /// for each side.
+///
+/// A `DynamicType` column contributes only null-rejecting atoms and monotone
+/// combinations of them. These are never exact translations, and the source
+/// must satisfy `DynamicType`'s no-under-matching contract. Negation, `!=` a
+/// value, `== null`, computations, and column-to-column comparisons stay local;
+/// `x != null` is the null-rejecting exception. Integers are bounded to ±2^53.
 auto translate_prefilter(ast::expression const& expr,
                          ColumnModel const& columns) -> Option<Expr>;
 

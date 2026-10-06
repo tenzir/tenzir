@@ -196,6 +196,65 @@ auto sub(Expr left, Expr right) -> Expr {
 
 } // namespace
 
+TEST("dynamic columns only contribute monotone prefilters") {
+  auto columns = ColumnModel{};
+  columns.add({"x"}, {DynamicType{}, true});
+  columns.add({"y"}, {DynamicType{}, true});
+  for (auto source : {"x == 42",
+                      "x < -42",
+                      "x <= 1.5",
+                      "x > 0",
+                      "x >= 1",
+                      "42 == x",
+                      "0 < x",
+                      "x == true",
+                      "x",
+                      "x != null",
+                      "null != x",
+                      "x == \"text\"",
+                      "x in [\"a\", 1]",
+                      "x.starts_with(\"a\")",
+                      "x.ends_with(\"z\")",
+                      "\"s\" in x",
+                      "x == 1 and y == 2",
+                      "x == 1 or y == 2",
+                      "x == 1 and y.length_bytes() > 0",
+                      "x == 9007199254740992",
+                      "x == -9007199254740992"}) {
+    auto expr = parse(source);
+    CHECK(not translate_predicate(expr, columns));
+    CHECK(translate_prefilter(expr, columns));
+  }
+  for (auto source : {"x != 42",
+                      "x == null",
+                      "not (x == 42)",
+                      "not x",
+                      "x < true",
+                      "x == y",
+                      "x <= y",
+                      "x + 1 == 42",
+                      "x in []",
+                      "x in [1, null]",
+                      "x == 9007199254740993",
+                      "x == -9007199254740993",
+                      "x == 9007199254740992.0",
+                      "x == 1.1.1.1",
+                      "x in 10.0.0.0/8",
+                      "x == 2024-01-01",
+                      "x.length_bytes() > 1",
+                      "x.starts_with(\"a\", ignore_case=true)",
+                      "x == 1 or y.length_bytes() > 0",
+                      "not (x != null)"}) {
+    auto expr = parse(source);
+    CHECK(not translate_predicate(expr, columns));
+    CHECK(not translate_prefilter(expr, columns));
+  }
+  // Inference is not a license to rewrite IPs into strings on dynamic fields.
+  auto expr = parse("x == 1.1.1.1");
+  adapt_to_columns(expr, columns);
+  CHECK(is<ip>(as<ast::constant>(as<ast::binary_expr>(expr).right).value));
+}
+
 TEST("sql renderer spells predicates") {
   CHECK_EQUAL(translate("x > 1"), std::string{"\"x\" > 1"});
   CHECK_EQUAL(translate("r.i <= 1.5"), std::string{"\"r\".\"i\" <= 1.5"});

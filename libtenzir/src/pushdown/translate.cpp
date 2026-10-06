@@ -185,6 +185,31 @@ auto to_literal(ast::constant const& constant) -> Expr {
     });
 }
 
+/// A literal safe even when a target compares dynamic numbers as doubles.
+auto dynamic_literal_fits(ast::constant const& literal) -> bool {
+  return match(
+    literal.value,
+    [](int64_t x) {
+      constexpr auto bound = int64_t{1} << 53;
+      return x >= -bound and x <= bound;
+    },
+    [](uint64_t x) {
+      return x <= uint64_t{1} << 53;
+    },
+    [](double x) {
+      return std::isfinite(x) and std::fabs(x) < exact_double_bound;
+    },
+    [](bool) {
+      return true;
+    },
+    [](std::string const&) {
+      return true;
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
 // -- Literals -----------------------------------------------------------------
 
 /// Returns whether `expr` consists of constants combined by operators and
@@ -822,6 +847,9 @@ auto translate_literal_comparison(Scalar const& scalar, ast::binary_op op,
       }
       return translate_ip_comparison(scalar.expr, scalar.nullable, type, op,
                                      *x);
+    },
+    [](DynamicType const&) -> Option<Expr> {
+      return None{};
     });
 }
 
@@ -971,6 +999,9 @@ auto translate_comparison(ast::binary_expr const& expr,
   if (not scalar) {
     return None{};
   }
+  if (is<DynamicType>(scalar->type)) {
+    return None{};
+  }
   // `x == null` and `x != null` are null checks in TQL, which also hold for
   // values that TQL cannot decode.
   if (is<caf::none_t>(literal->value)) {
@@ -997,6 +1028,8 @@ auto translate_comparison(ast::binary_expr const& expr,
 /// the IR disagree for `null` rows. For the text-like and temporal types, an
 /// element that no stored value can equal is dropped; when none remains, the
 /// membership is `false` for every row, `null` included, as in TQL.
+/// Dynamic columns use this only as a prefilter: mixed literals may over-match
+/// but cannot under-match, even if the local evaluator drops clashing types.
 auto translate_in_list(Scalar const& scalar, ast::list const& list)
   -> Option<Expr> {
   if (list.items.empty()) {
@@ -1015,7 +1048,8 @@ auto translate_in_list(Scalar const& scalar, ast::list const& list)
     }
     auto type_index
       = variant_traits<ast::constant::kind>::index(constant->value);
-    if (element_type and *element_type != type_index) {
+    if (not is<DynamicType>(scalar.type) and element_type
+        and *element_type != type_index) {
       return None{};
     }
     element_type = type_index;
@@ -1109,6 +1143,15 @@ auto translate_in_list(Scalar const& scalar, ast::list const& list)
         }
       }
       return true;
+    },
+    [&](DynamicType const&) {
+      for (auto const& constant : constants) {
+        if (not dynamic_literal_fits(constant)) {
+          return false;
+        }
+        literals.push_back(to_literal(constant));
+      }
+      return true;
     });
   if (not ok) {
     return None{};
@@ -1127,7 +1170,7 @@ auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns)
   -> Option<Expr> {
   if (auto const* list = try_as<ast::list>(expr.right)) {
     auto scalar = translate_scalar(expr.left, columns);
-    if (not scalar) {
+    if (not scalar or is<DynamicType>(scalar->type)) {
       return None{};
     }
     return translate_in_list(*scalar, *list);
@@ -1162,7 +1205,8 @@ auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns)
 
 /// Translates a function call that yields a boolean.
 auto translate_predicate_function(ast::function_call const& call,
-                                  ColumnModel const& columns) -> Option<Expr> {
+                                  ColumnModel const& columns,
+                                  bool dynamic = false) -> Option<Expr> {
   auto name = function_name(call);
   if (not name) {
     return None{};
@@ -1191,7 +1235,13 @@ auto translate_predicate_function(ast::function_call const& call,
       ignore_case = *value;
     }
     auto column = resolve_column(call.args[0], columns);
-    if (not column or not is<StringType>(column->type)) {
+    if (not column
+        or (not is<StringType>(column->type)
+            and not(dynamic and is<DynamicType>(column->type)))) {
+      return None{};
+    }
+    // Approximate case folding is not a guaranteed superset.
+    if (is<DynamicType>(column->type) and ignore_case) {
       return None{};
     }
     auto prefix = as_literal(call.args[1]);
@@ -1411,6 +1461,98 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns)
 
 // -- Prefilters ---------------------------------------------------------------
 
+/// Dynamic fields contribute only null-rejecting atoms. Negation, inequality
+/// against a value, null equality, pairwise comparisons, and computations
+/// cannot establish the required implication. `and` and `or` compose these
+/// atoms in translate_prefilter, but `not` deliberately does not.
+auto translate_dynamic_atom(ast::expression const& expr,
+                            ColumnModel const& columns) -> Option<Expr> {
+  auto dynamic_column = [&](ast::expression const& x) -> Option<Scalar> {
+    auto column = resolve_column(x, columns);
+    if (not column or not is<DynamicType>(column->type)) {
+      return None{};
+    }
+    // No null guard is needed: false and null both drop the row.
+    column->nullable = false;
+    return column;
+  };
+  if (auto column = dynamic_column(expr)) {
+    return binary(BinaryOp::eq, std::move(column->expr), lit(true));
+  }
+  if (auto const* fn = try_as<ast::function_call>(expr)) {
+    return translate_predicate_function(*fn, columns, true);
+  }
+  auto const* x = try_as<ast::binary_expr>(expr);
+  if (not x) {
+    return None{};
+  }
+  if (x->op == ast::binary_op::in) {
+    if (auto const* list = try_as<ast::list>(x->right)) {
+      TRY(auto column, dynamic_column(x->left));
+      return translate_in_list(column, *list);
+    }
+    TRY(auto column, dynamic_column(x->right));
+    TRY(auto needle, as_literal(x->left));
+    auto const* text = try_as<std::string>(needle.value);
+    if (not text) {
+      return None{};
+    }
+    return call(Operation::contains, std::move(column.expr), lit(*text));
+  }
+  switch (x->op) {
+    case ast::binary_op::eq:
+    case ast::binary_op::neq:
+    case ast::binary_op::lt:
+    case ast::binary_op::leq:
+    case ast::binary_op::gt:
+    case ast::binary_op::geq:
+      break;
+    default:
+      return None{};
+  }
+  auto op = x->op;
+  auto column = dynamic_column(x->left);
+  auto literal = as_literal(x->right);
+  if (not column or not literal) {
+    column = dynamic_column(x->right);
+    literal = as_literal(x->left);
+    op = flip_comparison(op);
+  }
+  if (not column or not literal) {
+    return None{};
+  }
+  if (is<caf::none_t>(literal->value)) {
+    if (op == ast::binary_op::neq) {
+      return is_not_null(std::move(column->expr));
+    }
+    return None{};
+  }
+  if (op == ast::binary_op::neq or not dynamic_literal_fits(*literal)
+      or (is<bool>(literal->value) and op != ast::binary_op::eq)) {
+    return None{};
+  }
+  // At the exact-double boundary an adjacent integer can round onto the
+  // literal. Relax strict comparisons there so that rounding only over-matches.
+  auto boundary = match(
+    literal->value,
+    [](int64_t x) {
+      constexpr auto bound = int64_t{1} << 53;
+      return x == bound or x == -bound;
+    },
+    [](uint64_t x) {
+      return x == uint64_t{1} << 53;
+    },
+    [](auto const&) {
+      return false;
+    });
+  if (boundary and op == ast::binary_op::gt) {
+    op = ast::binary_op::geq;
+  } else if (boundary and op == ast::binary_op::lt) {
+    op = ast::binary_op::leq;
+  }
+  return compare(std::move(column->expr), op, to_literal(*literal), true);
+}
+
 /// Resolves `ip(column)` on a string column to `parse_ip`. The result is
 /// nullable even for a non-nullable column, since the parse may fail.
 auto resolve_parsed_ip(ast::expression const& expr, ColumnModel const& columns)
@@ -1560,6 +1702,9 @@ auto translate_prefilter(ast::expression const& expr,
   // form, since a prefilter drops rows on `false` and `null` alike.
   if (auto exact = translate_predicate(expr, columns, true)) {
     return exact;
+  }
+  if (auto dynamic = translate_dynamic_atom(expr, columns)) {
+    return dynamic;
   }
   auto const* binary = try_as<ast::binary_expr>(expr);
   if (not binary) {

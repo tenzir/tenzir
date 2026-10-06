@@ -589,6 +589,42 @@ TEST("optional nested field access still warns on active scalar rows") {
   CHECK_EQUAL(std::move(masked_dh).collect().size(), 0u);
 }
 
+TEST("optional nested fields distinguish null from non-record parents") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("flow").record().field("src_ip").data(
+    std::string_view{"192.0.2.1"});
+  builder.record().field("flow").null();
+  builder.record();
+  static_cast<void>(builder.record().field("flow").record());
+  builder.record().field("flow").data(std::int64_t{42});
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  for (auto include_scalar : {false, true}) {
+    auto dh = tenzir::collecting_diagnostic_handler{};
+    auto field = tenzir::ast::expression{tenzir::ast::field_access{
+      tenzir::ast::expression{tenzir::ast::root_field{
+        tenzir::ast::identifier{"flow", tenzir::location::unknown}, true}},
+      tenzir::location::unknown,
+      true,
+      tenzir::ast::identifier{"src_ip", tenzir::location::unknown},
+    }};
+    auto mask
+      = include_scalar ? all_rows(events) : all_rows(events).keep_first(4);
+    auto result = eval(std::move(field), events, std::move(mask), dh, reg);
+    CHECK_EQUAL(materialize_legacy(result.get(0)),
+                tenzir::data{std::string{"192.0.2.1"}});
+    for (auto i = storage::Index{1}; i < (include_scalar ? 5 : 4); ++i) {
+      CHECK_EQUAL(materialize_legacy(result.get(i)), tenzir::data{});
+    }
+    auto diagnostics = std::move(dh).collect();
+    REQUIRE_EQUAL(diagnostics.size(), include_scalar ? 1u : 0u);
+    if (include_scalar) {
+      CHECK_EQUAL(diagnostics[0].message,
+                  "cannot access field of non-record type");
+    }
+  }
+}
+
 TEST("binary add kernel over a field absent from some rows' shape") {
   // Mirrors `select x = src_port | y = x + 42` where `src_port` is missing
   // from some JSON records' keys entirely: reading `x` back and adding a

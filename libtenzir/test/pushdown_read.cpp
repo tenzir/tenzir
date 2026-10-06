@@ -100,6 +100,20 @@ TEST("reader projection includes filter columns and retains top-level "
   CHECK_EQUAL(*result, (std::vector<std::string>{"nested"}));
 }
 
+TEST("named arguments label parameters rather than reference fields") {
+  auto expr = expression_from("x.starts_with(\"a\", ignore_case=y)");
+  auto refs = ast::collect_refs(expr);
+  REQUIRE(refs);
+  REQUIRE_EQUAL(refs->field_paths.size(), size_t{2});
+  CHECK_EQUAL(refs->field_paths[0].path()[0].id.name, "x");
+  CHECK_EQUAL(refs->field_paths[1].path()[0].id.name, "y");
+  auto projection = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
+  ir::add_refs_to_projection(projection, expression_from("x.starts_with(\"a\", "
+                                                         "ignore_case=true)"));
+  CHECK_EQUAL(projection_paths(projection),
+              (std::vector<std::vector<std::string>>{{"x"}}));
+}
+
 TEST("reader projection conservatively handles whole events and functions") {
   CHECK(not pushdown::read_projection(projection_from("this"), {}));
   auto filter = ir::OptimizeFilter{};

@@ -48,6 +48,37 @@ class SentinelOneAssertions:
 # Special floating-point values that cannot be expressed in JSON are encoded
 # as single-key objects: {"special": "NaN"}, {"special": "+infinity"}, etc.
 _STATIC_RESPONSES: dict[str, object] = {
+    "pushdown_booleans": {
+        "columns": [{"name": "id"}, {"name": "flag"}],
+        "values": [[1, True], [2, "true"], [3, False], [4, "false"], [5, None]],
+    },
+    "pushdown_semantics": {
+        "columns": [{"name": name} for name in ("id", "n", "addr", "text")],
+        "values": [
+            [1, 42, "192.0.2.1", "prefix-MATCH-suffix"],
+            [2, "42", "192.0.2.2", "prefix-MATCH-suffix"],
+            [3, 42, "not-an-ip", "prefix-MATCH-suffix"],
+            [4, 42, "192.0.2.4", "prefix-MATCH-suffix"],
+            [5, 43, "192.0.2.5", "prefix-MATCH-suffix"],
+            [6, None, None, None],
+        ],
+    },
+    # Columns beyond the default `timestamp` and `message` are returned only
+    # when a generated query requests them.
+    "pushdown_projection": {
+        "columns": [
+            {"name": "timestamp"},
+            {"name": "message"},
+            {"name": "event.type"},
+            {"name": "account.id"},
+            {"name": "dataSource.name"},
+        ],
+        "values": [
+            [1704067200000000000, "resolved", "DNS Resolved", "a1", "SentinelOne"],
+            [1704067201000000000, "opened", "IP Connect", "a1", "Other"],
+            [1704067202000000000, "resolved", "DNS Resolved", "a2", "SentinelOne"],
+        ],
+    },
     "select_batch_boundary": {
         "columns": [{"name": "n"}],
         "values": [[i] for i in range(8193)],
@@ -205,6 +236,74 @@ _STATIC_RESPONSES: dict[str, object] = {
 }
 
 
+# A trailing `columns` stage before an optional `limit`, as generated from TQL.
+_COLUMNS_STAGE = re.compile(r"(?:^| )\| columns ([^|]+?)(?= \| |$)")
+
+
+def _split_columns(query: str) -> tuple[str, list[str] | None]:
+    """Separate the projection of a generated query from its other stages."""
+    match = _COLUMNS_STAGE.search(query)
+    if match is None:
+        return query, None
+    rest = (query[: match.start()] + query[match.end() :]).strip()
+    if not rest:
+        # A projection alone reads the whole request window.
+        rest = "| filter (1 == 1)"
+    return rest, [name.strip() for name in match.group(1).split(",")]
+
+
+def _project(data: dict, columns: list[str] | None) -> dict:
+    """Model PowerQuery's table projection of a generated query.
+
+    Without a `columns` stage, SentinelOne returns only `timestamp` and
+    `message`. Requested fields that an event lacks are null. Every real event
+    has a `timestamp`; fixtures without one model it as absent instead.
+    """
+    names = [column["name"] for column in data["columns"]]
+    if columns is None:
+        columns = ["timestamp", "message"]
+    columns = [name for name in columns if name != "timestamp" or name in names]
+    indexes = [names.index(name) if name in names else None for name in columns]
+    return {
+        **data,
+        "columns": [{"name": name} for name in columns],
+        "values": [
+            [None if i is None else row[i] for i in indexes] for row in data["values"]
+        ],
+    }
+
+
+def _request_query(payload: dict) -> str:
+    if payload["queryType"] == "PQ":
+        return payload["pq"]["query"]
+    return "| filter " + (payload["log"]["filter"] or "(1 == 1)")
+
+
+def _log_page(data: dict, payload: dict) -> dict:
+    names = [column["name"] for column in data["columns"]]
+    matches = []
+    for i, row in enumerate(data["values"]):
+        values = dict(zip(names, row))
+        matches.append(
+            {
+                "cursor": f"match-{i}",
+                "timestamp": values.pop("timestamp", 1704067200000000000),
+                "severity": 3,
+                "threadId": "worker",
+                "values": values,
+            }
+        )
+    log = payload["log"]
+    offset = int(log["cursor"].removeprefix("match-")) if "cursor" in log else 0
+    # Inclusive opaque cursors, not timestamp arithmetic; equal timestamps
+    # deliberately span page boundaries in the dense fixture.
+    return {
+        "matches": matches[offset : offset + log["limit"]],
+        # This estimate is deliberately wrong. It is not an exhaustion signal.
+        "estimatedMatchCount": 1,
+    }
+
+
 def _validate_add_events_payload(payload: object) -> str | None:
     if not isinstance(payload, dict):
         return "payload must be a JSON object"
@@ -294,8 +393,12 @@ def _make_handler(
                 capture(method="POST", payload=payload, status=400, error=error)
                 self._respond(400, {"error": error})
                 return
-            query = payload["pq"]["query"]
+            query = _request_query(payload)
             launches[query] = launches.get(query, 0) + 1
+            if query.startswith("| filter ((launch_error) == (1))"):
+                capture(method="POST", payload=payload, status=500)
+                self._respond(500, {"error": "Unable to parse the entire query"})
+                return
             if query == "select_http_error":
                 capture(method="POST", payload=payload, status=500)
                 self._respond(500, {"error": "internal server error"})
@@ -329,17 +432,29 @@ def _make_handler(
             }
             # The query exists, but the client never receives its ID. Replaying
             # either launch creates another query that the client cannot cancel.
-            if query == "select_launch_transport_error":
+            if query.startswith("select_launch_transport_error"):
                 capture(method="POST", payload=payload, status=0, id=qid)
                 self.close_connection = True
                 self.connection.shutdown(socket.SHUT_RDWR)
                 self.connection.close()
                 return
-            if query == "select_launch_server_error":
+            if query.startswith("select_launch_server_error"):
                 capture(method="POST", payload=payload, status=503, id=qid)
                 self._respond(503, {"error": "response failed after query creation"})
                 return
             capture(method="POST", payload=payload, status=200, id=qid)
+            if payload.get("accountIds") == ["hybrid_inline"]:
+                self._respond(
+                    200,
+                    {
+                        "id": qid,
+                        "stepsCompleted": 2,
+                        "stepsTotal": 2,
+                        "data": _log_page(_STATIC_RESPONSES["select_basic"], payload),
+                    },
+                    {"X-Dataset-Query-Forward-Tag": tag},
+                )
+                return
             self._respond(
                 200,
                 {"id": qid, "stepsCompleted": 0, "stepsTotal": 2},
@@ -347,13 +462,30 @@ def _make_handler(
             )
 
         def _validate_launch(self, payload: dict[str, Any]) -> str | None:
-            if payload.get("queryType") != "PQ":
-                return "expected queryType PQ"
+            if payload.get("queryType") not in {"PQ", "LOG"}:
+                return "expected queryType PQ or LOG"
             if payload.get("queryPriority") != "LOW":
                 return "expected LOW priority"
-            pq = payload.get("pq", {})
-            if pq.get("resultType") != "TABLE" or not isinstance(pq.get("query"), str):
-                return "expected a TABLE PowerQuery"
+            if payload["queryType"] == "PQ":
+                pq = payload.get("pq", {})
+                if pq.get("resultType") != "TABLE" or not isinstance(
+                    pq.get("query"), str
+                ):
+                    return "expected a TABLE PowerQuery"
+                if "log" in payload:
+                    return "PQ must not include LOG parameters"
+            else:
+                log = payload.get("log", {})
+                if (
+                    not isinstance(log.get("filter"), str)
+                    or not isinstance(log.get("limit"), int)
+                    or not 2 <= log["limit"] <= 5000
+                    or set(log) - {"filter", "limit", "cursor"}
+                    or "pq" in payload
+                ):
+                    return "invalid LOG request"
+                if "X-Dataset-Query-Forward-Tag" in self.headers:
+                    return "a new LOG job must not reuse another job's routing tag"
             if "accountIds" in payload:
                 ids = payload["accountIds"]
                 if (
@@ -400,7 +532,18 @@ def _make_handler(
                 self._respond(400, {"error": "invalid lastStepSeen or deleted query"})
                 return
             state["polls"] += 1
-            query = state["payload"]["pq"]["query"]
+            query = _request_query(state["payload"])
+            scope = state["payload"].get("accountIds", [""])[0]
+            continuation = "cursor" in state["payload"].get("log", {})
+            if continuation and scope in {"hybrid_retry", "hybrid_timeout"}:
+                if state["polls"] == 1:
+                    capture(method="GET", id=qid, status=429)
+                    self._respond(
+                        429,
+                        {"error": "rate limited"},
+                        {"Retry-After": "0" if scope == "hybrid_retry" else "3"},
+                    )
+                    return
             if query == "select_retry" and state["polls"] == 1:
                 capture(method="GET", id=qid, status=429)
                 self._respond(429, {"error": "rate limited"}, {"Retry-After": "1"})
@@ -450,6 +593,14 @@ def _make_handler(
                 capture(method="GET", id=qid, status=503)
                 self._respond(503, {"error": "temporarily unavailable"})
                 return
+            if query.startswith("| filter ((poll_error) == (1))"):
+                capture(method="GET", id=qid, status=500)
+                self._respond(500, {"error": "undefined field 'poll_error'"})
+                return
+            if query.startswith("pushdown_auth_error"):
+                capture(method="GET", id=qid, status=403)
+                self._respond(403, {"error": "access denied"})
+                return
             # Two in-progress polls before the final result.
             # Do not expose partial rows: LRQ results belong to the final poll.
             state["progress"] += 1
@@ -457,6 +608,10 @@ def _make_handler(
             total = 0 if state["progress"] == 1 or query == "select_running" else 2
             if query == "select_stalled":
                 step, total = 1, 2
+            # Wire-contract cases need no slow-query simulation. Keep lifecycle
+            # coverage in the existing select_* scenarios.
+            if query.startswith("pushdown_") or query.startswith("| "):
+                step = total = 2
             state["last_step"] = step
             capture(method="GET", id=qid, status=200, step=step)
             if total == 0 or step < total:
@@ -469,6 +624,9 @@ def _make_handler(
                     },
                 )
                 return
+            # Generated queries project their response; explicit ones do not.
+            generated = query.startswith("| ")
+            query, projection = _split_columns(query) if generated else (query, None)
             if query == "select_echo_times":
                 data = {
                     "columns": [{"name": "start"}, {"name": "end"}],
@@ -489,6 +647,145 @@ def _make_handler(
                 "select_delete_retry",
             }:
                 data = _STATIC_RESPONSES["select_basic"]
+            elif query.startswith("pushdown_empty"):
+                # The caller asserts exact query text and bounds in the capture.
+                # This accepts arbitrary lexical probes, not arbitrary PQ syntax.
+                data = {"columns": [], "values": []}
+            elif query.startswith("pushdown_capped"):
+                # Model the server's order: window and query first, cap last.
+                # There are five more rows than the default cap can return.
+                match = re.fullmatch(
+                    r"pushdown_capped(?:_reverse)?(?: \| filter \(\(id\) >= \((\d+)\)\))?"
+                    r"(?: \| limit (\d+))?",
+                    query,
+                )
+                if match is None:
+                    self._respond(400, {"error": "unexpected capped query"})
+                    return
+                start = datetime.fromisoformat(
+                    state["payload"]["startTime"]
+                ).timestamp()
+                end = datetime.fromisoformat(state["payload"]["endTime"]).timestamp()
+                minimum = int(match[1]) if match[1] is not None else 0
+                limit = int(match[2]) if match[2] is not None else 1000
+                reverse = query.startswith("pushdown_capped_reverse")
+                values = []
+                for i in range(1005):
+                    seconds = 1704067200 + (1004 - i if reverse else i)
+                    if i >= minimum and start <= seconds < end:
+                        values.append([seconds * 1_000_000_000, i])
+                data = {
+                    "columns": [{"name": "timestamp"}, {"name": "id"}],
+                    "values": values[:limit],
+                }
+            elif query.startswith("| ") and scope.startswith("hybrid_numeric_"):
+                data = _STATIC_RESPONSES[
+                    "select_floats"
+                    if scope == "hybrid_numeric_floats"
+                    else "select_basic"
+                ]
+            elif query.startswith("| ") and scope.startswith("hybrid_"):
+                data = {
+                    "columns": [
+                        {"name": name}
+                        for name in (
+                            "timestamp",
+                            "id",
+                            "event.type",
+                            "event.dns.request",
+                            "key",
+                            "flag",
+                            "addr",
+                            "items",
+                            "event.extra",
+                        )
+                    ],
+                    "values": [
+                        [
+                            1704067200000000000,
+                            i,
+                            "DNS Resolved",
+                            f"host-{i}",
+                            "id",
+                            "true",
+                            "192.0.2.1",
+                            [1, {"nested": "false"}],
+                            "kept",
+                        ]
+                        for i in range(
+                            3
+                            if scope in {"hybrid_discovery", "hybrid_partial"}
+                            else 1005
+                        )
+                    ],
+                }
+                # Generated PQ inherits the native 1,000-row cap. LOG pages
+                # can continue beyond it, even though every timestamp ties.
+                if state["payload"]["queryType"] == "PQ":
+                    data["values"] = data["values"][:1000]
+            elif query.startswith("| ") and state["payload"].get("accountIds") == [
+                "pushdown_empty"
+            ]:
+                # Exact query spelling is asserted by the wire-contract tests.
+                data = {"columns": [], "values": []}
+            elif query.startswith("| ") and state["payload"].get("accountIds") == [
+                "pushdown_projection"
+            ]:
+                original = _STATIC_RESPONSES["pushdown_projection"]
+                values = original["values"]
+                if query == '| filter ((event.type) == ("DNS Resolved"))':
+                    values = [row for row in values if row[2] == "DNS Resolved"]
+                elif query == '| filter ((dataSource.name) == ("SentinelOne"))':
+                    values = [row for row in values if row[4] == "SentinelOne"]
+                elif query != "| filter (1 == 1)":
+                    self._respond(400, {"error": "unexpected projection prefilter"})
+                    return
+                data = {**original, "values": values}
+            elif query.startswith("| ") and state["payload"].get("accountIds") in (
+                ["pushdown_semantics"],
+                ["pushdown_booleans"],
+            ):
+                scope = state["payload"]["accountIds"][0]
+                original = _STATIC_RESPONSES[scope]
+                values = original["values"]
+                if scope == "pushdown_semantics":
+                    expected = "| filter ((n) == (42))"
+                    if query in (expected, expected + " and (missing = *)"):
+                        # Emulate loose coercion and a raw field omitted from
+                        # the returned columns. Both need local rechecking.
+                        values = [row for row in values if row[1] in (42, "42")]
+                    elif query not in {"| limit 1000", "| filter (1 == 1)"}:
+                        self._respond(400, {"error": "unexpected prefilter"})
+                        return
+                elif query == '| filter (((flag) == (true)) or ((flag) == ("true")))':
+                    values = values[:2]
+                elif query not in {"| limit 1000", "| filter (1 == 1)"}:
+                    self._respond(400, {"error": "unexpected boolean prefilter"})
+                    return
+                data = {**original, "values": values}
+            elif query in {
+                "| filter (1 == 1)",
+                "| filter ((event_id) == (42))",
+                "| filter ((event_id) > (40))",
+                '| filter ((message) starts_with:matchcase("login"))',
+                "| limit 1",
+            }:
+                original = _STATIC_RESPONSES["select_basic"]
+                start = datetime.fromisoformat(
+                    state["payload"]["startTime"]
+                ).timestamp()
+                end = datetime.fromisoformat(state["payload"]["endTime"]).timestamp()
+                values = [
+                    row for row in original["values"] if start <= row[0] / 1e9 < end
+                ]
+                if query in {
+                    "| filter ((event_id) == (42))",
+                    '| filter ((message) starts_with:matchcase("login"))',
+                }:
+                    values = [row for row in values if row[1] == 42]
+                if query == "| limit 1":
+                    values = values[:1]
+                data = {**original, "values": values}
             else:
                 data = _STATIC_RESPONSES.get(query)
             if data is None:
@@ -499,12 +796,45 @@ def _make_handler(
                 # parser diagnostics while exercising cleanup after a poll.
                 self._respond(200, data)
                 return
+            if state["payload"]["queryType"] == "LOG":
+                data = _log_page(data, state["payload"])
+                if scope == "hybrid_mixed":
+                    for match in data["matches"]:
+                        values = match["values"]
+                        shape = values["id"] % 3
+                        if shape == 0:
+                            values["dataSource.name"] = "SentinelOne"
+                        else:
+                            for name in list(values):
+                                if name.startswith("event."):
+                                    del values[name]
+                            if shape == 2:
+                                values.update(event=None, dataSource=None)
+                if scope == "hybrid_bad_boundary" and continuation:
+                    data["matches"][0]["cursor"] = "wrong-boundary"
+                if scope in {"hybrid_numeric_positive", "hybrid_numeric_negative"}:
+                    number = (
+                        2**64 if scope == "hybrid_numeric_positive" else -(2**63) - 1
+                    )
+                    data["matches"][-1]["values"]["oversized"] = [{"nested": number}]
+                if scope == "hybrid_bad_values":
+                    data["matches"][-1]["values"] = []
+                if scope == "hybrid_partial_log":
+                    data["partialResultsDueToTimeLimit"] = True
+                self._respond(
+                    200, {"stepsCompleted": step, "stepsTotal": total, "data": data}
+                )
+                return
+            if generated:
+                data = _project(data, projection)
             data = dict(data)
             data["columns"] = [
                 dict(column, cellType="UNKNOWN", decimalPlaces=0)
                 for column in data["columns"]
             ]
             data["matchCount"] = len(data["values"])
+            if scope == "hybrid_partial":
+                data["omittedEvents"] = 1.0
             self._respond(
                 200, {"stepsCompleted": step, "stepsTotal": total, "data": data}
             )
@@ -516,14 +846,14 @@ def _make_handler(
             qid, state = active
             state["deletes"] += 1
             if (
-                state["payload"]["pq"]["query"] == "select_delete_retry"
+                _request_query(state["payload"]) == "select_delete_retry"
                 and state["deletes"] == 1
             ):
                 capture(method="DELETE", id=qid, status=503)
                 self._respond(503, {"error": "temporarily unavailable"})
                 return
             state["deleted"] = True
-            code = 404 if state["payload"]["pq"]["query"] == "select_expired" else 200
+            code = 404 if _request_query(state["payload"]) == "select_expired" else 200
             capture(method="DELETE", id=qid, status=code)
             self._respond(code, {})
 

@@ -174,6 +174,12 @@ public:
     enter(const_cast<T&>(x));
   }
 
+  void visit(const ast::assignment& x) {
+    // The left side of a named argument, as in `f(x, ignore_case=true)`, is a
+    // label, not a field.
+    visit(x.right);
+  }
+
   void visit(const ast::dollar_var& x) {
     if (x.let
         and std::ranges::find(refs_.let_ids, x.let) == refs_.let_ids.end()) {

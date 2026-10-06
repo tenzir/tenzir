@@ -96,10 +96,18 @@ struct IpType {
   bool v4;
 };
 
+/// A field with no static type or presence guarantee.
+///
+/// Only prefilters may reference it. The source must guarantee that a
+/// null-rejecting atom that holds on a decoded value also holds in the target.
+/// The target may coerce or over-match, but must not under-match. In particular,
+/// decoding must not turn an absent target field into a non-null value.
+struct DynamicType {};
+
 /// The column types that filter pushdown compares.
 using ColumnType
   = variant<BoolType, IntType, FloatType, StringType, FixedStringType, EnumType,
-            UuidType, TimeType, IpType>;
+            UuidType, TimeType, IpType, DynamicType>;
 
 /// A column together with the properties that decide how to compare it.
 struct ColumnInfo {
