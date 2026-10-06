@@ -34,9 +34,9 @@ def array(items):
     return {"type": "array", "items": items}
 
 
-def run(mode, expression):
+def run(expression):
     return subprocess.run(
-        [*binary, *mode, "from {} | this = " + expression + " | write_json"],
+        [*binary, "--nova=true", "from {} | this = " + expression + " | write_json"],
         env=env,
         text=True,
         capture_output=True,
@@ -44,13 +44,13 @@ def run(mode, expression):
     )
 
 
-def check_batch(mode, cases, schema_argument, *, failure=False):
+def check_batch(cases, schema_argument, *, failure=False):
     fields = ", ".join(
         f"case{i}: print_avro({value}, schema={schema_argument(schema)})"
         for i, (value, schema, _) in enumerate(cases)
     )
-    result = run(mode, "{" + fields + "}")
-    context = (mode, fields, result.returncode, result.stdout, result.stderr)
+    result = run("{" + fields + "}")
+    context = (fields, result.returncode, result.stdout, result.stderr)
     assert result.returncode == 0, context
     assert json.loads(result.stdout) == {
         f"case{i}": None
@@ -175,50 +175,43 @@ failures = [
     ("1.5", {"type": "long"}, "value does not match Avro type `long`"),
 ]
 
-for mode in ([], ["--nova"]):
-    label = "nova" if mode else "legacy"
-    for as_string in (False, True):
+for as_string in (False, True):
 
-        def schema_argument(schema):
-            # A record wrapping a root union is a convenience accepted by the
-            # function; a JSON schema string uses the standard bare array.
-            if (
-                as_string
-                and list(schema) == ["type"]
-                and isinstance(schema["type"], list)
-            ):
-                schema = schema["type"]
-            result = json.dumps(schema)
-            return json.dumps(result) if as_string else result
+    def schema_argument(schema):
+        # A record wrapping a root union is a convenience accepted by the
+        # function; a JSON schema string uses the standard bare array.
+        if as_string and list(schema) == ["type"] and isinstance(schema["type"], list):
+            schema = schema["type"]
+        result = json.dumps(schema)
+        return json.dumps(result) if as_string else result
 
-        check_batch(mode, successes, schema_argument)
-        check_batch(mode, failures, schema_argument, failure=True)
+    check_batch(successes, schema_argument)
+    check_batch(failures, schema_argument, failure=True)
 
-    for expression, diagnostic in [
-        ("print_avro(1)", "schema"),
-        ("print_avro(1, schema=42)", "schema"),
-        ('print_avro(1, schema="not json")', "invalid Avro schema"),
-        ('print_avro(1, schema={type: "unknown"})', "invalid Avro schema"),
-        ('print_avro(1, schema={type: "array"})', "invalid Avro schema"),
-    ]:
-        result = run(mode, "{encoded: " + expression + "}")
-        context = (label, expression, result.returncode, result.stdout, result.stderr)
-        assert result.returncode != 0, context
-        assert "error:" in result.stderr and diagnostic in result.stderr, context
-        assert not result.stdout, context
+for expression, diagnostic in [
+    ("print_avro(1)", "schema"),
+    ("print_avro(1, schema=42)", "schema"),
+    ('print_avro(1, schema="not json")', "invalid Avro schema"),
+    ('print_avro(1, schema={type: "unknown"})', "invalid Avro schema"),
+    ('print_avro(1, schema={type: "array"})', "invalid Avro schema"),
+]:
+    result = run("{encoded: " + expression + "}")
+    context = (expression, result.returncode, result.stdout, result.stderr)
+    assert result.returncode != 0, context
+    assert "error:" in result.stderr and diagnostic in result.stderr, context
+    assert not result.stdout, context
 
-    print(f"{label} schema-driven Avro encoding: ok")
+print("schema-driven Avro encoding: ok")
 
-# Legacy lists can coerce heterogeneous input before the function sees it.
-# Nova preserves the individual element types, including nested records.
-nova_successes = [
+# Lists preserve the individual element types, including nested records.
+heterogeneous_successes = [
     ('[1, "x", null]', array(["null", "long", "string"]), "0602020402780000"),
     ('[{a: 1}, {a: "x"}]', array(record(a=["long", "string"])), "04000202027800"),
     ('[[], [1], ["x"]]', array(array(["long", "string"])), "060002000200020202780000"),
 ]
-check_batch(["--nova"], nova_successes, json.dumps)
+check_batch(heterogeneous_successes, json.dumps)
 
-nova_failures = [
+heterogeneous_failures = [
     ('[1, "x"]', array("long"), "value does not match Avro type `long`"),
     ('[[], [1], ["x"]]', array(array("long")), "value does not match Avro type `long`"),
     ('[{a: 1}, {a: "x"}]', array(record(a="long")), "field `a`"),
@@ -230,6 +223,6 @@ nova_failures = [
         "unexpected Avro record field `b`",
     ),
 ]
-check_batch(["--nova"], nova_failures, json.dumps, failure=True)
+check_batch(heterogeneous_failures, json.dumps, failure=True)
 
-print("nova heterogeneous Avro unions: ok")
+print("heterogeneous Avro unions: ok")
