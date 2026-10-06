@@ -1,5 +1,12 @@
 tenzir:
   nova: true
+  serve:
+    # All serve pipelines below start with the node and complete immediately.
+    # The default retention time of one minute can elapse before the last tests
+    # of this suite issue their request, which makes them observe an expired
+    # serve id with an empty result. Keep the results around for the entire
+    # lifetime of the fixture instead.
+    retention-time: 1h
   pipelines:
     serve-1:
       name: serve 1

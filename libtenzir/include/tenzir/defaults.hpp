@@ -167,7 +167,8 @@ namespace api {
 namespace serve {
 
 /// The duration for which results for the last set of results of a pipeline
-/// is kept available after being fetched for the first time.
+/// is kept available after being fetched for the first time. Configurable via
+/// `tenzir.serve.retention-time`.
 inline constexpr std::chrono::seconds retention_time = std::chrono::minutes{1};
 
 /// Threshold number of events to wait for .

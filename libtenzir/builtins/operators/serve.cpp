@@ -59,6 +59,8 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/hash/hash.hpp>
 #include <tenzir/hash/legacy_hash.hpp>
@@ -692,6 +694,10 @@ struct managed_serve_operator {
 };
 
 struct serve_manager_state {
+  /// How long a cleanly completed serve id lingers before removal. Set from
+  /// `tenzir.serve.retention-time`.
+  duration retention_time = defaults::api::serve::retention_time;
+
   static constexpr auto name = "serve-manager";
 
   serve_manager_actor::pointer self = {};
@@ -780,8 +786,7 @@ struct serve_manager_state {
     if (not found->get_rps.empty()) {
       found->try_deliver_results(/*force_underful=*/true);
     }
-    detail::weak_run_delayed(self, defaults::api::serve::retention_time,
-                             delete_serve);
+    detail::weak_run_delayed(self, retention_time, delete_serve);
   }
 
   auto start(std::string serve_id, uint64_t buffer_size, caf::actor watched)
@@ -1266,9 +1271,10 @@ struct serve_manager_state {
 };
 
 auto serve_manager(
-  serve_manager_actor::stateful_pointer<serve_manager_state> self)
-  -> serve_manager_actor::behavior_type {
+  serve_manager_actor::stateful_pointer<serve_manager_state> self,
+  duration retention_time) -> serve_manager_actor::behavior_type {
   self->state().self = self;
+  self->state().retention_time = retention_time;
   return {
     [self](atom::start, std::string& serve_id, uint64_t buffer_size,
            caf::actor& watched) -> caf::result<void> {
@@ -2406,6 +2412,19 @@ class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
                      public virtual OperatorPlugin {
 public:
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    TENZIR_UNUSED(plugin_config);
+    TRY(retention_time_,
+        try_get_or(global_config, "tenzir.serve.retention-time",
+                   duration{defaults::api::serve::retention_time}));
+    if (retention_time_ <= duration::zero()) {
+      return diagnostic::error("serve retention time must be greater than zero")
+        .to_error();
+    }
+    return {};
+  }
+
   auto name() const -> std::string override {
     return "serve";
   }
@@ -2432,7 +2451,7 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    return node->spawn<caf::linked>(serve_manager);
+    return node->spawn<caf::linked>(serve_manager, retention_time_);
   }
 
   auto openapi_endpoints(api_version version) const -> record override {
@@ -2503,6 +2522,9 @@ public:
     -> rest_handler_actor override {
     return system.spawn(serve_handler, node);
   }
+
+private:
+  duration retention_time_ = defaults::api::serve::retention_time;
 };
 
 } // namespace
