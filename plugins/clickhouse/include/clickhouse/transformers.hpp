@@ -59,6 +59,12 @@ struct transformer {
       clickhouse_nullable{clickhouse_nullable} {
   }
 
+  /// Whether nulls are stored as `NULL`, which only a `Nullable` column can.
+  auto stores_null() const -> bool {
+    return unwrap_clickhouse_type_call(clickhouse_typename, "Nullable")
+      .has_value();
+  }
+
   enum class drop { none, some, all };
 
   friend auto operator|(drop lhs, drop rhs) -> drop {

@@ -1,0 +1,7 @@
+warning: column `req` contains `null`, but the ClickHouse column is not nullable
+ --> tests/operators/to_clickhouse/roundtrip/64_null_required.tql:4:1
+  |
+4 | to_clickhouse table="test_null_required",
+  | ~~~~~~~~~~~~~
+  |
+  = note: affected events will be dropped

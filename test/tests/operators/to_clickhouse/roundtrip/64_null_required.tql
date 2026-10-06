@@ -1,0 +1,9 @@
+// Without a default, a `null` for a non-nullable column cannot be written, so
+// the event is dropped with a warning.
+from {id: 1, req: 1}, {id: 2, req: null}
+to_clickhouse table="test_null_required",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

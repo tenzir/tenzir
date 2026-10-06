@@ -1,7 +1,6 @@
-// A typed `null` for the non-nullable `n` column cannot be written. The default
-// only applies when the column is omitted entirely (slice level), not per row,
-// so this event is dropped with a warning.
-from {id: 5, n: string(null)}
+// A `null` for the non-nullable `n` column means its default, just like an
+// event without the field. This holds for typed and untyped nulls.
+from {id: 5, n: string(null)}, {id: 6, n: null}, {id: 7, n: "y"}
 to_clickhouse table="test_supported_default",
               host=env("CLICKHOUSE_HOST"),
               port=int(env("CLICKHOUSE_PORT")),

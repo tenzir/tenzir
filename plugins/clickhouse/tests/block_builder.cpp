@@ -296,6 +296,167 @@ TEST("rows that omit a column with a default go into their own insert") {
               (std::vector<uint64_t>{2}));
 }
 
+TEST("a null for a non-nullable column with a default omits the column") {
+  auto schema = make_schema({
+    column("id", "UInt64"),
+    column("d", "UInt64", "DEFAULT"),
+    column("s", "String", "DEFAULT"),
+  });
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"d", uint64_t{5}}, {"s", "a"}},
+    record{{"id", uint64_t{2}}, {"d", data{}}, {"s", "b"}},
+    record{{"id", uint64_t{3}}, {"s", "c"}},
+    record{{"id", uint64_t{4}}, {"d", uint64_t{6}}, {"s", data{}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(not warned(dh, "not nullable"));
+  REQUIRE_EQUAL(inserts.size(), size_t{3});
+  CHECK_EQUAL(inserts[0].block.GetColumnCount(), size_t{3});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[0].block, "id")),
+              (std::vector<uint64_t>{1}));
+  // A null and a missing field both leave the default to the server.
+  CHECK_EQUAL(inserts[1].block.GetColumnCount(), size_t{2});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[1].block, "id")),
+              (std::vector<uint64_t>{2, 3}));
+  CHECK_EQUAL(strings(get(inserts[1].block, "s")),
+              (std::vector<std::string>{"b", "c"}));
+  CHECK_EQUAL(inserts[2].block.GetColumnCount(), size_t{2});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[2].block, "d")),
+              (std::vector<uint64_t>{6}));
+  CHECK_EQUAL(bits(inserts[1].input_rows[0]),
+              (std::vector<bool>{false, true, true, false}));
+}
+
+TEST("a null for a column that is null in all rows omits the column") {
+  auto schema
+    = make_schema({column("id", "UInt64"), column("d", "UInt64", "DEFAULT")});
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"d", data{}}},
+    record{{"id", uint64_t{2}}, {"d", data{}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(dh.empty());
+  REQUIRE_EQUAL(inserts.size(), size_t{1});
+  CHECK_EQUAL(inserts[0].block.GetColumnCount(), size_t{1});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[0].block, "id")),
+              (std::vector<uint64_t>{1, 2}));
+}
+
+TEST("a null for a nullable column with a default stays null") {
+  auto schema = make_schema(
+    {column("id", "UInt64"), column("d", "Nullable(UInt64)", "DEFAULT")});
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"d", uint64_t{5}}},
+    record{{"id", uint64_t{2}}, {"d", data{}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  REQUIRE_EQUAL(inserts.size(), size_t{1});
+  auto d = get(inserts[0].block, "d")->As<::clickhouse::ColumnNullable>();
+  REQUIRE(d);
+  REQUIRE_EQUAL(d->Size(), size_t{2});
+  CHECK(not d->IsNull(0));
+  CHECK(d->IsNull(1));
+}
+
+TEST("a null for a composite column with a default omits the column") {
+  auto schema = make_schema({
+    column("id", "UInt64"),
+    column("a", "Array(Nullable(String))", "DEFAULT"),
+    column("t", "Tuple(x Nullable(Int64))", "DEFAULT"),
+    column("j", "JSON", "DEFAULT"),
+  });
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"a", data{}}, {"t", data{}}, {"j", data{}}},
+    record{{"id", uint64_t{2}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(dh.empty());
+  REQUIRE_EQUAL(inserts.size(), size_t{1});
+  CHECK_EQUAL(inserts[0].block.GetColumnCount(), size_t{1});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[0].block, "id")),
+              (std::vector<uint64_t>{1, 2}));
+}
+
+TEST("a null for a list column with a default omits it in catch-all tables") {
+  auto schema = make_schema({
+    column("id", "UInt64"),
+    column("a", "Array(Nullable(String))", "DEFAULT"),
+    column("event", "JSON", "", "tenzir:catch_all"),
+  });
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"a", data{}}},
+    record{{"id", uint64_t{2}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(dh.empty());
+  REQUIRE_EQUAL(inserts.size(), size_t{1});
+  CHECK_EQUAL(inserts[0].block.GetColumnCount(), size_t{2});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[0].block, "id")),
+              (std::vector<uint64_t>{1, 2}));
+}
+
+TEST("a null for a list column without a default is an empty list") {
+  auto schema = make_schema(
+    {column("id", "UInt64"), column("a", "Array(Nullable(String))")});
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"a", data{}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(dh.empty());
+  REQUIRE_EQUAL(inserts.size(), size_t{1});
+  auto a = get(inserts[0].block, "a")->As<::clickhouse::ColumnArray>();
+  REQUIRE(a);
+  REQUIRE_EQUAL(a->Size(), size_t{1});
+  CHECK_EQUAL(a->GetAsColumn(0)->Size(), size_t{0});
+}
+
+TEST("a null for a non-nullable column without a default drops the event") {
+  auto schema = make_schema({column("id", "UInt64"), column("d", "UInt64")});
+  auto events = std::vector{make_events({
+    record{{"id", uint64_t{1}}, {"d", uint64_t{5}}},
+    record{{"id", uint64_t{2}}, {"d", data{}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(warned(dh, "not nullable"));
+  REQUIRE_EQUAL(inserts.size(), size_t{1});
+  CHECK_EQUAL(values<uint64_t>(get(inserts[0].block, "id")),
+              (std::vector<uint64_t>{1}));
+}
+
+TEST("a null for a mapped column with a default omits it in catch-all "
+     "tables") {
+  auto schema = make_schema({
+    column("class_uid", "Int32", "DEFAULT"),
+    column("activity_id", "Int32", "DEFAULT"),
+    column("event", "JSON", "", "tenzir:catch_all"),
+  });
+  auto events = std::vector{make_events({
+    record{{"class_uid", int64_t{4001}}, {"activity_id", data{}}, {"x", "a"}},
+    record{{"class_uid", int64_t{4001}}},
+    record{{"class_uid", int64_t{4001}}, {"activity_id", int64_t{2}}},
+  })};
+  auto dh = collecting_diagnostic_handler{};
+  auto inserts = build(schema, events, dh);
+  CHECK(dh.empty());
+  REQUIRE_EQUAL(inserts.size(), size_t{2});
+  auto const& omitting = inserts[0].block;
+  CHECK_EQUAL(omitting.GetColumnCount(), size_t{2});
+  CHECK_EQUAL(values<int32_t>(get(omitting, "class_uid")),
+              (std::vector<int32_t>{4001, 4001}));
+  // The null neither reaches the catch-all nor drops the event.
+  CHECK_EQUAL(json(get(omitting, "event")),
+              (std::vector<std::string>{R"({"x":"a"})", "{}"}));
+  CHECK_EQUAL(values<int32_t>(get(inserts[1].block, "activity_id")),
+              (std::vector<int32_t>{2}));
+}
+
 TEST("tuples stay consistent when rows are removed") {
   auto schema = make_schema({
     column("id", "UInt16"),

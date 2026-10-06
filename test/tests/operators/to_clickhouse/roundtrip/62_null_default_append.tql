@@ -1,0 +1,13 @@
+// A `null` for a non-nullable column with a default gets the default, like an
+// event without the field. ClickHouse evaluates expression defaults per row.
+// Lists and JSON objects get the default instead of an empty value.
+from {id: 1, lit: 1, expr: 1, name: "one", tags: ["a"], meta: {k: "v"}},
+     {id: 2, lit: null, expr: null, name: null, tags: null, meta: null},
+     {id: 3, lit: int(null), expr: 30, name: string(null)},
+     {id: 4}
+to_clickhouse table="test_null_default",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

@@ -66,7 +66,9 @@ struct PreparedInsert {
 
 /// Turns the active rows of `events` into as few inserts as possible. Rows
 /// that omit different columns with defaults end up in different inserts,
-/// because the server only fills defaults for columns that an insert omits.
+/// because the server only fills defaults for columns that an insert omits. A
+/// `null` for a column with a default omits the column as well, unless it is
+/// `Nullable`.
 auto build_inserts(RootWriter const& root, std::span<nova::Events const> events,
                    std::string_view table, diagnostic_handler& dh)
   -> std::vector<PreparedInsert>;

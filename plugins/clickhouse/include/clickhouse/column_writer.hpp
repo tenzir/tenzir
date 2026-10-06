@@ -117,6 +117,9 @@ public:
     return nullable_;
   }
 
+  /// Whether nulls are stored as `NULL`, which only a `Nullable` column can.
+  auto stores_null() const -> bool;
+
 private:
   std::string path_;
   std::string clickhouse_type_;

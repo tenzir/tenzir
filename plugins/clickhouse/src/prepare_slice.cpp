@@ -12,6 +12,10 @@
 
 #include <arrow/record_batch.h>
 
+#include <algorithm>
+#include <unordered_map>
+#include <utility>
+
 namespace tenzir::plugins::clickhouse {
 
 auto prepare_slice(const table_slice& slice, const transformer_record& tr,
@@ -143,6 +147,76 @@ auto restructure_for_catch_all(table_slice const& slice,
   auto result = table_slice{batch, std::move(schema)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());
+  return result;
+}
+
+auto split_null_defaults(table_slice const& slice, transformer_record const& tr)
+  -> std::vector<DefaultedPart> {
+  // The columns whose nulls mean the default, by index in `slice`.
+  auto defaulted = std::vector<size_t>{};
+  auto index = size_t{0};
+  for (auto const& column : columns_of(slice)) {
+    auto const* trafo = tr.transfrom_and_index_for(column.name).trafo;
+    if (trafo and trafo->has_default and not trafo->stores_null()
+        and column.array.null_count() > 0) {
+      defaulted.push_back(index);
+    }
+    ++index;
+  }
+  auto result = std::vector<DefaultedPart>{};
+  if (defaulted.empty()) {
+    result.push_back({slice, {}});
+    return result;
+  }
+  auto const batch = to_record_batch(slice);
+  // Group the rows by the defaulted columns that they omit.
+  auto keys = std::vector<std::vector<bool>>{};
+  auto groups = std::unordered_map<std::vector<bool>, size_t>{};
+  auto key = std::vector<bool>(defaulted.size());
+  for (auto row = int64_t{0}; row < batch->num_rows(); ++row) {
+    for (auto i = size_t{0}; i < defaulted.size(); ++i) {
+      key[i] = batch->column(detail::narrow<int>(defaulted[i]))->IsNull(row);
+    }
+    auto [it, inserted] = groups.try_emplace(key, keys.size());
+    if (inserted) {
+      keys.push_back(key);
+      result.emplace_back();
+    }
+    result[it->second].rows.push_back(row);
+  }
+  for (auto i = size_t{0}; i < result.size(); ++i) {
+    auto& part = result[i];
+    auto const all_rows = std::cmp_equal(part.rows.size(), slice.rows());
+    auto rows = all_rows ? slice : take_rows(slice, part.rows);
+    if (all_rows) {
+      part.rows.clear();
+    }
+    auto omitted = [&](size_t column) {
+      auto const it = std::ranges::find(defaulted, column);
+      return it != defaulted.end() and keys[i][it - defaulted.begin()];
+    };
+    auto fields = std::vector<record_type::field_view>{};
+    auto arrays = arrow::ArrayVector{};
+    auto column_index = size_t{0};
+    for (auto const& column : columns_of(rows)) {
+      if (not omitted(column_index++)) {
+        fields.emplace_back(column.name, column.type);
+        arrays.push_back(column.array.Slice(0));
+      }
+    }
+    if (fields.size() == column_index) {
+      part.slice = std::move(rows);
+      continue;
+    }
+    auto schema = type{"tenzir.clickhouse-prepared", record_type{fields}};
+    auto omitted_batch
+      = arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                 detail::narrow<int64_t>(rows.rows()),
+                                 std::move(arrays));
+    part.slice = table_slice{omitted_batch, std::move(schema)};
+    part.slice.offset(rows.offset());
+    part.slice.import_time(rows.import_time());
+  }
   return result;
 }
 

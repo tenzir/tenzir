@@ -1,0 +1,13 @@
+// Nulls for mapped columns with defaults get the defaults in a catch-all table
+// as well, and do not reach the catch-all column.
+from {time: 2026-01-01T00:00:00Z, class_uid: 4001, activity_id: null,
+      severity_id: null, tags: null, message: "a"},
+     {time: 2026-01-01T00:00:01Z, class_uid: 4001, message: "b"},
+     {time: 2026-01-01T00:00:02Z, class_uid: null, activity_id: 3,
+      message: "c"}
+to_clickhouse table="test_null_default_catch_all",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

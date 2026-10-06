@@ -8,6 +8,7 @@
 
 #include "clickhouse/block_builder.hpp"
 
+#include "clickhouse/column_writer_detail.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 
 #include <algorithm>
@@ -121,7 +122,8 @@ auto without_paths(nova::Array<nova::Record> records,
 /// The inputs of all columns for one batch.
 struct Part {
   BitMap const& mask;
-  /// The rows that have the field of each column.
+  /// The rows that have the field of each column. A `null` counts as missing
+  /// if it means the default of the column.
   std::vector<BitMap> present;
   /// The values of each column, with nulls for selected rows without the
   /// field.
@@ -164,6 +166,13 @@ auto report_unwritable(RootWriter const& root,
         .emit(dh);
     }
   }
+}
+
+/// Whether a `null` for the column means its default. A column that cannot
+/// store the `null` as `NULL` is omitted for these rows instead, just as for
+/// rows without the field.
+auto defaults_null(RootColumn const& column) -> bool {
+  return column.has_default and not column.writer->stores_null();
 }
 
 /// Whether the server can fill in a column that an insert omits.
@@ -378,8 +387,13 @@ auto build_inserts(RootWriter const& root, std::span<nova::Events const> events,
       }
       // Writers see rows without the field as nulls.
       auto absent = batch.mask.and_not(field->present);
-      part.data.push_back(std::move(field->data).null_where(std::move(absent)));
-      part.present.push_back(std::move(field->present));
+      auto data = std::move(field->data).null_where(std::move(absent));
+      auto present = std::move(field->present);
+      if (defaults_null(column)) {
+        present = std::move(present).and_not(null_rows(data));
+      }
+      part.data.push_back(std::move(data));
+      part.present.push_back(std::move(present));
     }
   }
   auto result = std::vector<PreparedInsert>{};

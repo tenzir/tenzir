@@ -52,6 +52,10 @@ auto WriteCtx::first_unknown_report(ColumnWriter const& writer,
   return true;
 }
 
+auto ColumnWriter::stores_null() const -> bool {
+  return unwrap_clickhouse_type_call(clickhouse_type_, "Nullable").has_value();
+}
+
 auto null_rows(nova::Array<nova::Data> const& data) -> BitMap {
   auto nulls = data.get_alternative<nova::Null>();
   return nulls ? std::move(nulls->present) : BitMap{data.length(), false};

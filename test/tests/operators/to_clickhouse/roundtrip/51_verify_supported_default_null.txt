@@ -1,3 +1,5 @@
-total=3
-dropped=0
+total=6
+5 def
+6 def
+7 y
 ok

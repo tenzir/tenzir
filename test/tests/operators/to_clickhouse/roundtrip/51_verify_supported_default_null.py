@@ -1,5 +1,5 @@
 # runner: python
-"""Verify the event carrying a null for the non-nullable `n` column was dropped."""
+"""Verify that nulls for the non-nullable `n` column got its default."""
 
 import os
 import subprocess
@@ -29,13 +29,14 @@ def ch_query(sql: str) -> str:
 
 
 def main() -> None:
-    # Unchanged from the previous step: the null-carrying event was dropped.
     total = int(ch_query("SELECT count() FROM test_supported_default"))
     print(f"total={total}")
-    assert total == 3, f"expected 3, got {total}"
-    dropped = int(ch_query("SELECT count() FROM test_supported_default WHERE id = 5"))
-    print(f"dropped={dropped}")
-    assert dropped == 0, f"expected 0 rows with id = 5, got {dropped}"
+    assert total == 6, f"expected 6, got {total}"
+    rows = ch_query(
+        "SELECT id, n FROM test_supported_default WHERE id >= 5 ORDER BY id"
+    )
+    print(rows.replace("\t", " "))
+    assert rows == "5\tdef\n6\tdef\n7\ty", f"unexpected rows: {rows!r}"
     print("ok")
 
 

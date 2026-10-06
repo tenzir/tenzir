@@ -545,14 +545,19 @@ auto easy_client::insert_batch_impl(const std::vector<table_slice>& events,
         = tr->catch_all or normalize_unmarked_input
             ? prepare_slice(reshaped, *tr, dh_, args_.operator_location)
             : reshaped;
-      auto [it, inserted]
-        = by_schema.try_emplace(prepared.schema(), pending.size());
-      if (inserted) {
-        pending.emplace_back();
+      // Prepared slices keep the rows of their originals, so a part of one
+      // retries with the same rows of the original.
+      for (auto& part : split_null_defaults(prepared, *tr)) {
+        auto [it, inserted]
+          = by_schema.try_emplace(part.slice.schema(), pending.size());
+        if (inserted) {
+          pending.emplace_back();
+        }
+        auto& group = pending[it->second];
+        group.slices.push_back(std::move(part.slice));
+        group.originals.push_back(
+          part.rows.empty() ? original : take_rows(original, part.rows));
       }
-      auto& group = pending[it->second];
-      group.slices.push_back(std::move(prepared));
-      group.originals.push_back(original);
     }
     return pending;
   };
