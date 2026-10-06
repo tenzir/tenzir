@@ -817,6 +817,57 @@ auto decode(GrpcRequest request, DecodeContext ctx) -> DecodeResult {
   });
 }
 
+auto decode_events(Signal signal, Encoding encoding,
+                   std::span<std::byte const> bytes, DecodeContext ctx)
+  -> EventsDecodeResult {
+  switch (signal) {
+    case Signal::logs: {
+      auto request = parse_message<collector_logs::ExportLogsServiceRequest>(
+        bytes, encoding, InvalidJsonIdPolicy::clear);
+      if (request.is_err()) {
+        return Err{std::move(request).unwrap_err()};
+      }
+      return decode_logs_events(std::move(request).unwrap(), std::move(ctx));
+    }
+    case Signal::metrics: {
+      auto request
+        = parse_message<collector_metrics::ExportMetricsServiceRequest>(
+          bytes, encoding);
+      if (request.is_err()) {
+        return Err{std::move(request).unwrap_err()};
+      }
+      return decode_metrics_events(std::move(request).unwrap(), std::move(ctx));
+    }
+    case Signal::traces: {
+      auto request = parse_message<collector_trace::ExportTraceServiceRequest>(
+        bytes, encoding);
+      if (request.is_err()) {
+        return Err{std::move(request).unwrap_err()};
+      }
+      return decode_traces_events(std::move(request).unwrap(), std::move(ctx));
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto decode_events(GrpcRequest request, DecodeContext ctx)
+  -> EventsDecodeResult {
+  return match(
+    std::move(request), [&](auto&& typed_request) -> EventsDecodeResult {
+      using Request = std::remove_cvref_t<decltype(typed_request)>;
+      if constexpr (std::same_as<Request,
+                                 collector_logs::ExportLogsServiceRequest>) {
+        return decode_logs_events(std::move(typed_request), std::move(ctx));
+      } else if constexpr (std::same_as<
+                             Request,
+                             collector_metrics::ExportMetricsServiceRequest>) {
+        return decode_metrics_events(std::move(typed_request), std::move(ctx));
+      } else {
+        return decode_traces_events(std::move(typed_request), std::move(ctx));
+      }
+    });
+}
+
 auto make_decode_context(RequestMetadata const& metadata,
                          AcceptOtlpArgs const& args)
   -> Result<DecodeContext, std::string> {

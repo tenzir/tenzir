@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_request:
+      path: /v1/logs
+      headers:
+        Content-Type: application/json
+      expected_status: 200
+      expected_body: "{}"
+      body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"attributes":[{"key":"value","value":{"intValue":"42"}}],"body":{"stringValue":"integer"}},{"attributes":[{"key":"value","value":{"stringValue":"hello"}}],"body":{"stringValue":"string"}},{"attributes":[{"key":"value","value":{"boolValue":false}}],"body":{"stringValue":"bool"}},{"attributes":[{"key":"value","value":{}}],"body":{"stringValue":"empty"}}]}]}]}'
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT"), schema="record"
+head 4
+select schema=@name, body=body.string_value, attributes

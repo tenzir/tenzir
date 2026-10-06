@@ -498,22 +498,23 @@ auto metric_repeated_size(metrics::Metric const& metric) -> size_t {
   return result;
 }
 
+template <class Builder>
 auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
-                         DecodeContext ctx) -> DecodedSlices {
-  auto builder = Option<series_builder>{None{}};
+                         DecodeContext ctx) -> DecodedBatches<Builder> {
+  auto builder = Option<Builder>{None{}};
   auto active_kind = metrics::Metric::DATA_NOT_SET;
   for (auto const& resource_metrics : request.resource_metrics()) {
     for (auto const& scope_metrics : resource_metrics.scope_metrics()) {
       for (auto const& metric : scope_metrics.metrics()) {
         if (ctx.is_cancelled()) {
-          co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+          co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
           co_return;
         }
         auto const kind = metric.data_case();
         if (kind != active_kind) {
           if (builder) {
-            for (auto& slice : builder->finish_as_table_slice()) {
-              co_yield DecodedSlice{std::move(slice)};
+            for (auto& slice : finish_batches(*builder)) {
+              co_yield DecodedBatch<Builder>{std::move(slice)};
             }
             builder.reset();
           }
@@ -535,7 +536,7 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
               builder.emplace(summary_type(ctx.attribute_mode));
               break;
             case metrics::Metric::DATA_NOT_SET:
-              co_yield DecodedSlice{
+              co_yield DecodedBatch<Builder>{
                 Err{fmt::format("metric `{}` has no data", metric.name())}};
               co_return;
           }
@@ -568,52 +569,56 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
           }
           return {};
         };
-        auto flush_if_ready = [&]() -> std::vector<table_slice> {
+        auto flush_if_ready = [&]() -> std::vector<Batch<Builder>> {
           if (builder->length() < batch_rows) {
             return {};
           }
-          return builder->finish_as_table_slice();
+          return finish_batches(*builder);
         };
         if (metric.has_gauge()) {
           for (auto const& point : metric.gauge().data_points()) {
             if (ctx.is_cancelled()) {
-              co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+              co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
               co_return;
             }
             auto event = make_point_event(point, true);
             if (event.is_err()) {
-              co_yield DecodedSlice{Err{std::move(event).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(event).unwrap_err()}};
               co_return;
             }
             auto materialized = std::move(event).unwrap();
             materialized["value"] = make_number_value(point);
             auto exemplars = add_exemplars(materialized, point);
             if (exemplars.is_err()) {
-              co_yield DecodedSlice{Err{std::move(exemplars).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(exemplars).unwrap_err()}};
               co_return;
             }
             materialized["flags"] = static_cast<uint64_t>(point.flags());
             builder->data(materialized);
             for (auto& slice : flush_if_ready()) {
-              co_yield DecodedSlice{std::move(slice)};
+              co_yield DecodedBatch<Builder>{std::move(slice)};
             }
           }
         } else if (metric.has_sum()) {
           for (auto const& point : metric.sum().data_points()) {
             if (ctx.is_cancelled()) {
-              co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+              co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
               co_return;
             }
             auto event = make_point_event(point);
             if (event.is_err()) {
-              co_yield DecodedSlice{Err{std::move(event).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(event).unwrap_err()}};
               co_return;
             }
             auto materialized = std::move(event).unwrap();
             materialized["value"] = make_number_value(point);
             auto exemplars = add_exemplars(materialized, point);
             if (exemplars.is_err()) {
-              co_yield DecodedSlice{Err{std::move(exemplars).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(exemplars).unwrap_err()}};
               co_return;
             }
             materialized["flags"] = static_cast<uint64_t>(point.flags());
@@ -624,18 +629,19 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
             materialized["monotonic"] = metric.sum().is_monotonic();
             builder->data(materialized);
             for (auto& slice : flush_if_ready()) {
-              co_yield DecodedSlice{std::move(slice)};
+              co_yield DecodedBatch<Builder>{std::move(slice)};
             }
           }
         } else if (metric.has_histogram()) {
           for (auto const& point : metric.histogram().data_points()) {
             if (ctx.is_cancelled()) {
-              co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+              co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
               co_return;
             }
             auto event = make_point_event(point);
             if (event.is_err()) {
-              co_yield DecodedSlice{Err{std::move(event).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(event).unwrap_err()}};
               co_return;
             }
             auto materialized = std::move(event).unwrap();
@@ -661,19 +667,22 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
                 = point.has_max() ? data{point.max()} : data{};
               auto counts = make_u64_list(point.bucket_counts(), ctx);
               if (counts.is_err()) {
-                co_yield DecodedSlice{Err{std::move(counts).unwrap_err()}};
+                co_yield DecodedBatch<Builder>{
+                  Err{std::move(counts).unwrap_err()}};
                 co_return;
               }
               materialized["bucket_counts"] = std::move(counts).unwrap();
               auto bounds = make_double_list(point.explicit_bounds(), ctx);
               if (bounds.is_err()) {
-                co_yield DecodedSlice{Err{std::move(bounds).unwrap_err()}};
+                co_yield DecodedBatch<Builder>{
+                  Err{std::move(bounds).unwrap_err()}};
                 co_return;
               }
               materialized["explicit_bounds"] = std::move(bounds).unwrap();
               auto exemplars = make_exemplars(point.exemplars(), ctx);
               if (exemplars.is_err()) {
-                co_yield DecodedSlice{Err{std::move(exemplars).unwrap_err()}};
+                co_yield DecodedBatch<Builder>{
+                  Err{std::move(exemplars).unwrap_err()}};
                 co_return;
               }
               materialized["exemplars"] = std::move(exemplars).unwrap();
@@ -681,19 +690,20 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
             materialized["flags"] = static_cast<uint64_t>(point.flags());
             builder->data(materialized);
             for (auto& slice : flush_if_ready()) {
-              co_yield DecodedSlice{std::move(slice)};
+              co_yield DecodedBatch<Builder>{std::move(slice)};
             }
           }
         } else if (metric.has_exponential_histogram()) {
           for (auto const& point :
                metric.exponential_histogram().data_points()) {
             if (ctx.is_cancelled()) {
-              co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+              co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
               co_return;
             }
             auto event = make_point_event(point);
             if (event.is_err()) {
-              co_yield DecodedSlice{Err{std::move(event).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(event).unwrap_err()}};
               co_return;
             }
             auto materialized = std::move(event).unwrap();
@@ -725,19 +735,22 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
               materialized["zero_threshold"] = point.zero_threshold();
               auto positive = make_buckets(point.positive(), ctx);
               if (positive.is_err()) {
-                co_yield DecodedSlice{Err{std::move(positive).unwrap_err()}};
+                co_yield DecodedBatch<Builder>{
+                  Err{std::move(positive).unwrap_err()}};
                 co_return;
               }
               materialized["positive"] = std::move(positive).unwrap();
               auto negative = make_buckets(point.negative(), ctx);
               if (negative.is_err()) {
-                co_yield DecodedSlice{Err{std::move(negative).unwrap_err()}};
+                co_yield DecodedBatch<Builder>{
+                  Err{std::move(negative).unwrap_err()}};
                 co_return;
               }
               materialized["negative"] = std::move(negative).unwrap();
               auto exemplars = make_exemplars(point.exemplars(), ctx);
               if (exemplars.is_err()) {
-                co_yield DecodedSlice{Err{std::move(exemplars).unwrap_err()}};
+                co_yield DecodedBatch<Builder>{
+                  Err{std::move(exemplars).unwrap_err()}};
                 co_return;
               }
               materialized["exemplars"] = std::move(exemplars).unwrap();
@@ -745,18 +758,19 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
             materialized["flags"] = static_cast<uint64_t>(point.flags());
             builder->data(materialized);
             for (auto& slice : flush_if_ready()) {
-              co_yield DecodedSlice{std::move(slice)};
+              co_yield DecodedBatch<Builder>{std::move(slice)};
             }
           }
         } else if (metric.has_summary()) {
           for (auto const& point : metric.summary().data_points()) {
             if (ctx.is_cancelled()) {
-              co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+              co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
               co_return;
             }
             auto event = make_point_event(point);
             if (event.is_err()) {
-              co_yield DecodedSlice{Err{std::move(event).unwrap_err()}};
+              co_yield DecodedBatch<Builder>{
+                Err{std::move(event).unwrap_err()}};
               co_return;
             }
             auto materialized = std::move(event).unwrap();
@@ -770,7 +784,8 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
               auto quantiles = list{};
               for (auto const& quantile : point.quantile_values()) {
                 if (ctx.is_cancelled()) {
-                  co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+                  co_yield DecodedBatch<Builder>{
+                    Err{std::string{cancelled_error}}};
                   co_return;
                 }
                 quantiles.emplace_back(record{{"quantile", quantile.quantile()},
@@ -781,7 +796,7 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
             materialized["flags"] = static_cast<uint64_t>(point.flags());
             builder->data(materialized);
             for (auto& slice : flush_if_ready()) {
-              co_yield DecodedSlice{std::move(slice)};
+              co_yield DecodedBatch<Builder>{std::move(slice)};
             }
           }
         }
@@ -789,18 +804,19 @@ auto materialize_metrics(collector_metrics::ExportMetricsServiceRequest request,
     }
   }
   if (ctx.is_cancelled()) {
-    co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+    co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
     co_return;
   }
   if (builder) {
-    for (auto& slice : builder->finish_as_table_slice()) {
-      co_yield DecodedSlice{std::move(slice)};
+    for (auto& slice : finish_batches(*builder)) {
+      co_yield DecodedBatch<Builder>{std::move(slice)};
     }
   }
 }
 
-auto decode_metrics(collector_metrics::ExportMetricsServiceRequest request,
-                    DecodeContext ctx) -> DecodeResult {
+template <class Builder>
+auto decode_metrics_impl(collector_metrics::ExportMetricsServiceRequest request,
+                         DecodeContext ctx) -> BatchDecodeResult<Builder> {
   auto const unique = ctx.attribute_mode == AttributeMode::record;
   for (auto const& resource_metrics : request.resource_metrics()) {
     if (ctx.is_cancelled()) {
@@ -827,7 +843,19 @@ auto decode_metrics(collector_metrics::ExportMetricsServiceRequest request,
       }
     }
   }
-  return materialize_metrics(std::move(request), std::move(ctx));
+  return materialize_metrics<Builder>(std::move(request), std::move(ctx));
+}
+
+auto decode_metrics(collector_metrics::ExportMetricsServiceRequest request,
+                    DecodeContext ctx) -> DecodeResult {
+  return decode_metrics_impl<series_builder>(std::move(request),
+                                             std::move(ctx));
+}
+
+auto decode_metrics_events(
+  collector_metrics::ExportMetricsServiceRequest request, DecodeContext ctx)
+  -> EventsDecodeResult {
+  return decode_metrics_impl<EventsBuilder>(std::move(request), std::move(ctx));
 }
 
 } // namespace tenzir::plugins::accept_otlp::detail

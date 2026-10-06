@@ -19,6 +19,13 @@ auto decode(Signal signal, Encoding encoding, std::span<std::byte const> bytes,
 
 auto decode(GrpcRequest request, DecodeContext ctx) -> DecodeResult;
 
+auto decode_events(Signal signal, Encoding encoding,
+                   std::span<std::byte const> bytes, DecodeContext ctx)
+  -> EventsDecodeResult;
+
+auto decode_events(GrpcRequest request, DecodeContext ctx)
+  -> EventsDecodeResult;
+
 auto make_decode_context(RequestMetadata const& metadata,
                          AcceptOtlpArgs const& args)
   -> Result<DecodeContext, std::string>;

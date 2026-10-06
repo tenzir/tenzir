@@ -1,0 +1,28 @@
+{
+  schema: "otel.log",
+  body: "integer",
+  attributes: {
+    value: 42,
+  },
+}
+{
+  schema: "otel.log",
+  body: "string",
+  attributes: {
+    value: "hello",
+  },
+}
+{
+  schema: "otel.log",
+  body: "bool",
+  attributes: {
+    value: false,
+  },
+}
+{
+  schema: "otel.log",
+  body: "empty",
+  attributes: {
+    value: null,
+  },
+}

@@ -16,6 +16,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/ip.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/secret.hpp"
@@ -139,6 +140,9 @@ struct AcceptOtlpArgs {
 using DecodedSlice = Result<table_slice, std::string>;
 using DecodedSlices = generator<DecodedSlice>;
 using DecodeResult = Result<DecodedSlices, std::string>;
+using DecodedEvent = Result<nova::Events, std::string>;
+using DecodedEvents = generator<DecodedEvent>;
+using EventsDecodeResult = Result<DecodedEvents, std::string>;
 using GrpcRequest = variant<collector_logs::ExportLogsServiceRequest,
                             collector_metrics::ExportMetricsServiceRequest,
                             collector_trace::ExportTraceServiceRequest>;

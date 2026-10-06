@@ -9,6 +9,8 @@
 #pragma once
 
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/nova/array_builder.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
@@ -25,6 +27,66 @@
 #include "decode.hpp"
 
 namespace tenzir::plugins::accept_otlp::detail {
+
+// Both output representations share protobuf validation and record construction.
+// The event builder never constructs an Arrow array or a table slice.
+class EventsBuilder {
+public:
+  explicit EventsBuilder(type schema) : name_{schema.name()} {
+  }
+
+  auto data(record const& value) -> void {
+    auto row = builder_.record();
+    for (auto const& [key, field] : value) {
+      nova::append_legacy_data(row.field(key), field, dh_);
+    }
+  }
+
+  auto length() const -> int64_t {
+    return builder_.length();
+  }
+
+  auto finish() -> std::vector<nova::Events> {
+    if (builder_.length() == 0) {
+      return {};
+    }
+    auto data = builder_.finish();
+    builder_ = nova::ArrayBuilder<nova::Record>{};
+    auto const length = data.length();
+    auto result = std::vector<nova::Events>{};
+    result.emplace_back(std::move(data), nova::storage::BitMap{length, true},
+                        nova::Events::Meta::make_empty(length, name_));
+    return result;
+  }
+
+private:
+  std::string name_;
+  nova::ArrayBuilder<nova::Record> builder_;
+  null_diagnostic_handler dh_;
+};
+
+inline auto finish_batches(series_builder& builder)
+  -> std::vector<table_slice> {
+  return builder.finish_as_table_slice();
+}
+
+inline auto finish_batches(EventsBuilder& builder)
+  -> std::vector<nova::Events> {
+  return builder.finish();
+}
+
+template <class Builder>
+using Batch =
+  typename decltype(finish_batches(std::declval<Builder&>()))::value_type;
+
+template <class Builder>
+using DecodedBatch = Result<Batch<Builder>, std::string>;
+
+template <class Builder>
+using DecodedBatches = generator<DecodedBatch<Builder>>;
+
+template <class Builder>
+using BatchDecodeResult = Result<DecodedBatches<Builder>, std::string>;
 
 namespace resource = ::opentelemetry::proto::resource::v1;
 
@@ -128,9 +190,16 @@ auto validate_resource(resource::Resource const& value, bool unique,
 
 auto decode_logs(collector_logs::ExportLogsServiceRequest request,
                  DecodeContext ctx) -> DecodeResult;
+auto decode_logs_events(collector_logs::ExportLogsServiceRequest request,
+                        DecodeContext ctx) -> EventsDecodeResult;
 auto decode_metrics(collector_metrics::ExportMetricsServiceRequest request,
                     DecodeContext ctx) -> DecodeResult;
+auto decode_metrics_events(
+  collector_metrics::ExportMetricsServiceRequest request, DecodeContext ctx)
+  -> EventsDecodeResult;
 auto decode_traces(collector_trace::ExportTraceServiceRequest request,
                    DecodeContext ctx) -> DecodeResult;
+auto decode_traces_events(collector_trace::ExportTraceServiceRequest request,
+                          DecodeContext ctx) -> EventsDecodeResult;
 
 } // namespace tenzir::plugins::accept_otlp::detail

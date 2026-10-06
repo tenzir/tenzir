@@ -23,10 +23,12 @@
 #include <grpcpp/support/status.h>
 
 #include <chrono>
+#include <concepts>
 #include <limits>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 namespace tenzir::plugins::accept_otlp::detail {
 
@@ -82,7 +84,8 @@ auto warn_about_duplicate_attribute(std::string_view key,
 
 } // namespace
 
-class AcceptOtlp final : public Operator<void, table_slice> {
+template <class Output>
+class AcceptOtlp final : public Operator<void, Output> {
 public:
   explicit AcceptOtlp(AcceptOtlpArgs args)
     : args_{std::move(args)},
@@ -93,6 +96,15 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      if (ctx.checkpoint_settings()) {
+        lifecycle_ = Lifecycle::done;
+        diagnostic::error("`accept_otlp` does not support checkpointing")
+          .primary(args_.endpoint)
+          .emit(ctx);
+        co_return;
+      }
+    }
     if (args_.get_transport() == Transport::grpc) {
       grpc_server_ = co_await OtlpGrpcServer::start(
         args_, message_queue_, active_requests_limit_, ctx);
@@ -124,7 +136,7 @@ public:
     co_return co_await message_queue_->dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     auto message = std::move(result).as<Message>();
     co_await co_match(
@@ -218,8 +230,9 @@ public:
           request.response_signal->send(make_error_response(400));
           co_return;
         }
-        auto slices = decode(request.metadata.signal, request.metadata.encoding,
-                             request.body, std::move(request.decode_ctx));
+        auto slices
+          = decode_request(request.metadata.signal, request.metadata.encoding,
+                           request.body, std::move(request.decode_ctx));
         if (slices.is_err()) {
           diagnostic::warning("rejected invalid OTLP request: {}",
                               std::move(slices).unwrap_err())
@@ -238,9 +251,9 @@ public:
             co_return;
           }
           auto materialized = std::move(slice).unwrap();
-          auto const rows = materialized.rows();
-          co_await push(std::move(materialized));
+          auto const rows = event_count(materialized);
           events_read_counter_.add(rows);
+          co_await push(std::move(materialized));
         }
         request.response_signal->send(
           make_success_response(request.metadata.encoding));
@@ -273,7 +286,7 @@ public:
               warn_about_duplicate_attribute(key, discarded, kept, source, ctx);
             };
         auto slices
-          = decode(std::move(msg.request), std::move(grpc_decode_ctx));
+          = decode_request(std::move(msg.request), std::move(grpc_decode_ctx));
         if (slices.is_err()) {
           if (msg.call->finished()) {
             co_return;
@@ -306,9 +319,9 @@ public:
             co_return;
           }
           auto materialized = std::move(slice).unwrap();
-          auto const rows = materialized.rows();
-          co_await push(std::move(materialized));
+          auto const rows = event_count(materialized);
           events_read_counter_.add(rows);
+          co_await push(std::move(materialized));
         }
         std::ignore = msg.call->finish(grpc::Status::OK);
       },
@@ -336,7 +349,7 @@ public:
       });
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<Output>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     if (lifecycle_ == Lifecycle::done) {
@@ -361,6 +374,23 @@ public:
   }
 
 private:
+  template <class... Args>
+  static auto decode_request(Args&&... args) {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      return decode_events(std::forward<Args>(args)...);
+    } else {
+      return decode(std::forward<Args>(args)...);
+    }
+  }
+
+  static auto event_count(Output const& batch) -> size_t {
+    if constexpr (std::same_as<Output, nova::Events>) {
+      return batch.active_count();
+    } else {
+      return batch.rows();
+    }
+  }
+
   enum class Lifecycle {
     starting,
     running,
@@ -460,7 +490,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptOtlpArgs, AcceptOtlp>{};
+    auto d = Describer<AcceptOtlpArgs, AcceptOtlp<table_slice>,
+                       AcceptOtlp<nova::Events>>{};
     d.positional("endpoint", &AcceptOtlpArgs::endpoint);
     auto transport = d.named("transport", &AcceptOtlpArgs::transport);
     auto signals = d.named("signals", &AcceptOtlpArgs::signals, "list<string>");

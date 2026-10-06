@@ -190,9 +190,10 @@ auto validate_span(trace::Span const& span, DecodeContext const& ctx)
   return Empty{};
 }
 
+template <class Builder>
 auto materialize_traces(collector_trace::ExportTraceServiceRequest request,
-                        DecodeContext ctx) -> DecodedSlices {
-  auto builder = series_builder{span_type(ctx.attribute_mode)};
+                        DecodeContext ctx) -> DecodedBatches<Builder> {
+  auto builder = Builder{span_type(ctx.attribute_mode)};
   for (auto const& resource_spans : request.resource_spans()) {
     for (auto const& scope_spans : resource_spans.scope_spans()) {
       auto const batch_rows
@@ -201,14 +202,14 @@ auto materialize_traces(collector_trace::ExportTraceServiceRequest request,
                           scope_spans.schema_url(), ctx);
       for (auto const& span : scope_spans.spans()) {
         if (ctx.is_cancelled()) {
-          co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+          co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
           co_return;
         }
         auto event
           = with_context(resource_spans.resource(), resource_spans.schema_url(),
                          scope_spans.scope(), scope_spans.schema_url(), ctx);
         if (event.is_err()) {
-          co_yield DecodedSlice{Err{std::move(event).unwrap_err()}};
+          co_yield DecodedBatch<Builder>{Err{std::move(event).unwrap_err()}};
           co_return;
         }
         auto materialized = std::move(event).unwrap();
@@ -223,7 +224,8 @@ auto materialize_traces(collector_trace::ExportTraceServiceRequest request,
         materialized["end_time"] = timestamp(span.end_time_unix_nano());
         auto attributes = make_attributes(span.attributes(), ctx);
         if (attributes.is_err()) {
-          co_yield DecodedSlice{Err{std::move(attributes).unwrap_err()}};
+          co_yield DecodedBatch<Builder>{
+            Err{std::move(attributes).unwrap_err()}};
           co_return;
         }
         materialized["attributes"] = std::move(attributes).unwrap();
@@ -231,7 +233,7 @@ auto materialize_traces(collector_trace::ExportTraceServiceRequest request,
           = static_cast<uint64_t>(span.dropped_attributes_count());
         auto events = make_span_events(span, ctx);
         if (events.is_err()) {
-          co_yield DecodedSlice{Err{std::move(events).unwrap_err()}};
+          co_yield DecodedBatch<Builder>{Err{std::move(events).unwrap_err()}};
           co_return;
         }
         materialized["events"] = std::move(events).unwrap();
@@ -239,7 +241,7 @@ auto materialize_traces(collector_trace::ExportTraceServiceRequest request,
           = static_cast<uint64_t>(span.dropped_events_count());
         auto links = make_span_links(span, ctx);
         if (links.is_err()) {
-          co_yield DecodedSlice{Err{std::move(links).unwrap_err()}};
+          co_yield DecodedBatch<Builder>{Err{std::move(links).unwrap_err()}};
           co_return;
         }
         materialized["links"] = std::move(links).unwrap();
@@ -252,24 +254,25 @@ auto materialize_traces(collector_trace::ExportTraceServiceRequest request,
         materialized["flags"] = static_cast<uint64_t>(span.flags());
         builder.data(materialized);
         if (builder.length() >= batch_rows) {
-          for (auto& slice : builder.finish_as_table_slice("otel.span")) {
-            co_yield DecodedSlice{std::move(slice)};
+          for (auto& slice : finish_batches(builder)) {
+            co_yield DecodedBatch<Builder>{std::move(slice)};
           }
         }
       }
     }
   }
   if (ctx.is_cancelled()) {
-    co_yield DecodedSlice{Err{std::string{cancelled_error}}};
+    co_yield DecodedBatch<Builder>{Err{std::string{cancelled_error}}};
     co_return;
   }
-  for (auto& slice : builder.finish_as_table_slice("otel.span")) {
-    co_yield DecodedSlice{std::move(slice)};
+  for (auto& slice : finish_batches(builder)) {
+    co_yield DecodedBatch<Builder>{std::move(slice)};
   }
 }
 
-auto decode_traces(collector_trace::ExportTraceServiceRequest request,
-                   DecodeContext ctx) -> DecodeResult {
+template <class Builder>
+auto decode_traces_impl(collector_trace::ExportTraceServiceRequest request,
+                        DecodeContext ctx) -> BatchDecodeResult<Builder> {
   auto const unique = ctx.attribute_mode == AttributeMode::record;
   for (auto const& resource_spans : request.resource_spans()) {
     if (ctx.is_cancelled()) {
@@ -296,7 +299,17 @@ auto decode_traces(collector_trace::ExportTraceServiceRequest request,
       }
     }
   }
-  return materialize_traces(std::move(request), std::move(ctx));
+  return materialize_traces<Builder>(std::move(request), std::move(ctx));
+}
+
+auto decode_traces(collector_trace::ExportTraceServiceRequest request,
+                   DecodeContext ctx) -> DecodeResult {
+  return decode_traces_impl<series_builder>(std::move(request), std::move(ctx));
+}
+
+auto decode_traces_events(collector_trace::ExportTraceServiceRequest request,
+                          DecodeContext ctx) -> EventsDecodeResult {
+  return decode_traces_impl<EventsBuilder>(std::move(request), std::move(ctx));
 }
 
 } // namespace tenzir::plugins::accept_otlp::detail
