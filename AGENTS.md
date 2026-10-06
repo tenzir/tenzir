@@ -235,3 +235,21 @@ Choose the narrowest test that exercises the behavior users rely on:
 - Use `--update` only after checking that the new reference output is correct.
 
 Load the `tenzir-docs` skill for the complete `tenzir-test` documentation.
+
+### Python integration tests
+
+Do not add or extend Python integration tests: `.py` cases in any `tenzir-test`
+root (`test/tests/...` or `plugins/*/test/tests/...`) and the Python helpers
+they use. Use `.tql` tests and the suite and fixture features of `tenzir-test`
+instead. Python unit tests, such as those in `python/`, are not affected.
+
+The only exception is a specific test the user manually approves. Before
+writing it, explain why `tenzir-test` features do not suffice and have the user
+acknowledge that:
+
+1. Python integration tests have a ballooning runtime cost.
+2. This test is still necessary.
+3. The existing suite or fixture features of `tenzir-test` cannot express it.
+
+Never infer approval from the task, earlier approvals, or review feedback.
+Without a user to ask, report the gap instead.
