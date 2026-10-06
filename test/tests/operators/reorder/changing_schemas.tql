@@ -1,5 +1,4 @@
-// Complete heterogeneous events survive sorting, and adjacent output rows are
-// never concatenated across incompatible schemas.
+// Complete heterogeneous events survive sorting with their field sets intact.
 from {kind: "a", ts: 2s.from_epoch(), x: 1},
      {kind: "b", ts: 1s.from_epoch(), y: "two"},
      {kind: "a", ts: 3s.from_epoch(), x: 3}

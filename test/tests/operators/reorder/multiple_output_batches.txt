@@ -1,0 +1,14 @@
+{
+  rows: 10001,
+  first: 0,
+  last: 10000,
+  names: [
+    "event",
+  ],
+  times: [
+    1970-01-01T00:00:01Z,
+  ],
+  flags: [
+    true,
+  ],
+}

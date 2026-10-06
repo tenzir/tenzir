@@ -1,0 +1,6 @@
+// Reordering and stable ties span separately delivered input batches.
+from {seq: 2, ts: 2s.from_epoch()},
+     {seq: 1, ts: 1s.from_epoch()},
+     {seq: 3, ts: 2s.from_epoch()}
+batch 1
+reorder on=ts, tolerance=1s

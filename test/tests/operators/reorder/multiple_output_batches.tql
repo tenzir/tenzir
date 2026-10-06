@@ -1,0 +1,13 @@
+// A buffered tail larger than the output batch size keeps all rows and metadata.
+from {ts: 1s.from_epoch()}
+repeat 10001
+enumerate seq
+@name = "event"
+@import_time = ts
+@internal = true
+reorder on=ts, tolerance=1h
+name = @name
+import_time = @import_time
+internal = @internal
+summarize rows=count(), first=min(seq), last=max(seq),
+  names=distinct(name), times=distinct(import_time), flags=distinct(internal)

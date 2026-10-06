@@ -1,0 +1,9 @@
+// Inactive rows must neither advance the watermark nor trigger diagnostics.
+from {seq: 2, ts: 2s.from_epoch()},
+     {seq: 99, ts: 100s.from_epoch()},
+     {seq: 98, ts: "invalid"},
+     {seq: 1, ts: 1s.from_epoch()},
+     {seq: 3, ts: 2s.from_epoch()}
+batch
+where seq < 10
+reorder on=ts, tolerance=1s

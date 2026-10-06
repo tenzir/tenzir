@@ -1,0 +1,21 @@
+{
+  seq: 1,
+  ts: 1970-01-01T00:00:01Z,
+  name: "event-1",
+  import_time: 1970-01-01T00:00:01Z,
+  internal: true,
+}
+{
+  seq: 2,
+  ts: 1970-01-01T00:00:02Z,
+  name: "event-2",
+  import_time: 1970-01-01T00:00:02Z,
+  internal: false,
+}
+{
+  seq: 3,
+  ts: 1970-01-01T00:00:02Z,
+  name: "event-3",
+  import_time: 1970-01-01T00:00:02Z,
+  internal: false,
+}

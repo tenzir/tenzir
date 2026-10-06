@@ -1,0 +1,11 @@
+from {seq: 2, ts: 2s.from_epoch()},
+     {seq: 1, ts: 1s.from_epoch()},
+     {seq: 3, ts: 2s.from_epoch()}
+batch
+@name = "event-" + seq.string()
+@import_time = ts
+@internal = seq == 1
+reorder on=ts, tolerance=1s
+name = @name
+import_time = @import_time
+internal = @internal

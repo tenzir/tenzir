@@ -10,6 +10,9 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/event_time_reorder_buffer.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/nova/eval.hpp>
+#include <tenzir/nova/events.hpp>
+#include <tenzir/nova/reorder.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
@@ -146,6 +149,90 @@ private:
   bool warned_retained_events_ = false;
 };
 
+class ReorderEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit ReorderEvents(ReorderArgs args)
+    : args_{std::move(args)}, buffer_{args_.tolerance.inner} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto evaluator = co_await nova::Evaluator::make(args_.on, ctx);
+    if (not evaluator) {
+      co_return;
+    }
+    evaluator_.emplace(std::move(*evaluator));
+  }
+
+  auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto timestamps = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    auto counts
+      = buffer_.add(std::move(input), timestamps.get_alternative<nova::Time>());
+    warn_about_invalid_events(counts.invalid, ctx);
+    warn_about_late_events(counts.late, ctx);
+    warn_about_retained_events(counts.max_retained, ctx);
+    for (auto events : buffer_.drain()) {
+      co_await push(std::move(events));
+    }
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    for (auto events : buffer_.flush()) {
+      co_await push(std::move(events));
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("warned_retained_events", warned_retained_events_);
+  }
+
+private:
+  auto warn_about_invalid_events(int64_t count, OpCtx& ctx) const -> void {
+    if (count == 0) {
+      return;
+    }
+    diagnostic::warning("`reorder` dropped {} event(s) where `on` did not "
+                        "evaluate to a timestamp",
+                        count)
+      .primary(args_.on)
+      .emit(ctx);
+  }
+
+  auto warn_about_late_events(int64_t count, OpCtx& ctx) const -> void {
+    if (count == 0) {
+      return;
+    }
+    diagnostic::warning("`reorder` dropped {} late event(s)", count)
+      .primary(args_.on)
+      .note("a late event's timestamp precedes an event that was already "
+            "emitted")
+      .emit(ctx);
+  }
+
+  auto warn_about_retained_events(size_t count, OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = 100_k;
+    if (warned_retained_events_ or count < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`reorder` retained {} events without emitting them",
+                        count)
+      .primary(args_.operator_location)
+      .note("stalled event time prevents watermark progress and can cause "
+            "unbounded memory usage")
+      .emit(ctx);
+    warned_retained_events_ = true;
+  }
+
+  ReorderArgs args_;
+  Option<nova::Evaluator> evaluator_;
+  nova::ReorderBuffer buffer_;
+  bool warned_retained_events_ = false;
+};
+
 class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -153,7 +240,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReorderArgs, Reorder>{};
+    auto d = Describer<ReorderArgs, Reorder, ReorderEvents>{};
     d.named("on", &ReorderArgs::on, "time");
     auto tolerance = d.named("tolerance", &ReorderArgs::tolerance, "duration");
     d.operator_location(&ReorderArgs::operator_location);
