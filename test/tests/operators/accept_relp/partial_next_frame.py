@@ -55,6 +55,7 @@ def main() -> None:
     pipeline = f'accept_relp "127.0.0.1:{port}" | head 1'
     command = [
         *shlex.split(os.environ["TENZIR_BINARY"]),
+        "--nova=true",
         "--parallelism=1,fused=none",
         pipeline,
     ]

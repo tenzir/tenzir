@@ -23,6 +23,8 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -50,6 +52,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::accept_relp {
@@ -1086,6 +1089,585 @@ private:
   Lifecycle lifecycle_ = Lifecycle::starting;
 };
 
+class AcceptRelpEvents final : public Operator<void, nova::Events> {
+public:
+  explicit AcceptRelpEvents(AcceptRelpArgs args)
+    : args_{std::move(args)},
+      reverse_dns_{std::in_place,
+                   ReverseDnsConfig{
+                     .max_in_flight = args_.get_max_connections(),
+                   }},
+      connection_slots_{args_.get_max_connections()} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto bind_endpoint = Endpoint{};
+    auto parsed = parsers::endpoint(args_.endpoint.inner, bind_endpoint)
+                  and bind_endpoint.port;
+    TENZIR_ASSERT(parsed);
+    auto bind_address
+      = co_await forward_dns_.resolve_bind_address(std::move(bind_endpoint));
+    if (bind_address.is_err()) {
+      diagnostic::error("failed to resolve listen address")
+        .primary(args_.endpoint)
+        .note("reason: {}", std::move(bind_address).unwrap_err())
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto tls = tls_options::from_optional(args_.tls, {.tls_default = false,
+                                                      .is_server = true});
+    auto resolved_tls = tls.resolve(ctx.actor_system().config(), ctx);
+    if (not resolved_tls) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (args_.auto_detect_tls and not resolved_tls->tls.inner) {
+      diagnostic::error("`auto_detect_tls` requires TLS to be enabled")
+        .primary(args_.endpoint)
+        .emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (resolved_tls->tls.inner) {
+      auto context = resolved_tls->make_folly_ssl_context(ctx);
+      if (not context) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      tls_context_ = std::move(*context);
+    }
+    io_executor_ = ctx.io_executor();
+    evb_ = io_executor_->getEventBase();
+    TENZIR_ASSERT(evb_);
+    auto socket = folly::AsyncServerSocket::newSocket(evb_);
+    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket),
+                                             std::move(bind_address).unwrap(),
+                                             listen_backlog};
+    tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "accept_relp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    lifecycle_ = Lifecycle::running;
+    ctx.spawn_task([this, &ctx]() -> Task<void> {
+      auto notify_finished = detail::scope_guard{[this]() noexcept {
+        message_queue_->force_enqueue(AcceptLoopFinished{});
+      }};
+      auto token = folly::cancellation_token_merge(
+        co_await folly::coro::co_current_cancellation_token,
+        cancel_->getToken());
+      // The listener and all accepted sockets belong to `evb_`, and folly's
+      // socket types are not thread-safe. Run the accept loop, and thereby
+      // all connection tasks it spawns, on that event base so that every
+      // resumption, e.g., after cancellation or a timer, touches the sockets
+      // only from their owning thread.
+      co_await folly::coro::co_withCancellation(
+        token, folly::coro::co_withExecutor(evb_, accept_loop(ctx)));
+    });
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await message_queue_->dequeue();
+  }
+
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto message = std::move(result).as<Message>();
+    co_await co_match(
+      std::move(message),
+      [&](SyslogBatch batch) -> Task<void> {
+        for (auto& msg : batch.messages) {
+          if (not unicode::is_valid_utf8(msg.payload)) {
+            diagnostic::warning(
+              "dropped RELP syslog payload with invalid UTF-8")
+              .primary(args_.endpoint)
+              .note("peer: {}", batch.peer.address)
+              .emit(ctx);
+            continue;
+          }
+          auto event = builder_.record();
+          event.field("data").data(std::string_view{msg.payload});
+          auto peer = event.field("peer").record();
+          peer.field("ip").data(batch.peer.address);
+          peer.field("port").data(batch.peer.port);
+          if (args_.resolve_hostnames) {
+            if (batch.hostname) {
+              peer.field("hostname").data(std::string_view{*batch.hostname});
+            } else {
+              peer.field("hostname").null();
+            }
+          }
+          auto relp = event.field("relp").record();
+          relp.field("transaction_id").data(int64_t{msg.transaction_id});
+          if (builder_.length() == 1) {
+            schedule_batch_flush(ctx);
+          }
+          if (builder_.length() >= event_batch_size) {
+            co_await flush_builder(push);
+          }
+        }
+      },
+      [&](Flush flush) -> Task<void> {
+        if (builder_.length() == 0 or flush.generation != batch_generation_) {
+          co_return;
+        }
+        co_await flush_builder(push);
+      },
+      [&](AcceptLoopFinished) -> Task<void> {
+        cancel_batch_flush();
+        co_await flush_builder(push);
+        lifecycle_ = Lifecycle::done;
+      });
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    begin_draining();
+    co_return;
+  }
+
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    begin_draining();
+    co_return FinalizeBehavior::continue_;
+  }
+
+  auto state() -> OperatorState override {
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
+  }
+
+  auto snapshot(Serde&) -> void override {
+    // RELP sessions and acknowledged in-memory messages cannot be restored.
+    diagnostic::error("accept_relp does not support checkpoints yet")
+      .primary(args_.endpoint)
+      .throw_();
+  }
+
+private:
+  enum class Lifecycle {
+    starting,
+    running,
+    draining,
+    done,
+  };
+
+  auto begin_draining() -> void {
+    if (lifecycle_ == Lifecycle::draining or lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    cancel_batch_flush();
+    cancel_->requestCancellation();
+    if (server_ and evb_) {
+      evb_->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
+        if (server_) {
+          (*server_)->close();
+        }
+      });
+    }
+  }
+
+  auto accept_loop(OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(server_);
+    TENZIR_ASSERT(evb_->isInEventBaseThread());
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      while (true) {
+        auto slot = co_await connection_slots_.acquire();
+        auto transport = co_await folly::coro::retryWithExponentialBackoff(
+          std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+          accept_retry_delay, 0.0,
+          [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
+            try {
+              co_return co_await (*server_)->accept();
+            } catch (folly::AsyncSocketException const& ex) {
+              diagnostic::warning("failed to accept incoming RELP connection")
+                .primary(args_.endpoint)
+                .note("reason: {}", describe_socket_error(ex))
+                .emit(ctx);
+              throw;
+            }
+          },
+          should_retry_socket);
+        auto client
+          = Box<folly::coro::Transport>::from_non_null(std::move(transport));
+        scope.spawn(run_connection(std::move(client), std::move(slot), ctx));
+      }
+    });
+  }
+
+  auto run_connection(Box<folly::coro::Transport> transport,
+                      SemaphorePermit slot, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(slot);
+    try {
+      co_await connection_loop(std::move(transport), ctx);
+    } catch (folly::AsyncSocketException const& ex) {
+      diagnostic::warning("RELP connection closed after I/O error")
+        .primary(args_.endpoint)
+        .note("reason: {}", describe_socket_error(ex))
+        .emit(ctx);
+    }
+  }
+
+  auto connection_loop(Box<folly::coro::Transport> transport, OpCtx& ctx)
+    -> Task<void> {
+    auto metrics = Arc<RelpConnectionMetrics>{
+      std::in_place,
+      *transport,
+      tcp_metrics_,
+    };
+    auto close_metrics = detail::scope_guard{[metrics]() mutable noexcept {
+      metrics->close();
+    }};
+    ctx.spawn_task(emit_tcp_metrics(metrics));
+    auto peer = make_peer_info(transport->getPeerAddress());
+    if (tls_context_) {
+      try {
+        auto should_upgrade = true;
+        if (args_.auto_detect_tls) {
+          should_upgrade
+            = co_await probe_tls_client_hello(*transport, tls_probe_timeout);
+        }
+        if (should_upgrade) {
+          transport = Box<folly::coro::Transport>{
+            co_await upgrade_transport_to_tls_server(std::move(*transport),
+                                                     tls_context_)};
+        }
+      } catch (folly::AsyncSocketException const& ex) {
+        diagnostic::warning("TLS handshake failed")
+          .primary(args_.endpoint)
+          .note("peer IP: {}", peer.address)
+          .note("reason: {}", describe_socket_error(ex))
+          .hint("verify TLS settings and certificates on both sides")
+          .emit(ctx);
+        co_return;
+      }
+    }
+    auto hostname = Option<std::string>{None{}};
+    if (args_.resolve_hostnames) {
+      auto result = co_await reverse_dns_->resolve(peer.address);
+      if (result->is_err()) {
+        diagnostic::warning("{}", result->unwrap_err().error)
+          .note("failed to resolve peer hostname for {}", peer.address)
+          .note("set `resolve_hostnames=false` to disable hostname resolution")
+          .primary(args_.endpoint)
+          .emit(ctx);
+      } else if (auto* resolved
+                 = try_as<ReverseDnsResolved>(&result->unwrap())) {
+        hostname = resolved->hostname;
+      }
+    }
+    auto bytes_read_counter = ctx.make_counter(
+      MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                fmt::to_string(peer.address))},
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
+    auto reader = RelpReader{*transport, args_.get_max_message_size(),
+                             bytes_read_counter, *metrics};
+    auto responses = Arc<ResponseQueue>{std::in_place, response_queue_capacity};
+    auto performance = RelpPerformanceStats{};
+    auto log_performance = detail::scope_guard{[&]() noexcept {
+      TENZIR_DEBUG(
+        "RELP connection stats: frames={}, message_batches={}, messages={}, "
+        "responses={}, response_writes={}, message_queue_stalls={}, "
+        "response_queue_stalls={}",
+        performance.frames.load(std::memory_order_relaxed),
+        performance.message_batches.load(std::memory_order_relaxed),
+        performance.messages.load(std::memory_order_relaxed),
+        performance.responses.load(std::memory_order_relaxed),
+        performance.response_writes.load(std::memory_order_relaxed),
+        performance.message_queue_stalls.load(std::memory_order_relaxed),
+        performance.response_queue_stalls.load(std::memory_order_relaxed));
+    }};
+    co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+      scope.spawn(
+        write_responses(*transport, *metrics, responses, performance));
+      auto finish_writer = detail::scope_guard{[&]() noexcept {
+        responses->force_enqueue(ResponseWriterFinished{});
+      }};
+      co_await read_frames(reader, responses, peer, hostname, performance, ctx);
+    });
+  }
+
+  auto read_frames(RelpReader& reader, Arc<ResponseQueue> responses,
+                   PeerInfo const& peer, Option<std::string> const& hostname,
+                   RelpPerformanceStats& performance, OpCtx& ctx)
+    -> Task<void> {
+    auto expected_transaction_id = uint32_t{1};
+    auto opened = false;
+    auto pending = std::vector<SyslogMessage>{};
+    pending.reserve(ingress_batch_size);
+    auto flush_pending = [&]() -> Task<void> {
+      if (pending.empty()) {
+        co_return;
+      }
+      auto first_transaction_id = pending.front().transaction_id;
+      auto count = detail::narrow<uint32_t>(pending.size());
+      auto batch = SyslogBatch{
+        .messages = std::move(pending),
+        .peer = peer,
+        .hostname = hostname,
+      };
+      pending = std::vector<SyslogMessage>{};
+      pending.reserve(ingress_batch_size);
+      auto stalled = false;
+      if (not message_queue_->try_enqueue(std::move(batch))) {
+        stalled = true;
+        co_await message_queue_->enqueue(std::move(batch));
+      }
+      performance.frames.fetch_add(count, std::memory_order_relaxed);
+      performance.message_batches.fetch_add(1, std::memory_order_relaxed);
+      performance.messages.fetch_add(count, std::memory_order_relaxed);
+      performance.message_queue_stalls.fetch_add(static_cast<uint64_t>(stalled),
+                                                 std::memory_order_relaxed);
+      // A successful enqueue transfers ownership into the bounded in-memory
+      // operator input. It does not imply durable downstream processing.
+      co_await enqueue_response(responses, performance, first_transaction_id,
+                                count, 200, "OK");
+    };
+    while (true) {
+      auto frame_result = Result<Option<RelpFrame>, std::string>{};
+      auto socket_error = Option<std::string>{None{}};
+      try {
+        frame_result = co_await reader.read();
+      } catch (folly::AsyncSocketException const& ex) {
+        socket_error = describe_socket_error(ex);
+      }
+      if (socket_error) {
+        co_await flush_pending();
+        diagnostic::warning("RELP connection closed after I/O error")
+          .primary(args_.endpoint)
+          .note("peer: {}", peer.address)
+          .note("reason: {}", *socket_error)
+          .emit(ctx);
+        co_return;
+      }
+      if (frame_result.is_err()) {
+        co_await flush_pending();
+        diagnostic::warning("rejected malformed RELP frame")
+          .primary(args_.endpoint)
+          .note("peer: {}", peer.address)
+          .note("reason: {}", std::move(frame_result).unwrap_err())
+          .emit(ctx);
+        co_return;
+      }
+      auto frame = std::move(frame_result).unwrap();
+      if (not frame) {
+        co_await flush_pending();
+        co_return;
+      }
+      if (frame->transaction_id == 0
+          or frame->transaction_id != expected_transaction_id) {
+        co_await flush_pending();
+        diagnostic::warning("rejected unexpected RELP transaction number")
+          .primary(args_.endpoint)
+          .note("peer: {}", peer.address)
+          .note("expected: {}, got: {}", expected_transaction_id,
+                frame->transaction_id)
+          .emit(ctx);
+        co_return;
+      }
+      expected_transaction_id = next_transaction_id(expected_transaction_id);
+      if (frame->command == "syslog") {
+        if (not opened) {
+          co_await enqueue_response(responses, performance,
+                                    frame->transaction_id, 1, 500,
+                                    "session is not open");
+          co_return;
+        }
+        pending.push_back(SyslogMessage{
+          .payload = std::move(frame->data),
+          .transaction_id = frame->transaction_id,
+        });
+        if (pending.size() >= ingress_batch_size
+            or not reader.has_complete_frame()) {
+          co_await flush_pending();
+        }
+        continue;
+      }
+      co_await flush_pending();
+      performance.frames.fetch_add(1, std::memory_order_relaxed);
+      if (frame->command == "open") {
+        if (opened) {
+          co_await enqueue_response(responses, performance,
+                                    frame->transaction_id, 1, 500,
+                                    "protocol error: connection already open");
+          co_return;
+        }
+        auto offer = parse_open_offer(frame->data);
+        if (offer.is_err()) {
+          co_await enqueue_response(responses, performance,
+                                    frame->transaction_id, 1, 500,
+                                    std::move(offer).unwrap_err());
+          co_return;
+        }
+        auto payload = fmt::format("OK\nrelp_version={}\ncommands=syslog",
+                                   offer.unwrap().version);
+        co_await enqueue_response(responses, performance, frame->transaction_id,
+                                  1, 200, payload);
+        opened = true;
+        continue;
+      }
+      if (frame->command == "close") {
+        if (not opened) {
+          co_await enqueue_response(responses, performance,
+                                    frame->transaction_id, 1, 500,
+                                    "session is not open");
+          co_return;
+        }
+        co_await enqueue_response(responses, performance, frame->transaction_id,
+                                  1, 200, "OK");
+        co_return;
+      }
+      if (frame->command == "rsp") {
+        diagnostic::warning("received unexpected RELP response from client")
+          .primary(args_.endpoint)
+          .note("peer: {}", peer.address)
+          .emit(ctx);
+        co_return;
+      }
+      co_await enqueue_response(responses, performance, frame->transaction_id,
+                                1, 500, "unsupported command");
+      co_return;
+    }
+  }
+
+  static auto flush_batch_after(Arc<MessageQueue> message_queue,
+                                uint64_t generation) -> Task<void> {
+    co_await sleep_for(event_batch_timeout);
+    message_queue->force_enqueue(Flush{generation});
+  }
+
+  auto schedule_batch_flush(OpCtx& ctx) -> void {
+    cancel_batch_flush();
+    batch_generation_ += 1;
+    batch_flush_cancel_.emplace();
+    auto token = batch_flush_cancel_->getToken();
+    auto generation = batch_generation_;
+    ctx.spawn_task(folly::coro::co_withCancellation(
+      token, folly::coro::co_withExecutor(
+               io_executor_, flush_batch_after(message_queue_, generation))));
+  }
+
+  auto cancel_batch_flush() -> void {
+    if (batch_flush_cancel_) {
+      batch_flush_cancel_->requestCancellation();
+      batch_flush_cancel_.reset();
+    }
+  }
+
+  auto flush_builder(Push<nova::Events>& push) -> Task<void> {
+    if (builder_.length() == 0) {
+      co_return;
+    }
+    cancel_batch_flush();
+    auto rows = builder_.length();
+    auto data
+      = std::exchange(builder_, nova::ArrayBuilder<nova::Record>{}).finish();
+    auto events = nova::Events{
+      std::move(data), nova::storage::BitMap{rows, true},
+      nova::Events::Meta::make_empty(rows, "tenzir.accept_relp")};
+    events_read_counter_.add(events.active_count());
+    co_await push(std::move(events));
+  }
+
+  static auto write_frame(folly::coro::Transport& transport,
+                          RelpConnectionMetrics& metrics, std::string frame)
+    -> Task<void> {
+    auto bytes = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(frame.data()), frame.size()};
+    co_await transport.write(bytes);
+    metrics.record_write(bytes.size());
+  }
+
+  static auto
+  append_responses(std::string& output, ResponseFrame const& response) -> void {
+    auto transaction_id = response.first_transaction_id;
+    auto payload_size
+      = fmt::formatted_size("{} {}", response.status, response.message);
+    for (auto index = uint32_t{0}; index < response.count; ++index) {
+      fmt::format_to(std::back_inserter(output), "{} rsp {} {} {}\n",
+                     transaction_id, payload_size, response.status,
+                     response.message);
+      transaction_id = next_transaction_id(transaction_id);
+    }
+  }
+
+  static auto
+  write_responses(folly::coro::Transport& transport,
+                  RelpConnectionMetrics& metrics, Arc<ResponseQueue> responses,
+                  RelpPerformanceStats& performance) -> Task<void> {
+    while (true) {
+      auto response = co_await responses->dequeue();
+      auto* first = try_as<ResponseFrame>(&response);
+      if (not first) {
+        co_return;
+      }
+      auto frames = std::string{};
+      auto response_count = uint64_t{first->count};
+      append_responses(frames, *first);
+      co_await sleep_for(response_coalesce_delay);
+      auto finished = false;
+      while (auto next = responses->try_dequeue()) {
+        if (auto* frame = try_as<ResponseFrame>(&*next)) {
+          response_count += frame->count;
+          append_responses(frames, *frame);
+        } else {
+          finished = true;
+          break;
+        }
+      }
+      co_await write_frame(transport, metrics, std::move(frames));
+      performance.responses.fetch_add(response_count,
+                                      std::memory_order_relaxed);
+      performance.response_writes.fetch_add(1, std::memory_order_relaxed);
+      if (finished) {
+        co_return;
+      }
+    }
+  }
+
+  static auto enqueue_response(Arc<ResponseQueue> responses,
+                               RelpPerformanceStats& performance,
+                               uint32_t first_transaction_id, uint32_t count,
+                               uint16_t status, std::string_view message)
+    -> Task<void> {
+    auto response = ResponseFrame{
+      .first_transaction_id = first_transaction_id,
+      .count = count,
+      .status = status,
+      .message = std::string{message},
+    };
+    if (not responses->try_enqueue(std::move(response))) {
+      performance.response_queue_stalls.fetch_add(1, std::memory_order_relaxed);
+      co_await responses->enqueue(std::move(response));
+    }
+  }
+
+  AcceptRelpArgs args_;
+  nova::ArrayBuilder<nova::Record> builder_;
+  ForwardDnsResolver forward_dns_;
+  Arc<ReverseDnsResolver> reverse_dns_;
+  Semaphore connection_slots_;
+  Option<folly::CancellationSource> batch_flush_cancel_;
+  Box<folly::CancellationSource> cancel_{std::in_place};
+  mutable Arc<MessageQueue> message_queue_{std::in_place,
+                                           message_queue_capacity};
+  folly::EventBase* evb_ = nullptr;
+  Option<Box<folly::coro::ServerSocket>> server_;
+  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+  std::shared_ptr<folly::SSLContext> tls_context_;
+  metric_handler tcp_metrics_ = {};
+  MetricsCounter events_read_counter_;
+  uint64_t batch_generation_ = 0;
+  Lifecycle lifecycle_ = Lifecycle::starting;
+};
+
 class AcceptRelpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -1093,7 +1675,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptRelpArgs, AcceptRelp>{};
+    auto d = Describer<AcceptRelpArgs, AcceptRelp, AcceptRelpEvents>{};
     auto endpoint_arg = d.positional("endpoint", &AcceptRelpArgs::endpoint);
     auto max_message_size_arg
       = d.named("max_message_size", &AcceptRelpArgs::max_message_size);

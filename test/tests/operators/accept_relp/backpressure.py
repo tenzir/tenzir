@@ -60,6 +60,7 @@ def main() -> None:
     )
     command = [
         *shlex.split(os.environ["TENZIR_BINARY"]),
+        "--nova=true",
         "--parallelism=1,fused=none",
         pipeline,
     ]
