@@ -109,12 +109,14 @@ struct Batch {
 /// defaults to the host's native order. Each type selects a physical encoding
 /// without requiring the decoder to retain it. Visibility is propagated
 /// through nested arrays, and inaccessible positions receive placeholders
-/// without changing physical row or child-array positions. The encoder first
-/// calculates the exact payload size, then allocates the result once and
-/// writes directly into it. The sizing pass enforces the default decoder's
-/// resource limits, including cumulative budgets and visibility validation
-/// memory, before allocating the output. Trusted callers can explicitly raise
-/// size limits in `options`, but must use matching decoder limits.
+/// without changing physical row or child-array positions. The encoder writes
+/// into a buffer that grows geometrically from an estimate of the batch's
+/// in-memory size, enforcing the default decoder's resource limits as it goes:
+/// cumulative budgets and visibility validation memory are charged during the
+/// single pass, and a payload that would exceed the frame limit stops being
+/// written at the limit rather than being allocated and then rejected.
+/// Trusted callers can explicitly raise size limits in `options`, but must use
+/// matching decoder limits.
 [[nodiscard]] auto encode(Batch const& batch, EncodeOptions const& options = {})
   -> Result<std::vector<std::byte>, std::string>;
 

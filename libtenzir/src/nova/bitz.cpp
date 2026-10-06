@@ -193,12 +193,20 @@ public:
         .max_logical_slots = options.max_logical_slots,
         .max_decoded_bytes = options.max_decoded_bytes,
       }},
-      scalar_byte_order_{options.scalar_byte_order} {
+      scalar_byte_order_{options.scalar_byte_order},
+      max_frame_bytes_{options.max_frame_bytes} {
   }
 
-  Writer(std::span<std::byte> output, EncodeOptions const& options)
-    : Writer{options} {
-    output_ = output;
+  /// Reserves an initial output capacity.
+  ///
+  /// The encoder writes into a growing buffer, so a caller that can estimate
+  /// the payload size cheaply saves the reallocations that growth would
+  /// otherwise cost. The hint is clamped to the frame limit, because nothing
+  /// larger than that can ever be written, and a bad hint costs only the
+  /// reallocations it failed to avoid.
+  auto reserve(std::uint64_t bytes) -> void {
+    buffer_.reserve(
+      static_cast<std::size_t>(std::min(bytes, max_frame_bytes_)));
   }
 
   template <std::unsigned_integral T>
@@ -216,10 +224,17 @@ public:
       overflow_ = true;
       return;
     }
-    if (not output_.empty()) {
-      TENZIR_ASSERT_LEQ(position_ + value.size(), output_.size());
-      std::memcpy(output_.data() + position_, value.data(), value.size());
+    // The frame limit is enforced here, on the way in, rather than on a total
+    // computed in advance: a payload that would exceed it stops being written
+    // at the limit instead of being allocated and then rejected. The encode
+    // still runs to completion so that the caller sees one error for the frame
+    // rather than one per array, and `encode_batches` splits the batch and
+    // tries again.
+    if (position_ + value.size() > max_frame_bytes_) {
+      frame_exceeded_ = true;
+      return;
     }
+    buffer_.insert(buffer_.end(), value.begin(), value.end());
     position_ += value.size();
   }
 
@@ -236,6 +251,50 @@ public:
     this->bytes(bytes);
   }
 
+  /// Appends `count` copies of `value`, in the same encoding `integer` uses.
+  ///
+  /// A record column whose rows all carry one shape writes the same shape id
+  /// `length` times, and going through `integer` for each of them pays the
+  /// buffer's bounds and growth checks once per row. Building a block of copies
+  /// and appending those pays it once per block instead.
+  auto repeat_integer(std::uint32_t value, storage::Index count) -> void {
+    if (count <= 0) {
+      return;
+    }
+    constexpr auto block = storage::Index{64};
+    auto unit = std::array<std::byte, sizeof(value)>{};
+    for (auto i = std::size_t{0}; i < unit.size(); ++i) {
+      unit[i] = std::byte{static_cast<std::uint8_t>((value >> (i * 8)) & 0xff)};
+    }
+    auto chunk = std::array<std::byte, block * sizeof(value)>{};
+    auto const copies = std::min(count, block);
+    for (auto i = storage::Index{0}; i < copies; ++i) {
+      std::memcpy(chunk.data() + (i * sizeof(value)), unit.data(), unit.size());
+    }
+    auto remaining = count;
+    while (remaining > 0) {
+      auto const now = std::min(remaining, block);
+      bytes(
+        std::span{chunk.data(), static_cast<std::size_t>(now) * sizeof(value)});
+      remaining -= now;
+    }
+  }
+
+  /// Appends `values` in the same encoding `integer` uses, one after another.
+  ///
+  /// `integer` is unconditionally little-endian, independent of the frame's
+  /// scalar byte order, so on a little-endian host a run of `std::uint32_t` is
+  /// already the bytes to write and goes out as one copy.
+  auto integers(std::span<const std::uint32_t> values) -> void {
+    if constexpr (std::endian::native == std::endian::little) {
+      bytes(std::as_bytes(values));
+    } else {
+      for (auto value : values) {
+        integer(value);
+      }
+    }
+  }
+
   auto string(std::string_view value) -> void {
     integer(static_cast<std::uint32_t>(value.size()));
     bytes(std::as_bytes(std::span{value}));
@@ -250,14 +309,33 @@ public:
   }
 
   auto valid() const -> bool {
-    return not overflow_;
+    return not overflow_ and not frame_exceeded_;
+  }
+
+  /// Whether the frame limit, rather than the platform's own size limit, is
+  /// what `valid()` is reporting.
+  ///
+  /// The two are a different contract: a frame over `max_frame_bytes` is a
+  /// batch that `encode_batches` can split and retry, while an overflowing
+  /// position is not. Callers report them with different messages, and the
+  /// caller-visible message for the frame limit predates writing into a growing
+  /// buffer.
+  auto frame_exceeded() const -> bool {
+    return frame_exceeded_;
+  }
+
+  /// Takes the encoded payload, leaving the writer empty.
+  auto take() && -> std::vector<std::byte> {
+    return std::move(buffer_);
   }
 
 private:
-  std::span<std::byte> output_;
+  std::vector<std::byte> buffer_;
   ScalarByteOrder scalar_byte_order_;
+  std::uint64_t max_frame_bytes_;
   std::size_t position_ = 0;
   bool overflow_ = false;
+  bool frame_exceeded_ = false;
 };
 
 class Reader : public ResourceBudget {
@@ -506,9 +584,50 @@ concept fixed_width_scalar
     or std::same_as<Tag, Float> or std::same_as<Tag, Time>
     or std::same_as<Tag, Duration>;
 
+// The scalar types whose in-memory representation *is* their Bitz
+// representation, so a dense fully-visible array can be handed to the writer as
+// one memcpy instead of a value at a time.
+//
+// `Time` and `Duration` qualify for the same reason `Int` does: both are
+// `std::chrono` wrappers around a single `std::int64_t` tick count, so the
+// object representation of the array is the little-endian tick sequence the
+// per-value path would have written. They are only eligible because neither
+// carries a narrowing encoding — `encoding` stays `dense_64_encoding` for them
+// — which is what makes the fast path's encoding check trivially true.
 template <class Tag>
-concept bulk_copy_scalar = std::same_as<Tag, Int> or std::same_as<Tag, UInt>
-                           or std::same_as<Tag, Float>;
+concept bulk_copy_scalar
+  = std::same_as<Tag, Int> or std::same_as<Tag, UInt>
+    or std::same_as<Tag, Float> or std::same_as<Tag, Time>
+    or std::same_as<Tag, Duration>;
+
+// The storage behind an array, if its values are laid out exactly as the frame
+// wants them: a dense primary buffer, every row visible, and no row selection
+// to apply. Returns nullptr when any of that fails, in which case the caller
+// falls back to its per-value loop.
+//
+// Shared by every bulk path so that the conditions are stated once. Getting one
+// of them wrong does not fail loudly — it writes a frame that decodes to the
+// wrong values — so there should be exactly one copy of this predicate.
+template <class Value, class Array>
+auto dense_values(Array const& array, storage::BitMap const& visible)
+  -> storage::SparseStorage<Value> const* {
+  using Primary = storage::SparseStorage<Value>;
+  // `is_identity()` and not merely `not compact`: a non-compact selection still
+  // gathers, and a gather gives row `i` some other source row. Copying the
+  // storage would then write the right values in the wrong order, silently.
+  // Equal lengths are not enough to rule that out, since a gather can cover
+  // every source row and still permute them.
+  if (array.selection.compact or not array.selection.is_identity()
+      or visible.true_count() != visible.length()
+      or not is<Primary>(array.storage())) {
+    return nullptr;
+  }
+  auto const& values = as<Primary>(array.storage());
+  if (values.length() != array.length()) {
+    return nullptr;
+  }
+  return &values;
+}
 
 template <fixed_width_scalar Tag>
 auto scalar_bits(typename Type<Tag>::ViewType value) -> std::uint64_t {
@@ -569,6 +688,15 @@ public:
     auto const it = std::ranges::upper_bound(ranges_, row, {}, &Range::end);
     auto const begin = it == ranges_.begin() ? 0 : std::prev(it)->end;
     return it->source + (row - begin);
+  }
+
+  /// Whether `index(row) == row` for every row, so a caller with a row loop can
+  /// skip the binary search in `index` entirely.
+  ///
+  /// This is not the same question as `not compact`: a non-compact selection
+  /// still carries several ranges when it gathers the children of a list.
+  auto is_identity() const -> bool {
+    return ranges_.size() == 1 and ranges_.front().source == 0;
   }
 
   // Only used for sorted, disjoint list-child ranges.
@@ -643,33 +771,70 @@ auto encodes_null(Array<Data> const& array, RowSelection const& selection)
   return true;
 }
 
+// The narrow element type an encoding writes, for the storage the Nova data
+// model already keeps arrays in. `Array<Int>` may be backed by `SparseStorage`
+// of any of the four signed widths, `Array<Float>` by `float` or `double`, so
+// an encoding is not only a wire choice: when it matches the width the array is
+// *already* stored at, the frame bytes are the storage bytes.
+template <class Tag, std::uint8_t Encoding>
+using narrow_value = std::conditional_t<
+  std::same_as<Tag, Float>, std::conditional_t<Encoding == 1, float, double>,
+  std::conditional_t<
+    Encoding == dense_8_encoding,
+    std::conditional_t<std::same_as<Tag, Int>, std::int8_t, std::uint8_t>,
+    std::conditional_t<
+      Encoding == dense_16_encoding,
+      std::conditional_t<std::same_as<Tag, Int>, std::int16_t, std::uint16_t>,
+      std::conditional_t<
+        Encoding == dense_32_encoding,
+        std::conditional_t<std::same_as<Tag, Int>, std::int32_t, std::uint32_t>,
+        std::conditional_t<std::same_as<Tag, Int>, std::int64_t, std::uint64_t>>>>>;
+
 template <class Tag>
   requires(std::same_as<Tag, Int> or std::same_as<Tag, UInt>)
 auto integer_encoding(SelectedArray<Tag> const& array,
                       storage::BitMap const& visible) -> std::uint8_t {
-  auto fits = [&](auto width) {
-    using Narrow = decltype(width);
-    for (auto i = storage::Index{0}; i < array.length(); ++i) {
-      if (visible.get(i)) {
-        auto const value = *array.get(i);
-        if (value < std::numeric_limits<Narrow>::min()
-            or value > std::numeric_limits<Narrow>::max()) {
-          return false;
-        }
-      }
+  // The storage width is deliberately not taken as the answer here. An array
+  // stored as `int16` whose selected, visible values all fit in a byte still
+  // encodes as `dense_8`, both because that is the narrower frame and because
+  // the choice must not depend on rows a selection excludes: a value outside the
+  // byte range in a filtered-out row would otherwise widen the whole column.
+  //
+  // One pass for the range, rather than one pass per candidate width. The
+  // previous shape asked "do all values fit in 8 bits?", then 16, then 32, so a
+  // column of large values — the case where narrowing buys nothing — paid three
+  // full scans to find that out. The extremes answer all three questions at
+  // once, and answer them identically: a range fits a width exactly when every
+  // value in it does.
+  using Value = Type<Tag>::ViewType;
+  auto lowest = std::numeric_limits<Value>::max();
+  auto highest = std::numeric_limits<Value>::min();
+  for (auto i = storage::Index{0}; i < array.length(); ++i) {
+    if (not visible.get(i)) {
+      continue;
     }
-    return true;
-  };
-  if (fits(std::conditional_t<std::same_as<Tag, Int>, std::int8_t,
-                              std::uint8_t>{})) {
+    auto const value = *array.get(i);
+    lowest = std::min(lowest, value);
+    highest = std::max(highest, value);
+  }
+  if (lowest > highest) {
+    // No visible row, so every row encodes as zero and the narrowest width
+    // holds all of them.
     return dense_8_encoding;
   }
-  if (fits(std::conditional_t<std::same_as<Tag, Int>, std::int16_t,
-                              std::uint16_t>{})) {
+  auto fits = [&](auto width) {
+    using Narrow = decltype(width);
+    return lowest >= static_cast<Value>(std::numeric_limits<Narrow>::min())
+           and highest
+                 <= static_cast<Value>(std::numeric_limits<Narrow>::max());
+  };
+  if (fits(narrow_value<Tag, dense_8_encoding>{})) {
+    return dense_8_encoding;
+  }
+  if (fits(narrow_value<Tag, dense_16_encoding>{})) {
     return dense_16_encoding;
   }
-  if (fits(std::conditional_t<std::same_as<Tag, Int>, std::int32_t,
-                              std::uint32_t>{})) {
+  if (fits(narrow_value<Tag, dense_32_encoding>{})) {
     return dense_32_encoding;
   }
   return dense_64_encoding;
@@ -677,6 +842,11 @@ auto integer_encoding(SelectedArray<Tag> const& array,
 
 auto float_encoding(SelectedArray<Float> const& array,
                     storage::BitMap const& visible) -> std::uint8_t {
+  // Already stored as `float`: every value round-trips through `float` by
+  // construction, which is what the scan below would conclude row by row.
+  if (is<storage::SparseStorage<float>>(array.storage())) {
+    return float_32_encoding;
+  }
   for (auto i = storage::Index{0}; i < array.length(); ++i) {
     if (visible.get(i)) {
       auto const value = *array.get(i);
@@ -730,7 +900,6 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
     return {};
   } else if constexpr (fixed_width_scalar<Tag>) {
     using Value = Type<Tag>::ViewType;
-    using Primary = storage::SparseStorage<Value>;
     static_assert(sizeof(Value) == sizeof(std::uint64_t));
     auto width = std::uint64_t{8};
     if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
@@ -746,14 +915,49 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
                               * width));
     if constexpr (bulk_copy_scalar<Tag>) {
       static_assert(std::is_trivially_copyable_v<Value>);
-      if (not array.selection.compact and encoding == dense_64_encoding
-          and writer.scalar_byte_order() == native_scalar_byte_order
-          and visible.true_count() == visible.length()
-          and is<Primary>(array.storage())) {
-        auto const& values = as<Primary>(array.storage());
-        writer.bytes(std::as_bytes(
-          std::span{values.data(), static_cast<std::size_t>(values.length())}));
-        return {};
+      // A non-native byte order writes the bytes in the other direction, so the
+      // memory is no longer the frame. Nothing else disqualifies the copy: the
+      // encoding picks *which* storage width has to match, not whether one can.
+      if (writer.scalar_byte_order() == native_scalar_byte_order) {
+        auto copied = false;
+        auto copy = [&]<class Narrow>() {
+          if (auto const* values = dense_values<Narrow>(array, visible)) {
+            writer.bytes(std::as_bytes(std::span{
+              values->data(), static_cast<std::size_t>(values->length())}));
+            copied = true;
+          }
+        };
+        // An array stored narrow and encoded at that same width needs no
+        // conversion at all: `integer_encoding` and `float_encoding` above pick
+        // the storage's own width when it is already narrow, so this is the
+        // common case rather than a lucky one.
+        if constexpr (std::same_as<Tag, Int> or std::same_as<Tag, UInt>) {
+          switch (encoding) {
+            case dense_8_encoding:
+              copy.template operator()<narrow_value<Tag, dense_8_encoding>>();
+              break;
+            case dense_16_encoding:
+              copy.template operator()<narrow_value<Tag, dense_16_encoding>>();
+              break;
+            case dense_32_encoding:
+              copy.template operator()<narrow_value<Tag, dense_32_encoding>>();
+              break;
+            default:
+              copy.template operator()<Value>();
+              break;
+          }
+        } else if constexpr (std::same_as<Tag, Float>) {
+          if (encoding == float_32_encoding) {
+            copy.template operator()<float>();
+          } else {
+            copy.template operator()<Value>();
+          }
+        } else {
+          copy.template operator()<Value>();
+        }
+        if (copied) {
+          return {};
+        }
       }
     }
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
@@ -784,7 +988,83 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       }
     }
   } else if constexpr (std::same_as<Tag, String> or std::same_as<Tag, Blob>) {
+    using Primary = Type<Tag>::PrimaryPhysicalStorage;
+    // A dense string or blob column is a contiguous byte buffer plus a span per
+    // row \u2014 which is what the frame is too, so when the spans run back to
+    // back over the rows being written, the payload is one copy of a buffer
+    // range and the offsets are a walk over the spans. The row-at-a-time path
+    // below reads `array.get(i)`, which dispatches over the storage variant and
+    // builds a view, twice per row, and hands the writer one call per value.
+    //
+    // Contiguity has to be checked rather than assumed: spans may overlap or
+    // skip after a slice or a gather, and nothing in the storage says they do
+    // not.
+    auto const* dense = [&]() -> Primary const* {
+      if (array.selection.compact or not array.selection.is_identity()
+          or visible.true_count() != visible.length()
+          or not is<Primary>(array.storage())) {
+        return nullptr;
+      }
+      auto const& storage = as<Primary>(array.storage());
+      return storage.length() >= array.length() ? &storage : nullptr;
+    }();
     auto byte_count = std::uint32_t{0};
+    auto payload = storage::Span{0, 0};
+    auto contiguous = dense != nullptr;
+    if (contiguous and array.length() > 0) {
+      payload = dense->span(0);
+      auto end = payload.begin;
+      for (auto i = storage::Index{0}; i < array.length(); ++i) {
+        auto const span = dense->span(i);
+        if (span.begin != end) {
+          contiguous = false;
+          break;
+        }
+        end = span.end;
+      }
+      payload.end = end;
+      if (contiguous
+          and std::cmp_greater(payload.end - payload.begin,
+                               std::numeric_limits<std::uint32_t>::max())) {
+        return writer.limit_error(
+          "string or blob data exceeds the Bitz size limit");
+      }
+      byte_count = static_cast<std::uint32_t>(payload.end - payload.begin);
+    }
+    if (contiguous) {
+      // Offsets in blocks rather than one call per row. The first offset is
+      // always zero and the last is the total, which the frame repeats after
+      // them.
+      constexpr auto block = std::size_t{256};
+      auto buffer = std::array<std::uint32_t, block>{};
+      auto filled = std::size_t{0};
+      auto emit = [&](std::uint32_t offset) {
+        buffer[filled++] = offset;
+        if (filled == block) {
+          writer.integers(std::span{buffer.data(), filled});
+          filled = 0;
+        }
+      };
+      emit(0);
+      for (auto i = storage::Index{0}; i < array.length(); ++i) {
+        emit(static_cast<std::uint32_t>(dense->span(i).end - payload.begin));
+      }
+      emit(byte_count);
+      if (filled > 0) {
+        writer.integers(std::span{buffer.data(), filled});
+      }
+      TRY(writer.charge_decoded(
+        ((static_cast<std::uint64_t>(array.length()) + 1)
+         * sizeof(std::uint32_t))
+        + (static_cast<std::uint64_t>(array.length()) * sizeof(storage::Span))
+        + byte_count));
+      if (byte_count > 0) {
+        writer.bytes(
+          std::as_bytes(std::span{dense->data().begin() + payload.begin,
+                                  static_cast<std::size_t>(byte_count)}));
+      }
+      return {};
+    }
     writer.integer(byte_count);
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       if (visible.get(i)) {
@@ -816,6 +1096,17 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
     }
   } else if constexpr (std::same_as<Tag, Ip>) {
     TRY(writer.charge_decoded(static_cast<std::uint64_t>(array.length()) * 16));
+    // An `ip` is one `std::array<std::uint8_t, 16>` and nothing else, so an
+    // array of them is already the 16-byte-per-row frame layout. No byte-order
+    // check here, unlike the scalars above: those bytes are network order in
+    // memory and go out unswapped either way.
+    static_assert(sizeof(Ip) == 16);
+    static_assert(std::is_trivially_copyable_v<Ip>);
+    if (auto const* values = dense_values<Ip>(array, visible)) {
+      writer.bytes(std::as_bytes(
+        std::span{values->data(), static_cast<std::size_t>(values->length())}));
+      return {};
+    }
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       auto value = visible.get(i) ? *array.get(i) : Ip{};
       writer.bytes(as_bytes(value));
@@ -928,8 +1219,12 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       return Err{"record field names and arrays have different sizes"};
     }
     auto shapes = std::vector<ShapeTable::ShapeId>{};
-    auto shape_remap
-      = std::unordered_map<ShapeTable::ShapeId, storage::Index>{};
+    // Indexed by shape id rather than hashed: ids are dense over the shape
+    // table, and this is read once per row *per field*, which made it the
+    // single most expensive lookup in the encoder. -1 means the shape is not in
+    // the frame.
+    auto shape_remap = std::vector<storage::Index>(data.shape_table.size(),
+                                                   storage::Index{-1});
     auto live_fields
       = std::vector<bool>(data.arrays.size(), not array.selection.compact);
     auto add_shape
@@ -937,12 +1232,13 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       if (shape < 0 or std::cmp_greater_equal(shape, data.shape_table.size())) {
         return Err{"visible record row has an invalid shape"};
       }
-      if (shape_remap.contains(shape)) {
+      if (shape_remap[static_cast<std::size_t>(shape)] >= 0) {
         return {};
       }
       TRY(writer.check_shape_count(
         static_cast<std::uint32_t>(shapes.size() + 1)));
-      shape_remap.emplace(shape, static_cast<storage::Index>(shapes.size()));
+      shape_remap[static_cast<std::size_t>(shape)]
+        = static_cast<storage::Index>(shapes.size());
       shapes.push_back(shape);
       if (array.selection.compact) {
         for (auto field : data.shape_table.fields(shape)) {
@@ -997,9 +1293,22 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       + (static_cast<std::uint64_t>(shape_count) * sizeof(ShapeTable::ShapeId))
       + (static_cast<std::uint64_t>(array.length()) * sizeof(storage::Index))));
     writer.integer(shape_count);
-    auto shape_membership = std::vector<std::vector<storage::Index>>{};
-    for (auto shape : shapes) {
-      auto fields = data.shape_table.fields(shape);
+    // Membership inverted: per field, the shapes that carry it. The row loop
+    // below asks "is this field in this shape?" once per row per field, which
+    // used to be a binary search; the field loop turns its own entry of this
+    // index into a flag array once and then reads it.
+    //
+    // Deliberately *not* a flat (shape, field) table: the two counts are
+    // bounded independently \u2014 65536 shapes and 16384 fields by default
+    // \u2014 so their product is a gibibyte, which a batch with few actual
+    // memberships could make the encoder allocate before any limit fires. This
+    // holds one entry per membership instead, which `charge_shape_entries`
+    // already bounds.
+    auto shapes_with_field
+      = std::vector<std::vector<storage::Index>>(data.arrays.size());
+    for (auto shape_index = std::size_t{0}; shape_index < shapes.size();
+         ++shape_index) {
+      auto fields = data.shape_table.fields(shapes[shape_index]);
       auto live_count = std::uint32_t{0};
       for (auto field : fields) {
         if (field < 0
@@ -1013,27 +1322,81 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       // Remapping removed fields can collapse shapes, so this is an upper bound.
       TRY(writer.charge_decoded(static_cast<std::uint64_t>(live_count)
                                 * sizeof(storage::Index)));
-      auto& membership = shape_membership.emplace_back();
       writer.integer(live_count);
       for (auto field : fields) {
         auto const mapped = field_remap[static_cast<std::size_t>(field)];
         if (mapped >= 0) {
           writer.integer(static_cast<std::uint32_t>(mapped));
-          membership.push_back(field);
+          shapes_with_field[static_cast<std::size_t>(field)].push_back(
+            static_cast<storage::Index>(shape_index));
         }
       }
-      std::ranges::sort(membership);
     }
+    // `index(row) == row` for a selection that gathers nothing, which is every
+    // selection but a list's children. Hoisting the test out of the row loops
+    // below removes a binary search per row.
+    auto const identity = array.selection.is_identity();
+    auto const source_of = [&](storage::Index row) {
+      return identity ? row : array.selection.index(row);
+    };
+    // An identity selection still need not cover the whole source: splitting an
+    // oversized frame hands each half a prefix of the rows. A field's bitmap
+    // can only stand in for the frame's when the two have the same length, so
+    // the fast path below asks for the stronger property.
+    auto const covers_source
+      = identity and array.length() == array.source.length();
+    auto const all_visible = visible.true_count() == visible.length();
+    // Validate every row's shape and find out whether they are all the same
+    // one. This pass only reads; the write follows below, so that a frame whose
+    // rows share a shape can emit the column in blocks instead of a value at a
+    // time. The read is an indexed load per row, where the write was a bounds
+    // and growth check per row.
+    auto uniform_mapped = storage::Index{-1};
+    auto all_same = true;
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
-      auto shape = visible.get(i)
-                     ? data.shape_indices.get(array.selection.index(i))
-                     : ShapeTable::empty_shape;
+      auto shape = visible.get(i) ? data.shape_indices.get(source_of(i))
+                                  : ShapeTable::empty_shape;
       if (shape < 0
           or static_cast<std::size_t>(shape) >= data.shape_table.size()) {
         return Err{"visible record row has an invalid shape"};
       }
-      writer.integer(static_cast<std::uint32_t>(shape_remap.at(shape)));
+      auto const mapped = shape_remap[static_cast<std::size_t>(shape)];
+      if (mapped < 0) {
+        return Err{"visible record row has an invalid shape"};
+      }
+      if (i == 0) {
+        uniform_mapped = mapped;
+      } else if (mapped != uniform_mapped) {
+        // No early exit: this pass is also what validates the remaining rows,
+        // and the write below relies on that having happened for all of them.
+        all_same = false;
+      }
     }
+    if (all_same and array.length() > 0) {
+      writer.repeat_integer(static_cast<std::uint32_t>(uniform_mapped),
+                            array.length());
+    } else {
+      for (auto i = storage::Index{0}; i < array.length(); ++i) {
+        auto const shape = visible.get(i) ? data.shape_indices.get(source_of(i))
+                                          : ShapeTable::empty_shape;
+        writer.integer(static_cast<std::uint32_t>(
+          shape_remap[static_cast<std::size_t>(shape)]));
+      }
+    }
+    // Every row carrying one shape, nothing hidden, and no gather: then a
+    // field's presence is a property of the field rather than of the row, and
+    // the per-field row loop below has nothing left to decide. This is the
+    // shape of a batch whose events all have the same fields — the common case,
+    // and the one that loop costs the most on, since it runs once per field.
+    auto const uniform
+      = all_same and all_visible and covers_source and uniform_mapped >= 0
+          ? uniform_mapped
+          : storage::Index{-1};
+    // One flag per shape, filled from the inverted index for the field being
+    // written and cleared again afterwards, so the row loop tests membership
+    // with an indexed load. Allocated once for all fields: its size is the
+    // shape count, which `check_shape_count` bounds.
+    auto shape_has_field = std::vector<char>(shapes.size(), char{0});
     for (auto field_index = std::size_t{0}; field_index < data.arrays.size();
          ++field_index) {
       if (field_remap[field_index] < 0) {
@@ -1044,20 +1407,45 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
           or field.present.length() != array.source.length()) {
         return Err{"record field length does not match its record array"};
       }
-      auto present = storage::BitMap::Builder{};
-      for (auto row = storage::Index{0}; row < array.length(); ++row) {
-        auto selected = false;
-        if (visible.get(row)) {
-          auto const source_row = array.selection.index(row);
-          auto const shape = shape_remap.at(data.shape_indices.get(source_row));
-          selected = std::ranges::binary_search(
-                       shape_membership[static_cast<std::size_t>(shape)],
-                       static_cast<storage::Index>(field_index))
-                     and field.present.get(source_row);
+      auto const& carriers = shapes_with_field[field_index];
+      auto present_mask = storage::BitMap{};
+      if (uniform >= 0) {
+        // Presence is then a property of the field rather than of the row: the
+        // single shape either carries the field, in which case the field's own
+        // bitmap already says which rows have it, or it does not, in which case
+        // no row does.
+        //
+        // The question is whether *that* shape carries the field, not whether
+        // any shape does: a frame holds every shape of the table, including
+        // ones no row uses, and a field array may carry presence bits for rows
+        // whose shape omits it. Taking the field's bitmap on the strength of an
+        // unused carrier would write those bits out, and the decoder rejects a
+        // field present outside its shape.
+        present_mask = std::ranges::binary_search(carriers, uniform)
+                         ? field.present
+                         : storage::BitMap{array.length(), false};
+      } else {
+        for (auto shape : carriers) {
+          shape_has_field[static_cast<std::size_t>(shape)] = char{1};
         }
-        present.emplace_back(selected);
+        auto present = storage::BitMap::Builder{};
+        for (auto row = storage::Index{0}; row < array.length(); ++row) {
+          auto selected = false;
+          if (visible.get(row)) {
+            auto const source_row = source_of(row);
+            auto const shape = shape_remap[static_cast<std::size_t>(
+              data.shape_indices.get(source_row))];
+            selected
+              = shape_has_field[static_cast<std::size_t>(shape)] != char{0}
+                and field.present.get(source_row);
+          }
+          present.emplace_back(selected);
+        }
+        present_mask = std::move(present).finish();
+        for (auto shape : carriers) {
+          shape_has_field[static_cast<std::size_t>(shape)] = char{0};
+        }
       }
-      auto present_mask = present.finish();
       TRY(write_bitmap(writer, present_mask));
       TRY(write_array(writer, field.data, present_mask, depth + 1,
                       array.selection));
@@ -1176,8 +1564,22 @@ auto read_narrow_scalar(Reader& reader, storage::Index length, TypeId type)
   using Value = std::conditional_t<
     std::same_as<Tag, Float>, float,
     std::conditional_t<std::same_as<Tag, Int>, std::make_signed_t<Bits>, Bits>>;
+  static_assert(sizeof(Value) == sizeof(Bits));
+  static_assert(std::is_trivially_copyable_v<Value>);
   TRY(
     reader.charge_decoded(static_cast<std::uint64_t>(length) * sizeof(Value)));
+  // A narrow column is not widened on the way in: the Nova data model keeps
+  // `Array<Int>` over any of the four signed widths and `Array<Float>` over
+  // `float` or `double`, so the decoded array is stored at the width the frame
+  // used. That makes the frame's bytes the storage's bytes, and the whole
+  // column is one copy rather than a `scalar()` call per row.
+  if (length > 0 and reader.scalar_byte_order() == native_scalar_byte_order) {
+    auto const byte_size = static_cast<std::size_t>(length) * sizeof(Value);
+    TRY(auto bytes, reader.bytes(byte_size));
+    auto values = typename storage::SparseStorage<Value>::Mutable{length};
+    std::memcpy(values.data(), bytes.data(), byte_size);
+    return DecodedArray{Array<Tag>{std::move(values).finish()}, type};
+  }
   auto values = typename storage::SparseStorage<Value>::Mutable{length};
   for (auto i = storage::Index{0}; i < length; ++i) {
     TRY(auto bits, reader.scalar<Bits>());
@@ -1343,14 +1745,21 @@ auto read_array(Reader& reader, storage::Index length,
         return Err{"truncated IP column"};
       }
       TRY(reader.charge_decoded(static_cast<std::uint64_t>(length) * 16));
-      auto builder = ArrayBuilder<Ip>{};
-      for (auto i = storage::Index{0}; i < length; ++i) {
-        TRY(auto raw, reader.bytes(16));
-        auto value = std::array<std::byte, 16>{};
-        std::memcpy(value.data(), raw.data(), value.size());
-        builder.data(Ip{value});
+      if (length == 0) {
+        return DecodedArray{ArrayBuilder<Ip>{}.finish(), type};
       }
-      return DecodedArray{builder.finish(), type};
+      // The column is 16 bytes per row and an `ip` is 16 bytes of the same
+      // order, so the frame is already the array: take it in one copy rather
+      // than reconstructing a value at a time through the builder. This mirrors
+      // the encoder's bulk path, and like it depends on `ip` holding nothing
+      // but its byte array.
+      static_assert(sizeof(Ip) == 16);
+      static_assert(std::is_trivially_copyable_v<Ip>);
+      auto const byte_size = static_cast<std::size_t>(length) * sizeof(Ip);
+      TRY(auto bytes, reader.bytes(byte_size));
+      auto values = storage::SparseStorage<Ip>::Mutable{length};
+      std::memcpy(values.data(), bytes.data(), byte_size);
+      return DecodedArray{Array<Ip>{std::move(values).finish()}, type};
     }
     case TypeId::subnet: {
       if (static_cast<std::size_t>(length) > reader.remaining() / 17) {
@@ -1731,6 +2140,34 @@ read_typed_meta(Reader& reader, storage::Index length, TypeId expected)
   return std::move(decoded.data);
 }
 
+/// An initial output capacity for one encode, in bytes.
+///
+/// The in-memory footprint of the batch, scaled by the fraction of its rows the
+/// selection keeps. It is an estimate and nothing depends on it being right:
+/// the buffer grows when it is too small, and a batch that is handed back is
+/// copied into a chunk by the caller anyway, so slack costs nothing lasting.
+///
+/// The point is only to start close. Encoded Bitz is in the same order of
+/// magnitude as the arrays it comes from — it is those arrays plus light
+/// metadata, minus whatever narrowing saves — so this normally lands within one
+/// doubling and the growth copies disappear.
+auto reserve_hint(Batch const& batch, RowSelection const& selection)
+  -> std::uint64_t {
+  auto const approx = static_cast<std::uint64_t>(
+    batch.data.approx_bytes() + batch.mask.approx_bytes()
+    + batch.meta.name.approx_bytes() + batch.meta.import_time.approx_bytes()
+    + batch.meta.internal.approx_bytes());
+  auto const length = batch.length();
+  auto scaled = approx;
+  if (selection.compact and length > 0) {
+    scaled = approx * static_cast<std::uint64_t>(selection.length())
+             / static_cast<std::uint64_t>(length);
+  }
+  // A floor, so that a tiny batch does not start from nothing and double its
+  // way up through a dozen reallocations of a few hundred bytes each.
+  return std::max(scaled, std::uint64_t{4} << 10);
+}
+
 auto encode_selected(Batch const& batch, EncodeOptions const& options,
                      RowSelection const& selection, bool& limit_exceeded)
   -> Result<std::vector<std::byte>, std::string> {
@@ -1773,23 +2210,28 @@ auto encode_selected(Batch const& batch, EncodeOptions const& options,
     TRY(write_concrete(writer, SelectedArray{batch.meta.internal, selection},
                        mask, 0));
     if (not writer.valid()) {
-      return writer.limit_error("Bitz payload size exceeds the platform limit");
+      return writer.limit_error(
+        writer.frame_exceeded()
+          ? "Bitz frame exceeds the resource limit"
+          : "Bitz payload size exceeds the platform limit");
     }
     return {};
   };
-  auto sizer = Writer{options};
-  auto sized = write(sizer);
-  limit_exceeded = sizer.limit_exceeded();
-  TRY(std::move(sized));
-  if (sizer.size() > options.max_frame_bytes) {
-    limit_exceeded = true;
-    return Err{"Bitz frame exceeds the resource limit"};
-  }
-  auto result = std::vector<std::byte>(sizer.size());
-  auto writer = Writer{result, options};
-  TRY(write(writer));
-  TENZIR_ASSERT_EQ(writer.size(), result.size());
-  return result;
+  // One pass. The encoder used to run `write` twice — once into a writer with
+  // no output buffer, purely to total the bytes, and once for real — so that
+  // the result could be allocated exactly once. That guarantee turned out to
+  // cost half of all encoding time: profiling `write_bitz` attributed 48.8% of
+  // its cycles to the sizing pass, which performs every per-row loop, every
+  // encoding decision and every bitmap build of the real pass and emits
+  // nothing. The copy it was protecting is far cheaper than that: the payload
+  // memcpy is under a tenth of encode time, and geometric growth amortizes to
+  // about one extra copy of it, further reduced by the reservation below.
+  auto writer = Writer{options};
+  writer.reserve(reserve_hint(batch, selection));
+  auto written = write(writer);
+  limit_exceeded = writer.limit_exceeded();
+  TRY(std::move(written));
+  return std::move(writer).take();
 }
 
 } // namespace

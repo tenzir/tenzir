@@ -1139,6 +1139,42 @@ TEST("bitz v2 compacts fully removed record fields") {
   CHECK_EQUAL(*as<RowView<Int>>(records->field("c")->data.get(0)), 3);
 }
 
+TEST("bitz v2 encodes presence from the row's own shape") {
+  // Every row uses a shape without `b`, while the table also holds a shape with
+  // it and `b`'s backing array claims presence for all rows. Presence belongs
+  // to the shape of the row, so `b` must not appear in the frame at all:
+  // writing its bits out produces a frame the decoder rejects.
+  auto const length = storage::Index{4};
+  auto a = ArrayBuilder<Int>{};
+  auto b = ArrayBuilder<Int>{};
+  for (auto i = storage::Index{0}; i < length; ++i) {
+    a.data(i);
+    b.data(i + 100);
+  }
+  auto names = Array<Record>::Names{};
+  names.emplace(storage::String<>{"a"}, 0);
+  names.emplace(storage::String<>{"b"}, 1);
+  auto fields = Array<Record>::MaskedArrays{};
+  fields.push_back({Array<Data>{a.finish()}, storage::BitMap{length, true}});
+  fields.push_back({Array<Data>{b.finish()}, storage::BitMap{length, true}});
+  auto shapes = ShapeTable{};
+  auto const without_b = std::array{storage::Index{0}};
+  auto const with_b = std::array{storage::Index{0}, storage::Index{1}};
+  auto const shape = shapes.with_fields(without_b);
+  shapes.with_fields(with_b);
+  auto rows = storage::DataOwner<storage::Index[]>::make_value(length, shape);
+  auto record
+    = Array<Record>{Array<Record>::IndicesStorage{std::move(rows)},
+                    std::move(shapes), std::move(names), std::move(fields)};
+  auto encoded = bitz::encode(bitz::Batch{Array<Data>{std::move(record)},
+                                          storage::BitMap{length, true},
+                                          Events::Meta::make_empty(length)});
+  REQUIRE(encoded);
+  auto decoded = bitz::decode(encoded.unwrap());
+  REQUIRE(decoded);
+  CHECK_EQUAL(decoded.unwrap().length(), length);
+}
+
 TEST("bitz v2 round-trips an empty record batch") {
   auto builder = ArrayBuilder<Record>{};
   auto encoded = bitz::encode(bitz::Batch{
