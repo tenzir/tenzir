@@ -1,0 +1,10 @@
+// Rows with different indexes alternate within a batch. Assigning to a field
+// that already exists must keep the values of the rows that write elsewhere.
+from {x: {a: 1, b: 1}, k: "a", l: "p", v: 10},
+     {x: {a: 2, b: 2}, k: "b", l: "q", v: 20},
+     {x: {a: 3, b: 3}, k: "a", l: "q", v: 30},
+     {x: 4, k: "c", l: "p", v: 40},
+     {x: {a: 5, b: 5}, k: null, l: "p", v: 50},
+     {k: "b", l: "p", v: 60}
+batch 6
+set x[k] = v, y[k][l] = v, z[k].w = move v

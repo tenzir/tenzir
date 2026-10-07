@@ -570,6 +570,10 @@ auto with_merged(MaskedArray<Array<Data>> const& old,
   if (auto constant = new_.present.as_constant(); constant and *constant) {
     return new_.data;
   }
+  if (not old.present.and_not(new_.present).any()) {
+    // No row keeps an old value.
+    return new_.data;
+  }
   return ArrayMerger{}.merge(old, new_).data;
 }
 

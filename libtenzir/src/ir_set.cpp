@@ -11,6 +11,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
@@ -33,6 +34,8 @@
 
 #include <algorithm>
 #include <ranges>
+#include <string>
+#include <unordered_map>
 
 namespace tenzir {
 
@@ -527,29 +530,331 @@ auto assign_meta(nova::Events& events, ast::meta const& target,
   TENZIR_UNREACHABLE();
 }
 
+/// Warns about every type other than string that occurs in the active rows of
+/// the `values` of the index `expression`.
+auto warn_non_string_index(nova::Array<nova::Data> const& values,
+                           nova::storage::BitMap const& mask,
+                           ast::expression const& expression,
+                           diagnostic_handler& dh) -> void {
+  auto warn = [&]<nova::data_type Tag>(nova::Array<Tag> const&,
+                                       nova::storage::BitMap const& present) {
+    if constexpr (not std::same_as<Tag, nova::String>) {
+      if ((mask & present).any()) {
+        diagnostic::warning("assignment index must be a string, but got `{}`",
+                            nova::Type<Tag>::static_name)
+          .primary(expression)
+          .emit(dh);
+      }
+    }
+  };
+  match(values, [&](auto const& array) {
+    if constexpr (std::same_as<std::remove_cvref_t<decltype(array)>,
+                               nova::UnionArray>) {
+      for (auto const& alternative : array.fields()) {
+        match(alternative.data, [&](auto const& typed) {
+          warn(typed, alternative.present);
+        });
+      }
+    } else {
+      warn(array, mask);
+    }
+  });
+}
+
+/// The rows of a dynamic assignment that share the same computed field path.
+struct DynamicGroup {
+  std::vector<ast::field_path::segment> path;
+  nova::storage::BitMap rows;
+};
+
+/// The rows of a dynamic assignment with valid indexes, grouped by the field
+/// path that the indexes compute.
+struct DynamicRows {
+  nova::storage::BitMap valid;
+  std::vector<DynamicGroup> groups;
+};
+
+/// Evaluates the indexes of `path` for the active rows of `input`. Rows with
+/// an index that is not a string are skipped with a warning, like the legacy
+/// `set`.
+auto group_dynamic(DynamicPath const& path,
+                   std::span<nova::Evaluator> evaluators,
+                   nova::Events const& input, diagnostic_handler& dh)
+  -> DynamicRows {
+  auto const& mask = input.mask;
+  auto valid = mask;
+  auto keys = std::vector<nova::Array<nova::String>>{};
+  auto evaluator = evaluators.begin();
+  for (auto const& segment : path.segments) {
+    auto const* expression = try_as<ast::expression>(segment);
+    if (not expression) {
+      continue;
+    }
+    TENZIR_ASSERT(evaluator != evaluators.end());
+    auto values = evaluator->eval(input, nova::EvalCtx{dh});
+    ++evaluator;
+    auto strings = values.get_alternative<nova::String>();
+    auto present = strings ? mask & strings->present
+                           : nova::storage::BitMap{mask.length(), false};
+    warn_non_string_index(values, mask, *expression, dh);
+    valid = std::move(valid) & present;
+    if (strings) {
+      keys.push_back(std::move(strings->data));
+    }
+  }
+  auto result = DynamicRows{.valid = std::move(valid), .groups = {}};
+  if (not result.valid.any()) {
+    return result;
+  }
+  // Every index has a string in a valid row, so there is one key per index.
+  TENZIR_ASSERT(std::ranges::count_if(path.segments,
+                                      [](auto const& segment) {
+                                        return is<ast::expression>(segment);
+                                      })
+                == std::ssize(keys));
+  // Rows with the same indexes form one group. With several indexes, the
+  // lookup key concatenates the length-prefixed indexes of a row, so that it
+  // is unambiguous.
+  auto lookup
+    = std::unordered_map<std::string, size_t, detail::heterogeneous_string_hash,
+                         detail::heterogeneous_string_equal>{};
+  auto rows = std::vector<nova::storage::BitMap::Mutable>{};
+  auto buffer = std::string{};
+  auto make_key = [&](nova::storage::Index row) -> std::string_view {
+    if (keys.size() == 1) {
+      return *keys.front().get(row);
+    }
+    buffer.clear();
+    for (auto const& key : keys) {
+      auto value = *key.get(row);
+      auto size = value.size();
+      buffer.append(reinterpret_cast<char const*>(&size), sizeof(size));
+      buffer.append(value);
+    }
+    return buffer;
+  };
+  // Neighboring rows often share their indexes, so the last group is checked
+  // before the lookup.
+  auto last = Option<decltype(lookup)::iterator>{};
+  for (auto row : nova::storage::true_bits(result.valid)) {
+    auto key = make_key(row);
+    if (last and (*last)->first == key) {
+      rows[(*last)->second].set(row, true);
+      continue;
+    }
+    auto it = lookup.find(key);
+    if (it == lookup.end()) {
+      auto segments = std::vector<ast::field_path::segment>{};
+      segments.reserve(path.segments.size());
+      auto index = keys.begin();
+      for (auto const& segment : path.segments) {
+        if (auto const* field = try_as<ast::field_path::segment>(segment)) {
+          segments.push_back(*field);
+          continue;
+        }
+        auto const& expression = as<ast::expression>(segment);
+        segments.emplace_back(ast::identifier{std::string{*index->get(row)},
+                                              expression.get_location()},
+                              false);
+        ++index;
+      }
+      result.groups.push_back(DynamicGroup{
+        .path = std::move(segments),
+        .rows = nova::storage::BitMap{},
+      });
+      rows.emplace_back(mask.length());
+      it = lookup.emplace(key, rows.size() - 1).first;
+    }
+    rows[it->second].set(row, true);
+    last = it;
+  }
+  for (auto [group, group_rows] : std::views::zip(result.groups, rows)) {
+    group.rows = std::move(group_rows).finish();
+  }
+  return result;
+}
+
+/// Returns the records to assign the nested fields of `groups` into for the
+/// `rows` of the `existing` field: its records, and empty records where it
+/// holds none. Warns when this replaces a value other than `null`, like
+/// `assign_nested_field`, naming the segment at `depth` of a group that
+/// replaces it.
+auto nested_records(nova::MaskedArray<nova::Array<nova::Data>> const& existing,
+                    nova::storage::BitMap const& rows,
+                    std::span<DynamicGroup const* const> groups, size_t depth,
+                    diagnostic_handler& dh) -> nova::Array<nova::Record> {
+  auto const active = rows & existing.present;
+  auto warn = [&]<nova::data_type Tag>(nova::Array<Tag> const&,
+                                       nova::storage::BitMap const& present) {
+    if constexpr (not std::same_as<Tag, nova::Record>
+                  and not std::same_as<Tag, nova::Null>) {
+      auto const replaced = active & present;
+      if (replaced.any()) {
+        auto const* group = *std::ranges::find_if(groups, [&](auto* group) {
+          return (group->rows & replaced).any();
+        });
+        auto const& next = group->path[depth];
+        diagnostic::warning("implicit record for `{}` field overwrites `{}` "
+                            "value",
+                            next.id.name, nova::Type<Tag>::static_name)
+          .primary(next.id)
+          .hint("if this is intentional, drop the parent field before")
+          .emit(dh);
+      }
+    }
+  };
+  match(existing.data, [&](auto const& array) {
+    if constexpr (std::same_as<std::remove_cvref_t<decltype(array)>,
+                               nova::UnionArray>) {
+      for (auto const& alternative : array.fields()) {
+        match(alternative.data, [&](auto const& typed) {
+          warn(typed, alternative.present);
+        });
+      }
+    } else {
+      warn(array, existing.present);
+    }
+  });
+  auto records = existing.data.get_alternative<nova::Record>();
+  if (not records) {
+    return nova::Array<nova::Record>::make_empty(rows.length());
+  }
+  auto replaced = rows.and_not(active & records->present);
+  if (not replaced.any()) {
+    return std::move(records->data);
+  }
+  return std::move(records->data).empty_where(std::move(replaced));
+}
+
+/// Assigns `value` to the path of each of `groups`, on the group's rows. The
+/// groups' paths have the same length, and their rows are disjoint and
+/// together make up `rows`. All paths share their first `depth` segments.
+///
+/// This has the effect of `assign_nested_field` for each group in turn, but
+/// writes all fields of a level at once. Otherwise, every group would rebuild
+/// the records along its path, at a cost that grows with the number of fields
+/// that the groups before it added.
+auto assign_groups(nova::Array<nova::Record> record,
+                   std::span<DynamicGroup const* const> groups,
+                   nova::storage::BitMap const& rows, size_t depth,
+                   nova::Array<nova::Data> const& value, diagnostic_handler& dh)
+  -> nova::Array<nova::Record> {
+  using MaskedArray = nova::MaskedArray<nova::Array<nova::Data>>;
+  TENZIR_ASSERT(not groups.empty());
+  auto const length = record.length();
+  auto const leaf = depth + 1 == groups.front()->path.size();
+  // The groups by the field that they write at this level, in order of
+  // appearance.
+  struct Field {
+    std::string_view name;
+    std::vector<DynamicGroup const*> groups;
+    nova::storage::BitMap rows;
+  };
+  auto fields = std::vector<Field>{};
+  auto lookup = std::unordered_map<std::string_view, size_t>{};
+  for (auto const* group : groups) {
+    TENZIR_ASSERT_EQ(group->path.size(), groups.front()->path.size());
+    auto const& name = group->path[depth].id.name;
+    auto [it, inserted] = lookup.try_emplace(name, fields.size());
+    if (inserted) {
+      fields.push_back(Field{.name = name, .groups = {}, .rows = {}});
+    }
+    fields[it->second].groups.push_back(group);
+  }
+  for (auto& field : fields) {
+    if (fields.size() == 1) {
+      field.rows = rows;
+      continue;
+    }
+    field.rows = field.groups.front()->rows;
+    for (auto const* group : field.groups | std::views::drop(1)) {
+      field.rows = std::move(field.rows) | group->rows;
+    }
+  }
+  auto updates = std::vector<std::pair<std::string_view, MaskedArray>>{};
+  updates.reserve(fields.size());
+  if (leaf) {
+    for (auto& field : fields) {
+      updates.emplace_back(field.name,
+                           MaskedArray{value, std::move(field.rows)});
+    }
+    return std::move(record).with_fields(
+      nova::Array<nova::Record>::from_fields(updates));
+  }
+  // The fields that do not exist yet share the records of their nested
+  // fields: as the rows of the groups are disjoint, each row of these records
+  // only has the nested fields of its own group.
+  auto values = std::vector<Option<nova::Array<nova::Data>>>{};
+  values.reserve(fields.size());
+  auto fresh_groups = std::vector<DynamicGroup const*>{};
+  auto fresh_rows = Option<nova::storage::BitMap>{};
+  for (auto const& field : fields) {
+    auto existing = record.field(field.name);
+    if (not existing) {
+      std::ranges::copy(field.groups, std::back_inserter(fresh_groups));
+      fresh_rows
+        = fresh_rows ? std::move(*fresh_rows) | field.rows : field.rows;
+      values.emplace_back(None{});
+      continue;
+    }
+    auto nested
+      = nested_records(*existing, field.rows, field.groups, depth + 1, dh);
+    values.emplace_back(nova::Array<nova::Data>{assign_groups(
+      std::move(nested), field.groups, field.rows, depth + 1, value, dh)});
+  }
+  auto fresh = Option<nova::Array<nova::Data>>{};
+  if (fresh_rows) {
+    fresh = nova::Array<nova::Data>{
+      assign_groups(nova::Array<nova::Record>::make_empty(length), fresh_groups,
+                    *fresh_rows, depth + 1, value, dh)};
+  }
+  for (auto [field, field_value] : std::views::zip(fields, values)) {
+    updates.emplace_back(
+      field.name, MaskedArray{field_value ? std::move(*field_value) : *fresh,
+                              std::move(field.rows)});
+  }
+  return std::move(record).with_fields(
+    nova::Array<nova::Record>::from_fields(updates));
+}
+
 /// Implements `set`/`select` for the nova columnar representation.
 class SetNova final : public Operator<nova::Events, nova::Events> {
 public:
   /// One assignment `SetNova` will apply, in order, to the original input.
   struct Field {
-    /// A metadata reference, or a field path. An empty `path()` means a bare
-    /// `this = expr` assignment.
-    ast::selector target;
+    /// A metadata reference, a field path, or a field path with computed
+    /// segments. An empty `path()` means a bare `this = expr` assignment.
+    AssignmentTarget target;
     location rhs_location;
     ast::expression rhs;
+    /// The fields that a dynamic target moves, which are only dropped for
+    /// rows with valid indexes. Owns the segment strings that `drop_tree`
+    /// aliases.
+    std::vector<ast::field_path> moved_fields;
+    nova::DropTree drop_tree;
   };
 
   explicit SetNova(std::vector<ast::assignment> assignments) {
     fields_.reserve(assignments.size());
     for (auto& assignment : assignments) {
       auto [pruned, moved] = resolve_move_keyword(std::move(assignment));
-      auto selector = ast::selector::try_from(pruned.left);
-      TENZIR_ASSERT(selector);
+      auto target = make_assignment_target(pruned.left);
+      TENZIR_ASSERT(target);
+      auto dynamic = is<DynamicPath>(*target);
       fields_.push_back(Field{
-        .target = std::move(*selector),
+        .target = std::move(*target),
         .rhs_location = pruned.right.get_location(),
         .rhs = std::move(pruned.right),
+        .moved_fields = {},
+        .drop_tree = {},
       });
+      if (dynamic) {
+        // `fields_` does not reallocate, so the strings stay in place.
+        auto& field = fields_.back();
+        field.moved_fields = std::move(moved);
+        field.drop_tree = nova::DropTree::make(field.moved_fields);
+        continue;
+      }
       std::ranges::move(moved, std::back_inserter(moved_fields_));
     }
     drop_tree_ = nova::DropTree::make(moved_fields_);
@@ -566,6 +871,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     evaluators_.reserve(fields_.size());
+    index_evaluators_.reserve(fields_.size());
     for (auto& field : fields_) {
       auto evaluator
         = co_await nova::Evaluator::make(std::move(field.rhs), ctx);
@@ -573,30 +879,74 @@ public:
         co_return;
       }
       evaluators_.push_back(std::move(*evaluator));
+      auto& indexes = index_evaluators_.emplace_back();
+      auto* path = try_as<DynamicPath>(field.target);
+      if (not path) {
+        continue;
+      }
+      for (auto const& segment : path->segments) {
+        auto const* expression = try_as<ast::expression>(segment);
+        if (not expression) {
+          continue;
+        }
+        // The target keeps its expressions for diagnostics.
+        auto index = co_await nova::Evaluator::make(*expression, ctx);
+        if (not index) {
+          co_return;
+        }
+        indexes.push_back(std::move(*index));
+      }
     }
   }
 
   auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(evaluators_.size() == fields_.size());
+    TENZIR_ASSERT(index_evaluators_.size() == fields_.size());
     // Evaluated against the original input, like `Set`: earlier assignments
-    // must not affect later right-hand sides.
+    // must not affect later right-hand sides or dynamic targets.
     auto values = std::vector<nova::MaskedArray<nova::Array<nova::Data>>>{};
     values.reserve(fields_.size());
     for (auto& evaluator : evaluators_) {
       values.push_back(nova::MaskedArray<nova::Array<nova::Data>>{
         evaluator.eval(input, nova::EvalCtx{ctx.dh()}), input.mask});
     }
+    auto dynamic_rows = std::vector<Option<DynamicRows>>{};
+    dynamic_rows.reserve(fields_.size());
+    for (auto [field, indexes] : std::views::zip(fields_, index_evaluators_)) {
+      auto* path = try_as<DynamicPath>(field.target);
+      dynamic_rows.push_back(
+        path ? Option{group_dynamic(*path, indexes, input, ctx.dh())} : None{});
+    }
     auto& data = input.data;
     if (not drop_tree_.empty()) {
       data = drop_tree_.apply(std::move(data), input.mask);
     }
-    for (auto [field, value] : std::views::zip(fields_, values)) {
-      if (auto* meta = try_as<ast::meta>(&field.target)) {
+    for (auto [field, rows] : std::views::zip(fields_, dynamic_rows)) {
+      if (rows and not field.drop_tree.empty()) {
+        data = field.drop_tree.apply(std::move(data), rows->valid);
+      }
+    }
+    for (auto [field, value, rows] :
+         std::views::zip(fields_, values, dynamic_rows)) {
+      if (rows) {
+        if (not rows->groups.empty()) {
+          auto groups = std::vector<DynamicGroup const*>{};
+          groups.reserve(rows->groups.size());
+          for (auto const& group : rows->groups) {
+            groups.push_back(&group);
+          }
+          data = assign_groups(std::move(data), groups, rows->valid, 0,
+                               value.data, ctx.dh());
+        }
+        continue;
+      }
+      auto const& selector = as<ast::selector>(field.target);
+      if (auto* meta = try_as<ast::meta>(&selector)) {
         assign_meta(input, *meta, value.data, ctx.dh());
         continue;
       }
-      auto path = as<ast::field_path>(field.target).path();
+      auto path = as<ast::field_path>(selector).path();
       if (path.empty()) {
         data = nova::records_or_empty(std::move(value), data.length(),
                                       field.rhs_location, ctx.dh());
@@ -611,6 +961,8 @@ public:
 private:
   std::vector<Field> fields_;
   std::vector<nova::Evaluator> evaluators_;
+  /// The evaluators for the computed segments of each field's target.
+  std::vector<std::vector<nova::Evaluator>> index_evaluators_;
   /// Field paths moved out of via `move` in a right-hand side; owns the
   /// segment strings that `drop_tree_` aliases as `string_view`s.
   std::vector<ast::field_path> moved_fields_;
@@ -631,21 +983,11 @@ auto validate_assignment_target(ast::expression const& expression,
   return failure::promise();
 }
 
-/// Checks that `assignment`'s left side is a target `SetNova` can handle: a
-/// field path of any depth, `this`, or metadata (`@x`). Rejects
-/// dynamic/computed paths (`$var`, `foo[expr]`), and `move this` (there is
-/// no field to drop for a `this`-level move).
+/// Checks that `assignment` is one `SetNova` can handle. Rejects `move this`,
+/// as there is no field to drop for a `this`-level move.
 auto validate_nova_target(ast::assignment const& assignment,
                           diagnostic_handler& dh) -> failure_or<void> {
-  auto const& expression = assignment.left;
-  if (not ast::selector::try_from(expression)) {
-    diagnostic::error("set operator does not yet support this assignment "
-                      "target with nova events")
-      .primary(expression, "expected a field path, `this`, or metadata, e.g. "
-                           "`x`, `x.y`, `this`, or `@name`")
-      .emit(dh);
-    return failure::promise();
-  }
+  TRY(validate_assignment_target(assignment.left, dh));
   auto [resolved, moved] = resolve_move_keyword(assignment);
   TENZIR_UNUSED(resolved);
   for (const auto& field : moved) {

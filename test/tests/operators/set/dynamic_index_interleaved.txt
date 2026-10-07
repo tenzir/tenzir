@@ -1,0 +1,125 @@
+warning: assignment index must be a string, but got `null`
+  --> tests/operators/set/dynamic_index_interleaved.tql:10:7
+   |
+10 | set x[k] = v, y[k][l] = v, z[k].w = move v
+   |       ~
+   |
+
+warning: assignment index must be a string, but got `null`
+  --> tests/operators/set/dynamic_index_interleaved.tql:10:17
+   |
+10 | set x[k] = v, y[k][l] = v, z[k].w = move v
+   |                 ~
+   |
+
+warning: assignment index must be a string, but got `null`
+  --> tests/operators/set/dynamic_index_interleaved.tql:10:30
+   |
+10 | set x[k] = v, y[k][l] = v, z[k].w = move v
+   |                              ~
+   |
+
+warning: implicit record for `c` field overwrites `int` value
+  --> tests/operators/set/dynamic_index_interleaved.tql:10:7
+   |
+10 | set x[k] = v, y[k][l] = v, z[k].w = move v
+   |       ~
+   |
+   = hint: if this is intentional, drop the parent field before
+{
+  x: {
+    a: 10,
+    b: 1,
+  },
+  k: "a",
+  l: "p",
+  y: {
+    a: {
+      p: 10,
+    },
+  },
+  z: {
+    a: {
+      w: 10,
+    },
+  },
+}
+{
+  x: {
+    a: 2,
+    b: 20,
+  },
+  k: "b",
+  l: "q",
+  y: {
+    b: {
+      q: 20,
+    },
+  },
+  z: {
+    b: {
+      w: 20,
+    },
+  },
+}
+{
+  x: {
+    a: 30,
+    b: 3,
+  },
+  k: "a",
+  l: "q",
+  y: {
+    a: {
+      q: 30,
+    },
+  },
+  z: {
+    a: {
+      w: 30,
+    },
+  },
+}
+{
+  x: {
+    c: 40,
+  },
+  k: "c",
+  l: "p",
+  y: {
+    c: {
+      p: 40,
+    },
+  },
+  z: {
+    c: {
+      w: 40,
+    },
+  },
+}
+{
+  x: {
+    a: 5,
+    b: 5,
+  },
+  k: null,
+  l: "p",
+  v: 50,
+}
+{
+  k: "b",
+  l: "p",
+  x: {
+    b: 60,
+  },
+  y: {
+    b: {
+      p: 60,
+    },
+  },
+  z: {
+    b: {
+      w: 60,
+    },
+  },
+}

@@ -1,4 +1,4 @@
-warning: assignment index must be a string, but got `int64`
+warning: assignment index must be a string, but got `int`
  --> tests/operators/set/error_dynamic_index_type.tql:2:3
   |
 2 | a[key] = move value
