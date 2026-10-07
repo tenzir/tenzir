@@ -15,6 +15,7 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -65,6 +66,17 @@ struct PartitionTransformProgress {
   Atomic<size_t> partition_files_total = 0;
 };
 
+/// Selects the rebuild path of the partition transformer: instead of running a
+/// pipeline, it concatenates the loaded slices into batches of `batch_size`
+/// rows and streams them into the output stores.
+struct RebuildTag {
+  size_t batch_size = 0;
+};
+
+/// What a partition transformer applies to its input: either a `table_slice ->
+/// table_slice` pipeline or the pipeline-free rebuild.
+using PartitionTransform = variant<ast::pipeline, RebuildTag>;
+
 /// Similar to the active partition, but all contents come in a single
 /// stream, a transform is applied and no queries need to be answered
 /// while the partition is constructed.
@@ -109,8 +121,8 @@ struct partition_transformer_state {
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
-  /// The TQL2 AST of the transform to apply to the data.
-  ast::pipeline transform = {};
+  /// The transform to apply to the data.
+  PartitionTransform transform = {};
 
   /// Cached stream error, if the stream terminated abnormally.
   caf::error stream_error = {};
@@ -166,7 +178,6 @@ struct partition_transformer_state {
   double minimum_reduction_ratio = 0;
   std::vector<uuid> required_input_partitions = {};
   uint64_t input_byte_budget = 0;
-  size_t rebuild_batch_size = 0;
   bool input_constraints_satisfied = true;
 
   /// Progress observed by the index while this transform is active.
@@ -217,19 +228,20 @@ auto store_error_partition(const caf::error& err) -> Option<uuid>;
 
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.
 ///
-/// The actor loads the selected partitions, applies the given `table_slice ->
-/// table_slice` AST pipeline via the new coroutine executor, and writes the
-/// resulting slices into one or more new partitions.
+/// The actor loads the selected partitions, applies the given transform, and
+/// writes the resulting slices into one or more new partitions. A pipeline runs
+/// via the new coroutine executor; a `RebuildTag` rebatches the slices without
+/// running a pipeline.
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, filesystem_actor fs,
-  std::vector<partition_info> input_partitions, ast::pipeline transform,
+  std::vector<partition_info> input_partitions, PartitionTransform transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
   std::string origin, size_t minimum_partition_reduction,
   double minimum_reduction_ratio, std::vector<uuid> required_input_partitions,
-  uint64_t input_byte_budget, size_t rebuild_batch_size,
+  uint64_t input_byte_budget,
   std::shared_ptr<PartitionTransformProgress> progress)
   -> partition_transformer_actor::behavior_type;
 

@@ -21,8 +21,12 @@
 #include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/flatbuffer.hpp"
+#include "tenzir/import_conversion.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/nova/arrow_export.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova_flag.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
@@ -470,11 +474,26 @@ public:
     state_->selected_partitions = partitions_;
   }
 
-  auto feed(Push<OperatorMsg<table_slice>>& push_input) const -> Task<void> {
-    co_await consume([&push_input](table_slice slice) -> Task<void> {
-      co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
+  /// Pushes the stored slices into a transform pipeline that consumes `T`,
+  /// converting them to `nova::Events` if necessary.
+  template <class T>
+  auto feed(Push<OperatorMsg<T>>& push_input, diagnostic_handler& dh) const
+    -> Task<void> {
+    co_await consume([&](table_slice slice) -> Task<void> {
+      if constexpr (std::same_as<T, nova::Events>) {
+        auto imported = import_table_slice(slice);
+        if (not imported) {
+          diagnostic::error("{}", std::move(imported).unwrap_err())
+            .note("failed to convert stored events")
+            .emit(dh);
+          co_return;
+        }
+        co_await push_input(OperatorMsg<T>{std::move(imported).unwrap()});
+      } else {
+        co_await push_input(OperatorMsg<T>{std::move(slice)});
+      }
     });
-    co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+    co_await push_input(OperatorMsg<T>{Signal{EndOfData{}}});
   }
 
   template <class Consumer>
@@ -657,24 +676,26 @@ private:
   std::shared_ptr<PartitionTransformProgress> progress_;
 };
 
-/// Compile an AST `table_slice -> table_slice` pipeline to an executable plan.
-/// Emits diagnostics via `dh` for any failure.
-auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
+/// Compile an AST events-to-events pipeline to an executable plan. The plan
+/// consumes and produces the event type of the current execution mode. Emits
+/// diagnostics via `dh` for any failure.
+auto compile_transform(ast::pipeline ast, diagnostic_handler& dh)
   -> failure_or<ir::Plan> {
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   auto root = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(root));
-  TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
-  if (not output.is<table_slice>()) {
+  auto input = events_element_type();
+  TRY(auto output, ir.infer_type(input, dh));
+  if (output != input) {
     diagnostic::error("partition transform: pipeline must produce events, "
                       "got {}",
                       output)
       .emit(dh);
     return failure::promise();
   }
-  auto plan = ir::make_plan(std::move(ir), tag_v<table_slice>, b_ctx);
+  auto plan = ir::make_plan(std::move(ir), input, b_ctx);
   if (ctx.has_failure()) {
     return failure::promise();
   }
@@ -896,12 +917,12 @@ auto partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, filesystem_actor fs,
-  std::vector<partition_info> input_partitions, ast::pipeline transform,
+  std::vector<partition_info> input_partitions, PartitionTransform transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
   std::string origin, size_t minimum_partition_reduction,
   double minimum_reduction_ratio, std::vector<uuid> required_input_partitions,
-  uint64_t input_byte_budget, size_t rebuild_batch_size,
+  uint64_t input_byte_budget,
   std::shared_ptr<PartitionTransformProgress> progress)
   -> partition_transformer_actor::behavior_type {
   TENZIR_ASSERT(progress);
@@ -926,7 +947,6 @@ auto partition_transformer(
   self->state().required_input_partitions
     = std::move(required_input_partitions);
   self->state().input_byte_budget = input_byte_budget;
-  self->state().rebuild_batch_size = rebuild_batch_size;
   self->state().progress = std::move(progress);
   self->mail(atom::done_v).send(static_cast<partition_transformer_actor>(self));
   return {
@@ -1047,14 +1067,16 @@ auto partition_transformer(
         self->mail(atom::internal_v, atom::resume_v, atom::done_v)
           .send(static_cast<partition_transformer_actor>(self));
       };
-      // Move input metadata and AST out so the actor's state is empty when the
-      // run begins; they live inside the coroutine until it finishes.
+      // Move input metadata and transform out so the actor's state is empty
+      // when the run begins; they live inside the coroutine until it finishes.
+      // The moved-from transform keeps its alternative, which the resume
+      // handler inspects.
       auto input_partitions = std::exchange(self->state().input_partitions, {});
       auto input_partition_path_template
         = std::move(self->state().input_partition_path_template);
       auto archive_dir = std::move(self->state().archive_dir);
       auto fs = self->state().fs;
-      auto ast = std::move(self->state().transform);
+      auto transform = std::move(self->state().transform);
       auto budget = [&]() -> Option<memory_budget> {
         if (self->state().input_byte_budget == 0) {
           return make_memory_budget(
@@ -1079,10 +1101,9 @@ auto partition_transformer(
       auto& sys = self->system();
       auto source_state = std::make_shared<partition_source_state>();
       auto progress = self->state().progress;
-      const auto rebuild_batch_size = self->state().rebuild_batch_size;
       folly::coro::co_withExecutor(
         folly::getGlobalCPUExecutor(),
-        folly::coro::co_invoke([ast = std::move(ast),
+        folly::coro::co_invoke([transform = std::move(transform),
                                 input_partitions = std::move(input_partitions),
                                 input_partition_path_template
                                 = std::move(input_partition_path_template),
@@ -1090,7 +1111,7 @@ auto partition_transformer(
                                 fs = std::move(fs), &sys, weak, self,
                                 process_slice, process_rebuild_slice,
                                 budget = std::move(budget), source_state,
-                                progress, rebuild_batch_size]() mutable
+                                progress]() mutable
                                  -> folly::coro::Task<failure_or<void>> {
           // Compaction and rebuild have no user-facing diagnostic sink, so
           // we log to the server log. The handler is owned by this
@@ -1106,7 +1127,8 @@ auto partition_transformer(
             source_state,
             progress,
           };
-          if (rebuild_batch_size > 0) {
+          if (auto* rebuild = try_as<RebuildTag>(transform)) {
+            const auto batch_size = rebuild->batch_size;
             auto write_slice
               = [self, weak, process_rebuild_slice,
                  source_state](table_slice slice) mutable -> Task<void> {
@@ -1162,37 +1184,37 @@ auto partition_transformer(
             auto pending = std::vector<table_slice>{};
             auto pending_rows = uint64_t{0};
             auto pending_schema = Option<type>{};
-            co_await loader.consume([&](
-                                      table_slice slice) mutable -> Task<void> {
-              slice = filter_rebuild_slice(std::move(slice));
-              if (slice.rows() == 0) {
-                co_return;
-              }
-              if (pending_schema and *pending_schema != slice.schema()) {
-                co_await write_slice(concatenate(std::move(pending)));
-                if (source_state->error.valid()) {
+            co_await loader.consume(
+              [&](table_slice slice) mutable -> Task<void> {
+                slice = filter_rebuild_slice(std::move(slice));
+                if (slice.rows() == 0) {
                   co_return;
                 }
-                pending = {};
-                pending_rows = 0;
-              }
-              pending_schema = slice.schema();
-              pending_rows += slice.rows();
-              pending.push_back(std::move(slice));
-              while (pending_rows >= rebuild_batch_size) {
-                auto [lhs, rhs] = split(std::move(pending), rebuild_batch_size);
-                auto batch = concatenate(std::move(lhs));
-                pending_rows -= batch.rows();
-                co_await write_slice(std::move(batch));
-                if (source_state->error.valid()) {
-                  co_return;
+                if (pending_schema and *pending_schema != slice.schema()) {
+                  co_await write_slice(concatenate(std::move(pending)));
+                  if (source_state->error.valid()) {
+                    co_return;
+                  }
+                  pending = {};
+                  pending_rows = 0;
                 }
-                pending = std::move(rhs);
-              }
-              if (pending.empty()) {
-                pending_schema = None{};
-              }
-            });
+                pending_schema = slice.schema();
+                pending_rows += slice.rows();
+                pending.push_back(std::move(slice));
+                while (pending_rows >= batch_size) {
+                  auto [lhs, rhs] = split(std::move(pending), batch_size);
+                  auto batch = concatenate(std::move(lhs));
+                  pending_rows -= batch.rows();
+                  co_await write_slice(std::move(batch));
+                  if (source_state->error.valid()) {
+                    co_return;
+                  }
+                  pending = std::move(rhs);
+                }
+                if (pending.empty()) {
+                  pending_schema = None{};
+                }
+              });
             if (not source_state->error.valid() and not pending.empty()) {
               co_await write_slice(concatenate(std::move(pending)));
             }
@@ -1202,61 +1224,79 @@ auto partition_transformer(
             co_return {};
           }
           auto dh = TransformerDiagHandler{};
-          CO_TRY(auto plan, compile_table_slice_transform(std::move(ast), dh));
-          auto feed_input
-            = [loader = std::move(loader),
-               progress](Push<OperatorMsg<table_slice>>& push_input) mutable
-            -> Task<void> {
-            co_await loader.feed(push_input);
-            progress->set_phase(PartitionTransformPhase::finishing_pipeline);
-          };
-          auto drain_output
-            = [self, weak, process_slice, source_state](
-                Pull<OperatorMsg<table_slice>>& pull_output) mutable
-            -> Task<void> {
-            while (auto msg = co_await pull_output()) {
-              co_await co_match(
-                std::move(*msg),
-                [&](table_slice slice) -> Task<void> {
-                  if (slice.rows() == 0) {
-                    co_return;
-                  }
-                  auto [promise, future]
-                    = folly::makePromiseContract<folly::Unit>();
-                  auto promise_ptr
-                    = std::make_shared<folly::Promise<folly::Unit>>(
-                      std::move(promise));
-                  auto strong = weak.lock();
-                  if (not strong) {
-                    promise_ptr->setValue(folly::unit);
-                  } else {
-                    auto fallback_import_time
-                      = source_state->min_loaded_import_time();
-                    self->schedule_fn(
-                      [process_slice, slice = std::move(slice),
-                       fallback_import_time,
-                       promise = std::move(promise_ptr)]() mutable {
-                        process_slice(std::move(slice), fallback_import_time);
-                        promise->setValue(folly::unit);
-                      });
-                  }
-                  co_await to_task_interrupt_on_cancel(std::move(future));
-                },
-                [&](Signal signal) -> Task<void> {
-                  co_await co_match(
-                    signal,
-                    [&](EndOfData) -> Task<void> {
-                      co_return;
-                    },
-                    [&](Checkpoint) -> Task<void> {
-                      co_return;
+          CO_TRY(auto plan, compile_transform(
+                              as<ast::pipeline>(std::move(transform)), dh));
+          // The store holds table slices, but the transform pipeline runs on
+          // the event type of the current execution mode, so we convert at
+          // the boundary.
+          auto run_transform = [&]<class T>(tag<T>) -> Task<failure_or<void>> {
+            auto feed_input
+              = [&loader, &dh,
+                 progress](Push<OperatorMsg<T>>& push_input) -> Task<void> {
+              co_await loader.feed(push_input, dh);
+              progress->set_phase(PartitionTransformPhase::finishing_pipeline);
+            };
+            auto drain_output
+              = [self, weak, process_slice, source_state](
+                  Pull<OperatorMsg<T>>& pull_output) mutable -> Task<void> {
+              auto forward_slice = [&](table_slice slice) -> Task<void> {
+                if (slice.rows() == 0) {
+                  co_return;
+                }
+                auto [promise, future]
+                  = folly::makePromiseContract<folly::Unit>();
+                auto promise_ptr
+                  = std::make_shared<folly::Promise<folly::Unit>>(
+                    std::move(promise));
+                auto strong = weak.lock();
+                if (not strong) {
+                  promise_ptr->setValue(folly::unit);
+                } else {
+                  auto fallback_import_time
+                    = source_state->min_loaded_import_time();
+                  self->schedule_fn(
+                    [process_slice, slice = std::move(slice),
+                     fallback_import_time,
+                     promise = std::move(promise_ptr)]() mutable {
+                      process_slice(std::move(slice), fallback_import_time);
+                      promise->setValue(folly::unit);
                     });
-                });
-            }
+                }
+                co_await to_task_interrupt_on_cancel(std::move(future));
+              };
+              while (auto msg = co_await pull_output()) {
+                co_await co_match(
+                  std::move(*msg),
+                  [&](T batch) -> Task<void> {
+                    if constexpr (std::same_as<T, nova::Events>) {
+                      for (auto& slice : nova::to_table_slices(batch)) {
+                        co_await forward_slice(std::move(slice));
+                      }
+                    } else {
+                      co_await forward_slice(std::move(batch));
+                    }
+                  },
+                  [&](Signal signal) -> Task<void> {
+                    co_await co_match(
+                      signal,
+                      [&](EndOfData) -> Task<void> {
+                        co_return;
+                      },
+                      [&](Checkpoint) -> Task<void> {
+                        co_return;
+                      });
+                  });
+              }
+            };
+            co_return co_await run_plan_with_io<T>(
+              std::move(plan), sys, dh, NoProfiler{}, /*is_hidden=*/true,
+              std::move(feed_input), std::move(drain_output));
           };
-          CO_TRY(co_await run_plan_with_io(
-            std::move(plan), sys, dh, NoProfiler{}, /*is_hidden=*/true,
-            std::move(feed_input), std::move(drain_output)));
+          if (nova_enabled()) {
+            CO_TRY(co_await run_transform(tag_v<nova::Events>));
+          } else {
+            CO_TRY(co_await run_transform(tag_v<table_slice>));
+          }
           co_return {};
         }))
         .start([self, weak = std::move(weak), source_state,
@@ -1347,7 +1387,7 @@ auto partition_transformer(
         self->state().data.size(), std::memory_order_relaxed);
       for (auto& [_, data] : self->state().data) {
         auto& mutable_synopsis = data.synopsis.unshared();
-        if (self->state().rebuild_batch_size == 0) {
+        if (not is<RebuildTag>(self->state().transform)) {
           // Push the slices to the store.
           auto& buildup = self->state().partition_buildup.at(data.id);
           auto offset = id{0};

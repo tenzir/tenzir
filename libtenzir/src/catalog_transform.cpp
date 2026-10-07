@@ -205,7 +205,7 @@ auto catalog_state::apply(ast::pipeline pipe,
 }
 
 void catalog_state::transform(
-  ast::pipeline pipe, std::vector<partition_info> selected,
+  PartitionTransform pipe, std::vector<partition_info> selected,
   keep_original_partition keep, std::string origin, std::string policy_token,
   std::function<void(partition_apply_result&)> success,
   std::function<void(caf::error&)> failure, TransformOptions options) {
@@ -224,8 +224,8 @@ void catalog_state::transform(
         and it->second->find(entry.uuid) != it->second->end()) {
       return false;
     }
-    TENZIR_WARN("{} skips unknown partition {} for pipeline {:?}", *self,
-                entry.uuid, pipe);
+    TENZIR_WARN("{} skips unknown partition {} for {} transformation", *self,
+                entry.uuid, origin);
     return true;
   });
   auto corrected_partitions = catalog_lookup_result{};
@@ -239,9 +239,9 @@ void catalog_state::transform(
       // Getting overlapping partitions triggers a warning, and we silently
       // ignore the partition at the cost of the transformation being less
       // efficient.
-      TENZIR_WARN("{} refuses to apply transformation '{:?}' to partition {} "
+      TENZIR_WARN("{} refuses to apply {} transformation to partition {} "
                   "because it is currently being transformed",
-                  *self, pipe, partition.uuid);
+                  *self, origin, partition.uuid);
     }
   }
   if (corrected_partitions.empty()) {
@@ -264,13 +264,12 @@ void catalog_state::transform(
   arm_maintenance_wakeup(time::clock::now());
   auto transformer = self->spawn(
     partition_transformer, std::string{store_actor_plugin->name()},
-    synopsis_opts, index_opts, filesystem, std::move(input_partitions), pipe,
-    paths.partition_template(), paths.archive_dir,
+    synopsis_opts, index_opts, filesystem, std::move(input_partitions),
+    std::move(pipe), paths.partition_template(), paths.archive_dir,
     paths.transformer_partition_template(),
     paths.transformer_synopsis_template(), std::move(origin),
     options.minimum_partition_reduction, options.minimum_reduction_ratio,
-    std::move(options.required_inputs), options.input_byte_budget,
-    options.rebuild_batch_size, progress);
+    std::move(options.required_inputs), options.input_byte_budget, progress);
   /// Monitor the actor to remove it from the collection of active
   /// transformers.
   auto transformer_addr = transformer->address();

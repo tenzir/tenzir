@@ -639,9 +639,10 @@ public:
     outputs_events.reserve(args_.arms.size());
     auto types_known = true;
     for (const auto& arm : args_.arms) {
-      auto ty = arm.pipeline.infer_type(tag_v<table_slice>, null_dh);
+      auto ty = arm.pipeline.infer_type(events_element_type(), null_dh);
       types_known = types_known and static_cast<bool>(ty);
-      outputs_events.push_back(ty and ty->is<table_slice>());
+      outputs_events.push_back(
+        ty and (ty->is<table_slice>() or ty->is<nova::Events>()));
     }
     // Pushing into the arms is only complete if we know every arm's output
     // type. Otherwise the filter stays behind `match`.

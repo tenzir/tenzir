@@ -242,8 +242,8 @@ public:
     auto null_dh = null_diagnostic_handler{};
     auto optimize_branch
       = [&](ir::pipeline& branch, const ir::OptimizeFilter& f) -> EventOrder {
-      auto ty = branch.infer_type(tag_v<table_slice>, null_dh);
-      auto events = ty and ty->is<table_slice>();
+      auto ty = branch.infer_type(events_element_type(), null_dh);
+      auto events = ty and (ty->is<table_slice>() or ty->is<nova::Events>());
       auto opt = std::move(branch).optimize(
         ir::OptimizeRequest{
           .filter = events ? f : ir::OptimizeFilter{},

@@ -23,8 +23,6 @@
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/storage_policy.hpp"
-#include "tenzir/session.hpp"
-#include "tenzir/tql2/parser.hpp"
 #include "tenzir/version.hpp"
 
 #include <caf/actor_registry.hpp>
@@ -55,23 +53,6 @@ auto rebuild_byte_budget(Option<uint64_t> configured, size_t parallelism)
     });
   const auto divisor = std::max<uint64_t>(parallelism, 1);
   return available.bytes / 4 / divisor;
-}
-
-/// The rebatching pipeline for a schema. Suricata partitions additionally drop
-/// events without a timestamp, which is how they became rebuild candidates in
-/// the first place.
-auto rebuild_pipeline(const type& schema, size_t desired_batch_size)
-  -> ast::pipeline {
-  auto source
-    = schema.name().starts_with("suricata")
-        ? fmt::format("where timestamp? != null | batch {}", desired_batch_size)
-        : fmt::format("batch {}", desired_batch_size);
-  auto dh = null_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
-  auto result = parse_pipeline_with_location_override(source, location::unknown,
-                                                      provider.as_session());
-  TENZIR_ASSERT(result);
-  return std::move(*result);
 }
 
 /// The time zone for rebuild windows when the configuration names none: the
@@ -767,7 +748,6 @@ void catalog_state::schedule_rebuild(time now) {
     rebuild->selected += size;
     ++rebuild->running;
     rebuild->running_partitions += size;
-    auto pipeline = rebuild_pipeline(batch.front().schema, desired_batch_size);
     auto options = TransformOptions{
       .minimum_partition_reduction = 1,
       .minimum_reduction_ratio = rebuild_day(batch.front().max_import_time)
@@ -775,7 +755,6 @@ void catalog_state::schedule_rebuild(time now) {
                                    ? maintenance.rebuild_merge_margin
                                    : 0.0,
       .input_byte_budget = rebuild->batch_byte_budget,
-      .rebuild_batch_size = desired_batch_size,
     };
     for (auto const& partition : batch) {
       if (is_worth_rebuilding_alone(*rebuild, partition)) {
@@ -784,8 +763,8 @@ void catalog_state::schedule_rebuild(time now) {
     }
     // Claim and dispatch in the same actor turn as selection.
     transform(
-      std::move(pipeline), std::move(batch), keep_original_partition::no,
-      std::string{"rebuild"}, std::string{},
+      RebuildTag{.batch_size = desired_batch_size}, std::move(batch),
+      keep_original_partition::no, std::string{"rebuild"}, std::string{},
       [this, size, batch_ids,
        generation = rebuild->generation](partition_apply_result& result) {
         if (not rebuild or rebuild->generation != generation) {

@@ -8,7 +8,20 @@
 
 #include "tenzir/element_type.hpp"
 
+#include "tenzir/nova_flag.hpp"
+
 #include <fmt/format.h>
+
+namespace tenzir {
+
+auto events_element_type() -> element_type_tag {
+  if (nova_enabled()) {
+    return tag_v<nova::Events>;
+  }
+  return tag_v<table_slice>;
+}
+
+} // namespace tenzir
 
 namespace fmt {
 

@@ -1,0 +1,8 @@
+// Operator plugins inside the arms do not prevent pushing the downstream filter
+// into the arms that return events.
+from {x: 2, y: 1, z: 3}
+match y {
+  1 => { drop z }
+  _ => { drop z }
+}
+where x == 1

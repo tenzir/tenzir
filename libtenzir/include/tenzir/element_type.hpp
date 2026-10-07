@@ -26,6 +26,10 @@ struct element_type_tag_pair {
   element_type_tag output;
 };
 
+/// The element type that carries events in the current execution mode:
+/// `nova::Events` under `--nova`, and `table_slice` otherwise.
+auto events_element_type() -> element_type_tag;
+
 /// The list of all valid element types.
 using element_types = element_type_tag::types;
 

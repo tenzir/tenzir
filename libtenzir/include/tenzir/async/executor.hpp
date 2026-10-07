@@ -234,20 +234,22 @@ auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
   -> Task<void>;
 
 /// Feeds input into a bounded pipeline.
-using PipelineFeeder
-  = std::function<Task<void>(Push<OperatorMsg<table_slice>>&)>;
+template <class T>
+using PipelineFeeder = std::function<Task<void>(Push<OperatorMsg<T>>&)>;
 
 /// Drains output from a bounded pipeline.
-using PipelineDrainer
-  = std::function<Task<void>(Pull<OperatorMsg<table_slice>>&)>;
+template <class T>
+using PipelineDrainer = std::function<Task<void>(Pull<OperatorMsg<T>>&)>;
 
-/// Runs a pipeline plan that pull `table_slice` and push `table_slice`.
+/// Runs a pipeline plan that pulls `T` and pushes `T`, where `T` is either
+/// `table_slice` or `nova::Events`.
 ///
 /// Creates the input/output channels and the control operators, then drives
 /// the plan, handling graceful stop and control messages.
+template <class T>
 auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
                           caf::actor_system& sys, DiagHandler& dh,
-                          PipelineFeeder feed_input,
-                          PipelineDrainer drain_output) -> Task<void>;
+                          PipelineFeeder<T> feed_input,
+                          PipelineDrainer<T> drain_output) -> Task<void>;
 
 } // namespace tenzir

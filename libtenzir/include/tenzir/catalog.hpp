@@ -419,7 +419,6 @@ struct TransformOptions {
   double minimum_reduction_ratio = 0;
   std::vector<uuid> required_inputs = {};
   uint64_t input_byte_budget = 0;
-  size_t rebuild_batch_size = 0;
 };
 
 struct ActivePartitionTransform {
@@ -770,7 +769,7 @@ public:
              std::string policy_token) -> caf::result<partition_apply_result>;
 
   /// Selectors call this directly: inputs are claimed before it returns.
-  void transform(ast::pipeline pipe, std::vector<partition_info> selected,
+  void transform(PartitionTransform pipe, std::vector<partition_info> selected,
                  keep_original_partition keep, std::string origin,
                  std::string policy_token,
                  std::function<void(partition_apply_result&)> success,

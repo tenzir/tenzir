@@ -1,0 +1,9 @@
+// Operator plugins inside the branches do not prevent pushing the downstream
+// filter into the branches that return events.
+from {x: 2, y: 1, z: 3}
+if y == 1 {
+  drop z
+} else {
+  drop z
+}
+where x == 1

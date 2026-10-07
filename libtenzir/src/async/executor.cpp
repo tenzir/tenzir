@@ -2463,16 +2463,17 @@ auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
     .emit(dh);
 }
 
+template <class T>
 auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
                           caf::actor_system& sys, DiagHandler& dh,
-                          PipelineFeeder feed_input,
-                          PipelineDrainer drain_output) -> Task<void> {
+                          PipelineFeeder<T> feed_input,
+                          PipelineDrainer<T> drain_output) -> Task<void> {
   auto num_ops = std::max(plan.size(), size_t{1});
   auto id = new_pipe_id();
   auto [push_input, pull_input]
-    = exec_ctx.make_channel<table_slice>(ChannelId::first(id.op(0)));
+    = exec_ctx.make_channel<T>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
-    = exec_ctx.make_channel<table_slice>(ChannelId::last(id.op(num_ops - 1)));
+    = exec_ctx.make_channel<T>(ChannelId::last(id.op(num_ops - 1)));
   // A bounded transform has no outside controller, so we keep only the
   // receiver. The matching sender dies with the temporary tuple at the end of
   // this statement, which closes the channel; the chain's
@@ -2524,5 +2525,15 @@ auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
     scope.cancel();
   });
 }
+
+template auto
+execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
+                     DiagHandler& dh, PipelineFeeder<table_slice> feed_input,
+                     PipelineDrainer<table_slice> drain_output) -> Task<void>;
+
+template auto
+execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
+                     DiagHandler& dh, PipelineFeeder<nova::Events> feed_input,
+                     PipelineDrainer<nova::Events> drain_output) -> Task<void>;
 
 } // namespace tenzir

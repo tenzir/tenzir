@@ -76,15 +76,18 @@ auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
               Profiler profiler, bool is_hidden,
               Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
 
-/// Run a `table_slice -> table_slice` chain with caller-provided IO.
+/// Run a `T -> T` chain with caller-provided IO, where `T` is either
+/// `table_slice` or `nova::Events`.
 ///
 /// Wraps `execute_plan_with_io` with a profiler and `failure_or` result. The
 /// feeder receives the pipeline input push endpoint. It should push all input
-/// slices and then an `EndOfData` signal. The drainer receives the output pull
-/// endpoint and can process transformed slices incrementally.
+/// batches and then an `EndOfData` signal. The drainer receives the output
+/// pull endpoint and can process transformed batches incrementally.
+template <class T>
 auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
                       Profiler profiler, bool is_hidden,
-                      PipelineFeeder feed_input, PipelineDrainer drain_output)
+                      PipelineFeeder<T> feed_input,
+                      PipelineDrainer<T> drain_output)
   -> Task<failure_or<void>>;
 
 } // namespace tenzir

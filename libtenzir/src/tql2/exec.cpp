@@ -1129,7 +1129,7 @@ void write_profile(
       } else {
         receiver_target = receiver;
       }
-      auto is_events = ch.type.is<table_slice>();
+      auto is_events = ch.type.is<table_slice>() or ch.type.is<nova::Events>();
       auto is_bytes = ch.type.is<chunk_ptr>();
       if (auto si = op_index.find(sender_target); si != op_index.end()) {
         auto& agg = aggs[si->second];
@@ -1641,22 +1641,38 @@ auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
                               false, is_hidden, graceful_stop);
 }
 
+template <class T>
 auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
                       Profiler profiler, bool is_hidden,
-                      PipelineFeeder feed_input, PipelineDrainer drain_output)
+                      PipelineFeeder<T> feed_input,
+                      PipelineDrainer<T> drain_output)
   -> Task<failure_or<void>> {
   auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
   auto num_ops = plan.size();
   auto start = std::chrono::steady_clock::now();
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops, start));
-    co_await execute_plan_with_io(std::move(plan), exec_ctx, sys, dh,
-                                  std::move(feed_input),
-                                  std::move(drain_output));
+    co_await execute_plan_with_io<T>(std::move(plan), exec_ctx, sys, dh,
+                                     std::move(feed_input),
+                                     std::move(drain_output));
     scope.cancel();
   });
   co_return dh.failure();
 }
+
+template auto
+run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+                 Profiler profiler, bool is_hidden,
+                 PipelineFeeder<table_slice> feed_input,
+                 PipelineDrainer<table_slice> drain_output)
+  -> Task<failure_or<void>>;
+
+template auto
+run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+                 Profiler profiler, bool is_hidden,
+                 PipelineFeeder<nova::Events> feed_input,
+                 PipelineDrainer<nova::Events> drain_output)
+  -> Task<failure_or<void>>;
 
 namespace {
 
@@ -1866,7 +1882,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   } else if (auto inferred = ir.infer_type(tag_v<chunk_ptr>, null_dh);
              inferred and not cfg.implicit_bytes_source.empty()) {
     implicit_source = cfg.implicit_bytes_source;
-  } else if (auto inferred = ir.infer_type(tag_v<table_slice>, null_dh);
+  } else if (auto inferred = ir.infer_type(events_element_type(), null_dh);
              inferred and not cfg.implicit_events_source.empty()) {
     implicit_source = cfg.implicit_events_source;
   } else {
