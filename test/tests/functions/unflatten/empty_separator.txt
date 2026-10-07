@@ -1,0 +1,8 @@
+error: `separator` must not be empty
+ --> tests/functions/unflatten/empty_separator.tql:6:24
+  |
+6 | this = unflatten(this, "")
+  |                        ^^
+  |
+  = usage: unflatten(x:any, [separator:string])
+  = docs: https://tenzir.com/docs/reference/functions/unflatten

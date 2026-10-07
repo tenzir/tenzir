@@ -12,6 +12,9 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/flatten.hpp>
+#include <tenzir/nova/function_plugin.hpp>
+#include <tenzir/nova/record_util.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -23,7 +26,34 @@ namespace {
 
 constexpr auto default_flatten_separator = ".";
 
-class plugin final : public virtual function_plugin {
+struct FlattenArgs {
+  nova::ValueArgument x;
+  std::string separator = default_flatten_separator;
+};
+
+class FlattenFunction {
+public:
+  static auto eval(FlattenArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto records = nova::resolve_record(args.x, frame);
+    if (not records) {
+      return frame.null();
+    }
+    auto flattened = nova::flatten(std::move(records->data), records->present,
+                                   args.separator);
+    if (not flattened.renamed_fields.empty()) {
+      diagnostic::warning("renamed fields with conflicting names after "
+                          "flattening: {}",
+                          fmt::join(flattened.renamed_fields, ", "))
+        .primary(args.x.source)
+        .emit(frame);
+    }
+    return nova::Array<nova::Data>{std::move(flattened.data)}.null_where(
+      frame.mask().and_not(records->present));
+  }
+};
+
+class plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "flatten";
@@ -31,6 +61,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<FlattenArgs, FlattenFunction>{};
+    d.positional("x", &FlattenArgs::x, "record");
+    d.optional_positional("separator", &FlattenArgs::separator);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

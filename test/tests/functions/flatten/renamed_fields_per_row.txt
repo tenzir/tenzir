@@ -1,0 +1,16 @@
+warning: renamed fields with conflicting names after flattening: a.b -> a.b_1
+ --> tests/functions/flatten/renamed_fields_per_row.tql:4:16
+  |
+4 | this = flatten(this)
+  |                ~~~~
+  |
+{
+  "a.b": 1,
+  "a.b_1": 2,
+}
+{
+  "a.b": 3,
+}
+{
+  "a.b": 4,
+}

@@ -10,6 +10,8 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/flatten.hpp>
+#include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -19,7 +21,23 @@ namespace tenzir::plugins::unflatten {
 
 namespace {
 
-class plugin final : public virtual function_plugin {
+struct UnflattenArgs {
+  nova::ValueArgument x;
+  Option<located<std::string>> separator;
+};
+
+class UnflattenFunction {
+public:
+  static auto eval(UnflattenArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto const separator = args.separator
+                             ? std::string_view{args.separator->inner}
+                             : std::string_view{"."};
+    return nova::unflatten(args.x.data, frame.mask(), separator);
+  }
+};
+
+class plugin final : public virtual nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "unflatten";
@@ -27,6 +45,23 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<UnflattenArgs, UnflattenFunction>{};
+    d.positional("x", &UnflattenArgs::x, "any");
+    d.positional("separator", &UnflattenArgs::separator);
+    d.validate(
+      [](UnflattenArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        if (args.separator and args.separator->inner.empty()) {
+          diagnostic::error("`separator` must not be empty")
+            .primary(*args.separator)
+            .emit(dh);
+          return failure::promise();
+        }
+        return {};
+      });
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const

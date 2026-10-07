@@ -1,0 +1,6 @@
+from {a: {b: 1}, "a.c": 2},
+     {"a.c": 3, a: {b: 4}},
+     {a: 5, "a.b": 6},
+     {"x.y": {"z.w": 7}, "x.y.v": 8},
+     {"a.b": null, "a.c": {}}
+this = unflatten(this)

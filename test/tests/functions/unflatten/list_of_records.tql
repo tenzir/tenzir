@@ -1,0 +1,2 @@
+from {xs: [{"a.b": 1, "a.c": 2}, {"a.b": 3}, 4, [{"d.e": 5}]]}
+this = unflatten(this)

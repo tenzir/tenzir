@@ -27,7 +27,44 @@ namespace tenzir::plugins::duration {
 
 namespace {
 
-class duration_plugin final : public function_plugin {
+struct DurationArgs {
+  nova::ValueArgument x;
+  location call;
+};
+
+class DurationFunction final {
+public:
+  static auto eval(DurationArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    auto warn_parse = nova::WarnOnce{};
+    return nova::apply_kernel<1>(
+      frame, "duration", {args.x}, args.call,
+      detail::overload{
+        [](diagnostic_handler&, nova::Null) -> Option<nova::Duration> {
+          return None{};
+        },
+        [](diagnostic_handler&,
+           nova::Duration value) -> Option<nova::Duration> {
+          return value;
+        },
+        [&](diagnostic_handler& dh,
+            std::string_view input) -> Option<nova::Duration> {
+          auto result = tenzir::duration{};
+          constexpr auto p = ignore(*parsers::space) >> parsers::duration
+                             >> ignore(*parsers::space);
+          if (p(input, result)) {
+            return result;
+          }
+          warn_parse(dh, diagnostic::warning("failed to parse string")
+                           .primary(args.x.source)
+                           .note("tried to convert: {}", input));
+          return None{};
+        },
+      });
+  }
+};
+
+class duration_plugin final : public nova::FunctionPlugin {
 public:
   auto name() const -> std::string override {
     return "duration";
@@ -35,6 +72,13 @@ public:
 
   auto is_deterministic() const -> bool override {
     return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<DurationArgs, DurationFunction>{};
+    d.positional("x", &DurationArgs::x, "string");
+    d.call_location(&DurationArgs::call);
+    return std::move(d).finish();
   }
 
   auto make_function(function_invocation inv, session ctx) const
