@@ -71,8 +71,6 @@
     },
     {
       class: "static",
-      type: null,
-      rdata: null,
     },
   ],
 }
