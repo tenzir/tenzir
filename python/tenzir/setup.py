@@ -210,7 +210,7 @@ class BdistWheel(_bdist_wheel):
             elif system == "linux" and machine in {"aarch64", "arm64"}:
                 self.plat_name = "manylinux_2_17_aarch64"
             elif system == "darwin" and machine in {"arm64", "aarch64"}:
-                self.plat_name = "macosx_11_0_arm64"
+                self.plat_name = "macosx_26_0_arm64"
             elif system == "darwin" and machine in {"x86_64", "amd64"}:
                 self.plat_name = "macosx_10_9_x86_64"
             if getattr(self, "plat_name", None):
