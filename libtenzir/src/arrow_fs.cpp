@@ -1034,7 +1034,7 @@ auto ToArrowFsOperator<Input>::process(Input input, OpCtx& ctx) -> Task<void> {
       result.data = partition_drop_->apply(std::move(result.data), result.mask);
       return result;
     } else {
-      return drop(input, fields, ctx, false);
+      return drop(input, fields, ctx);
     }
   }();
   // One push per bucket. `process_sub` erases `key_to_sub` under the

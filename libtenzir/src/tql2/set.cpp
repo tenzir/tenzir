@@ -351,7 +351,7 @@ auto resolve_assignment_left(const ast::assignment& assignment,
 }
 
 auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
-          diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice {
+          diagnostic_handler& dh) -> table_slice {
   constexpr auto drop = [](auto&&...) {
     return indexed_transformation::result_type{};
   };
@@ -373,32 +373,12 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
           const auto offset_exhausted = l == offset.inner.end();
           const auto resolved_exhausted = r == resolved.end();
           if (offset_exhausted and resolved_exhausted) {
-            if (warn_for_duplicates) {
-              diagnostic::warning("field `{}` may only be dropped once",
-                                  field.path().back().id.name)
-                .primary(offset)
-                .primary(field)
-                .emit(dh);
-            }
             return;
           }
           if (offset_exhausted) {
-            if (warn_for_duplicates) {
-              diagnostic::warning("ignoring dropped field within record")
-                .primary(field, "ignoring this field")
-                .secondary(offset, "because it is already dropped here")
-                .emit(dh);
-            }
             return;
           }
           if (resolved_exhausted) {
-            if (warn_for_duplicates) {
-              diagnostic::warning(
-                "ignoring dropped field within dropped record")
-                .primary(offset, "ignoring this field")
-                .secondary(field, "because it is already dropped here")
-                .emit(dh);
-            }
             offset = located{resolved, into_location{field}};
             return;
           }

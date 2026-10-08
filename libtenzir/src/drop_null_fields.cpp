@@ -198,7 +198,7 @@ auto emit_group(std::vector<table_slice>& result, table_slice group_slice,
   if (fields_to_drop.empty()) {
     result.push_back(std::move(group_slice));
   } else {
-    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh));
   }
 }
 

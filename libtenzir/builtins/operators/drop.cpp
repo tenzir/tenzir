@@ -15,6 +15,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -68,7 +69,7 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto result = tenzir::drop(input, args_.fields, ctx.dh(), true);
+    auto result = tenzir::drop(input, args_.fields, ctx.dh());
     co_await push(std::move(result));
   }
 
@@ -107,12 +108,52 @@ public:
     auto fields = d.variadic("fields", &DropArgs::fields, "field");
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);
+      // Fields that are dropped for real, after removing redundant entries.
+      // Dropping a record also drops everything within it, so a path that is a
+      // prefix of an earlier one replaces it.
+      auto effective = std::vector<ast::field_path>{};
       for (auto& value : values) {
         if (not value) {
           continue;
         }
         if (value->path().empty()) {
           diagnostic::error("cannot drop `this`").primary(*value).emit(ctx);
+          continue;
+        }
+        auto redundant = false;
+        for (auto& previous : effective) {
+          const auto previous_covers
+            = ir::is_field_path_prefix(previous, *value);
+          const auto value_covers = ir::is_field_path_prefix(*value, previous);
+          if (previous_covers and value_covers) {
+            diagnostic::warning("field `{}` may only be dropped once",
+                                value->path().back().id.name)
+              .primary(previous)
+              .primary(*value)
+              .emit(ctx);
+            redundant = true;
+            break;
+          }
+          if (previous_covers) {
+            diagnostic::warning("ignoring dropped field within record")
+              .primary(*value, "ignoring this field")
+              .secondary(previous, "because it is already dropped here")
+              .emit(ctx);
+            redundant = true;
+            break;
+          }
+          if (value_covers) {
+            diagnostic::warning("ignoring dropped field within dropped record")
+              .primary(previous, "ignoring this field")
+              .secondary(*value, "because it is already dropped here")
+              .emit(ctx);
+            previous = std::move(*value);
+            redundant = true;
+            break;
+          }
+        }
+        if (not redundant) {
+          effective.push_back(std::move(*value));
         }
       }
       return {};

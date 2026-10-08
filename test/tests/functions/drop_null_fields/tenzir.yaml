@@ -1,2 +1,3 @@
 tenzir:
   nova: true
+  enable-assert-secret-operator: true

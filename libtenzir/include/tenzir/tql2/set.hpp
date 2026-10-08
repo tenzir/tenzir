@@ -58,8 +58,13 @@ assign(const ast::field_path& left, series right, const table_slice& input,
                                            diagnostic_handler& dh)
   -> failure_or<ast::selector>;
 
+/// Drops `fields` from `slice`, warning about fields that do not exist.
+///
+/// Redundant entries, such as dropping the same field twice or dropping both a
+/// record and a field within it, are silently ignored. The `drop` operator
+/// reports them when the pipeline is compiled.
 [[nodiscard]] auto
 drop(const table_slice& slice, std::span<const ast::field_path> fields,
-     diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice;
+     diagnostic_handler& dh) -> table_slice;
 
 } // namespace tenzir

@@ -246,7 +246,7 @@ auto prepare_state(std::span<ResolvedAssignment const> assignments,
         std::ranges::copy(assignment.moved_fields, std::back_inserter(moved));
       }
     }
-    result.push_back(drop(subslice(input, begin, end), moved, dh, false));
+    result.push_back(drop(subslice(input, begin, end), moved, dh));
     begin = end;
   }
   return result;
@@ -347,7 +347,7 @@ public:
       for (const auto& assignment : assignments_) {
         values.push_back(eval(assignment.right, input, ctx));
       }
-      input = drop(input, moved_fields_, ctx, false);
+      input = drop(input, moved_fields_, ctx);
       // After we know all the multi series values on the right, we can split
       // the input table slice and perform the actual assignment.
       auto begin = int64_t{0};
