@@ -1,0 +1,8 @@
+{
+  events: 90,
+  schema: "count.large",
+}
+{
+  events: 10,
+  schema: "count.small",
+}

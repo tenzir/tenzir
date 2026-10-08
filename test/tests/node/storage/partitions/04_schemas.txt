@@ -1,0 +1,8 @@
+{
+  name: "count.large",
+  kind: "record",
+}
+{
+  name: "count.small",
+  kind: "record",
+}

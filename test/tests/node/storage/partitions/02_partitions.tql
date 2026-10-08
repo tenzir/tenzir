@@ -1,0 +1,7 @@
+// `partitions` relays event batches built inside the catalog, so this also
+// covers transferring them to a client process.
+partitions
+where not internal
+drop uuid, memusage, diskusage, min_import_time, max_import_time, schema_id,
+     store, indexes, sketches, approx_bytes, version, internal
+sort schema

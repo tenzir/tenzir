@@ -1,0 +1,4 @@
+{
+  schema: "count.small",
+  field: "index",
+}

@@ -84,15 +84,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not node_is_in_process(ctx.actor_system())) {
-      diagnostic::error(
-        "`schemas` is only available in node pipelines under `--nova`")
-        .primary(args_.operator_location)
-        .note("event batches cannot cross a process boundary yet")
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
     auto catalog_result = co_await fetch_actor_from_node<catalog_actor>(
       "catalog", args_.operator_location, ctx.actor_system(), ctx);
     if (not catalog_result) {

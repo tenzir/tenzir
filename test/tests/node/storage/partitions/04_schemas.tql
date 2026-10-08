@@ -1,0 +1,4 @@
+schemas
+where name.starts_with("count.")
+select name, kind
+sort name

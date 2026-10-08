@@ -1,0 +1,4 @@
+fields
+where schema == "count.small"
+drop schema_id, path, index, type
+sort field
