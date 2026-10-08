@@ -27,6 +27,7 @@ dependencies = [
   "numpy>=1.24",
   "python-box>=7.3.2",
   "tenzir-common>=6.19.0,<6.20.0",
+  "tenzir-platform-cli>=6.19.0,<6.20.0",
 ]
 
 [project.urls]
@@ -50,3 +51,4 @@ where = ["src"]
 
 [tool.uv.sources]
 tenzir-common = { workspace = true }
+tenzir-platform-cli = { workspace = true }

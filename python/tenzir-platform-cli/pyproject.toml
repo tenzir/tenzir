@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tenzir-platform-cli"
+version = "6.19.0"
+description = "Command-line client for the Tenzir Platform"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+readme = "README.md"
+authors = [{ name = "Tenzir", email = "engineering@tenzir.com" }]
+
+[project.urls]
+Homepage = "https://tenzir.com"
+Documentation = "https://tenzir.com/docs/reference/platform/command-line-interface"
+
+[project.scripts]
+platform-cli = "tenzir_platform_cli._bin:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tenzir_platform_cli = ["platform-cli"]

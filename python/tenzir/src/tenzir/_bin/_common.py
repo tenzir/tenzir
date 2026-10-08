@@ -18,6 +18,7 @@ def _pkg_wheels_dir() -> Path:
 def _candidate_paths(name: str) -> list[Path]:
     candidates: list[Path] = []
     bin_dir = _pkg_bin_dir()
+    candidates.append(bin_dir.parent / "libexec" / "engine")
     candidates.append(bin_dir / name)
     # Fallback to PATH if not packaged. We need to be careful to remove the
     # parent directory from the PATH to avoid an infinite self recursion on the
@@ -49,12 +50,34 @@ def exec_binary(name: str) -> NoReturn:
     # We don't support calling this helper outside of the generated tenzir(*) wrappers
     # from the [project.scripts] in pyproject.toml.
     _prepare_environment()
+    arguments = sys.argv[1:]
+    if name == "tenzir":
+        unified = os.environ.get("TENZIR_UNIFIED", "").lower() not in {
+            "",
+            "0",
+            "false",
+            "no",
+        }
+        platform_arguments = None
+        if unified and (not arguments or arguments[0] not in {"up", "run"}):
+            platform_arguments = arguments
+        elif not unified and arguments and arguments[0] == "platform":
+            platform_arguments = arguments[1:]
+        if platform_arguments is not None:
+            from tenzir_platform_cli._bin import exec_cli  # noqa: PLC0415
+
+            exec_cli(platform_arguments)
+        elif unified:
+            if arguments[0] == "up":
+                name = "tenzir-up"
+            arguments = arguments[1:]
     # Try packaged binary first, then PATH.
     for p in _candidate_paths("tenzir"):
         if p.is_file() and os.access(p, os.X_OK):
-            os.execv(p.as_posix(), [name, *sys.argv[1:]])
+            os.execv(p.as_posix(), [name, *arguments])
     _ = sys.stderr.write(
-        f"{name} not found. On Linux wheels this should be bundled; otherwise ensure '{name}' is in PATH.\n",
+        f"{name} not found. On Linux wheels this should be bundled; "
+        f"otherwise ensure '{name}' is in PATH.\n",
     )
     _ = sys.stderr.flush()
     raise SystemExit(127)

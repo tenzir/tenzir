@@ -60,10 +60,10 @@ if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux"
     # We can work around the problem above when the plugin is built together
     # with tenzir. The trick is to inject libfluent-bit.so into the main
     # dynamic link sequence of the `tenzir` binary.
-    target_link_libraries(tenzir PRIVATE "${FLUENT_BIT_LIB}")
+    target_link_libraries(tenzir-engine PRIVATE "${FLUENT_BIT_LIB}")
     # The rpath needs to be extended with the correct location just like above.
     set_property(
-      TARGET tenzir
+      TARGET tenzir-engine
       APPEND
       PROPERTY INSTALL_RPATH "${FLUENT_BIT_LOCATION}")
   endif ()

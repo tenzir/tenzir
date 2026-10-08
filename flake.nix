@@ -41,6 +41,7 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
   };
 
   outputs =
@@ -65,36 +66,57 @@
       let
         overlay = import ./nix/overlay.nix;
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+        platformCli =
+          if builtins.pathExists ../platform then
+            pkgs.callPackage ./nix/platform-cli/package.nix {
+              src = ../platform;
+              # Use the prebuilt compiler on macOS; Linux needs our static Bun.
+              inherit (nixpkgs.legacyPackages.${system}) bun;
+            }
+          else
+            null;
         tenzirPythonPkgs = pkgs.callPackage ./python {
           inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
         };
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          inherit tenzirPythonPkgs;
+          inherit platformCli tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          inherit tenzirPythonPkgs;
+          inherit platformCli tenzirPythonPkgs;
           forceClang = true;
         };
         treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
       in
       {
+        apps.tenzir-up = {
+          type = "app";
+          program = "${pkgs.writeShellScript "tenzir-up" ''
+            export TENZIR_UNIFIED=1
+            exec ${package.tenzir-up}/bin/tenzir up "$@"
+          ''}";
+        };
         packages =
-          flake-utils.lib.flattenTree {
-            inherit (package) tenzir-de;
-            inherit (package) tenzir-de-static;
-            inherit (package) tenzir;
-            inherit (package) tenzir-static;
-            inherit (package) tenzir-up;
-            tenzir-de-clang = package-clang.tenzir-de;
-            tenzir-de-static-clang = package-clang.tenzir-de-static;
-            tenzir-clang = package-clang.tenzir;
-            tenzir-static-clang = package-clang.tenzir-static;
-            integration-test-shell = pkgs.mkShell {
-              packages = package.tenzir-integration-test-deps ++ [ pkgs.go ];
-            };
-          }
+          flake-utils.lib.flattenTree (
+            {
+              inherit (package) tenzir-de;
+              inherit (package) tenzir-de-static;
+              inherit (package) tenzir;
+              inherit (package) tenzir-static;
+              inherit (package) tenzir-up;
+              tenzir-de-clang = package-clang.tenzir-de;
+              tenzir-de-static-clang = package-clang.tenzir-de-static;
+              tenzir-clang = package-clang.tenzir;
+              tenzir-static-clang = package-clang.tenzir-static;
+              integration-test-shell = pkgs.mkShell {
+                packages = package.tenzir-integration-test-deps ++ [ pkgs.go ];
+              };
+            }
+            // pkgs.lib.optionalAttrs (platformCli != null) {
+              platform-cli = platformCli;
+            }
+          )
           // {
             default = self.packages.${system}.tenzir-static;
             format = pkgs.callPackage ./nix/format.nix { inherit treefmtEval; };

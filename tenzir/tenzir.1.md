@@ -65,6 +65,20 @@ tenzir export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
 
 To learn more about using Tenzir, continue over at https://tenzir.com/docs.
 
+# ENVIRONMENT
+
+Set `TENZIR_UNIFIED=1` to enable the unified command interface. In this mode,
+`tenzir up` starts a deployment, `tenzir run` runs a pipeline, and all other
+commands and arguments go to the bundled platform CLI unchanged. The `up` and
+`run` commands remove their command name before passing the remaining arguments
+to the engine. Starting a deployment requires a build with deployment support.
+
+An unset or empty `TENZIR_UNIFIED`, or a value of `0`, `false`, or `no`
+(case-insensitive), keeps the default behavior: `tenzir platform` invokes the
+platform CLI without the `platform` argument, and other calls invoke the engine.
+The `tenzir-node`, `tenzir-ctl`, and `tenzir-rebuild` compatibility names always
+invoke the engine.
+
 # ISSUES
 
 If you encounter a bug, or have suggestions for improvement, please file an issue

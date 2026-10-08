@@ -1,7 +1,7 @@
-add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
-target_include_directories(tenzir PRIVATE include)
+add_executable(tenzir-engine tenzir.cpp operator_new.cpp malloc.cpp)
+target_include_directories(tenzir-engine PRIVATE include)
 if (NOT TENZIR_ENABLE_DEPLOYMENT)
-  target_sources(tenzir PRIVATE entry.cpp)
+  target_sources(tenzir-engine PRIVATE entry.cpp)
 endif ()
 # Static binaries are not fully static on macOS, they still need to link to the
 # apple system libraries dynamically.
@@ -9,7 +9,7 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE
     AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none"
     AND NOT APPLE)
   target_link_options(
-    tenzir
+    tenzir-engine
     BEFORE
     PRIVATE
     LINKER:--wrap=malloc
@@ -27,22 +27,39 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER MATCHES "musl")
   # musl uses the PT_GNU_STACK program header as the default stack size for
   # newly created pthreads. Keep the tenzir binary aligned with the larger
   # thread stacks commonly seen on glibc-based systems.
-  target_link_options(tenzir PRIVATE LINKER:-z,stack-size=8388608)
+  target_link_options(tenzir-engine PRIVATE LINKER:-z,stack-size=8388608)
 endif ()
 
-TenzirTargetEnableTooling(tenzir)
-target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
-TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
-add_executable(tenzir::tenzir ALIAS tenzir)
+TenzirTargetEnableTooling(tenzir-engine)
+target_link_libraries(tenzir-engine PRIVATE tenzir::internal tenzir::libtenzir)
+TenzirTargetLinkWholeArchive(tenzir-engine PRIVATE tenzir::libtenzir_builtins)
 
 if (TARGET AWS::aws-cpp-sdk-core)
-  target_link_libraries(tenzir PRIVATE AWS::aws-cpp-sdk-core)
-  target_compile_definitions(tenzir PRIVATE TENZIR_HAS_AWS_SDK=1)
+  target_link_libraries(tenzir-engine PRIVATE AWS::aws-cpp-sdk-core)
+  target_compile_definitions(tenzir-engine PRIVATE TENZIR_HAS_AWS_SDK=1)
 else ()
-  target_compile_definitions(tenzir PRIVATE TENZIR_HAS_AWS_SDK=0)
+  target_compile_definitions(tenzir-engine PRIVATE TENZIR_HAS_AWS_SDK=0)
 endif ()
 
-# Install tenzir in PREFIX/lib and headers in PREFIX/include/tenzir.
+# Keep the engine beside the other private executables in both the build and
+# install trees.
+set_target_properties(
+  tenzir-engine
+  PROPERTIES OUTPUT_NAME engine
+             RUNTIME_OUTPUT_DIRECTORY
+             "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
+install(TARGETS tenzir-engine RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
+                                      COMPONENT Runtime)
+
+file(RELATIVE_PATH TENZIR_LIBEXEC_FROM_BINDIR "${CMAKE_INSTALL_FULL_BINDIR}"
+     "${CMAKE_INSTALL_FULL_LIBEXECDIR}")
+add_executable(tenzir dispatcher.cpp)
+target_compile_definitions(
+  tenzir PRIVATE TENZIR_LIBEXEC_FROM_BINDIR="${TENZIR_LIBEXEC_FROM_BINDIR}")
+TenzirTargetEnableTooling(tenzir)
+add_dependencies(tenzir tenzir-engine)
+add_executable(tenzir::tenzir ALIAS tenzir)
+
 install(
   TARGETS tenzir
   EXPORT TenzirTargets
@@ -51,7 +68,7 @@ install(
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
 macro (create_tenzir_symlink name)
-  # Implicitly create tenzir-ctl and tenzir-node symlinks when building tenzir.
+  # Implicitly create the compatibility symlinks when building tenzir.
   # That means that the links get re-created every time tenzir is built, but we
   # tolerate this overhead to avoid the inconvenience of missing links.
   add_custom_command(
@@ -92,8 +109,21 @@ endmacro ()
 create_tenzir_symlink(tenzir-node)
 create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(tenzir-rebuild)
-if (TENZIR_ENABLE_DEPLOYMENT)
-  create_tenzir_symlink(tenzir-up)
+
+if (BUILD_TESTING)
+  add_test(
+    NAME tenzir/dispatcher
+    COMMAND
+      "${CMAKE_COMMAND}" "-DTENZIR_BINARY=$<TARGET_FILE:tenzir>"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/dispatcher-test"
+      "-DLIBEXEC_FROM_BINDIR=${TENZIR_LIBEXEC_FROM_BINDIR}" -P
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/dispatcher.cmake")
+  add_test(
+    NAME tenzir/dispatcher-run
+    COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "$<TARGET_FILE:tenzir>"
+            run "from {answer: 42} | write_ndjson")
+  set_tests_properties(tenzir/dispatcher-run PROPERTIES PASS_REGULAR_EXPRESSION
+                                                        "\"answer\"[^0-9]*42")
 endif ()
 
 # -- example configuration file -----------------------------------------------
@@ -378,7 +408,7 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
       "${CMAKE_SOURCE_DIR}/scripts/process_coverage.sh"
       "--coverage-dir=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
       "--source-dir=${CMAKE_SOURCE_DIR}" "--binary-dir=${CMAKE_BINARY_DIR}"
-      "--tenzir-binary=$<TARGET_FILE:tenzir>"
+      "--tenzir-binary=$<TARGET_FILE:tenzir-engine>"
       "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
     COMMENT "Running integration tests with code coverage enabled"
     USES_TERMINAL VERBATIM)
@@ -420,7 +450,7 @@ list(TRANSFORM TENZIR_BUNDLED_PLUGINS PREPEND "\"")
 list(TRANSFORM TENZIR_BUNDLED_PLUGINS APPEND "\"")
 list(JOIN TENZIR_BUNDLED_PLUGINS "," joined_bundled_plugins)
 target_compile_definitions(
-  tenzir PRIVATE "TENZIR_BUNDLED_PLUGINS=${joined_bundled_plugins}")
+  tenzir-engine PRIVATE "TENZIR_BUNDLED_PLUGINS=${joined_bundled_plugins}")
 
 # -- man page ------------------------------------------------------------------
 

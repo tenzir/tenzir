@@ -2,6 +2,7 @@
 members = [
   "tenzir-common",
   "tenzir-operator",
+  "tenzir-platform-cli",
   "tenzir",
 ]
 
@@ -9,6 +10,7 @@ members = [
 tenzir-common = { workspace = true }
 tenzir-operator = { workspace = true }
 tenzir = { workspace = true }
+tenzir-platform-cli = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -28,6 +30,7 @@ files = [
   "tenzir/src/tenzir",
   "tenzir-common/src/tenzir_common",
   "tenzir-operator/src/tenzir_operator",
+  "tenzir-platform-cli/src/tenzir_platform_cli",
 ]
 
 [[tool.mypy.overrides]]

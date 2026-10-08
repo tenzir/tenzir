@@ -306,6 +306,10 @@ in
 // lib.optionalAttrs (pkg.hasDeployment or false) {
   tenzir-up = buildTenzirImage {
     name = "tenzir/tenzir-up";
-    entrypoint = [ "tenzir-up" ];
+    entrypoint = [
+      "tenzir"
+      "up"
+    ];
+    extraEnv = [ "TENZIR_UNIFIED=1" ];
   };
 }

@@ -1154,6 +1154,30 @@ if (TENZIR_ENABLE_TENZIR_DF_PERCENT)
     COMPONENT Runtime)
 endif ()
 
+set(TENZIR_PLATFORM_CLI_PATH
+    ""
+    CACHE FILEPATH "Path to the platform-cli executable to package")
+if (TENZIR_PLATFORM_CLI_PATH)
+  set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
+  file(MAKE_DIRECTORY "${build_libexecdir}")
+  file(REMOVE "${build_libexecdir}/platform-cli")
+  file(CREATE_LINK "${TENZIR_PLATFORM_CLI_PATH}"
+       "${build_libexecdir}/platform-cli" SYMBOLIC)
+  install(
+    PROGRAMS "${TENZIR_PLATFORM_CLI_PATH}"
+    RENAME platform-cli
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
+    COMPONENT Runtime)
+  if (BUILD_TESTING)
+    add_test(NAME tenzir/dispatcher-platform
+             COMMAND "${CMAKE_COMMAND}" -E env --unset=TENZIR_UNIFIED
+                     $<TARGET_FILE:tenzir> platform --help)
+    add_test(NAME tenzir/dispatcher-unified-platform
+             COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1
+                     $<TARGET_FILE:tenzir> --help)
+  endif ()
+endif ()
+
 # -- docdir --------------------------------------------------------------------
 
 # Install CHANGELOG, LICENSE, README, and VERSIONING. This can intentionally not

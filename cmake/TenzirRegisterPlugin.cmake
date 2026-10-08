@@ -835,8 +835,8 @@ function (TenzirRegisterPlugin)
                              PRIVATE TENZIR_ENABLE_STATIC_PLUGINS)
 
   if (TENZIR_ENABLE_STATIC_PLUGINS)
-    # Link our static library against the tenzir binary directly.
-    TenzirTargetLinkWholeArchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
+    # Link our static library against the engine binary directly.
+    TenzirTargetLinkWholeArchive(tenzir-engine PRIVATE ${PLUGIN_TARGET}-static)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
@@ -868,9 +868,10 @@ function (TenzirRegisterPlugin)
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/tenzir/plugins"
       COMPONENT Runtime)
 
-    # Ensure that Tenzir only runs after all dynamic plugin libraries are built.
-    if (TARGET tenzir)
-      add_dependencies(tenzir ${PLUGIN_TARGET}-shared)
+    # Ensure that the engine only runs after all dynamic plugin libraries are
+    # built.
+    if (TARGET tenzir-engine)
+      add_dependencies(tenzir-engine ${PLUGIN_TARGET}-shared)
     endif ()
   endif ()
 

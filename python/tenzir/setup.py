@@ -56,6 +56,10 @@ def _extract_tarball(tarball: Path) -> None:
         # the binaries to fit - and an unstripped node gives every
         # pip-installed deployment usable backtraces.
         _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
+        # PyPI distributes the Platform CLI through a separate dependency.
+        (PACKAGE_ROOT / "bundled" / "libexec" / "platform-cli").unlink(
+            missing_ok=True,
+        )
         # The tarball bundles the python operator's dependencies as wheels so
         # that offline setups work, but the binary ones are ~74 MB that would
         # push this wheel against the 200 MB cap. A pip-installed tenzir runs

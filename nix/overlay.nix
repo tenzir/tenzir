@@ -2,6 +2,7 @@ finalPkgs: prevPkgs:
 let
   inherit (prevPkgs) lib;
   inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
+  bunOverlay = import ./bun-overlay.nix finalPkgs prevPkgs;
   gccName = "gcc${toString prevPkgs.default-gcc-version}";
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
@@ -37,7 +38,8 @@ let
   };
 
 in
-{
+bunOverlay
+// {
   # Port https://github.com/NixOS/nixpkgs/pull/515233 to our static Linux
   # toolchain. Select by targetPlatform: the cross compiler itself runs on
   # the build platform, while its output must be position independent.

@@ -8,6 +8,7 @@ let
       callPackage,
       tenzir-source,
       tenzirPythonPkgs,
+      platformCli ? null,
       caf,
       curl-ws,
       cacert,
@@ -203,6 +204,9 @@ let
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
             "-DTENZIR_ENABLE_DEPLOYMENT=${lib.boolToString (deployment-source != null)}"
             "-DTENZIR_ENABLE_DEPLOYMENT_TESTS=${lib.boolToString deploymentTests}"
+          ]
+          ++ lib.optionals (platformCli != null) [
+            "-DTENZIR_PLATFORM_CLI_PATH=${lib.getExe platformCli}"
           ]
           ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [
             "-DTENZIR_INSTALL_ARCHIVEDIR=${placeholder "dev"}/lib"

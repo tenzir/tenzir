@@ -3,6 +3,7 @@
   lib,
   pkgs,
   tenzirPythonPkgs,
+  platformCli ? null,
   forceClang ? false,
 }:
 rec {
@@ -100,6 +101,7 @@ rec {
       };
       tenzir-de = linkPkgs.callPackage ./tenzir {
         inherit
+          platformCli
           tenzir-source
           tenzirPythonPkgs
           toImageFn
@@ -178,15 +180,9 @@ rec {
   };
   # Unchecked: the integration tests exercise `tenzir`, which this carries
   # unchanged. The deployment unit tests run in the package build.
-  tenzir-up =
-    ((unchecked pkgs).tenzir-de.override {
-      inherit deployment-source;
-    }).overrideAttrs
-      (old: {
-        meta = old.meta // {
-          mainProgram = "tenzir-up";
-        };
-      });
+  tenzir-up = (unchecked pkgs).tenzir-de.override {
+    inherit deployment-source;
+  };
   tenzir = toChecked (unchecked pkgs).tenzir;
   tenzir-de-static = toChecked (unchecked pkgs.pkgsStatic).tenzir-de;
   tenzir-static = toChecked (unchecked pkgs.pkgsStatic).tenzir;
