@@ -1,0 +1,17 @@
+api "/serve-multi", {
+  requests: [
+    {
+      serve_id: "serve_multi_name_and_type_a",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+      schema: "name_and_type",
+    },
+    {
+      serve_id: "serve_multi_name_and_type_b",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
+  ],
+  min_events: 2,
+  max_events: 2,
+  schema: "never",
+}
+write_json

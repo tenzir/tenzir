@@ -1,0 +1,50 @@
+{
+  "serve_multi_name_and_type_b": {
+    "next_continuation_token": null,
+    "state": "completed",
+    "events": [
+      {
+        "schema_id": "756c9ffdbff07b0a",
+        "data": {
+          "y": 2
+        }
+      }
+    ]
+  },
+  "serve_multi_name_and_type_a": {
+    "next_continuation_token": null,
+    "state": "completed",
+    "events": [
+      {
+        "schema": "tenzir.unknown",
+        "type_id": "d9e6fe000412a028",
+        "data": {
+          "x": 1
+        }
+      }
+    ],
+    "schemas": [
+      {
+        "type_id": "d9e6fe000412a028",
+        "definition": {
+          "name": null,
+          "kind": "record",
+          "attributes": [],
+          "state": {
+            "fields": [
+              {
+                "name": "x",
+                "type": {
+                  "name": null,
+                  "kind": "int64",
+                  "attributes": [],
+                  "state": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+api "/serve", {
+  serve_id: "serve_chart_mixed_types_name_and_type",
+  min_events: 2,
+  max_events: 2,
+  schema: "name_and_type",
+}
+write_json

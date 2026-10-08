@@ -8,6 +8,35 @@ tenzir:
     # lifetime of the fixture instead.
     retention-time: 1h
   pipelines:
+    serve_name_and_type:
+      name: serve name and type
+      definition: |
+        from {x: 1}, {y: "x"}, {x: 2}
+        @name = "named.schema"
+        serve "serve_name_and_type"
+    serve_chart_name_and_type:
+      name: serve chart name and type
+      definition: |
+        from {x: 12, y: 3.5}, {x: 13, y: 4.01}
+        chart_line x=x, y=y
+        @name = "renamed.chart"
+        serve "serve_chart_name_and_type"
+    serve_chart_mixed_types_name_and_type:
+      name: serve chart mixed types name and type
+      definition: |
+        from {x: null, v: 1}, {x: 1s, v: 2}
+        chart_bar x=x, y=sum(v), resolution=1s
+        serve "serve_chart_mixed_types_name_and_type"
+    serve_multi_name_and_type_a:
+      name: serve multi name and type a
+      definition: |
+        from {x: 1}
+        serve "serve_multi_name_and_type_a"
+    serve_multi_name_and_type_b:
+      name: serve multi name and type b
+      definition: |
+        from {y: 2}
+        serve "serve_multi_name_and_type_b"
     serve-1:
       name: serve 1
       definition: |

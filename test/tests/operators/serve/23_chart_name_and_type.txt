@@ -1,0 +1,79 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema": "renamed.chart",
+      "type_id": "12510656f955fc4a",
+      "data": {
+        "x": 12,
+        "y": 3.5
+      }
+    },
+    {
+      "schema": "renamed.chart",
+      "type_id": "12510656f955fc4a",
+      "data": {
+        "x": 13,
+        "y": 4.01
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "type_id": "12510656f955fc4a",
+      "definition": {
+        "name": null,
+        "kind": "record",
+        "attributes": [
+          {
+            "key": "chart",
+            "value": "line"
+          },
+          {
+            "key": "position",
+            "value": "grouped"
+          },
+          {
+            "key": "x",
+            "value": "x"
+          },
+          {
+            "key": "x_axis_type",
+            "value": "linear"
+          },
+          {
+            "key": "y",
+            "value": "y"
+          },
+          {
+            "key": "y_axis_type",
+            "value": "linear"
+          }
+        ],
+        "state": {
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": null,
+                "kind": "int64",
+                "attributes": [],
+                "state": null
+              }
+            },
+            {
+              "name": "y",
+              "type": {
+                "name": null,
+                "kind": "double",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

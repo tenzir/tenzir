@@ -1,0 +1,134 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema": "tenzir.chart",
+      "type_id": "e9ba10c80d9ec2c2",
+      "data": {
+        "x": null,
+        "y": 1.0
+      }
+    },
+    {
+      "schema": "tenzir.chart",
+      "type_id": "a7ebd0f87c28c99b",
+      "data": {
+        "x": 1.0,
+        "y": 2.0
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "type_id": "a7ebd0f87c28c99b",
+      "definition": {
+        "name": null,
+        "kind": "record",
+        "attributes": [
+          {
+            "key": "chart",
+            "value": "bar"
+          },
+          {
+            "key": "position",
+            "value": "grouped"
+          },
+          {
+            "key": "x",
+            "value": "x"
+          },
+          {
+            "key": "x_axis_type",
+            "value": "linear"
+          },
+          {
+            "key": "y",
+            "value": "y"
+          },
+          {
+            "key": "y_axis_type",
+            "value": "linear"
+          }
+        ],
+        "state": {
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": null,
+                "kind": "duration",
+                "attributes": [],
+                "state": null
+              }
+            },
+            {
+              "name": "y",
+              "type": {
+                "name": null,
+                "kind": "double",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type_id": "e9ba10c80d9ec2c2",
+      "definition": {
+        "name": null,
+        "kind": "record",
+        "attributes": [
+          {
+            "key": "chart",
+            "value": "bar"
+          },
+          {
+            "key": "position",
+            "value": "grouped"
+          },
+          {
+            "key": "x",
+            "value": "x"
+          },
+          {
+            "key": "x_axis_type",
+            "value": "linear"
+          },
+          {
+            "key": "y",
+            "value": "y"
+          },
+          {
+            "key": "y_axis_type",
+            "value": "linear"
+          }
+        ],
+        "state": {
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": null,
+                "kind": "duration",
+                "attributes": [],
+                "state": null
+              }
+            },
+            {
+              "name": "y",
+              "type": {
+                "name": null,
+                "kind": "double",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -98,7 +98,7 @@
 namespace tenzir::plugins::serve {
 
 TENZIR_ENUM(serve_state, running, completed, failed);
-TENZIR_ENUM(schema, exact, never);
+TENZIR_ENUM(schema, exact, never, name_and_type);
 
 namespace {
 
@@ -154,10 +154,10 @@ constexpr auto serve_spec = R"_(
                 description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
               schema:
                 type: string
-                enum: [exact, never]
+                enum: [exact, never, name_and_type]
                 example: "exact"
                 default: "exact"
-                description: The schema representation to include in the response. Use `never` to omit schema definitions.
+                description: The schema representation to include in the response. Use `never` to omit definitions, or `name_and_type` to report each event's schema name and structural type ID with definitions indexed by type ID.
           example:
             serve_id: "query-1"
             max_events: 1024
@@ -193,9 +193,12 @@ constexpr auto serve_spec = R"_(
                     properties:
                       schema_id:
                         type: string
-                        description: The unique schema identifier.
+                        description: The schema identifier when `schema` is `exact`.
+                      type_id:
+                        type: string
+                        description: The structural type ID when `schema` is `name_and_type`.
                       definition:
-                        description: The schema definition in JSON format.
+                        description: The structural definition in JSON format. In `name_and_type` mode, the schema name is omitted but chart attributes are retained when present.
                   description: The schemas for the returned events. This field is omitted when the request sets `schema` to `never`.
                   example:
                   - schema_id: c631d301e4b18f4
@@ -224,7 +227,13 @@ constexpr auto serve_spec = R"_(
                     properties:
                       schema_id:
                         type: string
-                        description: The unique schema identifier.
+                        description: The schema identifier when `schema` is `exact` or `never`.
+                      schema:
+                        type: string
+                        description: The schema name when `schema` is `name_and_type`.
+                      type_id:
+                        type: string
+                        description: The structural type ID when `schema` is `name_and_type`. Matches `type_id(this)` for the row.
                       data:
                         type: object
                         description: The event data in JSON format.
@@ -306,9 +315,9 @@ constexpr auto serve_multi_spec = R"_(
                       description: The continuation token from the previous response for this output stream. Pass `00000000-0000-0000-0000-000000000000` for the initial request.
                     schema:
                       type: string
-                      enum: [exact, never]
+                      enum: [exact, never, name_and_type]
                       example: "exact"
-                      description: The schema representation to include in this output stream's response. Overrides the request-wide `schema` for this stream only.
+                      description: The schema representation to include in this output stream's response. Use `name_and_type` to report names and structural type IDs. Overrides the request-wide `schema` for this stream only.
               max_events:
                 type: integer
                 minimum: 0
@@ -328,10 +337,10 @@ constexpr auto serve_multi_spec = R"_(
                 description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
               schema:
                 type: string
-                enum: [exact, never]
+                enum: [exact, never, name_and_type]
                 example: "exact"
                 default: "exact"
-                description: The default schema representation to include in each response. Use `never` to omit schema definitions. Individual output streams can override this with their own `schema` field.
+                description: The default schema representation to include in each response. Use `never` to omit definitions, or `name_and_type` to report names and structural type IDs. Individual output streams can override this with their own `schema` field.
           example:
             requests:
               - serve_id: "query-1"
@@ -375,9 +384,12 @@ constexpr auto serve_multi_spec = R"_(
                       properties:
                         schema_id:
                           type: string
-                          description: The unique schema identifier.
+                          description: The schema identifier when `schema` is `exact`.
+                        type_id:
+                          type: string
+                          description: The structural type ID when `schema` is `name_and_type`.
                         definition:
-                          description: The schema definition in JSON format.
+                          description: The structural definition in JSON format. In `name_and_type` mode, the schema name is omitted but chart attributes are retained when present.
                     description: The schemas for the returned events. This field is omitted when the request sets `schema` to `never`.
                     example:
                     - schema_id: c631d301e4b18f4
@@ -406,7 +418,13 @@ constexpr auto serve_multi_spec = R"_(
                       properties:
                         schema_id:
                           type: string
-                          description: The unique schema identifier.
+                          description: The schema identifier when `schema` is `exact` or `never`.
+                        schema:
+                          type: string
+                          description: The schema name when `schema` is `name_and_type`.
+                        type_id:
+                          type: string
+                          description: The structural type ID when `schema` is `name_and_type`. Matches `type_id(this)` for the row.
                         data:
                           type: object
                           description: The event data in JSON format.
@@ -1606,8 +1624,15 @@ struct serve_handler_state {
           out_iter = fmt::format_to(out_iter, "}},{{");
         }
         first = false;
-        out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
-                                  slice.schema().make_fingerprint());
+        if (schema == schema::name_and_type) {
+          out_iter
+            = fmt::format_to(out_iter, R"("schema":{},"type_id":"{}","data":)",
+                             json_string_fmt_wrapper{slice.schema().name()},
+                             slice.schema().make_fingerprint());
+        } else {
+          out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
+                                    slice.schema().make_fingerprint());
+        }
         TENZIR_ASSERT(not is<caf::none_t>(row));
         const auto* record_view = try_as<view<record>>(&row);
         TENZIR_ASSERT(record_view);
@@ -1636,8 +1661,12 @@ struct serve_handler_state {
         out_iter = fmt::format_to(out_iter, "}},{{");
       }
       first = false;
-      out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
-                                type.make_fingerprint());
+      out_iter
+        = schema == schema::name_and_type
+            ? fmt::format_to(out_iter, R"("type_id":"{}","definition":)",
+                             type.make_fingerprint())
+            : fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
+                             type.make_fingerprint());
       const auto ok = printer.print(out_iter, type.to_definition());
       TENZIR_ASSERT(ok);
     }
@@ -1744,6 +1773,7 @@ struct serve_handler_state {
     // The definition of every schema that occurs in the events, which is only
     // computed when the response carries definitions.
     auto definitions = std::unordered_map<std::string, nova::Data>{};
+    auto charted_ids = std::unordered_set<std::string>{};
     auto first = true;
     auto chart_attributes = std::vector<std::pair<std::string, std::string>>{};
     auto chart_types = std::unordered_map<std::string, std::string>{};
@@ -1784,18 +1814,34 @@ struct serve_handler_state {
         auto const internal = *events.meta.internal.get(index);
         auto const charted
           = not chart_attributes.empty() or not chart_types.empty();
-        if (charted and not chart_id) {
+        if (schema != schema::name_and_type and charted and not chart_id) {
           // The identifier of a chart must not depend on whether the response
           // carries definitions, so it always comes from one.
           auto definition = nova::type_definition(row, name, internal);
           apply_chart(definition, chart_attributes, chart_types);
           chart_id = definition_id(std::move(definition));
         }
-        auto id = charted ? *chart_id : std::string{*ids.get(index)};
+        auto id = schema == schema::name_and_type ? std::string{*ids.get(index)}
+                  : charted                       ? *chart_id
+                            : std::string{*ids.get(index)};
         if (schema != schema::never and not definitions.contains(id)) {
-          auto definition = nova::type_definition(row, name, internal);
+          // In name_and_type mode, one ID describes the row structure. A
+          // stream has at most one chart, so its configuration can be kept
+          // once per type ID instead of repeating it for every event.
+          auto definition = schema == schema::name_and_type
+                              ? nova::type_definition(row)
+                              : nova::type_definition(row, name, internal);
           apply_chart(definition, chart_attributes, chart_types);
           definitions.emplace(id, std::move(definition));
+          if (charted) {
+            charted_ids.insert(id);
+          }
+        } else if (schema != schema::never and charted
+                   and not charted_ids.contains(id)) {
+          if (auto* definition = try_as<nova::Record>(definitions.at(id))) {
+            apply_chart(*definition, chart_attributes, chart_types);
+          }
+          charted_ids.insert(id);
         }
         if (first) {
           out = fmt::format_to(out, "{{");
@@ -1803,7 +1849,12 @@ struct serve_handler_state {
           out = fmt::format_to(out, "}},{{");
         }
         first = false;
-        out = fmt::format_to(out, R"("schema_id":"{}","data":)", id);
+        if (schema == schema::name_and_type) {
+          out = fmt::format_to(out, R"("schema":{},"type_id":"{}","data":)",
+                               json_string_fmt_wrapper{name}, id);
+        } else {
+          out = fmt::format_to(out, R"("schema_id":"{}","data":)", id);
+        }
         events_printer.print(events.data.get(index));
         auto bytes = events_printer.bytes();
         result.append(reinterpret_cast<const char*>(bytes.data()),
@@ -1831,7 +1882,9 @@ struct serve_handler_state {
         out = fmt::format_to(out, "}},{{");
       }
       first = false;
-      out = fmt::format_to(out, R"("schema_id":"{}","definition":)", id);
+      out = schema == schema::name_and_type
+              ? fmt::format_to(out, R"("type_id":"{}","definition":)", id)
+              : fmt::format_to(out, R"("schema_id":"{}","definition":)", id);
       definitions_printer.print(nova::RowView<nova::Data>{definition});
       auto bytes = definitions_printer.bytes();
       result.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());

@@ -86,6 +86,8 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "tql2_only",
     // The `/serve-multi` is supported
     "serve-multi",
+    // `/serve` and `/serve-multi` support schema: "name_and_type".
+    "serve-name-and-type",
     // High resolution pipeline activity info is available
     "hr-pipeline-activity",
     // summarize supports streaming mode via the frequency option.

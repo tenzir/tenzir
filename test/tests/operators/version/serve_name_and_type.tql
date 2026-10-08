@@ -1,0 +1,3 @@
+version
+assert "serve-name-and-type" in features
+discard

@@ -1,0 +1,71 @@
+{
+  "next_continuation_token": null,
+  "state": "completed",
+  "events": [
+    {
+      "schema": "named.schema",
+      "type_id": "d9e6fe000412a028",
+      "data": {
+        "x": 1
+      }
+    },
+    {
+      "schema": "named.schema",
+      "type_id": "f4fb93a13a1147f4",
+      "data": {
+        "y": "x"
+      }
+    },
+    {
+      "schema": "named.schema",
+      "type_id": "d9e6fe000412a028",
+      "data": {
+        "x": 2
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "type_id": "f4fb93a13a1147f4",
+      "definition": {
+        "name": null,
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "y",
+              "type": {
+                "name": null,
+                "kind": "string",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type_id": "d9e6fe000412a028",
+      "definition": {
+        "name": null,
+        "kind": "record",
+        "attributes": [],
+        "state": {
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": null,
+                "kind": "int64",
+                "attributes": [],
+                "state": null
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
