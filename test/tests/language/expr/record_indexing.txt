@@ -1,4 +1,4 @@
-warning: field `y` not found
+warning: event does not have field
  --> tests/language/expr/record_indexing.tql:9:7
   |
 9 | z = x[y]
@@ -15,15 +15,15 @@ warning: cannot use `null` as index
   |
   = hint: use `[…]?` to suppress this warning
 
-warning: record does not have field `x`
- --> tests/language/expr/record_indexing.tql:9:7
+warning: record has no field `x`
+ --> tests/language/expr/record_indexing.tql:9:5
   |
 9 | z = x[y]
-  |       ~ does not exist
+  |     ~~~~
   |
   = hint: use `[…]?` to suppress this warning
 
-warning: field `x` not found
+warning: event does not have field
  --> tests/language/expr/record_indexing.tql:9:5
   |
 9 | z = x[y]
@@ -32,7 +32,7 @@ warning: field `x` not found
   = hint: did you mean `y`?
   = hint: append `?` to suppress this warning
 
-warning: tried to access field of `null`
+warning: cannot index into `null`
  --> tests/language/expr/record_indexing.tql:9:5
   |
 9 | z = x[y]

@@ -452,15 +452,18 @@ private:
   bool fired_ = false;
 };
 
-/// How `apply_kernel` treats a `null` operand.
+/// How `apply_kernel` treats a `null` operand that `kernel` does not accept.
+///
+/// Either way, a tuple the kernel *does* accept is dispatched to it, so a
+/// kernel that gives `null` a meaning — such as `in`, where `null in [null]`
+/// is `true` — keeps seeing it under both policies.
 enum class NullPolicy {
-  /// `null` is an ordinary argument type: rows whose operand tuple includes a
-  /// `null` that `kernel` does not accept are rejected with a warning.
-  warning,
-  /// Rows where any operand is `null` yield `null` without invoking `kernel`
-  /// and without a diagnostic. Used for operators whose documented semantics
-  /// propagate missing data silently, such as arithmetic.
+  /// Rows whose operand tuple includes an unaccepted `null` yield `null`
+  /// without a diagnostic. Missing data propagates; it is not a type error.
   silent,
+  /// Those rows are rejected with a warning instead, for the rare kernel that
+  /// treats `null` as an ordinary argument type worth complaining about.
+  warning,
 };
 
 namespace _ {
@@ -498,29 +501,21 @@ inline auto apply_kernel_impl(EvalFrame frame, std::string_view name,
   // effect rather than threaded back through return values.
   auto results = Results{length};
   auto warn_too_large = WarnOnce{};
-  // Under `NullPolicy::silent`, rows with a `null` operand are settled up
-  // front and removed from the dispatch mask. A `null` operand then only ever
-  // reaches `reject` with an empty mask, which emits nothing.
   auto mask = frame.mask();
-  if (null_policy == NullPolicy::silent) {
-    auto null_rows = storage::BitMap{length, false};
-    for (auto const& arg : args) {
-      if (auto null_alt = arg.template get_alternative<Null>()) {
-        null_rows = std::move(null_rows) | null_alt->present;
-      }
-    }
-    null_rows = mask & null_rows;
-    if (null_rows.any()) {
-      results.set_null(null_rows);
-      mask = std::move(mask).and_not(null_rows);
-    }
-  }
   auto reject = [&](std::array<std::size_t, K> const& tags,
                     storage::BitMap const& rejected_mask) {
     if (not rejected_mask.any()) {
       return;
     }
-    warn_rejected_kernel_types(frame, name, loc, tags);
+    // The policy applies per resolved type tuple, not per row: only a tuple
+    // the kernel rejected reaches here, so a kernel that accepts `null`
+    // somewhere keeps that meaning and only its unaccepted combinations
+    // propagate silently.
+    constexpr auto null_tag = data_type_list::unique_index_of<Null>;
+    auto const has_null = std::ranges::contains(tags, null_tag);
+    if (null_policy == NullPolicy::warning or not has_null) {
+      warn_rejected_kernel_types(frame, name, loc, tags);
+    }
     results.set_null(rejected_mask);
   };
   auto finish = [&]<std::size_t... Tags>(
@@ -572,13 +567,13 @@ inline auto apply_kernel_impl(EvalFrame frame, std::string_view name,
 
 /// Dispatches `kernel` over the already-evaluated `args`; see
 /// `_::apply_kernel_impl`. A `null` operand that `kernel` does not accept
-/// warns.
+/// propagates as `null`; pass an explicit `NullPolicy` to warn instead.
 template <std::size_t K, class Kernel>
 inline auto apply_kernel(EvalFrame frame, std::string_view name,
                          std::array<Array<Data>, K> args, location loc,
                          const Kernel& kernel) -> Array<Data> {
   return _::apply_kernel_impl<K>(frame, name, std::move(args), std::move(loc),
-                                 NullPolicy::warning, kernel);
+                                 NullPolicy::silent, kernel);
 }
 
 /// Like the overload above, with an explicit `null_policy`.
@@ -598,7 +593,7 @@ template <std::size_t K, class Kernel>
 inline auto apply_kernel(EvalFrame frame, std::string_view name,
                          std::array<ValueArgument, K> const& args, location loc,
                          const Kernel& kernel) -> Array<Data> {
-  return apply_kernel<K>(frame, name, args, std::move(loc), NullPolicy::warning,
+  return apply_kernel<K>(frame, name, args, std::move(loc), NullPolicy::silent,
                          kernel);
 }
 
@@ -623,8 +618,8 @@ inline auto
 apply_kernel(EvalFrame frame, std::string_view name,
              std::array<std::reference_wrapper<const ast::expression>, K> exprs,
              location loc, const Kernel& kernel) -> Array<Data> {
-  return apply_kernel<K>(frame, name, exprs, std::move(loc),
-                         NullPolicy::warning, kernel);
+  return apply_kernel<K>(frame, name, exprs, std::move(loc), NullPolicy::silent,
+                         kernel);
 }
 
 /// Like the overload above, with an explicit `null_policy`.

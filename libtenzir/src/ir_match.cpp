@@ -236,6 +236,7 @@ auto extract_bool_mask(nova::Array<nova::Data> const& result,
                        bool warn_on_non_bool) -> nova::storage::BitMap {
   auto bool_data = Option<nova::Array<nova::Bool>>{};
   auto bool_present = nova::storage::BitMap{mask.length(), false};
+  auto null_present = nova::storage::BitMap{mask.length(), false};
   auto has_non_bool = false;
   match(
     result,
@@ -243,16 +244,24 @@ auto extract_bool_mask(nova::Array<nova::Data> const& result,
       bool_data = b;
       bool_present = mask;
     },
+    [&](nova::Array<nova::Null> const&) {
+      null_present = mask;
+    },
     [&](nova::UnionArray const& u) {
       if (auto alt = u.get_alternative<nova::Bool>()) {
         bool_data = std::move(alt->data);
         bool_present = mask & alt->present;
       }
-      has_non_bool = mask.and_not(bool_present).any();
+      if (auto alt = u.get_alternative<nova::Null>()) {
+        null_present = mask & alt->present;
+      }
+      has_non_bool = mask.and_not(bool_present).and_not(null_present).any();
     },
     [&](auto const&) {
       has_non_bool = mask.any();
     });
+  // A `null` guard or scrutinee row simply does not match; that is value
+  // absence rather than a type error, so it must not warn.
   if (has_non_bool and warn_on_non_bool) {
     diagnostic::warning("expected `bool`").primary(source).emit(dh);
   }

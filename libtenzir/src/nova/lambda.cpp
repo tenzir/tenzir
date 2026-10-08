@@ -29,6 +29,10 @@ public:
   explicit Captures(std::string parameter) : bound_{std::move(parameter)} {
   }
 
+  explicit Captures(std::vector<std::string> parameters)
+    : bound_{std::move(parameters)} {
+  }
+
   template <class T>
   auto visit(T& x) -> void {
     enter(x);
@@ -36,6 +40,12 @@ public:
 
   auto visit(ast::root_field& x) -> void {
     add(x.id);
+  }
+
+  auto visit(ast::this_&) -> void {
+    // `this` reads the enclosing event as a whole, so no single field name
+    // describes what the body needs.
+    captures_this = true;
   }
 
   template <class T>
@@ -63,6 +73,7 @@ public:
   }
 
   std::vector<ast::identifier> captures;
+  bool captures_this = false;
 
 private:
   auto add(ast::identifier const& id) -> void {
@@ -160,6 +171,20 @@ auto LambdaArgument::make(ast::lambda_expr& lambda, InstantiateCtx ctx)
   return LambdaArgument{std::addressof(lambda), std::move(captures.captures)};
 }
 
+auto BinaryLambdaArgument::make(ast::lambda_expr& lambda, InstantiateCtx ctx)
+  -> failure_or<BinaryLambdaArgument> {
+  if (not lambda.is_binary()) {
+    diagnostic::error("expected binary lambda").primary(lambda).emit(ctx);
+    return failure::promise();
+  }
+  auto captures
+    = Captures{std::vector{lambda.param(0).name, lambda.param(1).name}};
+  captures.visit(lambda.body);
+  return BinaryLambdaArgument{std::addressof(lambda),
+                              std::move(captures.captures),
+                              captures.captures_this};
+}
+
 auto EvalFrame::eval(LambdaArgument const& lambda,
                      MaskedArray<Array<Data>> subject,
                      Events const& input) const -> Array<Data> {
@@ -186,6 +211,45 @@ auto EvalFrame::eval(LambdaArgument const& lambda,
   // The body was prepared by the same evaluator, so its call sites resolve in
   // this run's function table; only the input changes.
   auto run = _::EvalRun{*run_->evaluator_, std::addressof(events), run_->ctx_};
+  auto frame = EvalFrame{run, events.mask};
+  return run.eval(lambda.body(), std::move(frame));
+}
+
+auto EvalFrame::eval(BinaryLambdaArgument const& lambda,
+                     MaskedArray<Array<Data>> lhs, MaskedArray<Array<Data>> rhs,
+                     Events const& input,
+                     Option<Ref<diagnostic_handler>> dh) const -> Array<Data> {
+  TENZIR_ASSERT(lambda);
+  TENZIR_ASSERT_EQ(lhs.data.length(), input.length());
+  TENZIR_ASSERT_EQ(rhs.data.length(), input.length());
+  auto const length = lhs.data.length();
+  auto present = std::move(lhs.present) & std::move(rhs.present) & input.mask;
+  if (present.true_count() == 0) {
+    return Array<Data>{Array<Null>{storage::NullStorage{length}}};
+  }
+  lhs.present = present;
+  rhs.present = present;
+  auto record = Array<Record>::make_empty(input.length());
+  // Like the unary case, captures retain the enclosing record; the parameters
+  // overwrite their fields below. A body that reads `this` needs the whole
+  // row, which no capture name describes.
+  if (lambda.captures_this()) {
+    record = input.data;
+  } else {
+    for (auto const& capture : lambda.captures()) {
+      if (input.data.field(capture.name)) {
+        record = input.data;
+        break;
+      }
+    }
+  }
+  record
+    = std::move(record).with_field_overwrite(lambda.param(0), std::move(lhs));
+  record
+    = std::move(record).with_field_overwrite(lambda.param(1), std::move(rhs));
+  auto events = Events{std::move(record), std::move(present), input.meta};
+  auto ctx = dh ? EvalCtx{**dh} : run_->ctx_;
+  auto run = _::EvalRun{*run_->evaluator_, std::addressof(events), ctx};
   auto frame = EvalFrame{run, events.mask};
   return run.eval(lambda.body(), std::move(frame));
 }

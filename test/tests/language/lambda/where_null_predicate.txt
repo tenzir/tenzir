@@ -1,4 +1,4 @@
-warning: expected `bool`, got `int64`
+warning: expected `bool`
  --> tests/language/lambda/where_null_predicate.tql:4:25
   |
 4 | invalid = xs.where(x => 1)

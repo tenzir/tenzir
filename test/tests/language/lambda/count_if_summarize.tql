@@ -8,5 +8,5 @@ from (
 )
 summarize (
   num_strings = x.count_if(x => type_of(x).kind == "string"),
-  num_ints = x.count_if(x => type_of(x).kind == "int64"),
+  num_ints = x.count_if(x => type_of(x).kind == "int"),
 )

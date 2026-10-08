@@ -111,9 +111,9 @@ TEST("reader predicates diagnose active non-boolean rows including nulls") {
     std::vector<std::string> warnings;
   };
   auto cases = {
-    TestCase{"null", 0, {"expected `bool`"}},
-    TestCase{"absent", 0, {"event does not have field", "expected `bool`"}},
-    TestCase{"null if id == 3 else true", 2, {"expected `bool`"}},
+    TestCase{"null", 0, {}},
+    TestCase{"absent", 0, {"event does not have field"}},
+    TestCase{"null if id == 3 else true", 2, {}},
     TestCase{"null if id == 0 else true", 3, {}},
     TestCase{"42", 0, {"expected `bool`"}},
     TestCase{"false", 0, {}},

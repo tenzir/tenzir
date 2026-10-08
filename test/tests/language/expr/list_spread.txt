@@ -1,4 +1,4 @@
-warning: expected list, got `int64` instead
+warning: expected `list`
  --> tests/language/expr/list_spread.tql:7:24
   |
 7 | z = [...x, 3, ...y, ...42]

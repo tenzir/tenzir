@@ -1,4 +1,4 @@
-warning: field `y` not found
+warning: event does not have field
  --> tests/operators/sort/nulls_last.tql:2:7
   |
 2 | sort -y

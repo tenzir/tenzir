@@ -1,8 +1,8 @@
-warning: expected `bool`, got `int64`
- --> tests/language/lambda/count_if_null_predicate.tql:4:23
+warning: expected `bool`
+ --> tests/language/lambda/count_if_null_predicate.tql:4:28
   |
 4 | invalid = xs.count_if(x => 1)
-  |                       ~~~~~~
+  |                            ~
   |
 {
   xs: [

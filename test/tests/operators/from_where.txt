@@ -1,4 +1,4 @@
-warning: field `foo` not found
+warning: event does not have field
  --> tests/operators/from_where.tql:5:7
   |
 5 | where foo == 42

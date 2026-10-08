@@ -132,13 +132,12 @@ def assert_byte_stream():
 def assert_predicate_diagnostics():
     path = Path(os.environ["READ_PUSHDOWN_ROOT"]) / "types"
     cases = [
-        ("where null", [], ["warning: expected `bool`"]),
-        (
-            "where absent",
-            [],
-            ["warning: event does not have field", "warning: expected `bool`"],
-        ),
-        ("where flag", [0, 3], ["warning: expected `bool`"]),
+        # A `null` predicate drops the row silently, so only the missing field
+        # itself is worth a diagnostic.
+        ("where null", [], []),
+        ("where absent", [], ["warning: event does not have field"]),
+        # `flag` holds a `null` in one row, which no longer warns either.
+        ("where flag", [0, 3], []),
         ("where id != 1\nwhere flag", [0, 3], []),
         ("where false\nwhere absent", [], []),
         ("where id >= 2", [2, 3], []),

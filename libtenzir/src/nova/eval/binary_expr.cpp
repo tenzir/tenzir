@@ -325,7 +325,7 @@ auto evaluate_subtraction(EvalFrame frame, std::array<Array<Data>, 2> args,
   auto warn_duration_overflow = WarnOnce{};
   auto warn_time_overflow = WarnOnce{};
   return apply_kernel<2>(
-    frame, "binary operator `-`", std::move(args), loc, NullPolicy::silent,
+    frame, "binary operator `-`", std::move(args), loc,
     ::tenzir::detail::overload{
       [loc, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh, T lhs,
                                                   U rhs)
@@ -384,7 +384,6 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       auto warn_duration_overflow = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `+`", {x.left, x.right}, x.get_location(),
-        NullPolicy::silent,
         ::tenzir::detail::overload{
           [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
                                                      T lhs, U rhs)
@@ -473,7 +472,6 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       };
       return apply_kernel<2>(
         frame, "binary operator `*`", {x.left, x.right}, x.get_location(),
-        NullPolicy::silent,
         ::tenzir::detail::overload{
           [&x, &warn_int_overflow]<class T, class U>(diagnostic_handler& dh,
                                                      T lhs, U rhs)
@@ -522,7 +520,6 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
       auto warn_div_by_zero = WarnOnce{};
       return apply_kernel<2>(
         frame, "binary operator `/`", {x.left, x.right}, x.get_location(),
-        NullPolicy::silent,
         ::tenzir::detail::overload{
           [&x, &warn_div_by_zero]<class T, class U>(
             diagnostic_handler& dh, T lhs, U rhs) -> Option<Float>
@@ -584,9 +581,8 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
     case in: {
       return apply_kernel<2>(
         frame, "binary operator `in`", {x.left, x.right}, x.get_location(),
-        // `in` keeps `NullPolicy::warning`: `null in [null]` is `true`, so a
-        // `null` operand cannot be settled before the kernel runs. Every other
-        // `null` operand yields `null` without a warning.
+        // `in` accepts every `null` combination itself, because `null in
+        // [null]` is `true`; the others yield `null` through the kernel.
         ::tenzir::detail::overload{
           []<class T, class U>(diagnostic_handler&, T, U) -> Option<Bool>
             requires((std::same_as<T, Null>

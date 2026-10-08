@@ -1,7 +1,8 @@
-error: expected unary lambda for `where`
+error: expected unary lambda
  --> tests/functions/sort/binary_lambda_rejected_elsewhere.tql:6:23
   |
 6 | select ys = xs.where((left, right) => left > right)
   |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = hint: binary lambdas are only supported for `sort(..., cmp=...)`
+  = usage: where(list:list, predicate:any => bool)
+  = docs: https://tenzir.com/docs/reference/functions/where

@@ -79,4 +79,65 @@ private:
   std::vector<ast::identifier> captures_;
 };
 
+/// A prepared binary lambda, such as the `cmp` comparator of `sort`.
+///
+/// Shares the lifetime rules of `LambdaArgument`: the node is borrowed, not
+/// owned. Both parameters are bound, so neither appears in `captures()`.
+/// Apply one with the binary `EvalFrame::eval`.
+class BinaryLambdaArgument {
+public:
+  BinaryLambdaArgument() = default;
+
+  /// Records the parameters and free fields of `lambda`, which must be binary.
+  static auto make(ast::lambda_expr& lambda, InstantiateCtx ctx)
+    -> failure_or<BinaryLambdaArgument>;
+
+  /// The name the left or right subject is bound to.
+  auto param(size_t index) const -> std::string_view {
+    TENZIR_ASSERT(node_);
+    TENZIR_ASSERT(index < 2);
+    return node_->param(index).name;
+  }
+
+  auto body() const -> ast::expression const& {
+    TENZIR_ASSERT(node_);
+    return node_->body;
+  }
+
+  /// The fields the body reads from the enclosing input.
+  auto captures() const -> std::span<ast::identifier const> {
+    return captures_;
+  }
+
+  /// Whether the body reads the enclosing event as a whole, through `this`.
+  /// Such a body needs the entire row in scope, not just its captures.
+  auto captures_this() const -> bool {
+    return captures_this_;
+  }
+
+  auto location() const -> ::tenzir::location {
+    TENZIR_ASSERT(node_);
+    return node_->location;
+  }
+
+  /// Whether an argument was provided; a default constructed
+  /// `BinaryLambdaArgument` stands for an omitted optional argument.
+  explicit operator bool() const {
+    return node_ != nullptr;
+  }
+
+private:
+  BinaryLambdaArgument(ast::lambda_expr const* node,
+                       std::vector<ast::identifier> captures,
+                       bool captures_this)
+    : node_{node},
+      captures_{std::move(captures)},
+      captures_this_{captures_this} {
+  }
+
+  ast::lambda_expr const* node_ = nullptr;
+  std::vector<ast::identifier> captures_;
+  bool captures_this_ = false;
+};
+
 } // namespace tenzir::nova

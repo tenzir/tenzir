@@ -1885,6 +1885,13 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   } else if (auto inferred = ir.infer_type(events_element_type(), null_dh);
              inferred and not cfg.implicit_events_source.empty()) {
     implicit_source = cfg.implicit_events_source;
+  } else if (auto inferred = ir.infer_type(tag_v<nova::Events>, null_dh);
+             inferred and not cfg.implicit_events_source.empty()) {
+    // Operators that have both a `table_slice` and a `nova::Events`
+    // implementation reject `table_slice` input when nova is enabled, so the
+    // probe above fails for them. Probe the nova element type as well instead
+    // of giving up and blaming the first operator for its `void` input.
+    implicit_source = cfg.implicit_events_source;
   } else {
     TRY(output, ir.infer_type(tag_v<void>, ctx));
   }

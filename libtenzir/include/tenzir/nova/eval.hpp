@@ -35,6 +35,7 @@ namespace tenzir::nova {
 struct Events;
 class Evaluator;
 class LambdaArgument;
+class BinaryLambdaArgument;
 class Aggregation;
 
 namespace _ {
@@ -144,6 +145,17 @@ public:
   /// flattening is the caller's business, or use `eval_elements`.
   auto eval(LambdaArgument const& lambda, MaskedArray<Array<Data>> subject,
             Events const& input) const -> Array<Data>;
+
+  /// Evaluates a binary `lambda`'s body with its parameters bound to `lhs`
+  /// and `rhs`, for the rows present in both. All three share a row layout.
+  ///
+  /// `dh` overrides the handler the body reports to. Callers that evaluate the
+  /// same body many times, such as a comparator driven by a sort, pass a
+  /// deduplicating handler so that one faulty body does not emit one
+  /// diagnostic per comparison.
+  auto eval(BinaryLambdaArgument const& lambda, MaskedArray<Array<Data>> lhs,
+            MaskedArray<Array<Data>> rhs, Events const& input,
+            Option<Ref<diagnostic_handler>> dh = None{}) const -> Array<Data>;
 
   /// Like above, but without input: the body may only read its parameter.
   auto eval(LambdaArgument const& lambda,

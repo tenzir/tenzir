@@ -461,7 +461,7 @@ TEST("print without nulls and with numeric durations") {
               "identifier\":\"z\"}}");
 }
 
-TEST("print DEL unescaped unless styled") {
+TEST("print DEL escaped") {
   auto dh = collecting_diagnostic_handler{};
   auto builder = nova::ArrayBuilder<nova::Data>{};
   nova::append_legacy_data(builder,
@@ -476,8 +476,7 @@ TEST("print DEL unescaped unless styled") {
     return std::string{reinterpret_cast<char const*>(bytes.data()),
                        bytes.size()};
   };
-  CHECK_EQUAL(text(plain(true)), "\"a\x7f"
-                                 "b\"");
+  CHECK_EQUAL(text(plain(true)), "\"a\\u007Fb\"");
   auto styled = plain(true);
   styled.style = jq_style();
   CHECK_EQUAL(text(styled), "\x1b[32m\"a\\u007Fb\"\x1b[0m");

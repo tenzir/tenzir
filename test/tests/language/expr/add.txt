@@ -12,13 +12,12 @@ warning: integer overflow
   |      ~~~~~~
   |
 
-warning: binary operator `add` not implemented for `string` and `int64`
+warning: binary operator `+` does not accept the argument type combination `(string, int)`
   --> tests/language/expr/add.tql:13:7
    |
 13 | x11 = "a" + 123
    |       ~~~~~~~~~
    |
-   = hint: the result of this expression is `null`
 
 warning: integer overflow
   --> tests/language/expr/add.tql:15:7

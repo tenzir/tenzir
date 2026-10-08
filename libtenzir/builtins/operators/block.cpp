@@ -8,6 +8,7 @@
 
 #include <tenzir/async/task.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -48,7 +49,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<BlockArgs, Block<table_slice>, Block<chunk_ptr>>{};
+    auto d = Describer<BlockArgs, Block<table_slice>, Block<nova::Events>,
+                       Block<chunk_ptr>>{};
     d.positional("duration", &BlockArgs::duration);
     // `_block` only delays its input; events pass through unchanged, so
     // downstream hints pass through as well.

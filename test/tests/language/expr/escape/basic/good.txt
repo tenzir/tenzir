@@ -7,5 +7,5 @@
   s2r: "Hello,\\x20\\u{1F310}",
   b2: b"Hello, 🌐",
   b2r: b"Hello,\\x20\\u{1F310}",
-  named: "\\\"\t\n\r\b\f\u000B\u0007\u0000",
+  named: "\\\"\t\n\r\b\f\u000b\u0007\u0000",
 }

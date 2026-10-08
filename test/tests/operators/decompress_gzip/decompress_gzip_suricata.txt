@@ -1,5 +1,8 @@
 {
-  events: 1162,
+  events: 581,
+}
+{
+  events: 581,
 }
 {
   events: 21,

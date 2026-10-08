@@ -6,6 +6,17 @@ warning: field `y` not found
   |
   = hint: did you mean `x`?
   = hint: append `?` to suppress this warning
+
+warning: record does not have field
+ --> tests/functions/list_map/captures.tql:9:26
+  |
+9 | list = list.map(x => {a: x.a, y: y, z: this["z"], k0: this.keys()[0]})
+  |                          ~
+  ⋮
+9 | list = list.map(x => {a: x.a, y: y, z: this["z"], k0: this.keys()[0]})
+  |                            - field does not exist
+  |
+  = hint: append `?` to suppress this warning
 {
   x: 1,
   y: 1.1.1.1,

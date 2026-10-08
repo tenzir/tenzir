@@ -18,21 +18,19 @@ auto _::EvalRun::eval(const ast::unary_expr& x, EvalFrame frame)
   switch (x.op) {
     using enum ast::unary_op;
     case pos:
-      return apply_kernel<1>(frame, "unary operator `+`", {x.expr},
-                             x.get_location(), NullPolicy::silent,
-                             []<class T>(diagnostic_handler&, T v) -> Option<T>
-                               requires(std::same_as<T, Int>
-                                        or std::same_as<T, UInt>
-                                        or std::same_as<T, Float>)
-                             {
-                               return +v;
-                             });
+      return apply_kernel<1>(
+        frame, "unary operator `+`", {x.expr}, x.get_location(),
+        []<class T>(diagnostic_handler&, T v) -> Option<T>
+          requires(std::same_as<T, Int> or std::same_as<T, UInt>
+                   or std::same_as<T, Float>)
+        {
+          return +v;
+        });
     case neg: {
       auto warn_int_overflow = WarnOnce{};
       auto warn_duration_overflow = WarnOnce{};
       return apply_kernel<1>(
         frame, "unary operator `-`", {x.expr}, x.get_location(),
-        NullPolicy::silent,
         ::tenzir::detail::overload{
           [&x, &warn_int_overflow](diagnostic_handler& dh,
                                    Int v) -> Option<Int> {
@@ -79,7 +77,6 @@ auto _::EvalRun::eval(const ast::unary_expr& x, EvalFrame frame)
         // would also accept `Int`/`UInt`/`Float` through implicit conversion
         // (see the note on `is_kernel_invocable_for`). `not null` is `null`,
         // silently, like in the legacy evaluator.
-        NullPolicy::silent,
         []<class T>(diagnostic_handler&, T v) -> Option<Bool>
           requires std::same_as<T, Bool>
         {

@@ -1,4 +1,4 @@
-warning: field `y` not found
+warning: event does not have field
  --> tests/operators/sort/multi_field.tql:2:10
   |
 2 | sort x, -y

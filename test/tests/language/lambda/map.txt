@@ -1,4 +1,4 @@
-warning: expected `list`, but got `string`
+warning: expected `list`, got a different type
   --> tests/language/lambda/map.tql:11:6
    |
 11 | xs = xs.map(x => x + x)

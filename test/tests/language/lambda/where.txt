@@ -1,24 +1,22 @@
-warning: binary operator `gt` not implemented for `string` and `int64`
+warning: expected `list`, got a different type
+  --> tests/language/lambda/where.tql:11:6
+   |
+11 | xs = xs.where(x => x > 1 and x < 4)
+   |      ~~
+   |
+
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
   --> tests/language/lambda/where.tql:11:20
    |
 11 | xs = xs.where(x => x > 1 and x < 4)
    |                    ~~~~~
    |
-   = hint: the result of this expression is `null`
 
-warning: binary operator `lt` not implemented for `string` and `int64`
+warning: binary operator `<` does not accept the argument type combination `(string, int)`
   --> tests/language/lambda/where.tql:11:30
    |
 11 | xs = xs.where(x => x > 1 and x < 4)
    |                              ~~~~~
-   |
-   = hint: the result of this expression is `null`
-
-warning: expected `list`, got `string`
-  --> tests/language/lambda/where.tql:11:6
-   |
-11 | xs = xs.where(x => x > 1 and x < 4)
-   |      ~~
    |
 {
   xs: [

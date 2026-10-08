@@ -110,7 +110,7 @@ public:
   template <class T>
   auto visit(T& x) -> void {
     if constexpr (not _::invalid_value_kind<T>().empty()) {
-      diagnostic::error("expected a value expression, got a {}",
+      diagnostic::error("expected a value expression, got {}",
                         _::invalid_value_kind<T>())
         .primary(x)
         .emit(ctx_);

@@ -270,8 +270,63 @@ auto sort_record(const series& input) -> series {
 struct SortArgs {
   nova::ValueArgument x;
   bool descending = false;
+  nova::BinaryLambdaArgument cmp;
   location call;
 };
+
+/// Deduplicates the warnings a `cmp` lambda can raise per call. The lambda
+/// body runs once per comparison, so both the diagnostics it emits itself and
+/// the ones we raise about its result need to collapse to one each.
+struct nova_comparator_warning_state {
+  bool null_result = false;
+  bool non_boolean_result = false;
+  diagnostic_deduplicator eval_diagnostics = {};
+};
+
+/// Evaluates `cmp` for a single pair of elements, with the enclosing row as
+/// input so that captures resolve against the event the list belongs to.
+auto eval_nova_sort_predicate(nova::BinaryLambdaArgument const& cmp,
+                              nova::RowView<nova::Data> lhs,
+                              nova::RowView<nova::Data> rhs,
+                              nova::Events const& scope,
+                              nova::EvalFrame const& frame,
+                              nova_comparator_warning_state& warnings) -> bool {
+  using namespace nova;
+  auto lhs_builder = ArrayBuilder<Data>{};
+  append_row(lhs_builder, lhs);
+  auto rhs_builder = ArrayBuilder<Data>{};
+  append_row(rhs_builder, rhs);
+  auto const present = storage::BitMap{1, true};
+  auto cmp_dh
+    = deduplicating_diagnostic_handler{frame.dh(), warnings.eval_diagnostics};
+  auto result
+    = frame.eval(cmp, MaskedArray<Array<Data>>{lhs_builder.finish(), present},
+                 MaskedArray<Array<Data>>{rhs_builder.finish(), present}, scope,
+                 cmp_dh);
+  return match(
+    result.get(storage::Index{0}),
+    [](RowView<Bool> value) {
+      return *value;
+    },
+    [&](RowView<Null>) {
+      if (not warnings.null_result) {
+        diagnostic::warning("`cmp` lambda must return `bool`, got `null`")
+          .primary(cmp.location())
+          .emit(frame);
+        warnings.null_result = true;
+      }
+      return false;
+    },
+    [&](auto const&) {
+      if (not warnings.non_boolean_result) {
+        diagnostic::warning("`cmp` lambda must return `bool`")
+          .primary(cmp.location())
+          .emit(frame);
+        warnings.non_boolean_result = true;
+      }
+      return false;
+    });
+}
 
 template <class Builder>
 auto append_sorted_records(Builder&& builder, nova::RowView<nova::Data> value)
@@ -304,11 +359,29 @@ auto append_sorted_records(Builder&& builder, nova::RowView<nova::Data> value)
 
 template <class Builder>
 auto append_sorted_list(Builder&& builder, nova::RowView<nova::List> value,
-                        bool descending) -> void {
+                        bool descending, nova::BinaryLambdaArgument const& cmp,
+                        nova::Events const* scope, nova::EvalFrame const& frame,
+                        nova_comparator_warning_state& warnings) -> void {
   using namespace nova;
   auto elements = std::vector<RowView<Data>>{};
   for (auto element : value) {
     elements.push_back(element);
+  }
+  if (cmp) {
+    TENZIR_ASSERT(scope);
+    // `desc` reverses the comparator instead of the result, so that it stays
+    // a strict weak ordering and `stable_sort` keeps ties in input order.
+    std::stable_sort(elements.begin(), elements.end(), [&](auto lhs, auto rhs) {
+      return descending ? eval_nova_sort_predicate(cmp, rhs, lhs, *scope, frame,
+                                                   warnings)
+                        : eval_nova_sort_predicate(cmp, lhs, rhs, *scope, frame,
+                                                   warnings);
+    });
+    auto output = builder.list();
+    for (auto element : elements) {
+      append_row(output, element);
+    }
+    return;
   }
   auto const order = descending ? Order::descending : Order::ascending;
   std::stable_sort(
@@ -329,19 +402,32 @@ public:
     auto builder = ArrayBuilder<Data>{};
     auto invalid = false;
     auto record_descending = false;
+    auto warnings = nova_comparator_warning_state{};
+    auto const* input = frame.input();
     for (auto row = storage::Index{0}; row < frame.length(); ++row) {
       if (not frame.mask().get(row)) {
         builder.skip();
         continue;
       }
       auto value = args.x.data.get(row);
+      auto scope = Option<Events>{};
+      if (args.cmp) {
+        // The comparator sees its enclosing event, so that captures such as
+        // `pivot` resolve per row.
+        scope = input ? subslice(*input, row, row + 1)
+                      : Events{Array<Record>::make_empty(1),
+                               storage::BitMap{1, true},
+                               Events::Meta::make_empty(1)};
+      }
       match(value, [&]<class T>(RowView<T> value) {
         if constexpr (std::same_as<T, Null>) {
           builder.null();
         } else if constexpr (std::same_as<T, List>) {
-          append_sorted_list(builder, value, args.descending);
+          append_sorted_list(builder, value, args.descending, args.cmp,
+                             scope ? std::addressof(*scope) : nullptr, frame,
+                             warnings);
         } else if constexpr (std::same_as<T, Record>) {
-          record_descending |= args.descending;
+          record_descending |= args.descending or bool{args.cmp};
           append_sorted_records(builder, RowView<Data>{value});
         } else {
           invalid = true;
@@ -356,7 +442,8 @@ public:
         .emit(frame);
     }
     if (record_descending) {
-      diagnostic::warning("`desc` is only applied when sorting lists")
+      diagnostic::warning(
+        "`desc` and `cmp` are only applied when sorting lists")
         .primary(args.call)
         .note("record fields are always sorted ascending by key")
         .emit(frame);
@@ -384,6 +471,7 @@ public:
     auto d = nova::FunctionDescriber<SortArgs, SortFunction>{};
     d.positional("x", &SortArgs::x, "list|record");
     d.named_optional("desc", &SortArgs::descending, "bool");
+    d.named_optional_binary("cmp", &SortArgs::cmp, "(a, b) => bool");
     d.call_location(&SortArgs::call);
     return std::move(d).finish();
   }

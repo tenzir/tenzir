@@ -427,6 +427,16 @@ public:
     add_named({std::move(name)}, std::move(type), prepare_value(ptr), false);
   }
 
+  /// Registers an optional named binary lambda, applied through the binary
+  /// `EvalFrame::eval`. The member stays default constructed when the caller
+  /// omits the argument, which `BinaryLambdaArgument`'s `operator bool`
+  /// reports.
+  auto named_optional_binary(std::string name, BinaryLambdaArgument Args::* ptr,
+                             std::string type = "(a, b) -> any") -> void {
+    add_named({std::move(name)}, std::move(type), prepare_binary_lambda(ptr),
+              false);
+  }
+
   /// Registers a required constant argument.
   template <ArgType T>
   auto positional(std::string name, T Args::* ptr, std::string type = "")
@@ -594,6 +604,22 @@ private:
       // Borrowed, not moved: the body belongs to the enclosing expression,
       // which is where its call sites are prepared.
       TRY(auto prepared, LambdaArgument::make(*lambda, ctx));
+      sink.args.as<Args>().*ptr = std::move(prepared);
+      sink.deferred.push_back(std::addressof(lambda->body));
+      return {};
+    };
+  }
+
+  static auto prepare_binary_lambda(BinaryLambdaArgument Args::* ptr)
+    -> Prepare {
+    return [ptr](PrepareSink sink, ast::expression& expr,
+                 InstantiateCtx ctx) -> failure_or<void> {
+      auto* lambda = try_as<ast::lambda_expr>(&expr);
+      if (not lambda) {
+        diagnostic::error("expected a lambda").primary(expr).emit(ctx);
+        return failure::promise();
+      }
+      TRY(auto prepared, BinaryLambdaArgument::make(*lambda, ctx));
       sink.args.as<Args>().*ptr = std::move(prepared);
       sink.deferred.push_back(std::addressof(lambda->body));
       return {};

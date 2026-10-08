@@ -1,3 +1,10 @@
+warning: event does not have field
+ --> tests/operators/sigma/metrics/03_check.tql:5:9
+  |
+5 |   where pipeline_id == "00000000-0000-0000-0000-000000000001"
+  |         ~~~~~~~~~~~
+  |
+  = hint: append `?` to suppress this warning
 {
   events: 2,
   rule_evaluations: 2,

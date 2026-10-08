@@ -94,8 +94,23 @@ private:
       fmt::format_to(std::back_inserter(buffer_), style, "{}",
                      json_string_fmt_wrapper{text});
     } else {
-      builder_.escape_and_append_with_quotes(text);
+      escape_and_append(text);
     }
+  }
+
+  /// Appends `text` quoted and escaped into the plain builder.
+  ///
+  /// simdjson only escapes what JSON mandates, i.e. U+0000 through U+001F,
+  /// but U+007F (DEL) is a control character too, and leaving it raw makes
+  /// the output differ from the styled path and from what the TQL parser
+  /// round-trips. Take the slow path only when a DEL is actually present.
+  auto escape_and_append(std::string_view text) -> void {
+    if (text.find('\x7f') == std::string_view::npos) {
+      builder_.escape_and_append_with_quotes(text);
+      return;
+    }
+    auto escaped = fmt::format("{}", json_string_fmt_wrapper{text});
+    builder_.append_raw(escaped);
   }
 
   template <class T>
@@ -161,7 +176,7 @@ private:
                          "b{}", json_string_fmt_wrapper{text});
         } else {
           builder_.append('b');
-          builder_.escape_and_append_with_quotes(text);
+          escape_and_append(text);
         }
       },
       [&](nova::RowView<nova::Secret>) {

@@ -140,6 +140,7 @@ public:
     // every other row as "not boolean".
     auto bool_data = Option<nova::Array<nova::Bool>>{};
     auto bool_present = nova::storage::BitMap{input.length(), false};
+    auto null_present = nova::storage::BitMap{input.length(), false};
     auto has_non_bool = false;
     match(
       result,
@@ -147,16 +148,25 @@ public:
         bool_data = b;
         bool_present = input.mask;
       },
+      [&](const nova::Array<nova::Null>&) {
+        null_present = input.mask;
+      },
       [&](const nova::UnionArray& u) {
         if (auto alt = u.get_alternative<nova::Bool>()) {
           bool_data = std::move(alt->data);
           bool_present = input.mask & alt->present;
         }
-        has_non_bool = input.mask.and_not(bool_present).any();
+        if (auto alt = u.get_alternative<nova::Null>()) {
+          null_present = input.mask & alt->present;
+        }
+        has_non_bool
+          = input.mask.and_not(bool_present).and_not(null_present).any();
       },
       [&](const auto&) {
         has_non_bool = input.mask.any();
       });
+    // A `null` condition takes the `else` branch without warning: `null` is an
+    // absent value, not a type error.
     if (has_non_bool) {
       diagnostic::warning("expected `bool`")
         .primary(condition_location_)

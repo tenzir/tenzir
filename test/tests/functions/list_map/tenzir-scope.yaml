@@ -1,0 +1,4 @@
+tests:
+  - captures.tql
+  - non_lambda_argument.tql
+  - null_promotion.tql

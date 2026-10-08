@@ -598,7 +598,13 @@ public:
     auto predicate = result.get_alternative<nova::Bool>();
     auto present = predicate ? input.mask & predicate->present
                              : nova::storage::BitMap{input.length(), false};
-    if (input.mask.and_not(present).any()) {
+    // A `null` predicate filters the row out without warning: `null` is an
+    // absent value, not a type error.
+    auto null_predicate = result.get_alternative<nova::Null>();
+    auto null_present = null_predicate
+                          ? input.mask & null_predicate->present
+                          : nova::storage::BitMap{input.length(), false};
+    if (input.mask.and_not(present).and_not(null_present).any()) {
       diagnostic::warning("expected `bool`")
         .primary(expr_location_)
         .emit(ctx.dh());

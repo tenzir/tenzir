@@ -353,6 +353,10 @@ public:
       [&](const Array<List>& arr) -> Array<Data> {
         return compute_lengths(arr, present);
       },
+      [&](const Array<Null>&) -> Array<Data> {
+        // A `null` subject propagates without warning.
+        return frame.null();
+      },
       [&](const UnionArray& u) -> Array<Data> {
         auto list_alt = u.get_alternative<List>();
         auto list_present

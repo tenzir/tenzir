@@ -106,7 +106,13 @@ auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
     auto predicate = result.get_alternative<nova::Bool>();
     auto present = predicate ? events.mask & predicate->present
                              : nova::storage::BitMap{events.length(), false};
-    if (events.mask.and_not(present).any()) {
+    // A `null` predicate filters the row out without warning, like `where`:
+    // `null` is an absent value, not a type error.
+    auto null_predicate = result.get_alternative<nova::Null>();
+    auto null_present = null_predicate
+                          ? events.mask & null_predicate->present
+                          : nova::storage::BitMap{events.length(), false};
+    if (events.mask.and_not(present).and_not(null_present).any()) {
       diagnostic::warning("expected `bool`").primary(filter.location()).emit(dh);
     }
     events.mask = predicate

@@ -33,19 +33,19 @@ namespace tenzir::nova::_ {
 template <class T>
 constexpr auto invalid_value_kind() -> std::string_view {
   if constexpr (std::is_same_v<T, ast::pipeline_expr>) {
-    return "pipeline";
+    return "a pipeline";
   } else if constexpr (std::is_same_v<T, ast::assignment>) {
-    return "assignment";
+    return "an assignment";
   } else if constexpr (std::is_same_v<T, ast::underscore>) {
-    return "placeholder `_`";
+    return "a placeholder `_`";
   } else if constexpr (std::is_same_v<T, ast::unpack>) {
-    return "unpack expression";
+    return "an unpack expression";
   } else if constexpr (std::is_same_v<T, ast::dollar_var>) {
-    return "variable that was not resolved";
+    return "a variable that was not resolved";
   } else if constexpr (std::is_same_v<T, ast::type_expr>) {
-    return "type expression";
+    return "a type expression";
   } else if constexpr (std::is_same_v<T, ast::lambda_expr>) {
-    return "lambda";
+    return "a lambda";
   } else {
     return {};
   }
@@ -157,7 +157,7 @@ private:
   template <class T>
     requires(not invalid_value_kind<T>().empty())
   auto eval(T const& x, EvalFrame frame) -> Array<Data> {
-    diagnostic::error("expected a value expression, got a {}",
+    diagnostic::error("expected a value expression, got {}",
                       invalid_value_kind<T>())
       .primary(x)
       .emit(ctx_);
