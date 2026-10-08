@@ -904,6 +904,7 @@ private:
     if (not venv_) {
       return;
     }
+    subprocess_ = None{};
     auto ec = std::error_code{};
     if (std::filesystem::exists(*venv_, ec)) {
       std::filesystem::remove_all(*venv_, ec);
