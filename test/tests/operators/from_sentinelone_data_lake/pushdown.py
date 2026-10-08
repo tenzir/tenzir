@@ -40,7 +40,7 @@ def run(
     native = "" if query is None else f", query={json.dumps(query)}"
     pipeline = f"""
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
-  token=secret("test-token-s1-12345", _literal=true),
+  token="test-token-s1-12345",
   account_ids=[{json.dumps(scope)}]{native}{args}
 {tail}
 write_ndjson

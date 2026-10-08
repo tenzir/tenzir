@@ -26,7 +26,7 @@ def calls() -> list[dict]:
 def command(query: str, arguments: str = "", tail: str = "write_ndjson") -> list[str]:
     pipeline = f"""
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
-  token=secret("test-token-s1-12345", _literal=true),
+  token="test-token-s1-12345",
   query={json.dumps(query)}{arguments}
 {tail}
 """

@@ -3,5 +3,5 @@ error: true
 ---
 
 from_sentinelone_data_lake "",
-  token=secret("x", _literal=true),
+  token="x",
   query="select_basic"

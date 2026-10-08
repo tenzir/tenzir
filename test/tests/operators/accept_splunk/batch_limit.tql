@@ -16,7 +16,7 @@ timeout: 30
 
 // The chunked gzip body contains 8193 identical HEC envelopes.
 accept_splunk env("HTTP_REQUEST_ENDPOINT"),
-  hec_token=secret("test-token", _literal=true)
+  hec_token="test-token"
 head 8193
 measure
 summarize events=sum(events), batches=count(), max_batch=max(events)

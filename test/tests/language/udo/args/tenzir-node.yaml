@@ -1,0 +1,6 @@
+tenzir:
+  nova: true
+  enable-assert-secret-operator: true
+  secrets:
+    udo-const: const
+    udo-suffix: topsecret

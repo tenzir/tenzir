@@ -1,0 +1,5 @@
+tenzir:
+  nova: true
+  secrets:
+    http-header-secret: alpha
+    http-body-secret: alpha

@@ -18,6 +18,6 @@ to_amazon_cloudwatch "ignored",
   stream="ignored",
   method="hlc",
   payload=message,
-  token=secret("tenzir-test-token", _literal=true),
+  token="tenzir-test-token",
   endpoint=env("CLOUDWATCH_HLC_ENDPOINT"),
   batch_size=1

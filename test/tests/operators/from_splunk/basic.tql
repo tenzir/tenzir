@@ -14,6 +14,6 @@ from_splunk env("HTTP_FIXTURE_URL"),
   earliest="-15m",
   latest="-5m",
   headers={
-    Authorization: secret("Splunk test-token", _literal=true),
+    Authorization: "Splunk test-token",
   },
   tls=false

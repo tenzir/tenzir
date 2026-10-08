@@ -3,5 +3,5 @@
 // stay as strings. Compare with typed_strings_raw.tql where raw=true
 // bypasses all inference and keeps every string as-is.
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
-  token=secret("test-token-s1-12345", _literal=true),
+  token="test-token-s1-12345",
   query="select_typed_strings"

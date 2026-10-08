@@ -8,7 +8,7 @@ from_http env("HTTP_FIXTURE_RECORD_URL"),
   body={page: 1},
   encode="json",
   headers={
-    "X-Secret": secret("keep", _literal=true),
+    "X-Secret": "keep",
     "X-Override": "old",
     "X-Delete": "gone",
   },

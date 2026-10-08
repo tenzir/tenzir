@@ -4,6 +4,6 @@ to_google_secops _dry_run=true,
   log_type="CUSTOM_DNS",
   log_text=text,
   labels={env: "prod"},
-  private_key=secret("test-key", _literal=true),
-  client_email=secret("test@example.com", _literal=true),
-  customer_id=secret("CUSTOMER", _literal=true)
+  private_key="test-key",
+  client_email="test@example.com",
+  customer_id="CUSTOMER"

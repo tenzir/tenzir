@@ -19,6 +19,6 @@ let $tls = {
 }
 
 accept_splunk "https://" + env("HTTP_REQUEST_ENDPOINT"),
-  hec_token=secret("test-token", _literal=true),
+  hec_token="test-token",
   tls=$tls
 head 1

@@ -12,5 +12,5 @@ timeout: 10
 ---
 
 accept_splunk env("HTTP_REQUEST_ENDPOINT"),
-  hec_token=secret("test-token", _literal=true)
+  hec_token="test-token"
 head 1

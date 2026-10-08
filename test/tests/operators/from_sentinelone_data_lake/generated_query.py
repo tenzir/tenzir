@@ -37,7 +37,7 @@ def run(
     pipeline = f"""
 {prefix}
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
-  token=secret("test-token-s1-12345", _literal=true){args}
+  token="test-token-s1-12345"{args}
 {tail}
 write_ndjson
 """

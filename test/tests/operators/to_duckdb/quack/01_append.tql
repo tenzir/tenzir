@@ -9,5 +9,5 @@ assertions:
 ---
 
 from {id: 3, name: "Grüße"}, {id: 4, name: "a\u{0}b", note: null}
-to_duckdb env("QUACK_URI"), token=secret(env("QUACK_TOKEN"), _literal=true),
+to_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"),
   table="events", mode="append", checkpoint_interval=0s

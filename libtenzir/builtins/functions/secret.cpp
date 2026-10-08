@@ -96,87 +96,81 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto name = ast::expression{};
-    auto literal = false;
     TRY(argument_parser2::function("secret")
           .positional("name", name, "string")
-          .named_optional("_literal", literal)
           .parse(inv, ctx));
     if (legacy_) {
-      return function_use::make([this, expr = std::move(name), literal](
-                                  evaluator eval, session ctx) -> series {
-        auto b = arrow::StringBuilder{};
-        check(b.Reserve(eval.length()));
-        for (auto& value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              for (auto i = int64_t{0}; i < array.length(); ++i) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
+      return function_use::make(
+        [this, expr = std::move(name)](evaluator eval, session ctx) -> series {
+          auto b = arrow::StringBuilder{};
+          check(b.Reserve(eval.length()));
+          for (auto& value : eval(expr)) {
+            auto f = detail::overload{
+              [&](const arrow::StringArray& array) {
+                for (auto i = int64_t{0}; i < array.length(); ++i) {
+                  if (array.IsNull(i)) {
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  const auto it = secrets_.find(array.GetView(i));
+                  if (it == secrets_.end()) {
+                    diagnostic::warning("unknown secret `{}`", array.GetView(i))
+                      .primary(expr)
+                      .emit(ctx);
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  check(b.Append(it->second));
                 }
-                if (literal) {
-                  check(b.Append(array.GetView(i)));
-                }
-                const auto it = secrets_.find(array.GetView(i));
-                if (it == secrets_.end()) {
-                  diagnostic::warning("unknown secret `{}`", array.GetView(i))
-                    .primary(expr)
-                    .emit(ctx);
-                  check(b.AppendNull());
-                  continue;
-                }
-                check(b.Append(it->second));
-              }
-            },
-            [&](const arrow::NullArray&) {
-              check(b.AppendNulls(value.length()));
-            },
-            [&](const auto&) {
-              diagnostic::warning("expected `string`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b.AppendNulls(value.length()));
-            },
-          };
-          match(*value.array, f);
-        }
-        return series{string_type{}, finish(b)};
-      });
+              },
+              [&](const arrow::NullArray&) {
+                check(b.AppendNulls(value.length()));
+              },
+              [&](const auto&) {
+                diagnostic::warning("expected `string`, got `{}`",
+                                    value.type.kind())
+                  .primary(expr)
+                  .emit(ctx);
+                check(b.AppendNulls(value.length()));
+              },
+            };
+            match(*value.array, f);
+          }
+          return series{string_type{}, finish(b)};
+        });
     } else {
-      return function_use::make([expr = std::move(name), literal](
-                                  evaluator eval, session ctx) -> series {
-        auto b = secret_type::builder_type{};
-        check(b.Reserve(eval.length()));
-        for (auto& value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              for (auto i = int64_t{0}; i < array.length(); ++i) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
+      return function_use::make(
+        [expr = std::move(name)](evaluator eval, session ctx) -> series {
+          auto b = secret_type::builder_type{};
+          check(b.Reserve(eval.length()));
+          for (auto& value : eval(expr)) {
+            auto f = detail::overload{
+              [&](const arrow::StringArray& array) {
+                for (auto i = int64_t{0}; i < array.length(); ++i) {
+                  if (array.IsNull(i)) {
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  check(append_builder(
+                    secret_type{}, b,
+                    ::tenzir::secret::make_managed(array.GetView(i))));
                 }
-                check(append_builder(
-                  secret_type{}, b,
-                  literal ? ::tenzir::secret::make_literal(array.GetView(i))
-                          : ::tenzir::secret::make_managed(array.GetView(i))));
-              }
-            },
-            [&](const arrow::NullArray&) {
-              check(b.AppendNulls(value.length()));
-            },
-            [&](const auto&) {
-              diagnostic::warning("expected `string`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b.AppendNulls(value.length()));
-            },
-          };
-          match(*value.array, f);
-        }
-        return series{secret_type{}, finish(b)};
-      });
+              },
+              [&](const arrow::NullArray&) {
+                check(b.AppendNulls(value.length()));
+              },
+              [&](const auto&) {
+                diagnostic::warning("expected `string`, got `{}`",
+                                    value.type.kind())
+                  .primary(expr)
+                  .emit(ctx);
+                check(b.AppendNulls(value.length()));
+              },
+            };
+            match(*value.array, f);
+          }
+          return series{secret_type{}, finish(b)};
+        });
     }
   }
 

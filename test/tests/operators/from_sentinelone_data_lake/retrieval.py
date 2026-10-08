@@ -28,7 +28,7 @@ def run(
     offset = len(CAPTURE.read_text().splitlines())
     pipeline = f"""
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
-  token=secret("test-token-s1-12345", _literal=true),
+  token="test-token-s1-12345",
   account_ids=[{json.dumps(scope)}],
   start=2024-01-01T00:00:00Z, end=2024-01-02T00:00:00Z{args}
 {tail}
