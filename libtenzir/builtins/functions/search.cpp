@@ -129,24 +129,18 @@ auto contains(const series& input, const type& what_type, const data& what,
   }
 }
 
-template <bool Deprecated = false>
+template <bool IsContains = false>
 class Plugin final : public function_plugin {
   auto is_deterministic() const -> bool override {
     return true;
   }
 
   auto name() const -> std::string override {
-    return Deprecated ? "contains" : "search";
+    return IsContains ? "contains" : "search";
   }
 
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
-    if constexpr (Deprecated) {
-      diagnostic::warning("`contains` is deprecated")
-        .primary(inv.call.get_location())
-        .hint("use `search` instead")
-        .emit(ctx);
-    }
     auto input = ast::expression{};
     auto target = located<data>{};
     auto exact = false;

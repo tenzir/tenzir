@@ -75,7 +75,7 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "modules",
     // Modules are exclusive to packages: builtin entities that used to live in
     // a module now use flat names, e.g., `context::enrich` became
-    // `context_enrich`. The old spellings still work, but are deprecated.
+    // `context_enrich`. The old operator spellings still work without warnings.
     "flat_builtin_names",
     // The node supports the TQL2 `from` and `to` operators.
     "tql2_from",

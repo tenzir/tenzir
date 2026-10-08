@@ -29,8 +29,8 @@ namespace {
 
 /// Modules that used to hold builtin entities. Modules are now reserved for
 /// packages, and the entities that lived in these modules were renamed from
-/// `mod::name` to `mod_name`. We keep the old spellings working with a
-/// deprecation warning that relays to the new name.
+/// `mod::name` to `mod_name`. We keep the old spellings working, with a
+/// deprecation warning for functions.
 ///
 /// TODO: Remove this compatibility shim with the next major release.
 constexpr auto deprecated_builtin_modules = std::array<std::string_view, 5>{
@@ -156,9 +156,9 @@ public:
         target_ns == entity_ns::op ? "operators" : "functions");
       std::move(builder).emit(diag_);
     };
-    // Relay a formerly module-qualified builtin entity to its flat name, with a
-    // deprecation warning. Package entities take precedence, so this runs only
-    // after regular resolution failed.
+    // Relay a formerly module-qualified builtin entity to its flat name.
+    // Package entities take precedence, so this runs only after regular
+    // resolution failed.
     const auto relay_deprecated = [&]() -> bool {
       auto flat = flatten_deprecated_path(x.path);
       if (not flat) {
@@ -170,22 +170,24 @@ public:
         if (not is<entity_ref>(reg_.try_get(path))) {
           continue;
         }
-        auto old = fmt::format(
-          "{}", fmt::join(std::views::transform(x.path, &ast::identifier::name),
-                          "::"));
         auto loc = x.get_location();
-        auto builder = diagnostic::warning("`{}` is deprecated", old)
-                         .primary(loc)
-                         .note("modules are reserved for packages");
-        // Entities in the deprecated package exist only under their old
-        // spelling, so there is no flat name to point at.
-        if (pkg != entity_pkg_deprecated) {
-          builder = std::move(builder).hint("use `{}` instead", *flat);
+        if (target_ns == entity_ns::fn) {
+          auto old = fmt::format(
+            "{}",
+            fmt::join(std::views::transform(x.path, &ast::identifier::name),
+                      "::"));
+          auto builder = diagnostic::warning("`{}` is deprecated", old)
+                           .primary(loc)
+                           .note("modules are reserved for packages");
+          // Entities in the deprecated package exist only under their old
+          // spelling, so there is no flat name to point at.
+          if (pkg != entity_pkg_deprecated) {
+            builder = std::move(builder).hint("use `{}` instead", *flat);
+          }
+          std::move(builder)
+            .docs("https://tenzir.com/docs/reference/functions")
+            .emit(diag_);
         }
-        std::move(builder)
-          .docs("https://tenzir.com/docs/reference/{}",
-                target_ns == entity_ns::op ? "operators" : "functions")
-          .emit(diag_);
         x.path = {ast::identifier{*flat, loc}};
         x.ref = std::move(path);
         return true;

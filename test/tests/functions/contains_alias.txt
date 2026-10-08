@@ -1,0 +1,7 @@
+{
+  nested: {
+    value: "Alice",
+  },
+  function_match: true,
+  method_match: true,
+}
