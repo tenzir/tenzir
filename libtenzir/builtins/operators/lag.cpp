@@ -11,6 +11,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/censor.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/eval_util.hpp>
 #include <tenzir/nova/events.hpp>
@@ -233,6 +234,7 @@ public:
                         : ast::expression{ast::this_{}}},
       offset_{args.offset ? args.offset->inner : default_offset},
       into_{std::move(args.into)} {
+    value_location_ = value_.get_location();
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -248,7 +250,12 @@ public:
     if (not input.mask.any()) {
       co_return;
     }
-    auto current = evaluator_->eval(input, nova::EvalCtx{ctx.dh()});
+    // Secrets may be used within expressions, but never stored in events.
+    auto [current, censored]
+      = nova::censor_secrets(evaluator_->eval(input, nova::EvalCtx{ctx.dh()}));
+    if (censored) {
+      nova::warn_censored_secrets(value_location_, ctx.dh());
+    }
     auto rows = std::vector<nova::storage::Index>{};
     rows.reserve(input.active_count());
     nova::storage::for_each_true(input.mask, [&](auto row) {
@@ -327,6 +334,7 @@ private:
   }
 
   ast::expression value_;
+  location value_location_;
   uint64_t offset_;
   ast::field_path into_;
   Option<nova::Evaluator> evaluator_;

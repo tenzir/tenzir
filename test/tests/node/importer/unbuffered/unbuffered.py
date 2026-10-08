@@ -27,7 +27,7 @@ try:
         "import\n"
     )
     assert result.returncode == 0, result.stderr.decode()
-    assert "`secret` cannot be imported as secrets" in result.stderr.decode()
+    assert "secrets cannot be stored in events" in result.stderr.decode()
     result = tenzir.run(
         'export\nwhere value == "secret-import"\nto_stdout { write_ndjson }\n'
     )

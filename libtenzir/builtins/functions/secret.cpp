@@ -40,8 +40,11 @@ public:
     return "secret";
   }
 
+  // Values that contain a secret are censored before they are stored in
+  // events, so optimizations must not substitute a `secret` call for a field
+  // that holds its censored value.
   auto is_deterministic() const -> bool final {
-    return true;
+    return false;
   }
 
   auto describe() const -> nova::FunctionDescription override {

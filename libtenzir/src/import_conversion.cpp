@@ -6,11 +6,11 @@
 #include "tenzir/import_conversion.hpp"
 
 #include "tenzir/arrow_utils.hpp"
-#include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/arrow_export.hpp"
 #include "tenzir/nova/arrow_import.hpp"
 #include "tenzir/nova/arrow_metadata.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/censor.hpp"
 
 #include <arrow/record_batch.h>
 
@@ -21,118 +21,6 @@
 namespace tenzir {
 
 namespace {
-
-auto redact_value(nova::Data const& input) -> Option<nova::Data> {
-  return match(input, []<class T>(T const& value) -> Option<nova::Data> {
-    if constexpr (std::same_as<T, nova::Secret>) {
-      return nova::Data{nova::String{"***"}};
-    } else if constexpr (std::same_as<T, nova::Record>) {
-      auto result = Option<nova::Record>{};
-      for (auto const& [name, field] : value) {
-        if (auto replacement = redact_value(field)) {
-          if (not result) {
-            result.emplace(value);
-          }
-          (*result)[name] = std::move(*replacement);
-        }
-      }
-      if (result) {
-        return nova::Data{std::move(*result)};
-      }
-    } else if constexpr (std::same_as<T, nova::List>) {
-      auto result = Option<nova::List>{};
-      for (auto i = size_t{0}; i < value.size(); ++i) {
-        if (auto replacement = redact_value(value[i])) {
-          if (not result) {
-            result.emplace(value);
-          }
-          (*result)[i] = std::move(*replacement);
-        }
-      }
-      if (result) {
-        return nova::Data{std::move(*result)};
-      }
-    }
-    return None{};
-  });
-}
-
-auto redact_column(nova::Array<nova::Data> const& input)
-  -> Option<nova::Array<nova::Data>> {
-  using namespace nova;
-  return match(input, []<class T>(T const& array) -> Option<Array<Data>> {
-    if constexpr (std::same_as<T, Array<Secret>>) {
-      return Array<String>{
-        storage::ConstantStorage<std::string, std::string_view>{array.length(),
-                                                                "***"}};
-    } else if constexpr (std::same_as<T, Array<Record>>) {
-      return match(
-        array.storage(), [](auto const& physical) -> Option<Array<Data>> {
-          if constexpr (std::same_as<std::decay_t<decltype(physical)>,
-                                     storage::RecordStorage>) {
-            auto const& source = *physical;
-            auto fields = Option<storage::RecordStorage::MaskedArrays>{};
-            for (auto i = size_t{0}; i < source.arrays.size(); ++i) {
-              if (auto replacement = redact_column(source.arrays[i].data)) {
-                if (not fields) {
-                  fields.emplace(source.arrays);
-                }
-                (*fields)[i].data = std::move(*replacement);
-              }
-            }
-            if (fields) {
-              return Array<Record>{source.shape_indices,
-                                   ShapeTable{source.shape_table}, source.names,
-                                   std::move(*fields)};
-            }
-          } else if (auto value = redact_value(Data{physical.value()})) {
-            return repeat(*value, physical.length());
-          }
-          return None{};
-        });
-    } else if constexpr (std::same_as<T, Array<List>>) {
-      return match(
-        array.storage(), [](auto const& physical) -> Option<Array<Data>> {
-          if constexpr (std::same_as<std::decay_t<decltype(physical)>,
-                                     storage::ListStorage>) {
-            if (auto values = redact_column(physical.values())) {
-              return Array<List>{physical.spans(), std::move(*values)};
-            }
-          } else if (auto value = redact_value(Data{physical.value()})) {
-            return repeat(*value, physical.length());
-          }
-          return None{};
-        });
-    } else if constexpr (std::same_as<T, UnionArray>) {
-      auto columns = std::vector<Array<Data>>{};
-      auto changed = false;
-      for (auto const& field : array.fields()) {
-        auto column = match(field.data, [](auto const& concrete) {
-          return Array<Data>{concrete};
-        });
-        if (auto replacement = redact_column(column)) {
-          column = std::move(*replacement);
-          changed = true;
-        }
-        columns.push_back(std::move(column));
-      }
-      if (changed) {
-        // Rebuild only changed unions to merge secret and string alternatives.
-        auto builder = ArrayBuilder<Data>{};
-        for (auto row = storage::Index{0}; row < array.length(); ++row) {
-          auto index = array.alternative_index_at(row);
-          if (index < 0) {
-            builder.null();
-          } else {
-            append_row(builder, columns[index].get(row));
-          }
-        }
-        return builder.finish();
-      }
-    }
-    return None{};
-  });
-}
 
 auto refine(type const& lhs, type const& rhs) -> Result<type, std::string> {
   if (lhs == rhs or is<null_type>(rhs)) {
@@ -376,11 +264,12 @@ auto make_slice(nova::Events const& events, record_type const& schema,
 
 auto redact_import_secrets(nova::Events events)
   -> std::pair<bool, nova::Events> {
-  auto replacement = redact_column(nova::Array<nova::Data>{events.data});
-  if (not replacement) {
+  auto [data, censored]
+    = nova::censor_secrets(nova::Array<nova::Data>{events.data});
+  if (not censored) {
     return {false, std::move(events)};
   }
-  auto record = replacement->try_as<nova::Record>();
+  auto record = data.try_as<nova::Record>();
   TENZIR_ASSERT(record);
   events.data = std::move(*record);
   return {true, std::move(events)};

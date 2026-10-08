@@ -1,2 +1,4 @@
 tenzir:
   nova: true
+  secrets:
+    censor-key: key

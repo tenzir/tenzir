@@ -171,6 +171,16 @@ yields a `Secret` for every row with a top-level secret replacement and a
 operators reject secrets. Generic code paths, such as sorting, hashing, and
 deduplication, treat all secrets as equivalent.
 
+Secrets live only within expressions and never in events. Every operator that
+stores an evaluated expression in events, such as `set`, `select`, `lag`, and
+`context::enrich`, must pass the value through `censor_secrets`
+(`tenzir/nova/censor.hpp`), which replaces each secret, including nested ones,
+with the string `***`, and report it with `warn_censored_secrets`. Operators
+that only use a value as a predicate, key, or argument need not censor it.
+`summarize` never emits a secret: it instantiates aggregations without secret
+resolution while planning, which rejects `secret()` within an aggregation, and
+its groups are field paths that only read event data.
+
 ### Contexts
 
 Three context types, each with one job and none of them retained:

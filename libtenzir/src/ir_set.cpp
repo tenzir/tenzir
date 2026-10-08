@@ -17,6 +17,7 @@
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/censor.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/eval_util.hpp"
@@ -907,9 +908,15 @@ public:
     // must not affect later right-hand sides or dynamic targets.
     auto values = std::vector<nova::MaskedArray<nova::Array<nova::Data>>>{};
     values.reserve(fields_.size());
-    for (auto& evaluator : evaluators_) {
+    for (auto [field, evaluator] : std::views::zip(fields_, evaluators_)) {
+      // Secrets may be used within expressions, but never stored in events.
+      auto [value, censored]
+        = nova::censor_secrets(evaluator.eval(input, nova::EvalCtx{ctx.dh()}));
+      if (censored and input.mask.any()) {
+        nova::warn_censored_secrets(field.rhs_location, ctx.dh());
+      }
       values.push_back(nova::MaskedArray<nova::Array<nova::Data>>{
-        evaluator.eval(input, nova::EvalCtx{ctx.dh()}), input.mask});
+        std::move(value), input.mask});
     }
     auto dynamic_rows = std::vector<Option<DynamicRows>>{};
     dynamic_rows.reserve(fields_.size());
