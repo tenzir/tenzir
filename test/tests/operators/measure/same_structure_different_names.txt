@@ -1,0 +1,8 @@
+{
+  schema: "my_schema",
+  events: 1,
+}
+{
+  schema: "tenzir.unknown",
+  events: 2,
+}

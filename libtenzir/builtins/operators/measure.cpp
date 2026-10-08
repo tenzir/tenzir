@@ -158,25 +158,26 @@ public:
         nova::Events::Meta::make_empty(rows, "tenzir.measure.events")});
       co_return;
     }
-    // A batch can hold events of multiple schemas, so we group its active
-    // rows by their schema identifier and report one metric per group. Schemas
-    // are identified by their structure, so events that share a structure but
-    // not their name form one group.
+    // A batch can hold events of multiple schemas, so group its active rows
+    // by both name and structural identifier. Different names can have the
+    // same structure, but must have separate counters.
     const auto ids
       = nova::type_id(nova::Array<nova::Data>{input.data}, input.mask);
     struct Group {
-      std::string id;
+      std::string key;
       nova::storage::Index first_row;
       uint64_t events;
     };
     auto groups = std::vector<Group>{};
     auto group_index = std::unordered_map<std::string, size_t>{};
     for (auto row : nova::storage::true_bits(input.mask)) {
-      auto id = std::string{*ids.get(row)};
-      auto it = group_index.find(id);
+      auto key = std::string{*input.meta.name.get(row)};
+      key.push_back('\0');
+      key.append(*ids.get(row));
+      auto it = group_index.find(key);
       if (it == group_index.end()) {
-        groups.emplace_back(id, row, 0);
-        it = group_index.emplace(std::move(id), groups.size() - 1).first;
+        groups.emplace_back(key, row, 0);
+        it = group_index.emplace(std::move(key), groups.size() - 1).first;
       }
       groups[it->second].events += 1;
     }
@@ -185,14 +186,14 @@ public:
     }
     auto builder = nova::ArrayBuilder<nova::Record>{};
     const auto now = time::clock::now();
-    for (const auto& [id, first_row, events] : groups) {
-      auto& total = events_[id];
+    for (const auto& [key, first_row, events] : groups) {
+      auto& total = events_[key];
       const auto is_new = total == 0;
       total = args_.cumulative ? total + events : events;
       auto metric = builder.record();
       metric.field("timestamp").data(now);
       metric.field("events").data(total);
-      metric.field("schema_id").data(id);
+      metric.field("schema_id").data(*ids.get(first_row));
       const auto name = *input.meta.name.get(first_row);
       if (not args_.definition) {
         metric.field("schema").data(name);
@@ -222,7 +223,7 @@ public:
 
 private:
   MeasureArgs args_;
-  /// The number of events per schema identifier.
+  /// The number of events per schema name and structural identifier.
   std::unordered_map<std::string, uint64_t> events_;
 };
 

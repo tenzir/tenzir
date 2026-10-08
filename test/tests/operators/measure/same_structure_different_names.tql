@@ -1,0 +1,7 @@
+from {x: "a", g: "yellow"}, {hello: "world", g: "blue"}
+merge {
+  from {x: "a", g: "yellow"} | @name = "my_schema"
+}
+measure cumulative=true
+summarize schema, events=events.sum()
+sort schema
