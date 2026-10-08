@@ -79,12 +79,15 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "to_udp"},
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::events);
-    auto [startup_sender, startup_receiver]
-      = channel<diagnostic>(request_queue_capacity);
+    // Avoid structured bindings here: GCC 15 can drop their cleanup when they
+    // live across a suspension point, which leaks the channel.
+    auto startup_channel = channel<diagnostic>(request_queue_capacity);
+    auto startup_receiver = std::move(std::get<1>(startup_channel));
     TENZIR_ASSERT(write_sender_);
     ctx.spawn_task(folly::coro::co_withExecutor(
       evb_, write_loop(*evb_, std::move(address).unwrap(), args_.self,
-                       std::move(write_receiver_), std::move(startup_sender),
+                       std::move(write_receiver_),
+                       std::move(std::get<0>(startup_channel)),
                        bytes_write_counter_, events_write_counter_)));
     // Successful startup is signaled by closing the channel without errors.
     while (auto diagnostic = co_await startup_receiver.recv()) {
@@ -148,13 +151,16 @@ public:
     if (payloads.empty()) {
       co_return;
     }
-    auto [reply_sender, reply_receiver] = channel<SendBatchResult>(1);
     // We currently use a one-shot channel to confirm that the data has been
     // completely sent. That might not be ideal, but it simplifies the code for
     // now that we don't have to wait for the queue to be drained. As a result,
     // the writer channel can be capacity one and writing always succeeds.
+    // Avoid structured bindings here: GCC 15 can drop their cleanup when they
+    // live across a suspension point, which leaks the channel.
+    auto reply_channel = channel<SendBatchResult>(1);
+    auto reply_receiver = std::move(std::get<1>(reply_channel));
     auto write_result = write_sender_->try_send(
-      SendBatch{std::move(payloads), std::move(reply_sender)});
+      SendBatch{std::move(payloads), std::move(std::get<0>(reply_channel))});
     TENZIR_ASSERT(write_result.is_ok());
     auto result = co_await reply_receiver.recv();
     TENZIR_ASSERT(result);
