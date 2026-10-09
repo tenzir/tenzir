@@ -1,0 +1,9 @@
+created: 2026-10-09
+title: Stability fixes for TCP, UDP, and Python pipelines
+intro: >-
+  This release fixes a memory leak in to_udp, a crash when TCP clients disconnect
+  during accept, and spurious error logs when stopping pipelines that use the python
+  operator.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.18.0
