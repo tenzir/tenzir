@@ -1386,6 +1386,12 @@ private:
       }
       co_await prepare_key_evaluators();
       co_await base_op().start(job_, *this);
+      // An error emitted during startup leaves the operator uninitialized. Do
+      // not rely on every diagnostic handler cancelling the ambient token.
+      if (dh_->failure().is_error()) {
+        co_await handle_done(true);
+        co_return;
+      }
       co_await folly::coro::co_safe_point;
       ensure_await_task();
       for (auto lane = size_t{0}; lane < pull_upstream_.size(); ++lane) {
