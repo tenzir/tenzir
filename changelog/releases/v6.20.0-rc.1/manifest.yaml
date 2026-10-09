@@ -1,0 +1,9 @@
+created: 2026-10-09
+title: A new data model for faster pipelines
+intro: >-
+  This release introduces a new data model that makes pipelines faster and lets lists
+  hold values of different types. It also adds typed decisions with `ai_decide` and
+  secrets as function arguments.
+source:
+  mode: snapshot-prerelease
+  previous_stable: v6.19.1

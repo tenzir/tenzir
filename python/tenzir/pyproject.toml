@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tenzir"
-version = "6.19.0"
+version = "6.20.0rc1"
 description = "Tenzir CLI bindings and binary launchers"
 requires-python = ">=3.10"
 license = "BSD-3-Clause"
@@ -26,8 +26,8 @@ classifiers = [
 dependencies = [
   "numpy>=1.24",
   "python-box>=7.3.2",
-  "tenzir-common>=6.19.0,<6.20.0",
-  "tenzir-platform-cli>=6.19.0,<6.20.0",
+  "tenzir-common>=6.20.0rc1,<6.21.0",
+  "tenzir-platform-cli>=6.20.0rc1,<6.21.0",
 ]
 
 [project.urls]

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tenzir-platform-cli"
-version = "6.19.0"
+version = "6.20.0rc1"
 description = "Command-line client for the Tenzir Platform"
 requires-python = ">=3.10"
 license = "BSD-3-Clause"
