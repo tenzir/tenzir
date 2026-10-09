@@ -30,6 +30,7 @@ def main() -> None:
         subprocess.Popen(
             [
                 "tenzir",
+                "--nova=true",
                 PIPELINE.format(id=id, field=field, catalog=catalog_uri),
             ],
         )

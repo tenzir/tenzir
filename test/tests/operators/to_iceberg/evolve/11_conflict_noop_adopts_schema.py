@@ -34,7 +34,7 @@ from_stdin {{
 to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append", max_size=1
 """
     writer = subprocess.Popen(
-        ["tenzir", pipeline],
+        ["tenzir", "--nova=true", pipeline],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -63,6 +63,7 @@ to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append", max_size=1
     subprocess.run(
         [
             "tenzir",
+            "--nova=true",
             f"from {{id: 2, extra: 42}}\n"
             f'to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="append"',
         ],

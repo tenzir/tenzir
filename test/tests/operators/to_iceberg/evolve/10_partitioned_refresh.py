@@ -18,7 +18,7 @@ TABLE = "evolvens.partitioned_refresh"
 
 def run_pipeline(pipeline: str) -> None:
     subprocess.run(
-        ["tenzir", pipeline],
+        ["tenzir", "--nova=true", pipeline],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -42,7 +42,7 @@ from_stdin {{
 to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="append", max_size=1000
 """
     writer = subprocess.Popen(
-        ["tenzir", pipeline],
+        ["tenzir", "--nova=true", pipeline],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

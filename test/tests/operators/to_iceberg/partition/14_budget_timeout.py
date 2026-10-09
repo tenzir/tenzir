@@ -23,7 +23,7 @@ to_iceberg "partns.live", catalog=env("ICEBERG_REST_URI"),
 
 def main() -> None:
     writer = subprocess.Popen(
-        ["tenzir", PIPELINE],
+        ["tenzir", "--nova=true", PIPELINE],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

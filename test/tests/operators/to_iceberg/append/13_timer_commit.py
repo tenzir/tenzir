@@ -29,7 +29,7 @@ from_stdin {{
 to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append", timeout=2s
 """
     writer = subprocess.Popen(
-        ["tenzir", pipeline],
+        ["tenzir", "--nova=true", pipeline],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

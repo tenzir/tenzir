@@ -21,6 +21,8 @@
 #include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/nova/arrow_export.hpp>
+#include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/si_literals.hpp>
@@ -388,7 +390,8 @@ auto parse_partition_by(ast::expression const& expr, diagnostic_handler& dh)
   return result;
 }
 
-class ToIceberg final : public Operator<table_slice, void> {
+template <class Input>
+class ToIceberg final : public Operator<Input, void> {
 public:
   struct RotateRequested {
     /// The `PartitionGroup::key` of the open partition to rotate.
@@ -727,7 +730,22 @@ public:
                  args_.table_id.inner);
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+  auto process(Input input, OpCtx& ctx) -> Task<void> override {
+    if constexpr (std::same_as<Input, nova::Events>) {
+      // The write path works on Arrow batches with a single schema, so the
+      // heterogeneous events are split into homogeneous slices first.
+      for (auto& slice : nova::to_table_slices(input)) {
+        co_await process_slice(std::move(slice), ctx);
+        if (done_) {
+          co_return;
+        }
+      }
+    } else {
+      co_await process_slice(std::move(input), ctx);
+    }
+  }
+
+  auto process_slice(table_slice input, OpCtx& ctx) -> Task<void> {
     if (done_ or input.rows() == 0) {
       co_return;
     }
@@ -2324,7 +2342,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToIcebergArgs, ToIceberg>{};
+    auto d = Describer<ToIcebergArgs, ToIceberg<table_slice>,
+                       ToIceberg<nova::Events>>{};
     auto table_arg = d.positional("table", &ToIcebergArgs::table_id);
     d.named("catalog", &ToIcebergArgs::catalog);
     auto mode_arg = d.named("mode", &ToIcebergArgs::mode);
