@@ -1,6 +1,6 @@
 ---
 title: Secret seeds for Crypto-PAn
-type: breaking
+type: change
 authors:
   - mavam
 created: 2026-10-08T19:10:06.853392Z
