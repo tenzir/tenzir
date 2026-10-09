@@ -915,15 +915,23 @@ private:
     if (not venv_) {
       return;
     }
-    auto ec = std::error_code{};
-    if (std::filesystem::exists(*venv_, ec)) {
-      std::filesystem::remove_all(*venv_, ec);
-      if (ec) {
-        TENZIR_WARN("python operator failed to remove venv at {}: {}", *venv_,
-                    ec);
-      }
-    }
+    auto venv = std::move(*venv_);
     venv_ = None{};
+    // `spawn_blocking` enqueues eagerly, so the work runs even though we drop
+    // the returned task.
+    static_cast<void>(
+      spawn_blocking([subprocess = std::exchange(subprocess_, None{}),
+                      venv = std::move(venv)]() mutable {
+        subprocess = None{};
+        auto ec = std::error_code{};
+        if (std::filesystem::exists(venv, ec)) {
+          std::filesystem::remove_all(venv, ec);
+          if (ec) {
+            TENZIR_WARN("python operator failed to remove venv at {}: {}", venv,
+                        ec);
+          }
+        }
+      }));
   }
 
   Lifecycle lifecycle_ = Lifecycle::starting;
