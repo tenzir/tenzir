@@ -48,9 +48,15 @@ return an `Ack` whose `RelatesTo` matches the request.
 The pipeline typically ends with `head`, so the last step may see its
 connection drop. Steps can opt into that with `may_drop: true`.
 
+By default, all entries in `clients` use the same CA. `client_cas` maps CA
+names to additional client names. Use `client_ca` on a step to select a client
+from one of these CAs. This supports scenarios in which separate CAs issue
+certificates with the same common name.
+
 With `intermediate_ca: true`, an intermediate CA issues the client
 certificates and clients send it along, while `WEF_CAFILE` holds only the root
-CA. `tls_max_version` limits the TLS version that clients offer, e.g., `"1.2"`.
+CA. `tls_max_version` limits the TLS version that clients offer, for example,
+`"1.2"`.
 
 With `kerberos: true` (or `negotiate`), clients authenticate with Kerberos
 against a KDC that the fixture runs, and the fixture sets `WEF_KEYTAB` and
@@ -90,6 +96,7 @@ _CONNECT_DEADLINE = 30.0
 @dataclass(frozen=True)
 class WefOptions:
     clients: list[str] = field(default_factory=lambda: ["win10.example.org"])
+    client_cas: dict[str, list[str]] = field(default_factory=dict)
     steps: list[dict[str, Any]] = field(default_factory=list)
     # Authenticate with Kerberos instead of certificates: `true` or `kerberos`
     # for the Kerberos scheme, `negotiate` for SPNEGO.
@@ -129,26 +136,43 @@ def _event(spec: Any) -> str:
 
 
 class _Scenario:
-    def __init__(self, opts: WefOptions, port: int, pki: wef_client.Pki) -> None:
+    def __init__(
+        self,
+        opts: WefOptions,
+        port: int,
+        pki: wef_client.Pki,
+        client_pkis: dict[str, wef_client.Pki],
+    ) -> None:
         self.opts = opts
         self.port = port
         self.pki = pki
+        self.client_pkis = client_pkis
         self.errors: list[str] = []
         self.stop = threading.Event()
-        self.clients: dict[str, wef_client.WefClient] = {}
+        self.clients: dict[tuple[str | None, str], wef_client.WefClient] = {}
 
-    def client(self, name: str | None) -> wef_client.WefClient:
-        name = name or self.opts.clients[0]
-        if name not in self.clients:
-            self.clients[name] = wef_client.WefClient(
+    def client(self, name: str | None, ca: str | None = None) -> wef_client.WefClient:
+        if name is None:
+            if ca is not None:
+                name = self.opts.client_cas[ca][0]
+            elif self.opts.clients:
+                name = self.opts.clients[0]
+            else:
+                ca, names = next(iter(self.opts.client_cas.items()))
+                name = names[0]
+        key = (ca, name)
+        if key not in self.clients:
+            client = wef_client.WefClient(
                 _HOST,
                 self.port,
                 self.pki,
                 name,
                 kerberos=self.opts.scheme,
+                client_pki=self.client_pkis[ca] if ca is not None else None,
                 tls_max_version=self.opts.tls_max_version,
             )
-        return self.clients[name]
+            self.clients[key] = client
+        return self.clients[key]
 
     def run(self) -> None:
         # Without steps, the fixture only provides certificates.
@@ -200,7 +224,9 @@ class _Scenario:
         if action == "sleep":
             self.stop.wait(float(params.get("seconds", 0)))
             return
-        client = self.client(params.pop("client", None))
+        client_ca = params.pop("client_ca", None)
+        client = self.client(params.pop("client", None), client_ca)
+        client_pki = self.client_pkis[client_ca] if client_ca is not None else self.pki
         expect = dict(params.pop("expect", None) or {})
         status = expect.pop("status", 200)
         try:
@@ -215,7 +241,7 @@ class _Scenario:
             if response.action != wef_client.ACTION_ACK:
                 raise _StepFailure(f"expected an Ack, got {response.action!r}")
         if action == "enumerate" and status == 200:
-            self.check_enumerate(client, expect)
+            self.check_enumerate(client, client_pki, expect)
             expect = {}
         if expect:
             raise _StepFailure(f"unknown expectations {sorted(expect)}")
@@ -279,7 +305,10 @@ class _Scenario:
         return client.post(path, body, **kwargs)
 
     def check_enumerate(
-        self, client: wef_client.WefClient, expect: dict[str, Any]
+        self,
+        client: wef_client.WefClient,
+        client_pki: wef_client.Pki,
+        expect: dict[str, Any],
     ) -> None:
         subscriptions = client.subscriptions
         if "subscriptions" in expect:
@@ -339,7 +368,7 @@ class _Scenario:
                     )
         if expect.pop("thumbprint", None) == "ca":
             for name, subscription in subscriptions.items():
-                if subscription.thumbprint != self.pki.issuer_thumbprint():
+                if subscription.thumbprint != client_pki.issuer_thumbprint():
                     raise _StepFailure(
                         f"subscription {name}: expected the CA thumbprint, "
                         f"got {subscription.thumbprint!r}"
@@ -353,10 +382,22 @@ def wef() -> FixtureHandle:
     opts = current_options("wef")
     if not isinstance(opts, WefOptions):
         raise TypeError("wef fixture options failed to parse")
-    if not opts.clients:
+    if not opts.clients and not opts.client_cas:
         raise ValueError("wef fixture requires at least one client")
+    if any(not clients for clients in opts.client_cas.values()):
+        raise ValueError("wef fixture client CAs require at least one client")
+    if opts.scheme and opts.client_cas:
+        raise ValueError("wef fixture client CAs require TLS authentication")
     directory = Path(tempfile.mkdtemp(prefix="wef-"))
     pki = wef_client.Pki.create(directory / "pki", intermediate=opts.intermediate_ca)
+    client_pkis = {
+        name: wef_client.Pki.create(
+            directory / f"pki-{index}",
+            f"Tenzir WEF Test {name} CA",
+            intermediate=opts.intermediate_ca,
+        )
+        for index, name in enumerate(opts.client_cas)
+    }
     env = {}
     if opts.scheme:
         try:
@@ -377,9 +418,21 @@ def wef() -> FixtureHandle:
     else:
         for name in opts.clients:
             pki.client(name)
+        for ca, names in opts.client_cas.items():
+            for name in names:
+                client_pkis[ca].client(name)
+    client_ca = pki.ca_cert
+    if client_pkis:
+        client_ca = directory / "client-cas.pem"
+        client_ca.write_text(
+            pki.ca_cert.read_text()
+            + "".join(
+                candidate.ca_cert.read_text() for candidate in client_pkis.values()
+            )
+        )
     state_directory = directory / "state"
     port = find_free_port()
-    scenario = _Scenario(opts, port, pki)
+    scenario = _Scenario(opts, port, pki, client_pkis)
     worker = threading.Thread(target=scenario.run, daemon=True)
     worker.start()
 
@@ -400,7 +453,7 @@ def wef() -> FixtureHandle:
             "WEF_ENDPOINT": f"{_HOST}:{port}",
             "WEF_CERTFILE": str(pki.server_cert),
             "WEF_KEYFILE": str(pki.server_key),
-            "WEF_CAFILE": str(pki.ca_cert),
+            "WEF_CAFILE": str(client_ca),
             "TENZIR_STATE_DIRECTORY": str(state_directory),
         },
         teardown=_teardown,

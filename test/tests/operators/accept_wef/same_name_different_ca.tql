@@ -1,0 +1,42 @@
+---
+fixtures:
+  - wef:
+      clients: []
+      client_cas:
+        tenant-a: [win10.example.org]
+        tenant-b: [win10.example.org]
+      steps:
+        - enumerate:
+            client_ca: tenant-a
+        - events:
+            client_ca: tenant-a
+            subscription: security
+            events: [{record: 42}]
+            bookmark: {Security: 42}
+        # A certificate with the same common name from another CA has its own
+        # bookmark.
+        - enumerate:
+            client_ca: tenant-b
+            expect: {bookmarks: {security: null}}
+        - enumerate:
+            client_ca: tenant-a
+            expect: {bookmarks: {security: {Security: 42}}}
+        - events:
+            client_ca: tenant-a
+            subscription: security
+            events: [{record: 43}]
+timeout: 60
+---
+
+accept_wef env("WEF_ENDPOINT"),
+  tls={
+    certfile: env("WEF_CERTFILE"),
+    keyfile: env("WEF_KEYFILE"),
+    client_ca: env("WEF_CAFILE"),
+    require_client_cert: true,
+  },
+  subscriptions=[
+    {id: "security", query: "<QueryList><Query Id='0'><Select Path='Security'>*</Select></Query></QueryList>"},
+  ]
+head 2
+select record=data.parse_winlog().System.EventRecordID

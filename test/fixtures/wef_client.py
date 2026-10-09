@@ -577,8 +577,9 @@ class KerberosRejected(OSError):
 class WefClient:
     """A Windows forwarder that talks to one collector.
 
-    The client authenticates with a certificate from `pki`, or with Kerberos
-    if `kerberos` names the scheme: `kerberos` or `negotiate`.
+    The client trusts the server certificate from `pki` and authenticates with
+    a client certificate from `client_pki` or `pki`. Alternatively, `kerberos`
+    names the authentication scheme: `kerberos` or `negotiate`.
     """
 
     def __init__(
@@ -592,6 +593,7 @@ class WefClient:
         timeout: float = 10,
         hostname: str = "localhost",
         kerberos: str | None = None,
+        client_pki: Pki | None = None,
         tls_max_version: str | None = None,
     ) -> None:
         self.host = host
@@ -612,7 +614,7 @@ class WefClient:
             )
         else:
             assert pki is not None
-            cert, key = pki.client(name)
+            cert, key = (client_pki or pki).client(name)
             self._context = ssl.create_default_context(cafile=str(pki.ca_cert))
             self._context.load_cert_chain(str(cert), str(key))
             if tls_max_version is not None:
