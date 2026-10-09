@@ -50,6 +50,7 @@ def main() -> None:
         result = subprocess.run(
             [
                 *tenzir,
+                "--nova=true",
                 "--bare-mode",
                 "--multi",
                 "--console-verbosity=warning",
