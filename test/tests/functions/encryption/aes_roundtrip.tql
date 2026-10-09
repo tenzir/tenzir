@@ -1,0 +1,11 @@
+// Every mode round-trips strings, blobs, and empty values, with and without
+// associated data.
+let $key = secret("key-256").decode_hex()
+let $siv_key = secret("key-512").decode_hex()
+from {x: "alice@example.com"}, {x: ""}, {x: b"\x00\xff"}, {x: null}
+gcm = decrypt_aes_gcm(encrypt_aes_gcm(x, key=$key), key=$key)
+gcm_aad = decrypt_aes_gcm(encrypt_aes_gcm(x, key=$key, aad="ctx"), key=$key, aad="ctx")
+gcm_siv = decrypt_aes_gcm_siv(encrypt_aes_gcm_siv(x, key=$key), key=$key)
+gcm_siv_aad = decrypt_aes_gcm_siv(encrypt_aes_gcm_siv(x, key=$key, aad=b"ctx"), key=$key, aad=b"ctx")
+siv = decrypt_aes_siv(encrypt_aes_siv(x, key=$siv_key), key=$siv_key)
+siv_aad = decrypt_aes_siv(encrypt_aes_siv(x, key=$siv_key, aad="ctx"), key=$siv_key, aad="ctx")

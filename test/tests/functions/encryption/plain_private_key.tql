@@ -1,0 +1,6 @@
+---
+error: true
+---
+// The private key of HPKE must be a secret as well.
+from {}
+x = decrypt_hpke("x", private_key=decode_hex("c8b5a8a159dc630b7894cea4add7d1478dbe0dc720744e8db3d3c228e6a4f36a"))

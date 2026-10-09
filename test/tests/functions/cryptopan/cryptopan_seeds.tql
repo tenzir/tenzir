@@ -1,0 +1,11 @@
+// The seed is a secret with 32 raw bytes. Without a seed, the functions use a
+// key of zeros. The outputs for the full key match those of the former
+// hex-string seed with the same bytes.
+let $seed = secret("cryptopan-key").decode_hex()
+from {x: 192.0.2.1}, {x: 2001:db8::1}
+default_value = x.encrypt_cryptopan()
+zero_value = x.encrypt_cryptopan(seed=secret("zero-key").decode_hex())
+full_value = x.encrypt_cryptopan(seed=$seed)
+assert default_value == zero_value
+assert default_value.decrypt_cryptopan() == x
+assert full_value.decrypt_cryptopan(seed=$seed) == x

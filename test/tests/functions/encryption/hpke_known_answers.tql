@@ -1,0 +1,12 @@
+// Ciphertexts from pyhpke, an independent implementation of RFC 9180, with
+// AES-256-GCM, an empty `info`, and the encapsulated key as prefix.
+from {}
+x25519 = decrypt_hpke(
+  decode_hex("8e17ed32defd75eeaf0482e1a9531e6b684b5352717552662703bf00e47d163fe658d8d3d2cf439403d669fbcc344175e3dbfa793267"),
+  private_key=secret("x25519-private-key").decode_hex(),
+  aad="tenant-a",
+).string()
+p256 = decrypt_hpke(
+  decode_hex("04b5334499bde3de54a4d17d5400601830c213dc25a949dabbba5c6de7ea5b123bba69b63c3ec72af37b5212fd79caa1fdc3306af9654082bddc9d58f0c376f4013e821178838744dc70936af1a7ff8d471b4bb52f641d"),
+  private_key=secret("p256-private-key"),
+).string()

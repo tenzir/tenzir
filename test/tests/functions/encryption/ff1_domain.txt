@@ -1,0 +1,22 @@
+warning: value has too few characters from the alphabet
+ --> tests/functions/encryption/ff1_domain.tql:5:22
+  |
+5 | digits = encrypt_ff1(x, key=$key)
+  |                      ~
+  |
+  = note: FF1 requires at least 6 characters from the alphabet with 10 characters
+{
+  x: "12345",
+  digits: null,
+  base36: "s9ghd",
+}
+{
+  x: "123456",
+  digits: "608210",
+  base36: "gp6x6e",
+}
+{
+  x: "ab-12",
+  digits: null,
+  base36: "38-d8",
+}

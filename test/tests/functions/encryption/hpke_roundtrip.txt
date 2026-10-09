@@ -1,0 +1,42 @@
+warning: cannot encrypt empty values
+  --> tests/functions/encryption/hpke_roundtrip.tql:13:23
+   |
+13 | x25519 = encrypt_hpke(x, public_key=$x25519_public, aad="ctx")
+   |                       ~
+   |
+   = note: the HPKE implementation of OpenSSL does not support empty plaintexts
+
+warning: cannot encrypt empty values
+  --> tests/functions/encryption/hpke_roundtrip.tql:14:21
+   |
+14 | p256 = encrypt_hpke(x, public_key=$p256_public)
+   |                     ~
+   |
+   = note: the HPKE implementation of OpenSSL does not support empty plaintexts
+{
+  x: "alice@example.com",
+  x25519: b"alice@example.com",
+  p256: b"alice@example.com",
+  size: {
+    x25519: 130,
+    p256: 196,
+  },
+}
+{
+  x: b"\u0000",
+  x25519: b"\u0000",
+  p256: b"\u0000",
+  size: {
+    x25519: 98,
+    p256: 164,
+  },
+}
+{
+  x: "",
+  x25519: null,
+  p256: null,
+  size: {
+    x25519: null,
+    p256: null,
+  },
+}

@@ -1,0 +1,5 @@
+// Only strings and blobs are accepted.
+let $key = secret("key-256").decode_hex()
+from {x: 42}
+y = encrypt_aes_gcm(x, key=$key)
+z = encrypt_aes_gcm("x", key=$key, aad=x)

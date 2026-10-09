@@ -1,0 +1,9 @@
+error: `seed` must have 32 bytes, but has 31 bytes
+ --> tests/functions/cryptopan/cryptopan_seed_size.tql:6:38
+  |
+6 | x = 192.0.2.1.encrypt_cryptopan(seed=secret("short-key").decode_hex())
+  |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: decode a hex or Base64 key with `decode_hex` or `decode_base64`, for example `secret("cryptopan-key").decode_hex()`
+  = usage: encrypt_cryptopan(x:ip, [seed=secret])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_cryptopan

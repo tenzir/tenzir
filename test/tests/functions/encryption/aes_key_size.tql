@@ -1,0 +1,6 @@
+---
+error: true
+---
+// AES-SIV needs a double-length key.
+from {}
+x = encrypt_aes_siv("x", key=secret("key-128").decode_hex())

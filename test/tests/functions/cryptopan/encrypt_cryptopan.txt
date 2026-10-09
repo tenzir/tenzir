@@ -1,0 +1,8 @@
+{
+  client_ip: 192.168.1.100,
+  server_ip: 8.8.8.8,
+  internal_ip: 10.0.0.5,
+  anon_client: 2.149.252.148,
+  anon_server: 245.155.245.195,
+  anon_internal: 246.35.191.213,
+}

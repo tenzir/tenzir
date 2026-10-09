@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {}
+x = encrypt_hpke("x", public_key=r"-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VuBCIEIMi1qKFZ3GMLeJTOpK3X0UeNvg3HIHROjbPTwijmpPNq
+-----END PRIVATE KEY-----")

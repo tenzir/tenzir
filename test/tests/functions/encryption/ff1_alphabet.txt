@@ -1,0 +1,8 @@
+error: `alphabet` contains `0` more than once
+ --> tests/functions/encryption/ff1_alphabet.tql:5:72
+  |
+5 | x = encrypt_ff1("123456", key=secret("key-128").decode_hex(), alphabet="0123456789a0")
+  |                                                                        ^^^^^^^^^^^^^^
+  |
+  = usage: encrypt_ff1(x:string, key=secret, [alphabet=string, tweak=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_ff1

@@ -197,24 +197,6 @@ class fun : public virtual nova::FunctionPlugin {
 TENZIR_ENUM(hmac_algorithm, sha256, sha512, sha384, sha1, md5);
 
 template <class Hmac>
-auto hmac_digest(data_view3 data, std::span<std::byte const> key)
-  -> std::string {
-  auto mac = Hmac{key};
-  match(
-    data,
-    [&](std::string_view str) {
-      mac.add(as_bytes(str));
-    },
-    [&](blob_view blob) {
-      mac.add(blob);
-    },
-    [&](auto const& value) {
-      hash_append(mac, value);
-    });
-  return detail::hexify(as_bytes(mac.finish()));
-}
-
-template <class Hmac>
 auto hmac_digest(nova::RowView<nova::Data> const& data,
                  std::span<std::byte const> key, bool& saw_secret)
   -> std::string {
@@ -306,68 +288,8 @@ public:
 
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
-    auto data = ast::expression{};
-    auto key = ast::expression{};
-    auto algorithm = located<std::string>{"sha256", location::unknown};
-    TRY(argument_parser2::function(name())
-          .positional("data", data, "any")
-          .positional("key", key, "string")
-          .named_optional("algorithm", algorithm)
-          .parse(inv, ctx));
-    auto parsed_algorithm = from_string<hmac_algorithm>(algorithm.inner);
-    if (not parsed_algorithm) {
-      diagnostic::error("`algorithm` must be one of "
-                        "`sha256`, `sha512`, `sha384`, `sha1`, `md5`")
-        .primary(algorithm)
-        .emit(ctx);
-      return failure::promise();
-    }
-    return function_use::make([data = std::move(data), key = std::move(key),
-                               algorithm = *parsed_algorithm](evaluator eval,
-                                                              session ctx) {
-      return map_series(
-        eval(data), eval(key),
-        [&](series data_values, series key_values) -> multi_series {
-          TENZIR_ASSERT(data_values.length() == key_values.length());
-          auto builder = arrow::StringBuilder{tenzir::arrow_memory_pool()};
-          check(builder.Reserve(data_values.length()));
-          match(
-            std::tie(*data_values.array, *key_values.array),
-            [&]<class DataArray>(DataArray const& data_array,
-                                 arrow::StringArray const& key_array) {
-              for (auto i = int64_t{0}; i < data_array.length(); ++i) {
-                if (key_array.IsNull(i)) {
-                  check(builder.AppendNull());
-                  continue;
-                }
-                auto value
-                  = view_at(static_cast<arrow::Array const&>(data_array), i);
-                if (is<caf::none_t>(value)) {
-                  check(builder.AppendNull());
-                  continue;
-                }
-                auto digest = compute_hmac(
-                  value, as_bytes(key_array.GetView(i)), algorithm);
-                check(builder.Append(digest));
-              }
-            },
-            [&]<class DataArray>(DataArray const& data_array,
-                                 arrow::NullArray const&) {
-              check(builder.AppendNulls(data_array.length()));
-            },
-            [&]<class DataArray, class KeyArray>(DataArray const& data_array,
-                                                 KeyArray const&) -> void {
-              if constexpr (not detail::is_any_v<KeyArray, arrow::NullArray>) {
-                diagnostic::warning("expected `string`, but got `{}`",
-                                    key_values.type.kind())
-                  .primary(key)
-                  .emit(ctx);
-              }
-              check(builder.AppendNulls(data_array.length()));
-            });
-          return series{string_type{}, finish(builder)};
-        });
-    });
+    diagnostic::error("`hmac` requires `--nova`").primary(inv.call).emit(ctx);
+    return failure::promise();
   }
 };
 

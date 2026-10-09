@@ -1,0 +1,13 @@
+{
+  gcm: 2,
+  gcm_siv: 2,
+  siv: [
+    "FDE8E091C7426C475AAC78827D5E10874AD4F1A4",
+  ],
+  siv_empty_aad: [
+    "FDE8E091C7426C475AAC78827D5E10874AD4F1A4",
+  ],
+  siv_other_aad: [
+    "354AEA9E9C2969B8F12D3454F9FD0CC44DA7E218",
+  ],
+}

@@ -1,0 +1,19 @@
+warning: value has too many characters from the alphabet
+ --> tests/functions/encryption/ff1_max_length.tql:6:37
+  |
+6 | roundtrip = decrypt_ff1(encrypt_ff1(x, key=$key), key=$key) == x
+  |                                     ~
+  |
+  = note: FF1 supports at most 4096 characters from the alphabet
+{
+  length: 4096,
+  roundtrip: true,
+}
+{
+  length: 4097,
+  roundtrip: false,
+}
+{
+  length: 10006,
+  roundtrip: true,
+}

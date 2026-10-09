@@ -1,0 +1,5 @@
+// A mismatching private key or associated data fails authentication.
+from {c: encrypt_hpke("secret", public_key=decode_hex("2031818f562622db6a4ead4d2b801da571436439f568d7399f5d000de8b5920e"), aad="a")}
+wrong_aad = decrypt_hpke(c, private_key=secret("x25519-private-key").decode_hex(), aad="b")
+wrong_key = decrypt_hpke(c, private_key=secret("key-256").decode_hex(), aad="a")
+drop c

@@ -1,0 +1,18 @@
+// The FF1 samples of NIST SP 800-38G for AES-128, AES-192, and AES-256.
+let $k128 = secret("nist-ff1-key-128").decode_hex()
+let $k192 = secret("nist-ff1-key-192").decode_hex()
+let $k256 = secret("nist-ff1-key-256").decode_hex()
+let $base36 = "0123456789abcdefghijklmnopqrstuvwxyz"
+let $tweak10 = decode_hex("39383736353433323130")
+let $tweak36 = decode_hex("3737373770717273373737")
+from {}
+sample_1 = encrypt_ff1("0123456789", key=$k128)
+sample_2 = encrypt_ff1("0123456789", key=$k128, tweak=$tweak10)
+sample_3 = encrypt_ff1("0123456789abcdefghi", key=$k128, alphabet=$base36, tweak=$tweak36)
+sample_4 = encrypt_ff1("0123456789", key=$k192)
+sample_5 = encrypt_ff1("0123456789", key=$k192, tweak=$tweak10)
+sample_6 = encrypt_ff1("0123456789abcdefghi", key=$k192, alphabet=$base36, tweak=$tweak36)
+sample_7 = encrypt_ff1("0123456789", key=$k256)
+sample_8 = encrypt_ff1("0123456789", key=$k256, tweak=$tweak10)
+sample_9 = encrypt_ff1("0123456789abcdefghi", key=$k256, alphabet=$base36, tweak=$tweak36)
+decrypted_9 = decrypt_ff1(sample_9, key=$k256, alphabet=$base36, tweak=$tweak36)

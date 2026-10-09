@@ -1,0 +1,9 @@
+error: unsupported public key type
+ --> tests/functions/encryption/hpke_key_type.tql:6:34
+  |
+6 | x = encrypt_hpke("x", public_key=r"-----BEGIN PUBLIC KEY-----
+  |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: supported key types are X25519, X448, P-256, P-384, or P-521
+  = usage: encrypt_hpke(x:blob|string, public_key=blob|string|secret, [aad=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_hpke

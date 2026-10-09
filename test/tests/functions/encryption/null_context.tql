@@ -1,0 +1,10 @@
+// A `null` value of `aad` or `tweak` makes the result `null` with a warning,
+// because encrypting without it would silently weaken the binding to the
+// context. Use `else` to fall back to an empty value instead.
+let $key = secret("key-256").decode_hex()
+from {x: "4111111111111111", context: null},
+     {x: "4111111111111111", context: "card"}
+gcm = encrypt_aes_gcm(x, key=$key, aad=context) != null
+hpke = encrypt_hpke(x, public_key=decode_hex("2031818f562622db6a4ead4d2b801da571436439f568d7399f5d000de8b5920e"), aad=context) != null
+ff1 = encrypt_ff1(x, key=secret("key-128").decode_hex(), tweak=context)
+fallback = encrypt_aes_siv(x, key=$key, aad=context else "") == encrypt_aes_siv(x, key=$key)

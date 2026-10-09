@@ -1,0 +1,9 @@
+error: `key` must have 16 or 32 bytes, but has 24 bytes
+ --> tests/functions/encryption/aes_gcm_siv_key_size.tql:6:34
+  |
+6 | x = encrypt_aes_gcm_siv("x", key=secret("key-192").decode_hex())
+  |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: decode a hex or Base64 key with `decode_hex` or `decode_base64`, for example `secret("key").decode_hex()`
+  = usage: encrypt_aes_gcm_siv(x:blob|string, key=secret, [aad=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_aes_gcm_siv

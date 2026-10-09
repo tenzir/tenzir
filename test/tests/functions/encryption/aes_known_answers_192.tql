@@ -1,0 +1,13 @@
+// Ciphertexts from the Python `cryptography` package for AES-192-GCM, and for
+// AES-SIV with a 48-byte key.
+from {}
+gcm_192 = decrypt_aes_gcm(
+  decode_hex("000102030405060708090a0bb29c4ce1f0cb850dad9613454895b253ecb8087a5186"),
+  key=secret("key-192").decode_hex(),
+  aad="ctx",
+).string()
+siv_192 = encrypt_aes_siv(
+  "Tenzir",
+  key=secret("key-384").decode_hex(),
+  aad="ctx",
+).encode_hex() == "1D00F958B15DEAC98985423F6F4E16C2D54D4A919015"

@@ -1,0 +1,8 @@
+---
+error: true
+---
+// HPKE needs a key agreement key. Ed25519 is a signature key.
+from {}
+x = encrypt_hpke("x", public_key=r"-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
+-----END PUBLIC KEY-----")

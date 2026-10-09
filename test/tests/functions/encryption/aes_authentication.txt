@@ -1,0 +1,38 @@
+warning: failed to decrypt: authentication failed
+ --> tests/functions/encryption/aes_authentication.tql:7:29
+  |
+7 | wrong_key = decrypt_aes_gcm(c, key=$other, aad="a")
+  |                             ~
+  |
+  = note: the key or the associated data does not match, or the ciphertext was modified
+
+warning: failed to decrypt: authentication failed
+ --> tests/functions/encryption/aes_authentication.tql:8:29
+  |
+8 | wrong_aad = decrypt_aes_gcm(c, key=$key, aad="b")
+  |                             ~
+  |
+  = note: the key or the associated data does not match, or the ciphertext was modified
+
+warning: failed to decrypt: authentication failed
+ --> tests/functions/encryption/aes_authentication.tql:9:31
+  |
+9 | missing_aad = decrypt_aes_gcm(c, key=$key)
+  |                               ~
+  |
+  = note: the key or the associated data does not match, or the ciphertext was modified
+
+warning: failed to decrypt: authentication failed
+  --> tests/functions/encryption/aes_authentication.tql:10:29
+   |
+10 | tampered = decrypt_aes_gcm((c.encode_hex().slice(end=-2) + "00").decode_hex(), key=$key, aad="a")
+   |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: the key or the associated data does not match, or the ciphertext was modified
+{
+  wrong_key: null,
+  wrong_aad: null,
+  missing_aad: null,
+  tampered: null,
+  correct: "secret",
+}

@@ -1,0 +1,9 @@
+error: expected a secret, but got `blob`
+ --> tests/functions/encryption/plain_key.tql:7:30
+  |
+7 | x = encrypt_aes_gcm("x", key=decode_hex("000102030405060708090a0b0c0d0e0f"))
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use `secret("name")` to read the value from a secret store
+  = usage: encrypt_aes_gcm(x:blob|string, key=secret, [aad=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_aes_gcm

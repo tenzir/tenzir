@@ -1,0 +1,12 @@
+{
+  x: 192.0.2.1,
+  default_value: 33.224.197.129,
+  zero_value: 33.224.197.129,
+  full_value: 2.90.93.17,
+}
+{
+  x: 2001:db8::1,
+  default_value: df86:cc7f:a1fe:9:87c0:7e08:7fc:6e6,
+  zero_value: df86:cc7f:a1fe:9:87c0:7e08:7fc:6e6,
+  full_value: dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00,
+}

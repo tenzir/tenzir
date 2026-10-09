@@ -1,0 +1,7 @@
+---
+error: true
+---
+// Keys must be secrets. A plain value would put the key into the pipeline
+// definition, so the function rejects it when the pipeline starts.
+from {}
+x = encrypt_aes_gcm("x", key=decode_hex("000102030405060708090a0b0c0d0e0f"))

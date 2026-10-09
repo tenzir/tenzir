@@ -1,0 +1,36 @@
+{
+  x: "alice@example.com",
+  gcm: b"alice@example.com",
+  gcm_aad: b"alice@example.com",
+  gcm_siv: b"alice@example.com",
+  gcm_siv_aad: b"alice@example.com",
+  siv: b"alice@example.com",
+  siv_aad: b"alice@example.com",
+}
+{
+  x: "",
+  gcm: b"",
+  gcm_aad: b"",
+  gcm_siv: b"",
+  gcm_siv_aad: b"",
+  siv: b"",
+  siv_aad: b"",
+}
+{
+  x: b"\u0000ÿ",
+  gcm: b"\u0000ÿ",
+  gcm_aad: b"\u0000ÿ",
+  gcm_siv: b"\u0000ÿ",
+  gcm_siv_aad: b"\u0000ÿ",
+  siv: b"\u0000ÿ",
+  siv_aad: b"\u0000ÿ",
+}
+{
+  x: null,
+  gcm: null,
+  gcm_aad: null,
+  gcm_siv: null,
+  gcm_siv_aad: null,
+  siv: null,
+  siv_aad: null,
+}

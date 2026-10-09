@@ -1,0 +1,17 @@
+// Raw X25519 keys and PEM-encoded P-256 keys. Encryption adds the
+// encapsulated key, which has 32 bytes for X25519 and 65 bytes for P-256,
+// and a 16-byte tag. The sizes count hex digits. OpenSSL does not support
+// empty plaintexts.
+let $x25519_public = decode_hex("2031818f562622db6a4ead4d2b801da571436439f568d7399f5d000de8b5920e")
+let $x25519_private = secret("x25519-private-key").decode_hex()
+let $p256_public = r"-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE8pQxsrjlr/4I2XrX48xqmrPU0Ge7
+xXkQRP5xg5Bwxwz3gSK9s5add0uVGOKacbfKapkj61XhofzEovNrtxFvYg==
+-----END PUBLIC KEY-----"
+let $p256_private = secret("p256-private-key")
+from {x: "alice@example.com"}, {x: b"\x00"}, {x: ""}
+x25519 = encrypt_hpke(x, public_key=$x25519_public, aad="ctx")
+p256 = encrypt_hpke(x, public_key=$p256_public)
+size = {x25519: x25519.encode_hex().length_bytes(), p256: p256.encode_hex().length_bytes()}
+x25519 = decrypt_hpke(x25519, private_key=$x25519_private, aad="ctx")
+p256 = decrypt_hpke(p256, private_key=$p256_private)

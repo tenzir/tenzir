@@ -1,0 +1,5 @@
+{
+  x448: "Tenzir",
+  p384: "Tenzir",
+  p521: "Tenzir",
+}

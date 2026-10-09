@@ -81,10 +81,92 @@ public:
       failed = true;
       return;
     }
+    request(expression, secret::make_managed(*name_string),
+            call.get_location());
+  }
+
+  /// A `let` binding substitutes its value as a constant. When the binding
+  /// holds a secret, such as `let $key = secret("key").decode_hex()`, the
+  /// constant carries the secret's name along with its pending
+  /// transformations, which the resolution applies.
+  auto visit_node(ast::expression& expression, ast::constant& constant)
+    -> void {
+    if (auto const* value = try_as<tenzir::secret>(&constant.value)) {
+      request(expression, *value, constant.get_location());
+      return;
+    }
+    // A binding of a record or list, such as `let $cfg = {key: secret("k")}`,
+    // nests its secrets in the constant. Expanding the constant into record
+    // and list expressions exposes them as constants of their own, which the
+    // visit below then resolves.
+    if (contains_secret(constant.value)) {
+      auto value = tenzir::match(std::move(constant.value), [](auto x) -> data {
+        return x;
+      });
+      auto const source = constant.get_location();
+      // This assignment destroys `constant`.
+      expression = expand(std::move(value), source);
+      visit(expression);
+    }
+  }
+
+  /// Whether `value`, a `data` or the value of an `ast::constant`, holds a
+  /// secret at any depth.
+  template <class T>
+  static auto contains_secret(T const& value) -> bool {
+    return tenzir::match(
+      value,
+      [](tenzir::secret const&) {
+        return true;
+      },
+      [](tenzir::record const& x) {
+        return std::ranges::any_of(x, [](auto const& field) {
+          return contains_secret(field.second);
+        });
+      },
+      [](tenzir::list const& x) {
+        return std::ranges::any_of(x, [](data const& element) {
+          return contains_secret(element);
+        });
+      },
+      [](auto const&) {
+        return false;
+      });
+  }
+
+  /// Turns records and lists that contain secrets into record and list
+  /// expressions, and everything else into constants.
+  static auto expand(data value, location source) -> ast::expression {
+    if (not contains_secret(value)) {
+      return ast::constant::make(located<data>{std::move(value), source});
+    }
+    if (auto* x = try_as<tenzir::record>(&value)) {
+      auto items = std::vector<ast::record::item>{};
+      items.reserve(x->size());
+      for (auto& [name, field] : *x) {
+        items.emplace_back(ast::record::field{
+          ast::identifier{name, source},
+          expand(std::move(field), source),
+        });
+      }
+      return ast::record{source, std::move(items), source};
+    }
+    if (auto* x = try_as<tenzir::list>(&value)) {
+      auto items = std::vector<ast::list::item>{};
+      items.reserve(x->size());
+      for (auto& element : *x) {
+        items.emplace_back(expand(std::move(element), source));
+      }
+      return ast::list{source, std::move(items), source};
+    }
+    return ast::constant::make(located<data>{std::move(value), source});
+  }
+
+  auto request(ast::expression& expression, tenzir::secret secret,
+               location source) -> void {
     auto const target = std::addressof(expression);
-    auto const source = call.get_location();
     requests_.emplace_back(
-      secret::make_managed(*name_string), source,
+      std::move(secret), source,
       [target, source](resolved_secret_value value) -> failure_or<void> {
         auto secret = Secret{
           ecc::cleansing_blob{value.blob().begin(), value.blob().end()}};

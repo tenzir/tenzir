@@ -1,0 +1,9 @@
+error: expected a secret, but got `blob`
+ --> tests/functions/encryption/plain_private_key.tql:6:35
+  |
+6 | x = decrypt_hpke("x", private_key=decode_hex("c8b5a8a159dc630b7894cea4add7d1478dbe0dc720744e8db3d3c228e6a4f36a"))
+  |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use `secret("name")` to read the value from a secret store
+  = usage: decrypt_hpke(x:blob|string, private_key=secret, [aad=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/decrypt_hpke

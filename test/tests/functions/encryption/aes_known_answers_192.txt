@@ -1,0 +1,4 @@
+{
+  gcm_192: "Tenzir",
+  siv_192: true,
+}

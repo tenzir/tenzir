@@ -1,0 +1,12 @@
+{
+  sample_1: "2433477484",
+  sample_2: "6124200773",
+  sample_3: "a9tv40mll9kdu509eum",
+  sample_4: "2830668132",
+  sample_5: "2496655549",
+  sample_6: "xbj3kv35jrawxv32ysr",
+  sample_7: "6657667009",
+  sample_8: "1001623463",
+  sample_9: "xs8a0azh2avyalyzuwd",
+  decrypted_9: "0123456789abcdefghi",
+}

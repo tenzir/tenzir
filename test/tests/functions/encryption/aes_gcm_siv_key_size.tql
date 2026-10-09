@@ -1,0 +1,6 @@
+---
+error: true
+---
+// RFC 8452 defines AES-GCM-SIV only for 128-bit and 256-bit keys.
+from {}
+x = encrypt_aes_gcm_siv("x", key=secret("key-192").decode_hex())

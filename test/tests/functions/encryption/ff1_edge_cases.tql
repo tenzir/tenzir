@@ -1,0 +1,13 @@
+// Edge cases that the NIST samples do not cover, checked against an
+// independent implementation of SP 800-38G: the binary alphabet with even and
+// odd lengths, a value long enough that the round function needs more than one
+// block, and a 64-character alphabet.
+let $key = secret("nist-ff1-key-128").decode_hex()
+let $base64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+from {}
+binary_20 = encrypt_ff1("01101001100101101001", key=$key, alphabet="01")
+binary_21 = encrypt_ff1("011010011001011010011", key=$key, alphabet="01")
+decimal_59 = encrypt_ff1("12345678901234567890123456789012345678901234567890123456789", key=$key, tweak="field")
+base64_33 = encrypt_ff1("Tenzir-encrypts_values-with-FF1_x", key=$key, alphabet=$base64, tweak=b"\x00\x01\x02")
+expected = ["01010110001000001010", "100110001110100001111", "88753898563567670421487458677918403408951428736086890213447", "ZCeiBfNduo5AXmpEDw9lJ7NgYg0W5Eh0G"]
+decrypted_59 = decrypt_ff1(decimal_59, key=$key, tweak="field")

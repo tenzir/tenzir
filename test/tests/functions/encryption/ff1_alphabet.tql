@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {}
+x = encrypt_ff1("123456", key=secret("key-128").decode_hex(), alphabet="0123456789a0")

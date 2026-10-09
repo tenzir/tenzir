@@ -1,0 +1,10 @@
+// AES-GCM and AES-GCM-SIV draw a random nonce for every value, while AES-SIV
+// maps equal inputs to equal outputs. An absent `aad` equals an empty one.
+let $key = secret("key-256").decode_hex()
+from {x: "same"}, {x: "same"}
+gcm = encrypt_aes_gcm(x, key=$key)
+gcm_siv = encrypt_aes_gcm_siv(x, key=$key)
+siv = encrypt_aes_siv(x, key=$key).encode_hex()
+siv_empty_aad = encrypt_aes_siv(x, key=$key, aad="").encode_hex()
+siv_other_aad = encrypt_aes_siv(x, key=$key, aad="other").encode_hex()
+summarize gcm=count_distinct(gcm), gcm_siv=count_distinct(gcm_siv), siv=distinct(siv), siv_empty_aad=distinct(siv_empty_aad), siv_other_aad=distinct(siv_other_aad)

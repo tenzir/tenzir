@@ -1,0 +1,6 @@
+// An empty ciphertext with an all-zero tag must not authenticate arbitrary
+// associated data (CVE-2026-45446).
+let $key = secret("key-256").decode_hex()
+from {}
+gcm_siv = decrypt_aes_gcm_siv(decode_hex("aabbccddeeff001122334455" + "00000000000000000000000000000000"), key=$key, aad="forged")
+siv = decrypt_aes_siv(decode_hex("00000000000000000000000000000000"), key=$key, aad="forged")

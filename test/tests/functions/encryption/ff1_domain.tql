@@ -1,0 +1,6 @@
+// FF1 requires at least one million possible inputs: six decimal digits, but
+// only four characters from a 36-character alphabet.
+let $key = secret("key-128").decode_hex()
+from {x: "12345"}, {x: "123456"}, {x: "ab-12"}
+digits = encrypt_ff1(x, key=$key)
+base36 = encrypt_ff1(x, key=$key, alphabet="0123456789abcdefghijklmnopqrstuvwxyz")

@@ -1,0 +1,42 @@
+warning: `aad` is null
+ --> tests/functions/encryption/null_context.tql:7:40
+  |
+7 | gcm = encrypt_aes_gcm(x, key=$key, aad=context) != null
+  |                                        ~~~~~~~
+  |
+  = note: the function returns `null` when `aad` is `null`
+  = hint: use `else ""` to fall back to an empty value
+
+warning: `aad` is null
+ --> tests/functions/encryption/null_context.tql:8:119
+  |
+8 | hpke = encrypt_hpke(x, public_key=decode_hex("2031818f562622db6a4ead4d2b801da571436439f568d7399f5d000de8b5920e"), aad=context) != null
+  |                                                                                                                       ~~~~~~~
+  |
+  = note: the function returns `null` when `aad` is `null`
+  = hint: use `else ""` to fall back to an empty value
+
+warning: `tweak` is null
+ --> tests/functions/encryption/null_context.tql:9:64
+  |
+9 | ff1 = encrypt_ff1(x, key=secret("key-128").decode_hex(), tweak=context)
+  |                                                                ~~~~~~~
+  |
+  = note: the function returns `null` when `tweak` is `null`
+  = hint: use `else ""` to fall back to an empty value
+{
+  x: "4111111111111111",
+  context: null,
+  gcm: false,
+  hpke: false,
+  ff1: null,
+  fallback: true,
+}
+{
+  x: "4111111111111111",
+  context: "card",
+  gcm: true,
+  hpke: true,
+  ff1: "3401026349486985",
+  fallback: false,
+}

@@ -1,0 +1,7 @@
+// FF1 accepts at most 4096 characters from the alphabet, because its cost grows
+// quadratically with the length.
+let $key = secret("key-128").decode_hex()
+from {x: "1".repeat(4096)}, {x: "1".repeat(4097)}, {x: "-".repeat(10000) + "123456"}
+length = x.length_bytes()
+roundtrip = decrypt_ff1(encrypt_ff1(x, key=$key), key=$key) == x
+drop x

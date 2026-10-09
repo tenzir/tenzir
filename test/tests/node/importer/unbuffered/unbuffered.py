@@ -14,7 +14,9 @@ try:
     assert result.returncode == 0, result.stderr.decode()
     result = tenzir.run(
         'export\nwhere value == "unbuffered" and '
-        'hmac(value, secret("test-secret")) == hmac(value, "test-value")\n'
+        # The HMAC-SHA256 of "unbuffered" with the key "test-value".
+        'hmac(value, secret("test-secret")) == '
+        '"ca3fd7a666b44364cd54ec22ef40bef3dc721687f0d62e35bad70e06fbfe5d46"\n'
         "to_stdout { write_ndjson }\n"
     )
     assert result.returncode == 0, result.stderr.decode()

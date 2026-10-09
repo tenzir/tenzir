@@ -1,0 +1,9 @@
+error: failed to read PEM-encoded public key: error:1E08010C:DECODER routines::unsupported
+ --> tests/functions/encryption/hpke_private_key_as_public.tql:5:34
+  |
+5 | x = encrypt_hpke("x", public_key=r"-----BEGIN PRIVATE KEY-----
+  |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: pass the public key instead of the private key
+  = usage: encrypt_hpke(x:blob|string, public_key=blob|string|secret, [aad=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_hpke

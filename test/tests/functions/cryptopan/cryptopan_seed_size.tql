@@ -1,0 +1,6 @@
+---
+error: true
+---
+// A seed must have exactly 32 bytes.
+from {}
+x = 192.0.2.1.encrypt_cryptopan(seed=secret("short-key").decode_hex())

@@ -1,0 +1,9 @@
+error: `key` must have 32, 48, or 64 bytes, but has 16 bytes
+ --> tests/functions/encryption/aes_key_size.tql:6:30
+  |
+6 | x = encrypt_aes_siv("x", key=secret("key-128").decode_hex())
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: decode a hex or Base64 key with `decode_hex` or `decode_base64`, for example `secret("key").decode_hex()`
+  = usage: encrypt_aes_siv(x:blob|string, key=secret, [aad=blob|string])
+  = docs: https://tenzir.com/docs/reference/functions/encrypt_aes_siv

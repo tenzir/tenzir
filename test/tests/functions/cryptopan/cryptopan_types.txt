@@ -1,26 +1,26 @@
 warning: encrypt_cryptopan does not accept the argument type `string`
- --> tests/functions/ip/cryptopan_types.tql:2:20
+ --> tests/functions/cryptopan/cryptopan_types.tql:2:20
   |
 2 | select encrypted = x.encrypt_cryptopan(), decrypted = x.decrypt_cryptopan()
   |                    ~
   |
 
 warning: decrypt_cryptopan does not accept the argument type `string`
- --> tests/functions/ip/cryptopan_types.tql:2:55
+ --> tests/functions/cryptopan/cryptopan_types.tql:2:55
   |
 2 | select encrypted = x.encrypt_cryptopan(), decrypted = x.decrypt_cryptopan()
   |                                                       ~
   |
 
 warning: encrypt_cryptopan does not accept the argument type `int`
- --> tests/functions/ip/cryptopan_types.tql:2:20
+ --> tests/functions/cryptopan/cryptopan_types.tql:2:20
   |
 2 | select encrypted = x.encrypt_cryptopan(), decrypted = x.decrypt_cryptopan()
   |                    ~
   |
 
 warning: decrypt_cryptopan does not accept the argument type `int`
- --> tests/functions/ip/cryptopan_types.tql:2:55
+ --> tests/functions/cryptopan/cryptopan_types.tql:2:55
   |
 2 | select encrypted = x.encrypt_cryptopan(), decrypted = x.decrypt_cryptopan()
   |                                                       ~

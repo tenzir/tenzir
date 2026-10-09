@@ -1,0 +1,21 @@
+warning: ciphertext is too short
+ --> tests/functions/encryption/aes_malformed.tql:5:33
+  |
+5 | too_short = decrypt_aes_gcm_siv("Zm9vYmFy", key=$key)
+  |                                 ~~~~~~~~~~
+  |
+  = note: expected at least 28 bytes
+  = hint: decode Base64 or hex input with `decode_base64` or `decode_hex` first
+
+warning: failed to decrypt: authentication failed
+ --> tests/functions/encryption/aes_malformed.tql:6:31
+  |
+6 | not_decoded = decrypt_aes_siv(encrypt_aes_siv("x", key=$key).encode_base64(), key=$key)
+  |                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: the key or the associated data does not match, or the ciphertext was modified
+  = hint: decode Base64 or hex input with `decode_base64` or `decode_hex` first
+{
+  too_short: null,
+  not_decoded: null,
+}

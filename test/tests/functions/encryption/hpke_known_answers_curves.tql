@@ -1,0 +1,20 @@
+// Ciphertexts from pyhpke for the X448, P-384, and P-521 suites.
+let $x448_key = secret("x448-private-key")
+let $p384_key = secret("p384-private-key")
+let $p521_key = secret("p521-private-key")
+from {}
+x448 = decrypt_hpke(
+  decode_hex("09b1373df39a4e2be262c9f8cfbd6b5fd1acd36149cb3fa2571d91a111edf35b9028566dda73925d08486a0cfc9d46baa0b8c89f16a80e88a6c007b230c99e6e4657eec11da03a675a01c74a7cc7"),
+  private_key=$x448_key,
+  aad="ctx",
+).string()
+p384 = decrypt_hpke(
+  decode_hex("04d60a14072a1e79a03ada2433efbc9d46ed901d1110db7c64a452b2faf1cfb4ca7685edf3cc15fd030346c22b64335ed8444de1de3ee089c10b5263ee50ba0bf154b4e940e3faef96f8f0154535e2f8a17505040c9cd2028a123f4aef264b17f5190e5d8449302634bc69026893e9a86c46d33d1e808b"),
+  private_key=$p384_key,
+  aad="ctx",
+).string()
+p521 = decrypt_hpke(
+  decode_hex("040014b8f79cf622958e368ed6c162457f65e82c88c20c24a31877c0030884d54fe526775e812f1c3e320b46383ea9d08bb8023525d45d1052a7e11f9cba2ac9261f2100a4c0c52966ea5bb13c8756763fd05e3b6451c63db4146efd88ac0b710cea5283e42088232000cbba0068b08b25183311fb09799301012225bda4212f6b30da2eedc6f4c40aba53de544963a9b8ca72df3c12e78573efe3"),
+  private_key=$p521_key,
+  aad="ctx",
+).string()

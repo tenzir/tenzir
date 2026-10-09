@@ -1,0 +1,12 @@
+// Decryption returns null with one warning per kind of failure when the key
+// or the associated data do not match, or when the ciphertext was modified.
+let $key = secret("key-256").decode_hex()
+let $other = secret("key-128").decode_hex()
+from {}
+c = encrypt_aes_gcm("secret", key=$key, aad="a")
+wrong_key = decrypt_aes_gcm(c, key=$other, aad="a")
+wrong_aad = decrypt_aes_gcm(c, key=$key, aad="b")
+missing_aad = decrypt_aes_gcm(c, key=$key)
+tampered = decrypt_aes_gcm((c.encode_hex().slice(end=-2) + "00").decode_hex(), key=$key, aad="a")
+correct = decrypt_aes_gcm(c, key=$key, aad="a").string()
+drop c

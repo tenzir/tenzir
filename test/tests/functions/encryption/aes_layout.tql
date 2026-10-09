@@ -1,0 +1,7 @@
+// Encryption adds a 12-byte nonce and a 16-byte tag, or only the 16-byte
+// synthetic IV for AES-SIV. The sizes count hex digits of a 3-byte input.
+let $key = secret("key-256").decode_hex()
+from {}
+gcm = encrypt_aes_gcm("abc", key=$key).encode_hex().length_bytes()
+gcm_siv = encrypt_aes_gcm_siv("abc", key=$key).encode_hex().length_bytes()
+siv = encrypt_aes_siv("abc", key=$key).encode_hex().length_bytes()

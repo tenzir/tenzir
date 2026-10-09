@@ -1,0 +1,11 @@
+// Characters outside of the alphabet pass through unchanged, so the output
+// keeps the format of the input. The tweak varies the output per row.
+let $key = secret("key-128").decode_hex()
+from {x: "4111-1111-1111-1111", tweak: "card"},
+     {x: "4111-1111-1111-1111", tweak: "account"},
+     {x: "Müller: 4111 1111 1111 1111 ✓", tweak: "card"},
+     {x: "DE89 3704 0044 0532 0130 00", tweak: null}
+encrypted = encrypt_ff1(x, key=$key, tweak=tweak)
+decrypted = decrypt_ff1(encrypted, key=$key, tweak=tweak)
+hex = encrypt_ff1("deadbeef00", key=$key, alphabet="0123456789abcdef")
+hex_decrypted = decrypt_ff1(hex, key=$key, alphabet="0123456789abcdef")

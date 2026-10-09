@@ -235,7 +235,7 @@ auto default_type_name() -> std::string {
   if constexpr (std::same_as<T, Data>) {
     return "any";
   } else if constexpr (std::same_as<T, Secret>) {
-    return "string|secret";
+    return "secret";
   } else if constexpr (std::same_as<T, ast::field_path>) {
     return "field";
   } else {
@@ -302,7 +302,7 @@ auto into_data_member(Data value, location source) -> T {
   }
 }
 
-/// Converts a resolved-secret AST node or a plain string constant to Secret.
+/// Converts a resolved-secret AST node or a constant secret to Secret.
 auto prepare_secret(ast::expression& expr, InstantiateCtx ctx)
   -> failure_or<located<Secret>>;
 /// Turns a constant into the representation of a member of type `Member`.

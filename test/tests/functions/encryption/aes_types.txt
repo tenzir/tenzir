@@ -1,0 +1,18 @@
+warning: encrypt_aes_gcm does not accept the argument type `int`
+ --> tests/functions/encryption/aes_types.tql:4:21
+  |
+4 | y = encrypt_aes_gcm(x, key=$key)
+  |                     ~
+  |
+
+warning: encrypt_aes_gcm does not accept the argument type combination `(string, int)`
+ --> tests/functions/encryption/aes_types.tql:5:5
+  |
+5 | z = encrypt_aes_gcm("x", key=$key, aad=x)
+  |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  x: 42,
+  y: null,
+  z: null,
+}

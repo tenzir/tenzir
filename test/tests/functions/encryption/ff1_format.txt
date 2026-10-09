@@ -1,0 +1,40 @@
+warning: `tweak` is null
+ --> tests/functions/encryption/ff1_format.tql:8:44
+  |
+8 | encrypted = encrypt_ff1(x, key=$key, tweak=tweak)
+  |                                            ~~~~~
+  |
+  = note: the function returns `null` when `tweak` is `null`
+  = hint: use `else ""` to fall back to an empty value
+{
+  x: "4111-1111-1111-1111",
+  tweak: "card",
+  encrypted: "3401-0263-4948-6985",
+  decrypted: "4111-1111-1111-1111",
+  hex: "7cbc397cbb",
+  hex_decrypted: "deadbeef00",
+}
+{
+  x: "4111-1111-1111-1111",
+  tweak: "account",
+  encrypted: "5611-1450-2298-2095",
+  decrypted: "4111-1111-1111-1111",
+  hex: "7cbc397cbb",
+  hex_decrypted: "deadbeef00",
+}
+{
+  x: "Müller: 4111 1111 1111 1111 ✓",
+  tweak: "card",
+  encrypted: "Müller: 3401 0263 4948 6985 ✓",
+  decrypted: "Müller: 4111 1111 1111 1111 ✓",
+  hex: "7cbc397cbb",
+  hex_decrypted: "deadbeef00",
+}
+{
+  x: "DE89 3704 0044 0532 0130 00",
+  tweak: null,
+  encrypted: null,
+  decrypted: null,
+  hex: "7cbc397cbb",
+  hex_decrypted: "deadbeef00",
+}

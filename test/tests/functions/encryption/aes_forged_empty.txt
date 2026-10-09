@@ -1,0 +1,19 @@
+warning: failed to decrypt: authentication failed
+ --> tests/functions/encryption/aes_forged_empty.tql:5:31
+  |
+5 | gcm_siv = decrypt_aes_gcm_siv(decode_hex("aabbccddeeff001122334455" + "00000000000000000000000000000000"), key=$key, aad="forged")
+  |                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: the key or the associated data does not match, or the ciphertext was modified
+
+warning: failed to decrypt: authentication failed
+ --> tests/functions/encryption/aes_forged_empty.tql:6:23
+  |
+6 | siv = decrypt_aes_siv(decode_hex("00000000000000000000000000000000"), key=$key, aad="forged")
+  |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: the key or the associated data does not match, or the ciphertext was modified
+{
+  gcm_siv: null,
+  siv: null,
+}

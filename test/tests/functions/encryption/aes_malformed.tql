@@ -1,0 +1,6 @@
+// Inputs shorter than the nonce and the tag cannot be ciphertexts. A common
+// cause is passing Base64 without decoding it first.
+let $key = secret("key-256").decode_hex()
+from {}
+too_short = decrypt_aes_gcm_siv("Zm9vYmFy", key=$key)
+not_decoded = decrypt_aes_siv(encrypt_aes_siv("x", key=$key).encode_base64(), key=$key)

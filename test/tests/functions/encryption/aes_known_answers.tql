@@ -1,0 +1,25 @@
+// Decrypts NIST GCM test cases 2 and 14, and the RFC 8452 AES-128-GCM-SIV
+// vectors. Our layout prefixes the 12-byte nonce to `ciphertext || tag`.
+from {}
+gcm_128 = decrypt_aes_gcm(
+  decode_hex("000000000000000000000000" + "0388dace60b6a392f328c2b971b2fe78" + "ab6e47d42cec13bdf53a67b21257bddf"),
+  key=secret("zero-key-128").decode_hex(),
+).encode_hex()
+gcm_256 = decrypt_aes_gcm(
+  decode_hex("000000000000000000000000" + "cea7403d4d606b6e074ec5d3baf39d18" + "d0d1c8a799996bf0265b98b5d48ab919"),
+  key=secret("zero-key-256").decode_hex(),
+).encode_hex()
+gcm_siv_empty = decrypt_aes_gcm_siv(
+  decode_hex("030000000000000000000000" + "dc20e2d83f25705bb49e439eca56de25"),
+  key=secret("rfc8452-key").decode_hex(),
+).encode_hex()
+gcm_siv = decrypt_aes_gcm_siv(
+  decode_hex("030000000000000000000000" + "b5d839330ac7b786578782fff6013b815b287c22493a364c"),
+  key=secret("rfc8452-key").decode_hex(),
+).encode_hex()
+// RFC 5297 A.1: AES-SIV is deterministic, so encryption has a known answer.
+siv = encrypt_aes_siv(
+  decode_hex("112233445566778899aabbccddee"),
+  key=secret("rfc5297-key").decode_hex(),
+  aad=decode_hex("101112131415161718191a1b1c1d1e1f2021222324252627"),
+).encode_hex()
