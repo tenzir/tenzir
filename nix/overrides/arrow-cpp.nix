@@ -18,6 +18,7 @@ arrow-cpp.overrideAttrs (orig: {
     hash = "sha256-IKqdGzjFiUDdOFxTHVIMKyY5pSLT5PbNHAPd5homp1Y=";
   };
 
+  patchFlags = [ "-p1" ];
   patches = [
     ./arrow-cpp-nixos-zoneinfo.patch
     ./arrow-cpp-eager-struct-fields.patch

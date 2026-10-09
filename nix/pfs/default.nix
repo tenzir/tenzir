@@ -15,6 +15,12 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-lceQXLmQuTv4phDID1dDduHFJqs09oAMWi6kKmM1eSg=";
   };
 
+  # Upstream enables -Werror, which breaks with new compiler warnings such
+  # as GCC 16's deprecated-enum-enum-conversion diagnostic.
+  postPatch = ''
+    substituteInPlace CMakeLists.txt --replace-fail '-Werror' ""
+  '';
+
   cmakeFlags = lib.optionals stdenv.hostPlatform.isStatic [
     "-Dpfs_BUILD_TESTS=OFF"
     "-Dpfs_BUILD_SAMPLES=OFF"
