@@ -1,4 +1,4 @@
-warning: field `g` not found
+warning: event does not have field
  --> tests/operators/summarize/parallel/null_keys.tql:7:11
   |
 7 | summarize g, total=sum(x)

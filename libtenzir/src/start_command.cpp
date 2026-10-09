@@ -69,8 +69,8 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   -> caf::message {
   TENZIR_TRACE("{} {}", TENZIR_ARG(inv.options),
                TENZIR_ARG("args", inv.arguments.begin(), inv.arguments.end()));
-  // Like `exec`, let the node's pipelines opt into the new data model.
-  set_nova_enabled(caf::get_or(inv.options, "tenzir.nova", false));
+  // Like `exec`, let the node's pipelines opt out of the new data model.
+  set_nova_enabled(caf::get_or(inv.options, "tenzir.nova", true));
   auto node_endpoint = Option<Endpoint>{};
   auto listen_endpoint = Option<std::string>{};
   const auto* endpoint_enabled = get_if<bool>(&inv.options, "tenzir.endpoint");

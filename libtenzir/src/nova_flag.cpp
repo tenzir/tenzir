@@ -12,7 +12,7 @@ namespace tenzir {
 
 namespace {
 
-bool nova_flag = false;
+bool nova_flag = true;
 
 } // namespace
 
