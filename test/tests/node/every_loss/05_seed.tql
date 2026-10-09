@@ -1,0 +1,3 @@
+// The publisher's completion flushes a distinct one-event batch.
+from {seq: -1}
+publish "tpc.raw"

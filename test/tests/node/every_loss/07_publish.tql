@@ -1,0 +1,5 @@
+from {}
+repeat 120
+enumerate seq
+batch 120
+publish "tpc.raw"

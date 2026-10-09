@@ -1,0 +1,9 @@
+// Wait for a probe to reach the subscriber's immediate fork. Do not start
+// the one-shot publishers until this succeeds.
+every 100ms {
+  export
+  where @name == "every-loss-ready"
+  head 1
+}
+head 1
+discard

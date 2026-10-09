@@ -1,0 +1,10 @@
+// A delayed subpipeline can temporarily leave the count unchanged. Wait for
+// the full terminal count before checking the exact sequence.
+every 200ms {
+  export
+  where @name == "every-loss"
+  summarize count=count()
+  where count == 121
+}
+head 1
+discard

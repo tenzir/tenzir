@@ -1,0 +1,5 @@
+// There are exactly 121 integers from -1 through 119. These aggregate
+// checks establish that every sequence number was imported exactly once.
+export
+where @name == "every-loss"
+summarize rows=count(), unique=count_distinct(seq), first=min(seq), last=max(seq)

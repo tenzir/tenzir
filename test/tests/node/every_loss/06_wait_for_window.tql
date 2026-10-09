@@ -1,0 +1,8 @@
+// `every` emits immediately, so wait for its second tick to put at least
+// one second between the two publishers. The first 250ms window has closed,
+// but its 2s delayed subpipeline is still alive.
+every 1s {
+  from {}
+}
+head 2
+discard

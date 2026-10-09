@@ -1,0 +1,14 @@
+// The probe takes the same subscription path as the events under test. Its
+// immediate fork confirms that the subscriber is attached before publishing
+// either of the two batches.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000000041",
+  definition: "subscribe \"tpc.raw\"\nfork {\n  where seq == -2\n  @name = \"every-loss-ready\"\n  import\n}\nwhere seq != -2\nevery 250ms {\n  this = {...this, _ts: 2025-01-01T00:00:02}\n  delay _ts, start=2025-01-01T00:00:00, speed=1.0\n  drop _ts\n  @name = \"every-loss\"\n  import\n}"
+}
+discard
+// Repeated probes avoid a race with the subscription starting up.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000000042",
+  definition: "every 50ms {\n  from {seq: -2}\n}\npublish \"tpc.raw\""
+}
+discard

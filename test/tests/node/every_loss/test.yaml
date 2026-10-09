@@ -1,0 +1,3 @@
+suite: every-loss
+fixtures: [node]
+timeout: 60

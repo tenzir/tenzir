@@ -1,1 +1,0 @@
-ok: all batches delivered exactly once
