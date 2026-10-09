@@ -1,0 +1,6 @@
+// A zero count drops the stream.
+load_stdin
+read_json _batch_size=2
+where keep
+repeat 0
+write_json compact=true

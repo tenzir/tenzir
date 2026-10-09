@@ -1,0 +1,8 @@
+// `rare x | head 0` is a prefix of the full ranking.
+// With the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+rare x
+optimize_barrier
+head 0
+write_json compact=true

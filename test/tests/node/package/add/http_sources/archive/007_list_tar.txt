@@ -1,0 +1,5 @@
+{
+  id: "remote_split",
+  name: "Remote split package",
+  message: "configured",
+}

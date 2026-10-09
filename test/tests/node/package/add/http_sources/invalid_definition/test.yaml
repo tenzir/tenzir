@@ -1,0 +1,5 @@
+suite:
+  name: package-add-invalid-definition
+  mode: sequential
+fixtures: [node, package_http]
+timeout: 180

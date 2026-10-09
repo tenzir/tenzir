@@ -1,0 +1,2 @@
+// An explicit path overrides the one in the query string.
+package_add f"{env("PACKAGE_HTTP_URL")}/archive.tar.gz?sha=main&path=packages/example", path="packages/example"

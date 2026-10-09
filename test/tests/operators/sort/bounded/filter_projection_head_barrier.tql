@@ -1,0 +1,10 @@
+// Filter, projection, and bound compose.
+// With the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+sort key?
+optimize_barrier
+where keep
+select id
+head 3
+write_json compact=true

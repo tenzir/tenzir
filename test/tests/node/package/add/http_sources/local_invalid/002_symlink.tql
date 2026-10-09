@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A local archive with a symlink is rejected.
+package_add f"{env("TENZIR_INPUTS")}/packages/symlink.tar.gz"

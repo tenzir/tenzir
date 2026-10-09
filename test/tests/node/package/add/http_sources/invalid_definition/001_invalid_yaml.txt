@@ -1,0 +1,9 @@
+error: failed to parse yaml
+ --> tests/node/package/add/http_sources/invalid_definition/001_invalid_yaml.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/invalid-yaml"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: trying to load inputs/packages/invalid-yaml/package.yaml
+  = note: error: !! parse_error: failed to parse YAML at line/col/pos message("failed to parse YAML at line/col/pos", 0, 0, 1) message("failed to parse YAML at line/col/pos", 0, 0, 1) message("failed to parse YAML at line/col/pos", 0, 0, 1)
+  = note: while loading package source `inputs/packages/invalid-yaml`

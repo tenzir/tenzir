@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A backslash separator is not a relative path.
+package_add f"{env("TENZIR_INPUTS")}/packages/multiple-wrapped.tar.gz", path="packages\\example"

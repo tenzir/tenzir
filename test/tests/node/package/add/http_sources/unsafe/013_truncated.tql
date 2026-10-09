@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A truncated archive fails to read.
+package_add f"{env("TENZIR_INPUTS")}/packages/truncated.tar.gz"

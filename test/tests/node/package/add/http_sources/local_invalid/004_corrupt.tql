@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A local non-archive file fails to read.
+package_add f"{env("TENZIR_INPUTS")}/packages/corrupt.tar.gz"

@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Malformed YAML fails while loading the package source.
+package_add f"{env("TENZIR_INPUTS")}/packages/invalid-yaml"

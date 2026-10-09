@@ -1,0 +1,7 @@
+error: unsafe package archive path `/outside`
+ --> tests/node/package/add/http_sources/unsafe/002_absolute.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/absolute.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/absolute.tar.gz`

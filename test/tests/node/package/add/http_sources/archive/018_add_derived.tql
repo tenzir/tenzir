@@ -1,0 +1,3 @@
+// A package id derived from the archive directory name.
+// `package_add` keeps the value configured in config.yaml.
+package_add f"{env("PACKAGE_HTTP_URL")}/derived.tgz", inputs={message: "override"}

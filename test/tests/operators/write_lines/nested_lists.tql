@@ -1,0 +1,3 @@
+// Nested lists flatten into a single comma-separated run.
+from {a: [[1, 2], [], [3, null]]}
+write_lines

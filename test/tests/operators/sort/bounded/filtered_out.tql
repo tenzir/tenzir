@@ -1,0 +1,8 @@
+// A filter that drops everything yields nothing.
+// Without the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+sort key?
+where false
+head 2
+write_json compact=true

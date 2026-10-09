@@ -1,0 +1,9 @@
+// Formatting does not change with `_jobs=3`.
+// A parallel writer prints one chunk per slice and emits them in
+// worker-completion order, so the lines are sorted before they are
+// compared against the serial baseline.
+from {a: [1, null, 2], b: ["", "x", ""]}
+write_lines _jobs=3
+read_lines
+sort line
+write_lines

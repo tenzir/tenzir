@@ -1,0 +1,2 @@
+// The installed package and its resolved inputs.
+package_list | select id, name, message=config.inputs.message

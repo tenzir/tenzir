@@ -1,0 +1,3 @@
+// Numbers and booleans use their canonical representation.
+from {a: 42, b: true, c: -2, d: 1.5}
+write_lines

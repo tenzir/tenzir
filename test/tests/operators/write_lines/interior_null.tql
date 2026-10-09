@@ -1,0 +1,3 @@
+// A null between two values does not leave a separator behind.
+from {a: "left", b: null, c: "right"}
+write_lines

@@ -1,0 +1,6 @@
+error: `path` requires a package archive source
+ --> tests/node/package/add/http_sources/path_invalid/008_path_on_events.tql:7:18
+  |
+7 | package_add path="."
+  |                  ^^^
+  |

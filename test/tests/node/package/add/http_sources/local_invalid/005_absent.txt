@@ -1,0 +1,7 @@
+error: failed to inspect package source `inputs/packages/absent.tar.gz`: generic:2
+ --> tests/node/package/add/http_sources/local_invalid/005_absent.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/absent.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/absent.tar.gz`

@@ -1,0 +1,16 @@
+warning: package id `warning-package` contains '-' characters; normalized module name will be `warning_package`
+ --> tests/node/package/add/http_sources/warning_error/001_warning_and_error.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/warning-error"
+  |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: while loading package source `inputs/packages/warning-error`
+
+error: !! parse_error: failed to parse YAML at line/col/pos message("failed to parse YAML at line/col/pos", 1, 0, 8) message("failed to parse YAML at line/col/pos", 1, 0, 8) message("failed to parse YAML at line/col/pos", 1, 0, 8)
+ --> tests/node/package/add/http_sources/warning_error/001_warning_and_error.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/warning-error"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: from file: inputs/packages/warning-error/pipelines/bad.tql
+  = note: while loading package source `inputs/packages/warning-error`

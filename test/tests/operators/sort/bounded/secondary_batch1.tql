@@ -1,0 +1,7 @@
+// `sort key?, -secondary | head 4` keeps the bounded and full plans in sync (batch size 1).
+// Without the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=1
+sort key?, -secondary
+head 4
+write_json compact=true

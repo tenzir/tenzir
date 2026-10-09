@@ -1,0 +1,2 @@
+// A `./` prefix selects a sibling package.
+package_add f"{env("PACKAGE_HTTP_URL")}/multiple-wrapped.tar.gz", path="./packages/other"

@@ -1,0 +1,8 @@
+error: package archives may only contain regular files and directories
+ --> tests/node/package/add/http_sources/unsafe/004_hardlink.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/hardlink.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: invalid entry `hardlink`
+  = note: while loading package source `inputs/packages/hardlink.tar.gz`

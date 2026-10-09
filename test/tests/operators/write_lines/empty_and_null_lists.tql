@@ -1,0 +1,3 @@
+// Empty lists and all-null lists contribute nothing.
+from {a: [], b: [null, null], c: "end"}
+write_lines

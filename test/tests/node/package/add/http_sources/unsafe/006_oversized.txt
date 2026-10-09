@@ -1,0 +1,7 @@
+error: unpacked package archive exceeds 64 MiB
+ --> tests/node/package/add/http_sources/unsafe/006_oversized.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/oversized.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/oversized.tar.gz`

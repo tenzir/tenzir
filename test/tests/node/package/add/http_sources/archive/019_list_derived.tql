@@ -1,0 +1,2 @@
+// The configured input wins over the override.
+package_list | select id, name, message=config.inputs.message

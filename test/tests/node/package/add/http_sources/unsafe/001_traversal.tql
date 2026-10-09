@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// An entry escaping the archive root is unsafe.
+package_add f"{env("TENZIR_INPUTS")}/packages/traversal.tar.gz"

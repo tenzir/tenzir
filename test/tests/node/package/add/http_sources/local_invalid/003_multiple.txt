@@ -1,0 +1,9 @@
+error: package archive must contain exactly one package.yaml
+ --> tests/node/package/add/http_sources/local_invalid/003_multiple.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/multiple.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: found 2 package definitions
+  = hint: use the `path` operator option to select one package
+  = note: while loading package source `inputs/packages/multiple.tar.gz`

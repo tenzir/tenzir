@@ -1,0 +1,8 @@
+// `top x | head 1` is a prefix of the full ranking.
+// With the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+top x
+optimize_barrier
+head 1
+write_json compact=true

@@ -1,0 +1,2 @@
+// Package inputs come from the archive's config.yaml.
+package_list | select id, name, message=config.inputs.message

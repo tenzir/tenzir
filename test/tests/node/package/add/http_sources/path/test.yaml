@@ -1,0 +1,7 @@
+suite:
+  name: package-add-path
+  mode: sequential
+fixtures:
+  - node
+  - package_http
+timeout: 180

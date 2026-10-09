@@ -1,0 +1,7 @@
+error: failed to read package archive: Unrecognized archive format
+ --> tests/node/package/add/http_sources/local_invalid/004_corrupt.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/corrupt.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/corrupt.tar.gz`

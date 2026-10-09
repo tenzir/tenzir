@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// An archive without a package.yaml is rejected.
+package_add f"{env("TENZIR_INPUTS")}/packages/missing.tar.gz"

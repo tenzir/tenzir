@@ -1,0 +1,5 @@
+suite:
+  name: package-add-remote
+  mode: sequential
+fixtures: [node, http]
+timeout: 180

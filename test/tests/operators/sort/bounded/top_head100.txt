@@ -1,0 +1,4 @@
+{"x":"a","count":3}
+{"x":"b","count":2}
+{"x":"c","count":2}
+{"x":"d","count":1}

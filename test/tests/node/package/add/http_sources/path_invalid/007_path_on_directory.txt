@@ -1,0 +1,7 @@
+error: `path` requires a package archive, not a directory
+ --> tests/node/package/add/http_sources/path_invalid/007_path_on_directory.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/directory", path="."
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/directory`

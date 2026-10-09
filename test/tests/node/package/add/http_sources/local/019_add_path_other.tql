@@ -1,0 +1,2 @@
+// Path selection reaches into a wrapper directory.
+package_add f"{env("TENZIR_INPUTS")}/packages/multiple-wrapped.tar.gz", path="packages/other"

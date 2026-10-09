@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// `this` is not a field path, and the rejection is a diagnostic.
+from {x: 1}
+enumerate this

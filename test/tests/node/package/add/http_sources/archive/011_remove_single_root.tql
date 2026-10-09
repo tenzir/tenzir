@@ -1,0 +1,2 @@
+// Reset the node for the next source.
+package_remove "remote_split"

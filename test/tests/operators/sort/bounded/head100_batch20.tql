@@ -1,0 +1,7 @@
+// A bounded `sort | head 100` is a prefix of the full sort (batch size 20).
+// Without the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=20
+sort key?
+head 100
+write_json compact=true

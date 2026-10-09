@@ -1,0 +1,6 @@
+// Replaying a masked stream is independent of the batch size (1).
+load_stdin
+read_json _batch_size=1
+where keep
+repeat 3
+write_json compact=true

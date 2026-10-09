@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A missing local file is reported as a bad package source.
+package_add f"{env("TENZIR_INPUTS")}/packages/absent.tar.gz"

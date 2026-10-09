@@ -1,0 +1,2 @@
+// The GitLab repository archive endpoint is supported.
+package_add f"{env("PACKAGE_HTTP_URL")}/api/v4/projects/group%2Frepo/repository/archive?sha=main&path=packages/example"

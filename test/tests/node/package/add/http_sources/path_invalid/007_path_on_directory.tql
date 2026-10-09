@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// `path` requires a package archive, not a directory.
+package_add f"{env("TENZIR_INPUTS")}/packages/directory", path="."

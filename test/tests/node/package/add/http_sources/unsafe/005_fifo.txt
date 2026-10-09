@@ -1,0 +1,8 @@
+error: package archives may only contain regular files and directories
+ --> tests/node/package/add/http_sources/unsafe/005_fifo.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/fifo.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: invalid entry `fifo`
+  = note: while loading package source `inputs/packages/fifo.tar.gz`

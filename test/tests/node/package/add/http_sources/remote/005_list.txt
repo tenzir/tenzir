@@ -1,0 +1,5 @@
+{
+  id: "remote_test",
+  name: "Remote test",
+  message: "custom",
+}

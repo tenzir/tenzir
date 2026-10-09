@@ -1,0 +1,2 @@
+// Same package, same resolved inputs.
+package_list | select id, name, message=config.inputs.message

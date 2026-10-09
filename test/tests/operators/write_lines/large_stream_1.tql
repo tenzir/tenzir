@@ -1,0 +1,12 @@
+// Unique rows across many batches detect work lost or duplicated with
+// _jobs=1.
+from {x: 0}
+repeat 20000
+enumerate row
+where row >= 10000
+drop x
+write_lines _jobs=1
+read_lines
+value = int(line)
+summarize lines=count(), distinct=count_distinct(value),
+          low=min(value), high=max(value)

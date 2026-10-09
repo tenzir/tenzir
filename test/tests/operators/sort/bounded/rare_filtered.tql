@@ -1,0 +1,8 @@
+// A filter on the aggregate runs before `rare x`'s bound.
+// Without the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+rare x
+where count >= 2
+head 2
+write_json compact=true

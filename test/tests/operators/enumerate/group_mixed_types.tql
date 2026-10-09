@@ -1,0 +1,4 @@
+// Counters are per group, and an integer and its unsigned twin share one.
+from {x: 1}, {x: 1.uint()}, {x: 2}, {x: 1}
+enumerate n, group=x
+write_json compact=true

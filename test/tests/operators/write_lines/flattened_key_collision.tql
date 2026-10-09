@@ -1,0 +1,3 @@
+// A literal dotted key and a nested record both contribute.
+from {"a.b": 1, a: {b: 2}}
+write_lines

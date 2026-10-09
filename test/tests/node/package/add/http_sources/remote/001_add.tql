@@ -1,0 +1,2 @@
+// A package URL with a query string installs with caller-supplied inputs.
+package_add f"{env("HTTP_FIXTURE_URL")}package/package.yaml?download=true", inputs={message: "custom"}

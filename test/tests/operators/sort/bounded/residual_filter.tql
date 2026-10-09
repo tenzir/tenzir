@@ -1,0 +1,8 @@
+// A residual predicate stays at the source but must run before the bound.
+// Without the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+sort key
+where keep
+head 2
+write_json compact=true

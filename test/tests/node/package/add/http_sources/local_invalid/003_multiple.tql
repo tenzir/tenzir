@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A local repository archive needs an explicit path.
+package_add f"{env("TENZIR_INPUTS")}/packages/multiple.tar.gz"

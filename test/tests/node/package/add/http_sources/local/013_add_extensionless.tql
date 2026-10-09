@@ -1,0 +1,2 @@
+// Discovery does not depend on the file extension.
+package_add f"{env("TENZIR_INPUTS")}/packages/archive"

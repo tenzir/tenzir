@@ -1,0 +1,7 @@
+error: `path` must be a relative archive directory without '..'
+ --> tests/node/package/add/http_sources/path_invalid/005_backslash.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/multiple-wrapped.tar.gz", path="packages\\example"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/multiple-wrapped.tar.gz`

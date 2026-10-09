@@ -1,0 +1,7 @@
+warning: package id `warning-package` contains '-' characters; normalized module name will be `warning_package`
+ --> tests/node/package/add/http_sources/warning/001_add_directory.tql:2:13
+  |
+2 | package_add f"{env("TENZIR_INPUTS")}/packages/directory"
+  |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: while loading package source `inputs/packages/directory`

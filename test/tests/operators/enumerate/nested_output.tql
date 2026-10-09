@@ -1,0 +1,5 @@
+// A nested output path is created where it is missing and moved to the front.
+load_stdin
+read_json _batch_size=3
+enumerate p.n
+write_json compact=true

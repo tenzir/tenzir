@@ -1,0 +1,2 @@
+// A package directory. The id warning does not prevent installation.
+package_add f"{env("TENZIR_INPUTS")}/packages/directory"

@@ -1,0 +1,5 @@
+{
+  id: "derived_package",
+  name: "Remote split package",
+  message: "configured",
+}

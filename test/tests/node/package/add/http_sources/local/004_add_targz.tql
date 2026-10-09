@@ -1,0 +1,2 @@
+// A local gzip-compressed tar archive.
+package_add f"{env("TENZIR_INPUTS")}/packages/archive.tar.gz"

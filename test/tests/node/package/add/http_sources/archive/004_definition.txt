@@ -1,0 +1,20 @@
+{
+  operators: {
+    "nested::answer": {
+      description: null,
+      definition: "from {answer: 42}\n",
+      args: {
+        positional: [],
+        named: [],
+      },
+    },
+  },
+  examples: [
+    {
+      name: null,
+      description: null,
+      definition: "version\n",
+    },
+  ],
+  lets: "let $answer = 42\n",
+}

@@ -1,0 +1,3 @@
+// Null fields are skipped, leaving an empty line.
+from {a: null, b: null}
+write_lines

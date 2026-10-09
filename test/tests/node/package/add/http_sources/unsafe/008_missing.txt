@@ -1,0 +1,9 @@
+error: package archive must contain exactly one package.yaml
+ --> tests/node/package/add/http_sources/unsafe/008_missing.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/missing.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: found 0 package definitions
+  = hint: use the `path` operator option to select one package
+  = note: while loading package source `inputs/packages/missing.tar.gz`

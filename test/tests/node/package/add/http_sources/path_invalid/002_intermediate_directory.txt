@@ -1,0 +1,7 @@
+error: archive path `packages` does not contain package.yaml
+ --> tests/node/package/add/http_sources/path_invalid/002_intermediate_directory.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/multiple-wrapped.tar.gz", path="packages"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/multiple-wrapped.tar.gz`

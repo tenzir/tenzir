@@ -1,0 +1,9 @@
+// Projection does not move across the bound.
+// With the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+sort key?
+optimize_barrier
+select id
+head 3
+write_json compact=true

@@ -1,0 +1,4 @@
+{"id":2,"key":"b","secondary":2,"keep":true,"extra":{"nested":[1,null,"x"]}}
+{"id":6,"key":"a","secondary":0,"keep":true}
+{"id":9,"key":2,"secondary":0,"keep":true}
+{"id":1,"key":1,"secondary":1,"keep":true}

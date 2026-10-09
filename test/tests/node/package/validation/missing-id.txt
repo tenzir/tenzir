@@ -1,0 +1,7 @@
+error: id must be provided
+ --> tests/node/package/validation/missing-id.tql:7:1
+  |
+7 | package_add
+  | ^^^^^^^^^^^
+  |
+  = note: invalid package definition

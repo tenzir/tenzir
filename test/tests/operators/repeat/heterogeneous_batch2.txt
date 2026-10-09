@@ -1,0 +1,8 @@
+{"v":{"a":1},"list":[1,"x",null]}
+{"v":"text","list":[]}
+{"other":true,"v":{"b":[2,{"c":false}]}}
+{"v":null,"list":[{"x":1},{"y":2}]}
+{"v":{"a":1},"list":[1,"x",null]}
+{"v":"text","list":[]}
+{"other":true,"v":{"b":[2,{"c":false}]}}
+{"v":null,"list":[{"x":1},{"y":2}]}

@@ -1,0 +1,2 @@
+// The selected package is the installed one.
+package_list | select id

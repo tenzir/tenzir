@@ -1,0 +1,2 @@
+// A redirecting package URL resolves to the same definition.
+package_add f"{env("HTTP_FIXTURE_URL")}package/redirect", inputs={message: "custom"}

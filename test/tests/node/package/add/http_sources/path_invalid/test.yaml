@@ -1,0 +1,7 @@
+suite:
+  name: package-add-path-invalid
+  mode: sequential
+fixtures:
+  - node
+  - package_http
+timeout: 180

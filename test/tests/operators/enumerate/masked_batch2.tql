@@ -1,0 +1,6 @@
+// The counter continues across batches and skips masked rows (batch size 2).
+load_stdin
+read_json _batch_size=2
+where keep
+enumerate
+write_json compact=true

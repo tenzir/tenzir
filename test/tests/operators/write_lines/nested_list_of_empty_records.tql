@@ -1,0 +1,3 @@
+// Empty records inside nested lists contribute nothing.
+from {a: [[], [{}]], b: 1}
+write_lines

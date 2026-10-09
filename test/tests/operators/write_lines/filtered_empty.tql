@@ -1,0 +1,4 @@
+// An empty result writes nothing at all.
+from {x: 1}, {x: 2}
+where x > 2
+write_lines

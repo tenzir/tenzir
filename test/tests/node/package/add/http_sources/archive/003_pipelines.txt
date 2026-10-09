@@ -1,0 +1,4 @@
+{
+  id: "remote_split/nested/hello",
+  definition: "from {message: \"configured\"}\ndiscard\n",
+}

@@ -1,0 +1,5 @@
+// Null, string, record, and list group keys each get their own counter.
+load_stdin
+read_json _batch_size=3
+enumerate n, group=g
+write_json compact=true

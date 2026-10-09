@@ -1,0 +1,6 @@
+// A count of one passes the stream through unchanged.
+load_stdin
+read_json _batch_size=2
+where keep
+repeat 1
+write_json compact=true

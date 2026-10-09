@@ -1,0 +1,3 @@
+// Records are flattened; empty records contribute nothing.
+from {a: {b: 1, c: {d: 2}}, e: {}, f: 3}
+write_lines

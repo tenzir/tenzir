@@ -1,0 +1,8 @@
+error: expected a record
+ --> tests/node/package/add/http_sources/invalid_definition/002_not_record.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/not-record"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: trying to load inputs/packages/not-record/package.yaml
+  = note: while loading package source `inputs/packages/not-record`

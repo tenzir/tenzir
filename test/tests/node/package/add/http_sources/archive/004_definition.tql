@@ -1,0 +1,5 @@
+// Operators, examples, and constants are collected from the archive.
+package_list format="extended"
+select operators=package_definition.operators,
+       examples=package_definition.examples,
+       lets=package_definition.lets

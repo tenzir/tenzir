@@ -1,0 +1,6 @@
+// An input masked away entirely stays empty.
+load_stdin
+read_json _batch_size=3
+where false
+repeat 2
+write_json compact=true

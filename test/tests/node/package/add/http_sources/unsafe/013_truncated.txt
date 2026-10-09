@@ -1,0 +1,7 @@
+error: failed to read package archive: truncated gzip input
+ --> tests/node/package/add/http_sources/unsafe/013_truncated.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/truncated.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/truncated.tar.gz`

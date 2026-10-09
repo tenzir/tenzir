@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Archives above the size limit are rejected.
+package_add f"{env("TENZIR_INPUTS")}/packages/oversized.tar.gz"

@@ -1,0 +1,6 @@
+error: enumerate output must be a field path
+ --> tests/operators/enumerate/invalid_out_this.tql:7:11
+  |
+7 | enumerate this
+  |           ^^^^
+  |

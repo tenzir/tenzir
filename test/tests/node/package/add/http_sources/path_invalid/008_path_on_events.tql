@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// `path` requires a package archive source, not piped events.
+from {}
+package_add path="."

@@ -1,0 +1,5 @@
+// An existing output field keeps its position; a new one is prepended.
+load_stdin
+read_json _batch_size=3
+enumerate x
+write_json compact=true

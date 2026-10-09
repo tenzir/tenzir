@@ -1,0 +1,4 @@
+// A mask drops events without disturbing the remaining lines.
+from {x: 1}, {x: 2}, {x: 3}
+where x != 2
+write_lines

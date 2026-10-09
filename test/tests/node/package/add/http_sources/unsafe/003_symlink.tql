@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Symlinks are not extracted.
+package_add f"{env("TENZIR_INPUTS")}/packages/symlink.tar.gz"

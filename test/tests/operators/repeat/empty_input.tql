@@ -1,0 +1,5 @@
+// An empty input stays empty.
+load_stdin
+read_json _batch_size=3
+repeat 2
+write_json compact=true

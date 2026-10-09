@@ -1,0 +1,3 @@
+// An empty record writes an empty line.
+from {}
+write_lines

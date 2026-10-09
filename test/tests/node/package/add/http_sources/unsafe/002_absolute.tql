@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// An absolute entry path is unsafe.
+package_add f"{env("TENZIR_INPUTS")}/packages/absolute.tar.gz"

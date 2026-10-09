@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A non-record document is not a package definition.
+package_add f"{env("TENZIR_INPUTS")}/packages/not-record"

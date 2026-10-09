@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// A definition without an id is rejected before anything is installed.
+from {name: "Missing ID"}
+package_add

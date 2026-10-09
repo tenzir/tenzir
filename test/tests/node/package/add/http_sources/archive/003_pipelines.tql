@@ -1,0 +1,4 @@
+// The nested pipeline is installed with the configured input substituted.
+pipeline_list
+where id == "remote_split/nested/hello"
+select id, definition

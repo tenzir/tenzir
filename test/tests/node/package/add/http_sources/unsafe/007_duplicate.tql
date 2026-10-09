@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A duplicate archive entry is rejected.
+package_add f"{env("TENZIR_INPUTS")}/packages/duplicate.tar.gz"

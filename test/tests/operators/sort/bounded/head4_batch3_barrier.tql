@@ -1,0 +1,8 @@
+// A bounded `sort | head 4` is a prefix of the full sort (batch size 3).
+// With the optimization barrier; both share one baseline.
+load_stdin
+read_json _batch_size=3
+sort key?
+optimize_barrier
+head 4
+write_json compact=true

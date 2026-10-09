@@ -1,0 +1,2 @@
+// An archive without a wrapper directory installs directly.
+package_add f"{env("PACKAGE_HTTP_URL")}/single-root.tar.gz"

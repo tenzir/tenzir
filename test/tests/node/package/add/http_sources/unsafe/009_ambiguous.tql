@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Two candidate package.yaml files are ambiguous.
+package_add f"{env("TENZIR_INPUTS")}/packages/ambiguous.tar.gz"

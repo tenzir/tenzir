@@ -1,0 +1,5 @@
+// Heterogeneous and nested values survive a replay (batch size 20).
+load_stdin
+read_json _batch_size=20
+repeat 2
+write_json compact=true

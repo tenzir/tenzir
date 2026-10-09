@@ -1,0 +1,3 @@
+// Blobs are base64-encoded; IPs and subnets print as written.
+from {a: b"hello", b: 192.0.2.1, c: 192.0.2.0/24}
+write_lines

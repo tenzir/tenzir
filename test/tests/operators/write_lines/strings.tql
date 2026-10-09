@@ -1,0 +1,3 @@
+// Strings are written verbatim, including spaces and newlines.
+from {a: "", b: "two words", c: "x\ny"}
+write_lines

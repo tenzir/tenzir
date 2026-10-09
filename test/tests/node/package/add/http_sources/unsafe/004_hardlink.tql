@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Hard links are not extracted.
+package_add f"{env("TENZIR_INPUTS")}/packages/hardlink.tar.gz"

@@ -1,0 +1,7 @@
+error: duplicate package archive file `package.yaml`
+ --> tests/node/package/add/http_sources/unsafe/007_duplicate.tql:6:13
+  |
+6 | package_add f"{env("TENZIR_INPUTS")}/packages/duplicate.tar.gz"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: while loading package source `inputs/packages/duplicate.tar.gz`

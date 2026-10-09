@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// A local archive escaping its root is unsafe.
+package_add f"{env("TENZIR_INPUTS")}/packages/traversal.tar.gz"
