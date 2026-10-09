@@ -1,0 +1,9 @@
+// Empty or non-digit input warns once per kind and becomes null. Null
+// propagates silently.
+from {x: "7992739871"},
+     {x: ""},
+     {x: "7992-7398-71"},
+     {x: "٧٩٩٢٧٣٩٨٧١"},
+     {x: null},
+     {x: 7992739871}
+check_digit = luhn_check_digit(x)

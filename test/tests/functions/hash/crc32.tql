@@ -1,0 +1,11 @@
+// Known-answer vectors of CRC-32/ISO-HDLC, the CRC-32 of zlib and PNG. Like
+// the other hash functions, strings and blobs contribute only their bytes.
+from {x: "123456789"},
+     {x: ""},
+     {x: "foo"},
+     {x: b"foo"},
+     {x: "example_log_123"},
+     {x: "webserver01/var/log/app.log"},
+     {x: {a: 1.2.3.4, b: 10.0.0.0/8, c: 2024-12-24}}
+digest = hash_crc32(x)
+seeded = hash_crc32(x, seed="foo")

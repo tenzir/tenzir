@@ -1,0 +1,7 @@
+// Null propagates silently. Other types warn and become null, like with the
+// other string predicates.
+from {x: "4111111111111111"},
+     {x: null},
+     {x: 4111111111111111},
+     {x: b"4111111111111111"}
+valid = is_luhn_valid(x)

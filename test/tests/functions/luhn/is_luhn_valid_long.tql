@@ -1,0 +1,3 @@
+// The checksum handles digit strings of any length.
+from {x: "59".repeat(50000)}, {x: "9".repeat(100001)}
+select length = x.length_bytes(), valid = x.is_luhn_valid()

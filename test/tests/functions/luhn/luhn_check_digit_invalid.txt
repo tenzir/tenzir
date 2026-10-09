@@ -1,0 +1,45 @@
+warning: cannot compute the check digit of an empty string
+ --> tests/functions/luhn/luhn_check_digit_invalid.tql:9:32
+  |
+9 | check_digit = luhn_check_digit(x)
+  |                                ~
+  |
+
+warning: expected only the digits `0` to `9`
+ --> tests/functions/luhn/luhn_check_digit_invalid.tql:9:32
+  |
+9 | check_digit = luhn_check_digit(x)
+  |                                ~
+  |
+  = hint: remove separators such as spaces and dashes first
+
+warning: luhn_check_digit does not accept the argument type `int`
+ --> tests/functions/luhn/luhn_check_digit_invalid.tql:9:15
+  |
+9 | check_digit = luhn_check_digit(x)
+  |               ~~~~~~~~~~~~~~~~~~~
+  |
+{
+  x: "7992739871",
+  check_digit: 3,
+}
+{
+  x: "",
+  check_digit: null,
+}
+{
+  x: "7992-7398-71",
+  check_digit: null,
+}
+{
+  x: "٧٩٩٢٧٣٩٨٧١",
+  check_digit: null,
+}
+{
+  x: null,
+  check_digit: null,
+}
+{
+  x: 7992739871,
+  check_digit: null,
+}

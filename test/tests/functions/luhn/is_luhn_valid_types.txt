@@ -1,0 +1,29 @@
+warning: is_luhn_valid does not accept the argument type `int`
+ --> tests/functions/luhn/is_luhn_valid_types.tql:7:9
+  |
+7 | valid = is_luhn_valid(x)
+  |         ~~~~~~~~~~~~~~~~
+  |
+
+warning: is_luhn_valid does not accept the argument type `blob`
+ --> tests/functions/luhn/is_luhn_valid_types.tql:7:9
+  |
+7 | valid = is_luhn_valid(x)
+  |         ~~~~~~~~~~~~~~~~
+  |
+{
+  x: "4111111111111111",
+  valid: true,
+}
+{
+  x: null,
+  valid: null,
+}
+{
+  x: 4111111111111111,
+  valid: null,
+}
+{
+  x: b"4111111111111111",
+  valid: null,
+}

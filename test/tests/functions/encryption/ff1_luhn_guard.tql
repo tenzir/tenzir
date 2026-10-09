@@ -1,0 +1,24 @@
+// Guarding with `is_luhn_valid` and a length check encrypts only card numbers
+// and leaves other values unchanged, so decryption restores every value. The
+// short `42` passes the Luhn check, but leaves too few digits for FF1. The
+// 20-digit number is too long for a card number.
+// branches of `if` do not preserve the order of events, hence the `sort`.
+let $key = secret("key-128").decode_hex()
+from {card: "4111111111111111"},
+     {card: "4111111111111112"},
+     {card: "42"},
+     {card: "12345678901234567894"},
+     {card: "4111-1111-1111-1111"},
+     {card: null}
+original = card
+if card.is_luhn_valid() and card.length_bytes() >= 12 and card.length_bytes() <= 19 {
+  card = card.slice(end=-1).encrypt_ff1(key=$key, tweak="card")
+  card = card + card.luhn_check_digit().string()
+}
+encrypted = card
+if card.is_luhn_valid() and card.length_bytes() >= 12 and card.length_bytes() <= 19 {
+  card = card.slice(end=-1).decrypt_ff1(key=$key, tweak="card")
+  card = card + card.luhn_check_digit().string()
+}
+restored = card == original
+sort original

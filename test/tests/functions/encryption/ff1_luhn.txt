@@ -1,0 +1,40 @@
+{
+  card: "4111111111111111",
+  encrypted: "3141841710014094",
+  decrypted: "4111111111111111",
+  valid: true,
+  changed: true,
+  same_length: true,
+  encrypted_valid: true,
+  restored: true,
+}
+{
+  card: "378282246310005",
+  encrypted: "629133361737208",
+  decrypted: "378282246310005",
+  valid: true,
+  changed: true,
+  same_length: true,
+  encrypted_valid: true,
+  restored: true,
+}
+{
+  card: "5555555555554444",
+  encrypted: "5918156481794840",
+  decrypted: "5555555555554444",
+  valid: true,
+  changed: true,
+  same_length: true,
+  encrypted_valid: true,
+  restored: true,
+}
+{
+  card: "4111111111111112",
+  encrypted: "3141841710014094",
+  decrypted: "4111111111111111",
+  valid: false,
+  changed: true,
+  same_length: true,
+  encrypted_valid: true,
+  restored: false,
+}

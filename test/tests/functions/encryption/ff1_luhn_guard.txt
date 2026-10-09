@@ -1,0 +1,36 @@
+{
+  card: "12345678901234567894",
+  original: "12345678901234567894",
+  encrypted: "12345678901234567894",
+  restored: true,
+}
+{
+  card: "4111-1111-1111-1111",
+  original: "4111-1111-1111-1111",
+  encrypted: "4111-1111-1111-1111",
+  restored: true,
+}
+{
+  card: "4111111111111111",
+  original: "4111111111111111",
+  encrypted: "3141841710014094",
+  restored: true,
+}
+{
+  card: "4111111111111112",
+  original: "4111111111111112",
+  encrypted: "4111111111111112",
+  restored: true,
+}
+{
+  card: "42",
+  original: "42",
+  encrypted: "42",
+  restored: true,
+}
+{
+  card: null,
+  original: null,
+  encrypted: null,
+  restored: true,
+}

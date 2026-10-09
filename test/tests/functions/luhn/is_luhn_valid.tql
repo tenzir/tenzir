@@ -1,0 +1,15 @@
+// Known-answer vectors. Only ASCII digits count, so separators, other digits,
+// and empty strings are invalid without a warning.
+from {x: "4111111111111111"},
+     {x: "49927398716"},
+     {x: "79927398713"},
+     {x: "378282246310005"},
+     {x: "5555555555554444"},
+     {x: "4111111111111112"},
+     {x: "1424918006331645"},
+     {x: "3480505043670686"},
+     {x: ""},
+     {x: "4111-1111-1111-1111"},
+     {x: "4111 1111 1111 1111"},
+     {x: "٤١١١١١١١١١١١١١١١"}
+valid = x.is_luhn_valid()

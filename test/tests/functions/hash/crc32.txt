@@ -1,0 +1,39 @@
+{
+  x: "123456789",
+  digest: "cbf43926",
+  seeded: "72871f0c",
+}
+{
+  x: "",
+  digest: "00000000",
+  seeded: "8c736521",
+}
+{
+  x: "foo",
+  digest: "8c736521",
+  seeded: "647af61e",
+}
+{
+  x: b"foo",
+  digest: "8c736521",
+  seeded: "647af61e",
+}
+{
+  x: "example_log_123",
+  digest: "cf0e3d3a",
+  seeded: "94bd0b23",
+}
+{
+  x: "webserver01/var/log/app.log",
+  digest: "b9b661b6",
+  seeded: "7d1ed815",
+}
+{
+  x: {
+    a: 1.2.3.4,
+    b: 10.0.0.0/8,
+    c: 2024-12-24T00:00:00Z,
+  },
+  digest: "65b10dc7",
+  seeded: "8ff4461e",
+}

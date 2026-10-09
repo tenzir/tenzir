@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace tenzir;
@@ -945,4 +946,78 @@ TEST("secret rejects data-dependent names") {
   REQUIRE(not diagnostics.empty());
   CHECK(diagnostics.front().severity == severity::error);
   CHECK_EQUAL(diagnostics.front().message, "expected a constant expression");
+}
+
+namespace {
+
+/// The textbook Luhn check digit, written independently of the builtins.
+auto reference_check_digit(std::string_view payload) -> std::int64_t {
+  auto sum = 0;
+  auto doubled = true;
+  for (auto it = payload.rbegin(); it != payload.rend(); ++it) {
+    auto digit = *it - '0';
+    if (doubled) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+    sum += digit;
+    doubled = not doubled;
+  }
+  return (10 - sum % 10) % 10;
+}
+
+/// Records whose field `x` holds the strings `values`.
+auto make_string_events(std::vector<std::string> const& values) -> Events {
+  auto builder = ArrayBuilder<Record>{};
+  for (auto const& value : values) {
+    builder.record().field("x").data(std::string_view{value});
+  }
+  return make_events(builder.finish());
+}
+
+} // namespace
+
+TEST("luhn_check_digit yields the only digit that makes a payload valid") {
+  // Every payload with up to four digits, including leading zeros.
+  auto payloads = std::vector<std::string>{};
+  auto limit = 1;
+  for (auto length = size_t{1}; length <= 4; ++length) {
+    limit *= 10;
+    for (auto n = 0; n < limit; ++n) {
+      auto payload = std::to_string(n);
+      payload.insert(0, length - payload.size(), '0');
+      payloads.push_back(std::move(payload));
+    }
+  }
+  auto candidates = std::vector<std::string>{};
+  for (auto const& payload : payloads) {
+    for (auto digit = '0'; digit <= '9'; ++digit) {
+      candidates.push_back(payload + digit);
+    }
+  }
+  auto const count = static_cast<storage::Index>(payloads.size());
+  auto dh = collecting_diagnostic_handler{};
+  auto check_digits
+    = eval(call("luhn_check_digit", {root_field("x")}),
+           make_string_events(payloads), storage::BitMap{count, true}, dh);
+  auto valid = eval(call("is_luhn_valid", {root_field("x")}),
+                    make_string_events(candidates),
+                    storage::BitMap{count * 10, true}, dh);
+  CHECK(std::move(dh).collect().empty());
+  for (auto i = storage::Index{0}; i < count; ++i) {
+    auto const check_digit = int_at(check_digits, i);
+    REQUIRE(check_digit);
+    CHECK_EQUAL(*check_digit, reference_check_digit(payloads[i]));
+    auto valid_digits = std::vector<std::int64_t>{};
+    for (auto digit = std::int64_t{0}; digit < 10; ++digit) {
+      auto const is_valid = bool_at(valid, i * 10 + digit);
+      REQUIRE(is_valid);
+      if (*is_valid) {
+        valid_digits.push_back(digit);
+      }
+    }
+    CHECK_EQUAL(valid_digits, std::vector{*check_digit});
+  }
 }

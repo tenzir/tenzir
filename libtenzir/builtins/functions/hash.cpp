@@ -22,6 +22,7 @@
 #include <tenzir/detail/type_traits.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/concepts.hpp>
+#include <tenzir/hash/crc.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/hash/md5.hpp>
 #include <tenzir/hash/sha.hpp>
@@ -298,6 +299,7 @@ public:
 } // namespace tenzir::plugins::hash
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::hmac)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::crc32, "crc32">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::md5, "md5">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha1, "sha1">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha224, "sha224">)

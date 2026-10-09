@@ -1,0 +1,19 @@
+// FF1 keeps the length and digits of a card number, but not its Luhn check
+// digit. Encrypting the payload, which is the number without its check digit,
+// and appending a new check digit yields a valid number that decrypts to the
+// original. For an invalid number, the round trip restores only the payload,
+// so the last digit of `4111111111111112` changes.
+let $key = secret("key-128").decode_hex()
+from {card: "4111111111111111"},
+     {card: "378282246310005"},
+     {card: "5555555555554444"},
+     {card: "4111111111111112"}
+encrypted = card.slice(end=-1).encrypt_ff1(key=$key, tweak="card")
+encrypted = encrypted + encrypted.luhn_check_digit().string()
+decrypted = encrypted.slice(end=-1).decrypt_ff1(key=$key, tweak="card")
+decrypted = decrypted + decrypted.luhn_check_digit().string()
+valid = card.is_luhn_valid()
+changed = encrypted != card
+same_length = encrypted.length_bytes() == card.length_bytes()
+encrypted_valid = encrypted.is_luhn_valid()
+restored = decrypted == card

@@ -1,0 +1,25 @@
+{
+  number: "4111111111111111",
+  payload: "411111111111111",
+  check_digit: 1,
+}
+{
+  number: "49927398716",
+  payload: "4992739871",
+  check_digit: 6,
+}
+{
+  number: "79927398713",
+  payload: "7992739871",
+  check_digit: 3,
+}
+{
+  number: "378282246310005",
+  payload: "37828224631000",
+  check_digit: 5,
+}
+{
+  number: "5555555555554444",
+  payload: "555555555555444",
+  check_digit: 4,
+}

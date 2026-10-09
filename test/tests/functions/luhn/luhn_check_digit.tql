@@ -1,0 +1,9 @@
+// Known-answer vectors: the check digit of each payload is the last digit of
+// the valid number.
+from {number: "4111111111111111"},
+     {number: "49927398716"},
+     {number: "79927398713"},
+     {number: "378282246310005"},
+     {number: "5555555555554444"}
+payload = number.slice(end=-1)
+check_digit = payload.luhn_check_digit()
