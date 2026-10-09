@@ -194,10 +194,15 @@ for mode, error in [
     seed(topic, [record(prefix(7, b"\x02")), record(prefix(9, b"\x04"))])
     result = consume(topic, 2, mode, group=topic)
     assert result.returncode != 0 and error in result.stderr, result.stderr
-    assert rows(consume(topic, 2, group=topic, stored=True)) == [
-        {"value": 1},
-        {"value": 2},
-    ]
+    resumed = consume(topic, 2, group=topic, stored=True)
+    actual = [json.loads(line) for line in resumed.stdout.splitlines()]
+    expected_rows = [{"value": 1}, {"value": 2}]
+    assert resumed.returncode == 0 and actual == expected_rows, (
+        f"{mode=}, {topic=}, {expected_rows=}, {actual=}, "
+        f"first_stderr={result.stderr!r}, "
+        f"resumed_returncode={resumed.returncode}, "
+        f"resumed_stderr={resumed.stderr!r}"
+    )
 # Successful preceding batches may commit, but a later valid batch must not
 # advance the offset past a failure in another worker.
 seed(
@@ -210,7 +215,15 @@ seed(
 )
 result = consume("avro_partial", 3, "wrong-schema")
 assert result.returncode != 0 and "truncated Avro datum" in result.stderr, result.stderr
-assert rows(consume("avro_partial", 2, stored=True)) == [{"value": 1}, {"value": 2}]
+resumed = consume("avro_partial", 2, stored=True)
+actual = [json.loads(line) for line in resumed.stdout.splitlines()]
+expected_rows = [{"value": 1}, {"value": 2}]
+assert resumed.returncode == 0 and actual == expected_rows, (
+    f"topic='avro_partial', {expected_rows=}, {actual=}, "
+    f"first_stderr={result.stderr!r}, "
+    f"resumed_returncode={resumed.returncode}, "
+    f"resumed_stderr={resumed.stderr!r}"
+)
 print("registry and decode failures preserve offsets across restart: ok")
 
 seed("avro_retry", [record(prefix(7, b"\x02"))])
