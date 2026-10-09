@@ -175,8 +175,12 @@ TEST("simplify handles missing fields") {
 
 TEST("simplify handles type mismatches") {
   CHECK_EQUAL(simplify("1 == 1.0"), render("true"));
+  // Equality is total, so mismatched types fold instead of warning.
+  CHECK_EQUAL(simplify("42 == \"42\""), render("false"));
+  CHECK_EQUAL(simplify("42 != \"42\""), render("true"));
+  // Ordering stays partial and warns at runtime.
+  CHECK_EQUAL(simplify("42 < \"42\""), render("42 < \"42\""));
   // Operations that warn at runtime stay.
-  CHECK_EQUAL(simplify("42 == \"42\""), render("42 == \"42\""));
   CHECK_EQUAL(simplify("x == 1 / 0"), render("x == 1 / 0"));
   // An operation that evaluates a warning operand warns as well.
   CHECK_EQUAL(simplify("x == (1 / 0 + 1) * 2"), render("x == (1 / 0 + 1) * 2"));

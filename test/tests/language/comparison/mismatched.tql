@@ -1,0 +1,14 @@
+// Equality is total: operands that cannot be equal compare as `false`, just
+// like a `null` compared against a non-`null`, without warning.
+from {
+  string_duration: "x" == 1d,
+  string_duration_neq: "x" != 1d,
+  int_string: 1 == "1",
+  list_string: [1] == "x",
+  record_int: {a: 1} == 1,
+  list_record: [1] == {a: 1},
+  ip_subnet: 1.2.3.4 == 1.2.3.0/24,
+  membership: "x" in [1d, "x"],
+  membership_missing: "x" in [1d],
+  not_membership: "x" not in [1d],
+}

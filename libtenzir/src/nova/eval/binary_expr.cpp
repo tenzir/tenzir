@@ -95,7 +95,7 @@ using concat_result_t = std::conditional_t<
 /// `std::is_invocable_v`, which is `false` for an ambiguous call, so an
 /// overlap silently drops a type pair instead of failing to compile.
 template <ast::binary_op Op>
-auto comparison_kernel() {
+auto strict_comparison_kernel() {
   return ::tenzir::detail::overload{
     // Equality compares `null` by nullness. For the ordering operators, two
     // `null`s are equal but not ordered, and a single `null` has no order.
@@ -127,6 +127,30 @@ auto comparison_kernel() {
       return Op == ast::binary_op::eq ? equal_rows : not equal_rows;
     },
   };
+}
+
+/// Equality is total: operands that no comparison rule relates simply are not
+/// equal, just as a `null` is not equal to a non-`null`. Secrets are the one
+/// exception, as their value is unknown until the pipeline resolves them, so
+/// they keep warning instead of answering `false`. Ordering stays partial and
+/// yields `null` for operands it cannot order.
+template <ast::binary_op Op>
+auto comparison_kernel() {
+  if constexpr (_::is_ordering(Op)) {
+    return strict_comparison_kernel<Op>();
+  } else {
+    using Strict = decltype(strict_comparison_kernel<Op>());
+    return ::tenzir::detail::overload{
+      strict_comparison_kernel<Op>(),
+      []<class T, class U>(diagnostic_handler&, T, U) -> Option<Bool>
+        requires(not std::is_invocable_v<Strict, diagnostic_handler&, T, U>
+                 and not std::same_as<T, SecretView>
+                 and not std::same_as<U, SecretView>)
+      {
+        return Op == ast::binary_op::neq;
+      },
+      };
+  }
 }
 
 template <ast::binary_op Op>

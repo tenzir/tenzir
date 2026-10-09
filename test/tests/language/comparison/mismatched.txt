@@ -1,0 +1,12 @@
+{
+  string_duration: false,
+  string_duration_neq: true,
+  int_string: false,
+  list_string: false,
+  record_int: false,
+  list_record: false,
+  ip_subnet: false,
+  membership: true,
+  membership_missing: false,
+  not_membership: true,
+}
