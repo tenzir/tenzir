@@ -1,6 +1,0 @@
-tests:
-  - captures.tql
-  - non_lambda_argument.tql
-  - null_promotion.tql
-  - resolve_largest.tql
-  - single_batch_everything.tql

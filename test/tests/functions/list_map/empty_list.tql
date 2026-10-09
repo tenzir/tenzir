@@ -1,6 +1,9 @@
+// A list without elements has no element type: `type_of` reports `list<null>`
+// regardless of how the list came to be empty.
 from {
   x: ["test"].where(x => false)
 }
 before = type_of(x)
 x = x.map(y => 42)
 after = type_of(x)
+literal = type_of([])

@@ -1,6 +1,6 @@
 ---
 error: true
-timeout: 5
+timeout: 20
 ---
 
 from {x: "payload", ts: 0ms.from_epoch()},

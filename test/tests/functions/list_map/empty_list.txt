@@ -7,13 +7,26 @@
     state: {
       type: {
         name: null,
-        kind: "string",
+        kind: "null",
         attributes: [],
         state: null,
       },
     },
   },
   after: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "null",
+        attributes: [],
+        state: null,
+      },
+    },
+  },
+  literal: {
     name: null,
     kind: "list",
     attributes: [],

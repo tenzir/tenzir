@@ -9,7 +9,7 @@ namespace tenzir::nova {
 auto _::EvalRun::eval(const ast::root_field& x, EvalFrame frame)
   -> Array<Data> {
   const auto maybe_warn = [this, &x, &frame]() {
-    if (not x.has_question_mark) {
+    if (not x.has_question_mark and frame.mask().any()) {
       diagnostic::warning("event does not have field")
         .primary(x.get_location())
         .compose([&](auto builder) {

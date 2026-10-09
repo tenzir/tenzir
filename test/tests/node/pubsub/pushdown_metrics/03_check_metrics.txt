@@ -1,10 +1,3 @@
-warning: event does not have field
- --> tests/node/pubsub/pushdown_metrics/03_check_metrics.tql:3:9
-  |
-3 |   where pipeline_id == "00000000-0000-0000-0000-000000000001"
-  |         ~~~~~~~~~~~
-  |
-  = hint: append `?` to suppress this warning
 {
   subscribe_events_out: 3,
   head_events_out: 3,
