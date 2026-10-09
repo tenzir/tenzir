@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {message: "hello"}
+ai_decide questions={bad: {type: "noul", instructions: "Is this bad?", options: ["yes"]}},
+          model="m", endpoint="http://127.0.0.1:1/v1"

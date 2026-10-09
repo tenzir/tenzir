@@ -1,0 +1,31 @@
+{
+  message: "danger: a very long log line",
+  mode: "laya",
+  ai: {
+    decide: {
+      answers: {
+        pii: {
+          probability: 0.9,
+        },
+        urgency: {
+          score: 1.7,
+          probabilities: [
+            0.1,
+            0.1,
+            0.8,
+          ],
+          confidence: 0.5,
+        },
+      },
+      model: "laya-rl-agent",
+      usage: {
+        input_tokens: 20,
+        output_tokens: 0,
+        truncated: true,
+        truncated_questions: [
+          "pii",
+        ],
+      },
+    },
+  },
+}

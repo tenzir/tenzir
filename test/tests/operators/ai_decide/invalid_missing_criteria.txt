@@ -1,0 +1,7 @@
+error: `questions.risk` has no `criteria`
+ --> tests/operators/ai_decide/invalid_missing_criteria.tql:6:21
+  |
+6 | ai_decide questions={risk: {type: "score", instructions: "How risky?"}},
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: add a list of levels ordered from lowest to highest

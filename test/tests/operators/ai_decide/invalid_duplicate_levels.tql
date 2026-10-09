@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {message: "hello"}
+ai_decide "How risky is this?", scale=["Routine", "Dangerous", "Routine"],
+          model="m", endpoint="http://127.0.0.1:1/v1"

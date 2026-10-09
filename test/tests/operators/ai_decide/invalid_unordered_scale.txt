@@ -1,0 +1,7 @@
+error: `scale` must be a list of levels ordered from lowest to highest, but got `record`
+ --> tests/operators/ai_decide/invalid_unordered_scale.tql:6:39
+  |
+6 | ai_decide "How risky is this?", scale={low: "Routine", high: "Dangerous"},
+  |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use `choices` for unordered options

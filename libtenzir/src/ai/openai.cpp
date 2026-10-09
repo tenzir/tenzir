@@ -6,21 +6,19 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/ai/openai.hpp>
 #include <tenzir/concept/printable/tenzir/json_printer_options.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/http.hpp>
-#include <tenzir/openai.hpp>
 
-#include <boost/url/parse.hpp>
-#include <boost/url/url.hpp>
 #include <fmt/format.h>
 
 #include <chrono>
 #include <simdjson.h>
 #include <string_view>
 
-namespace tenzir::openai {
+namespace tenzir::ai::openai {
 namespace {
 
 auto optional_string(simdjson::dom::object object, std::string_view field)
@@ -85,37 +83,6 @@ auto append_output_text(simdjson::dom::element output_item, std::string& text)
 }
 
 } // namespace
-
-auto make_responses_url(std::string endpoint)
-  -> Result<std::string, std::string> {
-  auto parsed = boost::urls::parse_uri(endpoint);
-  if (not parsed) {
-    return Err{
-      fmt::format("failed to parse endpoint: {}", parsed.error().message())};
-  }
-  auto url = boost::urls::url{*parsed};
-  if (url.scheme() != "http" and url.scheme() != "https") {
-    return Err{std::string{"endpoint must use HTTP or HTTPS"}};
-  }
-  if (url.host().empty()) {
-    return Err{std::string{"endpoint must include a host"}};
-  }
-  auto path = std::string{url.path()};
-  if (path.empty()) {
-    path = "/";
-  }
-  while (path.size() > 1 and path.ends_with('/')) {
-    path.pop_back();
-  }
-  if (not path.ends_with("/responses")) {
-    if (not path.ends_with('/')) {
-      path += '/';
-    }
-    path += "responses";
-  }
-  url.set_path(path);
-  return std::string{url.buffer()};
-}
 
 auto make_responses_body(ResponsesRequest const& request)
   -> Result<std::string, std::string> {
@@ -218,4 +185,4 @@ auto ResponsesClient::create(ResponsesRequest request)
   co_return parse_responses_body(http_response.body, latency);
 }
 
-} // namespace tenzir::openai
+} // namespace tenzir::ai::openai

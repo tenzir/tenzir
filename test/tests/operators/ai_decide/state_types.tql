@@ -1,0 +1,23 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 6
+      states: ["text", {k: v}, [1, 2], "42", "true", "10.0.0.1"]
+---
+
+from {id: 1, value: "text"},
+     {id: 2, value: {k: "v"}},
+     {id: 3, value: [1, 2]},
+     {id: 4, value: 42},
+     {id: 5, value: true},
+     {id: 6, value: null},
+     {id: 7, value: 10.0.0.1}
+ai_decide "Is this suspicious?",
+          state=value,
+          concurrency=4,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+select id, decided=ai.decide != null

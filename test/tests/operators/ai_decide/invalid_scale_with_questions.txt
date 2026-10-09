@@ -1,0 +1,7 @@
+error: `scale` applies only to a positional question
+ --> tests/operators/ai_decide/invalid_scale_with_questions.tql:7:17
+  |
+7 |           scale=["low", "high"], model="m", endpoint="http://127.0.0.1:1/v1"
+  |                 ^^^^^^^^^^^^^^^
+  |
+  = hint: set `criteria` within `questions` instead

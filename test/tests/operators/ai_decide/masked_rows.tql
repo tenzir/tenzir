@@ -1,0 +1,23 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 2
+      states:
+        - id: 1
+          message: one
+        - id: 3
+          message: danger
+---
+
+from {id: 0, message: "skip"}, {id: 1, message: "one"},
+     {id: 2, message: "skip"}, {id: 3, message: "danger"},
+     {id: 4, message: "skip"}
+where id == 1 or id == 3
+ai_decide "Is this event dangerous?",
+          concurrency=2,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+select id, probability=ai.decide.answer.probability

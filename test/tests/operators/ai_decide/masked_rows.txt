@@ -1,0 +1,8 @@
+{
+  id: 1,
+  probability: 0.1,
+}
+{
+  id: 3,
+  probability: 0.9,
+}

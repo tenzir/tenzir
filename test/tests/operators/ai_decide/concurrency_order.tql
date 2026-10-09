@@ -1,0 +1,21 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 4
+      max_concurrent_requests: 2
+---
+
+// The fixture holds the first request until a second one is in flight, and
+// then answers it last.
+from {id: 1, rendezvous: 2, delay_ms: 100}, {id: 2}, {id: 3},
+     {id: 4, note: "danger"}
+// Requests run concurrently within a batch.
+batch 4
+ai_decide "Is this event dangerous?",
+          concurrency=2,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+select id, probability=ai.decide.answer.probability

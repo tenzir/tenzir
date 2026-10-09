@@ -1,0 +1,12 @@
+{
+  answer: {
+    probability: 0.9,
+  },
+  model: "fixture-decider",
+  usage: {
+    input_tokens: 10,
+    output_tokens: 0,
+    truncated: null,
+    truncated_questions: null,
+  },
+}

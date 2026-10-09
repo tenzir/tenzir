@@ -1,0 +1,7 @@
+error: expected a question
+ --> tests/operators/ai_decide/invalid_missing_question.tql:6:1
+  |
+6 | ai_decide model="m", endpoint="http://127.0.0.1:1/v1"
+  | ^^^^^^^^^
+  |
+  = hint: pass a question, such as `ai_decide "Is this event malicious?"`, or several with `questions={...}`

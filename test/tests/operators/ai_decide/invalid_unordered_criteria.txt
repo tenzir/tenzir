@@ -1,0 +1,7 @@
+error: `questions.risk.criteria` must be a list of levels ordered from lowest to highest, but got `record`
+ --> tests/operators/ai_decide/invalid_unordered_criteria.tql:6:21
+  |
+6 | ai_decide questions={risk: {type: "score", instructions: "How risky?",
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use a `choice` question for unordered options

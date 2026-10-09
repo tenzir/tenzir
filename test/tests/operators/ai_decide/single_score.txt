@@ -1,0 +1,20 @@
+{
+  cmd: "ls -la",
+  risk: 0.3,
+  probabilities: [
+    0.8,
+    0.1,
+    0.1,
+  ],
+  confidence: 0.5,
+}
+{
+  cmd: "danger: rm -rf / --no-preserve-root",
+  risk: 1.7,
+  probabilities: [
+    0.1,
+    0.1,
+    0.8,
+  ],
+  confidence: 0.5,
+}

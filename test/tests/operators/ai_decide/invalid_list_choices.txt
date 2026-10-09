@@ -1,0 +1,7 @@
+error: `choices` must be a record that maps option names to descriptions, but got `list`
+ --> tests/operators/ai_decide/invalid_list_choices.tql:6:34
+  |
+6 | ai_decide "Which team?", choices=["soc", "it"],
+  |                                  ^^^^^^^^^^^^^
+  |
+  = hint: use `scale` for ordered levels

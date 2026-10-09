@@ -1,0 +1,41 @@
+{
+  id: 1,
+  answers: {
+    dangerous: {
+      probability: 0.1,
+    },
+    team: {
+      choice: "soc",
+      probabilities: {
+        soc: 0.8,
+        it: 0.2,
+      },
+      confidence: null,
+    },
+  },
+  model: null,
+  usage: null,
+}
+{
+  id: 2,
+  answers: {
+    dangerous: {
+      probability: 0.1,
+    },
+    team: {
+      choice: "soc",
+      probabilities: {
+        soc: 0.8,
+        it: 0.2,
+      },
+      confidence: 0.5,
+    },
+  },
+  model: "fixture-decider",
+  usage: {
+    input_tokens: 20,
+    output_tokens: 0,
+    truncated: null,
+    truncated_questions: null,
+  },
+}

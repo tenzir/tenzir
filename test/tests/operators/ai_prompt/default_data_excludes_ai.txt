@@ -1,0 +1,10 @@
+{
+  id: 1,
+  text: "id=1 message=hello",
+  decided: 0.9,
+}
+{
+  id: 2,
+  text: "id=2 message=world",
+  decided: null,
+}

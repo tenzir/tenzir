@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-namespace tenzir::openai {
+namespace tenzir::ai::openai {
 
 struct ResponsesRequest {
   std::string model;
@@ -44,10 +44,6 @@ struct ResponsesResult {
   duration latency = duration::zero();
 };
 
-/// Appends `/responses` to an OpenAI-compatible base endpoint.
-auto make_responses_url(std::string endpoint)
-  -> Result<std::string, std::string>;
-
 /// Serializes a Responses API request body.
 auto make_responses_body(ResponsesRequest const& request)
   -> Result<std::string, std::string>;
@@ -68,4 +64,4 @@ private:
   std::vector<http::Header> headers_;
 };
 
-} // namespace tenzir::openai
+} // namespace tenzir::ai::openai

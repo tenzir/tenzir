@@ -1,0 +1,8 @@
+warning: `scale` appears to be ordered from highest to lowest
+ --> tests/operators/ai_decide/descending_scale.tql:3:46
+  |
+3 | ai_decide "How severe is this alert?", scale=["High", "Medium", "Low"],
+  |                                              ~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: the score is the expected index into this list, so the first level scores 0
+  = hint: order the levels from lowest to highest

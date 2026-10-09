@@ -1,0 +1,6 @@
+error: endpoint must use a port between 1 and 65535
+ --> tests/operators/ai_decide/invalid_endpoint_port.tql:6:47
+  |
+6 | ai_decide "Is this bad?", model="m", endpoint="http://127.0.0.1:999999/v1"
+  |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

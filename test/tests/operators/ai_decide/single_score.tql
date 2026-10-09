@@ -1,0 +1,28 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 2
+      questions:
+        answer:
+          type: score
+          instructions: How risky is this command for the host?
+          criteria:
+            - Routine administration
+            - Unusual but plausible
+            - Destructive or malicious
+---
+
+from {cmd: "ls -la"}, {cmd: "danger: rm -rf / --no-preserve-root"}
+ai_decide "How risky is this command for the host?",
+          scale=["Routine administration", "Unusual but plausible",
+                 "Destructive or malicious"],
+          state=cmd,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+select cmd,
+       risk=ai.decide.answer.score,
+       probabilities=ai.decide.answer.probabilities,
+       confidence=ai.decide.answer.confidence

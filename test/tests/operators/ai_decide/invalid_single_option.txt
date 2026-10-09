@@ -1,0 +1,6 @@
+error: `choices` must have at least two options, but has 1
+ --> tests/operators/ai_decide/invalid_single_option.tql:6:34
+  |
+6 | ai_decide "Which team?", choices={soc: "Security operations"},
+  |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

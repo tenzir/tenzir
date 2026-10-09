@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {message: "hello"}
+ai_decide "How bad is this?", choices={a: null, b: null}, scale=["low", "high"],
+          model="m", endpoint="http://127.0.0.1:1/v1"

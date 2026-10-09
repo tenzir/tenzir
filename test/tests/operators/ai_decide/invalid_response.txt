@@ -1,0 +1,47 @@
+warning: AI request failed: response has no answer for question `answer`
+ --> tests/operators/ai_decide/invalid_response.tql:8:1
+  |
+8 | ai_decide "Is this event dangerous?",
+  | ~~~~~~~~~
+  |
+
+warning: AI request failed: answer for question `answer` has type `choice`, expected `noul`
+ --> tests/operators/ai_decide/invalid_response.tql:8:1
+  |
+8 | ai_decide "Is this event dangerous?",
+  | ~~~~~~~~~
+  |
+
+warning: AI request failed: answer for question `answer` has a probability of -9 outside of [0, 1]
+ --> tests/operators/ai_decide/invalid_response.tql:8:1
+  |
+8 | ai_decide "Is this event dangerous?",
+  | ~~~~~~~~~
+  |
+{
+  id: 1,
+  decision: null,
+}
+{
+  id: 2,
+  decision: null,
+}
+{
+  id: 3,
+  decision: null,
+}
+{
+  id: 4,
+  decision: {
+    answer: {
+      probability: 0.1,
+    },
+    model: "fixture-decider",
+    usage: {
+      input_tokens: 10,
+      output_tokens: 0,
+      truncated: null,
+      truncated_questions: null,
+    },
+  },
+}

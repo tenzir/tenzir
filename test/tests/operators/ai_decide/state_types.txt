@@ -1,0 +1,34 @@
+warning: skipped 1 event whose `state` is `null`
+  --> tests/operators/ai_decide/state_types.tql:19:17
+   |
+19 |           state=value,
+   |                 ~~~~~
+   |
+{
+  id: 1,
+  decided: true,
+}
+{
+  id: 2,
+  decided: true,
+}
+{
+  id: 3,
+  decided: true,
+}
+{
+  id: 4,
+  decided: true,
+}
+{
+  id: 5,
+  decided: true,
+}
+{
+  id: 6,
+  decided: false,
+}
+{
+  id: 7,
+  decided: true,
+}

@@ -1,0 +1,16 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['{"id":1,"message":"hello"}', '{"id":2,"message":"world","context":{"keep":true}}']
+---
+
+// The default request leaves out the `ai` field and the `into` field.
+from {id: 1, message: "hello", ai: {decide: {answer: {probability: 0.9}}}},
+     {id: 2, message: "world", context: {keep: true, summary: "old"}}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           into=context.summary
+select id, text=context.summary.text, decided=ai?.decide?.answer?.probability?

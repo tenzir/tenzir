@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {message: "hello"}
+ai_decide "Is this bad?", model="m", endpoint="http://exa_mple:80/v1"

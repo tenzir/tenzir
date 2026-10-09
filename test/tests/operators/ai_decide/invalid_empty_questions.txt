@@ -1,0 +1,6 @@
+error: `questions` must not be empty
+ --> tests/operators/ai_decide/invalid_empty_questions.tql:6:21
+  |
+6 | ai_decide questions={}, model="m", endpoint="http://127.0.0.1:1/v1"
+  |                     ^^
+  |

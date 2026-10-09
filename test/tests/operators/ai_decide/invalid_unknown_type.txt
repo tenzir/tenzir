@@ -1,0 +1,7 @@
+error: unknown question type `boolean` in `questions.bad.type`
+ --> tests/operators/ai_decide/invalid_unknown_type.tql:6:21
+  |
+6 | ai_decide questions={bad: {type: "boolean", instructions: "Is this bad?"}},
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: use `noul` for yes/no questions, `choice` for picking one option, or `score` for rating on an ordered scale

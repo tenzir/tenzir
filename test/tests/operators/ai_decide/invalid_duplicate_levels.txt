@@ -1,0 +1,7 @@
+error: levels 0 and 2 of `scale` are identical
+ --> tests/operators/ai_decide/invalid_duplicate_levels.tql:6:39
+  |
+6 | ai_decide "How risky is this?", scale=["Routine", "Dangerous", "Routine"],
+  |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: every level must describe a distinct step of the scale

@@ -1,0 +1,10 @@
+error: cannot combine `choices` and `scale`
+ --> tests/operators/ai_decide/invalid_choices_and_scale.tql:6:39
+  |
+6 | ai_decide "How bad is this?", choices={a: null, b: null}, scale=["low", "high"],
+  |                                       ^^^^^^^^^^^^^^^^^^
+  ⋮
+6 | ai_decide "How bad is this?", choices={a: null, b: null}, scale=["low", "high"],
+  |                                                                 ^^^^^^^^^^^^^^^
+  |
+  = hint: use `choices` for unordered options and `scale` for ordered levels

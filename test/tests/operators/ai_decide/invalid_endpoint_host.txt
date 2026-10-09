@@ -1,0 +1,6 @@
+error: `endpoint` is not a valid URL
+ --> tests/operators/ai_decide/invalid_endpoint_host.tql:6:47
+  |
+6 | ai_decide "Is this bad?", model="m", endpoint="http://exa_mple:80/v1"
+  |                                               ^^^^^^^^^^^^^^^^^^^^^^^
+  |

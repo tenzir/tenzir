@@ -1,0 +1,6 @@
+error: `questions.team.criteria` must have at least two options, but has 0
+ --> tests/operators/ai_decide/invalid_empty_criteria.tql:6:21
+  |
+6 | ai_decide questions={team: {type: "choice", instructions: "Which team?", criteria: {}}},
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

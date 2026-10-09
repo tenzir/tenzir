@@ -6,37 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/openai.hpp"
+#include "tenzir/ai/openai.hpp"
 
 #include "tenzir/test/test.hpp"
 
 using namespace tenzir;
 using namespace std::chrono_literals;
 
-TEST("responses URL") {
-  auto url = openai::make_responses_url("http://localhost:11434/v1");
-  REQUIRE(url);
-  CHECK_EQUAL(url.unwrap(), "http://localhost:11434/v1/responses");
-
-  url = openai::make_responses_url("https://api.openai.com/v1/responses");
-  REQUIRE(url);
-  CHECK_EQUAL(url.unwrap(), "https://api.openai.com/v1/responses");
-
-  url = openai::make_responses_url("https://api.openai.com/v1/responses/");
-  REQUIRE(url);
-  CHECK_EQUAL(url.unwrap(), "https://api.openai.com/v1/responses");
-
-  url = openai::make_responses_url("http://");
-  REQUIRE(url.is_err());
-  CHECK_EQUAL(url.unwrap_err(), "endpoint must include a host");
-
-  url = openai::make_responses_url("ftp://example.com/v1");
-  REQUIRE(url.is_err());
-  CHECK_EQUAL(url.unwrap_err(), "endpoint must use HTTP or HTTPS");
-}
-
 TEST("responses request body") {
-  auto body = openai::make_responses_body(openai::ResponsesRequest{
+  auto body = ai::openai::make_responses_body(ai::openai::ResponsesRequest{
     .model = "test-model",
     .instructions = "keep it short",
     .input = R"({"message":"hello"})",
@@ -54,13 +32,13 @@ TEST("responses request body") {
 }
 
 TEST("responses request body omits unset temperature") {
-  auto body = openai::make_responses_body(openai::ResponsesRequest{
+  auto body = ai::openai::make_responses_body(ai::openai::ResponsesRequest{
     .model = "test-model",
     .input = "hello",
   });
   REQUIRE(body);
   CHECK(not body.unwrap().contains("temperature"));
-  body = openai::make_responses_body(openai::ResponsesRequest{
+  body = ai::openai::make_responses_body(ai::openai::ResponsesRequest{
     .model = "test-model",
     .input = "hello",
     .temperature = 0.0,
@@ -91,7 +69,7 @@ TEST("responses body parser") {
       "total_tokens": 18
     }
   })";
-  auto parsed = openai::parse_responses_body(
+  auto parsed = ai::openai::parse_responses_body(
     response, std::chrono::duration_cast<duration>(123ms));
   REQUIRE(parsed);
   auto result = std::move(parsed).unwrap();
@@ -109,7 +87,7 @@ TEST("responses body parser") {
 }
 
 TEST("responses body parser accepts empty output text") {
-  auto parsed = openai::parse_responses_body(
+  auto parsed = ai::openai::parse_responses_body(
     R"({"status":"completed","output":[{"content":[{"type":"output_text","text":""}]}]})",
     duration::zero());
   REQUIRE(parsed);
@@ -117,7 +95,7 @@ TEST("responses body parser accepts empty output text") {
 }
 
 TEST("responses body parser rejects missing text") {
-  auto parsed = openai::parse_responses_body(
+  auto parsed = ai::openai::parse_responses_body(
     R"({"status":"completed","output":[]})", duration::zero());
   REQUIRE(parsed.is_err());
   CHECK_EQUAL(parsed.unwrap_err(), "response did not contain output text");

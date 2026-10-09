@@ -1,0 +1,6 @@
+error: endpoint must use a port between 1 and 65535
+ --> tests/operators/ai_prompt/invalid_endpoint_port.tql:6:43
+  |
+6 | ai_prompt model="fixture-model", endpoint="http://127.0.0.1:999999/v1"
+  |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

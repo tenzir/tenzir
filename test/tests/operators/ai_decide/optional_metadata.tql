@@ -1,0 +1,19 @@
+---
+fixtures: [system_one]
+timeout: 60
+---
+
+from {id: 1, mode: "bare"}, {id: 2, mode: "databricks"}
+ai_decide questions={
+            dangerous: {type: "noul", instructions: "Is this event dangerous?"},
+            team: {
+              type: "choice",
+              instructions: "Which team should handle this?",
+              criteria: {soc: null, it: null},
+            },
+          },
+          concurrency=2,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+select id, answers=ai.decide.answers, model=ai.decide.model,
+       usage=ai.decide.usage

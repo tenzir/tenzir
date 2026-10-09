@@ -1,0 +1,17 @@
+---
+fixtures: [system_one]
+timeout: 60
+---
+
+from {id: 1, cmd: "ls"},
+     {id: 2, cmd: "danger: unreachable", mode: "fail"},
+     {id: 3, cmd: "danger: rm -rf /"}
+ai_decide "How risky is this command?",
+          scale=["Routine", "Unusual", "Dangerous"],
+          state={cmd: cmd, mode: mode?},
+          concurrency=3,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+// Keep events that the model could not assess.
+where ai.decide == null or ai.decide.answer.score >= 1
+select id, failed=ai.decide == null

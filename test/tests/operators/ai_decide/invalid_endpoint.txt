@@ -1,0 +1,6 @@
+error: `endpoint` must not be empty
+ --> tests/operators/ai_decide/invalid_endpoint.tql:6:47
+  |
+6 | ai_decide "Is this bad?", model="m", endpoint=""
+  |                                               ^^
+  |

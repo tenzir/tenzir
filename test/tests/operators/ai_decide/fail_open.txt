@@ -1,0 +1,14 @@
+warning: AI request failed: HTTP request returned status 500: {"detail":"inference failed"}
+ --> tests/operators/ai_decide/fail_open.tql:9:1
+  |
+9 | ai_decide "How risky is this command?",
+  | ~~~~~~~~~
+  |
+{
+  id: 2,
+  failed: true,
+}
+{
+  id: 3,
+  failed: false,
+}

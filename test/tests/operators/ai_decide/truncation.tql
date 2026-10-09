@@ -1,0 +1,17 @@
+---
+fixtures: [system_one]
+timeout: 60
+---
+
+from {message: "danger: a very long log line", mode: "laya"}
+ai_decide questions={
+            pii: {type: "noul", instructions: "Does this log contain personal data?"},
+            urgency: {
+              type: "score",
+              instructions: "How urgent is this event?",
+              criteria: ["Routine", "Soon", "Immediate"],
+            },
+          },
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+drop ai.decide.latency

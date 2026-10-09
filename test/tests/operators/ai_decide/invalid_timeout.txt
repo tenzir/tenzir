@@ -1,0 +1,6 @@
+error: `timeout` must not be negative
+ --> tests/operators/ai_decide/invalid_timeout.tql:6:80
+  |
+6 | ai_decide "Is this bad?", model="m", endpoint="http://127.0.0.1:1/v1", timeout=-1s
+  |                                                                                ^^^
+  |

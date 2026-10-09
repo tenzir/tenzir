@@ -1,0 +1,10 @@
+error: cannot combine a positional question with `questions`
+ --> tests/operators/ai_decide/invalid_question_and_questions.tql:6:11
+  |
+6 | ai_decide "Is this bad?", questions={bad: {type: "noul", instructions: "Is this bad?"}},
+  |           ^^^^^^^^^^^^^^
+  ⋮
+6 | ai_decide "Is this bad?", questions={bad: {type: "noul", instructions: "Is this bad?"}},
+  |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: add the question to `questions` instead

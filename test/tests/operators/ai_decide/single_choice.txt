@@ -1,0 +1,18 @@
+{
+  raw: "sshd[42]: Failed password for root from 203.0.113.7",
+  class: "authentication",
+  probabilities: {
+    authentication: 0.8,
+    http_activity: 0.2,
+  },
+  confidence: 0.5,
+}
+{
+  raw: "danger: GET /admin.php?cmd=id HTTP/1.1",
+  class: "http_activity",
+  probabilities: {
+    authentication: 0.2,
+    http_activity: 0.8,
+  },
+  confidence: 0.5,
+}

@@ -1,0 +1,30 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 2
+      questions:
+        answer:
+          type: choice
+          instructions: Which OCSF class fits this log best?
+          criteria:
+            authentication: "Authentication: logon and logoff attempts"
+            http_activity: "HTTP Activity: web requests and responses"
+---
+
+from {raw: "sshd[42]: Failed password for root from 203.0.113.7"},
+     {raw: "danger: GET /admin.php?cmd=id HTTP/1.1"}
+ai_decide "Which OCSF class fits this log best?",
+          choices={
+            authentication: "Authentication: logon and logoff attempts",
+            http_activity: "HTTP Activity: web requests and responses",
+          },
+          state=raw,
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+select raw,
+       class=ai.decide.answer.choice,
+       probabilities=ai.decide.answer.probabilities,
+       confidence=ai.decide.answer.confidence

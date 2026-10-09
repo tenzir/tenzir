@@ -1,0 +1,7 @@
+error: `questions.bad` has unknown field `options`
+ --> tests/operators/ai_decide/invalid_unknown_field.tql:6:21
+  |
+6 | ai_decide questions={bad: {type: "noul", instructions: "Is this bad?", options: ["yes"]}},
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: a question has only `type`, `instructions`, and `criteria`

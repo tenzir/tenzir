@@ -1,0 +1,6 @@
+{
+  id: 1,
+  keep: 7,
+  probability: 0.1,
+  latency_is_duration: true,
+}

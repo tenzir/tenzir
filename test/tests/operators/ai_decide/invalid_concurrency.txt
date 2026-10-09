@@ -1,0 +1,6 @@
+error: `concurrency` must be greater than zero
+ --> tests/operators/ai_decide/invalid_concurrency.tql:6:84
+  |
+6 | ai_decide "Is this bad?", model="m", endpoint="http://127.0.0.1:1/v1", concurrency=0
+  |                                                                                    ^
+  |

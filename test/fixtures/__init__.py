@@ -38,6 +38,7 @@ from . import packages  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401
+from . import system_one  # noqa: F401
 from . import platform_ws  # noqa: F401
 from . import prometheus  # noqa: F401
 from . import prometheus_remote_write_mock  # noqa: F401
@@ -105,6 +106,7 @@ __all__ = [
     "s3_proxy",
     "sentinelone",
     "splunk",
+    "system_one",
     "tcp",
     "uds",
     "udp",

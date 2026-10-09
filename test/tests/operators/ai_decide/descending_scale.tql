@@ -1,0 +1,4 @@
+from {message: "hello"}
+where false
+ai_decide "How severe is this alert?", scale=["High", "Medium", "Low"],
+          model="m", endpoint="http://127.0.0.1:1/v1"
