@@ -41,6 +41,48 @@ auto exec_command_impl(Arc<const Source> source, diagnostic_handler& dh,
 
 auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto cfg = exec_config{};
+  auto platform
+    = caf::get_or(inv.options, "tenzir.exec.platform", std::string{});
+  if (platform.empty()) {
+    for (auto key : {"tenzir.exec.deployment-id", "tenzir.exec.key-file",
+                     "tenzir.exec.pipeline-id", "tenzir.exec.run"}) {
+      if (caf::get_if(&inv.options, key)) {
+        diagnostic::error("platform telemetry options require `--platform`")
+          .emit(*make_diagnostic_printer(color_diagnostics::no, std::cerr));
+        return false;
+      }
+    }
+  } else {
+    auto deployment
+      = caf::get_or(inv.options, "tenzir.exec.deployment-id", std::string{});
+    auto key_file
+      = caf::get_or(inv.options, "tenzir.exec.key-file", std::string{});
+    auto pipeline
+      = caf::get_or(inv.options, "tenzir.exec.pipeline-id", std::string{});
+    auto run = caf::get_or(inv.options, "tenzir.exec.run", int64_t{0});
+    auto valid_id = [](std::string const& value) {
+      return not value.empty() and not value.starts_with('_')
+             and not value.starts_with('-')
+             and value.find_first_not_of(
+                   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl"
+                   "mnopqrstuvwxyz0123456789_-")
+                   == std::string::npos;
+    };
+    if (not valid_id(deployment) or not valid_id(pipeline) or key_file.empty()
+        or run < 0 or run > 9'007'199'254'740'991
+        or not caf::get_or(inv.options, "tenzir.exec.profile", std::string{})
+                 .empty()) {
+      diagnostic::error(
+        "platform telemetry requires a deployment ID, key file, pipeline ID, "
+        "and nonnegative run; it cannot be combined with `--profile`")
+        .emit(*make_diagnostic_printer(color_diagnostics::no, std::cerr));
+      return false;
+    }
+    cfg.platform_profile.emplace(PlatformConnection{std::move(platform),
+                                                    std::move(deployment),
+                                                    std::move(key_file)},
+                                 std::move(pipeline), run);
+  }
   auto color_mode = caf::get_or(inv.options, "tenzir.exec.color", "auto");
   auto color = color_diagnostics{};
   const auto no_color_env = not detail::getenv("NO_COLOR").value_or("").empty();
@@ -182,6 +224,16 @@ public:
                           "implicit source for pipelines starting with events "
                           "(default: 'from_stdin { read_json }')")
         .add<bool>("multi", "deprecated; has no effect")
+        .add<std::string>("platform",
+                          "platform URL for authenticated telemetry")
+        .add<std::string>("deployment-id",
+                          "deployment identity for platform telemetry")
+        .add<std::string>("key-file",
+                          "deployment key file for platform telemetry")
+        .add<std::string>("pipeline-id",
+                          "pipeline identity for platform telemetry")
+        .add<int64_t>("run",
+                      "pipeline run number for platform telemetry (default: 0)")
         .add<std::string>("profile",
                           "write a channel profile to a file (Chrome Trace "
                           "Format, viewable in ui.perfetto.dev)")

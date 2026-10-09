@@ -19,6 +19,7 @@
 #include <functional>
 #include <mutex>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -107,7 +108,11 @@ using MetricsGauge = Metric<MetricsInstrument::gauge>;
 
 /// Snapshot of a single counter (plain values, no atomics).
 struct MetricsSnapshotEntry {
+  /// Representative label from the first registration, not connector identity.
   MetricsLabel label;
+  /// Canonical operator name, independent of peer/host labels. Empty for
+  /// counters registered without connector attribution.
+  std::string connector;
   MetricsDirection direction = {};
   MetricsVisibility visibility = {};
   MetricsInstrument instrument = {};
@@ -125,11 +130,14 @@ using MetricsCallback
 /// `take_snapshot()` from the timer coroutine.
 class PipelineMetrics {
 public:
-  /// Create and register a new counter.
+  /// Register a counter, sharing storage for the same connector, direction,
+  /// visibility, and unit. Labels do not affect aggregation. An empty connector
+  /// preserves legacy unattributed aggregation.
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsUnit type)
-    -> MetricsCounter {
-    return make<MetricsInstrument::counter>(label, direction, visibility, type);
+                    MetricsVisibility visibility, MetricsUnit type,
+                    std::string_view connector = {}) -> MetricsCounter {
+    return make<MetricsInstrument::counter>(label, direction, visibility, type,
+                                            connector);
   }
 
   /// Create and register a new gauge.
@@ -148,11 +156,12 @@ public:
 private:
   template <MetricsInstrument Instrument>
   auto make(MetricsLabel label, MetricsDirection direction,
-            MetricsVisibility visibility, MetricsUnit type)
-    -> Metric<Instrument>;
+            MetricsVisibility visibility, MetricsUnit type,
+            std::string_view connector) -> Metric<Instrument>;
 
   struct Entry {
     MetricsLabel label;
+    std::string connector;
     MetricsDirection direction;
     MetricsVisibility visibility;
     MetricsInstrument instrument;

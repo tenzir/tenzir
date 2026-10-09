@@ -40,6 +40,7 @@ from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401
 from . import system_one  # noqa: F401
 from . import platform_ws  # noqa: F401
+from . import platform_telemetry  # noqa: F401
 from . import prometheus  # noqa: F401
 from . import prometheus_remote_write_mock  # noqa: F401
 from . import quack  # noqa: F401
@@ -96,6 +97,7 @@ __all__ = [
     "openai_responses",
     "otlp_grpc",
     "packages",
+    "platform_telemetry",
     "platform_ws",
     "prometheus",
     "prometheus_remote_write_mock",

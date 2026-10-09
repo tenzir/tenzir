@@ -12,6 +12,7 @@
 #include "tenzir/async/executor.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/platform_profiler.hpp"
 #include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -38,6 +39,7 @@ struct exec_config {
   bool dump_opt_ir = false;
   bool dump_ir_plan = false;
   Option<std::string> profile;
+  Option<PlatformProfiler> platform_profile;
   Option<std::string> parallelism;
 };
 
@@ -60,7 +62,8 @@ struct PerfettoProfiler {
 };
 
 /// Profiler configuration for a pipeline execution.
-using Profiler = variant<NoProfiler, NodeProfiler, PerfettoProfiler>;
+using Profiler
+  = variant<NoProfiler, NodeProfiler, PerfettoProfiler, PlatformProfiler>;
 
 /// Build table slices from a profiler snapshot, adding a pipeline_id field.
 auto build_profiler_slices(ProfilerSnapshot const& snapshot,

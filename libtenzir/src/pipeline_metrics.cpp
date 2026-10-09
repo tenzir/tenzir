@@ -51,21 +51,21 @@ template class Metric<MetricsInstrument::gauge>;
 
 template <MetricsInstrument Instrument>
 auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
-                           MetricsVisibility visibility, MetricsUnit type)
-  -> Metric<Instrument> {
+                           MetricsVisibility visibility, MetricsUnit type,
+                           std::string_view connector) -> Metric<Instrument> {
   auto lock = std::lock_guard{mutex_};
   for (auto& e : entries_) {
-    // We currently ignore the labels and only store one entry per `(direction,
-    // visibility, type)` combination. This should be cleaned up together with
-    // gauges.
-    if (e.direction == direction and e.visibility == visibility
-        and e.type == type) {
+    // Peer/host labels do not create separate counters. Keep one entry per
+    // connector and traffic dimension, preserving legacy unattributed totals.
+    if (e.connector == connector and e.direction == direction
+        and e.visibility == visibility and e.type == type) {
       return Metric<Instrument>{e.value};
     }
   }
   auto value = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
   entries_.push_back(Entry{
     .label = label,
+    .connector = std::string{connector},
     .direction = direction,
     .visibility = visibility,
     .instrument = Instrument,
@@ -76,18 +76,20 @@ auto PipelineMetrics::make(MetricsLabel label, MetricsDirection direction,
 }
 
 template auto PipelineMetrics::make<MetricsInstrument::counter>(
-  MetricsLabel, MetricsDirection, MetricsVisibility, MetricsUnit)
-  -> Metric<MetricsInstrument::counter>;
+  MetricsLabel, MetricsDirection, MetricsVisibility, MetricsUnit,
+  std::string_view) -> Metric<MetricsInstrument::counter>;
 
-template auto PipelineMetrics::make<MetricsInstrument::gauge>(MetricsLabel,
-                                                              MetricsDirection,
-                                                              MetricsVisibility,
-                                                              MetricsUnit)
-  -> Metric<MetricsInstrument::gauge>;
+template auto
+  PipelineMetrics::make<MetricsInstrument::gauge>(MetricsLabel,
+                                                  MetricsDirection,
+                                                  MetricsVisibility,
+                                                  MetricsUnit, std::string_view)
+    -> Metric<MetricsInstrument::gauge>;
 
 auto PipelineMetrics::Entry::snapshot() const -> MetricsSnapshotEntry {
   return MetricsSnapshotEntry{
     .label = label,
+    .connector = connector,
     .direction = direction,
     .visibility = visibility,
     .instrument = instrument,

@@ -395,20 +395,23 @@ public:
 
   auto emit(diagnostic d) -> void override {
     auto lock = std::scoped_lock{mutex_};
-    if (dedup_.insert(d)) {
-      if constexpr (Behaviour == DiagnosticBehavior::WarningToError) {
-        if (d.severity == severity::warning) {
-          d.severity = severity::error;
-        }
-      } else {
-        if (d.severity == severity::error) {
+    if constexpr (Behaviour == DiagnosticBehavior::WarningToError) {
+      if (d.severity == severity::warning) {
+        d.severity = severity::error;
+      }
+    } else {
+      if (d.severity == severity::error) {
+        if (not failure_.is_error()) {
           failure_ = failure::promise();
           cancel_source_->requestCancellation();
-          d.severity = severity::warning;
         }
+        d.severity = severity::warning;
       }
-      dh_->emit(std::move(d));
     }
+    // The root handler observes every occurrence before deduplicating its
+    // local output. Forward after severity transformation and censoring so
+    // telemetry neither loses repeats nor exposes uncensored diagnostics.
+    dh_->emit(std::move(d));
   }
 
   auto failure() -> failure_or<void> override {
@@ -428,7 +431,6 @@ private:
   std::mutex mutex_;
   Ref<DiagHandler> dh_;
   std::shared_ptr<folly::CancellationSource> cancel_source_;
-  diagnostic_deduplicator dedup_;
   failure_or<void> failure_;
 };
 
@@ -461,9 +463,9 @@ public:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsUnit type)
-    -> MetricsCounter override {
-    return inner_.make_counter(label, direction, visibility, type);
+                    MetricsVisibility visibility, MetricsUnit type,
+                    std::string_view connector) -> MetricsCounter override {
+    return inner_.make_counter(label, direction, visibility, type, connector);
   }
 
   auto is_hidden() const -> bool override {
@@ -738,7 +740,10 @@ private:
   auto make_counter(MetricsLabel label, MetricsDirection direction,
                     MetricsVisibility visibility, MetricsUnit type)
     -> MetricsCounter override {
-    return exec_ctx_.make_counter(label, direction, visibility, type);
+    auto connector = base_op().name();
+    TENZIR_ASSERT(not connector.empty());
+    return exec_ctx_.make_counter(label, direction, visibility, type,
+                                  connector);
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {

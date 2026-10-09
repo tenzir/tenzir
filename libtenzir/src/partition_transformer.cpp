@@ -53,6 +53,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numeric>
 #include <ranges>
 #include <string>
@@ -386,6 +387,13 @@ public:
   void emit(diagnostic diag) override {
     if (diag.severity == severity::error) {
       failed_.store(true, std::memory_order_relaxed);
+    }
+    // Subpipeline handlers forward every occurrence, so repeats stop here.
+    auto lock = std::scoped_lock{mutex_};
+    if (not dedup_.insert(diag)) {
+      return;
+    }
+    if (diag.severity == severity::error) {
       TENZIR_ERROR("transformer diagnostic: {:?}", diag);
       return;
     }
@@ -401,6 +409,8 @@ public:
 
 private:
   Atomic<bool> failed_ = false;
+  std::mutex mutex_;
+  diagnostic_deduplicator dedup_;
 };
 
 struct partition_source_state {

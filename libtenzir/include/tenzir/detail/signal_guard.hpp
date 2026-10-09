@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async/notify.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/ref.hpp"
 
@@ -79,6 +80,9 @@ public:
   auto operator=(const SignalGuard&) -> SignalGuard& = delete;
   SignalGuard(SignalGuard&&) = delete;
   auto operator=(SignalGuard&&) -> SignalGuard& = delete;
+  auto stop_requested() const -> bool {
+    return stop_requested_.load(std::memory_order_relaxed);
+  }
 
 private:
   /// Waits for signals on the signal pipe, or for normal exit on the wake
@@ -99,6 +103,7 @@ private:
                  static_cast<int>(byte));
     fmt::print(stderr, "\rinitiating graceful shutdown... "
                        "(repeat to terminate immediately)\n");
+    stop_requested_.store(true, std::memory_order_relaxed);
     graceful_stop_->notify_one();
     // Wait for second signal, grace-period timeout, or normal completion. A
     // non-positive grace period waits indefinitely (timeout -1), so the
@@ -128,6 +133,7 @@ private:
   struct sigaction old_sigint_ = {};
   struct sigaction old_sigterm_ = {};
   std::thread thread_;
+  Atomic<bool> stop_requested_{false};
 };
 
 } // namespace tenzir::detail

@@ -349,6 +349,8 @@ file(GLOB_RECURSE libtenzir_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/*.hpp")
 
+# The shared platform client/profiler sources and their unit tests are picked
+# up by the source globs, including when the deployment project is absent.
 add_library(libtenzir ${libtenzir_sources})
 TenzirTargetEnableTooling(libtenzir)
 add_library(tenzir::libtenzir ALIAS libtenzir)

@@ -627,7 +627,7 @@ class TestExecCtx final : public ExecCtx {
 public:
   explicit TestExecCtx(Profiler const& profiler, bool has_terminal = false,
                        bool is_hidden = false)
-    : profiling_{not is<NoProfiler>(profiler)},
+    : profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
       metrics_receiver_{try_as<NodeProfiler>(profiler)
                           ? try_as<NodeProfiler>(profiler)->metrics
@@ -677,9 +677,10 @@ public:
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsUnit type)
-    -> MetricsCounter override {
-    return metrics_->make_counter(label, direction, visibility, type);
+                    MetricsVisibility visibility, MetricsUnit type,
+                    std::string_view connector) -> MetricsCounter override {
+    return metrics_->make_counter(label, direction, visibility, type,
+                                  connector);
   }
 
   auto metrics_receiver() const -> metrics_receiver_actor override {
@@ -1501,6 +1502,15 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     [](NoProfiler const&) -> Task<void> {
       co_return;
     },
+    [&](PlatformProfiler const& platform) -> Task<void> {
+      co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+        scope.spawn(platform.send());
+        while (true) {
+          platform.sample(exec_ctx.take_metrics_snapshot());
+          co_await folly::coro::sleep(std::chrono::seconds{1});
+        }
+      });
+    },
     [&](NodeProfiler const& node) -> Task<void> {
       auto start_time = time::clock::now();
       auto prev_snapshots = std::unordered_map<OpId, OpSnapshot>{};
@@ -1619,6 +1629,13 @@ auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
   auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
   auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
+  // The side task may never start for a sub-second pipeline. Sample after all
+  // its tasks join, even when execution unwinds through cancellation.
+  auto final_sample = detail::scope_guard{[&]() noexcept {
+    if (auto* platform = try_as<PlatformProfiler>(profiler)) {
+      platform->sample(exec_ctx.take_metrics_snapshot());
+    }
+  }};
   // Take the profiling baseline before any operator can run, so that the first
   // snapshot reports a window that covers the same span as its counters.
   auto start = std::chrono::steady_clock::now();
@@ -1648,6 +1665,11 @@ auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
                       PipelineDrainer<T> drain_output)
   -> Task<failure_or<void>> {
   auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
+  auto final_sample = detail::scope_guard{[&]() noexcept {
+    if (auto* platform = try_as<PlatformProfiler>(profiler)) {
+      platform->sample(exec_ctx.take_metrics_snapshot());
+    }
+  }};
   auto num_ops = plan.size();
   auto start = std::chrono::steady_clock::now();
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
@@ -1679,11 +1701,16 @@ namespace {
 /// Wraps a legacy `diagnostic_handler` into a `DiagHandler`.
 class ExecDiagHandler final : public DiagHandler {
 public:
-  ExecDiagHandler(diagnostic_handler& dh, folly::CancellationSource& source)
-    : dh_{dh}, cancel_source_{source} {
+  ExecDiagHandler(diagnostic_handler& dh, folly::CancellationSource& source,
+                  Option<PlatformProfiler> const& profiler,
+                  SourceMap const& sources)
+    : dh_{dh}, cancel_source_{source}, profiler_{profiler}, sources_{sources} {
   }
 
   auto emit(diagnostic d) -> void override {
+    if (profiler_) {
+      profiler_->diagnostic(d, sources_);
+    }
     // We make it thread-safe and deduplicating.
     auto lock = std::scoped_lock{mutex_};
     if (dedup_.insert(d)) {
@@ -1704,20 +1731,33 @@ private:
   std::mutex mutex_;
   Ref<diagnostic_handler> dh_;
   Ref<folly::CancellationSource> cancel_source_;
+  Option<PlatformProfiler> profiler_;
+  SourceMap const& sources_;
   diagnostic_deduplicator dedup_;
   failure_or<void> failure_;
 };
 
 auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
                        diagnostic_handler& dh,
-                       Option<std::string> const& profile_path)
+                       Option<std::string> const& profile_path,
+                       Option<PlatformProfiler> const& platform_profile,
+                       SourceMap const& sources,
+                       PlatformDiagnosticHandler* compile_reporting)
   -> failure_or<void> {
   auto profiler = Profiler{};
+  if (platform_profile) {
+    profiler = *platform_profile;
+    platform_profile->transition("running");
+  }
   if (profile_path) {
     profiler = PerfettoProfiler{*profile_path};
   }
   auto cancel_source = folly::CancellationSource{};
-  auto diag_handler = ExecDiagHandler{dh, cancel_source};
+  if (compile_reporting) {
+    compile_reporting->disable();
+  }
+  auto diag_handler
+    = ExecDiagHandler{dh, cancel_source, platform_profile, sources};
   auto has_terminal = ::isatty(STDIN_FILENO) == 1;
   auto graceful_stop = Notify{};
   // The grace period bounds how long a pipeline may drain after a graceful
@@ -1752,11 +1792,15 @@ auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
     // may have been lost, so we report failure.
     diagnostic::error("pipeline was aborted before completion")
       .note("in-flight data may have been lost")
-      .emit(dh);
+      .emit(diag_handler);
     return failure::promise();
   }
   if (result->is_error()) {
     panic("got failure from run_plan but not in diagnostic handler");
+  }
+  if (platform_profile) {
+    platform_profile->transition(signal_guard.stop_requested() ? "stopped"
+                                                               : "finished");
   }
   return {};
 }
@@ -1822,7 +1866,8 @@ namespace {
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys, SourceMap& source_map,
-                  ir::Parallelism parallelism) -> failure_or<bool> {
+                  ir::Parallelism parallelism,
+                  PlatformDiagnosticHandler* reporting) -> failure_or<bool> {
   auto source_location = ast.get_location();
   auto make_zero_width_location
     = [](location source_location, uint32_t offset) {
@@ -1946,7 +1991,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return not ctx.has_failure();
   }
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(*plan), sys, ctx, cfg.profile));
+  TRY(run_plan_blocking(std::move(*plan), sys, ctx, cfg.profile,
+                        cfg.platform_profile, source_map, reporting));
   return true;
 }
 
@@ -1955,9 +2001,14 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 auto exec2(Arc<const Source> source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys,
            SourceMap& source_map) -> bool {
+  auto reporting = Option<PlatformDiagnosticHandler>{};
+  if (cfg.platform_profile) {
+    reporting.emplace(dh, *cfg.platform_profile, source_map);
+  }
+  auto& handler = reporting ? static_cast<diagnostic_handler&>(*reporting) : dh;
   auto result = std::invoke([&]() -> failure_or<bool> {
-    TRY(load_packages_for_exec(dh, sys, &source_map));
-    auto provider = session_provider::make(dh);
+    TRY(load_packages_for_exec(handler, sys, &source_map));
+    auto provider = session_provider::make(handler);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source->text, ctx));
     auto tokens = tokenize_permissive(source->text);
@@ -1987,9 +2038,19 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       return failure::promise();
     }
     return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map,
-                        *parallelism);
+                        *parallelism, reporting ? &*reporting : nullptr);
   });
-  return result ? *result : false;
+  auto success = result ? *result : false;
+  if (cfg.platform_profile) {
+    if (not success) {
+      cfg.platform_profile->transition("failed");
+    }
+    folly::coro::blockingWait(folly::coro::co_withExecutor(
+      folly::getGlobalCPUExecutor(),
+      folly::coro::co_withCancellation(folly::CancellationToken{},
+                                       cfg.platform_profile->flush())));
+  }
+  return success;
 }
 
 exec_node_name_guard::exec_node_name_guard(const name_type& name, type t) {

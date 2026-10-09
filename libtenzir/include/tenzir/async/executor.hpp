@@ -25,6 +25,7 @@
 #include <folly/executors/GlobalExecutor.h>
 
 #include <functional>
+#include <string_view>
 
 namespace tenzir {
 
@@ -146,10 +147,10 @@ public:
   /// Returns the metrics receiver actor handle, if available.
   virtual auto metrics_receiver() const -> metrics_receiver_actor = 0;
 
-  /// Create and register a new counter for the pipeline.
+  /// Register a counter with the canonical operator name, not a peer/host label.
   virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
-                            MetricsVisibility visibility, MetricsUnit type)
-    -> MetricsCounter
+                            MetricsVisibility visibility, MetricsUnit type,
+                            std::string_view connector) -> MetricsCounter
     = 0;
 
   /// Returns whether the pipeline is hidden.
