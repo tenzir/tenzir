@@ -64,7 +64,7 @@ struct PromptArgs {
     return std::move(*result);
   }();
   Option<located<secret>> api_key;
-  located<double> temperature{0.0, location::unknown};
+  Option<located<double>> temperature;
   Option<located<uint64_t>> max_tokens;
   located<duration> timeout{std::chrono::seconds{30}, location::unknown};
   located<uint64_t> concurrency{1, location::unknown};
@@ -249,7 +249,9 @@ public:
               return x.inner;
             }),
             .input = std::move(*rows[i].input),
-            .temperature = args_.temperature.inner,
+            .temperature = args_.temperature.map([](auto const& x) {
+              return x.inner;
+            }),
             .max_output_tokens = args_.max_tokens.map([](auto const& x) {
               return x.inner;
             }),
@@ -458,7 +460,9 @@ public:
               return x.inner;
             }),
             .input = std::move(*rows[i].input),
-            .temperature = args_.temperature.inner,
+            .temperature = args_.temperature.map([](auto const& x) {
+              return x.inner;
+            }),
             .max_output_tokens = args_.max_tokens.map([](auto const& x) {
               return x.inner;
             }),
@@ -530,20 +534,20 @@ public:
     d.named("data", &PromptArgs::data, "any");
     d.named_optional("into", &PromptArgs::into);
     d.named("api_key", &PromptArgs::api_key, "string");
-    auto temperature
-      = d.named_optional("temperature", &PromptArgs::temperature);
+    auto temperature = d.named("temperature", &PromptArgs::temperature);
     d.named("max_tokens", &PromptArgs::max_tokens);
     d.named_optional("timeout", &PromptArgs::timeout);
     d.named_optional("concurrency", &PromptArgs::concurrency);
     d.named("tls", &PromptArgs::tls, "record");
     d.operator_location(&PromptArgs::operator_location);
     d.validate([temperature](DescribeCtx& ctx) -> Empty {
-      TRY(auto value, ctx.get(temperature));
-      if (not std::isfinite(value.inner) or value.inner < 0.0
-          or value.inner > 2.0) {
-        diagnostic::error("`temperature` must be between 0 and 2")
-          .primary(value)
-          .emit(ctx);
+      if (auto value = ctx.get(temperature)) {
+        if (not std::isfinite(value->inner) or value->inner < 0.0
+            or value->inner > 2.0) {
+          diagnostic::error("`temperature` must be between 0 and 2")
+            .primary(*value)
+            .emit(ctx);
+        }
       }
       return {};
     });

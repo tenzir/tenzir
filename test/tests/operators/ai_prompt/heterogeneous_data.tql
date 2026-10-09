@@ -5,7 +5,7 @@ assertions:
   fixtures:
     openai_responses:
       inputs: ['"hello"', '42', 'null', '[1,"two",null]', '{"nested":[true,3]}']
-      body: {model: fixture-model, stream: false, store: false, temperature: 0}
+      body: {model: fixture-model, stream: false, store: false}
 ---
 
 from {id: 1, value: "hello"},

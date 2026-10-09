@@ -53,6 +53,22 @@ TEST("responses request body") {
   CHECK(body.unwrap().contains(R"("max_output_tokens":42)"));
 }
 
+TEST("responses request body omits unset temperature") {
+  auto body = openai::make_responses_body(openai::ResponsesRequest{
+    .model = "test-model",
+    .input = "hello",
+  });
+  REQUIRE(body);
+  CHECK(not body.unwrap().contains("temperature"));
+  body = openai::make_responses_body(openai::ResponsesRequest{
+    .model = "test-model",
+    .input = "hello",
+    .temperature = 0.0,
+  });
+  REQUIRE(body);
+  CHECK(body.unwrap().contains(R"("temperature":0)"));
+}
+
 TEST("responses body parser") {
   auto response = R"({
     "id": "resp_test",

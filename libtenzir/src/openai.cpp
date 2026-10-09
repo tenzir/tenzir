@@ -124,7 +124,9 @@ auto make_responses_body(ResponsesRequest const& request)
   body.emplace("input", request.input);
   body.emplace("stream", false);
   body.emplace("store", false);
-  body.emplace("temperature", request.temperature);
+  if (request.temperature) {
+    body.emplace("temperature", *request.temperature);
+  }
   if (request.instructions) {
     body.emplace("instructions", *request.instructions);
   }

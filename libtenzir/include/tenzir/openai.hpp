@@ -25,7 +25,9 @@ struct ResponsesRequest {
   std::string model;
   Option<std::string> instructions = None{};
   std::string input;
-  double temperature = 0.0;
+  /// The sampling temperature. Omitted from the request if unset, so that
+  /// the model uses its own default. Some models reject the parameter.
+  Option<double> temperature = None{};
   Option<uint64_t> max_output_tokens = None{};
 };
 

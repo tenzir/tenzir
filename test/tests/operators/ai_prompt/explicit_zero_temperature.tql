@@ -1,0 +1,16 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['"hello"']
+      body: {model: fixture-model, stream: false, store: false, temperature: 0}
+---
+
+from {message: "hello"}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data=message,
+           temperature=0.0
+select text=ai.prompt.text
