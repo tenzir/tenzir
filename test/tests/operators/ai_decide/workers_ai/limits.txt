@@ -1,0 +1,7 @@
+error: `questions` has 65 questions, but Workers AI takes at most 64
+  --> tests/operators/ai_decide/workers_ai/limits.tql:81:21
+   |
+81 | ai_decide questions=$questions,
+   |                     ^^^^^^^^^^
+   |
+   = hint: split the questions across several `ai_decide` calls

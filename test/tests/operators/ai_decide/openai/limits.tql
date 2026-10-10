@@ -1,0 +1,17 @@
+---
+fixtures: [system_one]
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    system_one:
+      count: 0
+---
+
+// OpenAI takes at most 10 levels, so the operator fails before any request.
+from {cmd: "ls"}
+ai_decide "How risky is this command?",
+          scale=["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+          state=cmd,
+          model="gpt-6-luna",
+          endpoint=env("SYSTEM_ONE_FIXTURE_OPENAI_URL")

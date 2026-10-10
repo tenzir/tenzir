@@ -1,0 +1,30 @@
+warning: AI request failed: HTTP request returned status 500: {"detail":"inference failed"}
+  --> tests/operators/ai_decide/openai/fail_open.tql:12:1
+   |
+12 | ai_decide "How risky is this command?",
+   | ~~~~~~~~~
+   |
+
+warning: the model refused to answer question `answer` for 1 event
+  --> tests/operators/ai_decide/openai/fail_open.tql:12:1
+   |
+12 | ai_decide "How risky is this command?",
+   | ~~~~~~~~~
+   |
+   = note: the answer to a refused question is `null`
+   = hint: a more specific question or more context in `state` can avoid refusals
+{
+  id: 2,
+  failed: true,
+  score: null,
+}
+{
+  id: 3,
+  failed: false,
+  score: null,
+}
+{
+  id: 4,
+  failed: false,
+  score: 1.7,
+}

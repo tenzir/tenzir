@@ -1,0 +1,19 @@
+---
+fixtures: [system_one]
+timeout: 60
+---
+
+// The documented fail-open idiom keeps both failed requests and refused
+// questions, and drops answers below the cutoff.
+from {id: 1, cmd: "ls"},
+     {id: 2, cmd: "danger: unreachable", mode: "fail"},
+     {id: 3, cmd: "ls", mode: "refusal"},
+     {id: 4, cmd: "danger: rm -rf /"}
+ai_decide "How risky is this command?",
+          scale=["Routine", "Unusual", "Dangerous"],
+          state={cmd: cmd, mode: mode?},
+          concurrency=4,
+          model="gpt-6-luna",
+          endpoint=env("SYSTEM_ONE_FIXTURE_OPENAI_URL")
+where ai.decide.answer? == null or ai.decide.answer.score >= 1.5
+select id, failed=ai.decide == null, score=ai.decide.answer?.score?

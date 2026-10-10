@@ -1,0 +1,7 @@
+error: Workers AI rejects the question ID `risk level` in `questions`
+  --> tests/operators/ai_decide/workers_ai/ids.tql:13:21
+   |
+13 | ai_decide questions={
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = hint: use at most 100 letters, digits, `_`, `.`, and `-`

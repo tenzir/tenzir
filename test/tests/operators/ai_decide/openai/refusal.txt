@@ -1,0 +1,20 @@
+warning: the model refused to answer question `risky` for 1 event
+  --> tests/operators/ai_decide/openai/refusal.tql:17:1
+   |
+17 | ai_decide questions={
+   | ~~~~~~~~~
+   |
+   = note: the answer to a refused question is `null`
+   = hint: a more specific question or more context in `state` can avoid refusals
+{
+  id: 1,
+  risky: null,
+  severity: 0.3,
+}
+{
+  id: 2,
+  risky: {
+    probability: 0.9,
+  },
+  severity: 1.7,
+}

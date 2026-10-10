@@ -87,7 +87,8 @@ auto check_arguments(Option<located<std::string>> const& model,
   }
 }
 
-auto make_endpoint_url(std::string endpoint, std::string_view resource)
+auto make_endpoint_url(std::string endpoint, std::string_view resource,
+                       CompleteRoute complete)
   -> Result<std::string, std::string> {
   auto parsed = boost::urls::parse_uri(endpoint);
   if (not parsed) {
@@ -109,7 +110,7 @@ auto make_endpoint_url(std::string endpoint, std::string_view resource)
     path.pop_back();
   }
   auto suffix = fmt::format("/{}", resource);
-  if (not path.ends_with(suffix)) {
+  if (not path.ends_with(suffix) and not(complete and complete(path))) {
     path += suffix;
   }
   url.set_path(path);
@@ -118,8 +119,8 @@ auto make_endpoint_url(std::string endpoint, std::string_view resource)
 
 auto connect(located<secret> endpoint, Option<located<secret>> api_key,
              std::string_view resource, duration timeout,
-             Option<located<data>> const& tls, OpCtx& ctx)
-  -> Task<failure_or<Connection>> {
+             Option<located<data>> const& tls, OpCtx& ctx,
+             CompleteRoute complete) -> Task<failure_or<Connection>> {
   auto resolved_endpoint = std::string{};
   auto resolved_api_key = std::string{};
   auto requests = std::vector<secret_request>{};
@@ -143,12 +144,17 @@ auto connect(located<secret> endpoint, Option<located<secret>> api_key,
   if (config.is_error()) {
     co_return failure::promise();
   }
-  auto url = make_endpoint_url(std::move(resolved_endpoint), resource);
+  auto url
+    = make_endpoint_url(std::move(resolved_endpoint), resource, complete);
   if (url.is_err()) {
     diagnostic::error("{}", std::move(url).unwrap_err())
       .primary(endpoint.source)
       .emit(ctx);
     co_return failure::promise();
+  }
+  auto path = std::string{};
+  if (auto parsed = boost::urls::parse_uri(url.unwrap())) {
+    path = std::string{parsed->path()};
   }
   CO_TRY(auto pool, make_pool(ctx, std::move(url).unwrap(), std::move(*config),
                               endpoint.source));
@@ -160,6 +166,7 @@ auto connect(located<secret> endpoint, Option<located<secret>> api_key,
   co_return Connection{
     .pool = std::move(pool),
     .headers = std::move(headers),
+    .path = std::move(path),
   };
 }
 

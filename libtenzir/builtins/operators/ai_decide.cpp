@@ -397,12 +397,6 @@ auto check_question(std::string const& id, data const& value, location source,
   return result;
 }
 
-auto serialize_questions(data const& questions) -> std::string {
-  auto json = to_json(questions, json_printer_options{.oneline = true});
-  TENZIR_ASSERT(json);
-  return std::move(*json);
-}
-
 /// Checks which question arguments the user provided, independent of whether
 /// their values are known yet.
 auto check_question_arguments(Option<location> question,
@@ -459,7 +453,6 @@ auto make_question_set(Option<located<std::string>> const& question,
                        Option<located<data>> const& scale, bool warn,
                        diagnostic_handler& dh)
   -> failure_or<system_one::QuestionSet> {
-  auto result = system_one::QuestionSet{};
   if (questions) {
     auto const* fields = try_as<record>(questions->inner);
     if (not fields) {
@@ -475,12 +468,13 @@ auto make_question_set(Option<located<std::string>> const& question,
         .emit(dh);
       return failure::promise();
     }
+    auto checked = std::vector<system_one::Question>{};
     for (auto const& [id, value] : *fields) {
-      TRY(auto checked, check_question(id, value, questions->source, warn, dh));
-      result.questions.push_back(std::move(checked));
+      TRY(auto question,
+          check_question(id, value, questions->source, warn, dh));
+      checked.push_back(std::move(question));
     }
-    result.json = serialize_questions(questions->inner);
-    return result;
+    return system_one::make_question_set(std::move(checked), *fields);
   }
   TENZIR_ASSERT(question);
   if (question->inner.empty()) {
@@ -514,9 +508,10 @@ auto make_question_set(Option<located<std::string>> const& question,
   }
   auto wire_questions = record{};
   wire_questions.emplace(std::string{single_question_id}, std::move(wire));
-  result.questions.push_back(std::move(checked));
-  result.json = serialize_questions(wire_questions);
-  return result;
+  auto checked_questions = std::vector<system_one::Question>{};
+  checked_questions.push_back(std::move(checked));
+  return system_one::make_question_set(std::move(checked_questions),
+                                       wire_questions);
 }
 
 // -- execution ----------------------------------------------------------------
@@ -543,6 +538,74 @@ auto make_state(std::string json) -> Option<std::string> {
   return fmt::format("\"{}\"", json);
 }
 
+/// Rejects questions that a hosted provider would reject in every request, so
+/// that the pipeline fails once instead of warning per event.
+auto check_limits(system_one::QuestionSet const& questions,
+                  system_one::Limits const& limits, DecideArgs const& args,
+                  diagnostic_handler& dh) -> failure_or<void> {
+  if (questions.questions.size() > limits.max_questions) {
+    TENZIR_ASSERT(args.questions);
+    diagnostic::error("`questions` has {} questions, but {} takes at most {}",
+                      questions.questions.size(), limits.provider,
+                      limits.max_questions)
+      .primary(args.questions->source)
+      .hint("split the questions across several `ai_decide` calls")
+      .emit(dh);
+    return failure::promise();
+  }
+  for (auto const& question : questions.questions) {
+    if (limits.restricted_ids
+        and not system_one::is_restricted_id(question.id)) {
+      TENZIR_ASSERT(args.questions);
+      diagnostic::error("{} rejects the question ID `{}` in `questions`",
+                        limits.provider, question.id)
+        .primary(args.questions->source)
+        .hint("use at most 100 letters, digits, `_`, `.`, and `-`")
+        .emit(dh);
+      return failure::promise();
+    }
+    auto count = size_t{};
+    auto limit = Option<size_t>{};
+    auto unit = std::string_view{};
+    switch (question.type) {
+      case QuestionType::noul:
+        continue;
+      case QuestionType::choice:
+        count = question.options.size();
+        limit = limits.max_options;
+        unit = "options";
+        break;
+      case QuestionType::score:
+        count = question.levels;
+        limit = limits.max_levels;
+        unit = "levels";
+        break;
+    }
+    if (not limit or count <= *limit) {
+      continue;
+    }
+    auto name = std::string{};
+    auto source = args.operator_location;
+    if (args.questions) {
+      name = fmt::format("questions.{}.criteria", question.id);
+      source = args.questions->source;
+    } else if (args.choices) {
+      name = "choices";
+      source = args.choices->source;
+    } else if (args.scale) {
+      name = "scale";
+      source = args.scale->source;
+    }
+    diagnostic::error("`{}` has {} {}, but {} takes at most {}", name, count,
+                      unit, limits.provider, *limit)
+      .primary(source)
+      .hint("use at most {} {} with {}", *limit, unit, limits.provider)
+      .emit(dh);
+    return failure::promise();
+  }
+  return {};
+}
+
 auto connect(DecideArgs const& args, OpCtx& ctx)
   -> Task<Option<Box<system_one::Client>>> {
   auto questions = make_question_set(args.question, args.questions,
@@ -552,8 +615,14 @@ auto connect(DecideArgs const& args, OpCtx& ctx)
   }
   auto connection
     = co_await ai::connect(args.endpoint, args.api_key, "systemone",
-                           args.timeout.inner, args.tls, ctx);
+                           args.timeout.inner, args.tls, ctx,
+                           &system_one::is_complete_route);
   if (not connection) {
+    co_return None{};
+  }
+  auto dialect = system_one::dialect_of(connection->path);
+  if (auto limits = system_one::limits_of(connection->path);
+      limits and check_limits(*questions, *limits, args, ctx.dh()).is_error()) {
     co_return None{};
   }
   co_return Box<system_one::Client>{
@@ -562,6 +631,7 @@ auto connect(DecideArgs const& args, OpCtx& ctx)
     std::move(connection->headers),
     args.model.inner,
     std::move(*questions),
+    dialect,
   };
 }
 
@@ -584,6 +654,7 @@ auto decide_all(system_one::Client& client, DecideArgs const& args,
 }
 
 auto emit_warnings(std::vector<Row> const& rows, DecideArgs const& args,
+                   system_one::QuestionSet const& questions,
                    diagnostic_handler& dh) -> void {
   auto null_states = std::ranges::count_if(rows, [](Row const& row) {
     return not row.state and not row.error;
@@ -601,14 +672,38 @@ auto emit_warnings(std::vector<Row> const& rows, DecideArgs const& args,
       ai::request_failed(*row.error, args.operator_location).emit(dh);
     }
   }
+  // Refusals are answers, not failures, so they warn once per question.
+  auto const& ids = questions.questions;
+  for (auto i = size_t{}; i < ids.size(); ++i) {
+    auto refusals = std::ranges::count_if(rows, [&](Row const& row) {
+      return row.decision and is<system_one::Refusal>(row.decision->answers[i]);
+    });
+    if (refusals > 0) {
+      diagnostic::warning("the model refused to answer question `{}` for {} "
+                          "event{}",
+                          ids[i].id, refusals, refusals == 1 ? "" : "s")
+        .primary(args.operator_location)
+        .note("the answer to a refused question is `null`")
+        .hint("a more specific question or more context in `state` can "
+              "avoid refusals")
+        .emit(dh);
+    }
+  }
 }
 
 template <class Field>
 auto append_answer(Field field, system_one::Question const& question,
                    system_one::Answer const& answer) -> void {
+  if (is<system_one::Refusal>(answer)) {
+    field.null();
+    return;
+  }
   auto row = field.record();
   match(
     answer,
+    [](system_one::Refusal const&) {
+      TENZIR_UNREACHABLE();
+    },
     [&](system_one::NoulAnswer const& x) {
       row.field("probability").data(x.probability);
     },
@@ -706,7 +801,7 @@ public:
       }
     }
     co_await decide_all(**client_, args_, rows);
-    emit_warnings(rows, args_, ctx.dh());
+    emit_warnings(rows, args_, (*client_)->questions(), ctx.dh());
     auto const& questions = (*client_)->questions();
     auto single = args_.question.has_value();
     auto results = series_builder{};
@@ -757,7 +852,7 @@ public:
       rows.push_back(Row{.state = make_state(std::move(json))});
     }
     co_await decide_all(**client_, args_, rows);
-    emit_warnings(rows, args_, ctx.dh());
+    emit_warnings(rows, args_, (*client_)->questions(), ctx.dh());
     auto const& questions = (*client_)->questions();
     auto single = args_.question.has_value();
     auto results = ai::build_results(

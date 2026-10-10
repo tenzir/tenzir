@@ -1,0 +1,30 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 2
+      # A structured state travels as its JSON text.
+      states:
+        - '{"cmd":"ls","mode":"refusal"}'
+        - '{"cmd":"danger: rm -rf /","mode":null}'
+---
+
+// OpenAI refuses single questions. The answer to a refused question is null,
+// and the other answers of the request stay.
+from {id: 1, cmd: "ls", mode: "refusal"}, {id: 2, cmd: "danger: rm -rf /"}
+ai_decide questions={
+            risky: {type: "noul", instructions: "Is this command risky?"},
+            severity: {
+              type: "score",
+              instructions: "How risky is this command?",
+              criteria: ["Routine", "Unusual", "Malicious"],
+            },
+          },
+          state={cmd: cmd, mode: mode?},
+          model="gpt-6-luna",
+          endpoint=env("SYSTEM_ONE_FIXTURE_OPENAI_URL")
+select id,
+       risky=ai.decide.answers.risky,
+       severity=ai.decide.answers.severity.score

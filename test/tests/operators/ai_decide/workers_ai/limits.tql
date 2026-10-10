@@ -1,0 +1,84 @@
+---
+fixtures: [system_one]
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    system_one:
+      count: 0
+---
+
+// Workers AI takes at most 64 questions, so the operator fails before any
+// request.
+let $questions = {
+  q0: {type: "noul", instructions: "Is this risky? (0)"},
+  q1: {type: "noul", instructions: "Is this risky? (1)"},
+  q2: {type: "noul", instructions: "Is this risky? (2)"},
+  q3: {type: "noul", instructions: "Is this risky? (3)"},
+  q4: {type: "noul", instructions: "Is this risky? (4)"},
+  q5: {type: "noul", instructions: "Is this risky? (5)"},
+  q6: {type: "noul", instructions: "Is this risky? (6)"},
+  q7: {type: "noul", instructions: "Is this risky? (7)"},
+  q8: {type: "noul", instructions: "Is this risky? (8)"},
+  q9: {type: "noul", instructions: "Is this risky? (9)"},
+  q10: {type: "noul", instructions: "Is this risky? (10)"},
+  q11: {type: "noul", instructions: "Is this risky? (11)"},
+  q12: {type: "noul", instructions: "Is this risky? (12)"},
+  q13: {type: "noul", instructions: "Is this risky? (13)"},
+  q14: {type: "noul", instructions: "Is this risky? (14)"},
+  q15: {type: "noul", instructions: "Is this risky? (15)"},
+  q16: {type: "noul", instructions: "Is this risky? (16)"},
+  q17: {type: "noul", instructions: "Is this risky? (17)"},
+  q18: {type: "noul", instructions: "Is this risky? (18)"},
+  q19: {type: "noul", instructions: "Is this risky? (19)"},
+  q20: {type: "noul", instructions: "Is this risky? (20)"},
+  q21: {type: "noul", instructions: "Is this risky? (21)"},
+  q22: {type: "noul", instructions: "Is this risky? (22)"},
+  q23: {type: "noul", instructions: "Is this risky? (23)"},
+  q24: {type: "noul", instructions: "Is this risky? (24)"},
+  q25: {type: "noul", instructions: "Is this risky? (25)"},
+  q26: {type: "noul", instructions: "Is this risky? (26)"},
+  q27: {type: "noul", instructions: "Is this risky? (27)"},
+  q28: {type: "noul", instructions: "Is this risky? (28)"},
+  q29: {type: "noul", instructions: "Is this risky? (29)"},
+  q30: {type: "noul", instructions: "Is this risky? (30)"},
+  q31: {type: "noul", instructions: "Is this risky? (31)"},
+  q32: {type: "noul", instructions: "Is this risky? (32)"},
+  q33: {type: "noul", instructions: "Is this risky? (33)"},
+  q34: {type: "noul", instructions: "Is this risky? (34)"},
+  q35: {type: "noul", instructions: "Is this risky? (35)"},
+  q36: {type: "noul", instructions: "Is this risky? (36)"},
+  q37: {type: "noul", instructions: "Is this risky? (37)"},
+  q38: {type: "noul", instructions: "Is this risky? (38)"},
+  q39: {type: "noul", instructions: "Is this risky? (39)"},
+  q40: {type: "noul", instructions: "Is this risky? (40)"},
+  q41: {type: "noul", instructions: "Is this risky? (41)"},
+  q42: {type: "noul", instructions: "Is this risky? (42)"},
+  q43: {type: "noul", instructions: "Is this risky? (43)"},
+  q44: {type: "noul", instructions: "Is this risky? (44)"},
+  q45: {type: "noul", instructions: "Is this risky? (45)"},
+  q46: {type: "noul", instructions: "Is this risky? (46)"},
+  q47: {type: "noul", instructions: "Is this risky? (47)"},
+  q48: {type: "noul", instructions: "Is this risky? (48)"},
+  q49: {type: "noul", instructions: "Is this risky? (49)"},
+  q50: {type: "noul", instructions: "Is this risky? (50)"},
+  q51: {type: "noul", instructions: "Is this risky? (51)"},
+  q52: {type: "noul", instructions: "Is this risky? (52)"},
+  q53: {type: "noul", instructions: "Is this risky? (53)"},
+  q54: {type: "noul", instructions: "Is this risky? (54)"},
+  q55: {type: "noul", instructions: "Is this risky? (55)"},
+  q56: {type: "noul", instructions: "Is this risky? (56)"},
+  q57: {type: "noul", instructions: "Is this risky? (57)"},
+  q58: {type: "noul", instructions: "Is this risky? (58)"},
+  q59: {type: "noul", instructions: "Is this risky? (59)"},
+  q60: {type: "noul", instructions: "Is this risky? (60)"},
+  q61: {type: "noul", instructions: "Is this risky? (61)"},
+  q62: {type: "noul", instructions: "Is this risky? (62)"},
+  q63: {type: "noul", instructions: "Is this risky? (63)"},
+  q64: {type: "noul", instructions: "Is this risky? (64)"},
+}
+from {cmd: "ls"}
+ai_decide questions=$questions,
+          state=cmd,
+          model="clef",
+          endpoint=env("SYSTEM_ONE_FIXTURE_WORKERS_AI_URL")

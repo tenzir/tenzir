@@ -1,6 +1,12 @@
 """System One API fixture for ai_decide integration tests.
 
-The fixture answers `POST /v1/systemone` with deterministic decisions. A state
+The fixture answers `POST /v1/systemone` with deterministic decisions. It also
+answers the Cloudflare Workers AI run path
+`POST /client/v4/accounts/test/ai/run/@cf/cloudflare/clef` and wraps that
+response in a `result` envelope like Workers AI does. `POST /v1/decisions`
+speaks the OpenAI Decisions format: an `input` instead of a `state`, a list of
+named questions, and a list of named answers. The fixture checks that format
+and answers `mode: refusal` with a refusal of the first question. A state
 that mentions "danger" leans toward yes, the last choice option, and the
 highest score level; any other state leans the opposite way. Object states can
 select a response variant with a `mode` field, delay the response with
@@ -21,6 +27,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from tenzir_test import FixtureHandle, fixture
+
+
+WORKERS_AI_PATH = "/client/v4/accounts/test/ai/run/@cf/cloudflare/clef"
+OPENAI_PATH = "/v1/decisions"
 
 
 @dataclass(frozen=True)
@@ -78,6 +88,66 @@ def _answer(question: dict[str, Any], risky: bool, mode: str | None) -> dict[str
     return answer
 
 
+def _openai_question_errors(question: Any) -> list[str]:
+    """Returns what is wrong with a question of the OpenAI Decisions format."""
+    if not isinstance(question, dict):
+        return [f"question is not an object: {question!r}"]
+    errors = []
+    if not isinstance(question.get("name"), str) or not question["name"]:
+        errors.append(f"question has no name: {question!r}")
+    if not isinstance(question.get("instructions"), str):
+        errors.append(f"instructions are not a string: {question!r}")
+    kind = question.get("type")
+    if kind == "choice":
+        choices = question.get("choices")
+        if not isinstance(choices, list) or not all(
+            isinstance(c, dict) and isinstance(c.get("value"), str) for c in choices
+        ):
+            errors.append(f"choices are not a list of values: {question!r}")
+    elif kind == "score":
+        levels = question.get("levels")
+        if not isinstance(levels, list) or not all(
+            isinstance(level, dict) and isinstance(level.get("label"), str)
+            for level in levels
+        ):
+            errors.append(f"levels are not a list of labels: {question!r}")
+    elif kind != "predicate":
+        errors.append(f"unknown question type: {kind!r}")
+    return errors
+
+
+def _openai_answer(question: dict[str, Any], risky: bool) -> dict[str, Any]:
+    kind = question["type"]
+    name = question["name"]
+    if kind == "predicate":
+        return {"type": kind, "name": name, "probability": 0.9 if risky else 0.1}
+    if kind == "choice":
+        values = [choice["value"] for choice in question["choices"]]
+        distribution = _distribution(len(values), risky)
+        return {
+            "type": kind,
+            "name": name,
+            "choice": values[-1] if risky else values[0],
+            "probabilities": [
+                {"value": value, "probability": p}
+                for value, p in zip(values, distribution)
+            ],
+            "confidence": 0.5,
+        }
+    levels = question["levels"]
+    distribution = _distribution(len(levels), risky)
+    return {
+        "type": kind,
+        "name": name,
+        "score": round(sum(i * p for i, p in enumerate(distribution)), 6),
+        "probabilities": [
+            {"value": i, "label": level["label"], "probability": p}
+            for i, (level, p) in enumerate(zip(levels, distribution))
+        ],
+        "confidence": 0.5,
+    }
+
+
 def _make_handler(
     errors: list[str], requests: list[dict[str, Any]], state: dict[str, int]
 ):
@@ -113,7 +183,9 @@ def _make_handler(
             path = urlsplit(self.path).path
             length = int(self.headers.get("Content-Length", "0") or 0)
             raw = self.rfile.read(length) if length > 0 else b""
-            if path != "/v1/systemone":
+            workers_ai = path == WORKERS_AI_PATH
+            openai = path == OPENAI_PATH
+            if path != "/v1/systemone" and not workers_ai and not openai:
                 errors.append(f"expected path /v1/systemone, got {path}")
                 self._reply(HTTPStatus.NOT_FOUND, {"detail": "not found"})
                 return
@@ -130,7 +202,22 @@ def _make_handler(
                 requests.append(
                     {"body": body, "authorization": self.headers.get("Authorization")}
                 )
-            subject = body.get("state")
+            if openai:
+                if "state" in body or not isinstance(body.get("input"), str):
+                    errors.append(f"expected a string input, got {body!r}")
+                questions_list = body.get("questions")
+                if not isinstance(questions_list, list) or not questions_list:
+                    errors.append(f"expected a list of questions, got {body!r}")
+                    questions_list = []
+                for question in questions_list:
+                    errors.extend(_openai_question_errors(question))
+                subject = body.get("input")
+                try:
+                    subject = json.loads(subject) if subject[:1] in "{[" else subject
+                except (TypeError, json.JSONDecodeError):
+                    pass
+            else:
+                subject = body.get("state")
             mode = subject.get("mode") if isinstance(subject, dict) else None
             if isinstance(subject, dict) and subject.get("rendezvous"):
                 # Every request that arrives while this one waits overlaps with it,
@@ -151,6 +238,27 @@ def _make_handler(
                 )
                 return
             risky = "danger" in json.dumps(subject)
+            if openai:
+                # OpenAI refuses single questions and answers the others, so
+                # `mode: refusal` refuses only the first question.
+                answers_list: list[dict[str, Any]] = [
+                    {"type": "refusal", "name": q["name"]}
+                    if mode == "refusal" and i == 0
+                    else _openai_answer(q, risky)
+                    for i, q in enumerate(questions_list)
+                ]
+                self._reply(
+                    HTTPStatus.OK,
+                    {
+                        "model": body.get("model"),
+                        "answers": answers_list,
+                        "usage": {
+                            "input_tokens": 10 * len(questions_list),
+                            "output_tokens": 0,
+                        },
+                    },
+                )
+                return
             questions = body["questions"]
             answers = {
                 key: _answer(question, risky, mode)
@@ -186,6 +294,13 @@ def _make_handler(
                     }
                 )
                 response["routing"] = {"model": "english", "reason": "fixture"}
+            if workers_ai:
+                response = {
+                    "result": response,
+                    "success": True,
+                    "errors": [],
+                    "messages": [],
+                }
             self._reply(HTTPStatus.OK, response)
 
     return SystemOneHandler
@@ -236,7 +351,8 @@ def run() -> FixtureHandle:
                 )
         if assertions.states is not None:
             actual = sorted(
-                _canonical(request["body"].get("state")) for request in requests
+                _canonical(request["body"].get("state", request["body"].get("input")))
+                for request in requests
             )
             expected = sorted(_canonical(value) for value in assertions.states)
             if actual != expected:
@@ -258,7 +374,13 @@ def run() -> FixtureHandle:
             raise RuntimeError(errors[0])
 
     return FixtureHandle(
-        env={"SYSTEM_ONE_FIXTURE_ENDPOINT": f"http://127.0.0.1:{port}/v1"},
+        env={
+            "SYSTEM_ONE_FIXTURE_ENDPOINT": f"http://127.0.0.1:{port}/v1",
+            "SYSTEM_ONE_FIXTURE_WORKERS_AI_URL": (
+                f"http://127.0.0.1:{port}{WORKERS_AI_PATH}"
+            ),
+            "SYSTEM_ONE_FIXTURE_OPENAI_URL": f"http://127.0.0.1:{port}{OPENAI_PATH}",
+        },
         teardown=_teardown,
         hooks={"assert_test": _assert_test},
     )

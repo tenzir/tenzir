@@ -1,0 +1,18 @@
+---
+fixtures: [system_one]
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    system_one:
+      count: 0
+---
+
+// Workers AI restricts question IDs, so the operator fails before any request.
+from {cmd: "ls"}
+ai_decide questions={
+            "risk level": {type: "noul", instructions: "Is this risky?"},
+          },
+          state=cmd,
+          model="clef",
+          endpoint=env("SYSTEM_ONE_FIXTURE_WORKERS_AI_URL")

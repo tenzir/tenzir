@@ -54,25 +54,32 @@ auto check_arguments(Option<located<std::string>> const& model,
 
 // -- connection ---------------------------------------------------------------
 
-/// Appends `/<resource>` to a base endpoint unless it already ends with it.
-/// Fails unless the endpoint is an HTTP or HTTPS URL with a host and a valid
-/// port. Error messages never contain the endpoint.
-auto make_endpoint_url(std::string endpoint, std::string_view resource)
+/// Decides whether the path of an endpoint already addresses its resource,
+/// for providers whose URL does not end in the resource name.
+using CompleteRoute = bool (*)(std::string_view path);
+
+/// Appends `/<resource>` to a base endpoint unless it already ends with it or
+/// `complete` accepts its path. Fails unless the endpoint is an HTTP or HTTPS
+/// URL with a host and a valid port. Error messages never contain the endpoint.
+auto make_endpoint_url(std::string endpoint, std::string_view resource,
+                       CompleteRoute complete = nullptr)
   -> Result<std::string, std::string>;
 
 /// What an AI operator needs to send requests to its endpoint.
 struct Connection {
   Box<HttpPool> pool;
   std::vector<http::Header> headers;
+  /// The path that requests go to, after appending the resource.
+  std::string path;
 };
 
-/// Resolves the endpoint and the API key, appends `resource` to the endpoint,
-/// and creates an HTTP pool. The endpoint can be a secret, so diagnostics
-/// never reveal it.
+/// Resolves the endpoint and the API key, appends `resource` to the endpoint
+/// unless `complete` accepts its path, and creates an HTTP pool. The endpoint
+/// can be a secret, so diagnostics never reveal it.
 auto connect(located<secret> endpoint, Option<located<secret>> api_key,
              std::string_view resource, duration timeout,
-             Option<located<data>> const& tls, OpCtx& ctx)
-  -> Task<failure_or<Connection>>;
+             Option<located<data>> const& tls, OpCtx& ctx,
+             CompleteRoute complete = nullptr) -> Task<failure_or<Connection>>;
 
 // -- inputs -------------------------------------------------------------------
 
