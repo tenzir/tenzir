@@ -1,7 +1,7 @@
 let $foo = 1
 
 export
-if $foo == 1 {
+if foo == $foo {
   let $bar = 2
   where foo == $foo and bar == $bar
 } else {

@@ -1,0 +1,6 @@
+error: `if` requires incoming events
+ --> tests/operators/if/error_bytes_input.tql:8:4
+  |
+8 | if true {}
+  |    ^^^^
+  |

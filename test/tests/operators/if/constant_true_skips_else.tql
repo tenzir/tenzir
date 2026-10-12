@@ -1,0 +1,9 @@
+// The `else` branch under a condition that is constant `true` never runs, so
+// its arguments are not validated.
+let $p = ""
+from {x: "abc"}
+if $p == "" {
+  y = "then"
+} else {
+  x = x.replace_regex($p, "\\1")
+}

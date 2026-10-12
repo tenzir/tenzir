@@ -1,7 +1,7 @@
 export
-if true {
+if c {
   where a
-} else if false {
+} else if d {
   where b
 } else {
   where c

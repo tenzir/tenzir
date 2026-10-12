@@ -1,0 +1,8 @@
+// A condition that reads only package `let`s is constant, so the branch that
+// it never takes does not start.
+from {x: "abc"}
+if letspkg::$vendor == "acme" {
+  y = "then"
+} else {
+  x = x.replace_regex("", "\\1")
+}

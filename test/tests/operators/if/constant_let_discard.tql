@@ -1,0 +1,11 @@
+// A condition that a `let` makes constant keeps the type of `if`, which
+// returns events although the branch that it takes is a sink. The branch that
+// it never takes does not start.
+let $a = true
+from {x: 1}
+if $a {
+  discard
+} else {
+  x = x.replace_regex("", "\\1")
+}
+y = x + 1

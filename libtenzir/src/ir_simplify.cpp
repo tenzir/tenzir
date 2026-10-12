@@ -588,6 +588,28 @@ public:
   size_t size = 0;
 };
 
+/// Replaces package `let` references by their cached values where the
+/// evaluator accepts them. The simplifier keeps the references, but a
+/// condition that only reads them is constant.
+class PackageLetFolder final : public ast::visitor<PackageLetFolder> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::expression& x) -> void {
+    auto* var = try_as<ast::pkg_dollar_var>(x);
+    if (not var) {
+      enter(x);
+      return;
+    }
+    if (var->value and is_evaluable(*var->value)) {
+      x = ast::constant::make(located{*var->value, var->get_location()});
+    }
+  }
+};
+
 } // namespace
 
 auto ir::simplify_predicate(ast::expression predicate) -> ast::expression {
@@ -634,6 +656,15 @@ auto ir::simplify_filter(OptimizeFilter filter) -> OptimizeFilter {
     result.push_back(std::move(simplified[i]));
   }
   return result;
+}
+
+auto ir::constant_condition(ast::expression const& condition) -> Option<bool> {
+  auto reg = global_registry();
+  auto simplifier = Simplifier{*reg};
+  auto simplified = condition;
+  PackageLetFolder{}.visit(simplified);
+  simplifier.simplify(simplified, Context::condition);
+  return as_bool(simplified);
 }
 
 auto ir::expression_size(ast::expression const& expr) -> size_t {

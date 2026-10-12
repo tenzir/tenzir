@@ -1,0 +1,10 @@
+// A constant condition replaces `if` with the branch that it takes.
+let $p = ""
+export
+if $p != "" {
+  x = x.replace_regex($p, "\\1")
+} else {
+  where y
+}
+where foo == 42
+discard

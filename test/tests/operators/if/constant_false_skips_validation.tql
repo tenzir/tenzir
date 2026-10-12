@@ -1,0 +1,7 @@
+// A branch under a condition that is constant `false` never runs, so the
+// operators in it do not validate their arguments.
+let $stride = 0
+from {x: 1}
+if $stride != 0 {
+  slice stride=$stride
+}

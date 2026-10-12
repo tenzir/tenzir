@@ -1,8 +1,8 @@
 export
-if true {
+if c {
   write_lines
   read_ndjson
-} else if false {
+} else if d {
   write_lines
   read_ndjson
 } else {

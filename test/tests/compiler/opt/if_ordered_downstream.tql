@@ -1,5 +1,5 @@
 export
-if true {
+if c {
   head
 } else {
   head

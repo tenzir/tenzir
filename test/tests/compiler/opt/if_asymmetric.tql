@@ -1,5 +1,5 @@
 export
-if true {
+if c {
   where x == 1
 } else {
   write_lines

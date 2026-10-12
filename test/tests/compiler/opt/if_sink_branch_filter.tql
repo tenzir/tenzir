@@ -1,5 +1,5 @@
 export
-if true {
+if c {
   discard
 } else {
   drop a

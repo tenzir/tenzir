@@ -1,0 +1,7 @@
+// Pruning the alternative of a constant condition keeps the output type of
+// `if`, which returns events although its consequence returns nothing.
+from {x: 1}
+if true {
+  discard
+}
+y = x + 1

@@ -1,0 +1,7 @@
+// A branch under a condition that is constant `false` never runs, so its
+// arguments are not validated.
+let $p = ""
+from {x: "abc"}
+if $p != "" {
+  x = x.replace_regex($p, "\\1")
+}

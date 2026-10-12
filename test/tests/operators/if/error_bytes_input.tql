@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// `if` requires events, so it rejects bytes input although its empty branch
+// would pass the bytes through.
+load_stdin
+if true {}

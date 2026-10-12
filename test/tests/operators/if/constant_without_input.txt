@@ -1,0 +1,6 @@
+error: `if` requires incoming events
+ --> tests/operators/if/constant_without_input.tql:9:4
+  |
+9 | if true {}
+  |    ^^^^
+  |

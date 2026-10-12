@@ -1,0 +1,146 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:81..87 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    If {
+-      condition: binary_expr {
+-        left: constant string "" @ [1]:91..93 from 0,
+-        op: "neq",
+-        right: constant string "" @ [1]:97..99 from 0,
+-        location: [1]:91..99 from 0
+-      },
+-      consequence: {
+-        lets: [
+-          
+-        ],
+-        operators: [
+-          SetIr {
+-            assignments: [
+-              {
+-                left: root_field {
+-                  id: `x` @ [1]:104..105 from 0,
+-                  has_question_mark: false
+-                },
+-                right: function_call {
+-                  fn: {
+-                    path: [
+-                      `replace_regex` @ [1]:110..123 from 0
+-                    ],
+-                    ref: std::replace_regex/fn
+-                  },
+-                  args: [
+-                    root_field {
+-                      id: `x` @ [1]:108..109 from 0,
+-                      has_question_mark: false
+-                    },
+-                    dollar_var `$p` -> 1 @ [1]:124..126 from 0,
+-                    constant string "\\1" @ [1]:128..133 from 0
+-                  ],
+-                  method: true,
+-                  location: [1]:108..134 from 0
+-                },
+-                location: [1]:104..134 from 0
+-              }
+-            ],
+-            order: "ordered"
+-          }
+-        ]
+-      },
+-      alternative: {
+-        lets: [
+-          
+-        ],
+-        operators: [
+-          where_ir {
+-            op: {
+-              path: [
+-                `where` @ [1]:146..151 from 0
+-              ],
+-              ref: std::where/op
+-            },
+-            args: [
+-              expression root_field {
+-                id: `y` @ [1]:152..153 from 0,
+-                has_question_mark: false
+-              }
+-            ],
+-            named_args: [
+-              
+-            ]
+-          }
+-        ]
+-      }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:156..161 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        root_field {
++          id: `y` @ [1]:152..153 from 0,
++          has_question_mark: false
++        },
++        binary_expr {
+           left: root_field {
+             id: `foo` @ [1]:162..165 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 42 @ [1]:169..171 from 0,
+           location: [1]:162..171 from 0
+         }
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "unordered"
+     },
+     GenericIr {
+       desc: "discard",
+       store: {
+         op: {
+           path: [
+             `discard` @ [1]:172..179 from 0
+           ],
+           ref: std::discard/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     }
+   ]
+ }

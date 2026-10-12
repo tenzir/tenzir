@@ -232,8 +232,19 @@ public:
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
     TRY(args_.condition.substitute(ctx));
-    TRY(args_.consequence.substitute(ctx, instantiate));
-    if (args_.alternative) {
+    // Once instantiated, the condition may be constant, for example if it
+    // reads a `let` or the `$this` of `each`. The branch that it never takes
+    // is then not substituted, so that its operators never validate arguments
+    // that only it receives. It keeps its type, and `optimize` removes it
+    // before anything needs it instantiated.
+    auto constant = Option<bool>{None{}};
+    if (instantiate) {
+      constant = ir::constant_condition(args_.condition);
+    }
+    if (constant.unwrap_or(true)) {
+      TRY(args_.consequence.substitute(ctx, instantiate));
+    }
+    if (args_.alternative and not constant.unwrap_or(false)) {
       TRY(args_.alternative->substitute(ctx, instantiate));
     }
     return {};
@@ -241,6 +252,9 @@ public:
 
   auto optimize(ir::OptimizeRequest req,
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
+    if (auto branch = taken_branch()) {
+      return std::move(*branch).optimize(std::move(req), octx);
+    }
     auto filter = std::move(req.filter);
     auto order = req.order;
     auto downstream_projection = std::move(req.projection);
@@ -335,6 +349,16 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override {
+    // `if` routes events, so it rejects other inputs as `match` does. That also
+    // lets `optimize` assume events when it replaces an `if` with a constant
+    // condition by its taken branch, which may accept any input, as an empty
+    // branch does.
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
+      diagnostic::error("`if` requires incoming events")
+        .primary(args_.condition)
+        .emit(dh);
+      return failure::promise();
+    }
     // A branch may be empty (or contain only `let`s), in which case it has no
     // operator to point at. Fall back to the condition's location, which is
     // always present.
@@ -387,6 +411,33 @@ public:
   }
 
 private:
+  /// Returns the branch that every event takes if the condition is constant
+  /// and replacing `if` by it keeps the type of `if`. Otherwise, it empties
+  /// the branch that no event takes, which `substitute` did not instantiate.
+  /// That keeps the type of `if`: it differs from the taken branch only if
+  /// that is a sink and the other branch returns events, as for
+  /// `if true { discard }`, which returns events, unlike `discard`.
+  auto taken_branch() -> Option<ir::pipeline&> {
+    auto value = ir::constant_condition(args_.condition);
+    if (not value) {
+      return None{};
+    }
+    if (not args_.alternative) {
+      args_.alternative.emplace();
+    }
+    auto& taken = *value ? args_.consequence : *args_.alternative;
+    auto& untaken = *value ? *args_.alternative : args_.consequence;
+    auto null_dh = null_diagnostic_handler{};
+    auto input = events_element_type();
+    auto if_ty = infer_type(input, null_dh);
+    auto taken_ty = taken.infer_type(input, null_dh);
+    if (if_ty and taken_ty and *if_ty == *taken_ty) {
+      return taken;
+    }
+    untaken = ir::pipeline{};
+    return None{};
+  }
+
   IfArgs args_;
 };
 

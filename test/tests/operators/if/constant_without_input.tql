@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// Replacing an `if` with a constant condition by its empty branch must keep
+// the error for an `if` without incoming events.
+from {x: 1}
+discard
+if true {}

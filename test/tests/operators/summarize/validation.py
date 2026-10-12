@@ -19,7 +19,7 @@ def compile_pipeline(pipeline, stage="--dump-ir-plan"):
 for pipeline in (
     "let $normalize = true\nfrom []\nsummarize result=entropy(x, normalize=$normalize)",
     "let $normalize = true\nfrom []\n"
-    "if false { summarize result=entropy(x, normalize=$normalize) }",
+    "if x == 1 { summarize result=entropy(x, normalize=$normalize) }",
 ):
     result = compile_pipeline(pipeline)
     assert result.returncode == 0, result.stderr
@@ -34,7 +34,7 @@ for pipeline, error in (
         "expected argument of type `bool`, but got `int`",
     ),
     (
-        "from []\nif false { summarize result=sum() }",
+        "from []\nif x == 1 { summarize result=sum() }",
         "expected exactly 1 positional argument",
     ),
 ):

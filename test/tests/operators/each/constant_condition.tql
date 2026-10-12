@@ -1,0 +1,10 @@
+// A condition that reads `$this` is constant within each subpipeline, so the
+// branch that it skips is not validated.
+from {x: "abc", p: ""}, {x: "abc", p: "(b)"}
+each parallel=1 {
+  let $p = $this.p
+  from $this
+  if $p != "" {
+    x = x.replace_regex($p, "<\\1>")
+  }
+}

@@ -25,7 +25,10 @@
        order: "ordered"
      },
      If {
-       condition: constant bool true @ [1]:10..14 from 0,
+       condition: root_field {
+         id: `c` @ [1]:10..11 from 0,
+         has_question_mark: false
+       },
        consequence: {
          lets: [
            
@@ -34,7 +37,7 @@
            where_ir {
              op: {
                path: [
--                `where` @ [1]:19..24 from 0
+-                `where` @ [1]:16..21 from 0
 +                
                ],
 -              ref: std::where/op
@@ -44,12 +47,12 @@
 -              expression binary_expr {
 +              Incomplete binary_expr {
                  left: root_field {
-                   id: `x` @ [1]:25..26 from 0,
+                   id: `x` @ [1]:22..23 from 0,
                    has_question_mark: false
                  },
                  op: "eq",
-                 right: constant int64 1 @ [1]:30..31 from 0,
-                 location: [1]:25..31 from 0
+                 right: constant int64 1 @ [1]:27..28 from 0,
+                 location: [1]:22..28 from 0
                }
              ],
              named_args: [
@@ -68,7 +71,7 @@
              store: {
                op: {
                  path: [
-                   `write_lines` @ [1]:43..54 from 0
+                   `write_lines` @ [1]:40..51 from 0
                  ],
                  ref: std::write_lines/op
                },
@@ -89,7 +92,7 @@
              store: {
                op: {
                  path: [
-                   `read_ndjson` @ [1]:57..68 from 0
+                   `read_ndjson` @ [1]:54..65 from 0
                  ],
                  ref: std::read_ndjson/op
                },
@@ -114,7 +117,7 @@
        store: {
          op: {
            path: [
-             `discard` @ [1]:71..78 from 0
+             `discard` @ [1]:68..75 from 0
            ],
            ref: std::discard/op
          },

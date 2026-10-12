@@ -362,6 +362,13 @@ auto simplify_predicate(ast::expression predicate) -> ast::expression;
 /// pipeline.
 auto simplify_filter(OptimizeFilter filter) -> OptimizeFilter;
 
+/// Returns the value of the condition of an `if` if it is the same for every
+/// event, folding it as in `simplify_predicate`. A condition that is `null`
+/// for every event is `false`. Returns `None` if the condition depends on the
+/// event, does not fold, or is a constant of another type, which the runtime
+/// warns about.
+auto constant_condition(ast::expression const& condition) -> Option<bool>;
+
 /// Returns the number of expression nodes in `expr`.
 auto expression_size(ast::expression const& expr) -> size_t;
 

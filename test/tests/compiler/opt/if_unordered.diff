@@ -25,7 +25,10 @@
        order: "ordered"
      },
      If {
-       condition: constant bool true @ [1]:10..14 from 0,
+       condition: root_field {
+         id: `c` @ [1]:10..11 from 0,
+         has_question_mark: false
+       },
        consequence: {
          lets: [
            
@@ -36,7 +39,7 @@
              store: {
                op: {
                  path: [
-                   `write_lines` @ [1]:19..30 from 0
+                   `write_lines` @ [1]:16..27 from 0
                  ],
                  ref: std::write_lines/op
                },
@@ -57,7 +60,7 @@
              store: {
                op: {
                  path: [
-                   `read_ndjson` @ [1]:33..44 from 0
+                   `read_ndjson` @ [1]:30..41 from 0
                  ],
                  ref: std::read_ndjson/op
                },
@@ -82,7 +85,10 @@
          ],
          operators: [
            If {
-             condition: constant bool false @ [1]:55..60 from 0,
+             condition: root_field {
+               id: `d` @ [1]:52..53 from 0,
+               has_question_mark: false
+             },
              consequence: {
                lets: [
                  
@@ -93,7 +99,7 @@
                    store: {
                      op: {
                        path: [
-                         `write_lines` @ [1]:65..76 from 0
+                         `write_lines` @ [1]:58..69 from 0
                        ],
                        ref: std::write_lines/op
                      },
@@ -114,7 +120,7 @@
                    store: {
                      op: {
                        path: [
-                         `read_ndjson` @ [1]:79..90 from 0
+                         `read_ndjson` @ [1]:72..83 from 0
                        ],
                        ref: std::read_ndjson/op
                      },
@@ -143,7 +149,7 @@
                    store: {
                      op: {
                        path: [
-                         `write_lines` @ [1]:102..113 from 0
+                         `write_lines` @ [1]:95..106 from 0
                        ],
                        ref: std::write_lines/op
                      },
@@ -164,7 +170,7 @@
                    store: {
                      op: {
                        path: [
-                         `read_ndjson` @ [1]:116..127 from 0
+                         `read_ndjson` @ [1]:109..120 from 0
                        ],
                        ref: std::read_ndjson/op
                      },
@@ -192,7 +198,7 @@
        store: {
          op: {
            path: [
-             `discard` @ [1]:130..137 from 0
+             `discard` @ [1]:123..130 from 0
            ],
            ref: std::discard/op
          },

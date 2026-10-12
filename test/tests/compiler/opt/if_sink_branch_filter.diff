@@ -26,7 +26,10 @@
 +      order: "unordered"
      },
      If {
-       condition: constant bool true @ [1]:10..14 from 0,
+       condition: root_field {
+         id: `c` @ [1]:10..11 from 0,
+         has_question_mark: false
+       },
        consequence: {
          lets: [
            
@@ -37,7 +40,7 @@
              store: {
                op: {
                  path: [
-                   `discard` @ [1]:19..26 from 0
+                   `discard` @ [1]:16..23 from 0
                  ],
                  ref: std::discard/op
                },
@@ -70,12 +73,12 @@
 +            args: [
 +              Incomplete binary_expr {
 +                left: root_field {
-+                  id: `b` @ [1]:53..54 from 0,
++                  id: `b` @ [1]:50..51 from 0,
 +                  has_question_mark: false
 +                },
 +                op: "eq",
-+                right: constant int64 2 @ [1]:58..59 from 0,
-+                location: [1]:53..59 from 0
++                right: constant int64 2 @ [1]:55..56 from 0,
++                location: [1]:50..56 from 0
 +              }
 +            ],
 +            named_args: [
@@ -87,20 +90,20 @@
              store: {
                op: {
                  path: [
-                   `drop` @ [1]:38..42 from 0
+                   `drop` @ [1]:35..39 from 0
                  ],
                  ref: std::drop/op
                },
                args: [
                  field_path {
                    expr: root_field {
-                     id: `a` @ [1]:43..44 from 0,
+                     id: `a` @ [1]:40..41 from 0,
                      has_question_mark: false
                    },
                    has_this: false,
                    path: [
                      {
-                       id: `a` @ [1]:43..44 from 0,
+                       id: `a` @ [1]:40..41 from 0,
                        has_question_mark: false
                      }
                    ]
@@ -122,19 +125,19 @@
 -    where_ir {
 -      op: {
 -        path: [
--          `where` @ [1]:47..52 from 0
+-          `where` @ [1]:44..49 from 0
 -        ],
 -        ref: std::where/op
 -      },
 -      args: [
 -        expression binary_expr {
 -          left: root_field {
--            id: `b` @ [1]:53..54 from 0,
+-            id: `b` @ [1]:50..51 from 0,
 -            has_question_mark: false
 -          },
 -          op: "eq",
--          right: constant int64 2 @ [1]:58..59 from 0,
--          location: [1]:53..59 from 0
+-          right: constant int64 2 @ [1]:55..56 from 0,
+-          location: [1]:50..56 from 0
 -        }
 -      ],
 -      named_args: [
@@ -146,7 +149,7 @@
        store: {
          op: {
            path: [
-             `discard` @ [1]:60..67 from 0
+             `discard` @ [1]:57..64 from 0
            ],
            ref: std::discard/op
          },

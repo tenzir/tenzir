@@ -1,0 +1,11 @@
+// An `if` whose branches are both sinks is a sink, also with a constant
+// condition.
+let $over = [1, 2]
+from {x: 1}
+load_balance $over {
+  if true {
+    discard
+  } else {
+    discard
+  }
+}
