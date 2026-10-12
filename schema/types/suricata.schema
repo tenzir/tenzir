@@ -562,19 +562,9 @@ type suricata.http2_header = record {
 
 type suricata.http2_stream = record {
   settings: list<suricata.http2_setting>,
-  headers: list<suricata.http2_header>,
   error_code: string,
-  has_multiple: bool,
+  has_multiple: string,
   priority: uint64
-}
-
-type suricata.http2 = suricata.component.common + record {
-  tx_id: uint64 #index=hash,
-  http2: record {
-    stream_id: uint64,
-    request: suricata.http2_stream,
-    response: suricata.http2_stream
-  }
 }
 
 type suricata.fileinfo = suricata.component.common + record {
