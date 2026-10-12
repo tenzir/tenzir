@@ -15,6 +15,7 @@
 #include "tenzir/pushdown/renderer.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -115,6 +116,24 @@ auto translate_predicate(ast::expression const& expr,
 /// `x != null` is the null-rejecting exception. Integers are bounded to ±2^53.
 auto translate_prefilter(ast::expression const& expr,
                          ColumnModel const& columns) -> Option<Expr>;
+
+/// The value of a field, as the target computes it.
+struct FieldValue {
+  /// An expression whose value is the value that TQL sees for the field,
+  /// including `NULL` where TQL decodes a stored value to `null`.
+  Expr expr;
+  /// The column that holds the field.
+  ColumnInfo column;
+};
+
+/// Translates the field at `path` into the expression of its value, or
+/// returns `None` if the field has no column or no exact value.
+///
+/// Unlike a predicate, a value must agree with TQL exactly, not just in its
+/// keep-or-drop outcome, since a target may group by it or aggregate it. A
+/// `DynamicType` column therefore has no value.
+auto translate_field(std::span<std::string const> path,
+                     ColumnModel const& columns) -> Option<FieldValue>;
 
 /// The outcome of splitting a filter chain into pushed and local parts.
 struct FilterSplit {

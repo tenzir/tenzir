@@ -1,0 +1,4 @@
+// `top` counts the values in the query, and sorts the counts locally.
+from_duckdb env("DUCKDB_SEED"), table="events"
+top meta.host
+sort -count, meta.host

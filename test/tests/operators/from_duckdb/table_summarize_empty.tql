@@ -1,0 +1,5 @@
+// A summary without group keys yields one event for an empty table, also
+// when DuckDB computes it.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where id < 0
+summarize n=count(), first=min(id), latest=max(ts)

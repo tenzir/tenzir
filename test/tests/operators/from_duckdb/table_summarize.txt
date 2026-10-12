@@ -1,0 +1,20 @@
+{
+  ok: false,
+  n: 1,
+  names: 0,
+  first: 2,
+  latest: 2024-01-02T11:30:00Z,
+  meta: {
+    port: 443,
+  },
+}
+{
+  ok: null,
+  n: 1,
+  names: 1,
+  first: 3,
+  latest: null,
+  meta: {
+    port: null,
+  },
+}

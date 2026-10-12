@@ -1,0 +1,9 @@
+// DuckDB filters, groups, and aggregates the rows: the `where` and the
+// `summarize` go into the query. The result equals that of
+// `table_summarize_local.tql`, which aggregates the same rows locally. Only
+// the local aggregation sees the row whose struct `meta` is null and warns
+// about it, which shows that DuckDB computed this summary.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where id > 1 or name == null
+summarize ok, n=count(), names=count(name), first=min(id), latest=max(ts), meta.port=max(meta.port)
+sort ok

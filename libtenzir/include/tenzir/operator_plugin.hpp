@@ -242,6 +242,11 @@ struct Description {
   Option<Setter<Option<ir::OptimizeProjection>>> set_projection;
   Option<Setter<location>> set_operator_location;
   Option<Setter<EventOrder>> set_order;
+  Option<Setter<Option<ir::OptimizeAggregation>>> set_aggregation;
+  /// Decides whether the operator takes over an aggregation, given its
+  /// materialized arguments. Set by `Describer::aggregation`.
+  Option<std::function<auto(const Any&, const ir::OptimizeAggregation&)->bool>>
+    accepts_aggregation;
   // FIXME: Document.
   Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -664,8 +669,16 @@ public:
   ///
   /// `consumed` holds the parts of the optimization request that the operator
   /// took over from downstream, which the description maps onto `Args`.
-  auto materialize(const Description& desc, ir::OptimizeRequest consumed
-                                            = {}) const -> Any;
+  /// `aggregation` is the aggregation that the operator took over, if any.
+  auto materialize(const Description& desc, ir::OptimizeRequest consumed = {},
+                   Option<ir::OptimizeAggregation> aggregation = None{}) const
+    -> Any;
+
+  /// Returns whether `materialize` can run, which requires every argument
+  /// that the operator does not receive as an expression to be resolved. This
+  /// is not yet the case when an enclosing operator optimizes a subpipeline
+  /// before instantiating it.
+  auto is_resolved(const Description& desc) const -> bool;
 
   /// Creates a context for the description's callbacks.
   auto describe_ctx(const Description& desc, diagnostic_handler& dh) const
@@ -1341,6 +1354,35 @@ public:
             (args.as<Args>().*ptr).projection = std::move(value);
           };
     }
+    if constexpr (Bundle::template contains<opt::Aggregation>) {
+      TENZIR_ASSERT(not desc_.set_aggregation);
+      desc_.set_aggregation
+        = [ptr](Any& args, Option<ir::OptimizeAggregation> value) {
+            (args.as<Args>().*ptr).aggregation = std::move(value);
+          };
+    }
+  }
+
+  /// Lets the operator take over an aggregation that directly follows it,
+  /// such as a `summarize`, if `accepts` returns `true` for the operator's
+  /// arguments and the aggregation. Requires binding `opt::Aggregation`.
+  ///
+  /// The optimizer asks after absorbing filters, limits, and projections into
+  /// the operator, and only if no limit applies to its events. Decide on what
+  /// the arguments show, such as a query mode that cannot aggregate; columns
+  /// and functions that the source turns out not to support at runtime are
+  /// the job of `opt::Aggregation::aggregation->fallback`. Once the operator
+  /// emits an aggregation, it is a barrier for later optimization passes.
+  template <class F>
+    requires concepts::invokable_r<bool, F&, const Args&,
+                                   const ir::OptimizeAggregation&>
+  auto aggregation(F accepts) -> void {
+    TENZIR_ASSERT(not desc_.accepts_aggregation);
+    desc_.accepts_aggregation
+      = [accepts = std::move(accepts)](
+          const Any& args, const ir::OptimizeAggregation& aggregation) mutable {
+          return accepts(args.as<Args>(), aggregation);
+        };
   }
 
   /// Overrides the default optimization behavior.

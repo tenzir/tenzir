@@ -1,0 +1,5 @@
+{
+  n: 0,
+  first: null,
+  latest: null,
+}

@@ -1,0 +1,128 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:60..71 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:72..87 from 0
+         ],
+         named_args: [
+           {
+             index: 3,
+             value: located "SELECT * FROM events" @ [1]:93..115 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:126..132 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:126..132 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     summarize {
+       self: [1]:116..125 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `n` @ [1]:134..135 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `n` @ [1]:134..135 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:136..141 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:136..143 from 0
+             }
+           }
+         ],
+         groups: [
+           {
+             expr: {
+               expr: root_field {
+                 id: `src_ip` @ [1]:126..132 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `src_ip` @ [1]:126..132 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         indices: [
+           -1,
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:143..143 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

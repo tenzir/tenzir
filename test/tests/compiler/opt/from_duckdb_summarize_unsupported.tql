@@ -1,0 +1,3 @@
+// `from_duckdb` does not compute `sum`, so the `summarize` stays.
+from_duckdb "events.duckdb", table="events"
+summarize src_ip, bytes=sum(bytes)

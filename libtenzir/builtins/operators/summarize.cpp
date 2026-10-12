@@ -2023,6 +2023,85 @@ auto input_projection(Config const& config) -> Option<ir::OptimizeProjection> {
   return projection;
 }
 
+/// Returns the segments of `path` if it names a field directly, without
+/// `this` or an optional access.
+auto plain_segments(ast::field_path const& path)
+  -> Option<std::vector<std::string>> {
+  if (path.has_this() or path.path().empty()) {
+    return None{};
+  }
+  auto result = std::vector<std::string>{};
+  for (auto const& segment : path.path()) {
+    if (segment.has_question_mark) {
+      return None{};
+    }
+    result.push_back(segment.id.name);
+  }
+  return result;
+}
+
+/// Describes the summary of `config` for a source that may compute it, or
+/// returns `None` if it is no plain aggregation of input fields.
+auto describe_aggregation(Config const& config)
+  -> Option<std::vector<ir::OptimizeAggregation::Column>> {
+  // As for the input projection, only a single summary after the input ends
+  // is a plain aggregation.
+  if (config.emit_expr or config.mode_expr or config.output_expr
+      or config.legacy_frequency_expr) {
+    return None{};
+  }
+  auto columns = std::vector<ir::OptimizeAggregation::Column>{};
+  for (auto index : config.indices) {
+    if (index < 0) {
+      auto const& group = config.groups[static_cast<size_t>(-index - 1)];
+      TRY(auto input, plain_segments(group.expr));
+      TRY(auto output, group.dest ? plain_segments(*group.dest)
+                                  : Option<std::vector<std::string>>{input});
+      columns.push_back({
+        .output = std::move(output),
+        .function = None{},
+        .input = std::move(input),
+      });
+      continue;
+    }
+    auto const& aggregate = config.aggregates[static_cast<size_t>(index)];
+    auto const& call = aggregate.call;
+    // A source spells functions by name, so the call must resolve to a
+    // function of the standard library.
+    if (call.method or not call.fn.ref.resolved()
+        or call.fn.ref.pkg() != entity_pkg_std
+        or call.fn.ref.segments().size() != 1 or call.args.size() > 1) {
+      return None{};
+    }
+    auto input = Option<std::vector<std::string>>{};
+    if (not call.args.empty()) {
+      TRY(auto path, ast::field_path::try_from(call.args.front()));
+      TRY(input, plain_segments(path));
+    }
+    TRY(auto output, aggregate.dest
+                       ? plain_segments(*aggregate.dest)
+                       : Option<std::vector<std::string>>{
+                           std::vector{aggregate_name(aggregate)}});
+    columns.push_back({
+      .output = std::move(output),
+      .function = call.fn.ref.segments().front(),
+      .input = std::move(input),
+    });
+  }
+  // A field that contains another one would merge or overwrite values in the
+  // summary, which a source need not reproduce.
+  for (auto const& x : columns) {
+    for (auto const& y : columns) {
+      if (&x != &y and x.output.size() <= y.output.size()
+          and std::ranges::equal(x.output,
+                                 std::span{y.output}.first(x.output.size()))) {
+        return None{};
+      }
+    }
+  }
+  return columns;
+}
+
 class SummarizeIr final : public ir::Operator {
 public:
   SummarizeIr() = default;
@@ -2135,6 +2214,17 @@ public:
     auto result = std::move(*this).ir::Operator::optimize(std::move(req), ctx);
     result.projection = std::move(projection);
     return result;
+  }
+
+  auto aggregation() const -> Option<ir::OptimizeAggregation> override {
+    TRY(auto columns, describe_aggregation(config_));
+    auto fallback = std::vector<Box<ir::Operator>>{};
+    fallback.emplace_back(SummarizeIr{*this});
+    return ir::OptimizeAggregation{
+      .columns = std::move(columns),
+      .schema_name = "tenzir.summarize",
+      .fallback = ir::pipeline{{}, std::move(fallback)},
+    };
   }
 
   auto parallelizable() const -> bool override {

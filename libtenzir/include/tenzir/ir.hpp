@@ -94,6 +94,8 @@ struct OptimizeCtx {
 
 class PlanBuilder;
 
+struct OptimizeAggregation;
+
 /// Port for pushing events.
 /// Contains the node (index into Plan::operators), logical output port index on
 /// that node, and the element type.
@@ -158,6 +160,23 @@ public:
   /// input, and forwards neither limit nor projection.
   virtual auto
   optimize(OptimizeRequest req, const OptimizeCtx& octx) && -> OptimizeResult;
+
+  /// Return the aggregation that this operator computes from its input, if the
+  /// operator before it may compute that aggregation instead. The default
+  /// returns `None`.
+  virtual auto aggregation() const -> Option<OptimizeAggregation>;
+
+  /// Take over `aggregation`, which the operator directly after this one
+  /// computes from this operator's output. Return whether this operator now
+  /// emits the result of the aggregation, in which case the optimizer removes
+  /// the operator after it. The default declines.
+  ///
+  /// This runs after the optimization walk, so an implementation knows the
+  /// filters and limits it absorbed. It must decline unless it can produce
+  /// the result exactly, either by computing it or by running
+  /// `aggregation.fallback` on what it would otherwise emit.
+  virtual auto absorb_aggregation(OptimizeAggregation const& aggregation)
+    -> bool;
 
   /// Return the executable matching this operator.
   ///
@@ -274,6 +293,54 @@ struct pipeline {
   /// @see Operator
   auto
   optimize(OptimizeRequest req, const OptimizeCtx& octx) && -> OptimizeResult;
+};
+
+/// An aggregation that a source may compute instead of the operator that
+/// follows it.
+///
+/// Only an aggregation that reads its input fields directly qualifies. Each
+/// output column is either a group key, which copies a field, or a call of an
+/// aggregation function with at most one field as argument. The output holds
+/// one event per group. Without group keys, it holds exactly one event, also
+/// for empty input.
+///
+/// The description names functions and fields, but leaves their spelling to
+/// the source. A source that cannot compute every column with the semantics of
+/// TQL must decline, or run `fallback` itself.
+struct OptimizeAggregation {
+  struct Column {
+    /// The field of the output event, as path segments.
+    std::vector<std::string> output;
+    /// The name of the aggregation function, or `None` for a group key.
+    Option<std::string> function;
+    /// The field that the column reads, as path segments: the group key, or
+    /// the argument of the function. `None` only for a function without
+    /// arguments, such as `count()`.
+    Option<std::vector<std::string>> input;
+
+    friend auto inspect(auto& f, Column& x) -> bool {
+      return f.object(x).fields(f.field("output", x.output),
+                                f.field("function", x.function),
+                                f.field("input", x.input));
+    }
+  };
+
+  /// The output columns, in the order of the output fields.
+  std::vector<Column> columns;
+
+  /// The schema name of the output events.
+  std::string schema_name;
+
+  /// The operators that compute the aggregation from the source's events.
+  /// A source that accepts the aggregation but finds at runtime that it cannot
+  /// compute it runs these on the events that it would otherwise emit.
+  pipeline fallback;
+
+  friend auto inspect(auto& f, OptimizeAggregation& x) -> bool {
+    return f.object(x).fields(f.field("columns", x.columns),
+                              f.field("schema_name", x.schema_name),
+                              f.field("fallback", x.fallback));
+  }
 };
 
 struct CompileResult {

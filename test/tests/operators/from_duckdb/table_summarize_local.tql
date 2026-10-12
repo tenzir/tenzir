@@ -1,0 +1,9 @@
+// A predicate that DuckDB cannot evaluate keeps all rows but stays local, so
+// the operator aggregates locally, with the result of `table_summarize.tql`.
+// Only the local aggregation warns about the field of the null struct `meta`,
+// which DuckDB reads as `NULL`, as filter pushdown does.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where id > 1 or name == null
+where id.string() != ""
+summarize ok, n=count(), names=count(name), first=min(id), latest=max(ts), meta.port=max(meta.port)
+sort ok

@@ -1,0 +1,114 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:70..81 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:82..97 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:105..113 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     summarize {
+       self: [1]:114..123 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `n` @ [1]:132..133 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `n` @ [1]:132..133 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:134..139 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:134..141 from 0
+             }
+           }
+         ],
+         groups: [
+           {
+             expr: {
+               expr: root_field {
+                 id: `src_ip` @ [1]:124..130 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `src_ip` @ [1]:124..130 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         indices: [
+           -1,
+           0
+         ],
+         emit_expr: constant int64 1 @ [1]:158..159 from 0,
+         mode_expr: constant string "cumulative" @ [1]:167..179 from 0,
+         emission: "event",
+         mode: "cumulative",
+         output: "trigger",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:180..180 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

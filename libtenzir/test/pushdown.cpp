@@ -255,6 +255,32 @@ TEST("dynamic columns only contribute monotone prefilters") {
   CHECK(is<ip>(as<ast::constant>(as<ast::binary_expr>(expr).right).value));
 }
 
+TEST("fields translate to the values that TQL sees") {
+  auto columns = make_columns();
+  auto value = [&](std::vector<std::string> path) -> Option<std::string> {
+    auto field = translate_field(path, columns);
+    if (not field) {
+      return None{};
+    }
+    return TestRenderer{}.render(field->expr);
+  };
+  CHECK_EQUAL(value({"x"}), std::string{"\"x\""});
+  CHECK_EQUAL(value({"r", "i"}), std::string{"\"r\".\"i\""});
+  REQUIRE(translate_field(std::vector<std::string>{"s"}, columns));
+  CHECK(
+    translate_field(std::vector<std::string>{"s"}, columns)->column.nullable);
+  // A temporal value that TQL decodes to `null` is `NULL` in the target.
+  auto time = translate_field(std::vector<std::string>{"t"}, columns);
+  REQUIRE(time);
+  CHECK(is<Conditional>(time->expr));
+  CHECK(not value({"r"}));
+  CHECK(not value({"missing"}));
+  // A dynamic field has no exact value.
+  auto dynamic = ColumnModel{};
+  dynamic.add({"d"}, {DynamicType{}, true});
+  CHECK(not translate_field(std::vector<std::string>{"d"}, dynamic));
+}
+
 TEST("sql renderer spells predicates") {
   CHECK_EQUAL(translate("x > 1"), std::string{"\"x\" > 1"});
   CHECK_EQUAL(translate("r.i <= 1.5"), std::string{"\"r\".\"i\" <= 1.5"});

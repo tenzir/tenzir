@@ -1,0 +1,5 @@
+// `top` lowers to `summarize` and `sort`, so `from_duckdb` counts the values,
+// and the `sort` and `head` stay local.
+from_duckdb "events.duckdb", table="events"
+top src_ip
+head 5

@@ -1,0 +1,3 @@
+// Only a single summary after the input ends is a plain aggregation.
+from_duckdb "events.duckdb", table="events"
+summarize src_ip, n=count(), options={emit: 1, mode: "cumulative"}

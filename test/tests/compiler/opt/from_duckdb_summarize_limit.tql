@@ -1,0 +1,5 @@
+// A limit applies to the events before the summary, so `from_duckdb` keeps
+// emitting events and the `summarize` stays.
+from_duckdb "events.duckdb", table="events"
+head 10
+summarize n=count()

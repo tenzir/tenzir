@@ -1746,6 +1746,21 @@ auto translate_prefilter(ast::expression const& expr,
   }
 }
 
+auto translate_field(std::span<std::string const> path,
+                     ColumnModel const& columns) -> Option<FieldValue> {
+  auto segments = std::vector<std::string>{path.begin(), path.end()};
+  TRY(auto column, columns.find(segments));
+  if (is<DynamicType>(column.type)) {
+    return None{};
+  }
+  auto value = tql_view(Scalar{
+    .expr = Column{std::move(segments)},
+    .type = column.type,
+    .nullable = column.nullable,
+  });
+  return FieldValue{.expr = std::move(value), .column = column};
+}
+
 auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
                   Renderer const& renderer) -> FilterSplit {
   auto conjuncts = ir::OptimizeFilter{};

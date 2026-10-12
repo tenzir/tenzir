@@ -1,0 +1,8 @@
+// The path of the subpipeline is unresolved until `every` instantiates it, so
+// the optimizer keeps the `summarize` for now. It asks `from_duckdb` again when
+// the subpipeline runs.
+every 1h {
+  let $path = "events.duckdb"
+  from_duckdb $path, table="events"
+  summarize n=count()
+}

@@ -1,0 +1,6 @@
+// `from_duckdb` takes over the `summarize` that directly follows it, after it
+// absorbed the `where` before it. The `where` after the summary stays.
+from_duckdb "events.duckdb", table="events"
+where severity >= 3
+summarize src_ip, events=count(), first.seen=min(ts)
+where events >= 10

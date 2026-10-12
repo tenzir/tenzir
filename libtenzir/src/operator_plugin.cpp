@@ -522,6 +522,11 @@ auto apply_arg(const Arg& arg, const AnySetter& setter, Any& args) -> void {
     });
 }
 
+/// Whether `apply_arg` can apply `arg` with `setter`.
+auto is_applicable(const Arg& arg, const AnySetter& setter) -> bool {
+  return not is<Incomplete>(arg) or is<Setter<ast::expression>>(setter);
+}
+
 /// Picks the `AnySpawn` alternative in `spawns` matching `input`, emitting a
 /// diagnostic and failing if none is usable.
 auto select_spawn(const std::vector<AnySpawn>& spawns, element_type_tag input,
@@ -574,8 +579,9 @@ auto select_spawn(const std::vector<AnySpawn>& spawns, element_type_tag input,
 
 } // namespace
 
-auto ArgumentStore::materialize(const Description& desc,
-                                ir::OptimizeRequest consumed) const -> Any {
+auto ArgumentStore::materialize(
+  const Description& desc, ir::OptimizeRequest consumed,
+  Option<ir::OptimizeAggregation> aggregation) const -> Any {
   auto args = desc.make_args();
   for (auto [idx, arg] : detail::enumerate(args_)) {
     // For variadic arguments, all args >= variadic_index map to variadic_index.
@@ -622,7 +628,27 @@ auto ArgumentStore::materialize(const Description& desc,
   if (desc.set_order) {
     (*desc.set_order)(args, consumed.order);
   }
+  if (desc.set_aggregation) {
+    (*desc.set_aggregation)(args, std::move(aggregation));
+  } else {
+    TENZIR_ASSERT(not aggregation);
+  }
   return args;
+}
+
+auto ArgumentStore::is_resolved(const Description& desc) const -> bool {
+  for (auto [idx, arg] : detail::enumerate(args_)) {
+    auto pos_idx = idx;
+    if (desc.variadic_index and idx >= *desc.variadic_index) {
+      pos_idx = *desc.variadic_index;
+    }
+    if (not is_applicable(arg, desc.positional[pos_idx].setter)) {
+      return false;
+    }
+  }
+  return std::ranges::all_of(named_args_, [&](const auto& named_arg) {
+    return is_applicable(named_arg.value, desc.named[named_arg.index].setter);
+  });
 }
 
 auto ArgumentStore::describe_ctx(const Description& desc,
@@ -700,12 +726,14 @@ public:
   }
 
   auto materialize_args() const -> Any {
-    return store_.materialize(*desc_, ir::OptimizeRequest{
-                                        .filter = filter_,
-                                        .order = order_,
-                                        .limit = limit_,
-                                        .projection = projection_,
-                                      });
+    return store_.materialize(*desc_,
+                              ir::OptimizeRequest{
+                                .filter = filter_,
+                                .order = order_,
+                                .limit = limit_,
+                                .projection = projection_,
+                              },
+                              aggregation_);
   }
 
   auto describe_ctx(diagnostic_handler& dh) const -> DescribeCtx {
@@ -760,6 +788,11 @@ public:
   auto optimize(ir::OptimizeRequest req,
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     TENZIR_ASSERT(desc_->optimizer);
+    if (aggregation_) {
+      // The operator emits an aggregation, to which the filters, limits, and
+      // projections that it absorbs would apply in the wrong order.
+      return std::move(*this).ir::Operator::optimize(std::move(req), octx);
+    }
     auto filter = std::move(req.filter);
     auto order = req.order;
     auto& pipe = store_.pipeline();
@@ -886,6 +919,23 @@ public:
     };
   }
 
+  auto absorb_aggregation(const ir::OptimizeAggregation& aggregation)
+    -> bool override {
+    // A limit counts the events before the aggregation, which the operator
+    // would no longer emit. Unresolved arguments, such as a `let` of an
+    // enclosing subpipeline, do not tell yet whether the operator accepts;
+    // the optimizer asks again once the subpipeline is instantiated.
+    if (not desc_->set_aggregation or not desc_->accepts_aggregation
+        or aggregation_ or limit_ or not store_.is_resolved(*desc_)) {
+      return false;
+    }
+    if (not(*desc_->accepts_aggregation)(materialize_args(), aggregation)) {
+      return false;
+    }
+    aggregation_ = aggregation;
+    return true;
+  }
+
   auto main_location() const -> location override {
     return store_.main_location();
   }
@@ -895,7 +945,8 @@ private:
     return f.object(x).fields(
       f.field("desc", x.desc_), f.field("store", x.store_),
       f.field("filter", x.filter_), f.field("order", x.order_),
-      f.field("limit", x.limit_), f.field("projection", x.projection_));
+      f.field("limit", x.limit_), f.field("projection", x.projection_),
+      f.field("aggregation", x.aggregation_));
   }
 
   /// The parsed arguments of the invocation.
@@ -915,6 +966,10 @@ private:
   /// The projection passed to `optimize` (only if the operator wants to consume
   /// it). Repeated passes intersect the hints; `None` is unrestricted.
   Option<ir::OptimizeProjection> projection_;
+
+  /// The aggregation that the operator emits instead of its events, which it
+  /// took over from the operator after it.
+  Option<ir::OptimizeAggregation> aggregation_;
 
   /// The object describing the available parameters.
   SharedDescription desc_;

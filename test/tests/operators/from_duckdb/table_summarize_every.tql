@@ -1,0 +1,8 @@
+// DuckDB computes the summary of a subpipeline once `every` instantiates it,
+// with a path that the subpipeline binds itself.
+every 1h {
+  let $path = env("DUCKDB_SEED")
+  from_duckdb $path, table="events"
+  summarize n=count(), first=min(id)
+}
+head 1

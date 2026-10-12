@@ -1,0 +1,138 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "every",
+       store: {
+         op: {
+           path: [
+             `every` @ [1]:185..190 from 0
+           ],
+           ref: std::every/op
+         },
+         args: [
+           located "1h" @ [1]:191..193 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               {
+                 ident: `$path` @ [1]:202..207 from 0,
+                 expr: constant string "events.duckdb" @ [1]:210..225 from 0,
+                 id: 1
+               }
+             ],
+             operators: [
+               GenericIr {
+                 desc: "from_duckdb",
+                 store: {
+                   op: {
+                     path: [
+                       `from_duckdb` @ [1]:228..239 from 0
+                     ],
+                     ref: std::from_duckdb/op
+                   },
+                   args: [
+                     Incomplete dollar_var `$path` -> 1 @ [1]:240..245 from 0
+                   ],
+                   named_args: [
+                     {
+                       index: 2,
+                       value: located "events" @ [1]:253..261 from 0
+                     }
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+-                order: "ordered"
++                order: "ordered",
++                projection: [
++                  
++                ]
+               },
+               summarize {
+                 self: [1]:264..273 from 0,
+                 cfg: {
+                   aggregates: [
+                     {
+                       dest: {
+                         expr: root_field {
+                           id: `n` @ [1]:274..275 from 0,
+                           has_question_mark: false
+                         },
+                         has_this: false,
+                         path: [
+                           {
+                             id: `n` @ [1]:274..275 from 0,
+                             has_question_mark: false
+                           }
+                         ]
+                       },
+                       call: {
+                         fn: {
+                           path: [
+                             `count` @ [1]:276..281 from 0
+                           ],
+                           ref: std::count/fn
+                         },
+                         args: [
+                           
+                         ],
+                         method: false,
+                         location: [1]:276..283 from 0
+                       }
+                     }
+                   ],
+                   groups: [
+                     
+                   ],
+                   indices: [
+                     0
+                   ],
+                   emission: "final",
+                   mode: "reset",
+                   output: "summary",
+                   emit_every: 1
+                 }
+               }
+             ]
+           } @ [1]:194..285 from 0,
+           let_ids: {
+             
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:285..285 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

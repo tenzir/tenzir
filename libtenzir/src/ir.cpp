@@ -12,6 +12,7 @@
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/ir_if.hpp"
 #include "tenzir/ir_match.hpp"
 #include "tenzir/ir_set.hpp"
@@ -495,6 +496,16 @@ auto ir::pipeline::optimize(OptimizeRequest req,
       std::move_iterator{opt.replacement.operators.begin()},
       std::move_iterator{opt.replacement.operators.end()});
   }
+  // Let an operator compute the aggregation that directly follows it. This
+  // runs after the walk, when every operator has absorbed what it can, so that
+  // predicates kept between the two operators prevent the fusion.
+  auto& ops = replacement.operators;
+  for (auto i = size_t{0}; i + 1 < ops.size(); ++i) {
+    auto aggregation = ops[i + 1]->aggregation();
+    if (aggregation and ops[i]->absorb_aggregation(*aggregation)) {
+      ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(i + 1));
+    }
+  }
   return {
     .filter = simplify_filter(std::move(req.filter)),
     .order = req.order,
@@ -517,6 +528,16 @@ auto ir::Operator::optimize(OptimizeRequest req,
     EventOrder::ordered,
     pipeline{{}, std::move(replacement)},
   };
+}
+
+auto ir::Operator::aggregation() const -> Option<OptimizeAggregation> {
+  return None{};
+}
+
+auto ir::Operator::absorb_aggregation(OptimizeAggregation const& aggregation)
+  -> bool {
+  TENZIR_UNUSED(aggregation);
+  return false;
 }
 
 auto ir::Operator::copy() const -> Box<Operator> {

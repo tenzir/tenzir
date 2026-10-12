@@ -1,0 +1,123 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:122..133 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:134..149 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:157..165 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      limit: 10,
++      projection: [
++        
++      ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:166..170 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 10 @ [1]:171..173 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     summarize {
+       self: [1]:174..183 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `n` @ [1]:184..185 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `n` @ [1]:184..185 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:186..191 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:186..193 from 0
+             }
+           }
+         ],
+         groups: [
+           
+         ],
+         indices: [
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:193..193 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

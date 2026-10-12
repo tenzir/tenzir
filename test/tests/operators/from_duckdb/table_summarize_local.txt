@@ -1,0 +1,40 @@
+warning: cannot access field of non-record type
+ --> tests/operators/from_duckdb/table_summarize_local.tql:8:90
+  |
+8 | summarize ok, n=count(), names=count(name), first=min(id), latest=max(ts), meta.port=max(meta.port)
+  |                                                                                          ~~~~ not a record
+  ⋮
+8 | summarize ok, n=count(), names=count(name), first=min(id), latest=max(ts), meta.port=max(meta.port)
+  |                                                                                               ----
+  |
+
+warning: record does not have field
+ --> tests/operators/from_duckdb/table_summarize_local.tql:8:90
+  |
+8 | summarize ok, n=count(), names=count(name), first=min(id), latest=max(ts), meta.port=max(meta.port)
+  |                                                                                          ~~~~
+  ⋮
+8 | summarize ok, n=count(), names=count(name), first=min(id), latest=max(ts), meta.port=max(meta.port)
+  |                                                                                               ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+{
+  ok: false,
+  n: 1,
+  names: 0,
+  first: 2,
+  latest: 2024-01-02T11:30:00Z,
+  meta: {
+    port: 443,
+  },
+}
+{
+  ok: null,
+  n: 1,
+  names: 1,
+  first: 3,
+  latest: null,
+  meta: {
+    port: null,
+  },
+}

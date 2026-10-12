@@ -37,12 +37,24 @@ struct Projection {
   Option<ir::OptimizeProjection> projection;
 };
 
+struct Aggregation {
+  /// The aggregation that the operator emits instead of its events, or `None`
+  /// if it emits its events. It applies after the accepted filter chain.
+  ///
+  /// The operator must emit exactly the result of the aggregation. If it
+  /// cannot compute the result itself, for example because a filter stays
+  /// local, it runs `aggregation->fallback` on the events it would otherwise
+  /// emit. See `Describer::aggregation` for when the optimizer sets this.
+  Option<ir::OptimizeAggregation> aggregation;
+};
+
 } // namespace opt
 
 template <class T>
 concept OptimizationInput
   = std::same_as<T, opt::Order> or std::same_as<T, opt::Filter>
-    or std::same_as<T, opt::Limit> or std::same_as<T, opt::Projection>;
+    or std::same_as<T, opt::Limit> or std::same_as<T, opt::Projection>
+    or std::same_as<T, opt::Aggregation>;
 
 /// Selected runtime inputs, not user arguments or optimizer rewrite policy.
 /// Inheritance provides ordinary named access only to selected fields.

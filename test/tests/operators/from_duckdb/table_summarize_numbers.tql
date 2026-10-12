@@ -1,0 +1,4 @@
+// DuckDB returns one row instead of the 4,000 that match.
+from_duckdb env("DUCKDB_SEED"), table="staging.numbers"
+where n >= 1000
+summarize n=count(), lo=min(doubled), hi=max(doubled)
