@@ -176,7 +176,9 @@ target_include_directories(
   wangle BEFORE PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wangle>)
 # wangle's FizzAcceptorHandshakeHelper uses folly::AsyncFdSocket but the
 # upstream CMakeLists.txt is missing the dependency declaration.
-if (TARGET wangle_acceptor AND TARGET folly_io_async_fdsock_async_fd_socket)
+if (NOT BUILD_SHARED_LIBS
+    AND TARGET wangle_acceptor
+    AND TARGET folly_io_async_fdsock_async_fd_socket)
   target_link_libraries(wangle_acceptor
                         PUBLIC folly_io_async_fdsock_async_fd_socket)
 endif ()
@@ -197,6 +199,11 @@ set(wangle_DIR
 # ---- 4. MVFST ----
 # mvfst's CMakeLists.txt is at repo root
 add_subdirectory(mvfst SYSTEM)
+# The shared aggregate must expose the generated logging configuration used
+# by its public headers, just as the static component targets do.
+if (TARGET mvfst AND TARGET mvfst_logging_config)
+  target_link_libraries(mvfst INTERFACE mvfst_logging_config)
+endif ()
 # mvfst's install(EXPORT) adds the mvfst:: namespace, but add_subdirectory
 # only creates bare targets. Create aliases for all targets that proxygen
 # and other downstream libs reference with the mvfst:: prefix.
@@ -221,6 +228,14 @@ set(mvfst_DIR
 
 # ---- 5. PROXYGEN ----
 add_subdirectory(proxygen SYSTEM)
+# This object target reaches mvfst's public headers through HTTPEvents.h but
+# omits the external dependency in its generated component list.
+if (TARGET proxygen_http_coro_filters_request_context_filter_factory_obj
+    AND TARGET mvfst_logging_config)
+  target_link_libraries(
+    proxygen_http_coro_filters_request_context_filter_factory_obj
+    PRIVATE mvfst_logging_config)
+endif ()
 # Newer glog (0.7+) no longer transitively includes <gflags/gflags.h> in
 # <glog/logging.h>. Proxygen source files use raw DEFINE_int32/DEFINE_bool
 # macros without explicitly including gflags. Force-include the header.
@@ -265,9 +280,13 @@ tenzir_suppress_bundled_facebook_warnings("${CMAKE_CURRENT_SOURCE_DIR}")
 TenzirSystemizeTarget(proxygen_coro_client)
 # proxygen_utils_trace calls getTraceEventTypeString/getTraceFieldTypeString
 # from proxygen_utils_trace_event_types but does not declare the dependency.
-# Patch it here so the linker sees the archives in the correct order.
-target_link_libraries(proxygen_utils_trace
-                      PUBLIC proxygen_utils_trace_event_types)
+# Patch it here so the linker sees the archives in the correct order. Shared
+# builds aggregate these components into one library; their granular targets
+# are only interfaces, so archive ordering does not apply.
+if (NOT BUILD_SHARED_LIBS)
+  target_link_libraries(proxygen_utils_trace
+                        PUBLIC proxygen_utils_trace_event_types)
+endif ()
 dependency_summary("proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/proxygen"
                    "Dependencies")
 
