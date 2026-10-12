@@ -1271,7 +1271,7 @@ type suricata.rdp = suricata.component.common + record {
       build: string,
       client_name: string,
       function_keys: uint64,
-      product_id: string,
+      product_id: uint64,
       capabilities: list<string>,
       connection_hint: string,
       ime: string,
