@@ -306,7 +306,9 @@ type suricata.dns = suricata.component.common + record {
     version: uint64,
     type: enum {
       answer,
-      query
+      query,
+      request,
+      response
     },
     id: uint64 #index=hash,
     flags: string,
