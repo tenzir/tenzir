@@ -22,6 +22,7 @@
 #include <tenzir/http.hpp>
 #include <tenzir/http_server.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -352,6 +353,9 @@ public:
       co_return;
     }
     server_ = std::move(server).unwrap();
+    if (auto port = (*server_)->port()) {
+      TENZIR_DEBUG("serve_http listening on port {}", *port);
+    }
     bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
                          MetricsDirection::write, MetricsVisibility::external_,
@@ -695,6 +699,9 @@ public:
       co_return;
     }
     server_ = std::move(server).unwrap();
+    if (auto port = (*server_)->port()) {
+      TENZIR_DEBUG("serve_http listening on port {}", *port);
+    }
     bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
                          MetricsDirection::write, MetricsVisibility::external_,

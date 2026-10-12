@@ -6,17 +6,23 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 import shlex
-import socket
 import subprocess
 import threading
 import time
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+def _bound_port(
+    process: subprocess.Popen[str], listening: threading.Event, ports: list[int]
+) -> int:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if listening.wait(0.1):
+            return ports[0]
+        if process.poll() is not None:
+            raise AssertionError("serve_http exited before reporting its port")
+    raise AssertionError("serve_http did not report its port within 30 seconds")
 
 
 def _terminate(process: subprocess.Popen[str]) -> None:
@@ -37,21 +43,20 @@ def _write(process: subprocess.Popen[str], data: str) -> None:
 
 
 def _run_case(lines: list[str]) -> None:
-    port = _free_port()
     prefixes = [
         "".join(f"{line}\n" for line in lines[:i]).encode()
         for i in range(1, len(lines) + 1)
     ]
-    pipeline = f"""
-from_stdin {{ read_ndjson }}
+    pipeline = """
+from_stdin { read_ndjson }
 batch 1
-serve_http "127.0.0.1:{port}" {{ write_lines }}
+serve_http "127.0.0.1:0" { write_lines }
 """.strip()
     process = subprocess.Popen(
         [
             *shlex.split(os.environ["TENZIR_BINARY"]),
             "--bare-mode",
-            "--console-verbosity=warning",
+            "--console-verbosity=debug",
             "--nova=true",
             "--multi",
             pipeline,
@@ -61,6 +66,34 @@ serve_http "127.0.0.1:{port}" {{ write_lines }}
         stderr=subprocess.PIPE,
         text=True,
     )
+    assert process.stderr is not None
+    stderr_pipe = process.stderr
+    process.stderr = None  # The log reader owns the pipe, not communicate().
+    listening = threading.Event()
+    ports: list[int] = []
+    stderr_lines: list[str] = []
+
+    def read_logs() -> None:
+        with stderr_pipe:
+            for line in stderr_pipe:
+                stderr_lines.append(line)
+                if match := re.search(r"serve_http listening on port (\d+)", line):
+                    ports.append(int(match.group(1)))
+                    listening.set()
+
+    log_reader = threading.Thread(target=read_logs, daemon=True)
+    log_reader.start()
+    try:
+        port = _bound_port(process, listening, ports)
+    except Exception as error:
+        _terminate(process)
+        stdout, _ = process.communicate()
+        log_reader.join(timeout=5)
+        error.add_note(
+            f"tenzir exit code: {process.returncode}\nstdout: {stdout}"
+            f"\nstderr: {''.join(stderr_lines)}"
+        )
+        raise
     response_ready = threading.Event()
     payload_received = [threading.Event() for _ in lines]
     response: list[tuple[int, str]] = []
@@ -118,9 +151,10 @@ serve_http "127.0.0.1:{port}" {{ write_lines }}
         assert process.stdin is not None
         process.stdin.close()
         process.stdin = None
-        stdout, stderr = process.communicate(timeout=30)
+        stdout, _ = process.communicate(timeout=30)
+        log_reader.join(timeout=5)
         worker.join(timeout=5)
-        assert process.returncode == 0, (process.returncode, stdout, stderr)
+        assert process.returncode == 0, (process.returncode, stdout, stderr_lines)
         assert not worker.is_alive(), (request_errors, response)
         assert not response_errors, response_errors
         assert len(response) == 1, response
@@ -130,6 +164,15 @@ serve_http "127.0.0.1:{port}" {{ write_lines }}
         assert len(received) > len(lines), response
         assert received[: -len(lines)] == ["ready\n"] * (len(received) - len(lines))
         assert received[-len(lines) :] == [f"{line}\n" for line in lines]
+    except Exception as error:
+        _terminate(process)
+        stdout, _ = process.communicate()
+        log_reader.join(timeout=5)
+        error.add_note(
+            f"tenzir exit code: {process.returncode}\nstdout: {stdout}"
+            f"\nstderr: {''.join(stderr_lines)}"
+        )
+        raise
     finally:
         _terminate(process)
 
