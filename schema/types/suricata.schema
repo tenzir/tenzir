@@ -669,6 +669,7 @@ type suricata.ike = suricata.component.common + record {
     message_id: uint64,
     exchange_type: uint64,
     exchange_type_verbose: string,
+    role: string,
     sa_life_type: string,
     sa_life_type_raw: uint64,
     sa_life_duration: string,
@@ -681,6 +682,7 @@ type suricata.ike = suricata.component.common + record {
     alg_auth_raw: uint64,
     alg_dh: string,
     alg_dh_raw: uint64,
+    alg_prf: string,
     sa_key_length: string,
     sa_key_length_raw: uint64,
     alg_esn: string,
@@ -706,7 +708,6 @@ type suricata.ike = suricata.component.common + record {
       vendor_ids: list<string>
     },
     ikev2: record {
-      role: string,
       errors: uint64,
       notify: list<string>
     }
