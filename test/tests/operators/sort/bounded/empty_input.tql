@@ -1,5 +1,6 @@
 // An empty input stays empty.
-// Without the optimization barrier; both share one baseline.
+// An input without batches is a distinct degenerate path from a filter
+// that drops everything, so both stay; neither needs a barrier twin.
 load_stdin
 read_json _batch_size=3
 sort key?

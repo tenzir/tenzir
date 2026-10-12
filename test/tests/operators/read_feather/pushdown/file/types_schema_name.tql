@@ -1,0 +1,5 @@
+// The schema name travels with the Arrow metadata.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" {
+  read_feather
+}
+schema = @name

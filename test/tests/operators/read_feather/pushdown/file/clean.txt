@@ -1,0 +1,81 @@
+{
+  id: 0,
+  nested: {
+    x: 50,
+    sibling: "keep",
+  },
+  "literal.dot": 0,
+  import_time: 100,
+}
+{
+  id: 1,
+  nested: {
+    x: 51,
+    sibling: "keep",
+  },
+  "literal.dot": 1,
+  import_time: 101,
+}
+{
+  id: 2,
+  nested: {
+    x: 52,
+    sibling: "keep",
+  },
+  "literal.dot": 2,
+  import_time: 102,
+}
+{
+  id: 3,
+  nested: {
+    x: 53,
+    sibling: "keep",
+  },
+  "literal.dot": 3,
+  import_time: 103,
+}
+{
+  id: 4,
+  nested: {
+    x: 54,
+    sibling: "keep",
+  },
+  "literal.dot": 4,
+  import_time: 104,
+}
+{
+  id: 5,
+  nested: {
+    x: 55,
+    sibling: "keep",
+  },
+  "literal.dot": 5,
+  import_time: 105,
+}
+{
+  id: 6,
+  nested: {
+    x: 56,
+    sibling: "keep",
+  },
+  "literal.dot": 6,
+  import_time: 106,
+}
+{
+  id: 7,
+  nested: {
+    x: 57,
+    sibling: "keep",
+  },
+  "literal.dot": 7,
+  import_time: 107,
+}
+{
+  id: 8,
+  nested: {
+    x: 58,
+    sibling: "keep",
+  },
+  "literal.dot": 8,
+  import_time: 108,
+}

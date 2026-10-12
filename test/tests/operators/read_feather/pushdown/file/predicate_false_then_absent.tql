@@ -1,0 +1,6 @@
+// A predicate that drops every row silences the missing-field warning.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_feather }
+// No barrier here: the predicate below is pushed into the reader.
+where false
+where absent
+select id

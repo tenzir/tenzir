@@ -1,0 +1,6 @@
+// An earlier filter must not change how the `null` in `flag` is reported.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_feather }
+head 4
+where id != 1
+where flag
+select id

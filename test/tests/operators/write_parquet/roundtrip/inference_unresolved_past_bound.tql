@@ -1,0 +1,9 @@
+// An unresolved column may cross the discovery bound. A per-row baseline
+// would be 10001 events long, so the summary stands in for it.
+// The batches arrive on stdin: a `from_file` subpipeline would
+// emit each unresolved batch separately.
+load_stdin
+read_feather
+write_parquet
+read_parquet
+summarize rows=count(), non_null=count(x)

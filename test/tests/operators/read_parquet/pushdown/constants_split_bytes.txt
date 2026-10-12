@@ -1,0 +1,63 @@
+{
+  id: 0,
+  group: "a",
+  gaps: "x",
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 1,
+  group: "a",
+  gaps: null,
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 2,
+  group: "a",
+  gaps: "x",
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 3,
+  group: "b",
+  gaps: "x",
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 4,
+  group: "b",
+  gaps: "x",
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 5,
+  group: "b",
+  gaps: "x",
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 6,
+  group: "c",
+  gaps: null,
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 7,
+  group: "c",
+  gaps: null,
+  bytes: b"\u0000",
+  category: "same",
+}
+{
+  id: 8,
+  group: "c",
+  gaps: null,
+  bytes: b"\u0000",
+  category: "same",
+}

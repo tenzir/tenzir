@@ -1,0 +1,6 @@
+// Concatenated IPC streams with different schemas read as one sequence.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/concatenated" {
+  read_feather
+}
+select
+head 5

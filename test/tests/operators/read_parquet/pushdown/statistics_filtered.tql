@@ -1,0 +1,6 @@
+// A predicate on a per-row-group constant still projects nested fields.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/statistics" {
+  read_parquet
+}
+where text == "b"
+select id, record.c

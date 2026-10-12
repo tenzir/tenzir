@@ -1,0 +1,6 @@
+// Counting rows must not decode the damaged column chunk.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+select
+head 4

@@ -1,0 +1,5 @@
+// `flag` holds a `null` in one row, which does not warn either.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_feather }
+head 4
+where flag
+select id

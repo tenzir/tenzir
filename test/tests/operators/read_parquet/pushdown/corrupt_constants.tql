@@ -1,0 +1,4 @@
+// The damaged chunks read only if the statistics supply every value.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-constants" {
+  read_parquet
+}

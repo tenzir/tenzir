@@ -1,5 +1,5 @@
 // A filter that drops everything yields nothing.
-// Without the optimization barrier; both share one baseline.
+// No bound to exploit, so there is no barrier twin.
 load_stdin
 read_json _batch_size=3
 sort key?

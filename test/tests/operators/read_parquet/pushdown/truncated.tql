@@ -1,0 +1,4 @@
+// An empty file must read as no events in every mode.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/truncated" {
+  read_parquet
+}

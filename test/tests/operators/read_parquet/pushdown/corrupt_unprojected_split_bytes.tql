@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// Same as corrupt_unprojected, with the input arriving in 97-byte chunks.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  split_bytes 97
+  read_parquet
+}
+head 1

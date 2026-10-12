@@ -1,0 +1,13 @@
+// The schema name and the `internal` attribute must survive the
+// writer and come back out of the reader.
+from_file f"{env("TENZIR_INPUTS")}/feather/roundtrip/metadata.feather" {
+  read_feather
+}
+where x > 0
+input_name = @name
+input_internal = @internal
+write_feather
+split_bytes 1
+read_feather
+output_name = @name
+output_internal = @internal

@@ -1,0 +1,5 @@
+// Only the missing field itself is worth a diagnostic.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_parquet }
+head 4
+where absent
+select id

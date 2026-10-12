@@ -1,0 +1,16 @@
+{
+  x: null,
+  nested: {
+    lists: [
+      [],
+    ],
+    value: null,
+  },
+}
+{
+  x: null,
+  nested: {
+    lists: [],
+    value: null,
+  },
+}

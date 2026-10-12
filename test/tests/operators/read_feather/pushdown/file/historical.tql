@@ -1,0 +1,8 @@
+// Legacy `VAST:`-prefixed metadata and per-batch import times, including
+// a batch without one.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/historical" {
+  read_feather
+}
+select import_time
+schema = @name
+timestamp = @import_time

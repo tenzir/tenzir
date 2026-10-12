@@ -1,0 +1,5 @@
+// Columns holding one value or only nulls per row group, which readers
+// may keep dictionary-encoded, next to ones whose values vary.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/constants" {
+  read_parquet
+}

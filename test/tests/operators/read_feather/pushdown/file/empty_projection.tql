@@ -1,0 +1,5 @@
+// Projecting a table without rows must not invent events.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/empty" {
+  read_feather
+}
+select

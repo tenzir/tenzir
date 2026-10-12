@@ -1,0 +1,6 @@
+// Counting rows of the type matrix must not convert any column.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" {
+  read_feather
+}
+select
+head 4

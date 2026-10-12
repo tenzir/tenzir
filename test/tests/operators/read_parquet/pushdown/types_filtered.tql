@@ -1,0 +1,6 @@
+// A pushed predicate on the type matrix keeps the remaining columns.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" {
+  read_parquet
+}
+where id >= 2
+head 1

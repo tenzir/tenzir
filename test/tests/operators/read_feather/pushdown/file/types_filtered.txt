@@ -1,0 +1,16 @@
+{
+  id: 2,
+  flag: false,
+  count: 3,
+  value: -2.5,
+  text: "",
+  bytes: b"",
+  timestamp: 1970-01-01T00:00:01.234Z,
+  record: {
+    x: null,
+  },
+  list: [],
+  records: null,
+  "null": null,
+  dictionary: null,
+}

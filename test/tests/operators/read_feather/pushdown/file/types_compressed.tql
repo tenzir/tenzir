@@ -1,0 +1,4 @@
+// Same values as types, but with Zstandard-compressed record batch buffers.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types-compressed" {
+  read_feather
+}

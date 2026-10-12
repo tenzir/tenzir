@@ -1,1 +1,0 @@
-Pushed and standalone Nova predicates preserve rows and diagnostics

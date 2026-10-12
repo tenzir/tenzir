@@ -1,0 +1,6 @@
+// A limit below the total row count stops after enough files.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/files/*" {
+  read_parquet
+}
+head 5
+summarize rows=count()

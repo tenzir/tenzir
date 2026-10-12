@@ -1,0 +1,42 @@
+{
+  nested: {
+    lists: [
+      [],
+    ],
+    records: [
+      {
+        x: null,
+      },
+    ],
+  },
+}
+{
+  nested: {
+    lists: [
+      [
+        1,
+        2,
+      ],
+    ],
+    records: [
+      {
+        x: 3,
+      },
+    ],
+  },
+}
+{
+  nested: {
+    lists: [
+      [],
+      [
+        null,
+      ],
+    ],
+    records: [
+      {
+        x: null,
+      },
+    ],
+  },
+}

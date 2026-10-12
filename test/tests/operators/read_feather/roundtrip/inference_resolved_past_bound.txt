@@ -1,0 +1,10 @@
+error: input schema changed while writing Arrow data
+  --> tests/operators/read_feather/roundtrip/inference_resolved_past_bound.tql:12:1
+   |
+12 | write_feather
+   | ^^^^^^^^^^^^^
+   |
+   = note: incompatible types `null` and `int64`
+   = note: first schema: x: null
+   = note: current schema: x: int64
+   = note: the schema inference window ended at the row or byte limit; null types can no longer be refined

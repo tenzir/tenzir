@@ -9,6 +9,11 @@ random-access scan from a whole-file read by the bytes it fetches. IPC formats a
 streams additionally provide concatenated schemas and trailing corruption. The
 fixture only generates inputs: TQL tests and their baselines check reader
 behavior.
+
+A handful of representative inputs also come as `<name>.gz`, so that TQL tests
+can read the same bytes through `decompress_gzip` instead of a seekable file.
+Together with `split_bytes`, that is how the tests pin decoding to be
+independent of byte chunking, without repeating every case in every mode.
 """
 
 # /// script
@@ -34,6 +39,16 @@ WIDE_ROWS = 40_000
 WIDE_ROW_GROUP_SIZE = 10_000
 WIDE_SEED = 1034
 
+# Inputs that also get a `<name>.gz` copy. These are the ones whose decoding the
+# TQL tests check in all three input modes; every other case runs as a plain
+# file, because byte chunking is a property of the buffering layer rather than
+# of an individual column, predicate, or projection.
+GZIPPED = {
+    "parquet": ["types", "statistics", "constants", "garbage", "truncated"],
+    "ipc_file": ["types", "clean", "envelope"],
+    "ipc_stream": ["types", "clean", "envelope"],
+}
+
 
 def _write_table(
     path: Path, table: pa.Table, format: str, *, compressed: bool = False
@@ -45,6 +60,13 @@ def _write_table(
     options = pa.ipc.IpcWriteOptions(compression="zstd" if compressed else None)
     with writer_factory(path, table.schema, options=options) as writer:
         writer.write_table(table, max_chunksize=3)
+
+
+def _write_gzipped(root: Path, format: str) -> None:
+    for name in GZIPPED[format]:
+        source = root / name
+        # A fixed header timestamp keeps the copy byte-identical across runs.
+        (root / f"{name}.gz").write_bytes(gzip.compress(source.read_bytes(), mtime=0))
 
 
 def _stream_bytes(table: pa.Table) -> bytes:
@@ -243,6 +265,17 @@ def _setup_inputs(root: Path, format: str) -> None:
         (root / "wide.gz").write_bytes(
             gzip.compress((root / "wide").read_bytes(), mtime=0)
         )
+        # Inputs that cannot be Parquet at all. A reader that seeks and one that
+        # buffers the whole stream must fail the same way on both.
+        (root / "truncated").write_bytes(b"")
+        (root / "garbage").write_bytes(b"not a parquet file")
+        # Two copies of the same file, so that a glob instantiates one reader
+        # per file and keeps their file bindings apart.
+        files = root / "files"
+        files.mkdir()
+        for name in ["a", "b"]:
+            (files / name).write_bytes((root / "types").read_bytes())
+        _write_gzipped(root, format)
         return
     _write_table(root / "unsupported-only", table.select(["unused"]), format)
     subnet_storage = pa.struct(
@@ -363,6 +396,7 @@ def _setup_inputs(root: Path, format: str) -> None:
         second = table.slice(3).select(["nested", "unused", "literal.dot", "id"])
         (root / "concatenated").write_bytes(first + _stream_bytes(second))
         (root / "trailing").write_bytes(first + b"not another IPC stream")
+    _write_gzipped(root, format)
 
 
 if __name__ == "__main__":

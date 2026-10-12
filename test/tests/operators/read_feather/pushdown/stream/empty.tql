@@ -1,0 +1,4 @@
+// A table without rows must produce no events and no diagnostics.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/empty" {
+  read_feather
+}

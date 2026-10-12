@@ -1,0 +1,7 @@
+// Same rows in a single row group, so that batching is the reader's.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/single-group" {
+  read_parquet
+}
+enumerate n
+mismatch = n != id or text != "value"
+summarize rows=count(), out_of_order=sum(int(mismatch))

@@ -1,5 +1,6 @@
 // `sort key` over list, record, and null keys stays bounded-safe.
-// Without the optimization barrier; both share one baseline.
+// Structured key ordering is pinned by sort/nova/structured.tql; this
+// only adds the bound.
 load_stdin
 read_json _batch_size=3
 sort key

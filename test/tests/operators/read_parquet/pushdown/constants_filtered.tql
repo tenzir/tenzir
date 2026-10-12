@@ -1,0 +1,6 @@
+// A predicate on a constant column selects whole row groups.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/constants" {
+  read_parquet
+}
+where group == "b"
+select id

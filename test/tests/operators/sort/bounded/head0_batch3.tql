@@ -1,5 +1,5 @@
 // A bounded `sort | head 0` is a prefix of the full sort (batch size 3).
-// Without the optimization barrier; both share one baseline.
+// A zero bound cannot depend on batching, so one case covers it.
 load_stdin
 read_json _batch_size=3
 sort key?

@@ -1,0 +1,14 @@
+{
+  x: 1,
+  input_name: "test.format_roundtrip",
+  input_internal: true,
+  output_name: "test.format_roundtrip",
+  output_internal: true,
+}
+{
+  x: 2,
+  input_name: "test.format_roundtrip",
+  input_internal: true,
+  output_name: "test.format_roundtrip",
+  output_internal: true,
+}

@@ -1,0 +1,6 @@
+// Projecting away nothing still yields one empty event per row.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/zero-columns" {
+  read_feather
+}
+select
+head 4

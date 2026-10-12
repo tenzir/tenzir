@@ -1,0 +1,135 @@
+{
+  id: 0,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 0,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 1,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 1,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 2,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 2,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 3,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 3,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 4,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 4,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 5,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 5,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 6,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 6,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 7,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 7,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}
+{
+  id: 8,
+  number: 42,
+  same: "everywhere",
+  none: null,
+  record: {
+    x: 8,
+    c: 7,
+    n: null,
+  },
+  meta: {
+    product: "p",
+    version: 1,
+  },
+}

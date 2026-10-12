@@ -1,0 +1,7 @@
+// Same limit, with the rows coming from one row group.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/single-group" {
+  read_parquet
+}
+where id >= 8192
+select id
+head 3

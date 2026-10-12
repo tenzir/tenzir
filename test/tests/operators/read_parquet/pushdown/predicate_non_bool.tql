@@ -1,0 +1,5 @@
+// A non-boolean predicate warns once, whether pushed or not.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_parquet }
+// No barrier here: the predicate below is pushed into the reader.
+where id
+select id

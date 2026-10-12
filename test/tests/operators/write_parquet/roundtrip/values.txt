@@ -1,0 +1,79 @@
+{
+  x: 1,
+  msg: "alpha",
+  ip: 192.0.2.1,
+  subnet: 192.0.2.0/24,
+  list: [
+    1,
+    2,
+  ],
+  nested: {
+    ok: true,
+  },
+  missing: null,
+  empty: [],
+  mixed: [
+    "1",
+    "x",
+  ],
+  nested_mixed: {
+    lists: [
+      [
+        "1",
+        "x",
+      ],
+      [
+        "y",
+      ],
+    ],
+    records: [
+      {
+        value: "1",
+      },
+      {
+        value: "x",
+      },
+    ],
+  },
+  text: "alpha/192.0.2.1/192.0.2.0/24/[1,2]/{ok:true}/null",
+  stored_text: "alpha/192.0.2.1/192.0.2.0/24/[1,2]/{ok:true}/null",
+}
+{
+  x: 2,
+  msg: "beta",
+  ip: 192.0.2.2,
+  subnet: 192.0.2.0/24,
+  list: [
+    3,
+  ],
+  nested: {
+    ok: false,
+  },
+  missing: null,
+  empty: [],
+  mixed: [
+    "2",
+    "x",
+  ],
+  nested_mixed: {
+    lists: [
+      [
+        "2",
+        "x",
+      ],
+      [
+        "y",
+      ],
+    ],
+    records: [
+      {
+        value: "2",
+      },
+      {
+        value: "x",
+      },
+    ],
+  },
+  text: "beta/192.0.2.2/192.0.2.0/24/[3]/{ok:false}/null",
+  stored_text: "beta/192.0.2.2/192.0.2.0/24/[3]/{ok:false}/null",
+}

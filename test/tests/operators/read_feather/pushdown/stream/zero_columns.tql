@@ -1,0 +1,4 @@
+// A table with rows but no columns must still produce its events.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/zero-columns" {
+  read_feather
+}

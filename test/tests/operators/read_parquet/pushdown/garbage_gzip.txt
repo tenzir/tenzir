@@ -1,0 +1,1 @@
+error: invalid or corrupted parquet file: Invalid: Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file.

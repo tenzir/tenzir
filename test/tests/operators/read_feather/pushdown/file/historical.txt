@@ -1,0 +1,45 @@
+{
+  import_time: 100,
+  schema: "test.historical",
+  timestamp: 1970-01-01T00:00:00.000000002Z,
+}
+{
+  import_time: 101,
+  schema: "test.historical",
+  timestamp: 1970-01-01T00:00:00.000000002Z,
+}
+{
+  import_time: 102,
+  schema: "test.historical",
+  timestamp: 1970-01-01T00:00:00.000000002Z,
+}
+{
+  import_time: 103,
+  schema: "test.historical",
+  timestamp: null,
+}
+{
+  import_time: 104,
+  schema: "test.historical",
+  timestamp: null,
+}
+{
+  import_time: 105,
+  schema: "test.historical",
+  timestamp: null,
+}
+{
+  import_time: 106,
+  schema: "test.historical",
+  timestamp: 1970-01-01T00:00:00.000000008Z,
+}
+{
+  import_time: 107,
+  schema: "test.historical",
+  timestamp: 1970-01-01T00:00:00.000000008Z,
+}
+{
+  import_time: 108,
+  schema: "test.historical",
+  timestamp: 1970-01-01T00:00:00.000000008Z,
+}

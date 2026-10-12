@@ -1,0 +1,6 @@
+// A predicate on a damaged constant column must still avoid decoding it.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-constants" {
+  read_parquet
+}
+where number == 42
+select id, meta

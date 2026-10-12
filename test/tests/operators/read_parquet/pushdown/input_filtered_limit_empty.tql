@@ -1,0 +1,6 @@
+// A predicate that matches nothing must not emit events.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/input" {
+  read_parquet
+}
+where nested.x >= 100
+select id

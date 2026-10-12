@@ -1,0 +1,5 @@
+// Convert every supported Arrow type, including nulls, nested records,
+// lists of records, and a dictionary that the IPC stream replaces.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" {
+  read_feather
+}

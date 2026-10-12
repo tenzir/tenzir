@@ -1,0 +1,6 @@
+// Counting rows must not convert the unsupported decimal256 column.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/unsupported-only" {
+  read_feather
+}
+select
+head 4

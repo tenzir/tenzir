@@ -1,0 +1,9 @@
+error: input schema changed while writing Arrow data
+  --> tests/operators/read_feather/roundtrip/inference_conflict.tql:12:1
+   |
+12 | write_feather
+   | ^^^^^^^^^^^^^
+   |
+   = note: incompatible types `int64` and `string`
+   = note: first schema: x: int64
+   = note: current schema: x: string

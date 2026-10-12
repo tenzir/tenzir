@@ -1,0 +1,6 @@
+warning: expected `bool`
+ --> tests/operators/read_feather/pushdown/file/predicate_non_bool.tql:4:7
+  |
+4 | where id
+  |       ~~
+  |

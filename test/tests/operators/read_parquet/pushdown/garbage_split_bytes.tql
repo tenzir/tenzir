@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// Same as garbage, with the input arriving in 97-byte chunks.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/garbage" {
+  split_bytes 97
+  read_parquet
+}

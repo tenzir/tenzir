@@ -1,4 +1,6 @@
 // Replaying a masked stream is independent of the batch size (1).
+// Batch size 1 and 20 bracket the behavior: one row per batch and the
+// whole input in one batch. Intermediate sizes added no coverage.
 load_stdin
 read_json _batch_size=1
 where keep

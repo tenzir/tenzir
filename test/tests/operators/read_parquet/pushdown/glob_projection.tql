@@ -1,0 +1,9 @@
+// A glob instantiates one reader per file and keeps the bindings apart.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/files/*" {
+  read_parquet
+  name = $file.path
+}
+where id >= 2
+name = name.replace(f"{env("READ_PUSHDOWN_ROOT")}/", "")
+select id, name
+sort name, id

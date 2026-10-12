@@ -1,0 +1,7 @@
+// A resolved column must keep accepting nulls.
+// The batches arrive on stdin: a `from_file` subpipeline would
+// emit each unresolved batch separately.
+load_stdin
+read_feather
+write_feather
+read_feather

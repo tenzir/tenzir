@@ -1,0 +1,5 @@
+// Same as types, read through a decompressor instead of a seekable file.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types.gz" {
+  decompress_gzip
+  read_feather
+}

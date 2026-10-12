@@ -1,0 +1,90 @@
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "a",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "a",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "a",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "a",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "a",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "a",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "b",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "b",
+      b: null,
+    },
+  },
+}
+{
+  same: "everywhere",
+  none: null,
+  record: {
+    inner: {
+      a: "b",
+      b: null,
+    },
+  },
+}

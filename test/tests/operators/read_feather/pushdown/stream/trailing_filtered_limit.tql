@@ -1,0 +1,7 @@
+// A limit reached before the trailing garbage must not fail the read.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/trailing" {
+  read_feather
+}
+where id >= 1
+select id
+head 1

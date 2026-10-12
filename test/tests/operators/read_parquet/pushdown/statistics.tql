@@ -1,0 +1,4 @@
+// Every statistic-backed type, including the NaN that statistics omit.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/statistics" {
+  read_parquet
+}

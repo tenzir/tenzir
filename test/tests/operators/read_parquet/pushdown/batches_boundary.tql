@@ -1,0 +1,7 @@
+// A limit just past the batch boundary must not read the whole file.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/batches" {
+  read_parquet
+}
+where id >= 8192
+select id
+head 3

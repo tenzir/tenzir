@@ -1,0 +1,6 @@
+// A predicate that drops every row silences the missing-field warning.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_parquet }
+head 4
+where false
+where absent
+select id

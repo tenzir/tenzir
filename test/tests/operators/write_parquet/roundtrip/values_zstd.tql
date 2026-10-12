@@ -1,0 +1,21 @@
+// Heterogeneous lists, records nested in lists, and empty lists must
+// round-trip. `stored_text` and `text` pin stringification on both
+// sides of the Arrow boundary, not just the JSON printing.
+from {x: 0, msg: "masked", ip: 192.0.2.9, subnet: 192.0.2.0/24,
+      list: [9], nested: {ok: false}, missing: null},
+     {x: 1, msg: "alpha", ip: 192.0.2.1, subnet: 192.0.2.0/24,
+      list: [1, 2], nested: {ok: true}, missing: null},
+     {x: 2, msg: "beta", ip: 192.0.2.2, subnet: 192.0.2.0/24,
+      list: [3], nested: {ok: false}, missing: null}
+where x > 0
+empty = []
+mixed = [x, "x"]
+nested_mixed = {
+  lists: [[x, "x"], ["y"]],
+  records: [{value: x}, {value: "x"}]
+}
+text = f"{msg}/{ip}/{subnet}/{list}/{nested}/{missing}"
+write_parquet compression_type="zstd", compression_level=3
+read_parquet
+stored_text = text
+text = f"{msg}/{ip}/{subnet}/{list}/{nested}/{missing}"

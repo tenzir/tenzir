@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// Same as garbage, read through a decompressor.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/garbage.gz" {
+  decompress_gzip
+  read_parquet
+}

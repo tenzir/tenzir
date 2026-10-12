@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Same as corrupt_nested_selected, with the input in 97-byte chunks.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-nested" {
+  split_bytes 97
+  read_parquet
+}
+select nested
+head 1

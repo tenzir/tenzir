@@ -1,0 +1,8 @@
+// Crossing the 8192-row import batch boundary twice must preserve both
+// the row count and the order. A per-row reference would be unreadable.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/batches" {
+  read_parquet
+}
+enumerate n
+mismatch = n != id or text != "value"
+summarize rows=count(), out_of_order=sum(int(mismatch))

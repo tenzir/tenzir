@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// Same as lookahead_error, with the input arriving in 97-byte chunks.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-lookahead" {
+  split_bytes 97
+  read_parquet
+}
+where id >= 8192
+select id
+head 1

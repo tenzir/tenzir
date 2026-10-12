@@ -1,5 +1,5 @@
 // A bounded `sort | head 100` is a prefix of the full sort (batch size 3).
-// Without the optimization barrier; both share one baseline.
+// The bound exceeds the input, so the plan is a full sort either way.
 load_stdin
 read_json _batch_size=3
 sort key?

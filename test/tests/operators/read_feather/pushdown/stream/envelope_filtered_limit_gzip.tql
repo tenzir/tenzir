@@ -1,0 +1,8 @@
+// Same as envelope_filtered_limit, read through a decompressor.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/envelope.gz" {
+  decompress_gzip
+  read_feather
+}
+where nested.x >= 54
+select id
+head 2

@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// A file that is not Parquet at all must fail the same way in every mode.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/garbage" {
+  read_parquet
+}

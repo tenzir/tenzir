@@ -1,0 +1,7 @@
+warning: event does not have field
+ --> tests/operators/read_feather/pushdown/stream/predicate_absent.tql:4:7
+  |
+4 | where absent
+  |       ~~~~~~
+  |
+  = hint: append `?` to suppress this warning

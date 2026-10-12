@@ -1,0 +1,5 @@
+// Convert every supported Arrow type, including nulls, nested records,
+// and lists of records.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" {
+  read_parquet
+}

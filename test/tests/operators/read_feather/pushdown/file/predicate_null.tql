@@ -1,0 +1,5 @@
+// A `null` predicate drops every row without a diagnostic.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/types" { read_feather }
+// No barrier here: the predicate below is pushed into the reader.
+where null
+select id

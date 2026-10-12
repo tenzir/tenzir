@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+// Refining a resolved column is a schema change.
+// Discard the encoded bytes: the writer fails, and whether the decoder
+// has emitted its first batch by then is a race.
+// The batches arrive on stdin: a `from_file` subpipeline would
+// emit each unresolved batch separately.
+load_stdin
+read_feather
+write_parquet
+discard
