@@ -3660,21 +3660,32 @@ TEST("Arrow column export repeats constant nested lists and refines nulls") {
   CHECK(empty.unwrap()->ValidateFull().ok());
 }
 
-TEST("import conversion rejects mixed lists without mutating candidates") {
+TEST("import conversion stores mixed list elements as strings") {
   auto buffer = tenzir::ImportConversionBuffer{"events", false};
   auto good = export_events(Record{{"xs", List{Int{1}}}});
   good.meta = Events::Meta::make_empty(1, "events");
   REQUIRE(buffer.add(good, good.mask));
-  auto bad = export_events(Record{{"xs", List{Int{1}, String{"x"}}}});
-  bad.meta = Events::Meta::make_empty(1, "events");
-  auto result = buffer.add(bad, bad.mask);
-  CHECK(not result);
-  CHECK_EQUAL(buffer.rows(), 1u);
+  auto ip = tenzir::ip::v4(uint32_t{0x34d8dc01});
+  auto mixed = export_events(Record{
+    {"xs", List{Int{1}, String{"x"}, Null{}}},
+    {"answers",
+     List{Record{{"rdata", String{"example.com"}}}, Record{{"rdata", ip}}}},
+    {"nested", List{List{Int{2}, String{"y"}}}},
+  });
+  mixed.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(buffer.add(mixed, mixed.mask));
+  CHECK_EQUAL(buffer.rows(), 2u);
   auto output = buffer.snapshot();
   REQUIRE(output);
   CHECK_EQUAL(export_values(output.unwrap()),
               (std::vector<tenzir::data>{
                 tenzir::record{{"xs", tenzir::list{Int{1}}}},
+                tenzir::record{
+                  {"xs", tenzir::list{"1", "x", caf::none}},
+                  {"answers", tenzir::list{"{rdata:\"example.com\"}",
+                                           "{rdata:52.216.220.1}"}},
+                  {"nested", tenzir::list{tenzir::list{"2", "y"}}},
+                },
               }));
 }
 
@@ -3768,10 +3779,20 @@ TEST("import conversion ignores incompatible list rows outside selection") {
               (std::vector<tenzir::data>{
                 tenzir::record{{"xs", tenzir::list{Int{2}}}},
               }));
-  CHECK(not buffer.add(events, events.mask));
-  CHECK_EQUAL(buffer.rows(), 1u);
+  // Selecting the mixed row stores its elements as strings, but leaves the
+  // homogeneous row next to it untouched.
+  REQUIRE(buffer.add(events, events.mask));
+  CHECK_EQUAL(buffer.rows(), 3u);
+  auto mixed = buffer.snapshot();
+  REQUIRE(mixed);
+  CHECK_EQUAL(export_values(mixed.unwrap()),
+              (std::vector<tenzir::data>{
+                tenzir::record{{"xs", tenzir::list{Int{2}}}},
+                tenzir::record{{"xs", tenzir::list{Int{2}}}},
+                tenzir::record{{"xs", tenzir::list{"1", "bad"}}},
+              }));
   CHECK(not buffer.add(events, bitmap({false, false, true})));
-  CHECK_EQUAL(buffer.rows(), 1u);
+  CHECK_EQUAL(buffer.rows(), 3u);
 }
 
 TEST("import transport preserves selected values, order, and metadata") {
@@ -4047,15 +4068,42 @@ TEST("import conversion snapshots do not freeze inference") {
     tenzir::as<tenzir::record_type>(after.unwrap()[0].schema()).field(0).type));
 }
 
-TEST("import conversion rejects incompatible record elements in a list") {
+TEST("import conversion stores invalid UTF-8 blobs in mixed lists as Base64") {
   auto conversion = tenzir::ImportConversionBuffer{"events", false};
-  auto bad = export_events(Record{{
+  auto mixed = export_events(Record{
+    {"items", List{Blob{std::byte{0xff}}, Int{1}}},
+    {"nested", List{Record{{"b", Blob{std::byte{0xff}}}}, Int{2}}},
+    {"valid", List{Blob{std::byte{'a'}}, Int{3}}},
+  });
+  mixed.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(mixed, mixed.mask));
+  auto output = conversion.snapshot();
+  REQUIRE(output);
+  CHECK_EQUAL(export_values(output.unwrap()),
+              (std::vector<tenzir::data>{
+                tenzir::record{
+                  {"items", tenzir::list{"\"/w==\"", "1"}},
+                  {"nested", tenzir::list{"{\"b\":\"/w==\"}", "2"}},
+                  {"valid", tenzir::list{"a", "3"}},
+                },
+              }));
+}
+
+TEST("import conversion stringifies incompatible record elements in a list") {
+  auto conversion = tenzir::ImportConversionBuffer{"events", false};
+  auto mixed = export_events(Record{{
     "items",
     List{Record{{"a", Int{1}}}, Record{{"b", Int{2}}}},
   }});
-  bad.meta = Events::Meta::make_empty(1, "events");
-  CHECK(not conversion.add(bad, bad.mask));
-  CHECK_EQUAL(conversion.rows(), 0u);
+  mixed.meta = Events::Meta::make_empty(1, "events");
+  REQUIRE(conversion.add(mixed, mixed.mask));
+  CHECK_EQUAL(conversion.rows(), 1u);
+  auto output = conversion.snapshot();
+  REQUIRE(output);
+  CHECK_EQUAL(export_values(output.unwrap()),
+              (std::vector<tenzir::data>{
+                tenzir::record{{"items", tenzir::list{"{a:1}", "{b:2}"}}},
+              }));
 }
 
 TEST("ArrowExportBuilder refines null across batches and accepts later null") {

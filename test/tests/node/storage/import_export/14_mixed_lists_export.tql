@@ -1,0 +1,4 @@
+export
+where @name == "test.mixed_lists"
+sort id
+write_json

@@ -1,0 +1,23 @@
+{
+  "id": 1,
+  "xs": [
+    "1",
+    "two",
+    null
+  ],
+  "answers": [
+    "{rdata:\"example.com\"}",
+    "{rdata:52.216.220.1}"
+  ]
+}
+{
+  "id": 2,
+  "xs": [
+    3
+  ],
+  "answers": [
+    {
+      "rdata": "10.0.0.1"
+    }
+  ]
+}
