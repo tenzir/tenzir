@@ -1064,44 +1064,37 @@ type suricata.mqtt = suricata.component.common + record {
   }
 }
 
+type suricata.modbus_message = record {
+  transaction_id: uint64,
+  protocol_id: uint64,
+  unit_id: uint64,
+  function_code: string,
+  function_raw: uint64,
+  access_type: string,
+  category: string,
+  error_flags: string,
+  exception: record {
+    raw: uint64,
+    code: string
+  },
+  diagnostic: record {
+    raw: uint64,
+    code: string,
+    data: string
+  },
+  mei: record {
+    raw: uint64,
+    code: string,
+    data: string
+  }
+}
+
 type suricata.modbus = suricata.component.common + record {
   tx_id: uint64 #index=hash,
   modbus: record {
     id: uint64,
-    request: record {
-      transaction_id: uint64,
-      protocol_id: uint64,
-      unit_id: uint64,
-      function_code: string,
-      function_raw: uint64,
-      access_type: string,
-      category: string,
-      error_flags: string
-    },
-    response: record {
-      transaction_id: uint64,
-      protocol_id: uint64,
-      unit_id: uint64,
-      function_code: string,
-      function_raw: uint64,
-      access_type: string,
-      category: string,
-      error_flags: string
-    },
-    exception: record {
-      raw: uint64,
-      code: string
-    },
-    diagnostic: record {
-      raw: uint64,
-      code: string,
-      data: string
-    },
-    mei: record {
-      raw: uint64,
-      code: string,
-      data: string
-    }
+    request: suricata.modbus_message,
+    response: suricata.modbus_message
   }
 }
 
