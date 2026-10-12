@@ -4,9 +4,17 @@ nix2container:
   fetchFromGitHub,
   runCommand,
   bashInteractive,
+  bind,
   cacert,
   coreutils,
+  curl,
+  findutils,
+  gnugrep,
+  iproute2,
+  less,
   libcap,
+  netcat,
+  procps,
   python3,
   stdenv,
   zlib,
@@ -186,10 +194,21 @@ let
         EOF
       '';
 
+  # Debugging a node from inside its container needs a few tools, and a
+  # Nix-built image has no package manager to install them on demand.
   extraTools = [
     bashInteractive
     coreutils
+    bind.dnsutils
+    bind.host
+    curl
+    findutils
+    gnugrep
+    iproute2
+    less
     libcap
+    netcat
+    procps
   ];
 
   layerDefs = [
