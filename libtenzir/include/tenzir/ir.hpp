@@ -755,6 +755,8 @@ struct Channel {
   element_type_tag type;
   /// How the physical channel is realized.
   ChannelKind kind = ChannelKind::regular;
+
+  auto operator<=>(Channel const&) const = default;
 };
 
 /// The pipeline plan: a DAG of operator stages ready to be spawned and driven
