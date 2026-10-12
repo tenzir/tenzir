@@ -44,7 +44,6 @@ type suricata.component.flow = record {
     bytes_toserver: uint64,
     bytes_toclient: uint64
   },
-  tcp: suricata.component.tcp,
   emergency: bool
 }
 
@@ -609,6 +608,7 @@ type suricata.fileinfo = suricata.component.common + record {
 
 type suricata.flow = suricata.component.common + record {
   flow: suricata.component.flow,
+  tcp: suricata.component.tcp
 }
 
 type suricata.frame = suricata.component.common + record {
@@ -1112,6 +1112,7 @@ type suricata.netflow = suricata.component.common + record {
     end: time,
     age: uint64
   },
+  tcp: suricata.component.tcp,
   app_proto: string
 }
 
