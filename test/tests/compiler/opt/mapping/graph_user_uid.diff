@@ -590,7 +590,8 @@
                        ],
                        order: "ordered"
                      }
-                   ]
+                   ],
+                   definition_location: [4]:1042..1062 from 1
                  }
                },
                GenericIr {
@@ -686,7 +687,8 @@
                            ],
                            order: "ordered"
                          }
-                       ]
+                       ],
+                       definition_location: [4]:1164..1182 from 1
                      },
                      wildcard: false
                    },
@@ -729,7 +731,8 @@
                            ],
                            order: "ordered"
                          }
-                       ]
+                       ],
+                       definition_location: [4]:1220..1238 from 1
                      },
                      wildcard: false
                    },
@@ -747,7 +750,8 @@
                        ],
                        operators: [
                          
-                       ]
+                       ],
+                       definition_location: [0]:0..0 from 0
                      },
                      wildcard: true
                    }
@@ -795,7 +799,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [4]:520..1305 from 1
            },
            wildcard: false
          },
@@ -1056,7 +1061,8 @@
                        ],
                        order: "ordered"
                      }
-                   ]
+                   ],
+                   definition_location: [4]:1621..1680 from 1
                  }
                },
                GenericIr {
@@ -1101,7 +1107,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [4]:1356..1713 from 1
            },
            wildcard: false
          },
@@ -1233,7 +1240,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [4]:1732..1875 from 1
            },
            wildcard: true
          }
@@ -1312,5 +1320,6 @@
 -      ]
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:107..165 from 0
  }

@@ -6,5 +6,6 @@
     version_ir {
       self: [1]:0..7 from 0
     }
-  ]
+  ],
+  definition_location: [1]:0..7 from 0
 }

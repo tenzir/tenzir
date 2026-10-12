@@ -169,6 +169,7 @@ auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
                                 });
   // construct plan
   auto plan = Plan{};
+  plan.definition_location = pipe.definition_location;
   plan.operators.reserve(pipe.operators.size());
   auto builder = PlanBuilder{plan, ctx.reg(), parallelism};
   auto head = input.is<void>()

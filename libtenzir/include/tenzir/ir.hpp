@@ -310,10 +310,14 @@ struct let {
 struct pipeline {
   std::vector<let> lets;
   std::vector<Box<Operator>> operators;
+  /// Original definition's source location, preserved through optimization.
+  /// Generated definitions may share an unknown location.
+  location definition_location = location::unknown;
 
   friend auto inspect(auto& f, pipeline& x) -> bool {
-    return f.object(x).fields(f.field("lets", x.lets),
-                              f.field("operators", x.operators));
+    return f.object(x).fields(
+      f.field("lets", x.lets), f.field("operators", x.operators),
+      f.field("definition_location", x.definition_location));
   }
 
   pipeline() = default;
@@ -763,6 +767,7 @@ struct Channel {
 struct Plan {
   std::vector<PlannedOperator> operators;
   std::vector<Channel> channels;
+  location definition_location = location::unknown;
 
   auto input_type() const -> element_type_tag;
 

@@ -83,7 +83,8 @@
 -            order: "ordered"
 +            order: "unordered"
            }
-         ]
+         ],
+         definition_location: [1]:21..27 from 0
        }
 -    },
 -    where_ir {
@@ -129,5 +130,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..50 from 0
  }

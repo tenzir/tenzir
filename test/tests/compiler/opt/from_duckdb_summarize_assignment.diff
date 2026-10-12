@@ -227,7 +227,8 @@
 +                emit_every: 1
 +              }
 +            }
-+          ]
++          ],
++          definition_location: [0]:0..0 from 0
 +        }
 +      }
      },
@@ -364,5 +365,6 @@
 -        emit_every: 1
 -      }
      }
-   ]
+   ],
+   definition_location: [1]:122..262 from 0
  }

@@ -110,7 +110,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:16..37 from 0
        }
      },
      SetIr {
@@ -161,5 +162,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..51 from 0
  }

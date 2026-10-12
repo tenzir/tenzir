@@ -162,9 +162,11 @@
 -            ],
 -            order: "ordered"
 -          }
+-        ],
+-        definition_location: [1]:30..48 from 0
 +        named_args: [
 +          
-         ]
++        ]
        },
 -      loc: [1]:16..25 from 0
 +      filter: [
@@ -172,5 +174,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..50 from 0
  }
