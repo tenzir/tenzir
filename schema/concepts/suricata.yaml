@@ -117,7 +117,7 @@
 - concept:
     name: net.app
     fields:
-      - suricata.alert.alert.app_proto
+      - suricata.alert.app_proto
       - suricata.dcerpc.event_type
       - suricata.dhcp.event_type
       - suricata.dns.event_type

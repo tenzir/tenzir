@@ -112,7 +112,6 @@ type suricata.quic = suricata.component.common + record {
 
 type suricata.alert = suricata.component.common + record {
   alert: record {
-    app_proto: string,
     action: enum {
       allowed,
       blocked
