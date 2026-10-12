@@ -956,6 +956,10 @@ public:
 
   auto name() const -> std::string override;
 
+  auto display_name() const -> std::string override;
+
+  auto main_location() const -> location override;
+
   auto copy() const -> Box<Operator> override;
 
   auto move() && -> Box<Operator> override;
