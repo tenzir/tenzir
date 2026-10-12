@@ -9,13 +9,17 @@
 /// The seam between the generated API bindings and however bytes actually
 /// travel, and the three failures no endpoint declares. `generated/api.hpp` is
 /// written against this and nothing else, so the same bindings work over the
-/// deployment tunnel and authenticated buffered HTTP.
+/// deployment tunnel and authenticated HTTP. Requests and outbound client
+/// responses are buffered; inbound handlers can return a streaming body.
 
 #pragma once
 
 #include <tenzir/async/task.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
+#include <tenzir/variant.hpp>
+
+#include <folly/coro/AsyncGenerator.h>
 
 #include <cstdint>
 #include <string>
@@ -79,9 +83,9 @@ public:
 ///
 /// Named for the API rather than for a transport, because the transport is not
 /// the same everywhere: the server adapter turns an arriving request into
-/// this, and `call` hands this to a transport on the way out. Whole bodies,
-/// because that is the least any carrier can do: a tunnel frames whole
-/// bodies and matches responses by id, and HTTP can always be reduced to it.
+/// this, and `call` hands this to a transport on the way out. Requests carry
+/// whole bodies so the generated dispatcher can validate them before calling
+/// a handler.
 class HttpRequest {
 public:
   HttpRequest(std::string method, std::string path, std::string body,
@@ -107,14 +111,26 @@ public:
   std::vector<std::pair<std::string, std::string>> headers;
 };
 
+/// A response body produced as the peer reads it. Destroying the stream
+/// releases its resources, including any subscription it owns.
+using HttpBodyStream = folly::coro::AsyncGenerator<std::string>;
+
 class HttpResponse {
 public:
   HttpResponse(std::uint16_t status, std::string body)
     : status{status}, body{std::move(body)} {
   }
 
+  HttpResponse(std::uint16_t status, HttpBodyStream stream,
+               std::string content_type)
+    : status{status},
+      body{std::move(stream)},
+      content_type{std::move(content_type)} {
+  }
+
   std::uint16_t status;
-  std::string body;
+  variant<std::string, HttpBodyStream> body;
+  std::string content_type = "application/json";
 };
 
 /// Carries a request to the platform and brings an answer back.
