@@ -9,6 +9,7 @@
 #include "clickhouse/arguments.hpp"
 #include "clickhouse/block_to_events.hpp"
 #include "clickhouse/block_to_table_slice.hpp"
+#include "clickhouse/catch_all_reader.hpp"
 #include "clickhouse/connection.hpp"
 #include "clickhouse/easy_client.hpp"
 #include "clickhouse/sql_pushdown.hpp"
@@ -152,6 +153,11 @@ auto make_schema_name_from_table(std::string_view table) -> std::string {
   return fmt::format("clickhouse.{}", table_name);
 }
 
+/// Whether `SELECT *` may leave out a column with the default kind `kind`.
+auto is_generated_kind(std::string_view kind) -> bool {
+  return kind == "ALIAS" or kind == "MATERIALIZED" or kind == "EPHEMERAL";
+}
+
 /// Reads the columns of `table` that `SELECT *` returns.
 auto fetch_schema(::clickhouse::Client& client, std::string_view table)
   -> SqlSchema {
@@ -174,10 +180,8 @@ auto fetch_schema(::clickhouse::Client& client, std::string_view table)
       // session's `asterisk_include_*` settings, so the schema keeps them
       // apart: predicates on them stay local and projections that name them
       // fall back to `*`, which matches the local result under any setting.
-      auto default_type = default_types->At(i);
-      auto generated = default_type == "ALIAS" or default_type == "MATERIALIZED"
-                       or default_type == "EPHEMERAL";
-      schema.add_column(names->At(i), types->At(i), generated);
+      schema.add_column(names->At(i), types->At(i),
+                        is_generated_kind(default_types->At(i)));
     }
   });
   client.Execute(query);
@@ -187,7 +191,29 @@ auto fetch_schema(::clickhouse::Client& client, std::string_view table)
 struct PreparedQuery {
   std::string text;
   ir::OptimizeFilter local_filter;
+  /// The layout of a catch-all table, whose events need reconstruction.
+  Option<CatchAllLayout> catch_all = None{};
 };
+
+/// Pushes as much of `plan`'s hints into a `SELECT` from its table as
+/// `schema` allows.
+auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
+                      Option<ir::OptimizeProjection> const& projection)
+  -> PreparedQuery {
+  auto split = pushdown::split_filter(std::move(plan.optimization.filter),
+                                      schema.model(), ClickHouseRenderer{});
+  // The limit counts events after the whole filter chain, so it can only go
+  // into the query if the chain did.
+  auto limit = Option<uint64_t>{};
+  if (split.remaining.empty()) {
+    limit = plan.optimization.limit;
+  }
+  return {
+    .text
+    = make_select_query(*plan.table, &schema, projection, split.pushed, limit),
+    .local_filter = std::move(split.remaining),
+  };
+}
 
 /// Decides the query text and which predicates stay local. Runs on the
 /// query thread because it may need a round-trip for the schema.
@@ -208,19 +234,35 @@ auto prepare_query(::clickhouse::Client& client, QueryPlan& plan)
     };
   }
   auto schema = fetch_schema(client, *plan.table);
-  auto split = pushdown::split_filter(std::move(plan.optimization.filter),
-                                      schema.model(), ClickHouseRenderer{});
-  // The limit counts events after the whole filter chain, so it can only go
-  // into the query if the chain did.
-  auto limit = Option<uint64_t>{};
-  if (split.remaining.empty()) {
-    limit = plan.optimization.limit;
+  return make_table_query(plan, schema, plan.optimization.projection);
+}
+
+/// Like `prepare_query`, but always describes a table to find out whether it
+/// has a catch-all column, whose events need reconstruction.
+auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
+                          diagnostic_handler& dh) -> failure_or<PreparedQuery> {
+  if (not plan.table) {
+    return prepare_query(client, plan);
   }
-  return {
-    .text = make_select_query(
-      *plan.table, &schema, plan.optimization.projection, split.pushed, limit),
-    .local_filter = std::move(split.remaining),
-  };
+  TRY(auto description, describe_table(client, *plan.table, dh));
+  TRY(auto catch_all, make_catch_all_layout(description, dh));
+  // Reconstruction moves the fields of the catch-all column to the top level
+  // and places dotted columns at nested paths, so only columns that keep their
+  // name and value are addressable.
+  auto schema = SqlSchema{};
+  for (auto const& column : description) {
+    if (not catch_all or catch_all->addressable(column.name)) {
+      schema.add_column(column.name, column.type,
+                        is_generated_kind(column.default_kind));
+    }
+  }
+  // A projection could leave out the part of a field that is in the
+  // catch-all, so the query of a catch-all table selects every column.
+  auto projection = catch_all ? Option<ir::OptimizeProjection>{}
+                              : plan.optimization.projection;
+  auto prepared = make_table_query(plan, schema, projection);
+  prepared.catch_all = std::move(catch_all);
+  return prepared;
 }
 
 class FromClickhouse final : public Operator<void, table_slice> {
@@ -639,6 +681,7 @@ private:
   run_query(Arc<Shared> shared, ConnectionArgs connection, QueryPlan plan,
             bool tls_enabled, diagnostic_handler& dh) -> Task<void> {
     try {
+      auto catch_all = Option<CatchAllLayout>{};
       auto on_data = [&](::clickhouse::Block const& block) {
         if (shared->should_cancel()) {
           return false;
@@ -646,6 +689,15 @@ private:
         auto events = block_to_events(block, plan.schema_name, dh);
         if (not events) {
           return not shared->should_cancel();
+        }
+        if (catch_all) {
+          auto columns = std::vector<std::string_view>{};
+          columns.reserve(block.GetColumnCount());
+          for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
+            columns.push_back(block.GetColumnName(i));
+          }
+          events = reconstruct_catch_all(std::move(*events), columns,
+                                         *catch_all, dh);
         }
         shared->produce(EventsMessage{std::move(*events)});
         return not shared->should_cancel();
@@ -658,10 +710,20 @@ private:
           options.SetDefaultDatabase(*connection.default_database);
         }
         auto client = ::clickhouse::Client{options};
-        auto prepared = prepare_query(client, plan);
-        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared.text);
-        shared->produce(PlanMessage{std::move(prepared.local_filter)});
-        auto query = ::clickhouse::Query{std::move(prepared.text)};
+        auto prepared = prepare_events_query(client, plan, dh);
+        if (not prepared) {
+          return;
+        }
+        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared->text);
+        shared->produce(PlanMessage{std::move(prepared->local_filter)});
+        catch_all = std::move(prepared->catch_all);
+        auto query = ::clickhouse::Query{std::move(prepared->text)};
+        if (catch_all) {
+          // Keeps literal dotted keys apart from nested paths, as the
+          // inserts of `to_clickhouse` do.
+          query.SetSetting("json_type_escape_dots_in_keys",
+                           {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
+        }
         query.SetSetting("max_block_size",
                          {std::to_string(defaults::import::table_slice_size),
                           ::clickhouse::QuerySettingsField::IMPORTANT});

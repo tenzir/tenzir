@@ -92,6 +92,20 @@ def _logged_queries(kind: str) -> list[str]:
     return [line for line in output.splitlines() if line]
 
 
+def _describe_count() -> int:
+    """Returns how many times the test table was described."""
+    # ClickHouse logs `DESCRIBE` without the tables it reads, so this matches
+    # the query text instead.
+    _clickhouse("SYSTEM FLUSH LOGS")
+    return int(
+        _clickhouse(
+            "SELECT count() FROM system.query_log"
+            " WHERE type = 'QueryFinish' AND query_kind = 'Describe'"
+            f" AND query LIKE 'DESCRIBE TABLE {TABLE} %'"
+        )
+    )
+
+
 def _last_select() -> str:
     selects = _logged_queries("Select")
     assert selects, "no SELECT against the test table was logged"
@@ -201,13 +215,13 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
         " toIPv6OrNull(`y`) BETWEEN toIPv6('1.0.0.0') AND toIPv6('1.255.255.255'))"
     ), _last_select()
     assert output.strip() == '{"id":3}', output
-    # A limit alone needs no schema round-trip.
-    describes_before = len(_logged_queries("Describe"))
+    # A limit alone needs the schema only to find a catch-all column, so it
+    # takes a single round-trip.
+    describes_before = _describe_count()
     _run_pipeline(tenzir, source + "head 1")
     assert _last_select() == f"SELECT * FROM {TABLE} LIMIT 1", _last_select()
-    assert len(_logged_queries("Describe")) == describes_before, (
-        "unexpected DESCRIBE for a limit-only pipeline"
-    )
+    describes = _describe_count() - describes_before
+    assert describes == 1, f"expected one DESCRIBE, got {describes}"
     # `SELECT *` omits ALIAS and MATERIALIZED columns, so a predicate on one
     # stays local, where it sees no such field and drops every row. Pushing it
     # would match rows instead. A DEFAULT column is an ordinary column.

@@ -53,6 +53,36 @@ auto read_description(Block const& block, diagnostic_handler& dh)
   return description;
 }
 
+auto find_catch_all(std::span<ColumnDescription const> description,
+                    diagnostic_handler& dh) -> failure_or<Option<std::string>> {
+  auto result = Option<std::string>{};
+  for (auto const& column : description) {
+    if (column.comment != "tenzir:catch_all") {
+      continue;
+    }
+    if (result) {
+      diagnostic::error("multiple ClickHouse catch-all columns").emit(dh);
+      return failure::promise();
+    }
+    if (column.name.find('.') != std::string::npos) {
+      diagnostic::error("ClickHouse catch-all column name `{}` must not "
+                        "contain dots",
+                        column.name)
+        .emit(dh);
+      return failure::promise();
+    }
+    // Restricted JSON declarations can discard paths or coerce values.
+    if (column.type != "JSON" or not column.default_kind.empty()) {
+      diagnostic::error("invalid ClickHouse catch-all column `{}`", column.name)
+        .note("expected a native JSON column without a default expression")
+        .emit(dh);
+      return failure::promise();
+    }
+    result = column.name;
+  }
+  return result;
+}
+
 namespace {
 
 // Inspect type calls recursively, never matching names inside quoted values.

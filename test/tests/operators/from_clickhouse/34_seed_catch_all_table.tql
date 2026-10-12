@@ -1,0 +1,7 @@
+// A catch-all table: dotted columns take nested fields, and the marked column
+// takes everything else.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_catch_all (time DateTime64(9), class_uid UInt32, `src_endpoint.ip` Nullable(IPv6), `src_endpoint.port` UInt16, unmapped JSON, event JSON COMMENT 'tenzir:catch_all') ENGINE = MergeTree ORDER BY time",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

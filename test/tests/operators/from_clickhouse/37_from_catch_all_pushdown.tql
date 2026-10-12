@@ -1,0 +1,11 @@
+// Only predicates on columns that keep their name go into the query. All
+// others apply to the reconstructed events, as does the projection.
+from_clickhouse table="fc_catch_all",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where class_uid == 4001
+where src_endpoint.port == 443 and metadata.product.name == "Demo"
+where this["a.b"] == 1 and event? == null
+select time, src_endpoint, a

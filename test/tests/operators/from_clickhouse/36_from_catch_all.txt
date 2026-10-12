@@ -1,0 +1,35 @@
+{
+  "a.b": 1,
+  a: {
+    b: 2,
+  },
+  metadata: {
+    product: {
+      name: "Demo",
+    },
+    version: "1.9.0",
+  },
+  seen: 2026-10-12T09:00:00Z,
+  src_endpoint: {
+    hostname: "a.example",
+    ip: 10.0.0.1,
+    port: 443,
+  },
+  time: 2026-10-12T10:00:00Z,
+  class_uid: 4001,
+  unmapped: {
+    source_field: "x",
+  },
+}
+{
+  metadata: {
+    version: "1.9.0",
+  },
+  time: 2026-10-12T10:00:01Z,
+  class_uid: 4002,
+  src_endpoint: {
+    ip: null,
+    port: 80,
+  },
+  unmapped: {},
+}

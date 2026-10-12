@@ -1,0 +1,11 @@
+{
+  time: 2026-10-12T10:00:00Z,
+  src_endpoint: {
+    hostname: "a.example",
+    ip: 10.0.0.1,
+    port: 443,
+  },
+  a: {
+    b: 2,
+  },
+}

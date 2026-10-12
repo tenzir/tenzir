@@ -8,6 +8,7 @@
 
 #include "clickhouse/table_registry.hpp"
 
+#include "clickhouse/table_description.hpp"
 #include "clickhouse/transformers.hpp"
 #include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/detail/string.hpp"
@@ -68,36 +69,6 @@ auto mapping_path(ColumnDescription const& column, std::string_view type,
     }
   }
   return path;
-}
-
-auto find_catch_all(std::vector<ColumnDescription> const& description,
-                    diagnostic_handler& dh) -> failure_or<Option<std::string>> {
-  auto result = Option<std::string>{};
-  for (auto const& column : description) {
-    if (column.comment != "tenzir:catch_all") {
-      continue;
-    }
-    if (result) {
-      diagnostic::error("multiple ClickHouse catch-all columns").emit(dh);
-      return failure::promise();
-    }
-    if (column.name.find('.') != std::string::npos) {
-      diagnostic::error("ClickHouse catch-all column name `{}` must not "
-                        "contain dots",
-                        column.name)
-        .emit(dh);
-      return failure::promise();
-    }
-    // Restricted JSON declarations can discard paths or coerce values.
-    if (column.type != "JSON" or not column.default_kind.empty()) {
-      diagnostic::error("invalid ClickHouse catch-all column `{}`", column.name)
-        .note("expected a native JSON column without a default expression")
-        .emit(dh);
-      return failure::promise();
-    }
-    result = column.name;
-  }
-  return result;
 }
 
 auto same(Arc<TableSchema const> const& lhs, Arc<TableSchema const> const& rhs)

@@ -143,6 +143,12 @@ auto create_table(Connection& connection, std::string query) -> void {
 auto describe_table(Connection& connection, std::string_view table,
                     diagnostic_handler& dh)
   -> failure_or<std::vector<ColumnDescription>> {
+  return describe_table(connection.client(), table, dh);
+}
+
+auto describe_table(::clickhouse::Client& client, std::string_view table,
+                    diagnostic_handler& dh)
+  -> failure_or<std::vector<ColumnDescription>> {
   auto query = ::clickhouse::Query{fmt::format(
     "DESCRIBE TABLE {} SETTINGS describe_compact_output = 0", table)};
   auto description = std::vector<ColumnDescription>{};
@@ -158,7 +164,7 @@ auto describe_table(Connection& connection, std::string_view table,
     }
     description.append_range(std::views::as_rvalue(*columns));
   });
-  connection.client().Execute(query);
+  client.Execute(query);
   if (failed) {
     return failure::promise();
   }

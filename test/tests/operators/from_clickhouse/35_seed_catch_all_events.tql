@@ -1,0 +1,21 @@
+from {
+  time: 2026-10-12T10:00:00Z,
+  class_uid: uint(4001),
+  src_endpoint: {ip: 10.0.0.1, port: uint(443), hostname: "a.example"},
+  unmapped: {source_field: "x"},
+  metadata: {version: "1.9.0", product: {name: "Demo"}},
+  "a.b": 1,
+  a: {b: 2},
+  seen: 2026-10-12T09:00:00Z,
+}, {
+  time: 2026-10-12T10:00:01Z,
+  class_uid: uint(4002),
+  src_endpoint: {ip: null, port: uint(80)},
+  metadata: {version: "1.9.0"},
+}
+to_clickhouse table="fc_catch_all",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

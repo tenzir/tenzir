@@ -1,0 +1,9 @@
+// Events come back as they were written, without the catch-all column. The
+// literal field `a.b` stays apart from the nested `a.b`, and the time in the
+// catch-all regains its type.
+from_clickhouse table="fc_catch_all",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort time

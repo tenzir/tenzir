@@ -79,6 +79,9 @@ auto create_table(Connection& connection, std::string query) -> void;
 auto describe_table(Connection& connection, std::string_view table,
                     diagnostic_handler& dh)
   -> failure_or<std::vector<ColumnDescription>>;
+auto describe_table(::clickhouse::Client& client, std::string_view table,
+                    diagnostic_handler& dh)
+  -> failure_or<std::vector<ColumnDescription>>;
 
 /// Sends `block` as one streaming INSERT into `table`. Resets the connection
 /// before rethrowing a failure, because the client otherwise leaves the

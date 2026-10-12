@@ -11,6 +11,8 @@
 
 #include <clickhouse/block.h>
 
+#include <span>
+
 namespace tenzir::plugins::clickhouse {
 
 inline constexpr auto schema_refresh_interval = std::chrono::seconds{30};
@@ -30,6 +32,11 @@ struct CachedDescription {
 };
 auto read_description(::clickhouse::Block const& block, diagnostic_handler& dh)
   -> failure_or<std::vector<ColumnDescription>>;
+/// Returns the name of the column marked `tenzir:catch_all`, if any. Fails
+/// for more than one marker and for a marked column that is not a plain
+/// `JSON` column without a default or whose name contains dots.
+auto find_catch_all(std::span<ColumnDescription const> description,
+                    diagnostic_handler& dh) -> failure_or<Option<std::string>>;
 auto build_transformations(std::vector<ColumnDescription> const& description,
                            diagnostic_handler& dh)
   -> failure_or<transformer_record>;
