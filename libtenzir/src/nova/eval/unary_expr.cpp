@@ -1,3 +1,4 @@
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/eval_internal.hpp"
@@ -98,6 +99,7 @@ auto _::EvalRun::eval(const ast::unary_expr& x, EvalFrame frame)
       }
       return frame.eval(x.expr);
   }
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace tenzir::nova

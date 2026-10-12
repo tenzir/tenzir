@@ -37,6 +37,7 @@ fizz.overrideAttrs (orig: {
     # Missing target_link_libraries in to the granular folly targets in CMakeLists.txt.
     (lib.cmakeBool "BUILD_EXAMPLES" false)
     (lib.cmakeBool "BUILD_TESTS" false)
+    (lib.cmakeFeature "CMAKE_CXX_STANDARD" facebookNetworkStack.cxxStandard)
   ];
   preConfigure =
     (orig.preConfigure or "")

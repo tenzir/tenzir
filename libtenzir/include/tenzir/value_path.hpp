@@ -35,8 +35,8 @@ public:
 
   auto root_field() const -> Option<std::string_view> {
     auto const* path = this;
-    while (path->data_ and path->data_->first.data_) {
-      path = &path->data_->first;
+    while (path->data_ and path->data_->first->data_) {
+      path = path->data_->first;
     }
     if (not path->data_) {
       return None{};
@@ -59,14 +59,14 @@ private:
   using segment = variant<field_t, list_t, index_t>;
 
   value_path(const value_path& previous, segment segment)
-    : value_path{{previous, segment}} {
+    : value_path{{&previous, segment}} {
   }
 
-  explicit value_path(std::pair<const value_path&, segment> data)
+  explicit value_path(std::pair<const value_path*, segment> data)
     : data_{data} {
   }
 
-  Option<std::pair<const value_path&, segment>> data_;
+  Option<std::pair<const value_path*, segment>> data_;
 };
 
 } // namespace tenzir
@@ -89,7 +89,7 @@ struct fmt::formatter<tenzir::value_path> {
       auto first = true;
       if (previous.data_) {
         first = false;
-        self(previous.data_->first, previous.data_->second);
+        self(*previous.data_->first, previous.data_->second);
       }
       match(
         segment,
@@ -112,7 +112,7 @@ struct fmt::formatter<tenzir::value_path> {
           out = fmt::format_to(out, "[{}]", index.value);
         });
     };
-    recurse(x.data_->first, x.data_->second);
+    recurse(*x.data_->first, x.data_->second);
     return out;
   }
 };

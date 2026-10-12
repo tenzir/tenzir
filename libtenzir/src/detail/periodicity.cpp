@@ -103,8 +103,8 @@ auto autocorrelation(std::span<double const> xs, int64_t max_lag)
   }
   auto result = std::vector<double>{};
   result.reserve(max_lag + 1);
-  auto const direct_work = (static_cast<__int128>(max_lag) + 1)
-                           * (2 * static_cast<__int128>(n) - max_lag) / 2;
+  auto const direct_work = (static_cast<__int128_t>(max_lag) + 1)
+                           * (2 * static_cast<__int128_t>(n) - max_lag) / 2;
   if (direct_work <= max_direct_autocorrelation_work) {
     for (auto k = int64_t{0}; k <= max_lag; ++k) {
       auto sum = 0.0;

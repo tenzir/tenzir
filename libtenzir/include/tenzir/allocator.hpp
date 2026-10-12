@@ -37,11 +37,12 @@
 #include <cstdlib>
 #include <new>
 #include <string_view>
+#include <tuple>
 
 namespace tenzir::memory {
 
 inline auto write_error(const char* txt, std::size_t size) noexcept {
-  (void)write(STDERR_FILENO, txt, size);
+  std::ignore = write(STDERR_FILENO, txt, size);
 }
 inline auto write_error(const char* txt) noexcept {
   write_error(txt, std::strlen(txt));

@@ -64,6 +64,7 @@ folly.overrideAttrs (orig: {
 
   cmakeFlags = orig.cmakeFlags ++ [
     (lib.cmakeBool "BOOST_LINK_STATIC" stdenv.hostPlatform.isStatic)
+    (lib.cmakeFeature "CMAKE_CXX_STANDARD" facebookNetworkStack.cxxStandard)
   ];
 
   doCheck = false;

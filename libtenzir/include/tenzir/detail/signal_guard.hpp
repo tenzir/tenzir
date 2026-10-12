@@ -10,7 +10,9 @@
 
 #include "tenzir/async/notify.hpp"
 #include "tenzir/atomic.hpp"
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/panic.hpp"
 #include "tenzir/ref.hpp"
 
 #include <fmt/format.h>
@@ -23,6 +25,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <thread>
+#include <tuple>
 #include <unistd.h>
 
 namespace tenzir::detail {
@@ -44,16 +47,20 @@ public:
   SignalGuard(Notify& graceful_stop, folly::CancellationSource& cancel_source,
               std::chrono::milliseconds grace)
     : graceful_stop_{graceful_stop}, cancel_source_{cancel_source} {
-    (void)::pipe(signal_pipe_.data());
+    if (::pipe(signal_pipe_.data()) != 0) {
+      panic("failed to create the signal pipe: {}", describe_errno());
+    }
     (void)::fcntl(signal_pipe_[1], F_SETFL, O_NONBLOCK);
-    (void)::pipe(wake_pipe_.data());
+    if (::pipe(wake_pipe_.data()) != 0) {
+      panic("failed to create the wake pipe: {}", describe_errno());
+    }
     signal_write_fd_.store(signal_pipe_[1], std::memory_order_relaxed);
     struct sigaction sa = {};
     sa.sa_handler = [](int signum) { // NOLINT
       auto fd = signal_write_fd_.load(std::memory_order_relaxed);
       if (fd >= 0) {
         auto byte = static_cast<char>(signum);
-        (void)::write(fd, &byte, 1);
+        std::ignore = ::write(fd, &byte, 1);
       }
     };
     sigemptyset(&sa.sa_mask);
@@ -65,7 +72,7 @@ public:
   }
 
   ~SignalGuard() {
-    (void)::write(wake_pipe_[1], "x", 1);
+    std::ignore = ::write(wake_pipe_[1], "x", 1);
     thread_.join();
     signal_write_fd_.store(-1, std::memory_order_relaxed);
     sigaction(SIGINT, &old_sigint_, nullptr);
@@ -98,7 +105,7 @@ private:
     }
     // First signal: drain the byte and request graceful stop.
     auto byte = char{};
-    (void)::read(signal_pipe_[0], &byte, 1);
+    std::ignore = ::read(signal_pipe_[0], &byte, 1);
     TENZIR_DEBUG("received signal {}, initiating graceful shutdown",
                  static_cast<int>(byte));
     fmt::print(stderr, "\rinitiating graceful shutdown... "

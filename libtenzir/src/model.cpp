@@ -48,7 +48,7 @@ auto missing_envelope_field(envelope_fields const& fields) -> std::string_view {
 }
 
 template <class T>
-auto model_as(data_view3 value) -> T const* {
+auto model_as(data_view3 const& value) -> T const* {
   return try_as<T>(value);
 }
 

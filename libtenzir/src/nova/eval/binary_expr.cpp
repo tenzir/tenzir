@@ -645,6 +645,7 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
     case else_:
       return eval_else(x, std::move(frame));
   }
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace tenzir::nova

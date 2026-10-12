@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/eval_internal.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/union_array.hpp"
@@ -34,5 +35,6 @@ auto _::EvalRun::eval(const ast::meta& x, EvalFrame frame) -> Array<Data> {
       return input_->meta.internal;
     }
   }
+  TENZIR_UNREACHABLE();
 }
 } // namespace tenzir::nova

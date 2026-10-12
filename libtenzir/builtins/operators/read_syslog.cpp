@@ -75,7 +75,7 @@ public:
     ordered_ = args_.msb_options.settings.ordered;
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     if (done_) {
       co_return;

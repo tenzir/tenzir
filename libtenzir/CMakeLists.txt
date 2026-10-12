@@ -711,10 +711,9 @@ dependency_summary("ICU" ICU::uc "Dependencies")
 
 # Link against folly.
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
-  # All Facebook libs are static archives linked into libtenzir.so.
-  # Use BUILD_LOCAL_INTERFACE to keep them visible in the local build
-  # tree but invisible in export()/install(EXPORT), avoiding a cascade
-  # of internal targets leaking into the TenzirTargets export set.
+  # Use BUILD_LOCAL_INTERFACE to keep the bundled Facebook libs visible in the
+  # local build tree but invisible in export()/install(EXPORT), avoiding a
+  # cascade of internal targets leaking into the TenzirTargets export set.
   target_link_libraries(libtenzir PUBLIC $<BUILD_LOCAL_INTERFACE:Folly::folly>)
 else ()
   target_link_libraries(libtenzir PUBLIC Folly::folly)
@@ -732,18 +731,12 @@ if (_tenzir_folly_include_dirs)
   target_include_directories(libtenzir_builtins BEFORE
                              PRIVATE ${_tenzir_folly_include_dirs})
 endif ()
-if (TARGET proxygen::proxygen_coro_client)
-  set(_tenzir_proxygen_target proxygen::proxygen_coro_client)
-elseif (TARGET proxygen::proxygen)
-  set(_tenzir_proxygen_target proxygen::proxygen)
-else ()
+if (NOT TARGET proxygen::proxygen_coro_client)
   message(FATAL_ERROR "No supported proxygen target found")
 endif ()
+set(_tenzir_proxygen_target proxygen::proxygen_coro_client)
 if (TARGET proxygen::proxygen_coro_server)
   set(_tenzir_proxygen_server_target proxygen::proxygen_coro_server)
-elseif (TARGET proxygen::proxygen_http_coro_server_coro_httpserver)
-  set(_tenzir_proxygen_server_target
-      proxygen::proxygen_http_coro_server_coro_httpserver)
 endif ()
 # Ensure bundled Facebook library headers win over Homebrew headers. The
 # bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
@@ -799,8 +792,7 @@ if (_tenzir_proxygen_server_target)
 endif ()
 # For the bundled case libtenzir_builtins is a static library whose private
 # deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
-# prevents that; the proxygen symbols are resolved through libtenzir.so
-# which consumers also link.
+# prevents that.
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_link_libraries(
     libtenzir_builtins
@@ -822,45 +814,25 @@ else ()
                           PRIVATE ${_tenzir_proxygen_server_target})
   endif ()
 endif ()
-target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
-                                             nsel_CONFIG_SELECT_EXPECTED=1)
-target_compile_definitions(
-  libtenzir_builtins PRIVATE TENZIR_HAS_PROXYGEN=1
-                             nsel_CONFIG_SELECT_EXPECTED=1)
-
-# Everything a translation unit outside libtenzir needs in order to include
-# `tenzir/http_server.hpp`.
-#
-# The settings above are all PRIVATE so that the rest of libtenzir stays clear
-# of proxygen, which leaves an in-tree consumer that genuinely runs an HTTP
-# server — the deployment, a plugin test — with no way to get them short of
-# repeating the list. `nsel_CONFIG_SELECT_EXPECTED` in particular is not
-# guessable: without it mvfst's `quic/common/Expected.h` selects an
-# implementation that does not compile.
-#
-# Deliberately not exported. The bundled Facebook targets exist only in this
-# build tree, the same reason folly is wrapped in `$<BUILD_LOCAL_INTERFACE:>`.
-add_library(libtenzir_http_server INTERFACE)
-add_library(tenzir::http_server ALIAS libtenzir_http_server)
-target_compile_definitions(
-  libtenzir_http_server INTERFACE TENZIR_HAS_PROXYGEN=1
-                                  nsel_CONFIG_SELECT_EXPECTED=1)
-target_link_libraries(
-  libtenzir_http_server INTERFACE ${_tenzir_proxygen_target}
-                                  proxygen_utils_trace_event_types)
-if (_tenzir_proxygen_server_target)
-  target_link_libraries(libtenzir_http_server
-                        INTERFACE ${_tenzir_proxygen_server_target})
-endif ()
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
-  target_include_directories(
-    libtenzir_http_server BEFORE
-    INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
-              "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated"
-              "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/mvfst"
-              "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/wangle"
-              "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/fizz"
-              "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
+  foreach (_tenzir_proxygen_usage_target IN
+           ITEMS ${_tenzir_proxygen_target} ${_tenzir_proxygen_server_target})
+    get_target_property(_tenzir_proxygen_aliased_target
+                        ${_tenzir_proxygen_usage_target} ALIASED_TARGET)
+    if (_tenzir_proxygen_aliased_target)
+      set(_tenzir_proxygen_usage_target ${_tenzir_proxygen_aliased_target})
+    endif ()
+    target_include_directories(
+      ${_tenzir_proxygen_usage_target} BEFORE
+      INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
+                "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated"
+                "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/mvfst"
+                "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/wangle"
+                "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/fizz"
+                "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
+  endforeach ()
+  unset(_tenzir_proxygen_usage_target)
+  unset(_tenzir_proxygen_aliased_target)
 endif ()
 # gflags is a transitive dependency of glog (used by folly). We must re-export
 # find_package(gflags) so that plugins can resolve the gflags_shared cmake

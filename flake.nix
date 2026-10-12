@@ -94,7 +94,7 @@
           type = "app";
           program = "${pkgs.writeShellScript "tenzir-up" ''
             export TENZIR_UNIFIED=1
-            exec ${package.tenzir-up}/bin/tenzir up "$@"
+            exec ${package.tenzir.unchecked}/bin/tenzir up "$@"
           ''}";
         };
         packages =
@@ -104,7 +104,6 @@
               inherit (package) tenzir-de-static;
               inherit (package) tenzir;
               inherit (package) tenzir-static;
-              inherit (package) tenzir-up;
               tenzir-de-clang = package-clang.tenzir-de;
               tenzir-de-static-clang = package-clang.tenzir-de-static;
               tenzir-clang = package-clang.tenzir;

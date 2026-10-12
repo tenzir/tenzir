@@ -15,6 +15,7 @@
 #include <cxxabi.h>
 #include <iostream>
 #include <string.h>
+#include <tuple>
 #include <unistd.h>
 #include <utility>
 
@@ -48,12 +49,12 @@ namespace {
 void safe_write(const char* str) {
   if (str) {
     auto len = __builtin_strlen(str);
-    (void)write(STDERR_FILENO, str, len);
+    std::ignore = write(STDERR_FILENO, str, len);
   }
 }
 
 void safe_write(const char* str, size_t len) {
-  (void)write(STDERR_FILENO, str, len);
+  std::ignore = write(STDERR_FILENO, str, len);
 }
 
 // Try to demangle a C++ symbol. Returns the demangled name on success,

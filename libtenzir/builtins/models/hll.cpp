@@ -272,7 +272,7 @@ public:
 
   auto update(table_slice const& input, session ctx) -> void override {
     for (auto& arg : eval(expr_, input, ctx)) {
-      for (auto const value : values3(*arg.array)) {
+      for (auto const& value : values3(*arg.array)) {
         auto input_count = checked_add(state_.input_count, uint64_t{1});
         if (not input_count) {
           warn_overflow("input", ctx);

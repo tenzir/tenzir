@@ -1018,7 +1018,7 @@ auto partition_transformer(
             self->state().partition_buildup.try_emplace(partition_data.id);
           }
           if (auto err = make_store_builder(self, partition_data); err) {
-            return std::move(err);
+            return err;
           }
           const auto available
             = self->state().partition_capacity - partition_data.events;

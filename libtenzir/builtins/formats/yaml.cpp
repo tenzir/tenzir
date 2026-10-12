@@ -319,7 +319,7 @@ public:
     co_await pusher_.push(msb_->yield_ready_as_table_slice(), push);
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
     TENZIR_ASSERT(msb_);
     TENZIR_ASSERT(dh_);
@@ -357,7 +357,7 @@ public:
     co_await pusher_.push(std::move(ready), push);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
     TENZIR_ASSERT(msb_);
     TENZIR_ASSERT(dh_);

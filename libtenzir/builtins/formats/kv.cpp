@@ -1361,7 +1361,7 @@ auto validate_splitter(const located<std::string>& split,
     auto validated
       = splitter{located<std::string_view>{split.inner, split.source}};
     TENZIR_UNUSED(validated);
-  } catch (diagnostic d) {
+  } catch (diagnostic& d) {
     dh.emit(std::move(d));
     return failure::promise();
   }

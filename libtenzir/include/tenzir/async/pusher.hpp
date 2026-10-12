@@ -13,6 +13,7 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/series_builder.hpp"
 
+#include <folly/Function.h>
 #include <folly/coro/BoundedQueue.h>
 
 #include <chrono>
@@ -61,11 +62,11 @@ public:
     });
   }
 
-  template <class OnSlice>
   auto push(series_builder::YieldReadyResult result, Push<table_slice>& push,
-            OnSlice&& on_slice) const -> Task<void> {
+            folly::FunctionRef<void(table_slice const&)> on_slice) const
+    -> Task<void> {
     for (auto&& slice : result.slices) {
-      std::invoke(on_slice, slice);
+      on_slice(slice);
       co_await push(std::move(slice));
     }
     if (result.wait_for) {

@@ -365,7 +365,7 @@ public:
     }
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
+  auto stop(OpCtx&) -> Task<void> override {
     TENZIR_ASSERT(reactor_);
     (*reactor_)->request_shutdown();
     co_return;
@@ -476,7 +476,7 @@ public:
     }
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
+  auto stop(OpCtx&) -> Task<void> override {
     TENZIR_ASSERT(reactor_);
     (*reactor_)->request_shutdown();
     co_return;

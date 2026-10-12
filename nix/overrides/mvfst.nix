@@ -13,6 +13,7 @@ mvfst.overrideAttrs (orig: {
   version = facebookNetworkStack.release;
   cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
     "-DBUILD_TESTS=OFF"
+    (lib.cmakeFeature "CMAKE_CXX_STANDARD" facebookNetworkStack.cxxStandard)
   ];
   src = fetchFromGitHub {
     inherit (facebookNetworkStack.mvfst)

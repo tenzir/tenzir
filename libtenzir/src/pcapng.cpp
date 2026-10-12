@@ -21,7 +21,7 @@ constexpr auto nanoseconds_per_second = uint64_t{1'000'000'000};
 } // namespace
 
 auto decode_timestamp(uint64_t value, TimestampFormat format) -> Option<time> {
-  auto nanoseconds = __int128{};
+  auto nanoseconds = __int128_t{};
   auto exponent
     = static_cast<uint8_t>(format.resolution & resolution_exponent_mask);
   if ((format.resolution & binary_resolution_flag) == 0) {
@@ -32,7 +32,7 @@ auto decode_timestamp(uint64_t value, TimestampFormat format) -> Option<time> {
       if (not factor) {
         return None{};
       }
-      nanoseconds = static_cast<__int128>(value) * *factor;
+      nanoseconds = static_cast<__int128_t>(value) * *factor;
     } else {
       auto divisor = checked_pow(
         uint64_t{10},
@@ -42,10 +42,10 @@ auto decode_timestamp(uint64_t value, TimestampFormat format) -> Option<time> {
   } else {
     auto numerator = static_cast<__uint128_t>(value) * nanoseconds_per_second;
     auto denominator = __uint128_t{1} << exponent;
-    nanoseconds = static_cast<__int128>(numerator / denominator);
+    nanoseconds = static_cast<__int128_t>(numerator / denominator);
   }
   nanoseconds
-    += static_cast<__int128>(format.offset_seconds) * nanoseconds_per_second;
+    += static_cast<__int128_t>(format.offset_seconds) * nanoseconds_per_second;
   if (nanoseconds < std::numeric_limits<int64_t>::min()
       or nanoseconds > std::numeric_limits<int64_t>::max()) {
     return None{};
@@ -55,8 +55,8 @@ auto decode_timestamp(uint64_t value, TimestampFormat format) -> Option<time> {
 
 auto encode_timestamp(time value, TimestampFormat format) -> Option<uint64_t> {
   auto nanoseconds
-    = static_cast<__int128>(value.time_since_epoch().count())
-      - static_cast<__int128>(format.offset_seconds) * nanoseconds_per_second;
+    = static_cast<__int128_t>(value.time_since_epoch().count())
+      - static_cast<__int128_t>(format.offset_seconds) * nanoseconds_per_second;
   if (nanoseconds < 0) {
     return None{};
   }

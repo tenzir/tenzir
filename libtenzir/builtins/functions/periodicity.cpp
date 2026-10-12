@@ -60,9 +60,9 @@ auto extract_doubles(arrow::ListArray const& array, int64_t row,
       if (length == 0) {
         return extraction::ok;
       }
-      auto const origin = static_cast<__int128>(values.Value(begin));
+      auto const origin = static_cast<__int128_t>(values.Value(begin));
       for (auto i = begin; i < begin + length; ++i) {
-        auto const offset = static_cast<__int128>(values.Value(i)) - origin;
+        auto const offset = static_cast<__int128_t>(values.Value(i)) - origin;
         out.push_back(static_cast<double>(offset));
       }
       return extraction::ok;
@@ -89,12 +89,12 @@ auto extract_doubles(nova::RowView<nova::List> const& list,
                      std::vector<double>& out) -> extraction {
   out.clear();
   out.reserve(list.length());
-  auto origin = __int128{};
+  auto origin = __int128_t{};
   auto has_origin = false;
   for (auto value : list) {
     auto set_origin = [&](auto x) {
       if (not has_origin) {
-        origin = static_cast<__int128>(x);
+        origin = static_cast<__int128_t>(x);
         has_origin = true;
       }
     };
@@ -117,7 +117,7 @@ auto extract_doubles(nova::RowView<nova::List> const& list,
   for (auto value : list) {
     auto append_integral = [&](auto x) {
       if (has_origin) {
-        out.push_back(static_cast<double>(static_cast<__int128>(x) - origin));
+        out.push_back(static_cast<double>(static_cast<__int128_t>(x) - origin));
       } else {
         out.push_back(static_cast<double>(x));
       }
@@ -130,7 +130,7 @@ auto extract_doubles(nova::RowView<nova::List> const& list,
       append_integral((**x).count());
     } else if (auto const* x = try_as<nova::RowView<nova::Float>>(value)) {
       if (has_origin) {
-        constexpr auto scale = __int128{1} << 32;
+        constexpr auto scale = __int128_t{1} << 32;
         auto const high = origin / scale * scale;
         auto const low = origin - high;
         out.push_back(**x - static_cast<double>(high)
@@ -592,7 +592,7 @@ struct DominantPeriodFunction {
         = std::minmax_element(times.begin(), times.end());
       auto const resolution_ns = args.resolution.inner.count();
       auto const span
-        = static_cast<__int128>(*max_it) - static_cast<__int128>(*min_it);
+        = static_cast<__int128_t>(*max_it) - static_cast<__int128_t>(*min_it);
       auto const num_bins_wide = span / resolution_ns + 1;
       if (num_bins_wide > max_bins) {
         warn_bins = true;
@@ -607,7 +607,7 @@ struct DominantPeriodFunction {
       auto counts = std::vector<double>(num_bins, 0.0);
       for (auto const t : times) {
         auto const offset
-          = static_cast<__int128>(t) - static_cast<__int128>(*min_it);
+          = static_cast<__int128_t>(t) - static_cast<__int128_t>(*min_it);
         auto const bin = static_cast<size_t>(offset / resolution_ns);
         counts[bin] += 1.0;
       }
@@ -616,7 +616,8 @@ struct DominantPeriodFunction {
         no_peak();
         return;
       }
-      auto const period_ns = static_cast<__int128>(peak->first) * resolution_ns;
+      auto const period_ns
+        = static_cast<__int128_t>(peak->first) * resolution_ns;
       if (period_ns > std::numeric_limits<int64_t>::max()) {
         warn_period = true;
         builder.null();
@@ -771,8 +772,8 @@ public:
           auto const [min_it, max_it]
             = std::minmax_element(times.begin(), times.end());
           auto const resolution_ns = resolution.inner.count();
-          auto const span
-            = static_cast<__int128>(*max_it) - static_cast<__int128>(*min_it);
+          auto const span = static_cast<__int128_t>(*max_it)
+                            - static_cast<__int128_t>(*min_it);
           auto const num_bins_wide = span / resolution_ns + 1;
           if (num_bins_wide > max_bins) {
             warn_bins = true;
@@ -787,7 +788,7 @@ public:
           auto counts = std::vector<double>(num_bins, 0.0);
           for (auto const t : times) {
             auto const offset
-              = static_cast<__int128>(t) - static_cast<__int128>(*min_it);
+              = static_cast<__int128_t>(t) - static_cast<__int128_t>(*min_it);
             auto const bin = static_cast<size_t>(offset / resolution_ns);
             counts[bin] += 1.0;
           }
@@ -797,7 +798,7 @@ public:
             continue;
           }
           auto const period_ns
-            = static_cast<__int128>(peak->first) * resolution_ns;
+            = static_cast<__int128_t>(peak->first) * resolution_ns;
           if (period_ns > std::numeric_limits<int64_t>::max()) {
             warn_period = true;
             builder.null();

@@ -313,12 +313,14 @@ target_compile_options(
             $<$<CONFIG:CI>:-Werror
             # Spurious warnings when ASAN is combined with optimizations.
             $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-maybe-uninitialized>
-            $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-restrict>
+            $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-restrict>>
             # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
-            -Wno-error=deprecated-declarations>
+            -Wno-error=deprecated-declarations
             $<$<CXX_COMPILER_ID:GNU>:-Wno-interference-size>
-            $<$<CXX_COMPILER_ID:GNU>:-Wno-error=bool-compare>)
+            $<$<CXX_COMPILER_ID:GNU>:-Wno-error=bool-compare>
+            $<$<CXX_COMPILER_ID:GNU>:-Wno-error=maybe-uninitialized>
+            $<$<CXX_COMPILER_ID:GNU>:-Wno-error=array-bounds>)
 
 # -- build id ------------------------------------------------------------------
 
@@ -954,6 +956,20 @@ else ()
   unset(_tenzir_proxygen_generated_root)
   unset(_tenzir_proxygen_stats_wrapper)
 endif ()
+
+function (tenzir_alias_legacy_proxygen_target name legacy)
+  if (TARGET proxygen::${name} OR NOT TARGET ${legacy})
+    return()
+  endif ()
+  get_target_property(aliased ${legacy} ALIASED_TARGET)
+  if (aliased)
+    set(legacy ${aliased})
+  endif ()
+  add_library(proxygen::${name} ALIAS ${legacy})
+endfunction ()
+tenzir_alias_legacy_proxygen_target(proxygen_coro_client proxygen::proxygen)
+tenzir_alias_legacy_proxygen_target(
+  proxygen_coro_server proxygen::proxygen_http_coro_server_coro_httpserver)
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS

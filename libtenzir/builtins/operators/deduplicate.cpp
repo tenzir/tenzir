@@ -87,9 +87,6 @@ struct configuration {
        Option<ast::field_path> count_field, diagnostic_handler& dh)
     -> failure_or<configuration>;
 
-  static auto parse(operator_factory_invocation inv, session ctx)
-    -> failure_or<configuration>;
-
   auto cleanup_duration() const -> duration;
 };
 
@@ -287,74 +284,6 @@ auto configuration::make(std::vector<ast::expression> keys,
     return failure::promise();
   }
   return cfg;
-}
-
-auto configuration::parse(operator_factory_invocation inv, session ctx)
-  -> failure_or<configuration> {
-  auto expressions = std::vector<ast::expression>{};
-  auto named_args = std::vector<ast::expression>{};
-  auto seen_named = false;
-  auto seen_general_expression = false;
-  expressions.reserve(inv.args.size());
-  named_args.reserve(inv.args.size());
-  for (auto& arg : inv.args) {
-    if (is<ast::assignment>(arg)) {
-      seen_named = true;
-      named_args.push_back(std::move(arg));
-      continue;
-    }
-    if (seen_named) {
-      diagnostic::error("positional arguments must precede named arguments")
-        .primary(arg)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto selector = ast::field_path::try_from(arg);
-    if (selector) {
-      if (selector->has_this() or selector->path().empty()) {
-        diagnostic::error("cannot deduplicate `this` explicitly")
-          .primary(*selector)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (seen_general_expression) {
-        diagnostic::error("cannot mix field selectors with general expressions")
-          .primary(arg)
-          .emit(ctx);
-        return failure::promise();
-      }
-      expressions.push_back(std::move(*selector).unwrap());
-      continue;
-    }
-    if (seen_general_expression) {
-      diagnostic::error("expected selector").primary(arg).emit(ctx);
-      return failure::promise();
-    }
-    if (not expressions.empty()) {
-      diagnostic::error("cannot mix field selectors with general expressions")
-        .primary(arg)
-        .emit(ctx);
-      return failure::promise();
-    }
-    seen_general_expression = true;
-    expressions.push_back(std::move(arg));
-  }
-  auto limit = Option<located<int64_t>>{};
-  auto cfg = DeduplicateArgs{};
-  auto parser = argument_parser2::operator_("deduplicate");
-  [[maybe_unused]] auto unused_key = Option<ast::expression>{};
-  parser.positional("key", unused_key, "any");
-  parser.named("distance", cfg.distance);
-  parser.named("limit", limit);
-  parser.named("create_timeout", cfg.create_timeout);
-  parser.named("write_timeout", cfg.write_timeout);
-  parser.named("read_timeout", cfg.read_timeout);
-  parser.named("count_field", cfg.count_field);
-  auto parser_inv
-    = operator_factory_invocation{inv.self, std::move(named_args)};
-  TRY(parser.parse(parser_inv, ctx));
-  return make(std::move(expressions), limit, cfg.distance, cfg.create_timeout,
-              cfg.write_timeout, cfg.read_timeout, cfg.count_field, ctx);
 }
 
 auto configuration::cleanup_duration() const -> duration {

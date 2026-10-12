@@ -38,5 +38,6 @@ wangle.overrideAttrs (orig: {
     '';
   cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
     (lib.cmakeBool "BUILD_TESTS" false)
+    (lib.cmakeFeature "CMAKE_CXX_STANDARD" facebookNetworkStack.cxxStandard)
   ];
 })

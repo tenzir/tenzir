@@ -210,7 +210,6 @@ public:
 
   private:
     friend class Field;
-    friend class List;
     List(EventBuilder& parent,
          Option<ArrayBuilder<nova::List>::ListBuilder> inner, type seed,
          value_path path);

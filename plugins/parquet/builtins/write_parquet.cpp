@@ -164,7 +164,7 @@ public:
   explicit WriteParquet(WriteParquetArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto start(OpCtx&) -> Task<void> override {
     parquet_writer_props_ = build_writer_props(args_);
     co_return;
   }

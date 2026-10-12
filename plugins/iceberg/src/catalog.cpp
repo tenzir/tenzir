@@ -1739,7 +1739,7 @@ auto commit_append(std::shared_ptr<ice::Table> table,
       "(a concurrent update won the race)",
     }};
   }
-  return std::move(committed);
+  return committed;
 }
 
 auto finish_data_file(ice::DataWriter& writer)

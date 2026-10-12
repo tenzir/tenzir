@@ -1,6 +1,6 @@
-# Build folly, fizz, wangle, mvfst, and proxygen from submodules as static
-# archives. All five libraries are linked into libtenzir.so so that there is
-# exactly one copy of every folly singleton in the process.
+# Build folly, fizz, wangle, mvfst, and proxygen from submodules, as shared
+# libraries when the rest of the build is. Either way there is exactly one copy
+# of every folly singleton in the process.
 
 # Validate all submodules exist. Some repos (fizz, wangle) have their
 # CMakeLists.txt in a subdirectory named after the project.
@@ -43,8 +43,6 @@ set(BUILD_EXAMPLES
     OFF
     CACHE BOOL "" FORCE)
 # gflags is available from the Nix environment (transitive dep of glog).
-# With all Facebook libs as static archives inside libtenzir.so, gflags
-# registrations go into the single shared libgflags — no duplication.
 # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
 set(FOLLY_HAVE_MALLOC_USABLE_SIZE
     OFF
@@ -85,18 +83,15 @@ if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
   string(APPEND CMAKE_CXX_FLAGS " -mavx2")
 endif ()
 
-# Force ALL Facebook libs to build as static libraries. This ensures every
-# folly singleton lives in exactly one place (libtenzir.so), preventing the
-# "mismatched unique instance" crash from duplicate folly singletons.
-# When the main build uses shared libraries, static archives must be compiled
-# with -fPIC because they will be linked into a shared library.
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (BUILD_SHARED_LIBS)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif ()
-set(BUILD_SHARED_LIBS OFF)
 
-# Skip install rules while adding bundled Facebook libs — they are static
-# archives linked into libtenzir.so and never installed individually.
+# Skip the bundled projects' own install rules: they would install their
+# headers, archives, and CMake packages into the Tenzir prefix. The shared
+# libraries are installed below.
 # Restore the previous value afterwards so this directory still gets a
 # cmake_install.cmake for parent include() calls.
 set(_tenzir_prev_skip_install_rules "${CMAKE_SKIP_INSTALL_RULES}")
@@ -295,10 +290,31 @@ unset(_tenzir_fb_install_subdir)
 unset(_tenzir_fb_install_stub)
 unset(_tenzir_fb_install_stub_dir)
 
-# All Facebook libs are static archives linked into libtenzir.so. No
-# export/install of individual targets needed.
 set(CMAKE_SKIP_INSTALL_RULES "${_tenzir_prev_skip_install_rules}")
 unset(_tenzir_prev_skip_install_rules)
+function (tenzir_install_bundled_facebook_libraries directory)
+  get_property(
+    targets
+    DIRECTORY "${directory}"
+    PROPERTY BUILDSYSTEM_TARGETS)
+  foreach (target IN LISTS targets)
+    get_target_property(type "${target}" TYPE)
+    if (type STREQUAL "SHARED_LIBRARY")
+      install(
+        TARGETS "${target}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
+    endif ()
+  endforeach ()
+  get_property(
+    subdirectories
+    DIRECTORY "${directory}"
+    PROPERTY SUBDIRECTORIES)
+  foreach (subdirectory IN LISTS subdirectories)
+    tenzir_install_bundled_facebook_libraries("${subdirectory}")
+  endforeach ()
+endfunction ()
+tenzir_install_bundled_facebook_libraries("${CMAKE_CURRENT_SOURCE_DIR}")
 if (DEFINED _tenzir_prev_warn_deprecated)
   set(CMAKE_WARN_DEPRECATED
       "${_tenzir_prev_warn_deprecated}"

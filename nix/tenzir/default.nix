@@ -205,6 +205,9 @@ let
             "-DTENZIR_ENABLE_DEPLOYMENT=${lib.boolToString (deployment-source != null)}"
             "-DTENZIR_ENABLE_DEPLOYMENT_TESTS=${lib.boolToString deploymentTests}"
           ]
+          ++ lib.optionals (isStatic && stdenv.hostPlatform.isx86_64) [
+            "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
+          ]
           ++ lib.optionals (platformCli != null) [
             "-DTENZIR_PLATFORM_CLI_PATH=${lib.getExe platformCli}"
           ]

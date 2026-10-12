@@ -1,10 +1,11 @@
 {
   release = "2026.06.29.00";
+  cxxStandard = "23";
   folly = {
     owner = "tenzir";
     repo = "folly";
-    rev = "3a064dbfe386cc7a292860de3764a374e3d99e7e";
-    hash = "sha256-0vWqcRZ8O5N3I4pNnHSxoJ7/2CmLCt3tM9O5DIY80Xk=";
+    rev = "97ac253cfda970472a9e087ad7da631dbbeeadde";
+    hash = "sha256-yFo5FVhpSN5ZYHLfs+U5synjIb1+FMt2zGJuBfbFLCs=";
   };
   fizz = {
     owner = "facebookincubator";
@@ -19,15 +20,15 @@
     hash = "sha256-4upeE8XiVPWb19y6DL+GGKkxcFDdvOfUjGoy3LkqNwM=";
   };
   mvfst = {
-    owner = "facebook";
+    owner = "tenzir";
     repo = "mvfst";
-    rev = "0564d5c495cc3281d79d70563fd9e5d57dadf050";
-    hash = "sha256-h0jfadP/c8dg4df9r5K48fJ9a0XpUEoSQHvIrdYdagU=";
+    rev = "27bea101b7bd41ebadf1f713bd65ade44a64ab80";
+    hash = "sha256-5KeDgBgrr7GhmEOMLWXTkPXMXdpcqTGOTIh0VIRJrMo=";
   };
   proxygen = {
     owner = "tenzir";
     repo = "proxygen";
-    rev = "df0505a9d310197b81058abfb6aaed56fe8d3826";
-    hash = "sha256-vmDAH1+i8dlTS0bqyj9EUINgaJyFsAZYh/7e0yByepo=";
+    rev = "f14fa8382cea6ca2d055593fa480cc9553a54c87";
+    hash = "sha256-/QM4LycKu0fmIwAYYpCmh5zIT5iwrE3LCSiDn3OlCOA=";
   };
 }
