@@ -66,9 +66,9 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 else
   time_args=(-v -o "$resource_file")
 fi
-tenzir_args=(--bare-mode)
+tenzir_args=(run --bare-mode)
 if [[ "${BENCHMARK_DIAGNOSTICS:-false}" == "true" ]]; then
-  tenzir_args=(-vv "${tenzir_args[@]}")
+  tenzir_args+=(-vv)
 fi
 /usr/bin/time "${time_args[@]}" \
   "$tenzir_bin" "${tenzir_args[@]}" -f "$results/pipeline.tql" \

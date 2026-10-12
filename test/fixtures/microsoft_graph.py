@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 import threading
 import time
 from dataclasses import dataclass
@@ -514,7 +515,7 @@ def _plugin_env() -> dict[str, str]:
 
     env: dict[str, str] = {}
     if binary := os.environ.get("TENZIR_BINARY"):
-        build_dir = Path(binary).resolve().parent.parent
+        build_dir = Path(shlex.split(binary)[0]).resolve().parent.parent
         plugin_dir = build_dir / "lib" / "tenzir" / "plugins"
         if plugin_dir.is_dir():
             env["TENZIR_PLUGIN_DIRS"] = str(plugin_dir)

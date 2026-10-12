@@ -46,31 +46,40 @@ def _prepare_environment() -> None:
     os.environ["TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS"] = value
 
 
+def _unified_mode() -> bool:
+    value = os.environ.get("TENZIR_UNIFIED", "").lower()
+    return value not in {"", "0", "false", "no"}
+
+
+def _is_remote_run(arguments: list[str]) -> bool:
+    for argument in arguments:
+        if argument == "--":
+            return False
+        if argument in {"-r", "--remote"}:
+            return True
+    return False
+
+
+def _exec_platform_cli(arguments: list[str]) -> NoReturn:
+    import tenzir_platform_cli  # noqa: PLC0415
+
+    # The platform CLI starts deployments through the engine.
+    os.environ["TENZIR_LIBEXEC"] = str(_pkg_bin_dir().parent / "libexec")
+    binary = Path(tenzir_platform_cli.__file__).with_name("platform-cli")
+    os.execv(binary, ["tenzir", *arguments])
+
+
 def exec_binary(name: str) -> NoReturn:
     # We don't support calling this helper outside of the generated tenzir(*) wrappers
     # from the [project.scripts] in pyproject.toml.
     _prepare_environment()
     arguments = sys.argv[1:]
     if name == "tenzir":
-        unified = os.environ.get("TENZIR_UNIFIED", "").lower() not in {
-            "",
-            "0",
-            "false",
-            "no",
-        }
-        platform_arguments = None
-        if unified and (not arguments or arguments[0] not in {"up", "run"}):
-            platform_arguments = arguments
-        elif not unified and arguments and arguments[0] == "platform":
-            platform_arguments = arguments[1:]
-        if platform_arguments is not None:
-            from tenzir_platform_cli._bin import exec_cli  # noqa: PLC0415
-
-            exec_cli(platform_arguments)
-        elif unified:
-            if arguments[0] == "up":
-                name = "tenzir-up"
-            arguments = arguments[1:]
+        if _unified_mode():
+            if arguments[:1] != ["run"] or _is_remote_run(arguments[1:]):
+                _exec_platform_cli(arguments)
+        elif arguments[:1] == ["platform"]:
+            _exec_platform_cli(arguments[1:])
     # Try packaged binary first, then PATH.
     for p in _candidate_paths("tenzir"):
         if p.is_file() and os.access(p, os.X_OK):

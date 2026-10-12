@@ -51,6 +51,7 @@ def main():
         p = subprocess.Popen(
             [
                 "tenzir",
+                "run",
                 "--color=always",
                 "-q",
                 '--implicit-events-sink=write_tql color=true | save_file "/dev/stdout"',

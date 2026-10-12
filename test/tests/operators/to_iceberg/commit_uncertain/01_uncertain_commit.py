@@ -92,7 +92,7 @@ from_stdin {{
 to_iceberg "{TABLE}", catalog="{proxy_uri}", mode="create_append", max_size=1
 """
     writer = subprocess.Popen(
-        ["tenzir", "--nova=true", pipeline],
+        ["tenzir", "run", "--nova=true", pipeline],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

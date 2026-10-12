@@ -34,7 +34,7 @@ to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append",
   partition_by=[id]
 """
     writer = subprocess.Popen(
-        ["tenzir", "--nova=true", "--console-verbosity=debug", pipeline],
+        ["tenzir", "run", "--nova=true", "--console-verbosity=debug", pipeline],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -60,6 +60,7 @@ to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append",
     subprocess.run(
         [
             "tenzir",
+            "run",
             "--nova=true",
             f'from {{id: 1, value: "external"}}\n'
             f'to_iceberg "{TABLE}", catalog="{catalog_uri}", '

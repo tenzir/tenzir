@@ -4,6 +4,7 @@
 
 import os
 import select
+import shlex
 import subprocess
 
 
@@ -11,7 +12,7 @@ pipeline = """from_stdin { read_syslog _batch_timeout=10ms }
 select message
 write_lines"""
 with subprocess.Popen(
-    [os.environ["TENZIR_BINARY"], "--bare-mode", "--nova=true", pipeline],
+    [*shlex.split(os.environ["TENZIR_BINARY"]), "--bare-mode", "--nova=true", pipeline],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,

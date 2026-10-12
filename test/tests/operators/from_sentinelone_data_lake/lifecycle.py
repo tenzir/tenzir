@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import shutil
 import signal
 import subprocess
 import time
@@ -14,9 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CAPTURE = Path(os.environ["S1_FIXTURE_LRQ_CAPTURE_FILE"])
-BINARY = shlex.split(
-    os.environ.get("TENZIR_BINARY", shutil.which("tenzir") or "tenzir")
-)
+BINARY = shlex.split(os.environ.get("TENZIR_BINARY", "tenzir run"))
 
 
 def calls() -> list[dict]:

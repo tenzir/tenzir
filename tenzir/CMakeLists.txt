@@ -119,11 +119,20 @@ if (BUILD_TESTING)
       "-DLIBEXEC_FROM_BINDIR=${TENZIR_LIBEXEC_FROM_BINDIR}" -P
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/dispatcher.cmake")
   add_test(
-    NAME tenzir/dispatcher-run
-    COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "$<TARGET_FILE:tenzir>"
-            run "from {answer: 42} | write_ndjson")
-  set_tests_properties(tenzir/dispatcher-run PROPERTIES PASS_REGULAR_EXPRESSION
-                                                        "\"answer\"[^0-9]*42")
+    NAME tenzir/run-subcommand
+    COMMAND
+      "${CMAKE_COMMAND}" "-DTENZIR_BINARY=$<TARGET_FILE:tenzir>"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/run-subcommand-test" -P
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/run-subcommand.cmake")
+  foreach (mode 0 1)
+    add_test(
+      NAME tenzir/dispatcher-run-${mode}
+      COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=${mode}
+              "$<TARGET_FILE:tenzir>" run "from {answer: 42} | write_ndjson")
+    set_tests_properties(
+      tenzir/dispatcher-run-${mode} PROPERTIES PASS_REGULAR_EXPRESSION
+                                               "\"answer\"[^0-9]*42")
+  endforeach ()
 endif ()
 
 # -- example configuration file -----------------------------------------------
@@ -269,7 +278,7 @@ function (tenzir_build_test_command out_var)
   list(
     APPEND
     cmd
-    "TENZIR_BINARY=$<TARGET_FILE:tenzir::tenzir>"
+    "TENZIR_BINARY=$<TARGET_FILE:tenzir::tenzir> run"
     "TENZIR_NODE_BINARY=$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
     "--"
     "${TENZIR_UV_PATH}"

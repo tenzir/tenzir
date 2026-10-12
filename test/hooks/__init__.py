@@ -2,6 +2,7 @@
 
 import logging
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import threading
@@ -213,7 +214,7 @@ def use_local_tenzir_build(ctx):
         return
 
     ctx.path.insert(0, str(bin_dir))
-    ctx.env.setdefault("TENZIR_BINARY", str(tenzir))
+    ctx.env.setdefault("TENZIR_BINARY", shlex.join([str(tenzir), "run"]))
     ctx.env.setdefault("TENZIR_NODE_BINARY", str(tenzir_node))
 
     if ctx.debug:

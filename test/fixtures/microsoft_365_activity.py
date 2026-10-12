@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import threading
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -361,7 +362,7 @@ def _plugin_env() -> dict[str, str]:
 
     env: dict[str, str] = {}
     if binary := os.environ.get("TENZIR_BINARY"):
-        build_dir = Path(binary).resolve().parent.parent
+        build_dir = Path(shlex.split(binary)[0]).resolve().parent.parent
         plugin_dir = Path(
             os.environ.get(
                 "MS_ACTIVITY_FIXTURE_PLUGIN_DIR",

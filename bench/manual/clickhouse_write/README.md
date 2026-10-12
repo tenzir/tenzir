@@ -12,8 +12,8 @@ the same environment as the ClickHouse integration fixture:
 
 - `CLICKHOUSE_CONTAINER_RUNTIME` and `CLICKHOUSE_CONTAINER_ID` for SQL queries.
 - `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, and `CLICKHOUSE_PASSWORD` for insertion.
-- `TENZIR_BINARY` for the binary under test.
-- Optional `BENCH_BASELINE_BINARY` for a comparison binary.
+- `TENZIR_BINARY` for the command under test, such as `/path/to/tenzir run`.
+- Optional `BENCH_BASELINE_BINARY` for a comparison command.
 
 ```sh
 python3 bench/manual/clickhouse_write/write.py

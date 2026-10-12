@@ -295,7 +295,7 @@ WORKDIR /var/lib/tenzir
 VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 
 # Verify that Tenzir starts up correctly.
-RUN tenzir 'version'
+RUN tenzir run 'version'
 
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
@@ -312,7 +312,7 @@ COPY --chown=tenzir:tenzir test/ ./test
 # release, whose different stdout/stderr handling reorders diagnostics relative
 # to the reference outputs.
 RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
-    TENZIR_BINARY="$PREFIX/bin/tenzir" \
+    TENZIR_BINARY="$PREFIX/bin/tenzir run" \
     TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \
     "${PREFIX}/libexec/uv" tool run \
     --python ">=3.12" \

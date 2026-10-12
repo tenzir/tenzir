@@ -5,11 +5,12 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shlex
 import subprocess
 import urllib.request
 from pathlib import Path
 
-binary = os.environ["TENZIR_PYTHON_FIXTURE_BINARY"]
+binary = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
 registry = os.environ["AVRO_REGISTRY_URL"]
 control = "http://" + os.environ["KAFKA_IAM_HELPER_HTTP"]
 header_key = "__value_schema_id"
@@ -74,7 +75,7 @@ def consume(
     to_stdout {{ write_ndjson }}
     """
     return subprocess.run(
-        [binary, "--nova=true", pipeline],
+        [*binary, "--nova=true", pipeline],
         capture_output=True,
         text=True,
         timeout=35,

@@ -2,15 +2,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # Exercise routing and argument forwarding without starting either backend.
-file(MAKE_DIRECTORY "${TEST_ROOT}/bin"
-     "${TEST_ROOT}/bin/${LIBEXEC_FROM_BINDIR}")
+# The stand-ins print their name, TENZIR_LIBEXEC, and their arguments. As
+# scripts, they cannot see the argv[0] they were started with.
+set(libexec "${TEST_ROOT}/bin/${LIBEXEC_FROM_BINDIR}")
+file(MAKE_DIRECTORY "${TEST_ROOT}/bin" "${libexec}")
+file(REAL_PATH "${libexec}" libexec)
 file(COPY_FILE "${TENZIR_BINARY}" "${TEST_ROOT}/bin/tenzir")
 foreach (backend engine platform-cli)
-  set(path "${TEST_ROOT}/bin/${LIBEXEC_FROM_BINDIR}/${backend}")
-  file(WRITE "${path}" "#!/bin/sh\nprintf '%s\\n' '${backend}' \"$@\"\n")
-  file(CHMOD "${path}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+  file(
+    WRITE "${libexec}/${backend}"
+    "#!/bin/sh\nprintf '%s\\n' '${backend}' \"\${TENZIR_LIBEXEC-unset}\" \"$@\"\n"
+  )
+  file(CHMOD "${libexec}/${backend}" PERMISSIONS OWNER_READ OWNER_WRITE
+       OWNER_EXECUTE)
 endforeach ()
-foreach (name tenzir-node tenzir-ctl tenzir-rebuild)
+foreach (name tenzir-node tenzir-ctl tenzir-rebuild tenzir-up)
   file(CREATE_LINK tenzir "${TEST_ROOT}/bin/${name}" SYMBOLIC)
 endforeach ()
 
@@ -21,7 +27,7 @@ function (check mode name expected)
     set(environment "TENZIR_UNIFIED=${mode}")
   endif ()
   execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env "${environment}"
+    COMMAND "${CMAKE_COMMAND}" -E env --unset=TENZIR_LIBEXEC "${environment}"
             "${TEST_ROOT}/bin/${name}" ${ARGN}
     RESULT_VARIABLE status
     OUTPUT_VARIABLE output
@@ -32,6 +38,31 @@ function (check mode name expected)
   endif ()
 endfunction ()
 
+set(engine "engine\nunset\n")
+set(platform "platform-cli\n${libexec}\n")
+foreach (
+  mode
+  unset
+  ""
+  0
+  false
+  FALSE
+  FaLsE
+  no
+  NO
+  nO
+  1
+  true
+  yes
+  arbitrary)
+  check("${mode}" tenzir "${engine}run\nfrom {x: 1}\n" run "from {x: 1}")
+  check("${mode}" tenzir "${engine}run\n-f\npipeline.tql\n" run -f pipeline.tql)
+  check("${mode}" tenzir "${engine}run\n--\n-r\n" run -- -r)
+  foreach (name tenzir-node tenzir-ctl tenzir-rebuild tenzir-up)
+    check("${mode}" "${name}" "${engine}run\n-r\n" run -r)
+    check("${mode}" "${name}" "${engine}platform\n--help\n" platform --help)
+  endforeach ()
+endforeach ()
 foreach (
   mode
   unset
@@ -43,42 +74,46 @@ foreach (
   no
   NO
   nO)
-  check("${mode}" tenzir "platform-cli\n--help\n" platform --help)
-  check("${mode}" tenzir "engine\nup\n--help\n" up --help)
-  check("${mode}" tenzir "engine\nrun\nfrom {x: 1}\n" run "from {x: 1}")
-  check("${mode}" tenzir "engine\nunknown\n--flag\na b\n" unknown --flag "a b")
+  check("${mode}" tenzir "${platform}--help\n" platform --help)
+  check("${mode}" tenzir "${platform}" platform)
+  check("${mode}" tenzir "${engine}run\n-r\nfrom {x: 1}\n" run -r "from {x: 1}")
+  check("${mode}" tenzir "${engine}up\nname\n" up name)
+  check("${mode}" tenzir "${engine}--help\n" --help)
+  check("${mode}" tenzir "${engine}unknown\n--flag\na b\n" unknown --flag "a b")
+  check("${mode}" tenzir "${engine}")
 endforeach ()
 foreach (mode 1 true yes arbitrary)
-  check("${mode}" tenzir "engine\n--help\n" up --help)
-  check("${mode}" tenzir "engine\nfrom {x: 1}\n" run "from {x: 1}")
-  check("${mode}" tenzir "platform-cli\nunknown\n--flag\na b\n" unknown --flag
+  check("${mode}" tenzir "${platform}run\n-r\nfrom {x: 1}\n" run -r
+        "from {x: 1}")
+  check(
+    "${mode}"
+    tenzir
+    "${platform}run\n-f\np.tql\n--remote\n"
+    run
+    -f
+    p.tql
+    --remote)
+  check("${mode}" tenzir "${platform}up\nname\n-d\n" up name -d)
+  check("${mode}" tenzir "${platform}down\nname\n" down name)
+  check("${mode}" tenzir "${platform}--help\n" --help)
+  check("${mode}" tenzir "${platform}unknown\n--flag\na b\n" unknown --flag
         "a b")
-  check("${mode}" tenzir "platform-cli\nplatform\n--help\n" platform --help)
-  check("${mode}" tenzir "platform-cli\n--help\n" --help)
-endforeach ()
-foreach (mode unset 1)
-  foreach (name tenzir-node tenzir-ctl tenzir-rebuild)
-    check("${mode}" "${name}" "engine\nplatform\n--help\n" platform --help)
-  endforeach ()
+  check("${mode}" tenzir "${platform}platform\n--help\n" platform --help)
+  check("${mode}" tenzir "${platform}")
 endforeach ()
 
-# No arguments, empty arguments, and backend exit status must survive exec.
-execute_process(
-  COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "${TEST_ROOT}/bin/tenzir"
-  OUTPUT_VARIABLE output
-  RESULT_VARIABLE status)
-if (NOT status EQUAL 0 OR NOT output STREQUAL "platform-cli\n")
-  message(FATAL_ERROR "No-argument dispatch failed: ${status}: ${output}")
-endif ()
+# A function's arguments drop empty strings, so this calls the binary directly.
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "${TEST_ROOT}/bin/tenzir"
           unknown "" "a b"
   OUTPUT_VARIABLE output
   RESULT_VARIABLE status)
-if (NOT status EQUAL 0 OR NOT output STREQUAL "platform-cli\nunknown\n\na b\n")
+if (NOT status EQUAL 0 OR NOT output STREQUAL "${platform}unknown\n\na b\n")
   message(FATAL_ERROR "Empty-argument dispatch failed: ${status}: ${output}")
 endif ()
-file(APPEND "${TEST_ROOT}/bin/${LIBEXEC_FROM_BINDIR}/platform-cli" "exit 42\n")
+
+# The backend's exit status must survive exec.
+file(APPEND "${libexec}/platform-cli" "exit 42\n")
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "${TEST_ROOT}/bin/tenzir"
           unknown

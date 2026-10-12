@@ -90,13 +90,6 @@
         treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
       in
       {
-        apps.tenzir-up = {
-          type = "app";
-          program = "${pkgs.writeShellScript "tenzir-up" ''
-            export TENZIR_UNIFIED=1
-            exec ${package.tenzir.unchecked}/bin/tenzir up "$@"
-          ''}";
-        };
         packages =
           flake-utils.lib.flattenTree (
             {

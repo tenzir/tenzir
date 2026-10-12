@@ -98,6 +98,10 @@ public:
   /// Flag that indicates whether the command shows up in the help text.
   bool visible;
 
+  /// Whether an argument that names no subcommand is an argument of this
+  /// command rather than an error.
+  bool takes_arguments = false;
+
   // -- constructors -----------------------------------------------------------
 
   /// Construct a new command

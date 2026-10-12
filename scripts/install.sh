@@ -321,7 +321,7 @@ if [ -n "${TENZIR_TOKEN:-}" ]; then
   fi
 
   # Write config using tenzir and sudo tee.
-  ${prefix}/bin/tenzir -qq "${tql_pipeline}" | $sudo tee "${config_file}" >/dev/null
+  ${prefix}/bin/tenzir run -qq "${tql_pipeline}" | $sudo tee "${config_file}" >/dev/null
   echo "Token configured in ${config_file}"
 
   # Restart the service if it's already running (RPM/DEB packages auto-start it).
@@ -334,7 +334,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"
-tenzir -q 'version | select version | write_ndjson'
+tenzir run -q 'version | select version | write_ndjson'
 
 # Inform about next steps.
 action "Providing guidance"

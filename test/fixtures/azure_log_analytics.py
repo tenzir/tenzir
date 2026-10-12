@@ -6,6 +6,7 @@ import copy
 import gzip
 import json
 import os
+import shlex
 import threading
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -408,7 +409,7 @@ def run() -> FixtureHandle:
         "AZLOG_QUERY": _QUERY,
     }
     if binary := os.environ.get("TENZIR_BINARY"):
-        build = Path(binary).resolve().parent.parent
+        build = Path(shlex.split(binary)[0]).resolve().parent.parent
         if (build / "lib/tenzir/plugins").is_dir():
             env["TENZIR_PLUGIN_DIRS"] = str(build / "lib/tenzir/plugins")
             env["TENZIR_PLUGINS"] = "to_azure_log_analytics"

@@ -161,7 +161,7 @@ def resolve_tenzir_binary() -> tuple[str, ...]:
     if value := os.environ.get("TENZIR_BINARY"):
         return tuple(shlex.split(value))
     if binary := shutil.which("tenzir"):
-        return (binary,)
+        return (binary, "run")
     raise RuntimeError("tenzir executable not found")
 
 

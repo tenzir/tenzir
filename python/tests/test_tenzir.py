@@ -45,9 +45,10 @@ async def endpoint():
 
 
 async def tenzir_exec(endpoint, pipeline: str):
-    logger.debug(f"> tenzir -e {endpoint} {pipeline}")
+    logger.debug(f"> tenzir run -e {endpoint} {pipeline}")
     exec_proc = await asyncio.create_subprocess_exec(
         "tenzir",
+        "run",
         "-e",
         endpoint,
         pipeline,
@@ -55,7 +56,7 @@ async def tenzir_exec(endpoint, pipeline: str):
     )
     (_, exec_err) = await asyncio.wait_for(exec_proc.communicate(), 3)
     assert exec_proc.returncode == 0
-    logger.debug(f"tenzir {pipeline} stderr:\n{exec_err.decode()}")
+    logger.debug(f"tenzir run {pipeline} stderr:\n{exec_err.decode()}")
 
 
 def integration_data(path):

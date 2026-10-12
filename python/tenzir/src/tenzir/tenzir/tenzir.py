@@ -489,6 +489,7 @@ async def stream_pipeline(
     binary = _resolve_tenzir_binary()
     command: list[str] = [
         binary.as_posix(),
+        "run",
         *map(str, options.extra_args or ()),
         str(resolved_spec),
     ]

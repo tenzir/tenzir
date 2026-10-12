@@ -3,6 +3,12 @@
 # timeout: 180
 set -eu
 
+# TENZIR_BINARY holds a command line, such as `tenzir run`.
+tenzir() {
+  # shellcheck disable=SC2086
+  $TENZIR_BINARY "$@"
+}
+
 input_dir=$(mktemp -d)
 for workload in homogeneous nullheavy conflict; do
   awk -v workload="$workload" 'BEGIN {
@@ -14,13 +20,13 @@ for workload in homogeneous nullheavy conflict; do
       printf "{\"id\":%d,\"x\":%s,\"y\":%s,\"message\":\"security telemetry event\",\"tags\":[\"network\",\"sample\"],\"nested\":{\"ok\":true,\"code\":200}}\n",i,x,y;
     }
   }' >"$input_dir/$workload.ndjson"
-  "$TENZIR_BINARY" --nova --bare-mode --console-verbosity=error \
+  tenzir --nova --bare-mode --console-verbosity=error \
     --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" "
     from_file \"$input_dir/$workload.ndjson\" { read_json }
     @name = \"buffered.$workload\"
     import
   "
-  "$TENZIR_BINARY" --nova --bare-mode --console-verbosity=error \
+  tenzir --nova --bare-mode --console-verbosity=error \
     --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" "
     export
     where @name == \"buffered.$workload\"

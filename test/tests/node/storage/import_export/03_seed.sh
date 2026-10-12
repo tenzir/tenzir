@@ -2,7 +2,13 @@
 # runner: shell
 set -eu
 
-"$TENZIR_BINARY" --neo --nova --bare-mode --console-verbosity=error \
+# TENZIR_BINARY holds a command line, such as `tenzir run`.
+tenzir() {
+  # shellcheck disable=SC2086
+  $TENZIR_BINARY "$@"
+}
+
+tenzir --neo --nova --bare-mode --console-verbosity=error \
   --endpoint="$TENZIR_NODE_CLIENT_ENDPOINT" '
   from {id: 1, x: null, y: 1},
        {id: 2, x: "a", y: null},

@@ -33,6 +33,21 @@ auto unified_mode() -> bool {
   return normalized != "0" and normalized != "false" and normalized != "no";
 }
 
+// A `run` with `-r` or `--remote` runs on the platform, so in unified mode it
+// goes to the platform CLI like every other command.
+auto is_remote_run(int argc, char** argv) -> bool {
+  for (auto i = 2; i < argc; ++i) {
+    auto const argument = std::string_view{argv[i]};
+    if (argument == "--") {
+      return false;
+    }
+    if (argument == "-r" or argument == "--remote") {
+      return true;
+    }
+  }
+  return false;
+}
+
 auto executable_path(std::string_view argv0) -> std::filesystem::path {
   auto path = std::filesystem::path{argv0};
   if (not path.has_parent_path()) {
@@ -71,28 +86,37 @@ auto run(std::filesystem::path const& binary, std::vector<char*> arguments)
   return EXIT_FAILURE;
 }
 
+auto run_platform_cli(std::filesystem::path const& libexec, std::string& name,
+                      char** first, char** last) -> int {
+  // The platform CLI starts deployments through the engine, so it needs to
+  // know where to find it.
+  if (::setenv("TENZIR_LIBEXEC", libexec.c_str(), 1) != 0) {
+    std::cerr << "tenzir: failed to set TENZIR_LIBEXEC: "
+              << std::strerror(errno) << '\n';
+    return EXIT_FAILURE;
+  }
+  auto arguments = std::vector<char*>{name.data()};
+  arguments.insert(arguments.end(), first, last);
+  return run(libexec / "platform-cli", std::move(arguments));
+}
+
 } // namespace
 
 auto main(int argc, char** argv) -> int {
   auto name = std::filesystem::path{argv[0]}.filename().string();
   auto const libexec
-    = executable_path(argv[0]).parent_path() / TENZIR_LIBEXEC_FROM_BINDIR;
-  if (name == "tenzir" and unified_mode()) {
+    = (executable_path(argv[0]).parent_path() / TENZIR_LIBEXEC_FROM_BINDIR)
+        .lexically_normal();
+  if (name == "tenzir") {
     auto const command
       = argc > 1 ? std::string_view{argv[1]} : std::string_view{};
-    if (command == "up" or command == "run") {
-      name = command == "up" ? "tenzir-up" : "tenzir";
-      auto arguments = std::vector<char*>{name.data()};
-      arguments.insert(arguments.end(), argv + 2, argv + argc);
-      return run(libexec / "engine", std::move(arguments));
+    if (unified_mode()) {
+      if (command != "run" or is_remote_run(argc, argv)) {
+        return run_platform_cli(libexec, name, argv + 1, argv + argc);
+      }
+    } else if (command == "platform") {
+      return run_platform_cli(libexec, name, argv + 2, argv + argc);
     }
-    return run(libexec / "platform-cli", {argv, argv + argc});
-  }
-  if (name == "tenzir" and argc > 1
-      and std::string_view{argv[1]} == "platform") {
-    auto arguments = std::vector<char*>{argv[0]};
-    arguments.insert(arguments.end(), argv + 2, argv + argc);
-    return run(libexec / "platform-cli", std::move(arguments));
   }
   auto arguments = std::vector<char*>{argv, argv + argc};
   arguments[0] = name.data();

@@ -11,11 +11,11 @@ from pathlib import Path
 
 node = acquire_fixture("node")
 node.start()
-binary = shlex.split(node.env["TENZIR_NODE_CLIENT_BINARY"])[0]
+client = shlex.split(node.env["TENZIR_NODE_CLIENT_BINARY"])
 endpoint = f"--endpoint={node.env['TENZIR_NODE_CLIENT_ENDPOINT']}"
 common = ["--bare-mode", "--console-verbosity=error", endpoint]
 rebuild = subprocess.run(
-    [str(Path(binary).with_name("tenzir-ctl")), *common, "rebuild", "--all"],
+    [str(Path(client[0]).with_name("tenzir-ctl")), *common, "rebuild", "--all"],
     capture_output=True,
     check=False,
     timeout=180,
@@ -26,7 +26,7 @@ assert rebuild.returncode == 0, rebuild.stderr.decode()
 def export(name: str) -> list[dict[str, object]]:
     result = subprocess.run(
         [
-            binary,
+            *client,
             "--neo",
             "--nova",
             *common,

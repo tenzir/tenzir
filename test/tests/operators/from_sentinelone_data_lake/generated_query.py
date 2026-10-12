@@ -7,15 +7,12 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import shutil
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
 CAPTURE = Path(os.environ["S1_FIXTURE_LRQ_CAPTURE_FILE"])
-BINARY = shlex.split(
-    os.environ.get("TENZIR_BINARY", shutil.which("tenzir") or "tenzir")
-)
+BINARY = shlex.split(os.environ.get("TENZIR_BINARY", "tenzir run"))
 START = "2024-01-01T00:00:00Z"
 END = "2024-01-01T00:00:02Z"
 WINDOW = f"where timestamp >= {START} and timestamp < {END}"

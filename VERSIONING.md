@@ -14,7 +14,7 @@ Tenzirs User Interface and APIs are versioned independently:
 
 ### Version Identification
 
-Run `tenzir 'version'` operator to get Tenzir's current version:
+Run the `version` operator with `tenzir run 'version'` to get Tenzir's current version:
 
 ```json
 {

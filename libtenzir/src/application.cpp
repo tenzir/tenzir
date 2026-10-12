@@ -211,11 +211,20 @@ make_application(std::string_view path) {
     add_root_opts(*cmd);
     TENZIR_ASSERT(cmd_factory.contains("exec"));
     cmd->name = "";
+    // `tenzir run <pipeline>` is the same as `tenzir <pipeline>`. It is hidden
+    // so that the help text keeps describing the root as taking a pipeline.
+    auto run = exec->make_command().first;
+    run->name = "run";
+    run->visible = false;
+    add_root_opts(*run);
+    cmd->add_subcommand(std::move(run));
+    cmd->takes_arguments = true;
     return {
       std::move(cmd),
       command::factory{
         {"", cmd_factory["exec"]},
         {"exec", cmd_factory["exec"]},
+        {"run", cmd_factory["exec"]},
       },
     };
   }

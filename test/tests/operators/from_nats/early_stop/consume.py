@@ -12,14 +12,16 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 
 
-def _resolve_tenzir_binary() -> str:
-    binary = os.environ.get("TENZIR_BINARY") or shutil.which("tenzir")
-    if binary:
-        return binary
+def _resolve_tenzir_binary() -> list[str]:
+    if binary := os.environ.get("TENZIR_BINARY"):
+        return shlex.split(binary)
+    if binary := shutil.which("tenzir"):
+        return [binary, "run"]
     raise RuntimeError("tenzir executable not found")
 
 
@@ -71,7 +73,7 @@ select line = string(message)
 """.strip()
     first = subprocess.run(
         [
-            _resolve_tenzir_binary(),
+            *_resolve_tenzir_binary(),
             "--bare-mode",
             "--console-verbosity=warning",
             "--multi",

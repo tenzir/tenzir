@@ -2,6 +2,7 @@
 # timeout: 30
 
 import os
+import shlex
 import subprocess
 
 
@@ -10,7 +11,7 @@ oversized = b"value=" + b"x" * (limit - 5)
 for delimiter in (b"", b"\n", b"\r\n"):
     result = subprocess.run(
         [
-            os.environ["TENZIR_BINARY"],
+            *shlex.split(os.environ["TENZIR_BINARY"]),
             "--bare-mode",
             "--nova=true",
             "from_stdin { read_kv }\ndiscard",

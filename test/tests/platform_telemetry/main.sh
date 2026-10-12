@@ -9,7 +9,9 @@ dir="$PLATFORM_TELEMETRY_DIR"
 run() {
   id="$1"
   shift
-  "$TENZIR_BINARY" --bare-mode --nova=true \
+  # TENZIR_BINARY holds a command line, such as `tenzir run`.
+  # shellcheck disable=SC2086
+  $TENZIR_BINARY --bare-mode --nova=true \
     --platform "$PLATFORM_TELEMETRY_URL" --deployment-id test-deployment \
     --key-file "$PLATFORM_TELEMETRY_KEY_FILE" --pipeline-id "$id" --run 7 "$@"
 }

@@ -3,6 +3,12 @@
 # timeout: 180
 set -eu
 
+# TENZIR_BINARY holds a command line, such as `tenzir run`.
+tenzir() {
+  # shellcheck disable=SC2086
+  $TENZIR_BINARY "$@"
+}
+
 scratch=$(mktemp -d)
 node_pid=
 cleanup() {
@@ -41,7 +47,7 @@ stop_node() {
 }
 
 start_node
-"$TENZIR_BINARY" --neo --nova --bare-mode --console-verbosity=error \
+tenzir --neo --nova --bare-mode --console-verbosity=error \
   --endpoint="$endpoint" '
   from {id: 1, x: null}, {id: 2, x: "a"}, {id: 3, x: 2}
   @name = "restart.events"
@@ -50,7 +56,7 @@ start_node
 stop_node
 rm -f "$scratch/state/pid.lock"
 start_node
-"$TENZIR_BINARY" --neo --nova --bare-mode --console-verbosity=error \
+tenzir --neo --nova --bare-mode --console-verbosity=error \
   --endpoint="$endpoint" '
   export
   where @name == "restart.events"

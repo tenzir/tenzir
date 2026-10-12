@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import select
+import shlex
 import subprocess
 
 NUM_ROUNDS = 8
@@ -18,12 +19,12 @@ READY_ROUND = -1
 
 class Executor:
     def __init__(self) -> None:
-        self._binary = os.environ["TENZIR_PYTHON_FIXTURE_BINARY"]
+        self._binary = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
         self._endpoint = os.environ.get("TENZIR_PYTHON_FIXTURE_ENDPOINT")
 
     def command(self, pipeline: str) -> list[str]:
         cmd = [
-            self._binary,
+            *self._binary,
             "--nova=true",
             "--bare-mode",
             "--console-verbosity=warning",

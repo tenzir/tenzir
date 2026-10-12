@@ -41,7 +41,7 @@ stdenvNoCC.mkDerivation {
       export UV_NO_INDEX=1
       export UV_OFFLINE=1
       export UV_PYTHON=${lib.getExe py3}
-      export TENZIR_BINARY=${lib.getBin unchecked}/bin/tenzir
+      export TENZIR_BINARY="${lib.getBin unchecked}/bin/tenzir run"
       export TENZIR_NODE_BINARY=${lib.getBin unchecked}/bin/tenzir-node
       export TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL=1
       mkdir -p cache data state tmp

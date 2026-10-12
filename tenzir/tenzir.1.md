@@ -25,59 +25,63 @@ executable serves both as client and server.
 The usage examples in this manpage only scratch the surface. Please consult the
 official documentation at https://tenzir.com/docs for a comprehensive user guide.
 
-You get short usage instructions for every `tenzir` command by adding the `help`
-sub-command or providing the option `--help` (which has the shorthand `-h`):
+## Run a pipeline
+
+Use `tenzir run` to run a TQL pipeline locally, passing the pipeline as the
+argument:
 
 ```bash
-tenzir help
+tenzir run 'from {message: "hello"} | write_json'
+```
+
+A pipeline can read events from standard input and write results to standard
+output:
+
+```bash
+tenzir run 'read_suricata | where event_type == "alert" | write_json' < eve.json
+```
+
+Pass `-f` to read the pipeline from a file instead:
+
+```bash
+tenzir run -f pipeline.tql
+```
+
+## Get help
+
+Run `tenzir --help` to list all commands and their options:
+
+```bash
 tenzir --help
-tenzir -h
 ```
 
-## Start Tenzir
-
-Use the `start` command to spin up a Tenzir server:
-
-```bash
-tenzir start
-```
-
-## Ingest data
-
-Use the `import` command to ingest data via standard input, which takes a
-*format* as sub-command. For example, to ingest Suricata logs, add `suricata`
-after `import`:
-
-```bash
-tenzir import suricata < eve.log
-```
-
-## Query data
-
-Use the `export` command to run execute query and receive results on standard
-output. Like `import`, `export` needs a format as sub-command:
-
-```bash
-tenzir export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
-```
+Without `TENZIR_UNIFIED=1`, this lists only the engine's options. Run
+`tenzir platform --help` for the platform commands.
 
 ## Next steps
 
 To learn more about using Tenzir, continue over at https://tenzir.com/docs.
 
+# COMMANDS
+
+`tenzir run <pipeline>` runs a pipeline locally, exactly like
+`tenzir <pipeline>`, and takes the same options. `tenzir platform` invokes the
+bundled platform CLI without the `platform` argument. All other calls invoke the
+engine with their arguments unchanged.
+
+Set `TENZIR_UNIFIED=1` to opt into the unified command interface. In this mode,
+`tenzir run` with `-r` or `--remote` before an optional `--` runs the pipeline
+remotely instead. Remote runs and all other commands go to the bundled platform
+CLI with their arguments unchanged. An unset or empty `TENZIR_UNIFIED`, or a
+value of `0`, `false`, or `no` (case-insensitive), keeps the default behavior.
+
+The `tenzir-node`, `tenzir-ctl`, and `tenzir-rebuild` compatibility names
+always invoke the engine.
+
 # ENVIRONMENT
 
-Set `TENZIR_UNIFIED=1` to enable the unified command interface. In this mode,
-`tenzir up` starts a deployment, `tenzir run` runs a pipeline, and all other
-commands and arguments go to the bundled platform CLI unchanged. The `up` and
-`run` commands remove their command name before passing the remaining arguments
-to the engine. Starting a deployment requires a build with deployment support.
-
-An unset or empty `TENZIR_UNIFIED`, or a value of `0`, `false`, or `no`
-(case-insensitive), keeps the default behavior: `tenzir platform` invokes the
-platform CLI without the `platform` argument, and other calls invoke the engine.
-The `tenzir-node`, `tenzir-ctl`, and `tenzir-rebuild` compatibility names always
-invoke the engine.
+`tenzir` sets `TENZIR_LIBEXEC` to the directory of the bundled executables
+before it starts the platform CLI.
 
 # ISSUES
 

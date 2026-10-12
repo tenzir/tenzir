@@ -7,13 +7,10 @@ import json
 import os
 import platform
 import shlex
-import shutil
 import subprocess
 
 
-binary = shlex.split(
-    os.environ.get("TENZIR_BINARY", shutil.which("tenzir") or "tenzir")
-)
+binary = shlex.split(os.environ.get("TENZIR_BINARY", "tenzir run"))
 # Nova buffers cross the plugin boundary; tracking must use the same allocator
 # state in the plugin and the core library. Only x86_64 Linux supports actor
 # stats, and other platforms exit at startup when they are requested.

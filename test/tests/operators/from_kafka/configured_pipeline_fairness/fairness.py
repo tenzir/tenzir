@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import socket
 import subprocess
 import tempfile
@@ -128,8 +129,8 @@ def wait_for_offsets(
     return offsets
 
 
-tenzir = Path(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
-tenzir_node = tenzir.with_name("tenzir-node")
+tenzir = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
+tenzir_node = Path(tenzir[0]).with_name("tenzir-node")
 bootstrap_servers = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 topic = os.environ["KAFKA_TOPIC"]
 kafka_container = os.environ["KAFKA_CONTAINER_ID"]
@@ -211,7 +212,7 @@ with tempfile.TemporaryDirectory(
         wait_for_node(node, ("127.0.0.1", port))
         cli = subprocess.Popen(
             [
-                tenzir,
+                *tenzir,
                 "--nova=true",
                 "--console-verbosity=warning",
                 f"--endpoint=127.0.0.1:{port}",

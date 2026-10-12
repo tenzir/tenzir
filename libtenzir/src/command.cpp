@@ -347,6 +347,9 @@ caf::error parse_impl(invocation& result, const command& cmd,
                           return x->name == *p;
                         });
   if (i == cmd.children.end()) {
+    if (cmd.takes_arguments) {
+      return caf::none;
+    }
     return caf::make_error(ec::invalid_subcommand, cmd.full_name(), *position);
   }
   return parse_impl(result, **i, position + 1, last, target);
