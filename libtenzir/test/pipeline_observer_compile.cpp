@@ -84,6 +84,25 @@ auto snapshot(GraphSubscription& graph) -> GraphSnapshot {
   return **result;
 }
 
+class RuntimeDiagnostics final : public DiagHandler {
+public:
+  auto emit(diagnostic d) -> void override {
+    if (d.severity == severity::error) {
+      failed_.store(true, std::memory_order_relaxed);
+    }
+  }
+
+  auto failure() -> failure_or<void> override {
+    if (failed_.load(std::memory_order_relaxed)) {
+      return failure::promise();
+    }
+    return {};
+  }
+
+private:
+  Atomic<bool> failed_{false};
+};
+
 } // namespace
 
 TEST("inspection locates both fork_merge output ports at its keyword") {
@@ -280,6 +299,71 @@ TEST("inspection describes surviving operators after filter simplification") {
     check_eq(pipeline.operators[i].source,
              lowered->operators[i].op->main_location());
   }
+}
+
+TEST("inspection aggregates repeated read_auto runtime compilations") {
+  auto fixture = CompileFixture{};
+  auto directory = std::filesystem::temp_directory_path()
+                   / fmt::format("tenzir-inspection-{}", uuid::random());
+  std::filesystem::create_directory(directory);
+  auto cleanup = detail::scope_guard{[&] noexcept {
+    auto error = std::error_code{};
+    std::filesystem::remove_all(directory, error);
+  }};
+  std::ofstream{directory / "a.json"} << "{\"value\": 1}\n";
+  std::ofstream{directory / "b.json"} << "{\"value\": 2}\n";
+  auto plan = fixture.lower(fixture.compile(fmt::format(
+                              R"(from_file "{}/*.json" {{ read_auto }}
+         summarize n=count()
+         assert n == 2
+         discard)",
+                              directory.string())),
+                            tag_v<void>);
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto observer = PipelineObserver{uuid::null()};
+  auto diagnostics = RuntimeDiagnostics{};
+  auto executor = folly::ManualExecutor{};
+  auto cancellation = folly::CancellationSource{};
+  auto execution = folly::coro::co_withExecutor(
+                     folly::getKeepAliveToken(&executor),
+                     folly::coro::co_withCancellation(
+                       cancellation.getToken(),
+                       run_plan(*plan, fixture.reg, system, diagnostics,
+                                NoProfiler{}, false, nullptr, Ref{observer},
+                                Ref<SourceMap const>{fixture.sources})))
+                     .start();
+  auto stop_execution = detail::scope_guard{[&]() noexcept {
+    cancellation.requestCancellation();
+    executor.drain();
+  }};
+  // Start run_plan, then subscribe before allowing its operator tasks to run.
+  executor.step();
+  auto graph = observer.subscribe_graph().unwrap();
+  auto result = std::move(execution).via(&executor).getVia(&executor);
+  check(not result.is_error());
+  auto final = snapshot(graph);
+  while (auto next = folly::coro::blockingWait(graph.recv())) {
+    final = **next;
+  }
+  // One root, one read_auto definition shared by both files, and one selected
+  // JSON reader shared by both independent runtime compilations.
+  require_eq(final.graphs.size(), 3u);
+  auto roots = size_t{0};
+  auto selected_readers = size_t{0};
+  for (auto const& pipeline : final.graphs) {
+    roots += not pipeline->parent;
+    for (auto const& op : pipeline->operators) {
+      selected_readers += op.name == "read_json";
+    }
+    if (pipeline->parent) {
+      check(std::ranges::any_of(final.graphs, [&](auto const& parent) {
+        return parent->path == *pipeline->parent;
+      }));
+    }
+  }
+  check_eq(roots, 1u);
+  check_eq(selected_readers, 1u);
 }
 
 TEST("inspection groups generated readers without operator-specific identity") {

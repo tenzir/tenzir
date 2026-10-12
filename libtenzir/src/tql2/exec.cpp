@@ -18,6 +18,7 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/signal_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/element_type.hpp"
@@ -25,6 +26,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_observer.hpp"
 #include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
@@ -433,11 +435,13 @@ template <class T>
 struct OpChannel {
 public:
   explicit OpChannel(ChannelId id, size_t max_bytes,
-                     Option<Arc<ChannelStats>> stats)
+                     Option<Arc<ChannelStats>> stats,
+                     Option<Ref<ChannelTap const>> tap)
     : id_{std::move(id)},
       max_bytes_{max_bytes},
       stats_{std::move(stats)},
-      mutex_{Locked{}} {
+      mutex_{Locked{}},
+      tap_{std::move(tap)} {
   }
 
   auto send(OperatorMsg<T> x) -> Task<void> {
@@ -499,6 +503,9 @@ public:
     auto bytes = count_bytes(result);
     lock->current_bytes -= bytes;
     lock.unlock();
+    if (tap_) {
+      capture_channel(**tap_, result);
+    }
     // Update profiling counters.
     if (stats_.is_some()) {
       (*stats_)->out.bytes.fetch_add(bytes, std::memory_order::relaxed);
@@ -539,6 +546,7 @@ private:
   Notify notify_send_;
   Notify notify_receive_;
   Atomic<bool> sender_closed_ = false;
+  Option<Ref<ChannelTap const>> tap_;
 };
 
 template <class T>
@@ -592,7 +600,8 @@ private:
 class TestExecCtx final : public ExecCtx {
 public:
   explicit TestExecCtx(Arc<registry const> reg, Profiler const& profiler,
-                       bool has_terminal = false, bool is_hidden = false)
+                       bool has_terminal = false, bool is_hidden = false,
+                       Option<Ref<PipelineObserver>> observer = None{})
     : reg_{std::move(reg)},
       profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
@@ -600,7 +609,12 @@ public:
                           ? try_as<NodeProfiler>(profiler)->metrics
                           : metrics_receiver_actor{}},
       has_terminal_{has_terminal},
-      is_hidden_{is_hidden} {
+      is_hidden_{is_hidden},
+      observer_{std::move(observer)} {
+  }
+
+  auto inspection() const -> Option<Ref<PipelineObserver>> override {
+    return observer_;
   }
 
   /// Return the current set of channel profiles.
@@ -681,14 +695,16 @@ protected:
     return make_profiled_channel<void>(std::move(id), void_limit);
   }
 
-  auto make_events(ChannelId id)
+  auto make_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(std::move(id), events_limit);
+    return make_profiled_channel<table_slice>(std::move(id), events_limit,
+                                              std::move(tap));
   }
 
-  auto make_tiny_events(ChannelId id)
+  auto make_tiny_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(std::move(id), events_tiny_limit);
+    return make_profiled_channel<table_slice>(std::move(id), events_tiny_limit,
+                                              std::move(tap));
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
@@ -699,9 +715,10 @@ protected:
     return make_profiled_fused_channel<void>(std::move(id));
   }
 
-  auto make_fused_events(ChannelId id)
+  auto make_fused_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_fused_channel<table_slice>(std::move(id));
+    return make_profiled_fused_channel<table_slice>(std::move(id),
+                                                    std::move(tap));
   }
 
   auto make_fused_bytes(ChannelId id)
@@ -709,20 +726,22 @@ protected:
     return make_profiled_fused_channel<chunk_ptr>(std::move(id));
   }
 
-  auto make_nova_events(ChannelId id)
+  auto make_nova_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<nova::Events>> override {
-    return make_profiled_channel<nova::Events>(std::move(id), events_limit);
+    return make_profiled_channel<nova::Events>(std::move(id), events_limit,
+                                               std::move(tap));
   }
 
-  auto make_fused_nova_events(ChannelId id)
+  auto make_fused_nova_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<nova::Events>> override {
-    return make_profiled_fused_channel<nova::Events>(std::move(id));
+    return make_profiled_fused_channel<nova::Events>(std::move(id),
+                                                     std::move(tap));
   }
 
-  auto make_tiny_nova_events(ChannelId id)
+  auto make_tiny_nova_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<nova::Events>> override {
-    return make_profiled_channel<nova::Events>(std::move(id),
-                                               events_tiny_limit);
+    return make_profiled_channel<nova::Events>(std::move(id), events_tiny_limit,
+                                               std::move(tap));
   }
 
   auto make_files(ChannelId id) -> PushPull<OperatorMsg<FileHandle>> override {
@@ -771,7 +790,8 @@ private:
   /// very big individual items that exceed the total capacity by themselves,
   /// as we eventually let them through since we need to transmit them.
   template <class T>
-  auto make_profiled_channel(ChannelId id, size_t max_bytes)
+  auto make_profiled_channel(ChannelId id, size_t max_bytes,
+                             Option<Ref<ChannelTap const>> tap = None{})
     -> PushPull<OperatorMsg<T>> {
     auto stats = Option<Arc<ChannelStats>>{};
     if (profiling_) {
@@ -792,14 +812,16 @@ private:
       // lanes of a routing exchange).
       (*stats)->capacity.fetch_add(max_bytes, std::memory_order::relaxed);
     }
-    auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
-                                                 std::move(stats));
+    auto shared = std::make_shared<OpChannel<T>>(
+      std::move(id), max_bytes, std::move(stats), std::move(tap));
     return {OpPush<T>{shared}, OpPull<T>{shared}};
   }
 
   /// Create a fused channel and collect its profile.
   template <class T>
-  auto make_profiled_fused_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+  auto make_profiled_fused_channel(ChannelId id,
+                                   Option<Ref<ChannelTap const>> tap = None{})
+    -> PushPull<OperatorMsg<T>> {
     auto stats = Option<Arc<ChannelStats>>{};
     if (profiling_) {
       auto lock = std::scoped_lock{mutex_};
@@ -814,7 +836,7 @@ private:
         channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
       }
     }
-    auto [sender, receiver] = fused_channel<OperatorMsg<T>>();
+    auto [sender, receiver] = fused_channel<OperatorMsg<T>>(std::move(tap));
     if (stats.is_some()) {
       return {MeteredFusedPush<T>{std::move(sender), *stats},
               MeteredFusedPull<T>{std::move(receiver), *stats}};
@@ -831,6 +853,7 @@ private:
   metrics_receiver_actor metrics_receiver_;
   bool has_terminal_;
   bool is_hidden_;
+  Option<Ref<PipelineObserver>> observer_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
@@ -1595,13 +1618,15 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     });
 }
 
-auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool has_terminal,
-              bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
+auto run_plan_impl(ir::Plan plan, Arc<registry const> reg,
+                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
+                   bool has_terminal, bool is_hidden, Notify* graceful_stop,
+                   Option<Ref<PipelineObserver>> observer = None{})
+  -> Task<failure_or<PlanCompletion>> {
   auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto exec_ctx
-    = TestExecCtx{std::move(reg), profiler, has_terminal, is_hidden};
+  auto exec_ctx = TestExecCtx{std::move(reg), profiler, has_terminal, is_hidden,
+                              std::move(observer)};
   // The side task may never start for a sub-second pipeline. Sample after all
   // its tasks join, even when execution unwinds through cancellation.
   auto final_sample = detail::scope_guard{[&]() noexcept {
@@ -1612,24 +1637,57 @@ auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
   // Take the profiling baseline before any operator can run, so that the first
   // snapshot reports a window that covers the same span as its counters.
   auto start = std::chrono::steady_clock::now();
-  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
-    scope.spawn(run_profiler(profiler, exec_ctx, num_ops, start));
-    LOGW("blocking on pipeline");
-    co_await execute_plan(std::move(plan), exec_ctx, sys, dh, graceful_stop);
-    LOGW("blocking on pipeline done");
-    scope.cancel();
-  });
-  co_return dh.failure();
+  auto completion
+    = co_await async_scope([&](AsyncScope& scope) -> Task<PlanCompletion> {
+        scope.spawn(run_profiler(profiler, exec_ctx, num_ops, start));
+        LOGW("blocking on pipeline");
+        auto result = co_await execute_plan(std::move(plan), exec_ctx, sys, dh,
+                                            graceful_stop);
+        LOGW("blocking on pipeline done");
+        scope.cancel();
+        co_return result;
+      });
+  CO_TRY(dh.failure());
+  co_return completion;
 }
 
 } // namespace
 
 auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
-  co_return co_await run_plan(std::move(plan), std::move(reg), sys, dh,
-                              std::move(profiler), false, is_hidden,
-                              graceful_stop);
+              Notify* graceful_stop, Option<Ref<PipelineObserver>> observer,
+              Option<Ref<SourceMap const>> sources) -> Task<failure_or<void>> {
+  auto finish = detail::scope_guard{[&]() noexcept {
+    if (observer) {
+      (*observer)->finish(ExecutionOutcome::cancelled);
+    }
+  }};
+  co_await folly::coro::co_safe_point;
+  if (observer and sources) {
+    (*observer)->publish_sources(**sources);
+  }
+  auto execution = run_plan_impl(std::move(plan), std::move(reg), sys, dh,
+                                 std::move(profiler), false, is_hidden,
+                                 graceful_stop, observer);
+  if (not observer) {
+    CO_TRY(co_await std::move(execution));
+    co_return {};
+  }
+  auto result = co_await async_result(std::move(execution));
+  auto outcome = ExecutionOutcome::completed;
+  if (dh.failure().is_error() or result.is_exception()) {
+    outcome = ExecutionOutcome::failed;
+  } else if (result.is_cancelled()) {
+    outcome = ExecutionOutcome::cancelled;
+  } else if (result.value().is_error()) {
+    outcome = ExecutionOutcome::failed;
+  } else if (*result.value() == PlanCompletion::stopped) {
+    outcome = ExecutionOutcome::cancelled;
+  }
+  (*observer)->finish(outcome);
+  finish.disable();
+  CO_TRY(std::move(result).value());
+  co_return {};
 }
 
 template <class T>
@@ -1745,12 +1803,14 @@ auto run_plan_blocking(ir::Plan plan, Arc<registry const> reg,
   auto signal_guard = detail::SignalGuard{
     graceful_stop, cancel_source,
     std::chrono::duration_cast<std::chrono::milliseconds>(grace)};
-  auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
-    co_return co_await catch_cancellation(folly::coro::co_withCancellation(
-      cancel_source.getToken(),
-      run_plan(std::move(plan), std::move(reg), sys, diag_handler,
-               std::move(profiler), has_terminal, false, &graceful_stop)));
-  });
+  auto task
+    = folly::coro::co_invoke([&] -> Task<Option<failure_or<PlanCompletion>>> {
+        co_return co_await catch_cancellation(folly::coro::co_withCancellation(
+          cancel_source.getToken(),
+          run_plan_impl(std::move(plan), std::move(reg), sys, diag_handler,
+                        std::move(profiler), has_terminal, false,
+                        &graceful_stop)));
+      });
 #if 0
   TENZIR_DEBUG("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));

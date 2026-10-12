@@ -164,6 +164,81 @@ auto count(TapSubscription& tap) -> size_t {
   return folly::coro::blockingWait(drain(tap));
 }
 
+struct FlowControl {
+  Notify ready;
+  Notify produce;
+  Atomic<size_t> received{0};
+};
+
+class GatedSource final : public Operator<void, nova::Events> {
+public:
+  GatedSource(Arc<FlowControl> control, bool nested)
+    : control_{std::move(control)}, nested_{nested} {
+  }
+
+  auto start(OpCtx&) -> Task<void> override {
+    if (not nested_) {
+      control_->ready.notify_one();
+    }
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await control_->produce.wait();
+    co_return Any{};
+  }
+
+  auto process_task(Any, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    for (auto i = 0; i < 12; ++i) {
+      co_await push(batch(i));
+    }
+    done_ = true;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+private:
+  mutable Arc<FlowControl> control_;
+  bool nested_;
+  bool done_ = false;
+};
+
+class CountingSink final : public Operator<nova::Events, void> {
+public:
+  explicit CountingSink(Arc<FlowControl> control)
+    : control_{std::move(control)} {
+  }
+
+  auto process(nova::Events, OpCtx&) -> Task<void> override {
+    control_->received.fetch_add(1, std::memory_order_relaxed);
+    co_return;
+  }
+
+private:
+  Arc<FlowControl> control_;
+};
+
+class ForwardEvents final : public Operator<nova::Events, nova::Events> {
+public:
+  auto process(nova::Events events, Push<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    co_await push(std::move(events));
+  }
+};
+
+class SplitEvents final : public Operator<nova::Events, nova::Events, true> {
+public:
+  auto process(nova::Events events, PushPorts<nova::Events>& push, OpCtx&)
+    -> Task<void> override {
+    auto values = events.data.field("value")->data.get_alternative<nova::Int>();
+    auto value = *values->data.get(1);
+    co_await push(static_cast<size_t>(value % 2), std::move(events));
+  }
+};
+
 auto tap_values(TapSubscription& tap) -> Task<std::vector<int64_t>> {
   auto result = std::vector<int64_t>{};
   while (auto message = co_await tap.recv()) {
@@ -184,6 +259,139 @@ auto tap_values(TapSubscription& tap) -> Task<std::vector<int64_t>> {
   FAIL("tap reached EOF without a terminal outcome");
   co_return result;
 }
+
+class RuntimeIr final : public ir::Operator {
+public:
+  explicit RuntimeIr(std::function<AnyOperator()> spawn)
+    : spawn_{std::move(spawn)} {
+  }
+
+  auto name() const -> std::string override {
+    return "inspection_test";
+  }
+
+  auto copy() const -> Box<ir::Operator> override {
+    return RuntimeIr{spawn_};
+  }
+
+  auto infer_type(element_type_tag input, base_ctx) const
+    -> failure_or<element_type_tag> override {
+    return input;
+  }
+
+  auto substitute(substitute_ctx, bool) -> failure_or<void> override {
+    return {};
+  }
+
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
+    return spawn_();
+  }
+
+private:
+  std::function<AnyOperator()> spawn_;
+};
+
+auto forward_plan() -> ir::Plan {
+  auto result = ir::Plan{};
+  for (auto i = 0; i < 2; ++i) {
+    result.operators.push_back(
+      ir::PlannedOperator{.id = OpId{std::to_string(i)},
+                          .op = RuntimeIr{[]() -> AnyOperator {
+                            return Box<Operator<nova::Events, nova::Events>>{
+                              ForwardEvents{}.with_name("forward")};
+                          }},
+                          .partition_keys = None{},
+                          .input = tag_v<nova::Events>,
+                          .output = tag_v<nova::Events>});
+  }
+  result.channels = {{ir::Port::input, 0, 0, tag_v<nova::Events>},
+                     {0, 0, 1, tag_v<nova::Events>, ir::ChannelKind::fused},
+                     {1, 0, ir::Port::output, tag_v<nova::Events>}};
+  return result;
+}
+
+class NestedForward final : public Operator<nova::Events, nova::Events> {
+public:
+  explicit NestedForward(Arc<FlowControl> control)
+    : control_{std::move(control)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await ctx.spawn_sub(int64_t{0}, forward_plan(),
+                           DiagnosticBehavior::Unchanged);
+    control_->ready.notify_one();
+  }
+
+  auto process(nova::Events events, Push<nova::Events>&, OpCtx& ctx)
+    -> Task<void> override {
+    auto handle = ctx.get_sub(int64_t{0});
+    TENZIR_ASSERT(handle);
+    auto accepted
+      = co_await as<SubHandle<nova::Events>>(*handle).push(std::move(events));
+    TENZIR_ASSERT(accepted.is_ok());
+  }
+
+private:
+  Arc<FlowControl> control_;
+};
+
+auto flow_plan(Arc<FlowControl> control, ir::ChannelKind kind, bool nested)
+  -> ir::Plan {
+  auto result = ir::Plan{};
+  result.operators.push_back(
+    ir::PlannedOperator{.id = OpId{"0"},
+                        .op = RuntimeIr{[control, nested]() -> AnyOperator {
+                          return Box<Operator<void, nova::Events>>{
+                            GatedSource{control, nested}.with_name("source")};
+                        }},
+                        .partition_keys = None{},
+                        .input = tag_v<void>,
+                        .output = tag_v<nova::Events>});
+  result.operators.push_back(
+    ir::PlannedOperator{.id = OpId{"1"},
+                        .op = RuntimeIr{[control, nested]() -> AnyOperator {
+                          if (nested) {
+                            return Box<Operator<nova::Events, nova::Events>>{
+                              NestedForward{control}.with_name("nested")};
+                          }
+                          return Box<Operator<nova::Events, nova::Events>>{
+                            ForwardEvents{}.with_name("forward")};
+                        }},
+                        .partition_keys = None{},
+                        .input = tag_v<nova::Events>,
+                        .output = tag_v<nova::Events>});
+  result.operators.push_back(
+    ir::PlannedOperator{.id = OpId{"2"},
+                        .op = RuntimeIr{[control]() -> AnyOperator {
+                          return Box<Operator<nova::Events, void>>{
+                            CountingSink{control}.with_name("sink")};
+                        }},
+                        .partition_keys = None{},
+                        .input = tag_v<nova::Events>,
+                        .output = tag_v<void>});
+  result.channels = {{ir::Port::input, 0, 0, tag_v<void>},
+                     {0, 0, 1, tag_v<nova::Events>, kind},
+                     {1, 0, 2, tag_v<nova::Events>, kind},
+                     {2, 0, ir::Port::output, tag_v<void>}};
+  return result;
+}
+
+class TestDiagnostics final : public DiagHandler {
+public:
+  auto emit(diagnostic) -> void override {
+    failed_.store(true, std::memory_order_relaxed);
+  }
+
+  auto failure() -> failure_or<void> override {
+    if (failed_.load(std::memory_order_relaxed)) {
+      return failure::promise();
+    }
+    return {};
+  }
+
+private:
+  Atomic<bool> failed_{false};
+};
 
 } // namespace
 
@@ -1117,6 +1325,30 @@ TEST("inspection retirement preserves visibility order across many live "
   }
 }
 
+TEST("inspection fused receive captures data once and excludes control "
+     "signals") {
+  auto descriptions = Arc{Atomic<size_t>{0}};
+  auto observer = test::InspectionFixture{uuid::null()};
+  observer.start(PipeId{"root"});
+  auto registration = Option{observer.register_plan(plan(descriptions))};
+  auto tap = observer.subscribe_channel(target(snapshot(observer))).unwrap();
+  auto [sender, receiver]
+    = fused_channel<OperatorMsg<nova::Events>>((*registration)->tap(0));
+  folly::coro::blockingWait(folly::coro::collectAll(
+    [](FusedSender<OperatorMsg<nova::Events>> sender) -> Task<void> {
+      co_await sender.send(batch(0));
+      co_await sender.send(EndOfData{});
+    }(std::move(sender)),
+    [&]() -> Task<void> {
+      require((co_await receiver.recv()).is_some());
+      require((co_await receiver.recv()).is_some());
+      check(not co_await receiver.recv());
+    }()));
+  registration = None{};
+  observer.finish(ExecutionOutcome::completed);
+  check_eq(count(tap), 1u);
+}
+
 TEST("inspection subscription races capture and joined execution completion") {
   for (auto iteration = 0; iteration < 50; ++iteration) {
     auto descriptions = Arc{Atomic<size_t>{0}};
@@ -1283,6 +1515,366 @@ TEST("inspection wakes every suspended graph reader on completion") {
   for (auto& graph : subscriptions) {
     check(not folly::coro::blockingWait(graph.recv()));
   }
+}
+
+TEST("inspection rejects subscriptions until execution starts") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<FlowControl>{std::in_place};
+  auto diagnostics = TestDiagnostics{};
+  auto observer = Box<PipelineObserver>{std::in_place, uuid::null()};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    // Neither constructing the observer nor creating its lazy execution task
+    // admits subscriptions. Rejection must not require either task to start.
+    check_eq((observer->subscribe_graph()).unwrap_err(),
+             GraphSubscriptionError::not_started);
+    auto execution
+      = run_plan(flow_plan(control, ir::ChannelKind::regular, false), reg,
+                 system, diagnostics, NoProfiler{}, false, nullptr,
+                 Ref{*observer});
+    check_eq((observer->subscribe_graph()).unwrap_err(),
+             GraphSubscriptionError::not_started);
+    check_eq(
+      (observer->subscribe_channel({uuid::null(), PipeId{"root"}, {0}, 0}))
+        .unwrap_err(),
+      TapSubscriptionError::not_started);
+    auto run = scope.spawn(std::move(execution));
+    co_await control->ready.wait();
+    auto graph = (observer->subscribe_graph()).unwrap();
+    auto initial = co_await graph.recv();
+    require(initial.is_some());
+    auto tap = (observer->subscribe_channel(target(*initial, 0, 1))).unwrap();
+    control->produce.notify_one();
+    check(not(co_await run.join()).is_error());
+    check(count(tap) > 0);
+
+    auto final_graph = (observer->subscribe_graph()).unwrap();
+    auto final = co_await final_graph.recv();
+    require(final.is_some());
+    check_eq((*final)->end, ExecutionOutcome::completed);
+    check(not co_await final_graph.recv());
+    check_eq((observer->subscribe_channel(target(*initial, 0, 1))).unwrap_err(),
+             TapSubscriptionError::finished);
+  }));
+}
+
+TEST("run_plan finishes inspection when already cancelled before startup") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<FlowControl>{std::in_place};
+  auto diagnostics = TestDiagnostics{};
+  auto observer = Box<PipelineObserver>{std::in_place, uuid::null()};
+  auto cancellation = folly::CancellationSource{};
+  cancellation.requestCancellation();
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto execution = scope.spawn([&]() -> Task<failure_or<void>> {
+      co_return co_await folly::coro::co_withCancellation(
+        cancellation.getToken(),
+        run_plan(flow_plan(control, ir::ChannelKind::regular, false), reg,
+                 system, diagnostics, NoProfiler{}, false, nullptr,
+                 Ref{*observer}));
+    });
+    check(not co_await execution.try_join());
+    auto subscribed = observer->subscribe_graph();
+    require(subscribed.is_ok());
+    auto graph = std::move(subscribed).unwrap();
+    auto final = co_await graph.recv();
+    require(final.is_some());
+    check_eq((*final)->end, ExecutionOutcome::cancelled);
+    check(not(*final)->execution_id);
+    check((*final)->graphs.empty());
+    check(not co_await graph.recv());
+  }));
+}
+
+TEST("destroying an unstarted run_plan leaves inspection unstarted") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<FlowControl>{std::in_place};
+  auto diagnostics = TestDiagnostics{};
+  auto observer = Box<PipelineObserver>{std::in_place, uuid::null()};
+  {
+    auto execution
+      = run_plan(flow_plan(control, ir::ChannelKind::regular, false), reg,
+                 system, diagnostics, NoProfiler{}, false, nullptr,
+                 Ref{*observer});
+    check_eq(observer->subscribe_graph().unwrap_err(),
+             GraphSubscriptionError::not_started);
+  }
+  check_eq(observer->subscribe_graph().unwrap_err(),
+           GraphSubscriptionError::not_started);
+}
+
+TEST("shared plans run root and nested pipelines without an observer") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  for (auto kind : {ir::ChannelKind::regular, ir::ChannelKind::tiny,
+                    ir::ChannelKind::fused}) {
+    for (auto nested : {false, true}) {
+      auto control = Arc<FlowControl>{std::in_place};
+      auto diagnostics = TestDiagnostics{};
+      control->produce.notify_one();
+      auto result = folly::coro::blockingWait(
+        run_plan(flow_plan(control, kind, nested), reg, system, diagnostics,
+                 NoProfiler{}, false));
+      check(not result.is_error());
+      check_eq(control->received.load(std::memory_order_relaxed), 12u);
+    }
+  }
+}
+
+TEST("inspection runtime captures regular tiny fused and nested bridge "
+     "channels") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  for (auto kind : {ir::ChannelKind::regular, ir::ChannelKind::tiny,
+                    ir::ChannelKind::fused}) {
+    for (auto nested : {false, true}) {
+      for (auto [profiling, capacity] :
+           {std::pair{false, size_t{4}}, std::pair{false, size_t{64}},
+            std::pair{true, size_t{64}}}) {
+        auto control = Arc<FlowControl>{std::in_place};
+        auto observer
+          = Box<PipelineObserver>{std::in_place, uuid::null(),
+                                  InspectionOptions{.tap_capacity = capacity}};
+        auto diagnostics = TestDiagnostics{};
+        auto profile_path
+          = std::filesystem::temp_directory_path()
+            / fmt::format("tenzir-inspection-{}.json", uuid::random());
+        auto cleanup = detail::scope_guard{[&] noexcept {
+          auto error = std::error_code{};
+          std::filesystem::remove(profile_path, error);
+        }};
+        auto profiler = profiling
+                          ? Profiler{PerfettoProfiler{profile_path.string()}}
+                          : Profiler{NoProfiler{}};
+        folly::coro::blockingWait(
+          async_scope([&](AsyncScope& scope) -> Task<void> {
+            auto execution
+              = scope.spawn(run_plan(flow_plan(control, kind, nested), reg,
+                                     system, diagnostics, std::move(profiler),
+                                     false, nullptr, Ref{*observer}));
+            co_await control->ready.wait();
+            auto graph = (observer->subscribe_graph()).unwrap();
+            auto initial = co_await graph.recv();
+            require(initial.is_some());
+            check_eq((*initial)->graphs.size(), nested ? 2u : 1u);
+            auto taps = std::vector<TapSubscription>{};
+            for (auto const& pipeline : (*initial)->graphs) {
+              for (auto i = size_t{0}; i < pipeline->channels.size(); ++i) {
+                if (pipeline->channels[i].type.is<nova::Events>()) {
+                  taps.push_back((observer->subscribe_channel(
+                                    {uuid::null(), *(*initial)->execution_id,
+                                     pipeline->path, i}))
+                                   .unwrap());
+                }
+              }
+            }
+            check_eq(taps.size(), nested ? 5u : 2u);
+            control->produce.notify_one();
+            auto result = co_await execution.join();
+            check(not result.is_error());
+            check_eq(control->received.load(std::memory_order_relaxed), 12u);
+            for (auto& tap : taps) {
+              auto received = co_await drain(tap);
+              check_eq(received, std::min(capacity, size_t{12}));
+            }
+            auto final = *initial;
+            while (auto next = co_await graph.recv()) {
+              final = std::move(*next);
+            }
+            check_eq(*final->end, ExecutionOutcome::completed);
+          }));
+      }
+    }
+  }
+}
+
+TEST("inspection aggregates physical lanes across scatter shuffle and gather") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  for (auto [lanes, keyed] :
+       {std::pair{size_t{3}, false}, std::pair{size_t{2}, false},
+        std::pair{size_t{3}, true}}) {
+    auto control = Arc<FlowControl>{std::in_place};
+    auto planned = flow_plan(control, ir::ChannelKind::tiny, false);
+    auto second = planned.operators[1];
+    second.id = OpId{"2"};
+    second.parallelism = lanes;
+    if (keyed) {
+      auto diagnostics = collecting_diagnostic_handler{};
+      auto provider = session_provider::make(diagnostics, *reg);
+      auto key = parse_expression_with_location_override(
+        "value", location::unknown, provider.as_session());
+      require(not key.is_error());
+      second.partition_keys = std::move(*key);
+    }
+    planned.operators[1].parallelism = 3;
+    planned.operators[2].id = OpId{"3"};
+    planned.operators.insert(planned.operators.begin() + 2, std::move(second));
+    planned.channels = {
+      {ir::Port::input, 0, 0, tag_v<void>},
+      {0, 0, 1, tag_v<nova::Events>, ir::ChannelKind::tiny},
+      {1, 0, 2, tag_v<nova::Events>, ir::ChannelKind::tiny},
+      {2, 0, 3, tag_v<nova::Events>, ir::ChannelKind::tiny},
+      {3, 0, ir::Port::output, tag_v<void>},
+    };
+    auto observer = Box<PipelineObserver>{
+      std::in_place, uuid::null(), InspectionOptions{.tap_capacity = 64}};
+    auto diagnostics = TestDiagnostics{};
+    folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+      auto execution
+        = scope.spawn(run_plan(std::move(planned), reg, system, diagnostics,
+                               NoProfiler{}, false, nullptr, Ref{*observer}));
+      co_await control->ready.wait();
+      auto graph = (observer->subscribe_graph()).unwrap();
+      auto current = co_await graph.recv();
+      require(current.is_some());
+      require_eq((*current)->graphs.size(), 1u);
+      auto taps = std::vector<TapSubscription>{};
+      for (auto edge : {1u, 2u, 3u}) {
+        taps.push_back(
+          (observer->subscribe_channel(target(*current, 0, edge))).unwrap());
+      }
+      control->produce.notify_one();
+      check(not(co_await execution.join()).is_error());
+      check_eq(control->received.load(std::memory_order_relaxed), 12u);
+      auto expected = std::vector<int64_t>{};
+      for (auto i = int64_t{1}; i <= 12; ++i) {
+        expected.push_back(i);
+      }
+      for (auto& tap : taps) {
+        check_eq(co_await tap_values(tap), expected);
+      }
+    }));
+  }
+}
+
+TEST("inspection separates output ports connected to the same downstream") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<FlowControl>{std::in_place};
+  auto planned = flow_plan(control, ir::ChannelKind::regular, false);
+  planned.operators[1].op = RuntimeIr{[]() -> AnyOperator {
+    return Box<Operator<nova::Events, nova::Events, true>>{
+      SplitEvents{}.with_name("split")};
+  }};
+  planned.channels.insert(planned.channels.begin() + 3,
+                          {1, 1, 2, tag_v<nova::Events>});
+  auto observer = Box<PipelineObserver>{std::in_place, uuid::null(),
+                                        InspectionOptions{.tap_capacity = 64}};
+  auto diagnostics = TestDiagnostics{};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto execution
+      = scope.spawn(run_plan(std::move(planned), reg, system, diagnostics,
+                             NoProfiler{}, false, nullptr, Ref{*observer}));
+    co_await control->ready.wait();
+    auto graph = (observer->subscribe_graph()).unwrap();
+    auto current = co_await graph.recv();
+    require(current.is_some());
+    require_eq((*current)->graphs.size(), 1u);
+    auto even = (observer->subscribe_channel(target(*current, 0, 2))).unwrap();
+    auto odd = (observer->subscribe_channel(target(*current, 0, 3))).unwrap();
+    control->produce.notify_one();
+    check(not(co_await execution.join()).is_error());
+    check_eq(control->received.load(std::memory_order_relaxed), 12u);
+    check_eq(co_await tap_values(even),
+             (std::vector<int64_t>{2, 4, 6, 8, 10, 12}));
+    check_eq(co_await tap_values(odd),
+             (std::vector<int64_t>{1, 3, 5, 7, 9, 11}));
+  }));
+}
+
+TEST("run_plan closes retained inspection subscriptions when cancelled") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  // An operator error cancels the same runtime task as an external request.
+  // Its diagnostic must still produce failed rather than cancelled inspection.
+  for (auto failed : {false, true}) {
+    auto control = Arc<FlowControl>{std::in_place};
+    auto observer = Box<PipelineObserver>{std::in_place, uuid::null()};
+    auto diagnostics = TestDiagnostics{};
+    auto cancellation = folly::CancellationSource{};
+    folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+      auto execution = scope.spawn([&]() -> Task<failure_or<void>> {
+        co_return co_await folly::coro::co_withCancellation(
+          cancellation.getToken(),
+          run_plan(flow_plan(control, ir::ChannelKind::regular, false), reg,
+                   system, diagnostics, NoProfiler{}, false, nullptr,
+                   Ref{*observer}));
+      });
+      co_await control->ready.wait();
+      auto graph = (observer->subscribe_graph()).unwrap();
+      auto initial = co_await graph.recv();
+      require(initial.is_some());
+      auto tap = (observer->subscribe_channel(target(*initial, 0, 1))).unwrap();
+      if (failed) {
+        diagnostic::error("inspection test failure").emit(diagnostics);
+      }
+      cancellation.requestCancellation();
+      check(not co_await execution.try_join());
+      // Retain the observer through EOF: its destructor must not be what
+      // closes these subscriptions, and the caller never calls finish().
+      auto expected
+        = failed ? ExecutionOutcome::failed : ExecutionOutcome::cancelled;
+      check_eq(co_await drain(tap, expected), 0u);
+      auto final = *initial;
+      while (auto next = co_await graph.recv()) {
+        final = std::move(*next);
+      }
+      check_eq(*final->end, expected);
+    }));
+  }
+}
+
+TEST("run_plan reports diagnostic failure without caller completion") {
+  class FailingSink final : public Operator<nova::Events, void> {
+  public:
+    auto process(nova::Events, OpCtx&) -> Task<void> override {
+      co_return;
+    }
+    auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+      diagnostic::error("inspection test failure").emit(ctx);
+      co_return FinalizeBehavior::done;
+    }
+  };
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<FlowControl>{std::in_place};
+  auto observer = Box<PipelineObserver>{std::in_place, uuid::null()};
+  auto diagnostics = TestDiagnostics{};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto planned = flow_plan(control, ir::ChannelKind::regular, false);
+    planned.operators.back().op = RuntimeIr{[]() -> AnyOperator {
+      return Box<Operator<nova::Events, void>>{
+        FailingSink{}.with_name("failing_sink")};
+    }};
+    auto execution
+      = scope.spawn(run_plan(std::move(planned), reg, system, diagnostics,
+                             NoProfiler{}, false, nullptr, Ref{*observer}));
+    co_await control->ready.wait();
+    auto graph = (observer->subscribe_graph()).unwrap();
+    auto initial = co_await graph.recv();
+    require(initial.is_some());
+    auto tap = (observer->subscribe_channel(target(*initial, 0, 1))).unwrap();
+    control->produce.notify_one();
+    check((co_await execution.join()).is_error());
+    std::ignore = co_await drain(tap, ExecutionOutcome::failed);
+    auto final = *initial;
+    while (auto next = co_await graph.recv()) {
+      final = std::move(*next);
+    }
+    check_eq(*final->end, ExecutionOutcome::failed);
+  }));
 }
 
 } // namespace tenzir

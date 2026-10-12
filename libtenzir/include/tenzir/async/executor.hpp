@@ -16,6 +16,7 @@
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/signal.hpp"
 #include "tenzir/operator_id.hpp"
+#include "tenzir/pipeline_observer.hpp"
 #include "tenzir/result.hpp"
 
 #include <folly/Executor.h>
@@ -84,16 +85,19 @@ class ExecCtx {
 public:
   virtual ~ExecCtx() = default;
 
+  virtual auto inspection() const -> Option<Ref<PipelineObserver>> = 0;
+
   template <class T>
-  auto make_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+  auto make_channel(ChannelId id, Option<Ref<ChannelTap const>> tap = None{})
+    -> PushPull<OperatorMsg<T>> {
     if constexpr (std::same_as<T, void>) {
       return make_void(std::move(id));
     } else if constexpr (std::same_as<T, table_slice>) {
-      return make_events(std::move(id));
+      return make_events(std::move(id), std::move(tap));
     } else if constexpr (std::same_as<T, chunk_ptr>) {
       return make_bytes(std::move(id));
     } else if constexpr (std::same_as<T, nova::Events>) {
-      return make_nova_events(std::move(id));
+      return make_nova_events(std::move(id), std::move(tap));
     } else if constexpr (std::same_as<T, FileHandle>) {
       return make_files(std::move(id));
     } else {
@@ -102,15 +106,17 @@ public:
   }
 
   template <class T>
-  auto make_fused_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+  auto
+  make_fused_channel(ChannelId id, Option<Ref<ChannelTap const>> tap = None{})
+    -> PushPull<OperatorMsg<T>> {
     if constexpr (std::same_as<T, void>) {
       return make_fused_void(std::move(id));
     } else if constexpr (std::same_as<T, table_slice>) {
-      return make_fused_events(std::move(id));
+      return make_fused_events(std::move(id), std::move(tap));
     } else if constexpr (std::same_as<T, chunk_ptr>) {
       return make_fused_bytes(std::move(id));
     } else if constexpr (std::same_as<T, nova::Events>) {
-      return make_fused_nova_events(std::move(id));
+      return make_fused_nova_events(std::move(id), std::move(tap));
     } else if constexpr (std::same_as<T, FileHandle>) {
       return make_fused_files(std::move(id));
     } else {
@@ -124,11 +130,13 @@ public:
   /// expected to share one `ChannelId` across all lanes of an exchange so their
   /// profiling stats collate into a single metric.
   template <class T>
-  auto make_tiny_channel(ChannelId id) -> PushPull<OperatorMsg<T>> {
+  auto
+  make_tiny_channel(ChannelId id, Option<Ref<ChannelTap const>> tap = None{})
+    -> PushPull<OperatorMsg<T>> {
     if constexpr (std::same_as<T, table_slice>) {
-      return make_tiny_events(std::move(id));
+      return make_tiny_events(std::move(id), std::move(tap));
     } else if constexpr (std::same_as<T, nova::Events>) {
-      return make_tiny_nova_events(std::move(id));
+      return make_tiny_nova_events(std::move(id), std::move(tap));
     } else {
       static_assert(false, "only event channels can be tiny");
     }
@@ -170,10 +178,11 @@ public:
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
-  virtual auto make_events(ChannelId id) -> PushPull<OperatorMsg<table_slice>>
+  virtual auto make_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
+    -> PushPull<OperatorMsg<table_slice>>
     = 0;
 
-  virtual auto make_tiny_events(ChannelId id)
+  virtual auto make_tiny_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<table_slice>>
     = 0;
 
@@ -181,7 +190,8 @@ protected:
 
   virtual auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
-  virtual auto make_fused_events(ChannelId id)
+  virtual auto
+  make_fused_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<table_slice>>
     = 0;
 
@@ -189,15 +199,17 @@ protected:
     -> PushPull<OperatorMsg<chunk_ptr>>
     = 0;
 
-  virtual auto make_nova_events(ChannelId id)
+  virtual auto make_nova_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<nova::Events>>
     = 0;
 
-  virtual auto make_fused_nova_events(ChannelId id)
+  virtual auto
+  make_fused_nova_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<nova::Events>>
     = 0;
 
-  virtual auto make_tiny_nova_events(ChannelId id)
+  virtual auto
+  make_tiny_nova_events(ChannelId id, Option<Ref<ChannelTap const>> tap)
     -> PushPull<OperatorMsg<nova::Events>>
     = 0;
 
@@ -221,20 +233,27 @@ public:
 /// and then call this primitive.
 ///
 /// Channel kinds are determined during planning and executed unchanged.
+/// An existing registration must refer to the same shared plan.
 template <class Input, class Output>
-auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
+auto drive_plan(Arc<ir::Plan const> plan,
+                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                 Box<Push<OperatorMsg<Output>>> push_downstream,
                 Receiver<FromControl> from_control,
                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
+                caf::actor_system& sys, DiagHandler& dh,
+                Option<Ref<PlanRegistration>> registration = None{})
+  -> Task<void>;
+
+enum class PlanCompletion { completed, stopped };
 
 /// Runs a pipeline plan without external control.
 ///
 /// Creates the input/output channels and the control operators, then drives
 /// the plan, handling graceful stop and control messages.
+/// Returns whether the plan completed naturally or was gracefully stopped.
 auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
                   DiagHandler& dh, Notify* graceful_stop = nullptr)
-  -> Task<void>;
+  -> Task<PlanCompletion>;
 
 /// Feeds input into a bounded pipeline.
 template <class T>
