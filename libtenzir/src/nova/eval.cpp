@@ -407,6 +407,12 @@ auto _::EvalRun::fail_not_constant(location loc, EvalFrame frame) const
 
 auto _::EvalRun::eval(ast::expression const& expr, EvalFrame frame)
   -> Array<Data> {
+  // No node is evaluated without rows to produce, e.g., in a branch that no
+  // row takes. Rows outside the mask are unspecified, so `null` will do, and
+  // nodes never have to keep their diagnostics quiet for an empty mask.
+  if (not frame.mask().any()) {
+    return frame.null();
+  }
   return trace_panic(expr, [this, &expr, &frame] {
     return match(expr, [this, &frame](auto const& x) {
       return eval(x, std::move(frame));

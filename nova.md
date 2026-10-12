@@ -205,6 +205,9 @@ invariant into a structural one. The rules:
 - **A result is only meaningful for the mask it was produced under.** Rows
   outside `frame.mask()` hold unspecified values; never read them, and never
   expose them.
+- **No node is evaluated under an empty mask.** `EvalRun::eval` returns
+  `frame.null()` for it instead, so a node never has to special-case it, and
+  a branch that no row takes emits no diagnostics.
 - **Short-circuiting is mask narrowing, not control flow.** `and`/`or`
   evaluate the right operand under `frame.narrow(rows_that_still_matter)` and
   skip it entirely when that mask is empty. `x if y else z` is one

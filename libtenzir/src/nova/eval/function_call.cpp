@@ -8,9 +8,6 @@ namespace tenzir::nova {
 
 auto _::EvalRun::eval(ast::function_call const& x, EvalFrame frame)
   -> Array<Data> {
-  if (not frame.mask().any()) {
-    return frame.null();
-  }
   return evaluator_->call_site(x).eval(std::move(frame));
 }
 

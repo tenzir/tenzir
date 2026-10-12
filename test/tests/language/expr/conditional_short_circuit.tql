@@ -1,0 +1,9 @@
+// Conditional expressions must not evaluate a branch that no row takes, so
+// guarding a field access with a condition emits no warnings.
+from {c: false, x: {}}, {c: true, x: {a: 1}}, {c: true, x: {}}
+if_else = x.a if c and x.a? != null else null
+if_false = x.a if false else null
+if_only = x.a if c and x.a? != null
+else_only = 1 else x.a
+// The taken branch of the last event lacks the field and still warns.
+taken = x.a if c else null

@@ -1,0 +1,39 @@
+warning: record does not have field
+ --> tests/language/expr/conditional_short_circuit.tql:9:9
+  |
+9 | taken = x.a if c else null
+  |         ~
+  ⋮
+9 | taken = x.a if c else null
+  |           - field does not exist
+  |
+  = hint: append `?` to suppress this warning
+{
+  c: false,
+  x: {},
+  if_else: null,
+  if_false: null,
+  if_only: null,
+  else_only: 1,
+  taken: null,
+}
+{
+  c: true,
+  x: {
+    a: 1,
+  },
+  if_else: 1,
+  if_false: null,
+  if_only: 1,
+  else_only: 1,
+  taken: 1,
+}
+{
+  c: true,
+  x: {},
+  if_else: null,
+  if_false: null,
+  if_only: null,
+  else_only: 1,
+  taken: null,
+}

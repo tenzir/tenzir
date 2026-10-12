@@ -341,9 +341,6 @@ auto eval_index_rows(ast::index_expr const& x, Array<Data> const& subject,
 auto _::EvalRun::eval(ast::index_expr const& x, EvalFrame frame)
   -> Array<Data> {
   auto const& mask = frame.mask();
-  if (not mask.any()) {
-    return frame.null();
-  }
   auto subject = frame.eval(x.expr);
   auto index = frame.eval(x.index);
   if (auto records = single_type<Record>(subject, mask)) {

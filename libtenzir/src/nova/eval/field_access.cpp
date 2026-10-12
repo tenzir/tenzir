@@ -11,7 +11,7 @@ auto _::EvalRun::eval(const ast::field_access& x, EvalFrame frame)
   auto subject = frame.eval(x.left);
   auto rec = subject.get_alternative<Record>();
   const auto maybe_warn = [&x, &frame, &rec]() {
-    if (not x.has_question_mark) {
+    if (not x.has_question_mark and frame.mask().any()) {
       diagnostic::warning("record does not have field")
         .primary(x.left)
         .secondary(x.name, "field does not exist")

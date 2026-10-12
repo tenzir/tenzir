@@ -276,23 +276,20 @@ TEST("simplify keeps evaluated operands that could fail") {
 }
 
 TEST("simplify keeps constants that the evaluator rejects") {
-  // The evaluator fails the pipeline for a secret constant, even where it
-  // evaluates no rows.
+  // The evaluator fails the pipeline for a secret constant that it evaluates.
   CHECK_EQUAL(simplify_with_secret("s or true"),
               render_with_secret("s or true"));
   CHECK_EQUAL(simplify_with_secret("{a: s} == null or true"),
               render_with_secret("{a: s} == null or true"));
   CHECK_EQUAL(simplify_with_secret("[s] == x and false"),
               render_with_secret("[s] == x and false"));
-  CHECK_EQUAL(simplify_with_secret("true if true else s"),
-              render_with_secret("true if true else s"));
-  CHECK_EQUAL(simplify_with_secret("(s if false) == null"),
-              render_with_secret("(s if false) == null"));
-  CHECK_EQUAL(simplify_with_secret("(1 else s) == 1"),
-              render_with_secret("(1 else s) == 1"));
-  // The runtime never evaluates the right operand of a decided `and` or `or`.
+  // The runtime never evaluates the right operand of a decided `and` or `or`,
+  // nor a branch that no row takes.
   CHECK_EQUAL(simplify_with_secret("true or s"), render("true"));
   CHECK_EQUAL(simplify_with_secret("false and s == x"), render("false"));
+  CHECK_EQUAL(simplify_with_secret("true if true else s"), render("true"));
+  CHECK_EQUAL(simplify_with_secret("(s if false) == null"), render("true"));
+  CHECK_EQUAL(simplify_with_secret("(1 else s) == 1"), render("true"));
   // The secret stays where the runtime evaluates it.
   CHECK_EQUAL(simplify_with_secret("s and true"), render_with_secret("s"));
   CHECK_EQUAL(simplify_with_secret("(null else s) == x"),
@@ -310,8 +307,8 @@ TEST("simplify keeps the arguments of invalid calls") {
               render("drop_null_fields({a: x, b: 1 + 1}, a if true) == y"));
   CHECK_EQUAL(simplify("count_if([1 + 1], (v => true) if true) == 1"),
               render("count_if([1 + 1], (v => true) if true) == 1"));
-  CHECK_EQUAL(simplify("int(y, base=16 if true else x) == 1"),
-              render("int(y, base=16 if true else x) == 1"));
+  CHECK_EQUAL(simplify("int(y, base=16 if x == null or true) == 1"),
+              render("int(y, base=16 if x == null or true) == 1"));
   // The arguments of valid calls keep the syntax they need.
   CHECK_EQUAL(simplify("drop_null_fields({a: x, b: 1 + 1}, a) == y"),
               render("drop_null_fields({a: x, b: 2}, a) == y"));
@@ -325,8 +322,12 @@ TEST("simplify keeps the arguments of invalid calls") {
   CHECK_EQUAL(simplify("count_if(xs, v => int(v, base=8 * 2) > 1) == 1"),
               render("count_if(xs, v => int(v, base=16) > 1) == 1"));
   // A call with an invalid call in its arguments is invalid as well.
-  CHECK_EQUAL(simplify("int(int(y, base=16 if true else x).string()) == 1"),
-              render("int(int(y, base=16 if true else x).string()) == 1"));
+  CHECK_EQUAL(
+    simplify("int(int(y, base=16 if x == null or true).string()) == 1"),
+    render("int(int(y, base=16 if x == null or true).string()) == 1"));
+  // A branch that no row takes need not be constant.
+  CHECK_EQUAL(simplify("int(y, base=16 if true else x) == 1"),
+              render("int(y, base=16) == 1"));
 }
 
 TEST("simplify selects branches of conditional expressions") {
