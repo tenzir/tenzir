@@ -1,0 +1,6 @@
+// An SDL API key scopes its queries itself and finds nothing with
+// `tenant: true`.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  query="select_scope",
+  tenant=false

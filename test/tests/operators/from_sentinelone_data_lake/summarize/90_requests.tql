@@ -1,0 +1,5 @@
+// The queries of the earlier tests, in order. Aggregate queries that fall
+// back are followed by the read of the window.
+from_file env("S1_FIXTURE_LRQ_CAPTURE_FILE") { read_ndjson }
+where method == "POST"
+select scope=payload.accountIds[0], status, type=payload.queryType, query=payload.pq?.query?, filter=payload.log?.filter?

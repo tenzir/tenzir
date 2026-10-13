@@ -1,0 +1,9 @@
+// SentinelOne has no flat `endpoint` field, so it groups every event as
+// `null`. In TQL, `endpoint.name` makes `endpoint` a record, so the operator
+// aggregates locally and groups by the records.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"]
+summarize endpoint, n=count()
+sort n

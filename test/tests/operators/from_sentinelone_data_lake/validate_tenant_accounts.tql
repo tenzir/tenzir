@@ -1,0 +1,8 @@
+---
+error: true
+---
+from_sentinelone_data_lake "https://example.sentinelone.net",
+  token="t",
+  query="x",
+  tenant=true,
+  account_ids=["a"]

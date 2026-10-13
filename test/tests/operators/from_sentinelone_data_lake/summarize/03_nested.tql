@@ -1,0 +1,7 @@
+// Several group keys and counts, with nested and renamed outputs.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"]
+summarize source.name=dataSource.name, event.type, stats.events=count(), total=count()
+sort source.name, event.type

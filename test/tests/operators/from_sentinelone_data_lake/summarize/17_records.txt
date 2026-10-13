@@ -1,0 +1,23 @@
+warning: event does not have field
+ --> tests/operators/from_sentinelone_data_lake/summarize/17_records.tql:8:11
+  |
+8 | summarize endpoint, n=count()
+  |           ~~~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  endpoint: null,
+  n: 1,
+}
+{
+  endpoint: {
+    name: "host-b",
+  },
+  n: 2,
+}
+{
+  endpoint: {
+    name: "host-a",
+  },
+  n: 3,
+}

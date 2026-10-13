@@ -1,0 +1,52 @@
+warning: event does not have field
+ --> tests/operators/from_sentinelone_data_lake/summarize/15_sparse_local.tql:8:11
+  |
+8 | summarize event.type, n=count()
+  |           ~~~~~
+  |
+  = hint: append `?` to suppress this warning
+
+warning: cannot access field of non-record type
+ --> tests/operators/from_sentinelone_data_lake/summarize/15_sparse_local.tql:8:11
+  |
+8 | summarize event.type, n=count()
+  |           ~~~~~ not a record
+  ⋮
+8 | summarize event.type, n=count()
+  |                 ----
+  |
+
+warning: record does not have field
+ --> tests/operators/from_sentinelone_data_lake/summarize/15_sparse_local.tql:8:11
+  |
+8 | summarize event.type, n=count()
+  |           ~~~~~
+  ⋮
+8 | summarize event.type, n=count()
+  |                 ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+{
+  event: {
+    type: "DNS Resolved",
+  },
+  n: 3,
+}
+{
+  event: {
+    type: "IP Connect",
+  },
+  n: 2,
+}
+{
+  event: {
+    type: "Process Creation",
+  },
+  n: 1,
+}
+{
+  event: {
+    type: null,
+  },
+  n: 1,
+}

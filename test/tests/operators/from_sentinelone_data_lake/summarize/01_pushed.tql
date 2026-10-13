@@ -1,0 +1,8 @@
+// SentinelOne groups and counts the events of the window. The result equals
+// that of `02_local.tql`, which aggregates the same events locally.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"]
+summarize event.type, n=count()
+sort event.type

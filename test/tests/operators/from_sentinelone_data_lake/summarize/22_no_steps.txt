@@ -1,0 +1,18 @@
+{
+  event: {
+    type: "DNS Resolved",
+  },
+  n: 3,
+}
+{
+  event: {
+    type: "IP Connect",
+  },
+  n: 2,
+}
+{
+  event: {
+    type: "Process Creation",
+  },
+  n: 1,
+}

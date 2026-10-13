@@ -1,0 +1,4 @@
+{
+  tenant: true,
+  accounts: "",
+}

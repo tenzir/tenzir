@@ -1,0 +1,8 @@
+{
+  flag: true,
+  n: 2,
+}
+{
+  flag: "true",
+  n: 4,
+}

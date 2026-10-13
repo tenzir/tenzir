@@ -1,0 +1,4 @@
+// SentinelOne does not compute `count(x)` as TQL does, so the `summarize`
+// stays local.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
+summarize event.type, events=count(src.ip)

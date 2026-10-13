@@ -1,0 +1,6 @@
+error: `tenant=true` cannot be combined with `account_ids`
+ --> tests/operators/from_sentinelone_data_lake/validate_tenant_accounts.tql:7:10
+  |
+7 |   tenant=true,
+  |          ^^^^
+  |

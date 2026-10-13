@@ -1,0 +1,287 @@
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_2 = count(), __tenzir_aggregate_3 = count(), __tenzir_aggregate_4 = count() by __tenzir_aggregate_0 = dataSource.name, __tenzir_aggregate_1 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_0 = count(), __tenzir_aggregate_1 = count()",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_0 = count(), __tenzir_aggregate_1 = count()",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_sparse",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_sparse",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "!(event.type = *)",
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = flag | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, flag",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = flag | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_partial",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_partial",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_partial",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "",
+}
+{
+  scope: "aggregate_rejected",
+  status: 500,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_rejected",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_sparse",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, dataSource.name, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_sparse",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "",
+}
+{
+  scope: "aggregate_sparse_drift",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_sparse_drift",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "!(event.type = *)",
+}
+{
+  scope: "aggregate_sparse_drift",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_sparse_drift",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "",
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = endpoint | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "!(endpoint = *)",
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, endpoint",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "",
+}
+{
+  scope: "aggregate_launch_error",
+  status: 503,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_poll_error",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_poll_error",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_no_data",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_no_data",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_bad_poll",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_bad_poll",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_no_steps",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_no_steps",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_long_retry",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_long_retry",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_bad_retry",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_bad_retry",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}
+{
+  scope: "aggregate_bad_launch_retry",
+  status: 429,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_bad_launch_retry",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type",
+  filter: null,
+}

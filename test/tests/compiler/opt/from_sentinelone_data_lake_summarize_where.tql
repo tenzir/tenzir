@@ -1,0 +1,5 @@
+// A predicate only preselects candidates in SentinelOne, so the `summarize`
+// after it stays local.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
+where event.type == "DNS Resolved"
+summarize src.ip, events=count()

@@ -236,6 +236,105 @@ _STATIC_RESPONSES: dict[str, object] = {
 }
 
 
+# The events of the `aggregate*` account scopes, which generated reads and
+# aggregate queries share. A missing field is `None`. The `true` keys collide
+# with the text "true" after type inference. There is no flat `endpoint`
+# field, but `endpoint.name` makes `endpoint` a record in TQL.
+_AGGREGATE_COLUMNS = [
+    "timestamp",
+    "event.type",
+    "dataSource.name",
+    "flag",
+    "endpoint.name",
+]
+_AGGREGATE_EVENTS = [
+    ("DNS Resolved", "SentinelOne", "true", "host-a"),
+    ("IP Connect", "SentinelOne", True, "host-b"),
+    ("DNS Resolved", "Other", "true", None),
+    ("DNS Resolved", "SentinelOne", True, "host-a"),
+    ("Process Creation", "SentinelOne", "true", "host-b"),
+    (None, "Other", True, None),
+    ("IP Connect", "SentinelOne", "true", "host-a"),
+]
+
+
+def _aggregate_population(scope: str, payload: dict) -> dict:
+    """The events of an `aggregate*` scope within the request window."""
+    start = datetime.fromisoformat(payload["startTime"]).timestamp()
+    end = datetime.fromisoformat(payload["endTime"]).timestamp()
+    values = []
+    for i, event in enumerate(_AGGREGATE_EVENTS):
+        seconds = 1704067200 + i
+        if not start <= seconds < end:
+            continue
+        # Only the sparse scopes have an event without `event.type`.
+        if event[0] is None and not scope.startswith("aggregate_sparse"):
+            continue
+        values.append([seconds * 1_000_000_000, *event])
+    return {
+        "columns": [{"name": name} for name in _AGGREGATE_COLUMNS],
+        "values": values,
+    }
+
+
+# A LOG filter that selects the events without a field.
+_ABSENT_FILTER = re.compile(r"\| filter !\((?P<field>[\w.]+) = \*\)")
+
+
+def _absent(population: dict, field: str) -> dict:
+    """The events of `population` that lack `field` or hold `null` there."""
+    names = [column["name"] for column in population["columns"]]
+    index = names.index(field) if field in names else None
+    return {
+        **population,
+        "values": [
+            row for row in population["values"] if index is None or row[index] is None
+        ],
+    }
+
+
+# The aggregate queries that the operator generates from TQL.
+_GROUP_QUERY = re.compile(
+    r"\| group (?P<aggregates>.+?)(?: by (?P<keys>.+?) \| limit (?P<limit>\d+))?"
+)
+
+
+def _aggregate(population: dict, query: str) -> dict | None:
+    """Model PowerQuery's `group` stage for the generated aggregate queries.
+
+    Like PowerQuery, it groups values by type and spelling, before the type
+    inference of Tenzir, and groups events without a flat key field as `null`.
+    """
+    match = _GROUP_QUERY.fullmatch(query)
+    if match is None:
+        return None
+    aggregates = [part.split(" = ") for part in match["aggregates"].split(", ")]
+    keys = (
+        [part.split(" = ") for part in match["keys"].split(", ")]
+        if match["keys"]
+        else []
+    )
+    if any(len(part) != 2 or part[1] != "count()" for part in aggregates):
+        return None
+    names = [column["name"] for column in population["columns"]]
+    groups: dict[tuple, list] = {}
+    for row in population["values"]:
+        event = dict(zip(names, row))
+        key = [event.get(field) for _, field in keys]
+        group = tuple((type(value).__name__, value) for value in key)
+        groups.setdefault(group, [*key, 0])[-1] += 1
+    values = [
+        [*group[:-1], *([group[-1]] * len(aggregates))] for group in groups.values()
+    ]
+    if not keys and not values:
+        values = [[0] * len(aggregates)]
+    return {
+        "columns": [{"name": alias} for alias, _ in keys]
+        + [{"name": alias} for alias, _ in aggregates],
+        "values": values[: int(match["limit"])] if match["limit"] else values,
+    }
+
+
 # A trailing `columns` stage before an optional `limit`, as generated from TQL.
 _COLUMNS_STAGE = re.compile(r"(?:^| )\| columns ([^|]+?)(?= \| |$)")
 
@@ -395,6 +494,20 @@ def _make_handler(
                 return
             query = _request_query(payload)
             launches[query] = launches.get(query, 0) + 1
+            if payload.get("accountIds") == [
+                "aggregate_bad_launch_retry"
+            ] and query.startswith("| group"):
+                capture(method="POST", payload=payload, status=429)
+                self._respond(
+                    429, {"error": "rate limited"}, {"Retry-After": "invalid"}
+                )
+                return
+            if payload.get("accountIds") == ["aggregate_rejected"] and query.startswith(
+                "| group"
+            ):
+                capture(method="POST", payload=payload, status=500)
+                self._respond(500, {"error": "Don't understand [group]"})
+                return
             if query.startswith("| filter ((launch_error) == (1))"):
                 capture(method="POST", payload=payload, status=500)
                 self._respond(500, {"error": "Unable to parse the entire query"})
@@ -438,7 +551,10 @@ def _make_handler(
                 self.connection.shutdown(socket.SHUT_RDWR)
                 self.connection.close()
                 return
-            if query.startswith("select_launch_server_error"):
+            if query.startswith("select_launch_server_error") or (
+                payload.get("accountIds") == ["aggregate_launch_error"]
+                and query.startswith("| group")
+            ):
                 capture(method="POST", payload=payload, status=503, id=qid)
                 self._respond(503, {"error": "response failed after query creation"})
                 return
@@ -494,8 +610,8 @@ def _make_handler(
                     or not all(isinstance(x, str) for x in ids)
                 ):
                     return "expected non-empty accountIds with tenant false"
-            elif payload.get("tenant") is not True:
-                return "expected tenant true"
+            elif not isinstance(payload.get("tenant"), bool):
+                return "expected a boolean tenant"
             bounds = []
             for key in ("startTime", "endTime"):
                 value = payload.get(key)
@@ -553,6 +669,24 @@ def _make_handler(
                 self._respond(
                     429, {"error": "rate limited"}, {"Retry-After": str(2**64 - 1)}
                 )
+                return
+            # Polls of these aggregate queries ask for unusable retry delays.
+            retry_after = {
+                "aggregate_long_retry": "20",
+                "aggregate_bad_retry": "invalid",
+            }.get(scope)
+            if retry_after is not None and query.startswith("| group"):
+                capture(method="GET", id=qid, status=429)
+                self._respond(
+                    429, {"error": "rate limited"}, {"Retry-After": retry_after}
+                )
+                return
+            # Every poll of this aggregate query fails, so retries cannot help.
+            if scope == "aggregate_poll_error" and query.startswith("| group"):
+                capture(method="GET", id=qid, status=0)
+                self.close_connection = True
+                self.connection.shutdown(socket.SHUT_RDWR)
+                self.connection.close()
                 return
             if query == "select_transport_retry" and state["polls"] == 1:
                 capture(method="GET", id=qid, status=0)
@@ -614,6 +748,21 @@ def _make_handler(
                 step = total = 2
             state["last_step"] = step
             capture(method="GET", id=qid, status=200, step=step)
+            # Malformed polls of an aggregate query.
+            if query.startswith("| group") and scope in {
+                "aggregate_no_data",
+                "aggregate_bad_poll",
+                "aggregate_no_steps",
+            }:
+                self._respond(
+                    200,
+                    {
+                        "aggregate_no_data": {"stepsCompleted": 2, "stepsTotal": 2},
+                        "aggregate_bad_poll": "not json",
+                        "aggregate_no_steps": {"data": {}},
+                    }[scope],
+                )
+                return
             if total == 0 or step < total:
                 self._respond(
                     200,
@@ -627,7 +776,20 @@ def _make_handler(
             # Generated queries project their response; explicit ones do not.
             generated = query.startswith("| ")
             query, projection = _split_columns(query) if generated else (query, None)
-            if query == "select_echo_times":
+            # The number of events that the initial filter matched. Only
+            # aggregate queries differ from the number of returned rows.
+            match_count = None
+            if query == "select_scope":
+                data = {
+                    "columns": [{"name": "tenant"}, {"name": "accounts"}],
+                    "values": [
+                        [
+                            state["payload"].get("tenant"),
+                            ",".join(state["payload"].get("accountIds", [])),
+                        ]
+                    ],
+                }
+            elif query == "select_echo_times":
                 data = {
                     "columns": [{"name": "start"}, {"name": "end"}],
                     "values": [
@@ -678,6 +840,25 @@ def _make_handler(
                     "columns": [{"name": "timestamp"}, {"name": "id"}],
                     "values": values[:limit],
                 }
+            elif query.startswith("| ") and scope.startswith("aggregate"):
+                population = _aggregate_population(scope, state["payload"])
+                if query.startswith("| group"):
+                    data = _aggregate(population, query)
+                    if data is None:
+                        self._respond(400, {"error": f"unexpected group: {query!r}"})
+                        return
+                    match_count = len(population["values"])
+                    generated = False
+                elif query == "| filter (1 == 1)":
+                    data = population
+                elif match := _ABSENT_FILTER.fullmatch(query):
+                    data = _absent(population, match["field"])
+                    # Model a population that changed between the queries.
+                    if scope == "aggregate_sparse_drift":
+                        data = {**data, "values": []}
+                else:
+                    self._respond(400, {"error": f"unexpected query: {query!r}"})
+                    return
             elif query.startswith("| ") and scope.startswith("hybrid_numeric_"):
                 data = _STATIC_RESPONSES[
                     "select_floats"
@@ -821,6 +1002,12 @@ def _make_handler(
                     data["matches"][-1]["values"] = []
                 if scope == "hybrid_partial_log":
                     data["partialResultsDueToTimeLimit"] = True
+                if scope.startswith("aggregate"):
+                    # LOG events do not carry the fields that they lack.
+                    for match in data["matches"]:
+                        values = match["values"]
+                        for name in [k for k, v in values.items() if v is None]:
+                            del values[name]
                 self._respond(
                     200, {"stepsCompleted": step, "stepsTotal": total, "data": data}
                 )
@@ -832,8 +1019,10 @@ def _make_handler(
                 dict(column, cellType="UNKNOWN", decimalPlaces=0)
                 for column in data["columns"]
             ]
-            data["matchCount"] = len(data["values"])
-            if scope == "hybrid_partial":
+            data["matchCount"] = (
+                len(data["values"]) if match_count is None else match_count
+            )
+            if scope in {"hybrid_partial", "aggregate_partial"}:
                 data["omittedEvents"] = 1.0
             self._respond(
                 200, {"stepsCompleted": step, "stepsTotal": total, "data": data}

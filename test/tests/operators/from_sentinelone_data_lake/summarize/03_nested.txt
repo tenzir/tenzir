@@ -1,0 +1,48 @@
+{
+  source: {
+    name: "Other",
+  },
+  event: {
+    type: "DNS Resolved",
+  },
+  stats: {
+    events: 1,
+  },
+  total: 1,
+}
+{
+  source: {
+    name: "SentinelOne",
+  },
+  event: {
+    type: "DNS Resolved",
+  },
+  stats: {
+    events: 2,
+  },
+  total: 2,
+}
+{
+  source: {
+    name: "SentinelOne",
+  },
+  event: {
+    type: "IP Connect",
+  },
+  stats: {
+    events: 2,
+  },
+  total: 2,
+}
+{
+  source: {
+    name: "SentinelOne",
+  },
+  event: {
+    type: "Process Creation",
+  },
+  stats: {
+    events: 1,
+  },
+  total: 1,
+}

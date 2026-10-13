@@ -1,0 +1,4 @@
+// `from_sentinelone_data_lake` takes over the `summarize` that directly
+// follows it when no predicate restricts the events of the window.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
+summarize event.type, events=count()

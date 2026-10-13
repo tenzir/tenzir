@@ -1,0 +1,17 @@
+# A suite of its own, so that `90_requests.tql` sees only its requests.
+suite: from-sentinelone-data-lake-summarize
+fixtures:
+  - sentinelone
+timeout: 180
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+requires:
+  operators:
+    - from_sentinelone_data_lake
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable
+  reason: requires the from_sentinelone_data_lake plugin

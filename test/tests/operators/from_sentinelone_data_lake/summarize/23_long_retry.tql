@@ -1,0 +1,9 @@
+// A poll of the aggregate query asks to retry after 20 seconds, beyond the
+// query's keep-alive window. The operator falls back to aggregating locally,
+// with the result of `01_pushed.tql`.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate_long_retry"]
+summarize event.type, n=count()
+sort event.type

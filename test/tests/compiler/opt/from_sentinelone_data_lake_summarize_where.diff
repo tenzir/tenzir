@@ -1,0 +1,200 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_sentinelone_data_lake",
+       store: {
+         op: {
+           path: [
+             `from_sentinelone_data_lake` @ [1]:102..128 from 0
+           ],
+           ref: std::from_sentinelone_data_lake/op
+         },
+         args: [
+           located "https://example.sentinelone.net" @ [1]:129..162 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located {
+               buffer: {
+                 chunk: chunk(size=48),
+                 table-offset: 12
+               }
+             } @ [1]:170..173 from 0
+           }
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:174..179 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: field_access {
+             left: root_field {
+               id: `event` @ [1]:180..185 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:186..190 from 0,
+             location: [1]:180..190 from 0
+           },
+           op: "eq",
+           right: constant string "DNS Resolved" @ [1]:194..208 from 0,
+           location: [1]:180..208 from 0
+         }
+       ],
+-      named_args: [
+-        
++      order: "ordered",
++      projection: [
++        {
++          expr: field_access {
++            left: root_field {
++              id: `src` @ [1]:219..222 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `ip` @ [1]:223..225 from 0,
++            location: [1]:219..225 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src` @ [1]:219..222 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `ip` @ [1]:223..225 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `event` @ [1]:180..185 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `type` @ [1]:186..190 from 0,
++            location: [1]:180..190 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `event` @ [1]:180..185 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `type` @ [1]:186..190 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
+       ]
+     },
+     summarize {
+       self: [1]:209..218 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `events` @ [1]:227..233 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `events` @ [1]:227..233 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:234..239 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:234..241 from 0
+             }
+           }
+         ],
+         groups: [
+           {
+             expr: {
+               expr: field_access {
+                 left: root_field {
+                   id: `src` @ [1]:219..222 from 0,
+                   has_question_mark: false
+                 },
+                 has_question_mark: false,
+                 name: `ip` @ [1]:223..225 from 0,
+                 location: [1]:219..225 from 0
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `src` @ [1]:219..222 from 0,
+                   has_question_mark: false
+                 },
+                 {
+                   id: `ip` @ [1]:223..225 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         indices: [
+           -1,
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:241..241 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }
