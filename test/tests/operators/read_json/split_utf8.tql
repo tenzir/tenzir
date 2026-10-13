@@ -1,0 +1,6 @@
+// Every byte is its own chunk, so every multi-byte UTF-8 character is split at
+// every internal position.
+from_stdin {
+  split_bytes 1
+  read_json
+}

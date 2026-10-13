@@ -1,0 +1,8 @@
+---
+error: true
+---
+// The bytes after the split do not continue the UTF-8 sequence.
+from {data: "7b2278223a22e2".decode_hex()},
+     {data: "28a1227d0a".decode_hex()}
+write_chunks
+read_json

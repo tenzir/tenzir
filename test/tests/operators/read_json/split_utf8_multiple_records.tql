@@ -1,0 +1,9 @@
+// Each chunk completes the previous UTF-8 sequence, contains a complete
+// record, and ends within the next one.
+from {data: "7b2261223a22c3a9227d0a7b2262223a22e2".decode_hex()},
+     {data: "82ac227d0a7b2263223a22f09f".decode_hex()},
+     {data: "9880227d0a7b2264223a22c3".decode_hex()},
+     {data: "a9227d0a7b2265223a22f09f98".decode_hex()},
+     {data: "80227d0a".decode_hex()}
+write_chunks
+read_json

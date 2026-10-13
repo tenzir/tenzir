@@ -258,7 +258,16 @@ auto default_parser::parse(const chunk::view_type& json_chunk) -> void {
   auto completed_documents = size_t{0};
   buffer_.append(
     {reinterpret_cast<const char*>(json_chunk.data()), json_chunk.size()});
+  // A chunk may end within a multi-byte UTF-8 sequence. simdjson trims such a
+  // sequence from the input, but then parses the trimmed bytes as a batch of
+  // their own and fails with a UTF-8 error. We withhold the incomplete
+  // sequence instead and retain it in `handle_truncated_bytes` until the next
+  // chunk completes it.
   auto view = buffer_.view();
+  view.remove_suffix(unicode::count_trailing_partial_utf8(view));
+  if (view.empty()) {
+    return;
+  }
   do {
     retry_capacity_failure = false;
     auto err
@@ -277,10 +286,9 @@ auto default_parser::parse(const chunk::view_type& json_chunk) -> void {
     auto current_document = size_t{};
     for (auto doc_ : stream_) {
       // Skip documents that passed the simdjson batch_size limits previously
-      if (current_document < completed_documents) {
+      if (current_document++ < completed_documents) {
         continue;
       }
-      ++current_document;
       // doc.error() will inherit all errors from *doc_it and get_value.
       // No need to check after each operation.
       auto doc = doc_.get_value();
@@ -378,10 +386,10 @@ auto default_parser::handle_truncated_bytes() -> void {
     diagnostic::error("detected malformed JSON").emit(*dh);
     return;
   }
-  // simdjson's truncated_bytes() is calculated after trimming partial UTF-8
-  // sequences from the end of the input. We need to add those bytes back to
-  // avoid losing them, which would cause UTF-8 validation errors when the
-  // continuation bytes arrive in the next chunk.
+  // `parse` withholds a trailing incomplete UTF-8 sequence from simdjson, so
+  // simdjson's truncated_bytes() does not include it. We need to add those
+  // bytes back to avoid losing them, which would cause UTF-8 validation
+  // errors when the continuation bytes arrive in the next chunk.
   auto partial_utf8_bytes = unicode::count_trailing_partial_utf8(view);
   auto bytes_to_keep
     = std::min(truncated_bytes + partial_utf8_bytes, view.size());

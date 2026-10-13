@@ -1,0 +1,6 @@
+error: input ended with incomplete JSON
+ --> tests/operators/read_json/split_utf8_incomplete_at_end.tql:8:1
+  |
+8 | read_json
+  | ^^^^^^^^^
+  |

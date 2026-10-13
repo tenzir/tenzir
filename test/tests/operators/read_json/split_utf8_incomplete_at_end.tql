@@ -1,0 +1,8 @@
+---
+error: true
+---
+// The input ends within a UTF-8 sequence.
+from {data: "7b2278223a2261227d0a7b2279223a22e2".decode_hex()},
+     {data: "82".decode_hex()}
+write_chunks
+read_json

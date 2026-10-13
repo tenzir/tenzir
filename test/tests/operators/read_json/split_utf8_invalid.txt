@@ -1,0 +1,7 @@
+error: UTF8_ERROR: The input is not valid UTF-8
+ --> tests/operators/read_json/split_utf8_invalid.tql:8:1
+  |
+8 | read_json
+  | ^^^^^^^^^
+  |
+  = note: found invalid JSON

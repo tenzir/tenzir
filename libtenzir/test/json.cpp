@@ -9,9 +9,11 @@
 #include "tenzir/data.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/json_parser.hpp"
+#include "tenzir/si_literals.hpp"
 #include "tenzir/test/test.hpp"
 
 using namespace tenzir;
+using namespace tenzir::si_literals;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 
@@ -79,6 +81,26 @@ TEST("JSON diagnostic - end-of-input position") {
         .done();
   REQUIRE_EQUAL(diag.notes.size(), 2u);
   CHECK_EQUAL(diag.notes[0].message, "context:\nabc\n   ^");
+}
+
+TEST("JSON parser - capacity retry keeps documents after completed ones") {
+  auto dh = collecting_diagnostic_handler{};
+  auto parser = json::default_parser{"json", dh, {}, false};
+  // The second document exceeds the initial simdjson batch size, so the
+  // parser retries with a larger batch after completing the first one.
+  auto large = std::string(json::initial_simdjson_batch_size + 1_Mi, 'a');
+  auto source = "{\"x\":1}\n{\"x\":\""s + large + "\"}\n{\"x\":\"\xe2";
+  parser.parse(as_bytes(source));
+  auto rest = "\x82\xac\"}\n"s;
+  parser.parse(as_bytes(rest));
+  parser.validate_completion();
+  CHECK(not parser.abort_requested);
+  auto rows = size_t{0};
+  for (auto& slice : parser.builder.finalize_as_table_slice()) {
+    rows += slice.rows();
+  }
+  CHECK_EQUAL(rows, 3u);
+  CHECK(std::move(dh).collect().empty());
 }
 
 TEST("JSON parser - invalid UTF-8 includes input context") {

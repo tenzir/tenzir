@@ -1,0 +1,5 @@
+// Format detection must not reject a sample that ends within a UTF-8 sequence.
+from_stdin {
+  split_bytes 1
+  read_auto
+}

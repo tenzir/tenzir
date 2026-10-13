@@ -99,8 +99,18 @@ auto json_error_state(simdjson::error_code error, bool eof)
   return json_probe_state::invalid;
 }
 
-auto probe_json_document(read_detection_input input) -> json_probe_result {
+/// Removes a trailing incomplete UTF-8 sequence from a non-final sample, which
+/// simdjson would otherwise reject as invalid UTF-8.
+auto trim_partial_utf8(read_detection_input input) -> std::string_view {
   auto view = detail::trim_front(input.bytes);
+  if (not input.eof) {
+    view.remove_suffix(unicode::count_trailing_partial_utf8(view));
+  }
+  return view;
+}
+
+auto probe_json_document(read_detection_input input) -> json_probe_result {
+  auto view = trim_partial_utf8(input);
   if (view.empty()) {
     return {.state = input.eof ? json_probe_state::invalid
                                : json_probe_state::incomplete};
@@ -166,7 +176,7 @@ auto json_stream_error(simdjson::error_code error, bool eof)
 template <class Predicate>
 auto detect_json_stream(read_detection_input input, char initial_byte,
                         Predicate predicate) -> read_detection_result {
-  auto view = detail::trim_front(input.bytes);
+  auto view = trim_partial_utf8(input);
   if (view.empty()) {
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
@@ -704,7 +714,16 @@ private:
     auto completed = size_t{0};
     do {
       retry = false;
+      // A chunk may end within a multi-byte UTF-8 sequence. simdjson trims
+      // such a sequence from the input, but then parses the trimmed bytes as
+      // a batch of their own and fails with a UTF-8 error. We withhold the
+      // incomplete sequence instead and retain it in `handle_truncated` until
+      // the next chunk completes it.
       auto view = buffer_.view();
+      view.remove_suffix(unicode::count_trailing_partial_utf8(view));
+      if (view.empty()) {
+        co_return;
+      }
       auto stream = simdjson::ondemand::document_stream{};
       auto err = parser_.iterate_many(view.data(), view.length(), batch_size_)
                    .get(stream);
