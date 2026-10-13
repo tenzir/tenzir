@@ -1,0 +1,16 @@
+// A branch without output still receives every event that `if` routes to it,
+// although the filter behind `if` moves in front of it.
+from {id: 1, c: true, b: 0},
+     {id: 2, c: true, b: 42},
+     {id: 3, c: false, b: 42},
+     {id: 4, c: null, b: 0}
+if c {
+  sort id
+  to_stdout {
+    write_ndjson
+  }
+} else {
+  y = b
+}
+where y == 42
+discard

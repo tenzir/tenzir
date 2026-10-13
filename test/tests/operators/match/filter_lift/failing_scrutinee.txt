@@ -1,0 +1,6 @@
+error: `stride` must be greater 0, but got -1
+ --> tests/operators/match/filter_lift/failing_scrutinee.tql:8:22
+  |
+8 | match x.slice(stride=-1) {
+  |                      ^^
+  |

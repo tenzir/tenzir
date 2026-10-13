@@ -20,7 +20,29 @@
          ]
        },
        filter: [
-         
+-        
++        binary_expr {
++          left: binary_expr {
++            left: binary_expr {
++              left: root_field {
++                id: `x` @ [1]:22..23 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant int64 1 @ [1]:27..28 from 0,
++              location: [1]:22..28 from 0
++            },
++            op: "if_",
++            right: root_field {
++              id: `c` @ [1]:10..11 from 0,
++              has_question_mark: false
++            },
++            location: [1]:22..28 from 0
++          },
++          op: "else_",
++          right: constant bool true @ [0]:0..0 from 0,
++          location: [1]:22..28 from 0
++        }
        ],
        order: "ordered"
      },
@@ -34,31 +56,29 @@
            
          ],
          operators: [
-           where_ir {
-             op: {
-               path: [
+-          where_ir {
+-            op: {
+-              path: [
 -                `where` @ [1]:16..21 from 0
-+                
-               ],
+-              ],
 -              ref: std::where/op
-+              ref: unresolved
-             },
-             args: [
+-            },
+-            args: [
 -              expression binary_expr {
-+              Incomplete binary_expr {
-                 left: root_field {
-                   id: `x` @ [1]:22..23 from 0,
-                   has_question_mark: false
-                 },
-                 op: "eq",
-                 right: constant int64 1 @ [1]:27..28 from 0,
-                 location: [1]:22..28 from 0
-               }
-             ],
-             named_args: [
-               
-             ]
-           }
+-                left: root_field {
+-                  id: `x` @ [1]:22..23 from 0,
+-                  has_question_mark: false
+-                },
+-                op: "eq",
+-                right: constant int64 1 @ [1]:27..28 from 0,
+-                location: [1]:22..28 from 0
+-              }
+-            ],
+-            named_args: [
+-              
+-            ]
+-          }
++          
          ]
        },
        alternative: {

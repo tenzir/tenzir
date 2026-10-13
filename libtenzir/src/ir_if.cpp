@@ -11,6 +11,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/ir_lift.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap.hpp"
@@ -259,43 +260,85 @@ public:
     auto order = req.order;
     auto downstream_projection = std::move(req.projection);
     auto projection = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
+    // Without an explicit `else` branch, events whose condition is not `true`
+    // pass through an empty one.
+    auto const has_else = args_.alternative.has_value();
+    auto const cons_events = ir::returns_events(args_.consequence);
+    auto const alt_events
+      = has_else ? ir::returns_events(*args_.alternative) : Option<bool>{true};
+    // If a branch does not type-check, we cannot tell whether its output
+    // reaches the downstream filter, so the filter stays behind `if`.
+    auto const types_known = cons_events and alt_events;
+    auto kept = ir::OptimizeFilter{};
+    if (not types_known) {
+      kept = std::move(filter);
+      filter.clear();
+    }
+    if (not has_else and not filter.empty()) {
+      args_.alternative.emplace(ir::pipeline{});
+    }
     // A branch that does not return events has no downstream event consumer,
     // so it inherits neither the downstream filter nor its order requirement.
     // Every branch input requirement applies to the shared input of `if`, but
     // a branch-local limit does not.
-    auto null_dh = null_diagnostic_handler{};
     auto optimize_branch
-      = [&](ir::pipeline& branch, const ir::OptimizeFilter& f) -> EventOrder {
-      auto ty = branch.infer_type(events_element_type(), null_dh);
-      auto events = ty and (ty->is<table_slice>() or ty->is<nova::Events>());
+      = [&](ir::pipeline& branch,
+            bool events) -> std::pair<EventOrder, ir::OptimizeFilter> {
+      events = events and types_known;
       auto opt = std::move(branch).optimize(
         ir::OptimizeRequest{
-          .filter = events ? f : ir::OptimizeFilter{},
+          .filter = events ? filter : ir::OptimizeFilter{},
           .order = events ? order : EventOrder::ordered,
           .projection = events ? downstream_projection
                                : Option<ir::OptimizeProjection>{None{}},
         },
         octx);
       branch = std::move(opt.replacement);
-      branch.prepend(std::move(opt.filter));
       ir::merge_projection(projection, opt.projection);
-      return opt.order;
+      return {opt.order, std::move(opt.filter)};
     };
-    // Handle downstream filters when there is no explicit `else` branch.
-    if (not args_.alternative and not filter.empty()) {
-      args_.alternative.emplace(ir::pipeline{});
-    }
-    auto cons_order = optimize_branch(args_.consequence, filter);
-    auto alt_order
-      = args_.alternative ? optimize_branch(*args_.alternative, filter) : order;
-    if (not args_.alternative) {
+    auto [cons_order, cons_filter]
+      = optimize_branch(args_.consequence, cons_events.value_or(false));
+    auto alt_order = order;
+    auto alt_filter = ir::OptimizeFilter{};
+    if (args_.alternative) {
+      std::tie(alt_order, alt_filter)
+        = optimize_branch(*args_.alternative, alt_events.value_or(false));
+    } else {
       ir::merge_projection(projection, downstream_projection);
     }
     ir::add_refs_to_projection(projection, args_.condition);
+    // Each branch filter applies to the events that the condition routes to
+    // its branch, so `then_filter if condition else else_filter` keeps the
+    // same events in front of `if`, provided that the condition yields the
+    // same value when `if` evaluates it again.
+    auto lifted = Option<ir::OptimizeFilter>{};
+    if (types_known and ir::is_repeatable(args_.condition)) {
+      auto branches = std::vector<ir::RoutedBranch>{};
+      branches.push_back({args_.condition, cons_filter});
+      branches.push_back({None{}, alt_filter});
+      lifted = ir::lift_branch_filters(std::move(branches));
+    }
+    if (lifted) {
+      if (not has_else and args_.alternative
+          and args_.alternative->operators.empty()) {
+        args_.alternative = None{};
+      }
+    } else {
+      // The filters stay inside their branches.
+      args_.consequence.prepend(std::move(cons_filter));
+      if (args_.alternative) {
+        args_.alternative->prepend(std::move(alt_filter));
+      }
+    }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
+    for (auto& expr : kept) {
+      replacement.push_back(make_where_ir(std::move(expr)));
+    }
+    // The branches may change the number of events, so no limit passes `if`.
     return {
-      {},
+      std::move(lifted).value_or(ir::OptimizeFilter{}),
       stronger_event_order(cons_order, alt_order),
       ir::pipeline{{}, std::move(replacement)},
       None{},

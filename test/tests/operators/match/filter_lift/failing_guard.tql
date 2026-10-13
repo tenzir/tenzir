@@ -1,0 +1,19 @@
+---
+error: true
+---
+
+// The guard fails for a string. The moved filter keeps the events of its arm,
+// so it evaluates the guard for them, just like `match`.
+from {kind: "a", x: "abc"}
+match kind {
+  "a" if x.slice(stride=-1) == "" => {
+    cls = 1
+  }
+  "b" => {
+    cls = 2
+  }
+  _ => {
+    cls = 0
+  }
+}
+where cls == 1 or cls == 2

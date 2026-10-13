@@ -1,0 +1,6 @@
+// The filters reach the source as predicates on the event IDs of the arms that
+// assign the class and activity, without disjuncts for other event IDs.
+export
+winevt::ocsf::normalize
+where class_uid == 3002 and activity_id == 1
+where src_endpoint.ip == 203.0.113.7

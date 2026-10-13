@@ -20,7 +20,29 @@
          ]
        },
        filter: [
-         
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `c` @ [1]:10..11 from 0,
++              has_question_mark: false
++            },
++            op: "else_",
++            right: constant bool false @ [1]:10..11 from 0,
++            location: [1]:10..11 from 0
++          },
++          op: "or_",
++          right: binary_expr {
++            left: root_field {
++              id: `b` @ [1]:50..51 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 2 @ [1]:55..56 from 0,
++            location: [1]:50..56 from 0
++          },
++          location: [1]:50..56 from 0
++        }
        ],
 -      order: "ordered"
 +      order: "unordered"
@@ -63,28 +85,6 @@
            
          ],
          operators: [
-+          where_ir {
-+            op: {
-+              path: [
-+                
-+              ],
-+              ref: unresolved
-+            },
-+            args: [
-+              Incomplete binary_expr {
-+                left: root_field {
-+                  id: `b` @ [1]:50..51 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq",
-+                right: constant int64 2 @ [1]:55..56 from 0,
-+                location: [1]:50..56 from 0
-+              }
-+            ],
-+            named_args: [
-+              
-+            ]
-+          },
            GenericIr {
              desc: "drop",
              store: {

@@ -1,0 +1,75 @@
+// Patterns match numbers of other types by value, but not values of other
+// types, and ranges exclude their bounds.
+from {id: 1, n: 1},
+     {id: 2, n: 1.0},
+     {id: 3, n: 2},
+     {id: 4, n: 2.5},
+     {id: 5, n: 5},
+     {id: 6, n: 6},
+     {id: 7, n: "1"},
+     {id: 8, n: true},
+     {id: 9, n: null},
+     {id: 10},
+     {id: 11, n: 7.0},
+     {id: 12, n: -1}
+match n {
+  1 | 7 => {
+    cls = 1
+  }
+  2..6 => {
+    cls = 2
+  }
+  true => {
+    cls = 3
+  }
+  -1 => {
+    cls = 4
+  }
+  _ => {
+    cls = 0
+  }
+}
+where cls == 1 or cls == 2 or cls == 3
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {id: 1, n: 1},
+         {id: 2, n: 1.0},
+         {id: 3, n: 2},
+         {id: 4, n: 2.5},
+         {id: 5, n: 5},
+         {id: 6, n: 6},
+         {id: 7, n: "1"},
+         {id: 8, n: true},
+         {id: 9, n: null},
+         {id: 10},
+         {id: 11, n: 7.0},
+         {id: 12, n: -1}
+    match n {
+      1 | 7 => {
+        cls = 1
+      }
+      2..6 => {
+        cls = 2
+      }
+      true => {
+        cls = 3
+      }
+      -1 => {
+        cls = 4
+      }
+      _ => {
+        cls = 0
+      }
+    }
+    optimize_barrier
+    where cls == 1 or cls == 2 or cls == 3
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.id
+write_ndjson

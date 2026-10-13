@@ -1,0 +1,27 @@
+warning: event does not have field
+ --> tests/operators/if/filter_lift/no_else.tql:8:4
+  |
+8 | if c {
+  |    ~
+  |
+  = hint: did you mean `a`?
+  = hint: append `?` to suppress this warning
+
+warning: expected `bool`, but got a different type
+ --> tests/operators/if/filter_lift/no_else.tql:8:4
+  |
+8 | if c {
+  |    ~
+  |
+  = hint: this will be treated as `false`
+
+warning: expected `bool`
+ --> tests/operators/if/filter_lift/no_else.tql:8:4
+  |
+8 | if c {
+  |    ~
+  |
+{"event":{"id":1,"c":true,"a":42,"y":42},"optimized":[false,true]}
+{"event":{"id":3,"c":false,"a":0,"y":42},"optimized":[false,true]}
+{"event":{"id":4,"c":null,"a":42,"y":42},"optimized":[false,true]}
+{"event":{"id":6,"c":"true","a":42,"y":42},"optimized":[false,true]}

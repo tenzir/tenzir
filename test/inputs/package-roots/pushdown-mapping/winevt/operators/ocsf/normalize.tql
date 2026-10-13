@@ -1,0 +1,64 @@
+---
+description: |
+  Normalizes a Windows event to OCSF in the style of the library mappings:
+  wrap the event, dispatch on the event ID to assign a class per arm, and unwrap
+  the OCSF event. The mapping lives in a single file so that source locations
+  stay deterministic.
+---
+
+this = {windows: this, ocsf: {}}
+ocsf.metadata = {
+  event_code: windows.EventID.string(),
+  product: {name: "Microsoft Windows", vendor_name: "Microsoft"},
+  version: "1.9.0",
+}
+ocsf.severity_id = 1
+match windows.EventID {
+  4688 => {
+    @name = "ocsf.process_activity"
+    ocsf.category_uid = 1
+    ocsf.class_uid = 1007
+    ocsf.activity_id = 1
+    ocsf.process = {
+      pid: move windows.EventData.NewProcessId?,
+      cmd_line: move windows.EventData.CommandLine?,
+    }
+  }
+  4624 | 4625 => {
+    @name = "ocsf.authentication"
+    ocsf.category_uid = 3
+    ocsf.class_uid = 3002
+    ocsf.activity_id = 1
+    ocsf.status_id = 1 if windows.EventID == 4624 else 2
+    ocsf.user = {name: move windows.EventData.TargetUserName?}
+    ocsf.src_endpoint = {ip: (move windows.EventData.IpAddress).ip()}
+  }
+  4634 | 4647 => {
+    @name = "ocsf.authentication"
+    ocsf.category_uid = 3
+    ocsf.class_uid = 3002
+    ocsf.activity_id = 2
+    ocsf.user = {name: move windows.EventData.TargetUserName?}
+  }
+  4720 | 4722 | 4738 => {
+    @name = "ocsf.account_change"
+    ocsf.category_uid = 3
+    ocsf.class_uid = 3001
+    ocsf.activity_id = 99
+    ocsf.user = {name: move windows.EventData.TargetUserName?}
+  }
+  1005..1008 => {
+    @name = "ocsf.detection_finding"
+    ocsf.category_uid = 2
+    ocsf.class_uid = 2004
+    ocsf.activity_id = 1
+  }
+  _ => {
+    @name = "ocsf.base_event"
+    ocsf.category_uid = 0
+    ocsf.class_uid = 0
+    ocsf.activity_id = 0
+  }
+}
+ocsf.type_uid = ocsf.class_uid * 100 + ocsf.activity_id
+this = {...ocsf, unmapped: windows}

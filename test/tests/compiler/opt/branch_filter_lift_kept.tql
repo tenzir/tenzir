@@ -1,0 +1,32 @@
+// Predicates stay in the branches if the routing cannot be repeated exactly in
+// front of `if` or `match`, and so does the limit.
+export
+if random() < 0.5 {
+  y = 1
+}
+where y == 1
+if (move flag) == true {
+  f = 1
+}
+where f == 1
+match n {
+  1 if random() > 0.5 => { i = 1 }
+  _ => {}
+}
+where i == 1
+match r {
+  {a: 1} => { g = 1 }
+  _ => {}
+}
+where g == 1
+match s {
+  "a".."m" => { h = 1 }
+  _ => {}
+}
+where h == 1
+match m {
+  9007199254740993 => { j = 1 }
+  _ => {}
+}
+where j == 1
+head 5

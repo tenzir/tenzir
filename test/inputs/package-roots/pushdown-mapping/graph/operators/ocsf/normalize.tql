@@ -1,0 +1,67 @@
+---
+description: |
+  Normalizes a Microsoft Graph event to OCSF in the style of the library
+  mappings: wrap the event, dispatch on `@name`, and unwrap the OCSF event. The
+  mapping lives in a single file so that source locations stay deterministic.
+---
+
+this = {graph: this, ocsf: {}}
+ocsf.cloud = {provider: "Azure"}
+ocsf.metadata = {
+  product: {vendor_name: "Microsoft"},
+  version: "1.9.0",
+}
+ocsf.metadata.original_event_uid = move graph.id?
+ocsf.severity_id = 1
+match @name {
+  "microsoft.graph.sign_in" => {
+    @name = "ocsf.authentication"
+    ocsf.category_uid = 3
+    ocsf.class_uid = 3002
+    ocsf.activity_id = 1
+    ocsf.type_uid = ocsf.class_uid * 100 + ocsf.activity_id
+    ocsf.time = time(move graph.createdDateTime)
+    ocsf.user = {
+      uid: move graph.userId?,
+      name: graph.userPrincipalName?.split("@")[0]?,
+      email_addr: move graph.userPrincipalName?,
+    }
+    ocsf.src_endpoint = {ip: move graph.ipAddress?}
+    ocsf.status_id = 1 if graph.status.errorCode? == 0 else 2
+    if ocsf.status_id == 2 {
+      ocsf.severity_id = 2
+    }
+    drop graph.status?
+    match graph.conditionalAccessStatus? {
+      "success" => {
+        ocsf.action_id = 1
+      }
+      "failure" => {
+        ocsf.action_id = 2
+      }
+      _ => {}
+    }
+    drop graph.conditionalAccessStatus?
+  }
+  "microsoft.graph.directory_audit" => {
+    @name = "ocsf.account_change"
+    ocsf.category_uid = 3
+    ocsf.class_uid = 3001
+    ocsf.activity_id = 99
+    ocsf.type_uid = ocsf.class_uid * 100 + ocsf.activity_id
+    ocsf.time = time(move graph.activityDateTime)
+    if graph.initiatedBy.user? != null {
+      ocsf.actor = {user: {uid: move graph.initiatedBy.user.id?}}
+    }
+    drop graph.initiatedBy?
+  }
+  _ => {
+    @name = "ocsf.base_event"
+    ocsf.category_uid = 0
+    ocsf.class_uid = 0
+    ocsf.activity_id = 0
+    ocsf.type_uid = 0
+    ocsf.time = now()
+  }
+}
+this = {...ocsf, unmapped: graph}

@@ -1,0 +1,718 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:132..138 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     If {
+       condition: binary_expr {
+         left: function_call {
+           fn: {
+             path: [
+               `random` @ [1]:142..148 from 0
+             ],
+             ref: std::random/fn
+           },
+           args: [
+             
+           ],
+           method: false,
+           location: [1]:142..150 from 0
+         },
+         op: "lt",
+         right: constant double 0.5 @ [1]:153..156 from 0,
+         location: [1]:142..156 from 0
+       },
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           SetIr {
+             assignments: [
+               {
+                 left: root_field {
+                   id: `y` @ [1]:161..162 from 0,
+                   has_question_mark: false
+                 },
+                 right: constant int64 1 @ [1]:165..166 from 0,
+                 location: [1]:161..166 from 0
+               }
+             ],
+             order: "ordered"
+           }
+         ]
++      },
++      alternative: {
++        lets: [
++          
++        ],
++        operators: [
++          where_ir {
++            op: {
++              path: [
++                
++              ],
++              ref: unresolved
++            },
++            args: [
++              Incomplete binary_expr {
++                left: root_field {
++                  id: `y` @ [1]:175..176 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant int64 1 @ [1]:180..181 from 0,
++                location: [1]:175..181 from 0
++              }
++            ],
++            named_args: [
++              
++            ]
++          }
++        ]
+       }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:169..174 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `y` @ [1]:175..176 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:180..181 from 0,
+-          location: [1]:175..181 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     If {
+       condition: binary_expr {
+         left: unary_expr {
+           op: "move",
+           expr: root_field {
+             id: `flag` @ [1]:191..195 from 0,
+             has_question_mark: false
+           },
+           location: [1]:186..195 from 0
+         },
+         op: "eq",
+         right: constant bool true @ [1]:200..204 from 0,
+         location: [1]:186..204 from 0
+       },
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           SetIr {
+             assignments: [
+               {
+                 left: root_field {
+                   id: `f` @ [1]:209..210 from 0,
+                   has_question_mark: false
+                 },
+                 right: constant int64 1 @ [1]:213..214 from 0,
+                 location: [1]:209..214 from 0
+               }
+             ],
+             order: "ordered"
+           }
+         ]
++      },
++      alternative: {
++        lets: [
++          
++        ],
++        operators: [
++          where_ir {
++            op: {
++              path: [
++                
++              ],
++              ref: unresolved
++            },
++            args: [
++              Incomplete binary_expr {
++                left: root_field {
++                  id: `f` @ [1]:223..224 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant int64 1 @ [1]:228..229 from 0,
++                location: [1]:223..229 from 0
++              }
++            ],
++            named_args: [
++              
++            ]
++          }
++        ]
+       }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:217..222 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `f` @ [1]:223..224 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:228..229 from 0,
+-          location: [1]:223..229 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     Match {
+       match_keyword: [1]:230..235 from 0,
+       scrutinee: root_field {
+         id: `n` @ [1]:236..237 from 0,
+         has_question_mark: false
+       },
+       arms: [
+         {
+           source: [1]:242..243 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 1 @ [1]:242..243 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 1
+               }
+             }
+           ],
+           guard: binary_expr {
+             left: function_call {
+               fn: {
+                 path: [
+                   `random` @ [1]:247..253 from 0
+                 ],
+                 ref: std::random/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:247..255 from 0
+             },
+             op: "gt",
+             right: constant double 0.5 @ [1]:258..261 from 0,
+             location: [1]:247..261 from 0
+           },
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `i` @ [1]:267..268 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 1 @ [1]:271..272 from 0,
+                     location: [1]:267..272 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:277..278 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+-              
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `i` @ [1]:293..294 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant int64 1 @ [1]:298..299 from 0,
++                    location: [1]:293..299 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              }
+             ]
+           },
+           wildcard: true
+         }
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:287..292 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `i` @ [1]:293..294 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:298..299 from 0,
+-          location: [1]:293..299 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+       ]
+     },
+     Match {
+       match_keyword: [1]:300..305 from 0,
+       scrutinee: root_field {
+         id: `r` @ [1]:306..307 from 0,
+         has_question_mark: false
+       },
+       arms: [
+         {
+           source: [1]:312..318 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: record {
+                   begin: [1]:312..313 from 0,
+                   items: [
+                     field {
+                       name: `a` @ [1]:313..314 from 0,
+                       expr: constant int64 1 @ [1]:316..317 from 0
+                     }
+                   ],
+                   end: [1]:317..318 from 0
+                 }
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: vector_map [
+                   [
+                     "a",
+                     int64 1
+                   ]
+                 ]
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `g` @ [1]:324..325 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 1 @ [1]:328..329 from 0,
+                     location: [1]:324..329 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:334..335 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+-              
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `g` @ [1]:350..351 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant int64 1 @ [1]:355..356 from 0,
++                    location: [1]:350..356 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              }
+             ]
+           },
+           wildcard: true
+         }
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:344..349 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `g` @ [1]:350..351 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:355..356 from 0,
+-          location: [1]:350..356 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+       ]
+     },
+     Match {
+       match_keyword: [1]:357..362 from 0,
+       scrutinee: root_field {
+         id: `s` @ [1]:363..364 from 0,
+         has_question_mark: false
+       },
+       arms: [
+         {
+           source: [1]:369..377 from 0,
+           pattern_exprs: [
+             {
+               kind: range_pattern {
+                 lower: constant string "a" @ [1]:369..372 from 0,
+                 upper: constant string "m" @ [1]:374..377 from 0,
+                 location: [1]:369..377 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Range {
+                 lower: string "a",
+                 upper: string "m"
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `h` @ [1]:383..384 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 1 @ [1]:387..388 from 0,
+                     location: [1]:383..388 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:393..394 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+-              
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `h` @ [1]:409..410 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant int64 1 @ [1]:414..415 from 0,
++                    location: [1]:409..415 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              }
+             ]
+           },
+           wildcard: true
+         }
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:403..408 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `h` @ [1]:409..410 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:414..415 from 0,
+-          location: [1]:409..415 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+       ]
+     },
+     Match {
+       match_keyword: [1]:416..421 from 0,
+       scrutinee: root_field {
+         id: `m` @ [1]:422..423 from 0,
+         has_question_mark: false
+       },
+       arms: [
+         {
+           source: [1]:428..444 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 9007199254740993 @ [1]:428..444 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 9007199254740993
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `j` @ [1]:450..451 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 1 @ [1]:454..455 from 0,
+                     location: [1]:450..455 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:460..461 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+-              
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `j` @ [1]:476..477 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant int64 1 @ [1]:481..482 from 0,
++                    location: [1]:476..482 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              }
+             ]
+           },
+           wildcard: true
+         }
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:470..475 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `j` @ [1]:476..477 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:481..482 from 0,
+-          location: [1]:476..482 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:483..487 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:488..489 from 0
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:489..489 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     }
+   ]
+ }

@@ -1,0 +1,3 @@
+{"event":{"id":1,"kind":"list","x":[1,2,3],"y":[3,2,1]},"optimized":[false,true]}
+{"event":{"id":3,"kind":1,"x":"abc","y":[3]},"optimized":[false,true]}
+{"event":{"id":4,"kind":"text","x":"abc","y":[3]},"optimized":[false,true]}

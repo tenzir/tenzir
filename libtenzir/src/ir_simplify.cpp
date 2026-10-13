@@ -19,6 +19,7 @@
 #include "tenzir/tql2/registry.hpp"
 
 #include <algorithm>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -96,6 +97,72 @@ auto is_evaluable(auto const& value) -> bool {
     },
     []<class T>(T const&) {
       return not concepts::one_of<T, pattern, enumeration, map, secret>;
+    });
+}
+
+/// Returns whether evaluating `x` never fails the pipeline, so that a
+/// predicate may omit `x` although the runtime evaluates it. A function can
+/// fail depending on its input, such as `slice(x, stride=-1)` for a string,
+/// so `x` must not call any.
+auto is_removable(ast::expression const& x) -> bool {
+  auto const is_removable_item = [](auto const& item) {
+    return tenzir::match(
+      item,
+      [](ast::expression const& expr) {
+        return is_removable(expr);
+      },
+      [](ast::record::field const& field) {
+        return is_removable(field.expr);
+      },
+      [](ast::spread const& spread) {
+        return is_removable(spread.expr);
+      });
+  };
+  return x.match(
+    [](ast::constant const& y) {
+      return is_evaluable(y.value);
+    },
+    [](ast::this_ const&) {
+      return true;
+    },
+    [](ast::root_field const&) {
+      return true;
+    },
+    [](ast::meta const&) {
+      return true;
+    },
+    [](ast::field_access const& y) {
+      return is_removable(y.left);
+    },
+    [](ast::index_expr const& y) {
+      return is_removable(y.expr) and is_removable(y.index);
+    },
+    [](ast::binary_expr const& y) {
+      return is_removable(y.left) and is_removable(y.right);
+    },
+    [](ast::unary_expr const& y) {
+      return is_removable(y.expr);
+    },
+    [&](ast::record const& y) {
+      // The evaluator rejects a record literal with several spreads.
+      auto const spreads = std::ranges::count_if(y.items, [](auto const& item) {
+        return is<ast::spread>(item);
+      });
+      return spreads <= 1 and std::ranges::all_of(y.items, is_removable_item);
+    },
+    [&](ast::list const& y) {
+      return std::ranges::all_of(y.items, is_removable_item);
+    },
+    [](ast::format_expr const& y) {
+      return std::ranges::all_of(
+        y.segments, [](ast::format_expr::segment const& segment) {
+          auto const* replacement
+            = try_as<ast::format_expr::replacement>(segment);
+          return not replacement or is_removable(replacement->expr);
+        });
+    },
+    [](auto const&) {
+      return false;
     });
 }
 
@@ -330,6 +397,16 @@ private:
     };
     auto const condition = as_bool(x.right);
     if (not condition) {
+      // If both branches are the same constant, the condition matters only if
+      // evaluating it could fail.
+      auto const left = as_bool(x.left);
+      if (left and fallback and as_bool(*fallback) == left
+          and condition_properties.removable) {
+        return {
+          .replacement = std::move(x.left),
+          .properties = then_properties,
+        };
+      }
       return unchanged();
     }
     // The runtime evaluates the branch that the condition skips for no rows.
@@ -418,16 +495,22 @@ private:
     };
     auto const in_accepted_call = std::exchange(in_accepted_call_, true);
     for (auto& arg : x.args) {
-      properties &= simplify(arg, Context::value);
+      // A named argument is an assignment, not an expression that assigns.
+      if (auto* named = try_as<ast::assignment>(arg)) {
+        properties &= simplify(named->right, Context::value);
+      } else {
+        properties &= simplify(arg, Context::value);
+      }
     }
     in_accepted_call_ = in_accepted_call;
     return properties;
   }
 
   auto simplify_operands(ast::assignment& x) -> Properties {
-    // The left side of a named argument is a label. The assignment occurs
-    // only as an argument of a function call, which is never removable.
+    // An assignment in place of a value only warns at runtime. Named
+    // arguments are handled separately while simplifying a function call.
     auto properties = simplify(x.right, Context::value);
+    properties.constant = false;
     properties.removable = false;
     return properties;
   }
@@ -672,6 +755,33 @@ auto ir::expression_size(ast::expression const& expr) -> size_t {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   counter.visit(const_cast<ast::expression&>(expr));
   return counter.size;
+}
+
+auto ir::is_infallible(ast::expression const& expr) -> bool {
+  return is_removable(expr);
+}
+
+auto ir::conjoin_filter(OptimizeFilter filter) -> ast::expression {
+  if (filter.empty()) {
+    return ast::constant{true, location::unknown};
+  }
+  auto result = std::move(filter.front());
+  for (auto& predicate : filter | std::views::drop(1)) {
+    // The chain evaluates `predicate` only if `result` is `true`, and so does
+    // `predicate if result else false`. `result and predicate` also evaluates
+    // it if `result` is `null`, which is harmless only if it cannot fail.
+    if (is_removable(predicate)) {
+      result = ast::binary_expr{std::move(result), ast::binary_op::and_,
+                                std::move(predicate)};
+      continue;
+    }
+    auto const source = predicate.get_location();
+    result = ast::binary_expr{
+      ast::binary_expr{std::move(predicate), ast::binary_op::if_,
+                       std::move(result)},
+      ast::binary_op::else_, ast::constant{false, source}};
+  }
+  return result;
 }
 
 } // namespace tenzir

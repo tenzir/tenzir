@@ -1,0 +1,76 @@
+// Moving the filter in front of `match` keeps the same events as keeping it
+// behind: the first arm whose patterns and guard match takes an event, also
+// for `null`, missing, and mismatched scrutinees and guards.
+from {id: 1, k: "a", v: 1},
+     {id: 2, k: "b", v: -1},
+     {id: 3, k: null, v: -1},
+     {id: 4, v: -1},
+     {id: 5, k: "c", v: 1},
+     {id: 6, k: "c", v: -1},
+     {id: 7, k: "c", v: null},
+     {id: 8, k: "c", v: "1"},
+     {id: 9, k: 1, v: 0},
+     {id: 10, k: true, v: -1},
+     {id: 11, k: "d", v: 0},
+     {id: 12, k: "d", v: 1}
+match k {
+  "a" | "b" => {
+    cls = 1
+  }
+  null => {
+    cls = 2
+  }
+  "c" if v > 0 => {
+    cls = 3
+  }
+  _ if v < 0 => {
+    cls = 4
+  }
+  _ => {
+    cls = 5
+  }
+}
+where cls == 1 or cls == 4 or (cls == 5 and v == 0)
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {id: 1, k: "a", v: 1},
+         {id: 2, k: "b", v: -1},
+         {id: 3, k: null, v: -1},
+         {id: 4, v: -1},
+         {id: 5, k: "c", v: 1},
+         {id: 6, k: "c", v: -1},
+         {id: 7, k: "c", v: null},
+         {id: 8, k: "c", v: "1"},
+         {id: 9, k: 1, v: 0},
+         {id: 10, k: true, v: -1},
+         {id: 11, k: "d", v: 0},
+         {id: 12, k: "d", v: 1}
+    match k {
+      "a" | "b" => {
+        cls = 1
+      }
+      null => {
+        cls = 2
+      }
+      "c" if v > 0 => {
+        cls = 3
+      }
+      _ if v < 0 => {
+        cls = 4
+      }
+      _ => {
+        cls = 5
+      }
+    }
+    optimize_barrier
+    where cls == 1 or cls == 4 or (cls == 5 and v == 0)
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.id
+write_ndjson

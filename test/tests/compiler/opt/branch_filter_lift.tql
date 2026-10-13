@@ -1,0 +1,33 @@
+// Every predicate moves in front of the `if` or `match` whose branches it
+// reads, routed by the conditions that send events to each branch.
+export
+if x == 1 {
+  y = a
+} else {
+  y = b
+}
+where y == 42
+if c {
+  z = 1
+}
+where z == 1
+match kind {
+  "a" | "b" => { k = 1 }
+  null => { k = 2 }
+  "c" if v > 0 => { k = 3 }
+  _ if v < 0 => { k = 4 }
+  _ => {}
+}
+where k == 1 or k == 4
+match n {
+  7 => { cls = 2 }
+  1..5 | 8 => { cls = 1 }
+  _ => { cls = 0 }
+}
+where cls == 1 and untouched == 1
+if d {
+  discard
+} else {
+  e = f
+}
+where e == 1

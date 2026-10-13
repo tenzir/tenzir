@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+// The condition fails for a string. The moved filter may skip the condition for
+// the events that it drops, but `if` still evaluates it for those that it keeps.
+from {x: "abc", z: 1}
+if x.slice(stride=-1) == "" {
+  y = 1
+} else {
+  y = 2
+}
+where z == 1

@@ -1,0 +1,28 @@
+warning: event does not have field
+  --> tests/operators/match/filter_lift/patterns.tql:16:7
+   |
+16 | match k {
+   |       ~
+   |
+   = hint: did you mean `v`?
+   = hint: append `?` to suppress this warning
+
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
+  --> tests/operators/match/filter_lift/patterns.tql:23:10
+   |
+23 |   "c" if v > 0 => {
+   |          ~~~~~
+   |
+
+warning: binary operator `<` does not accept the argument type combination `(string, int)`
+  --> tests/operators/match/filter_lift/patterns.tql:26:8
+   |
+26 |   _ if v < 0 => {
+   |        ~~~~~
+   |
+{"event":{"id":1,"k":"a","v":1,"cls":1},"optimized":[false,true]}
+{"event":{"id":2,"k":"b","v":-1,"cls":1},"optimized":[false,true]}
+{"event":{"id":6,"k":"c","v":-1,"cls":4},"optimized":[false,true]}
+{"event":{"id":9,"k":1,"v":0,"cls":5},"optimized":[false,true]}
+{"event":{"id":10,"k":true,"v":-1,"cls":4},"optimized":[false,true]}
+{"event":{"id":11,"k":"d","v":0,"cls":5},"optimized":[false,true]}

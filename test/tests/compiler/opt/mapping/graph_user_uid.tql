@@ -1,0 +1,5 @@
+// The filter moves above `match @name` and reaches the source as a predicate
+// on `userId` for sign-ins.
+export
+graph::ocsf::normalize
+where user.uid == "a7c3e1b2"

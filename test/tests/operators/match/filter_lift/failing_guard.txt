@@ -1,0 +1,6 @@
+error: `stride` must be greater 0, but got -1
+ --> tests/operators/match/filter_lift/failing_guard.tql:9:25
+  |
+9 |   "a" if x.slice(stride=-1) == "" => {
+  |                         ^^
+  |

@@ -1,0 +1,16 @@
+---
+error: true
+---
+
+// The scrutinee fails for a string. The moved filter `z == 1` does not need
+// it, but keeps the event, so `match` still evaluates the scrutinee for it.
+from {x: "abc", z: 1}
+match x.slice(stride=-1) {
+  _ if z == 1 => {
+    y = 1
+  }
+  _ => {
+    y = 2
+  }
+}
+where z == 1

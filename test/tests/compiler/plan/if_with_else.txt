@@ -4,7 +4,7 @@
 ╎
 ● If(x6)
 ╟╌┐
-● ╎ where(x6)
+● ╎ drop(x6)
 ╎ ╎
 ╎ ● tail
 ├─┘

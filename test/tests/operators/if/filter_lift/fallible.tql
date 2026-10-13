@@ -1,0 +1,37 @@
+// The filter evaluates a branch's predicate only for the events of the
+// branch. Slicing a string with a negative stride fails, so the moved filter
+// must not slice `x` where the condition is not `true`, which includes a
+// comparison of mismatched types.
+from {id: 1, kind: "list", x: [1, 2, 3]},
+     {id: 2, kind: "list", x: [3, 2, 1]},
+     {id: 3, kind: 1, x: "abc"},
+     {id: 4, kind: "text", x: "abc"}
+if kind == "list" {
+  y = x.slice(stride=-1)
+} else {
+  y = [3]
+}
+where y[0] == 3
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {id: 1, kind: "list", x: [1, 2, 3]},
+         {id: 2, kind: "list", x: [3, 2, 1]},
+         {id: 3, kind: 1, x: "abc"},
+         {id: 4, kind: "text", x: "abc"}
+    if kind == "list" {
+      y = x.slice(stride=-1)
+    } else {
+      y = [3]
+    }
+    optimize_barrier
+    where y[0] == 3
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.id
+write_ndjson

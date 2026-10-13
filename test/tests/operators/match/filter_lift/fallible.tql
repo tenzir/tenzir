@@ -1,0 +1,42 @@
+// The filter evaluates a guard only for the events that the patterns of its
+// arm match. Slicing a string with a negative stride fails, so the moved
+// filter must not evaluate the guard for the other events.
+from {id: 1, kind: "list", x: [1, 2, 3]},
+     {id: 2, kind: "list", x: [3, 2, 1]},
+     {id: 3, kind: 1, x: "abc"},
+     {id: 4, kind: "text", x: "abc"}
+match kind {
+  "list" if x.slice(stride=-1)[0] == 3 => {
+    cls = 1
+  }
+  _ => {
+    cls = 0
+  }
+}
+where cls == 1
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {id: 1, kind: "list", x: [1, 2, 3]},
+         {id: 2, kind: "list", x: [3, 2, 1]},
+         {id: 3, kind: 1, x: "abc"},
+         {id: 4, kind: "text", x: "abc"}
+    match kind {
+      "list" if x.slice(stride=-1)[0] == 3 => {
+        cls = 1
+      }
+      _ => {
+        cls = 0
+      }
+    }
+    optimize_barrier
+    where cls == 1
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.id
+write_ndjson

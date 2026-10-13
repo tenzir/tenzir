@@ -1,0 +1,37 @@
+// The filters on the class and the source endpoint move in front of the
+// `match` on the event ID of a Windows mapping and keep the same events.
+from {id: 1, EventID: 4624, EventData: {IpAddress: "203.0.113.7", TargetUserName: "alice"}},
+     {id: 2, EventID: 4625, EventData: {IpAddress: "203.0.113.7", TargetUserName: "bob"}},
+     {id: 3, EventID: 4624, EventData: {IpAddress: "198.51.100.1", TargetUserName: "carol"}},
+     {id: 4, EventID: 4634, EventData: {TargetUserName: "alice"}},
+     {id: 5, EventID: 4688, EventData: {NewProcessId: 4, CommandLine: "cmd.exe"}},
+     {id: 6, EventID: 1007},
+     {id: 7, EventID: 1005},
+     {id: 8, EventID: 9999}
+winevt::ocsf::normalize
+where class_uid == 3002 and activity_id == 1
+where src_endpoint.ip == 203.0.113.7
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {id: 1, EventID: 4624, EventData: {IpAddress: "203.0.113.7", TargetUserName: "alice"}},
+         {id: 2, EventID: 4625, EventData: {IpAddress: "203.0.113.7", TargetUserName: "bob"}},
+         {id: 3, EventID: 4624, EventData: {IpAddress: "198.51.100.1", TargetUserName: "carol"}},
+         {id: 4, EventID: 4634, EventData: {TargetUserName: "alice"}},
+         {id: 5, EventID: 4688, EventData: {NewProcessId: 4, CommandLine: "cmd.exe"}},
+         {id: 6, EventID: 1007},
+         {id: 7, EventID: 1005},
+         {id: 8, EventID: 9999}
+    winevt::ocsf::normalize
+    optimize_barrier
+    where class_uid == 3002 and activity_id == 1
+    where src_endpoint.ip == 203.0.113.7
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.unmapped.id
+write_ndjson

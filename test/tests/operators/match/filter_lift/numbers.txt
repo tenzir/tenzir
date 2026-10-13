@@ -1,0 +1,42 @@
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
+  --> tests/operators/match/filter_lift/numbers.tql:15:7
+   |
+15 | match n {
+   |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: binary operator `<` does not accept the argument type combination `(string, int)`
+  --> tests/operators/match/filter_lift/numbers.tql:15:7
+   |
+15 | match n {
+   |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: binary operator `>` does not accept the argument type combination `(bool, int)`
+  --> tests/operators/match/filter_lift/numbers.tql:15:7
+   |
+15 | match n {
+   |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: binary operator `<` does not accept the argument type combination `(bool, int)`
+  --> tests/operators/match/filter_lift/numbers.tql:15:7
+   |
+15 | match n {
+   |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: event does not have field
+  --> tests/operators/match/filter_lift/numbers.tql:15:7
+   |
+15 | match n {
+   |       ~
+   |
+   = hint: did you mean `id`?
+   = hint: append `?` to suppress this warning
+{"event":{"id":1,"n":1,"cls":1},"optimized":[false,true]}
+{"event":{"id":2,"n":1.0,"cls":1},"optimized":[false,true]}
+{"event":{"id":4,"n":2.5,"cls":2},"optimized":[false,true]}
+{"event":{"id":5,"n":5,"cls":2},"optimized":[false,true]}
+{"event":{"id":8,"n":true,"cls":3},"optimized":[false,true]}
+{"event":{"id":11,"n":7.0,"cls":1},"optimized":[false,true]}

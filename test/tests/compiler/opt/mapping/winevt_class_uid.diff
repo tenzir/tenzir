@@ -1,0 +1,1238 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:153..159 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `EventID` @ [6]:494..501 from 1,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 4624 @ [6]:764..768 from 1,
++            location: [6]:486..768 from 1
++          },
++          op: "or_",
++          right: binary_expr {
++            left: root_field {
++              id: `EventID` @ [6]:494..501 from 1,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 4625 @ [6]:771..775 from 1,
++            location: [6]:486..775 from 1
++          },
++          location: [6]:486..775 from 1
++        },
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `ip` @ [6]:1076..1078 from 1
++              ],
++              ref: std::ip/fn
++            },
++            args: [
++              field_access {
++                left: root_field {
++                  id: `EventData` @ [6]:1055..1064 from 1,
++                  has_question_mark: false
++                },
++                has_question_mark: false,
++                name: `IpAddress` @ [6]:1065..1074 from 1,
++                location: [6]:1055..1074 from 1
++              }
++            ],
++            method: true,
++            location: [6]:1042..1080 from 1
++          },
++          op: "eq",
++          right: constant ip 203.0.113.7 @ [1]:254..265 from 0,
++          location: [1]:235..265 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [6]:280..284 from 1,
+           right: record {
+             begin: [6]:287..288 from 1,
+             items: [
+               field {
+                 name: `windows` @ [6]:288..295 from 1,
+                 expr: this_ [6]:297..301 from 1
+               },
+               field {
+                 name: `ocsf` @ [6]:303..307 from 1,
+                 expr: record {
+                   begin: [6]:309..310 from 1,
+                   items: [
+                     
+                   ],
+                   end: [6]:310..311 from 1
+                 }
+               }
+             ],
+             end: [6]:311..312 from 1
+           },
+           location: [6]:280..312 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: root_field {
+               id: `ocsf` @ [6]:313..317 from 1,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `metadata` @ [6]:318..326 from 1,
+             location: [6]:313..326 from 1
+           },
+           right: record {
+             begin: [6]:329..330 from 1,
+             items: [
+               field {
+                 name: `event_code` @ [6]:333..343 from 1,
+                 expr: function_call {
+                   fn: {
+                     path: [
+                       `string` @ [6]:361..367 from 1
+                     ],
+                     ref: std::string/fn
+                   },
+                   args: [
+                     field_access {
+                       left: root_field {
+                         id: `windows` @ [6]:345..352 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `EventID` @ [6]:353..360 from 1,
+                       location: [6]:345..360 from 1
+                     }
+                   ],
+                   method: true,
+                   location: [6]:345..369 from 1
+                 }
+               },
+               field {
+                 name: `product` @ [6]:373..380 from 1,
+                 expr: record {
+                   begin: [6]:382..383 from 1,
+                   items: [
+                     field {
+                       name: `name` @ [6]:383..387 from 1,
+                       expr: constant string "Microsoft Windows" @ [6]:389..408 from 1
+                     },
+                     field {
+                       name: `vendor_name` @ [6]:410..421 from 1,
+                       expr: constant string "Microsoft" @ [6]:423..434 from 1
+                     }
+                   ],
+                   end: [6]:434..435 from 1
+                 }
+               },
+               field {
+                 name: `version` @ [6]:439..446 from 1,
+                 expr: constant string "1.9.0" @ [6]:448..455 from 1
+               }
+             ],
+             end: [6]:457..458 from 1
+           },
+           location: [6]:313..458 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: root_field {
+               id: `ocsf` @ [6]:459..463 from 1,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `severity_id` @ [6]:464..475 from 1,
+             location: [6]:459..475 from 1
+           },
+           right: constant int64 1 @ [6]:478..479 from 1,
+           location: [6]:459..479 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     Match {
+       match_keyword: [6]:480..485 from 1,
+       scrutinee: field_access {
+         left: root_field {
+           id: `windows` @ [6]:486..493 from 1,
+           has_question_mark: false
+         },
+         has_question_mark: false,
+         name: `EventID` @ [6]:494..501 from 1,
+         location: [6]:486..501 from 1
+       },
+       arms: [
+         {
+           source: [6]:506..510 from 1,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4688 @ [6]:506..510 from 1
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 4688
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: meta {
+                       kind: "name",
+                       source: [6]:520..525 from 1
+                     },
+                     right: constant string "ocsf.process_activity" @ [6]:528..551 from 1,
+                     location: [6]:520..551 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:556..560 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `category_uid` @ [6]:561..573 from 1,
+                       location: [6]:556..573 from 1
+                     },
+                     right: constant int64 1 @ [6]:576..577 from 1,
+                     location: [6]:556..577 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:582..586 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [6]:587..596 from 1,
+                       location: [6]:582..596 from 1
+                     },
+                     right: constant int64 1007 @ [6]:599..603 from 1,
+                     location: [6]:582..603 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:608..612 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `activity_id` @ [6]:613..624 from 1,
+                       location: [6]:608..624 from 1
+                     },
+                     right: constant int64 1 @ [6]:627..628 from 1,
+                     location: [6]:608..628 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:633..637 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `process` @ [6]:638..645 from 1,
+                       location: [6]:633..645 from 1
+                     },
+                     right: record {
+                       begin: [6]:648..649 from 1,
+                       items: [
+                         field {
+                           name: `pid` @ [6]:656..659 from 1,
+                           expr: unary_expr {
+                             op: "move",
+                             expr: field_access {
+                               left: field_access {
+                                 left: root_field {
+                                   id: `windows` @ [6]:666..673 from 1,
+                                   has_question_mark: false
+                                 },
+                                 has_question_mark: false,
+                                 name: `EventData` @ [6]:674..683 from 1,
+                                 location: [6]:666..683 from 1
+                               },
+                               has_question_mark: true,
+                               name: `NewProcessId` @ [6]:684..696 from 1,
+                               location: [6]:666..696 from 1
+                             },
+                             location: [6]:661..696 from 1
+                           }
+                         },
+                         field {
+                           name: `cmd_line` @ [6]:705..713 from 1,
+                           expr: unary_expr {
+                             op: "move",
+                             expr: field_access {
+                               left: field_access {
+                                 left: root_field {
+                                   id: `windows` @ [6]:720..727 from 1,
+                                   has_question_mark: false
+                                 },
+                                 has_question_mark: false,
+                                 name: `EventData` @ [6]:728..737 from 1,
+                                 location: [6]:720..737 from 1
+                               },
+                               has_question_mark: true,
+                               name: `CommandLine` @ [6]:738..749 from 1,
+                               location: [6]:720..749 from 1
+                             },
+                             location: [6]:715..749 from 1
+                           }
+                         }
+                       ],
+                       end: [6]:756..757 from 1
+                     },
+                     location: [6]:633..757 from 1
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [6]:764..768 from 1,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4624 @ [6]:764..768 from 1
+               }
+             },
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4625 @ [6]:771..775 from 1
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 4624
+               }
+             },
+             {
+               kind: Constant {
+                 value: int64 4625
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: meta {
+                       kind: "name",
+                       source: [6]:785..790 from 1
+                     },
+                     right: constant string "ocsf.authentication" @ [6]:793..814 from 1,
+                     location: [6]:785..814 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:819..823 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `category_uid` @ [6]:824..836 from 1,
+                       location: [6]:819..836 from 1
+                     },
+                     right: constant int64 3 @ [6]:839..840 from 1,
+                     location: [6]:819..840 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:845..849 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [6]:850..859 from 1,
+                       location: [6]:845..859 from 1
+                     },
+                     right: constant int64 3002 @ [6]:862..866 from 1,
+                     location: [6]:845..866 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:871..875 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `activity_id` @ [6]:876..887 from 1,
+                       location: [6]:871..887 from 1
+                     },
+                     right: constant int64 1 @ [6]:890..891 from 1,
+                     location: [6]:871..891 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:896..900 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `status_id` @ [6]:901..910 from 1,
+                       location: [6]:896..910 from 1
+                     },
+                     right: binary_expr {
+                       left: binary_expr {
+                         left: constant int64 1 @ [6]:913..914 from 1,
+                         op: "if_",
+                         right: binary_expr {
+                           left: field_access {
+                             left: root_field {
+                               id: `windows` @ [6]:918..925 from 1,
+                               has_question_mark: false
+                             },
+                             has_question_mark: false,
+                             name: `EventID` @ [6]:926..933 from 1,
+                             location: [6]:918..933 from 1
+                           },
+                           op: "eq",
+                           right: constant int64 4624 @ [6]:937..941 from 1,
+                           location: [6]:918..941 from 1
+                         },
+                         location: [6]:913..941 from 1
+                       },
+                       op: "else_",
+                       right: constant int64 2 @ [6]:947..948 from 1,
+                       location: [6]:913..948 from 1
+                     },
+                     location: [6]:896..948 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:953..957 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `user` @ [6]:958..962 from 1,
+                       location: [6]:953..962 from 1
+                     },
+                     right: record {
+                       begin: [6]:965..966 from 1,
+                       items: [
+                         field {
+                           name: `name` @ [6]:966..970 from 1,
+                           expr: unary_expr {
+                             op: "move",
+                             expr: field_access {
+                               left: field_access {
+                                 left: root_field {
+                                   id: `windows` @ [6]:977..984 from 1,
+                                   has_question_mark: false
+                                 },
+                                 has_question_mark: false,
+                                 name: `EventData` @ [6]:985..994 from 1,
+                                 location: [6]:977..994 from 1
+                               },
+                               has_question_mark: true,
+                               name: `TargetUserName` @ [6]:995..1009 from 1,
+                               location: [6]:977..1009 from 1
+                             },
+                             location: [6]:972..1009 from 1
+                           }
+                         }
+                       ],
+                       end: [6]:1010..1011 from 1
+                     },
+                     location: [6]:953..1011 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1016..1020 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `src_endpoint` @ [6]:1021..1033 from 1,
+                       location: [6]:1016..1033 from 1
+                     },
+                     right: record {
+                       begin: [6]:1036..1037 from 1,
+                       items: [
+                         field {
+                           name: `ip` @ [6]:1037..1039 from 1,
+                           expr: function_call {
+                             fn: {
+                               path: [
+                                 `ip` @ [6]:1076..1078 from 1
+                               ],
+                               ref: std::ip/fn
+                             },
+                             args: [
+                               unary_expr {
+                                 op: "move",
+                                 expr: field_access {
+                                   left: field_access {
+                                     left: root_field {
+                                       id: `windows` @ [6]:1047..1054 from 1,
+                                       has_question_mark: false
+                                     },
+                                     has_question_mark: false,
+                                     name: `EventData` @ [6]:1055..1064 from 1,
+                                     location: [6]:1047..1064 from 1
+                                   },
+                                   has_question_mark: false,
+                                   name: `IpAddress` @ [6]:1065..1074 from 1,
+                                   location: [6]:1047..1074 from 1
+                                 },
+                                 location: [6]:1042..1074 from 1
+                               }
+                             ],
+                             method: true,
+                             location: [6]:1042..1080 from 1
+                           }
+                         }
+                       ],
+                       end: [6]:1080..1081 from 1
+                     },
+                     location: [6]:1016..1081 from 1
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [6]:1088..1092 from 1,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4634 @ [6]:1088..1092 from 1
+               }
+             },
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4647 @ [6]:1095..1099 from 1
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 4634
+               }
+             },
+             {
+               kind: Constant {
+                 value: int64 4647
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: meta {
+                       kind: "name",
+                       source: [6]:1109..1114 from 1
+                     },
+                     right: constant string "ocsf.authentication" @ [6]:1117..1138 from 1,
+                     location: [6]:1109..1138 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1143..1147 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `category_uid` @ [6]:1148..1160 from 1,
+                       location: [6]:1143..1160 from 1
+                     },
+                     right: constant int64 3 @ [6]:1163..1164 from 1,
+                     location: [6]:1143..1164 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1169..1173 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [6]:1174..1183 from 1,
+                       location: [6]:1169..1183 from 1
+                     },
+                     right: constant int64 3002 @ [6]:1186..1190 from 1,
+                     location: [6]:1169..1190 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1195..1199 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `activity_id` @ [6]:1200..1211 from 1,
+                       location: [6]:1195..1211 from 1
+                     },
+                     right: constant int64 2 @ [6]:1214..1215 from 1,
+                     location: [6]:1195..1215 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1220..1224 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `user` @ [6]:1225..1229 from 1,
+                       location: [6]:1220..1229 from 1
+                     },
+                     right: record {
+                       begin: [6]:1232..1233 from 1,
+                       items: [
+                         field {
+                           name: `name` @ [6]:1233..1237 from 1,
+                           expr: unary_expr {
+                             op: "move",
+                             expr: field_access {
+                               left: field_access {
+                                 left: root_field {
+                                   id: `windows` @ [6]:1244..1251 from 1,
+                                   has_question_mark: false
+                                 },
+                                 has_question_mark: false,
+                                 name: `EventData` @ [6]:1252..1261 from 1,
+                                 location: [6]:1244..1261 from 1
+                               },
+                               has_question_mark: true,
+                               name: `TargetUserName` @ [6]:1262..1276 from 1,
+                               location: [6]:1244..1276 from 1
+                             },
+                             location: [6]:1239..1276 from 1
+                           }
+                         }
+                       ],
+                       end: [6]:1277..1278 from 1
+                     },
+                     location: [6]:1220..1278 from 1
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [6]:1285..1289 from 1,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4720 @ [6]:1285..1289 from 1
+               }
+             },
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4722 @ [6]:1292..1296 from 1
+               }
+             },
+             {
+               kind: expression_pattern {
+                 expr: constant int64 4738 @ [6]:1299..1303 from 1
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 4720
+               }
+             },
+             {
+               kind: Constant {
+                 value: int64 4722
+               }
+             },
+             {
+               kind: Constant {
+                 value: int64 4738
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: meta {
+                       kind: "name",
+                       source: [6]:1313..1318 from 1
+                     },
+                     right: constant string "ocsf.account_change" @ [6]:1321..1342 from 1,
+                     location: [6]:1313..1342 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1347..1351 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `category_uid` @ [6]:1352..1364 from 1,
+                       location: [6]:1347..1364 from 1
+                     },
+                     right: constant int64 3 @ [6]:1367..1368 from 1,
+                     location: [6]:1347..1368 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1373..1377 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [6]:1378..1387 from 1,
+                       location: [6]:1373..1387 from 1
+                     },
+                     right: constant int64 3001 @ [6]:1390..1394 from 1,
+                     location: [6]:1373..1394 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1399..1403 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `activity_id` @ [6]:1404..1415 from 1,
+                       location: [6]:1399..1415 from 1
+                     },
+                     right: constant int64 99 @ [6]:1418..1420 from 1,
+                     location: [6]:1399..1420 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1425..1429 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `user` @ [6]:1430..1434 from 1,
+                       location: [6]:1425..1434 from 1
+                     },
+                     right: record {
+                       begin: [6]:1437..1438 from 1,
+                       items: [
+                         field {
+                           name: `name` @ [6]:1438..1442 from 1,
+                           expr: unary_expr {
+                             op: "move",
+                             expr: field_access {
+                               left: field_access {
+                                 left: root_field {
+                                   id: `windows` @ [6]:1449..1456 from 1,
+                                   has_question_mark: false
+                                 },
+                                 has_question_mark: false,
+                                 name: `EventData` @ [6]:1457..1466 from 1,
+                                 location: [6]:1449..1466 from 1
+                               },
+                               has_question_mark: true,
+                               name: `TargetUserName` @ [6]:1467..1481 from 1,
+                               location: [6]:1449..1481 from 1
+                             },
+                             location: [6]:1444..1481 from 1
+                           }
+                         }
+                       ],
+                       end: [6]:1482..1483 from 1
+                     },
+                     location: [6]:1425..1483 from 1
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [6]:1490..1500 from 1,
+           pattern_exprs: [
+             {
+               kind: range_pattern {
+                 lower: constant int64 1005 @ [6]:1490..1494 from 1,
+                 upper: constant int64 1008 @ [6]:1496..1500 from 1,
+                 location: [6]:1490..1500 from 1
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Range {
+                 lower: int64 1005,
+                 upper: int64 1008
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: meta {
+                       kind: "name",
+                       source: [6]:1510..1515 from 1
+                     },
+                     right: constant string "ocsf.detection_finding" @ [6]:1518..1542 from 1,
+                     location: [6]:1510..1542 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1547..1551 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `category_uid` @ [6]:1552..1564 from 1,
+                       location: [6]:1547..1564 from 1
+                     },
+                     right: constant int64 2 @ [6]:1567..1568 from 1,
+                     location: [6]:1547..1568 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1573..1577 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [6]:1578..1587 from 1,
+                       location: [6]:1573..1587 from 1
+                     },
+                     right: constant int64 2004 @ [6]:1590..1594 from 1,
+                     location: [6]:1573..1594 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1599..1603 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `activity_id` @ [6]:1604..1615 from 1,
+                       location: [6]:1599..1615 from 1
+                     },
+                     right: constant int64 1 @ [6]:1618..1619 from 1,
+                     location: [6]:1599..1619 from 1
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [6]:1626..1627 from 1,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: meta {
+                       kind: "name",
+                       source: [6]:1637..1642 from 1
+                     },
+                     right: constant string "ocsf.base_event" @ [6]:1645..1662 from 1,
+                     location: [6]:1637..1662 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1667..1671 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `category_uid` @ [6]:1672..1684 from 1,
+                       location: [6]:1667..1684 from 1
+                     },
+                     right: constant int64 0 @ [6]:1687..1688 from 1,
+                     location: [6]:1667..1688 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1693..1697 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [6]:1698..1707 from 1,
+                       location: [6]:1693..1707 from 1
+                     },
+                     right: constant int64 0 @ [6]:1710..1711 from 1,
+                     location: [6]:1693..1711 from 1
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [6]:1716..1720 from 1,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `activity_id` @ [6]:1721..1732 from 1,
+                       location: [6]:1716..1732 from 1
+                     },
+                     right: constant int64 0 @ [6]:1735..1736 from 1,
+                     location: [6]:1716..1736 from 1
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ]
+           },
+           wildcard: true
+         }
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: root_field {
+               id: `ocsf` @ [6]:1743..1747 from 1,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type_uid` @ [6]:1748..1756 from 1,
+             location: [6]:1743..1756 from 1
+           },
+           right: binary_expr {
+             left: binary_expr {
+               left: field_access {
+                 left: root_field {
+                   id: `ocsf` @ [6]:1759..1763 from 1,
+                   has_question_mark: false
+                 },
+                 has_question_mark: false,
+                 name: `class_uid` @ [6]:1764..1773 from 1,
+                 location: [6]:1759..1773 from 1
+               },
+               op: "mul",
+               right: constant int64 100 @ [6]:1776..1779 from 1,
+               location: [6]:1759..1779 from 1
+             },
+             op: "add",
+             right: field_access {
+               left: root_field {
+                 id: `ocsf` @ [6]:1782..1786 from 1,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `activity_id` @ [6]:1787..1798 from 1,
+               location: [6]:1782..1798 from 1
+             },
+             location: [6]:1759..1798 from 1
+           },
+           location: [6]:1743..1798 from 1
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [6]:1799..1803 from 1,
+           right: record {
+             begin: [6]:1806..1807 from 1,
+             items: [
+               spread {
+                 expr: root_field {
+                   id: `ocsf` @ [6]:1810..1814 from 1,
+                   has_question_mark: false
+                 },
+                 location: [6]:1807..1814 from 1
+               },
+               field {
+                 name: `unmapped` @ [6]:1816..1824 from 1,
+                 expr: root_field {
+                   id: `windows` @ [6]:1826..1833 from 1,
+                   has_question_mark: false
+                 }
+               }
+             ],
+             end: [6]:1833..1834 from 1
+           },
+           location: [6]:1799..1834 from 1
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:184..189 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:265..265 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `class_uid` @ [1]:190..199 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 3002 @ [1]:203..207 from 0,
+-            location: [1]:190..207 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `activity_id` @ [1]:212..223 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 1 @ [1]:227..228 from 0,
+-            location: [1]:212..228 from 0
+-          },
+-          location: [1]:190..228 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:229..234 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `src_endpoint` @ [1]:235..247 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `ip` @ [1]:248..250 from 0,
+-            location: [1]:235..250 from 0
+-          },
+-          op: "eq",
+-          right: constant ip 203.0.113.7 @ [1]:254..265 from 0,
+-          location: [1]:235..265 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ]
+ }

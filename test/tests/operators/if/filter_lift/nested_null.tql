@@ -1,0 +1,13 @@
+// The inner condition is `null`, so the inner `if` routes the event to the
+// branch that drops it, without comparing `x` with a duration. The moved filter
+// must not compare them either, which would warn.
+from {a: true, c: null, x: 1}
+if a {
+  if c {
+    where x > 1s
+  } else {
+    where false
+  }
+} else {
+  where x == 2
+}

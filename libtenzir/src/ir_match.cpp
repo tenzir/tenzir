@@ -12,6 +12,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/ir_lift.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
@@ -27,6 +28,7 @@
 #include "tenzir/view3.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace tenzir {
 
@@ -589,6 +591,229 @@ auto matches_pattern(nova::RowView<nova::Data> const& value,
     });
 }
 
+/// The magnitude up to which `match` and the comparison operators agree on
+/// numbers. `match` converts an integer to a floating-point number to compare
+/// the two, which is exact only up to this magnitude.
+constexpr auto max_exact_integer = int64_t{1} << 53;
+
+/// Returns whether `scrutinee == value` is `true` exactly for the scrutinees
+/// that `match` considers equal to `value`. For other values and scrutinees,
+/// the comparison is `false`, or `null` with a warning.
+auto is_comparable_constant(data const& value) -> bool {
+  return value.get_data().match<bool>(
+    [](caf::none_t) {
+      return true;
+    },
+    [](bool) {
+      return true;
+    },
+    [](int64_t x) {
+      return x >= -max_exact_integer and x <= max_exact_integer;
+    },
+    [](uint64_t x) {
+      return x <= static_cast<uint64_t>(max_exact_integer);
+    },
+    [](double x) {
+      // This also excludes `NaN`.
+      return std::abs(x) < static_cast<double>(max_exact_integer);
+    },
+    [](duration) {
+      return true;
+    },
+    [](time) {
+      return true;
+    },
+    [](std::string const&) {
+      return true;
+    },
+    [](ip) {
+      return true;
+    },
+    [](subnet) {
+      return true;
+    },
+    [](auto const&) {
+      // `match` and `==` disagree on lists and records, for example, on
+      // whether `[1]` equals `[1.0]`.
+      return false;
+    });
+}
+
+enum class BoundKind { number, duration, time };
+
+/// Returns the kind of a range bound that `match` and the ordering operators
+/// order alike.
+auto bound_kind(data const& value) -> Option<BoundKind> {
+  if (not is_comparable_constant(value)) {
+    return None{};
+  }
+  return value.get_data().match<Option<BoundKind>>(
+    [](int64_t) -> Option<BoundKind> {
+      return BoundKind::number;
+    },
+    [](uint64_t) -> Option<BoundKind> {
+      return BoundKind::number;
+    },
+    [](double) -> Option<BoundKind> {
+      return BoundKind::number;
+    },
+    [](duration) -> Option<BoundKind> {
+      return BoundKind::duration;
+    },
+    [](time) -> Option<BoundKind> {
+      return BoundKind::time;
+    },
+    [](auto const&) -> Option<BoundKind> {
+      // The ordering operators do not order strings, for example.
+      return None{};
+    });
+}
+
+/// Returns an expression that is `true` exactly for the scrutinees that
+/// `matches_pattern` matches against `pattern`, or `None` if there is no such
+/// expression.
+auto pattern_condition(ast::expression const& scrutinee,
+                       MatchPattern const& pattern, location source)
+  -> Option<ast::expression> {
+  auto const make_constant = [&](data const& value) -> ast::expression {
+    return ast::constant::make(located{value, source});
+  };
+  return pattern.kind.match(
+    [&](MatchPattern::Wildcard const&) -> Option<ast::expression> {
+      return ast::constant{true, source};
+    },
+    [&](MatchPattern::Constant const& constant) -> Option<ast::expression> {
+      if (not is_comparable_constant(constant.value)) {
+        return None{};
+      }
+      return ast::binary_expr{scrutinee, ast::binary_op::eq,
+                              make_constant(constant.value)};
+    },
+    [&](MatchPattern::Range const& range) -> Option<ast::expression> {
+      auto const kind = bound_kind(range.lower);
+      if (not kind or kind != bound_kind(range.upper)) {
+        return None{};
+      }
+      // Like `matches_pattern`, the range excludes both bounds.
+      return ast::binary_expr{
+        ast::binary_expr{scrutinee, ast::binary_op::gt,
+                         make_constant(range.lower)},
+        ast::binary_op::and_,
+        ast::binary_expr{scrutinee, ast::binary_op::lt,
+                         make_constant(range.upper)},
+      };
+    });
+}
+
+/// Returns an expression that is `true` exactly for the events that `arm`
+/// takes unless an earlier arm takes them, or `None` if there is no such
+/// expression.
+auto arm_condition(MatchArgs::Arm const& arm, ast::expression const& scrutinee)
+  -> Option<ast::expression> {
+  TENZIR_ASSERT(not arm.wildcard);
+  if (arm.patterns.empty() or arm.patterns.size() != arm.pattern_exprs.size()) {
+    return None{};
+  }
+  auto condition = Option<ast::expression>{};
+  auto irrefutable = false;
+  for (auto i = size_t{0}; i < arm.patterns.size(); ++i) {
+    auto const& pattern = arm.patterns[i];
+    if (is<MatchPattern::Wildcard>(pattern.kind)) {
+      irrefutable = true;
+      continue;
+    }
+    auto alternative = pattern_condition(scrutinee, pattern,
+                                         arm.pattern_exprs[i].get_location());
+    if (not alternative) {
+      return None{};
+    }
+    condition = condition
+                  ? ast::binary_expr{std::move(*condition), ast::binary_op::or_,
+                                     std::move(*alternative)}
+                  : std::move(*alternative);
+  }
+  if (irrefutable) {
+    condition = None{};
+  }
+  if (not arm.guard) {
+    // An arm without a guard is a wildcard arm if a pattern is irrefutable.
+    TENZIR_ASSERT(condition);
+    return condition;
+  }
+  if (not ir::is_repeatable(*arm.guard)) {
+    return None{};
+  }
+  if (not condition) {
+    return *arm.guard;
+  }
+  // `match` evaluates the guard only for the events that a pattern matches.
+  return ast::binary_expr{
+    ast::binary_expr{*arm.guard, ast::binary_op::if_, std::move(*condition)},
+    ast::binary_op::else_, ast::constant{false, arm.guard->get_location()}};
+}
+
+/// Returns whether no scrutinee matches both `x` and `y`. Both must have a
+/// condition, as in `pattern_condition`.
+auto are_disjoint(MatchPattern const& x, MatchPattern const& y) -> bool {
+  auto const in_range
+    = [](data const& value, MatchPattern::Range const& range) {
+        return compare_range_bounds(value, range.lower)
+                 == std::partial_ordering::greater
+               and compare_range_bounds(value, range.upper)
+                     == std::partial_ordering::less;
+      };
+  return x.kind.match(
+    [&](MatchPattern::Constant const& lhs) {
+      return y.kind.match(
+        [&](MatchPattern::Constant const& rhs) {
+          return compare_range_bounds(lhs.value, rhs.value)
+                 != std::partial_ordering::equivalent;
+        },
+        [&](MatchPattern::Range const& rhs) {
+          return not in_range(lhs.value, rhs);
+        },
+        [](MatchPattern::Wildcard const&) {
+          return false;
+        });
+    },
+    [&](MatchPattern::Range const& lhs) {
+      return y.kind.match(
+        [&](MatchPattern::Constant const& rhs) {
+          return not in_range(rhs.value, lhs);
+        },
+        [](auto const&) {
+          // Two ranges may overlap.
+          return false;
+        });
+    },
+    [](MatchPattern::Wildcard const&) {
+      return false;
+    });
+}
+
+/// Returns whether no scrutinee matches a pattern of both `x` and `y`. Both
+/// must have a condition, as in `arm_condition`.
+auto are_disjoint(MatchArgs::Arm const& x, MatchArgs::Arm const& y) -> bool {
+  return std::ranges::all_of(x.patterns, [&](MatchPattern const& lhs) {
+    return std::ranges::all_of(y.patterns, [&](MatchPattern const& rhs) {
+      return are_disjoint(lhs, rhs);
+    });
+  });
+}
+
+/// Returns whether a filter chain keeps no event.
+auto keeps_no_event(ir::OptimizeFilter const& filter) -> bool {
+  if (filter.size() != 1) {
+    return false;
+  }
+  auto const* constant = try_as<ast::constant>(filter.front());
+  if (not constant) {
+    return false;
+  }
+  auto const* value = try_as<bool>(constant->value);
+  return value and not *value;
+}
+
 class MatchIr final : public ir::Operator {
 public:
   MatchIr() = default;
@@ -641,17 +866,15 @@ public:
     // Every row goes to exactly one arm and the arm outputs are merged, so the
     // downstream filter and order requirement can be pushed into each arm that
     // still returns events. An arm that does not inherits neither, as it has no
-    // downstream event consumer. The filter is not propagated past `match`,
-    // because the arms may rewrite the fields it refers to.
-    auto null_dh = null_diagnostic_handler{};
+    // downstream event consumer. The arms may rewrite the fields that the
+    // filter refers to, so only their residual filters move past `match`.
     auto outputs_events = std::vector<bool>{};
     outputs_events.reserve(args_.arms.size());
     auto types_known = true;
     for (const auto& arm : args_.arms) {
-      auto ty = arm.pipeline.infer_type(events_element_type(), null_dh);
-      types_known = types_known and static_cast<bool>(ty);
-      outputs_events.push_back(
-        ty and (ty->is<table_slice>() or ty->is<nova::Events>()));
+      auto events = ir::returns_events(arm.pipeline);
+      types_known = types_known and events.has_value();
+      outputs_events.push_back(events.value_or(false));
     }
     // Pushing into the arms is only complete if we know every arm's output
     // type. Otherwise the filter stays behind `match`.
@@ -661,6 +884,8 @@ public:
       filter.clear();
     }
     auto result_order = order;
+    auto arm_filters = std::vector<ir::OptimizeFilter>{};
+    arm_filters.reserve(args_.arms.size());
     for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
       auto& arm = args_.arms[i];
       auto events = outputs_events[i];
@@ -675,10 +900,9 @@ public:
               },
               octx);
       arm.pipeline = std::move(opt.replacement);
-      // All arms share `match` as their upstream, so an arm cannot push its
-      // residual filter further up. A local limit also cannot escape. The
-      // projection describes fields this arm needs from the shared input.
-      arm.pipeline.prepend(std::move(opt.filter));
+      // A local limit cannot escape the arm. The projection describes fields
+      // this arm needs from the shared input.
+      arm_filters.push_back(std::move(opt.filter));
       ir::merge_projection(projection, opt.projection);
       result_order = stronger_event_order(result_order, opt.order);
     }
@@ -688,13 +912,26 @@ public:
         ir::add_refs_to_projection(projection, *arm.guard);
       }
     }
+    // The residual filter of an arm applies to the events that `match` routes
+    // to it, so routing them in a predicate moves the arm filters above
+    // `match`. If that fails, the residual filters stay at the front of their
+    // arms.
+    auto lifted = Option<ir::OptimizeFilter>{};
+    if (types_known) {
+      lifted = lift_arm_filters(arm_filters);
+    }
+    if (not lifted) {
+      for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+        args_.arms[i].pipeline.prepend(std::move(arm_filters[i]));
+      }
+    }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     for (auto& expr : filter) {
       replacement.push_back(make_where_ir(std::move(expr)));
     }
     return {
-      .filter = {},
+      .filter = std::move(lifted).value_or(ir::OptimizeFilter{}),
       .order = result_order,
       .replacement = ir::pipeline{{}, std::move(replacement)},
       .projection = std::move(projection),
@@ -775,6 +1012,62 @@ public:
   }
 
 private:
+  /// Combines the residual filters of the arms into a filter for the input of
+  /// `match`, or returns `None` if it cannot route the events exactly as
+  /// `match` does.
+  auto lift_arm_filters(std::vector<ir::OptimizeFilter> arm_filters) const
+    -> Option<ir::OptimizeFilter> {
+    TENZIR_ASSERT_EQ(arm_filters.size(), args_.arms.size());
+    TENZIR_ASSERT(args_.arms.back().wildcard);
+    // The scrutinee and the guards must yield the same values when `match`
+    // evaluates them again.
+    if (not ir::is_repeatable(args_.scrutinee)) {
+      return None{};
+    }
+    // Every arm but the wildcard arm, which takes the remaining events, needs
+    // a condition. This also makes `are_disjoint` exact for their patterns.
+    auto conditions = std::vector<Option<ast::expression>>{};
+    conditions.reserve(args_.arms.size());
+    for (auto const& arm : args_.arms) {
+      if (arm.wildcard) {
+        conditions.emplace_back(None{});
+        continue;
+      }
+      auto condition = arm_condition(arm, args_.scrutinee);
+      if (not condition) {
+        return None{};
+      }
+      conditions.push_back(std::move(condition));
+    }
+    // If the wildcard arm keeps no event, then an arm that keeps no event need
+    // not route its events, provided that no later arm can take them, so that
+    // they reach the wildcard arm instead. Its patterns must therefore be
+    // disjoint from those of every later arm that still routes. Then the
+    // events also never reach the guard of a later arm.
+    auto removed = std::vector<bool>(args_.arms.size(), false);
+    if (keeps_no_event(arm_filters.back())) {
+      for (auto k = args_.arms.size() - 1; k-- > 0;) {
+        if (not keeps_no_event(arm_filters[k])) {
+          continue;
+        }
+        auto removable = true;
+        for (auto j = k + 1; j + 1 < args_.arms.size() and removable; ++j) {
+          removable = removed[j] or are_disjoint(args_.arms[k], args_.arms[j]);
+        }
+        removed[k] = removable;
+      }
+    }
+    auto branches = std::vector<ir::RoutedBranch>{};
+    branches.reserve(args_.arms.size());
+    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+      if (not removed[i]) {
+        branches.push_back(
+          {std::move(conditions[i]), std::move(arm_filters[i])});
+      }
+    }
+    return ir::lift_branch_filters(std::move(branches));
+  }
+
   MatchArgs args_;
 };
 

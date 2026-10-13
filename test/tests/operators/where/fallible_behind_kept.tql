@@ -1,0 +1,7 @@
+// Slicing a string with a negative stride fails. The first filter stays behind
+// the assignment that it reads and drops every event, so the second filter must
+// not move in front of it and slice `x`.
+from {x: "abc"}
+c = random() < 0
+where c
+where x.slice(stride=-1) == ""

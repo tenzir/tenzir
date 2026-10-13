@@ -275,6 +275,17 @@ TEST("simplify keeps evaluated operands that could fail") {
               render_filter({"x.length() == 1", "false"}));
 }
 
+TEST("branch lifting keeps constants that the evaluator rejects") {
+  CHECK(ir::is_infallible(parse("x == 1")));
+  CHECK(not ir::is_infallible(parse("x.length() == 1")));
+  CHECK(not ir::is_infallible(parse_with_secret("s == x")));
+  CHECK(not ir::is_infallible(parse_with_secret("{a: s} == x")));
+  CHECK(not ir::is_infallible(parse_with_secret("[s] == x")));
+  auto chain = ir::OptimizeFilter{parse("x == 1"), parse_with_secret("s == y")};
+  CHECK_EQUAL(fmt::format("{:?}", ir::conjoin_filter(std::move(chain))),
+              render_with_secret("s == y if x == 1 else false"));
+}
+
 TEST("simplify keeps constants that the evaluator rejects") {
   // The evaluator fails the pipeline for a secret constant that it evaluates.
   CHECK_EQUAL(simplify_with_secret("s or true"),
@@ -298,6 +309,13 @@ TEST("simplify keeps constants that the evaluator rejects") {
               render_chain(ir::OptimizeFilter{parse_with_secret("s"),
                                               parse("false"),
                                               parse_with_secret("s")}));
+}
+
+TEST("simplify keeps assignments in place of values") {
+  // The evaluator only warns for them at the top level and does not support
+  // them inside other expressions.
+  CHECK_EQUAL(simplify("(x = 1 + 1) else false"), render("(x = 2) else false"));
+  CHECK_EQUAL(simplify("int(\"10\", base=16) == 16"), render("true"));
 }
 
 TEST("simplify keeps the arguments of invalid calls") {
@@ -343,6 +361,12 @@ TEST("simplify selects branches of conditional expressions") {
   CHECK_EQUAL(simplify("(null else x) == 1"), render("x == 1"));
   CHECK_EQUAL(simplify("(1 else x) == 1"), render("true"));
   CHECK_EQUAL(simplify("(x else 1) == 1"), render("(x else 1) == 1"));
+  // Equal branches make the condition irrelevant, unless it could fail.
+  CHECK_EQUAL(simplify("false if x == 1 else false"), render("false"));
+  CHECK_EQUAL(simplify("true if x else (1 == 1)"), render("true"));
+  CHECK_EQUAL(simplify("false if x.length() == 1 else false"),
+              render("false if x.length() == 1 else false"));
+  CHECK_EQUAL(simplify("true if x else false"), render("true if x else false"));
 }
 
 TEST("simplify filter chains") {
@@ -395,4 +419,35 @@ TEST("substitution stops when the predicate grows beyond the bound") {
   REQUIRE_EQUAL(split.independent.size(), size_t{1});
   CHECK_EQUAL(ir::expression_size(split.independent.front()),
               ir::expression_size(large));
+}
+
+TEST("predicates that could fail stay behind the ones that stay") {
+  // `slice` fails for a string with a negative stride. Moving it in front of
+  // `c`, which stays behind the operator, would evaluate it for the events that
+  // `c` drops.
+  auto const touched = ast::collect_refs(parse("c"));
+  REQUIRE(touched);
+  auto split = ir::split_filter_by_dependents(
+    parse_chain({"c", "x.slice(stride=-1) == \"\"", "y == 1"}), *touched);
+  CHECK_EQUAL(render_chain(split.independent), render_filter({"y == 1"}));
+  CHECK_EQUAL(render_chain(split.dependent),
+              render_filter({"c", "x.slice(stride=-1) == \"\""}));
+  split = ir::split_filter_by_dependents(
+    parse_chain({"x.slice(stride=-1) == \"\"", "c"}), *touched);
+  CHECK_EQUAL(render_chain(split.independent),
+              render_filter({"x.slice(stride=-1) == \"\""}));
+  CHECK_EQUAL(render_chain(split.dependent), render_filter({"c"}));
+  // The same holds for a substitution that has no replacement for `c`.
+  auto const keep_others
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    if (field.path().size() == 1 and field.path().front().id.name == "c") {
+      return None{};
+    }
+    return field.inner();
+  };
+  split = ir::split_filter_by_substitution(
+    parse_chain({"c", "x.slice(stride=-1) == \"\"", "y == 1"}), keep_others);
+  CHECK_EQUAL(render_chain(split.independent), render_filter({"y == 1"}));
+  CHECK_EQUAL(render_chain(split.dependent),
+              render_filter({"c", "x.slice(stride=-1) == \"\""}));
 }

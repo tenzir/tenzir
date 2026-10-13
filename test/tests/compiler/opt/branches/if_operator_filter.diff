@@ -25,6 +25,28 @@
          }
        ],
        self: [1]:126..130 from 0
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `x` @ [1]:197..198 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:202..203 from 0,
++          location: [1]:197..203 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
      },
      If {
        condition: binary_expr {
@@ -41,28 +63,6 @@
            
          ],
          operators: [
-+          where_ir {
-+            op: {
-+              path: [
-+                
-+              ],
-+              ref: unresolved
-+            },
-+            args: [
-+              Incomplete binary_expr {
-+                left: root_field {
-+                  id: `x` @ [1]:197..198 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq",
-+                right: constant int64 1 @ [1]:202..203 from 0,
-+                location: [1]:197..203 from 0
-+              }
-+            ],
-+            named_args: [
-+              
-+            ]
-+          },
            GenericIr {
              desc: "drop",
              store: {
@@ -103,28 +103,6 @@
            
          ],
          operators: [
-+          where_ir {
-+            op: {
-+              path: [
-+                
-+              ],
-+              ref: unresolved
-+            },
-+            args: [
-+              Incomplete binary_expr {
-+                left: root_field {
-+                  id: `x` @ [1]:197..198 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq",
-+                right: constant int64 1 @ [1]:202..203 from 0,
-+                location: [1]:197..203 from 0
-+              }
-+            ],
-+            named_args: [
-+              
-+            ]
-+          },
            GenericIr {
              desc: "drop",
              store: {

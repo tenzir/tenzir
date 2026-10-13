@@ -1,0 +1,44 @@
+warning: event does not have field
+  --> tests/operators/if/filter_lift/else.tql:12:4
+   |
+12 | if c {
+   |    ~
+   |
+   = hint: did you mean `d`?
+   = hint: append `?` to suppress this warning
+
+warning: expected `bool`, but got a different type
+  --> tests/operators/if/filter_lift/else.tql:12:4
+   |
+12 | if c {
+   |    ~
+   |
+   = hint: this will be treated as `false`
+
+warning: expected `bool`, but got a different type
+  --> tests/operators/if/filter_lift/else.tql:14:11
+   |
+14 | } else if d {
+   |           ~
+   |
+   = hint: this will be treated as `false`
+
+warning: expected `bool`
+  --> tests/operators/if/filter_lift/else.tql:12:4
+   |
+12 | if c {
+   |    ~
+   |
+
+warning: expected `bool`
+  --> tests/operators/if/filter_lift/else.tql:14:11
+   |
+14 | } else if d {
+   |           ~
+   |
+{"event":{"id":1,"c":true,"d":false,"a":42,"b":0,"e":0,"y":42},"optimized":[false,true]}
+{"event":{"id":3,"c":false,"d":true,"a":0,"e":0,"y":42},"optimized":[false,true]}
+{"event":{"id":4,"c":false,"d":false,"a":0,"b":0,"e":42,"y":42},"optimized":[false,true]}
+{"event":{"id":5,"c":null,"d":true,"a":42,"e":0,"y":42},"optimized":[false,true]}
+{"event":{"id":6,"d":null,"a":42,"b":0,"e":42,"y":42},"optimized":[false,true]}
+{"event":{"id":7,"c":"yes","d":1,"a":42,"b":0,"e":42,"y":42},"optimized":[false,true]}

@@ -20,7 +20,16 @@
          ]
        },
        filter: [
-         
+-        
++        binary_expr {
++          left: root_field {
++            id: `b` @ [1]:36..37 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 2 @ [1]:41..42 from 0,
++          location: [1]:36..42 from 0
++        }
        ],
 -      order: "ordered"
 +      order: "unordered"
@@ -40,28 +49,6 @@
            
          ],
          operators: [
-+          where_ir {
-+            op: {
-+              path: [
-+                
-+              ],
-+              ref: unresolved
-+            },
-+            args: [
-+              Incomplete binary_expr {
-+                left: root_field {
-+                  id: `b` @ [1]:36..37 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq",
-+                right: constant int64 2 @ [1]:41..42 from 0,
-+                location: [1]:36..42 from 0
-+              }
-+            ],
-+            named_args: [
-+              
-+            ]
-+          },
            GenericIr {
              desc: "drop",
              store: {
@@ -95,35 +82,6 @@
              ],
 -            order: "ordered"
 +            order: "unordered"
-+          }
-+        ]
-+      },
-+      alternative: {
-+        lets: [
-+          
-+        ],
-+        operators: [
-+          where_ir {
-+            op: {
-+              path: [
-+                
-+              ],
-+              ref: unresolved
-+            },
-+            args: [
-+              Incomplete binary_expr {
-+                left: root_field {
-+                  id: `b` @ [1]:36..37 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq",
-+                right: constant int64 2 @ [1]:41..42 from 0,
-+                location: [1]:36..42 from 0
-+              }
-+            ],
-+            named_args: [
-+              
-+            ]
            }
          ]
        }

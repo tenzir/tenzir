@@ -1,0 +1,50 @@
+// Moving the filter in front of `if` keeps the same events as keeping it
+// behind: `true` takes the first branch, and `false`, `null`, a missing field,
+// and other types take the `else` branch.
+from {id: 1, c: true, d: false, a: 42, b: 0, e: 0},
+     {id: 2, c: true, d: false, a: 0, b: 42, e: 42},
+     {id: 3, c: false, d: true, a: 0, b: 42, e: 0},
+     {id: 4, c: false, d: false, a: 0, b: 0, e: 42},
+     {id: 5, c: null, d: true, a: 42, b: 42, e: 0},
+     {id: 6, d: null, a: 42, b: 0, e: 42},
+     {id: 7, c: "yes", d: 1, a: 42, b: 0, e: 42},
+     {id: 8, c: 1, d: true, a: 42, b: 0, e: 0}
+if c {
+  y = a
+} else if d {
+  y = b
+  drop b
+} else {
+  y = e
+}
+where y == 42
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {id: 1, c: true, d: false, a: 42, b: 0, e: 0},
+         {id: 2, c: true, d: false, a: 0, b: 42, e: 42},
+         {id: 3, c: false, d: true, a: 0, b: 42, e: 0},
+         {id: 4, c: false, d: false, a: 0, b: 0, e: 42},
+         {id: 5, c: null, d: true, a: 42, b: 42, e: 0},
+         {id: 6, d: null, a: 42, b: 0, e: 42},
+         {id: 7, c: "yes", d: 1, a: 42, b: 0, e: 42},
+         {id: 8, c: 1, d: true, a: 42, b: 0, e: 0}
+    if c {
+      y = a
+    } else if d {
+      y = b
+      drop b
+    } else {
+      y = e
+    }
+    optimize_barrier
+    where y == 42
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.id
+write_ndjson

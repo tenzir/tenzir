@@ -1,0 +1,15 @@
+// `match` compares an integer with a float as floats, so the float 2^53 matches
+// both 2^53 + 1 and 2^53. The first arm takes the event and drops it. Removing
+// that arm because it keeps no event would let the second arm keep the event,
+// and would evaluate the guard of the second arm, which fails for a string.
+from {k: 9007199254740992.0, x: "abc"}
+match k {
+  9007199254740993 => {
+    where false
+  }
+  9007199254740992 if x.slice(stride=-1) == "" => {
+  }
+  _ => {
+    where false
+  }
+}

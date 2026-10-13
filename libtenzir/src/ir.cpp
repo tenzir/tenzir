@@ -44,7 +44,10 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   }
   for (auto& expr : filter) {
     auto refs = ast::collect_refs(expr);
-    if (not refs or refs->overlaps(touched)) {
+    // A predicate behind one that stays must not move past it if it could fail
+    // for the events that the other one drops.
+    if (not refs or refs->overlaps(touched)
+        or (not result.dependent.empty() and not is_infallible(expr))) {
       result.dependent.push_back(std::move(expr));
     } else {
       result.independent.push_back(std::move(expr));
@@ -52,16 +55,6 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   }
   return result;
 }
-
-namespace {
-
-/// The number of expression nodes beyond which a substitution may not grow a
-/// predicate. Every substitution can replace each field reference with an
-/// expression, so a chain of operators could otherwise grow a predicate
-/// exponentially.
-constexpr auto max_substituted_predicate_size = size_t{4096};
-
-} // namespace
 
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
                                       ast::FieldSubstitution const& fields,
@@ -78,8 +71,13 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
     auto simplified = simplify_predicate(std::move(*substituted));
     // A predicate that grows past the bound stays behind the operator.
     auto const size = expression_size(simplified);
-    if (size > max_substituted_predicate_size
-        and size > expression_size(expr)) {
+    if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
+    // As in `split_filter_by_dependents`, a predicate must not move past one
+    // that stays if it could fail for the events that the other one drops.
+    if (not result.dependent.empty() and not is_infallible(simplified)) {
       result.dependent.push_back(std::move(expr));
       continue;
     }

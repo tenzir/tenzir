@@ -1,3 +1,7 @@
 fixtures: [packages]
+# The packages are listed one by one because source indices follow the order
+# in which they load, and the order of a directory listing is unspecified.
 package-dirs:
-  - ../../../../inputs/package-roots/pushdown-mapping
+  - ../../../../inputs/package-roots/pushdown-mapping/winlog
+  - ../../../../inputs/package-roots/pushdown-mapping/graph
+  - ../../../../inputs/package-roots/pushdown-mapping/winevt

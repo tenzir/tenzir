@@ -1,0 +1,3 @@
+id: winevt
+name: Windows Event Mapping
+description: A Windows event to OCSF mapping in the style of the library packages.

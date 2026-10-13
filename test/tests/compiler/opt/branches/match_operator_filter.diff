@@ -25,6 +25,28 @@
          }
        ],
        self: [1]:118..122 from 0
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `x` @ [1]:196..197 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:201..202 from 0,
++          location: [1]:196..202 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
      },
      Match {
        match_keyword: [1]:142..147 from 0,
@@ -54,28 +76,6 @@
                
              ],
              operators: [
-+              where_ir {
-+                op: {
-+                  path: [
-+                    
-+                  ],
-+                  ref: unresolved
-+                },
-+                args: [
-+                  Incomplete binary_expr {
-+                    left: root_field {
-+                      id: `x` @ [1]:196..197 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "eq",
-+                    right: constant int64 1 @ [1]:201..202 from 0,
-+                    location: [1]:196..202 from 0
-+                  }
-+                ],
-+                named_args: [
-+                  
-+                ]
-+              },
                GenericIr {
                  desc: "drop",
                  store: {
@@ -126,28 +126,6 @@
                
              ],
              operators: [
-+              where_ir {
-+                op: {
-+                  path: [
-+                    
-+                  ],
-+                  ref: unresolved
-+                },
-+                args: [
-+                  Incomplete binary_expr {
-+                    left: root_field {
-+                      id: `x` @ [1]:196..197 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "eq",
-+                    right: constant int64 1 @ [1]:201..202 from 0,
-+                    location: [1]:196..202 from 0
-+                  }
-+                ],
-+                named_args: [
-+                  
-+                ]
-+              },
                GenericIr {
                  desc: "drop",
                  store: {

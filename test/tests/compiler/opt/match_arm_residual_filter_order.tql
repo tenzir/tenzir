@@ -1,6 +1,6 @@
-// An arm cannot push its residual filter past `match`, so the filter is
-// reinserted at the arm's front. The arm's own filters must keep their relative
-// order, and the downstream filter pushed into the arm must stay behind them.
+// The residual filters of the arms move above `match`, guarded by their
+// patterns. The arm's own filters must keep their relative order, and the
+// downstream filter pushed into the arm must stay behind them.
 export
 match x {
   1 => { where a > 1 | where b > 2 }

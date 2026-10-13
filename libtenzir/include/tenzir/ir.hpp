@@ -55,6 +55,23 @@ struct OptimizeRequest {
   /// An operator may push some or all of them further upstream (see
   /// `split_filter_by_dependents`); predicates it keeps are reinserted as
   /// `where` operators behind it.
+  ///
+  /// A filter that moves upstream must keep exactly the events that it kept
+  /// behind the operators that it passes. Beyond that:
+  ///
+  /// - It may skip the work of these operators for the events that it drops,
+  ///   including the errors and warnings that this work would emit for them.
+  ///   For example, `y = x.slice(stride=-1) | where z == 1` drops events with
+  ///   `z != 1` before slicing them.
+  /// - It must not fail the pipeline for an event for which the original
+  ///   pipeline does not fail. So a predicate may move past a predicate that
+  ///   stays behind, or evaluate an expression for events that the original
+  ///   pipeline does not evaluate it for, only if evaluating it cannot fail,
+  ///   as for `is_infallible`. If the original pipeline fails, the optimized
+  ///   one may fail with another error.
+  /// - It may emit other warnings. A moved predicate may warn for values that
+  ///   the operators it passes handle silently, or warn again for a condition
+  ///   that both it and the operator evaluate.
   OptimizeFilter filter;
 
   /// The ordering guarantee that downstream requires from this operator.
@@ -386,16 +403,26 @@ struct split_filter_result {
 /// Splits a filter chain into independent and dependent parts.
 /// A filter expression is dependent if its references overlap with `touched`.
 /// If refs of a filter cannot be determined (ambiguous), it is conservatively
-/// placed into the dependent set.
+/// placed into the dependent set. So is a filter behind a dependent one that
+/// could fail, as for `is_infallible`, because moving it upstream would
+/// evaluate it for the events that the dependent filter drops.
 auto split_filter_by_dependents(ir::OptimizeFilter filter,
                                 const ast::ExprRefs& touched)
   -> split_filter_result;
+
+/// The number of expression nodes beyond which a rewrite may not grow a
+/// predicate. Every substitution can replace each field reference with an
+/// expression, and every branch of an `if` or `match` that a filter moves above
+/// adds a condition, so a chain of operators could otherwise grow a predicate
+/// exponentially.
+inline constexpr auto max_rewritten_predicate_size = size_t{4096};
 
 /// Splits a filter chain by substituting the references of every predicate,
 /// as in `ast::substitute_refs`, and simplifying the result as in
 /// `simplify_predicate`. The substituted predicates are independent. The
 /// others stay dependent and unchanged, including those that the substitution
-/// would grow beyond a fixed bound.
+/// would grow beyond a fixed bound, and those behind a dependent one whose
+/// substitution could fail, as in `split_filter_by_dependents`.
 auto split_filter_by_substitution(OptimizeFilter filter,
                                   ast::FieldSubstitution const& fields,
                                   ast::MetaSubstitution const& meta = {})
@@ -438,6 +465,18 @@ auto constant_condition(ast::expression const& condition) -> Option<bool>;
 
 /// Returns the number of expression nodes in `expr`.
 auto expression_size(ast::expression const& expr) -> size_t;
+
+/// Returns whether evaluating `expr` cannot fail the pipeline. A function can
+/// fail depending on its input, so `expr` must not call any.
+auto is_infallible(ast::expression const& expr) -> bool;
+
+/// Combines a filter chain into a single predicate that keeps the same events.
+///
+/// Like the chain, the predicate evaluates each of its predicates only for the
+/// events that all previous ones keep. It may evaluate a predicate for more
+/// events if that predicate calls no function and thus cannot fail. An empty
+/// chain becomes `true`.
+auto conjoin_filter(OptimizeFilter filter) -> ast::expression;
 
 /// Returns whether `prefix` is a prefix of `path` (or equal to it), comparing
 /// segment names. An empty `prefix` is a prefix of every path.

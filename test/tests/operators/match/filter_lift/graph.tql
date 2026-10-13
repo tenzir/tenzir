@@ -1,0 +1,31 @@
+// The filter on the user moves in front of the `match @name` of a Microsoft
+// Graph mapping and keeps the same events.
+from {name: "microsoft.graph.sign_in", id: 1, userId: "a7c3e1b2", userPrincipalName: "alice@example.com", createdDateTime: "2024-05-01T10:00:00Z", ipAddress: "203.0.113.7", status: {errorCode: 0}, conditionalAccessStatus: "success"},
+     {name: "microsoft.graph.sign_in", id: 2, userId: "f4d9", userPrincipalName: "bob@example.com", createdDateTime: "2024-05-01T10:01:00Z", status: {errorCode: 50126}},
+     {name: "microsoft.graph.sign_in", id: 3, userPrincipalName: "carol@example.com", createdDateTime: "2024-05-01T10:02:00Z"},
+     {name: "microsoft.graph.directory_audit", id: 4, activityDateTime: "2024-05-01T10:03:00Z", initiatedBy: {user: {id: "a7c3e1b2"}}},
+     {name: "microsoft.graph.risky_user", id: 5, userId: "a7c3e1b2"}
+@name = move name
+graph::ocsf::normalize
+where user.uid == "a7c3e1b2"
+this = {event: this, optimized: true}
+// The same pipeline with the filter behind the operator, with its warnings
+// suppressed to keep the output deterministic.
+merge {
+  quiet {
+    from {name: "microsoft.graph.sign_in", id: 1, userId: "a7c3e1b2", userPrincipalName: "alice@example.com", createdDateTime: "2024-05-01T10:00:00Z", ipAddress: "203.0.113.7", status: {errorCode: 0}, conditionalAccessStatus: "success"},
+         {name: "microsoft.graph.sign_in", id: 2, userId: "f4d9", userPrincipalName: "bob@example.com", createdDateTime: "2024-05-01T10:01:00Z", status: {errorCode: 50126}},
+         {name: "microsoft.graph.sign_in", id: 3, userPrincipalName: "carol@example.com", createdDateTime: "2024-05-01T10:02:00Z"},
+         {name: "microsoft.graph.directory_audit", id: 4, activityDateTime: "2024-05-01T10:03:00Z", initiatedBy: {user: {id: "a7c3e1b2"}}},
+         {name: "microsoft.graph.risky_user", id: 5, userId: "a7c3e1b2"}
+    @name = move name
+    graph::ocsf::normalize
+    optimize_barrier
+    where user.uid == "a7c3e1b2"
+    this = {event: this, optimized: false}
+  }
+}
+summarize event, optimized=collect(optimized)
+optimized = optimized.sort()
+sort event.metadata.original_event_uid
+write_ndjson
