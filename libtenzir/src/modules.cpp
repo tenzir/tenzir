@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/legacy_type.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/taxonomies.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
@@ -29,6 +30,9 @@ struct global_module_registry {
     detail::heterogeneous_string_hash, detail::heterogeneous_string_equal>
     types;
   concepts_map concepts;
+  /// Schema directories that no lookup has needed yet. Empty once they are
+  /// read, which happens at most once.
+  Option<detail::stable_set<std::filesystem::path>> pending_dirs;
 };
 
 bool initialized = false;
@@ -38,12 +42,9 @@ auto get_impl() -> global_module_registry& {
   return data;
 }
 
-} // namespace
-
-void init(symbol_map symbols, symbol_map2 symbols2, concepts_map concepts) {
-  TENZIR_ASSERT(not initialized);
-  auto& impl = get_impl();
-  auto lock = std::unique_lock{impl.mutex};
+/// Adds parsed definitions to the registry. The caller holds the lock.
+void add_symbols(global_module_registry& impl, symbol_map symbols,
+                 symbol_map2 symbols2) {
   for (auto& [name, ty] : symbols) {
     TENZIR_ASSERT(name == ty.name());
     if (is<legacy_record_type>(ty)) {
@@ -57,7 +58,50 @@ void init(symbol_map symbols, symbol_map2 symbols2, concepts_map concepts) {
                   "schema `{}`",
                   name);
   }
-  get_impl().concepts = std::move(concepts);
+}
+
+/// Reads the deferred schema directories, if any are left. The caller holds the
+/// lock. Reading them is not fast, but it happens once per process and only for
+/// processes that look a schema up.
+void load_pending_dirs(global_module_registry& impl) {
+  if (not impl.pending_dirs) {
+    return;
+  }
+  auto dirs = std::move(*impl.pending_dirs);
+  impl.pending_dirs.reset();
+  auto symbols = load_symbols(dirs);
+  if (not symbols) {
+    TENZIR_ERROR("failed to read schema dirs: {}", symbols.error());
+    return;
+  }
+  auto symbols2 = load_symbols2(dirs);
+  if (not symbols2) {
+    if (symbols2 != ec::silent) {
+      TENZIR_ERROR("failed to read schema dirs: {}", symbols2.error());
+    }
+    return;
+  }
+  add_symbols(impl, std::move(*symbols), std::move(*symbols2));
+}
+
+} // namespace
+
+void init(symbol_map symbols, symbol_map2 symbols2, concepts_map concepts) {
+  TENZIR_ASSERT(not initialized);
+  auto& impl = get_impl();
+  auto lock = std::unique_lock{impl.mutex};
+  add_symbols(impl, std::move(symbols), std::move(symbols2));
+  impl.concepts = std::move(concepts);
+  initialized = true;
+}
+
+void init(detail::stable_set<std::filesystem::path> module_dirs,
+          concepts_map concepts) {
+  TENZIR_ASSERT(not initialized);
+  auto& impl = get_impl();
+  auto lock = std::unique_lock{impl.mutex};
+  impl.pending_dirs = std::move(module_dirs);
+  impl.concepts = std::move(concepts);
   initialized = true;
 }
 
@@ -124,6 +168,7 @@ auto get_schema(std::string_view name) -> Option<type> {
   // The critical section here is very small once the type has been converted.
   // This function should thus be fine to call outside of tight loops.
   auto lock = std::unique_lock{global.mutex};
+  load_pending_dirs(global);
   auto it = global.types.find(name);
   if (it == global.types.end()) {
     return None{};

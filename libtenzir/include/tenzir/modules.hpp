@@ -8,16 +8,27 @@
 
 #pragma once
 
+#include "tenzir/detail/stable_set.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/taxonomies.hpp"
 
+#include <filesystem>
+
 namespace tenzir::modules {
 
-/// Initialize the global module and concepts registries.
+/// Initialize the global module and concepts registries from definitions that
+/// are already parsed.
 ///
 /// Must be called at most once.
 void init(symbol_map mod, symbol_map2 mod2, concepts_map concepts);
+
+/// Initialize the global registries without parsing schema directories until
+/// the first schema lookup. Concepts remain available immediately.
+///
+/// Must be called at most once.
+void init(detail::stable_set<std::filesystem::path> module_dirs,
+          concepts_map concepts);
 
 /// Returns the schema with the given name, if it exists.
 ///
