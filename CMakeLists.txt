@@ -1172,16 +1172,16 @@ endif ()
 
 set(TENZIR_PLATFORM_CLI_PATH
     ""
-    CACHE FILEPATH "Path to the platform-cli executable to package")
+    CACHE FILEPATH "Path to the platform CLI executable to package")
 if (TENZIR_PLATFORM_CLI_PATH)
   set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
   file(MAKE_DIRECTORY "${build_libexecdir}")
-  file(REMOVE "${build_libexecdir}/platform-cli")
+  file(REMOVE "${build_libexecdir}/tenzir-platform")
   file(CREATE_LINK "${TENZIR_PLATFORM_CLI_PATH}"
-       "${build_libexecdir}/platform-cli" SYMBOLIC)
+       "${build_libexecdir}/tenzir-platform" SYMBOLIC)
   install(
     PROGRAMS "${TENZIR_PLATFORM_CLI_PATH}"
-    RENAME platform-cli
+    RENAME tenzir-platform
     DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
     COMPONENT Runtime)
   if (BUILD_TESTING)

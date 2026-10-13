@@ -44,10 +44,8 @@ endif ()
 # Keep the engine beside the other private executables in both the build and
 # install trees.
 set_target_properties(
-  tenzir-engine
-  PROPERTIES OUTPUT_NAME engine
-             RUNTIME_OUTPUT_DIRECTORY
-             "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
+  tenzir-engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                           "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
 install(TARGETS tenzir-engine RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
                                       COMPONENT Runtime)
 

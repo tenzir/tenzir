@@ -203,7 +203,9 @@ make_application(std::string_view path) {
       },
     };
   }
-  if (name == "tenzir") {
+  // `tenzir-engine` is the engine binary itself, started without the `tenzir`
+  // dispatcher in front of it.
+  if (name == "tenzir" or name == "tenzir-engine") {
     const auto* exec = plugins::find<command_plugin>("exec");
     TENZIR_ASSERT(exec);
     auto [cmd, cmd_factory] = exec->make_command();

@@ -18,7 +18,7 @@ def _pkg_wheels_dir() -> Path:
 def _candidate_paths(name: str) -> list[Path]:
     candidates: list[Path] = []
     bin_dir = _pkg_bin_dir()
-    candidates.append(bin_dir.parent / "libexec" / "engine")
+    candidates.append(bin_dir.parent / "libexec" / "tenzir-engine")
     candidates.append(bin_dir / name)
     # Fallback to PATH if not packaged. We need to be careful to remove the
     # parent directory from the PATH to avoid an infinite self recursion on the

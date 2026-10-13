@@ -23,7 +23,7 @@ let
     ];
   };
   nodeModules = stdenvNoCC.mkDerivation {
-    pname = "platform-cli-node-modules";
+    pname = "tenzir-platform-node-modules";
     version = "unstable";
     src = source;
 
@@ -59,7 +59,7 @@ let
   };
 in
 stdenvNoCC.mkDerivation {
-  pname = "platform-cli";
+  pname = "tenzir-platform";
   version = "unstable";
   src = source;
 
@@ -77,7 +77,7 @@ stdenvNoCC.mkDerivation {
     ${compiler}/bin/bun build --compile \
       ${lib.optionalString stdenvNoCC.hostPlatform.isDarwin "--compile-executable-path=bun-runtime/bun-darwin-aarch64/bun"} \
       tools/platform-cli/main.ts \
-      --outfile platform-cli
+      --outfile tenzir-platform
 
     runHook postBuild
   '';
@@ -85,7 +85,7 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
 
-    install -Dm755 platform-cli "$out/bin/platform-cli"
+    install -Dm755 tenzir-platform "$out/bin/tenzir-platform"
 
     runHook postInstall
   '';
@@ -95,22 +95,22 @@ stdenvNoCC.mkDerivation {
     runHook preInstallCheck
 
     ${lib.optionalString stdenvNoCC.hostPlatform.isLinux ''
-      ${file}/bin/file "$out/bin/platform-cli" | grep -q "statically linked"
-      ! ${binutils}/bin/readelf -l "$out/bin/platform-cli" | grep -q INTERP
-      ! ${binutils}/bin/readelf -d "$out/bin/platform-cli" | grep -q NEEDED
+      ${file}/bin/file "$out/bin/tenzir-platform" | grep -q "statically linked"
+      ! ${binutils}/bin/readelf -l "$out/bin/tenzir-platform" | grep -q INTERP
+      ! ${binutils}/bin/readelf -d "$out/bin/tenzir-platform" | grep -q NEEDED
     ''}
     ${lib.optionalString stdenvNoCC.hostPlatform.isDarwin ''
-      ${file}/bin/file "$out/bin/platform-cli" | grep -q "Mach-O.*arm64"
-      ! ${cctools}/bin/otool -L "$out/bin/platform-cli" | grep -q /nix/store
+      ${file}/bin/file "$out/bin/tenzir-platform" | grep -q "Mach-O.*arm64"
+      ! ${cctools}/bin/otool -L "$out/bin/tenzir-platform" | grep -q /nix/store
     ''}
-    "$out/bin/platform-cli" --help >/dev/null
+    "$out/bin/tenzir-platform" --help >/dev/null
 
     runHook postInstallCheck
   '';
 
   meta = {
     description = "Command-line client for the Tenzir Platform";
-    mainProgram = "platform-cli";
+    mainProgram = "tenzir-platform";
     platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
   };
 }

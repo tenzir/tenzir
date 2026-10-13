@@ -24,7 +24,7 @@ class BuildPy(_build_py):
         if signed_tarball:
             # Preserve the exact signed and notarized macOS executable bytes.
             with tarfile.open(signed_tarball) as archive:
-                member = archive.getmember("opt/tenzir/libexec/platform-cli")
+                member = archive.getmember("opt/tenzir/libexec/tenzir-platform")
                 with archive.extractfile(member) as source, BINARY.open("wb") as dest:
                     shutil.copyfileobj(source, dest)
                 BINARY.chmod(member.mode)
@@ -40,14 +40,14 @@ class BuildPy(_build_py):
                     "build",
                     "--no-link",
                     "--print-out-paths",
-                    f"{repo_root}#platform-cli",
+                    f"{repo_root}#tenzir-platform",
                 ],
                 cwd=repo_root,
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            source = Path(result.stdout.splitlines()[-1]) / "bin" / "platform-cli"
+            source = Path(result.stdout.splitlines()[-1]) / "bin" / "tenzir-platform"
             shutil.copy2(source, BINARY)
         try:
             super().run()

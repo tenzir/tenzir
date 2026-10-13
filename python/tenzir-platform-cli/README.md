@@ -11,7 +11,7 @@ available directly through `tenzir`.
 
 Build a wheel from a repository checkout with
 `uv build --wheel --package tenzir-platform-cli` in `engine/python/`. The build
-uses the engine flake's `platform-cli` output. To package an existing binary, set
+uses the engine flake's `tenzir-platform` output. To package an existing binary, set
 `TENZIR_PLATFORM_CLI_PATH` to its absolute path. Set `TENZIR_WHEEL_PLATFORM` when
 packaging a binary for a different architecture.
 

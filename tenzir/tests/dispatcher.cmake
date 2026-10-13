@@ -8,7 +8,7 @@ set(libexec "${TEST_ROOT}/bin/${LIBEXEC_FROM_BINDIR}")
 file(MAKE_DIRECTORY "${TEST_ROOT}/bin" "${libexec}")
 file(REAL_PATH "${libexec}" libexec)
 file(COPY_FILE "${TENZIR_BINARY}" "${TEST_ROOT}/bin/tenzir")
-foreach (backend engine platform-cli)
+foreach (backend tenzir-engine tenzir-platform)
   file(
     WRITE "${libexec}/${backend}"
     "#!/bin/sh\nprintf '%s\\n' '${backend}' \"\${TENZIR_LIBEXEC-unset}\" \"$@\"\n"
@@ -38,8 +38,8 @@ function (check mode name expected)
   endif ()
 endfunction ()
 
-set(engine "engine\nunset\n")
-set(platform "platform-cli\n${libexec}\n")
+set(engine "tenzir-engine\nunset\n")
+set(platform "tenzir-platform\n${libexec}\n")
 foreach (
   mode
   unset
@@ -113,7 +113,7 @@ if (NOT status EQUAL 0 OR NOT output STREQUAL "${platform}unknown\n\na b\n")
 endif ()
 
 # The backend's exit status must survive exec.
-file(APPEND "${libexec}/platform-cli" "exit 42\n")
+file(APPEND "${libexec}/tenzir-platform" "exit 42\n")
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "${TEST_ROOT}/bin/tenzir"
           unknown

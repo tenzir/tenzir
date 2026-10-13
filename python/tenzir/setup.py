@@ -57,7 +57,7 @@ def _extract_tarball(tarball: Path) -> None:
         # pip-installed deployment usable backtraces.
         _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
         # PyPI distributes the Platform CLI through a separate dependency.
-        (PACKAGE_ROOT / "bundled" / "libexec" / "platform-cli").unlink(
+        (PACKAGE_ROOT / "bundled" / "libexec" / "tenzir-platform").unlink(
             missing_ok=True,
         )
         # The tarball bundles the python operator's dependencies as wheels so

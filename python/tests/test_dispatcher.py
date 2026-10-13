@@ -15,12 +15,24 @@ class ExecutedError(Exception):
 @pytest.mark.parametrize(
     ("name", "unified", "arguments", "target", "forwarded"),
     [
-        ("tenzir", "", [], "engine", ["tenzir"]),
-        ("tenzir", "", ["from {}"], "engine", ["tenzir", "from {}"]),
-        ("tenzir", "0", ["--help"], "engine", ["tenzir", "--help"]),
-        ("tenzir", "No", ["up", "name"], "engine", ["tenzir", "up", "name"]),
-        ("tenzir", "FALSE", ["run", "-r", "x"], "engine", ["tenzir", "run", "-r", "x"]),
-        ("tenzir", "", ["run", "from {}"], "engine", ["tenzir", "run", "from {}"]),
+        ("tenzir", "", [], "tenzir-engine", ["tenzir"]),
+        ("tenzir", "", ["from {}"], "tenzir-engine", ["tenzir", "from {}"]),
+        ("tenzir", "0", ["--help"], "tenzir-engine", ["tenzir", "--help"]),
+        ("tenzir", "No", ["up", "name"], "tenzir-engine", ["tenzir", "up", "name"]),
+        (
+            "tenzir",
+            "FALSE",
+            ["run", "-r", "x"],
+            "tenzir-engine",
+            ["tenzir", "run", "-r", "x"],
+        ),
+        (
+            "tenzir",
+            "",
+            ["run", "from {}"],
+            "tenzir-engine",
+            ["tenzir", "run", "from {}"],
+        ),
         ("tenzir", "", ["platform"], "platform-cli", ["tenzir"]),
         (
             "tenzir",
@@ -52,7 +64,13 @@ class ExecutedError(Exception):
             "platform-cli",
             ["tenzir", "up", "name", "-d"],
         ),
-        ("tenzir", "1", ["down", "name"], "platform-cli", ["tenzir", "down", "name"]),
+        (
+            "tenzir",
+            "1",
+            ["down", "name"],
+            "platform-cli",
+            ["tenzir", "down", "name"],
+        ),
         (
             "tenzir",
             "1",
@@ -67,12 +85,30 @@ class ExecutedError(Exception):
             "platform-cli",
             ["tenzir", "run", "-f", "p.tql", "--remote"],
         ),
-        ("tenzir", "1", ["run", "from {}"], "engine", ["tenzir", "run", "from {}"]),
-        ("tenzir", "1", ["run", "--", "-r"], "engine", ["tenzir", "run", "--", "-r"]),
-        ("tenzir-node", "1", ["--help"], "engine", ["tenzir-node", "--help"]),
-        ("tenzir-ctl", "1", ["run", "-r"], "engine", ["tenzir-ctl", "run", "-r"]),
-        ("tenzir-ctl", "", ["platform"], "engine", ["tenzir-ctl", "platform"]),
-        ("tenzir-rebuild", "1", [], "engine", ["tenzir-rebuild"]),
+        (
+            "tenzir",
+            "1",
+            ["run", "from {}"],
+            "tenzir-engine",
+            ["tenzir", "run", "from {}"],
+        ),
+        (
+            "tenzir",
+            "1",
+            ["run", "--", "-r"],
+            "tenzir-engine",
+            ["tenzir", "run", "--", "-r"],
+        ),
+        ("tenzir-node", "1", ["--help"], "tenzir-engine", ["tenzir-node", "--help"]),
+        (
+            "tenzir-ctl",
+            "1",
+            ["run", "-r"],
+            "tenzir-engine",
+            ["tenzir-ctl", "run", "-r"],
+        ),
+        ("tenzir-ctl", "", ["platform"], "tenzir-engine", ["tenzir-ctl", "platform"]),
+        ("tenzir-rebuild", "1", [], "tenzir-engine", ["tenzir-rebuild"]),
     ],
 )
 def test_wheel_dispatch(
@@ -85,7 +121,7 @@ def test_wheel_dispatch(
     target: str,
     forwarded: list[str],
 ) -> None:
-    binary = tmp_path / "libexec" / "engine"
+    binary = tmp_path / "libexec" / "tenzir-engine"
     binary.parent.mkdir()
     binary.write_text("unused")
     binary.chmod(0o755)

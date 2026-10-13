@@ -68,7 +68,7 @@
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
         platformCli =
           if builtins.pathExists ../platform then
-            pkgs.callPackage ./nix/platform-cli/package.nix {
+            pkgs.callPackage ./nix/tenzir-platform/package.nix {
               src = ../platform;
               # Use the prebuilt compiler on macOS; Linux needs our static Bun.
               inherit (nixpkgs.legacyPackages.${system}) bun;
@@ -106,7 +106,7 @@
               };
             }
             // pkgs.lib.optionalAttrs (platformCli != null) {
-              platform-cli = platformCli;
+              tenzir-platform = platformCli;
             }
           )
           // {

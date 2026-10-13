@@ -97,7 +97,7 @@ auto run_platform_cli(std::filesystem::path const& libexec, std::string& name,
   }
   auto arguments = std::vector<char*>{name.data()};
   arguments.insert(arguments.end(), first, last);
-  return run(libexec / "platform-cli", std::move(arguments));
+  return run(libexec / "tenzir-platform", std::move(arguments));
 }
 
 } // namespace
@@ -120,5 +120,5 @@ auto main(int argc, char** argv) -> int {
   }
   auto arguments = std::vector<char*>{argv, argv + argc};
   arguments[0] = name.data();
-  return run(libexec / "engine", std::move(arguments));
+  return run(libexec / "tenzir-engine", std::move(arguments));
 }

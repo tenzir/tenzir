@@ -66,8 +66,9 @@ To learn more about using Tenzir, continue over at https://tenzir.com/docs.
 
 `tenzir run <pipeline>` runs a pipeline locally, exactly like
 `tenzir <pipeline>`, and takes the same options. `tenzir platform` invokes the
-bundled platform CLI without the `platform` argument. All other calls invoke the
-engine with their arguments unchanged.
+bundled platform CLI, `tenzir-platform`, without the `platform` argument. All
+other calls invoke the engine, `tenzir-engine`, with their arguments unchanged.
+Both executables live in the `libexec` directory of the installation.
 
 Set `TENZIR_UNIFIED=1` to opt into the unified command interface. In this mode,
 `tenzir run` with `-r` or `--remote` before an optional `--` runs the pipeline
