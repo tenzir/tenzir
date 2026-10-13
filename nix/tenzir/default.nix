@@ -37,7 +37,6 @@ let
       inherit (stdenv.hostPlatform) isStatic;
       deploymentTests =
         deployment-source != null
-        && !isStatic
         && stdenv.hostPlatform.isLinux
         && stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 
