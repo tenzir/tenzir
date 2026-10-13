@@ -1,3 +1,11 @@
+warning: mode `create` is deprecated
+  --> tests/operators/to_clickhouse/roundtrip/38_low_cardinality_missing_error.tql:14:20
+   |
+14 |               mode="create",
+   |                    ~~~~~~~~
+   |
+   = hint: create the table ahead of time and use `mode="append"`
+
 error: `low_cardinality` column `absent` is missing from the input
   --> tests/operators/to_clickhouse/roundtrip/38_low_cardinality_missing_error.tql:15:31
    |

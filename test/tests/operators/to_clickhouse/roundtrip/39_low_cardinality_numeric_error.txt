@@ -1,3 +1,11 @@
+warning: mode `create` is deprecated
+  --> tests/operators/to_clickhouse/roundtrip/39_low_cardinality_numeric_error.tql:14:20
+   |
+14 |               mode="create",
+   |                    ~~~~~~~~
+   |
+   = hint: create the table ahead of time and use `mode="append"`
+
 error: column `code` cannot be a `LowCardinality` column
   --> tests/operators/to_clickhouse/roundtrip/39_low_cardinality_numeric_error.tql:15:31
    |

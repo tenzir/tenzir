@@ -1,0 +1,7 @@
+warning: `json` has no effect when appending
+ --> tests/operators/to_clickhouse/roundtrip/68_default_append_json_warning.tql:8:20
+  |
+8 |               json=name
+  |                    ~~~~
+  |
+  = note: `json` only applies when creating a table

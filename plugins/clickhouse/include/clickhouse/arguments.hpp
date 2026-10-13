@@ -380,7 +380,7 @@ struct operator_arguments {
   located<secret> user = {secret::make_literal("default"), operator_location};
   located<secret> password = {secret::make_literal(""), operator_location};
   ast::expression table = {};
-  located<enum mode> mode = located{mode::create_append, operator_location};
+  located<enum mode> mode = located{mode::append, operator_location};
   Option<located<std::string>> primary = None{};
   tls_options ssl = {};
 
@@ -389,7 +389,7 @@ struct operator_arguments {
     -> failure_or<operator_arguments> {
     auto res = operator_arguments{inv.self.get_location()};
     auto mode_str = located<std::string>{
-      to_string(mode::create_append),
+      to_string(mode::append),
       res.operator_location,
     };
     auto uri = Option<located<secret>>{};

@@ -1,0 +1,7 @@
+warning: `primary` has no effect when appending
+ --> tests/operators/to_clickhouse/roundtrip/67_default_append_primary_warning.tql:8:23
+  |
+8 |               primary=id
+  |                       ~~
+  |
+  = note: `primary` only applies when creating a table

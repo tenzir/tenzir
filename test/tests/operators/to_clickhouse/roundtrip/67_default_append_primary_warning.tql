@@ -1,0 +1,8 @@
+// `primary` has no effect when appending, which is the default mode.
+from {id: 20000, name: "carol", score: 70.0, active: true}
+to_clickhouse table="test_basic",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id

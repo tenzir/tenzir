@@ -124,7 +124,7 @@ public:
     // Set by the caller via `tls_options::resolve()` before invoking.
     Option<TlsConfig> ssl;
     ast::expression table = {};
-    located<enum mode> mode = located{mode::create_append, operator_location};
+    located<enum mode> mode = located{mode::append, operator_location};
     Option<located<std::string>> primary = None{};
     // Top-level or nested field paths to create as ClickHouse `JSON` columns
     // (only used when creating a table). Empty for the legacy operator.

@@ -1,0 +1,7 @@
+warning: mode `create` is deprecated
+  --> tests/operators/to_clickhouse/roundtrip/31_json_create.tql:13:20
+   |
+13 |               mode="create"
+   |                    ~~~~~~~~
+   |
+   = hint: create the table ahead of time and use `mode="append"`

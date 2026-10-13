@@ -1,0 +1,6 @@
+error: mode is `append`, but table `test_default_mode_missing` does not exist
+ --> tests/operators/to_clickhouse/roundtrip/66_default_append_missing_table.tql:7:21
+  |
+7 | to_clickhouse table="test_default_mode_missing",
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

@@ -20,7 +20,7 @@ namespace tenzir::plugins::clickhouse {
 
 /// How tables are found and created.
 struct TableOptions {
-  located<enum mode> mode = {mode::create_append, location::unknown};
+  located<enum mode> mode = {mode::append, location::unknown};
   Option<located<std::string>> primary = None{};
   /// Fields that become `JSON` columns when creating a table.
   std::vector<located<field_path_type>> json;

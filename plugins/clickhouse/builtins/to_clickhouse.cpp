@@ -76,8 +76,8 @@ struct ToClickhouseArgs {
   located<secret> user = {secret::make_literal("default"), location::unknown};
   located<secret> password = {secret::make_literal(""), location::unknown};
   ast::expression table = {};
-  located<std::string> mode = {
-    std::string{to_string(clickhouse::mode::create_append)}, location::unknown};
+  located<std::string> mode
+    = {std::string{to_string(clickhouse::mode::append)}, location::unknown};
   Option<ast::field_path> primary = None{};
   Option<located<data>> tls;
   location operator_location;
@@ -1396,16 +1396,25 @@ public:
               .emit(ctx);
           }
         }
-        auto mode_enum = Option<enum mode>{};
+        auto mode_enum = Option<enum mode>{mode::append};
         if (auto mode_opt = ctx.get(mode_arg)) {
           if (auto x = from_string<enum mode>(mode_opt->inner)) {
             mode_enum = x;
           } else {
+            mode_enum = None{};
             diagnostic::error(
               "`mode` must be one of `create`, `append` or `create_append`")
               .primary(mode_opt->source, "got `{}`", mode_opt->inner)
               .emit(ctx);
           }
+        }
+        auto mode_location
+          = ctx.get_location(mode_arg).value_or(location::unknown);
+        if (mode_enum and *mode_enum != mode::append) {
+          diagnostic::warning("mode `{}` is deprecated", *mode_enum)
+            .primary(mode_location)
+            .hint("create the table ahead of time and use `mode=\"append\"`")
+            .emit(ctx);
         }
         if (auto jobs = ctx.get(jobs_arg)) {
           if (*jobs == 0) {
@@ -1457,6 +1466,13 @@ public:
             emit_invalid_identifier<true>("primary", p.front().id.name,
                                           primary->get_location(), ctx);
           }
+          if (mode_enum == mode::append) {
+            diagnostic::warning("`primary` has no effect when appending")
+              .primary(primary->get_location())
+              .secondary(mode_location)
+              .note("`primary` only applies when creating a table")
+              .emit(ctx);
+          }
         }
         if (mode_enum == mode::create and not ctx.get(primary_arg)) {
           diagnostic::error("mode `create` requires `primary` to be set")
@@ -1464,13 +1480,16 @@ public:
             .emit(ctx);
         }
         if (auto json = ctx.get(json_arg)) {
-          // `json` serves two purposes: when creating a table it forces the
-          // listed fields (at any nesting depth) to the ClickHouse `JSON`
-          // type, and in all modes it makes the operator serialize the
-          // listed top-level fields to opaque JSON strings before insertion.
-          // The latter collapses heterogeneous input into a single Tenzir
-          // schema so batching can coalesce it, and is essential on the
-          // high-volume `mode = "append"` path.
+          // `json` forces the listed fields (at any nesting depth) to the
+          // ClickHouse `JSON` type when creating a table. When appending, the
+          // operator takes the column types from the existing table instead.
+          if (mode_enum == mode::append) {
+            diagnostic::warning("`json` has no effect when appending")
+              .primary(json->get_location())
+              .secondary(mode_location)
+              .note("`json` only applies when creating a table")
+              .emit(ctx);
+          }
           if (auto columns = parse_json_field_argument(*json, ctx)) {
             if (auto primary = ctx.get(primary_arg)) {
               // `primary` is always a top-level field (validated above). Any

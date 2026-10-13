@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Without `mode`, the operator appends and does not create missing tables.
+from {id: 1}
+to_clickhouse table="test_default_mode_missing",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false

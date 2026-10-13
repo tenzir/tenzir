@@ -1,0 +1,7 @@
+warning: mode `create` is deprecated
+ --> tests/operators/to_clickhouse/roundtrip/19_uri_default_database.tql:9:20
+  |
+9 |               mode="create"
+  |                    ~~~~~~~~
+  |
+  = hint: create the table ahead of time and use `mode="append"`

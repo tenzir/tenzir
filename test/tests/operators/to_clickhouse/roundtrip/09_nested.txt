@@ -1,0 +1,7 @@
+warning: mode `create` is deprecated
+  --> tests/operators/to_clickhouse/roundtrip/09_nested.tql:12:20
+   |
+12 |               mode="create"
+   |                    ~~~~~~~~
+   |
+   = hint: create the table ahead of time and use `mode="append"`
