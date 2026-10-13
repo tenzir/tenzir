@@ -153,6 +153,27 @@ auto string_equals(std::string literal) -> pushdown::Expr {
   };
 }
 
+auto key(std::vector<std::string> output, std::vector<std::string> input)
+  -> ir::OptimizeAggregation::Column {
+  return {
+    .output = std::move(output), .function = None{}, .input = std::move(input)};
+}
+
+auto call(std::vector<std::string> output, std::string function,
+          Option<std::vector<std::string>> input = None{})
+  -> ir::OptimizeAggregation::Column {
+  return {.output = std::move(output),
+          .function = std::move(function),
+          .input = std::move(input)};
+}
+
+auto aggregation_of(std::vector<ir::OptimizeAggregation::Column> columns)
+  -> ir::OptimizeAggregation {
+  return {.columns = std::move(columns),
+          .schema_name = "tenzir.summarize",
+          .fallback = {}};
+}
+
 } // namespace
 
 TEST("column rows parse from information_schema") {
@@ -366,4 +387,53 @@ TEST("unknown tables leave everything local") {
   CHECK(plan.pushed.empty());
   CHECK_EQUAL(plan.local.size(), size_t{1});
   CHECK_EQUAL(make_table_query(plan, "tbl", 5), "SELECT * FROM `tbl`");
+}
+
+TEST("aggregations group text by its bytes") {
+  using V = std::vector<std::string>;
+  auto columns = make_columns();
+  auto where = std::vector<std::string>{"`id` > 0"};
+  // Text keys group by their bytes, which a collation would not, and select
+  // the stored text, which the binary string would not decode to.
+  CHECK_EQUAL(
+    make_aggregate_query(aggregation_of({key({"s"}, {"s"}), key({"u"}, {"u"}),
+                                         call({"n"}, "count"),
+                                         call({"c"}, "count", V{"t"}),
+                                         call({"lo"}, "min", V{"i"}),
+                                         call({"hi"}, "max", V{"ub"})}),
+                         columns, "tbl", where),
+    std::string{"SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, `u` AS "
+                "`__tenzir_aggregate_1`, CAST(COUNT(*) AS SIGNED) AS "
+                "`__tenzir_aggregate_2`, CAST(COUNT(CAST(`t` AS BINARY)) AS "
+                "SIGNED) AS `__tenzir_aggregate_3`, MIN(`i`) AS "
+                "`__tenzir_aggregate_4`, MAX(`ub`) AS `__tenzir_aggregate_5` "
+                "FROM `tbl` WHERE `id` > 0 GROUP BY CAST(`s` AS BINARY), "
+                "`u`"});
+  // Floating-point keys, extremes of anything but integers, columns outside
+  // the model, other functions, and aliases that name a column stay local.
+  auto local = [&](std::vector<ir::OptimizeAggregation::Column> x,
+                   std::vector<TableColumn> const& table) {
+    return not make_aggregate_query(aggregation_of(std::move(x)), table, "tbl",
+                                    {});
+  };
+  auto count = call({"n"}, "count");
+  CHECK(local({key({"d"}, {"d"}), count}, columns));
+  CHECK(local({call({"m"}, "min", V{"s"})}, columns));
+  CHECK(local({call({"m"}, "max", V{"d"})}, columns));
+  CHECK(local({key({"l"}, {"l"}), count}, columns));
+  CHECK(local({key({"dt"}, {"dt"}), count}, columns));
+  CHECK(local({key({"hidden"}, {"hidden"}), count}, columns));
+  CHECK(local({call({"s"}, "sum", V{"i"})}, columns));
+  CHECK(local({count}, {}));
+  CHECK(local({}, columns));
+  auto clash = columns;
+  clash.push_back(other("__tenzir_aggregate_0", "int", "int"));
+  CHECK(local({count}, clash));
+  // MySQL compares column names case-insensitively.
+  auto clash_case = columns;
+  clash_case.push_back(other("__TENZIR_AGGREGATE_0", "int", "int"));
+  CHECK(local({count}, clash_case));
+  CHECK(supports_aggregate_functions(aggregation_of({count})));
+  CHECK(not supports_aggregate_functions(
+    aggregation_of({call({"s"}, "sum", V{"i"})})));
 }

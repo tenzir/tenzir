@@ -1,0 +1,8 @@
+// The aggregations of the earlier tests ran in SQL Server, while
+// `summarize_11_local.tql` read the rows.
+from_microsoft_sql sql="SELECT t.text AS query FROM sys.dm_exec_cached_plans AS p CROSS APPLY sys.dm_exec_sql_text(p.plan_handle) AS t WHERE t.text LIKE 'SELECT%FROM [[]agg]%' AND t.text NOT LIKE '%dm_exec%' ORDER BY t.text",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_ADMIN_USER"),
+                   password=env("MSSQL_ADMIN_PASSWORD"),
+                   database=env("MSSQL_DATABASE")

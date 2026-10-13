@@ -1,0 +1,16 @@
+{
+  s: "a",
+  count: 2,
+}
+{
+  s: "A",
+  count: 1,
+}
+{
+  s: "a ",
+  count: 1,
+}
+{
+  s: null,
+  count: 1,
+}

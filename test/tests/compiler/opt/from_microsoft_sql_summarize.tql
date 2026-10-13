@@ -1,0 +1,5 @@
+// `from_microsoft_sql` takes over the `summarize` that directly follows it,
+// after it absorbed the `where` before it.
+from_microsoft_sql table="events", host="localhost"
+where severity >= 3
+summarize src_ip, events=count(), first=min(ts)

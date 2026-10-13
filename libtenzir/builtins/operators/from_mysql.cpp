@@ -19,10 +19,12 @@
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator/optimization.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/pushdown/aggregation.hpp>
 #include <tenzir/pushdown/read.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tls_options.hpp>
@@ -1809,8 +1811,12 @@ struct FromMySQLArgs {
   Option<located<bool>> live;
   Option<located<std::string>> tracking_column;
   Option<located<data>> tls;
-  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
+    optimization;
 };
+
+/// The key of the subpipeline that aggregates locally.
+constexpr auto aggregation_sub_key = int64_t{0};
 
 /// Reads from MySQL in one of the output formats.
 template <class Format>
@@ -1830,7 +1836,8 @@ private:
   auto plan_table() -> Task<MysqlResult<TablePlan>> {
     auto const& filter = args_.optimization.filter;
     auto const& projection = args_.optimization.projection;
-    if (filter.empty() and not projection) {
+    if (filter.empty() and not projection
+        and not args_.optimization.aggregation) {
       co_return TablePlan{};
     }
     CO_TRY(auto rows, co_await client_->query_rows_prepared(
@@ -1856,8 +1863,56 @@ private:
   auto emit(Output output, Push<Output>& push, OpCtx& ctx) -> Task<void> {
     events_read_counter_.add(Format::rows(output));
     output = Format::apply(std::move(output), filters_, remaining_, ctx.dh());
-    if (Format::active_rows(output) > 0) {
-      co_await push(std::move(output));
+    if (Format::active_rows(output) == 0) {
+      co_return;
+    }
+    if constexpr (std::same_as<Format, EventsFormat>) {
+      if (aggregated_) {
+        output = pushdown::nest_aggregation(
+          std::move(output), *args_.optimization.aggregation, ctx.dh());
+      } else if (aggregating_locally_) {
+        if (auto sub = ctx.get_sub(aggregation_sub_key)) {
+          // The subpipeline closes its input only when it fails, which it
+          // reports itself.
+          std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
+            std::move(output));
+        }
+        co_return;
+      }
+    }
+    co_await push(std::move(output));
+  }
+
+  /// Decides how a table read computes the aggregation, if the operator took
+  /// one over: in the query, or with the aggregation's fallback on the rows.
+  /// Returns whether the read can go ahead.
+  auto plan_aggregation(TablePlan const& plan, OpCtx& ctx) -> Task<bool> {
+    auto const& aggregation = args_.optimization.aggregation;
+    if (not aggregation) {
+      co_return true;
+    }
+    if constexpr (std::same_as<Format, EventsFormat>) {
+      // MySQL computes the aggregation only if it also evaluates every
+      // predicate, which apply to the rows before the aggregation.
+      if (plan.local.empty()) {
+        if (auto query = make_aggregate_query(*aggregation, plan.columns,
+                                              table_name_, plan.pushed)) {
+          query_ = std::move(*query);
+          schema_name_ = aggregation->schema_name;
+          aggregated_ = true;
+          co_return true;
+        }
+      }
+      if (not pushdown::can_aggregate_locally(*aggregation, ctx)
+          or not co_await ctx.plan_and_spawn_sub<nova::Events>(
+            aggregation_sub_key, aggregation->fallback)) {
+        co_return false;
+      }
+      aggregating_locally_ = true;
+      co_return true;
+    } else {
+      // Only the Nova operator takes over aggregations.
+      TENZIR_UNREACHABLE();
     }
   }
 
@@ -1876,10 +1931,19 @@ private:
     return fmt::format("{}", fmt::join(names, ", "));
   }
 
-  /// Ends the reads of this run and closes the connection.
+  /// Ends the reads of this run and closes the connection. A subpipeline
+  /// that aggregates locally then emits its result.
   auto finish(OpCtx& ctx) -> Task<void> {
     finished_ = true;
     co_await close_client(ctx);
+    if (aggregating_locally_ and not aggregation_closed_) {
+      aggregation_closed_ = true;
+      if constexpr (std::same_as<Format, EventsFormat>) {
+        if (auto sub = ctx.get_sub(aggregation_sub_key)) {
+          co_await as<SubHandle<nova::Events>>(*sub).close();
+        }
+      }
+    }
   }
 
   auto close_client(OpCtx& ctx) -> Task<void> {
@@ -2346,7 +2410,14 @@ public:
       }
       auto table_plan = std::move(plan).unwrap();
       query_ = make_table_query(table_plan, table_name_, remaining_);
+      if (not co_await plan_aggregation(table_plan, ctx)) {
+        co_await finish(ctx);
+        co_return;
+      }
       local = std::move(table_plan.local);
+      if (aggregated_) {
+        local.clear();
+      }
     }
     if (not local.empty() and not co_await set_local(std::move(local), ctx)) {
       co_await finish(ctx);
@@ -2416,7 +2487,25 @@ public:
         break;
       }
     }
-    done_ = completed;
+    if (aggregating_locally_) {
+      // The read completes once the subpipeline emitted the aggregation.
+      completed_locally_ = completed;
+    } else {
+      done_ = completed;
+    }
+    co_await finish(ctx);
+  }
+
+  auto finish_sub(SubKeyView, Push<Output>&, OpCtx&) -> Task<void> override {
+    aggregating_locally_ = false;
+    done_ = done_ or completed_locally_;
+    co_return;
+  }
+
+  auto finish_sub(SubKeyView, failure, Push<Output>&, OpCtx& ctx)
+    -> Task<void> override {
+    // The subpipeline reported its error, so the read cannot complete.
+    aggregating_locally_ = false;
     co_await finish(ctx);
   }
 
@@ -2434,6 +2523,9 @@ public:
   }
 
   auto state() -> OperatorState override {
+    if (aggregating_locally_) {
+      return OperatorState::normal;
+    }
     return done_ or finished_ ? OperatorState::done : OperatorState::normal;
   }
 
@@ -2458,6 +2550,16 @@ private:
   std::string query_;
   std::string schema_name_;
   std::string table_name_;
+  /// Whether the query computes the aggregation that the operator took over.
+  bool aggregated_ = false;
+  /// Whether the read passes its rows to the subpipeline that aggregates
+  /// them, until that subpipeline ends. A restore restarts the read, so this
+  /// is not part of the snapshot.
+  bool aggregating_locally_ = false;
+  /// Whether the subpipeline that aggregates locally has all of its input.
+  bool aggregation_closed_ = false;
+  /// Whether the read that the subpipeline aggregates ran to completion.
+  bool completed_locally_ = false;
   std::string tracking_column_;
   bool tracking_column_resolved_ = false;
   bool tracking_column_is_unsigned_ = false;
@@ -2594,6 +2696,15 @@ public:
       return {};
     });
     d.optimization(&FromMySQLArgs::optimization);
+    // A one-shot table read can compute an aggregation in its query. Queries
+    // of the user are opaque, and a live read never ends. Only the Nova
+    // operator implements the aggregation.
+    d.aggregation([](FromMySQLArgs const& args,
+                     ir::OptimizeAggregation const& aggregation) -> bool {
+      return nova_enabled() and args.table and not args.sql and not args.show
+             and not(args.live and args.live->inner)
+             and supports_aggregate_functions(aggregation);
+    });
     return d.without_optimize();
   }
 };

@@ -22,8 +22,10 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/nova_flag.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/read.hpp"
 #include "tenzir/pushdown/translate.hpp"
 #include "tenzir/tql2/filter.hpp"
@@ -55,8 +57,12 @@ struct FromClickhouseArgs {
   Option<located<data>> tls;
   location operator_location;
   /// Apply every accepted predicate: in SQL where exact, locally otherwise.
-  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
+    optimization;
 };
+
+/// The key of the subpipeline that aggregates locally.
+constexpr auto aggregation_sub_key = int64_t{0};
 
 struct QueryPlan {
   /// The table to read from; `None` when the user provided `sql`.
@@ -64,7 +70,8 @@ struct QueryPlan {
   /// The user-provided SQL; empty when `table` is set.
   std::string sql;
   std::string schema_name;
-  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
+    optimization;
 };
 
 /// Announces the predicates that the operator evaluates itself. Sent before
@@ -193,6 +200,8 @@ struct PreparedQuery {
   ir::OptimizeFilter local_filter;
   /// The layout of a catch-all table, whose events need reconstruction.
   Option<CatchAllLayout> catch_all = None{};
+  /// Whether the query computes the plan's aggregation.
+  bool aggregated = false;
 };
 
 /// Pushes as much of `plan`'s hints into a `SELECT` from its table as
@@ -254,6 +263,26 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
     if (not catch_all or catch_all->addressable(column.name)) {
       schema.add_column(column.name, column.type,
                         is_generated_kind(column.default_kind));
+    }
+  }
+  // ClickHouse computes a summary only if it also evaluates every predicate,
+  // which apply to the rows before the summary. A field of a catch-all table
+  // may live partly in the catch-all column, so its summary always runs
+  // locally, on the reconstructed events.
+  auto const& aggregation = plan.optimization.aggregation;
+  if (aggregation and not catch_all) {
+    auto split = pushdown::split_filter(plan.optimization.filter,
+                                        schema.model(), ClickHouseRenderer{});
+    if (split.remaining.empty()) {
+      if (auto query = make_aggregate_query(*aggregation, schema, *plan.table,
+                                            split.pushed)) {
+        return PreparedQuery{
+          .text = std::move(*query),
+          .local_filter = {},
+          .catch_all = None{},
+          .aggregated = true,
+        };
+      }
     }
   }
   // A projection could leave out the part of a field that is in the
@@ -597,6 +626,23 @@ public:
           filters_.push_back(std::move(*filter));
         }
       },
+      [&](AggregateLocallyMessage) -> Task<void> {
+        TENZIR_ASSERT(args_.optimization.aggregation);
+        auto const& aggregation = *args_.optimization.aggregation;
+        if (not pushdown::can_aggregate_locally(aggregation, ctx)) {
+          shared_->request_cancellation();
+          done_ = true;
+          co_return;
+        }
+        auto sub = co_await ctx.plan_and_spawn_sub<nova::Events>(
+          aggregation_sub_key, aggregation.fallback);
+        if (not sub) {
+          shared_->request_cancellation();
+          done_ = true;
+          co_return;
+        }
+        aggregating_locally_ = true;
+      },
       [&](EventsMessage x) -> Task<void> {
         if (done_ or shared_->should_cancel()) {
           co_return;
@@ -606,7 +652,14 @@ public:
         // after them; when it went into the SQL query this is a no-op.
         auto events = pushdown::apply_read(std::move(x.events), filters_,
                                            remaining_, ctx.dh());
-        if (events.active_count() > 0) {
+        if (events.active_count() > 0 and aggregating_locally_) {
+          if (auto sub = ctx.get_sub(aggregation_sub_key)) {
+            // The subpipeline closes its input only when it fails, which it
+            // reports itself.
+            std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
+              std::move(events));
+          }
+        } else if (events.active_count() > 0) {
           co_await push(std::move(events));
         }
         if (remaining_ == uint64_t{0}) {
@@ -616,8 +669,28 @@ public:
       },
       [&](DoneMessage) -> Task<void> {
         done_ = true;
-        co_return;
+        if (aggregating_locally_) {
+          // The operator ends once the subpipeline emitted the aggregation.
+          if (auto sub = ctx.get_sub(aggregation_sub_key)) {
+            co_await as<SubHandle<nova::Events>>(*sub).close();
+          }
+        }
       });
+  }
+
+  auto finish_sub(SubKeyView, Push<nova::Events>&, OpCtx&)
+    -> Task<void> override {
+    aggregating_locally_ = false;
+    co_return;
+  }
+
+  auto finish_sub(SubKeyView, failure, Push<nova::Events>&, OpCtx&)
+    -> Task<void> override {
+    // The subpipeline reported its error, so the read cannot complete.
+    aggregating_locally_ = false;
+    shared_->request_cancellation();
+    done_ = true;
+    co_return;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -627,6 +700,9 @@ public:
   }
 
   auto state() -> OperatorState override {
+    if (aggregating_locally_) {
+      return OperatorState::normal;
+    }
     return done_ ? OperatorState::done : OperatorState::normal;
   }
 
@@ -643,7 +719,13 @@ private:
     nova::Events events;
   };
 
-  using Message = variant<PlanMessage, EventsMessage, DoneMessage>;
+  /// Sent before the events of a table read whose aggregation ClickHouse
+  /// cannot compute, which the operator then passes to the aggregation's
+  /// fallback.
+  struct AggregateLocallyMessage {};
+
+  using Message
+    = variant<PlanMessage, AggregateLocallyMessage, EventsMessage, DoneMessage>;
 
   /// The state shared with the query thread.
   struct Shared {
@@ -680,6 +762,8 @@ private:
   static auto
   run_query(Arc<Shared> shared, ConnectionArgs connection, QueryPlan plan,
             bool tls_enabled, diagnostic_handler& dh) -> Task<void> {
+    // Whether the query computes the aggregation, decided before it runs.
+    auto aggregated = false;
     try {
       auto catch_all = Option<CatchAllLayout>{};
       auto on_data = [&](::clickhouse::Block const& block) {
@@ -690,7 +774,10 @@ private:
         if (not events) {
           return not shared->should_cancel();
         }
-        if (catch_all) {
+        if (aggregated) {
+          events = pushdown::nest_aggregation(
+            std::move(*events), *plan.optimization.aggregation, dh);
+        } else if (catch_all) {
           auto columns = std::vector<std::string_view>{};
           columns.reserve(block.GetColumnCount());
           for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
@@ -715,9 +802,19 @@ private:
           return;
         }
         TENZIR_DEBUG("from_clickhouse runs `{}`", prepared->text);
+        aggregated = prepared->aggregated;
+        if (plan.optimization.aggregation and not aggregated) {
+          shared->produce(AggregateLocallyMessage{});
+        }
         shared->produce(PlanMessage{std::move(prepared->local_filter)});
         catch_all = std::move(prepared->catch_all);
         auto query = ::clickhouse::Query{std::move(prepared->text)};
+        if (aggregated) {
+          // An aggregation without group keys must count `0` for empty
+          // input, whatever the session's settings say.
+          query.SetSetting("aggregate_functions_null_for_empty",
+                           {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
+        }
         if (catch_all) {
           // Keeps literal dotted keys apart from nested paths, as the
           // inserts of `to_clickhouse` do.
@@ -765,6 +862,9 @@ private:
   bool done_ = false;
   std::vector<nova::Evaluator> filters_;
   Option<uint64_t> remaining_;
+  /// Whether the read passes its events to the subpipeline that aggregates
+  /// them, until that subpipeline ends.
+  bool aggregating_locally_ = false;
 };
 
 class Plugin final : public virtual OperatorPlugin {
@@ -829,6 +929,13 @@ public:
       return {};
     });
     d.optimization(&FromClickhouseArgs::optimization);
+    // A table read can compute an aggregation in its query, while a query of
+    // the user is opaque. Only the Nova operator implements the aggregation.
+    d.aggregation([](FromClickhouseArgs const& args,
+                     ir::OptimizeAggregation const& aggregation) -> bool {
+      return nova_enabled() and args.table and not args.sql
+             and supports_aggregate_functions(aggregation);
+    });
     return d.without_optimize();
   }
 };

@@ -845,4 +845,100 @@ TEST("quoting") {
   CHECK_EQUAL(quote_sql_string("ünïcödé"), std::string{"'ünïcödé'"});
 }
 
+namespace {
+
+auto key(std::vector<std::string> output, std::vector<std::string> input)
+  -> ir::OptimizeAggregation::Column {
+  return {
+    .output = std::move(output), .function = None{}, .input = std::move(input)};
+}
+
+auto call(std::vector<std::string> output, std::string function,
+          Option<std::vector<std::string>> input = None{})
+  -> ir::OptimizeAggregation::Column {
+  return {.output = std::move(output),
+          .function = std::move(function),
+          .input = std::move(input)};
+}
+
+auto aggregate(std::vector<ir::OptimizeAggregation::Column> columns,
+               std::vector<std::string> where = {}) -> Option<std::string> {
+  auto aggregation = ir::OptimizeAggregation{
+    .columns = std::move(columns),
+    .schema_name = "tenzir.summarize",
+    .fallback = {},
+  };
+  return make_aggregate_query(aggregation, make_schema(), "tbl", where);
+}
+
+} // namespace
+
+TEST("aggregate query rendering") {
+  // Output columns become flat result columns, and counts become `Int64`.
+  CHECK_EQUAL(aggregate({key({"a", "b"}, {"y"}), call({"n"}, "count"),
+                         call({"c"}, "count", std::vector<std::string>{"n"})},
+                        {"`x` > 0"}),
+              std::string{
+                "SELECT `y` AS `__tenzir_aggregate_0`, toInt64(count()) AS "
+                "`__tenzir_aggregate_1`, toInt64(count(`n`)) AS "
+                "`__tenzir_aggregate_2` FROM tbl WHERE `x` > 0 GROUP BY `y`"});
+  // Without group keys, an extreme over no rows is `NULL`, as in TQL.
+  CHECK_EQUAL(aggregate({call({"lo"}, "min", std::vector<std::string>{"x"}),
+                         call({"hi"}, "max", std::vector<std::string>{"u32"})}),
+              std::string{
+                "SELECT minOrNull(`x`) AS `__tenzir_aggregate_0`, "
+                "maxOrNull(`u32`) AS `__tenzir_aggregate_1` FROM tbl"});
+  // Tuple elements, enums, addresses, UUIDs, and fixed strings group exactly.
+  CHECK_EQUAL(aggregate({key({"meta", "source"}, {"meta", "source"}),
+                         key({"status"}, {"status"}), key({"ip6"}, {"ip6"}),
+                         key({"uid"}, {"uid"}), key({"fs"}, {"fs"})}),
+              std::string{
+                "SELECT `meta`.`source` AS `__tenzir_aggregate_0`, `status` "
+                "AS `__tenzir_aggregate_1`, `ip6` AS `__tenzir_aggregate_2`, "
+                "`uid` AS `__tenzir_aggregate_3`, `fs` AS "
+                "`__tenzir_aggregate_4` FROM tbl GROUP BY `meta`.`source`, "
+                "`status`, `ip6`, `uid`, `fs`"});
+  // A temporal value that TQL decodes to `null` groups and compares as one.
+  CHECK_EQUAL(
+    aggregate({key({"d32"}, {"d32"}),
+               call({"t"}, "max", std::vector<std::string>{"stamp"})}),
+    std::string{"SELECT if(`d32` <= toDate32('2262-04-11'), `d32`, NULL) AS "
+                "`__tenzir_aggregate_0`, maxOrNull(if(`stamp` >= "
+                "fromUnixTimestamp64Milli(-9223372036854) AND `stamp` <= "
+                "fromUnixTimestamp64Milli(9223372036854), `stamp`, NULL)) AS "
+                "`__tenzir_aggregate_1` FROM tbl GROUP BY if(`d32` <= "
+                "toDate32('2262-04-11'), `d32`, NULL)"});
+}
+
+TEST("aggregations that stay local") {
+  auto count = call({"n"}, "count");
+  // `GROUP BY` equates `NaN` with itself and `-0.0` with `0.0`.
+  CHECK(not aggregate({key({"f"}, {"f"}), count}));
+  // TQL's extremes reject strings and depend on the order of `NaN`s.
+  CHECK(not aggregate({call({"m"}, "min", std::vector<std::string>{"y"})}));
+  CHECK(not aggregate({call({"m"}, "max", std::vector<std::string>{"f64"})}));
+  CHECK(not aggregate({call({"m"}, "min", std::vector<std::string>{"ip4"})}));
+  // Columns without an exact TQL counterpart, generated columns, and unknown
+  // fields have no value in the model.
+  CHECK(not aggregate({key({"dec"}, {"dec"}), count}));
+  CHECK(not aggregate({key({"gen"}, {"gen"}), count}));
+  CHECK(not aggregate({key({"half", "ok"}, {"half", "ok"}), count}));
+  CHECK(not aggregate({key({"nope"}, {"nope"}), count}));
+  CHECK(not aggregate({call({"s"}, "sum", std::vector<std::string>{"x"})}));
+  CHECK(not aggregate({}));
+  // ClickHouse would resolve the column below to the alias of the result.
+  auto schema = make_schema();
+  schema.add_column("__tenzir_aggregate_0", "Int64");
+  auto aggregation = ir::OptimizeAggregation{
+    .columns = {count},
+    .schema_name = "tenzir.summarize",
+    .fallback = {},
+  };
+  CHECK(not make_aggregate_query(aggregation, schema, "tbl", {}));
+  CHECK(supports_aggregate_functions(aggregation));
+  aggregation.columns.push_back(
+    call({"s"}, "sum", std::vector<std::string>{"x"}));
+  CHECK(not supports_aggregate_functions(aggregation));
+}
+
 } // namespace tenzir::plugins::clickhouse

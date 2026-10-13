@@ -1,0 +1,5 @@
+// `from_clickhouse` takes over the `summarize` that directly follows it, after
+// it absorbed the `where` before it.
+from_clickhouse table="events", host="localhost"
+where severity >= 3
+summarize src_ip, events=count(), first.seen=min(ts)

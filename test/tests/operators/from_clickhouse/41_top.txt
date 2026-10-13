@@ -1,0 +1,18 @@
+{
+  meta: {
+    source: "a",
+  },
+  count: 2,
+}
+{
+  meta: {
+    source: "b",
+  },
+  count: 2,
+}
+{
+  meta: {
+    source: "c",
+  },
+  count: 1,
+}

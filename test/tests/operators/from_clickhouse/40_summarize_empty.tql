@@ -1,0 +1,9 @@
+// A summary without group keys yields one event for an empty input, also when
+// ClickHouse computes it: `count()` is `0` and `min` is `null`.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where id > 100
+summarize events=count(), lo=min(x), first=min(meta.level)

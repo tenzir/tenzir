@@ -15,6 +15,8 @@
 #include "tenzir/detail/escapers.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/pushdown/aggregation.hpp"
+#include "tenzir/pushdown/translate.hpp"
 
 #include <clickhouse/columns/factory.h>
 #include <clickhouse/types/types.h>
@@ -516,6 +518,78 @@ auto SqlSchema::render_projection(
   auto quoted = quote_sql_identifier(name);
   return fmt::format("{} AS {}", render(*root, requested, quoted).first,
                      quoted);
+}
+
+auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
+  -> bool {
+  return std::ranges::all_of(
+    aggregation.columns, [](ir::OptimizeAggregation::Column const& column) {
+      if (not column.function) {
+        return true;
+      }
+      auto const& function = *column.function;
+      return function == "count"
+             or ((function == "min" or function == "max") and column.input);
+    });
+}
+
+auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
+                          SqlSchema const& schema, std::string_view table,
+                          std::span<const std::string> where)
+  -> Option<std::string> {
+  if (aggregation.columns.empty()
+      or not supports_aggregate_functions(aggregation)) {
+    return None{};
+  }
+  auto const renderer = ClickHouseRenderer{};
+  auto selection = std::vector<std::string>{};
+  auto groups = std::vector<std::string>{};
+  for (auto i = size_t{0}; i < aggregation.columns.size(); ++i) {
+    auto const& column = aggregation.columns[i];
+    auto alias = pushdown::aggregation_column(i);
+    // ClickHouse resolves a name to an alias before a column, so an alias
+    // that names a column would change what the query reads.
+    if (std::ranges::contains(schema.columns(), alias)) {
+      return None{};
+    }
+    auto input = Option<pushdown::FieldValue>{};
+    auto sql = Option<std::string>{};
+    if (column.input) {
+      TRY(input, pushdown::translate_field(*column.input, schema.model()));
+      TRY(sql, renderer.render(input->expr));
+    }
+    auto value = std::string{};
+    if (not column.function) {
+      TENZIR_ASSERT(input);
+      if (is<pushdown::FloatType>(input->column.type)) {
+        return None{};
+      }
+      groups.push_back(*sql);
+      value = std::move(*sql);
+    } else if (*column.function == "count") {
+      value = fmt::format("toInt64(count({}))", sql ? *sql : std::string{});
+    } else {
+      TENZIR_ASSERT(input);
+      if (not(is<pushdown::IntType>(input->column.type)
+              or is<pushdown::TimeType>(input->column.type))) {
+        return None{};
+      }
+      value = fmt::format("{}OrNull({})", *column.function, *sql);
+    }
+    selection.push_back(
+      fmt::format("{} AS {}", value, quote_sql_identifier(alias)));
+  }
+  auto query
+    = fmt::format("SELECT {} FROM {}", fmt::join(selection, ", "), table);
+  if (not where.empty()) {
+    fmt::format_to(std::back_inserter(query), " WHERE {}",
+                   fmt::join(where, " AND "));
+  }
+  if (not groups.empty()) {
+    fmt::format_to(std::back_inserter(query), " GROUP BY {}",
+                   fmt::join(groups, ", "));
+  }
+  return query;
 }
 
 auto make_select_query(std::string_view table, SqlSchema const* schema,

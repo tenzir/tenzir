@@ -1,0 +1,30 @@
+{
+  y: "baz",
+  events: 1,
+  names: 1,
+  lo: 9,
+  hi: 4,
+  meta: {
+    level: 3,
+  },
+}
+{
+  y: "foo",
+  events: 2,
+  names: 1,
+  lo: -5,
+  hi: 3,
+  meta: {
+    level: 2,
+  },
+}
+{
+  y: "qux",
+  events: 1,
+  names: 0,
+  lo: 11,
+  hi: 5,
+  meta: {
+    level: 4,
+  },
+}

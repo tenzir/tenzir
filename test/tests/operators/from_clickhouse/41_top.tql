@@ -1,0 +1,8 @@
+// `top` counts the values in the query, and sorts the counts locally.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+top meta.source
+sort -count, meta.source

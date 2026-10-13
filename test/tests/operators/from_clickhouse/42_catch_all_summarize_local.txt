@@ -1,0 +1,8 @@
+{
+  metadata: {
+    product: {
+      name: "Demo",
+    },
+  },
+  n: 1,
+}

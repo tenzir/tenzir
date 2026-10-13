@@ -1,0 +1,6 @@
+from_mysql sql="SET GLOBAL general_log = 'OFF'",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user="root",
+           password=env("MYSQL_ROOT_PASSWORD"),
+           database=env("MYSQL_DATABASE")

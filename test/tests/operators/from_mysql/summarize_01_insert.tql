@@ -1,0 +1,6 @@
+from_mysql sql="INSERT INTO agg VALUES (1, 'a', 10, 1.5), (2, 'A', NULL, -0.0), (3, 'a ', 7, 0.0), (4, NULL, -9223372036854775808, NULL), (5, 'a', 9223372036854775807, 2.5), (6, 'ä', 1, 3.5)",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")

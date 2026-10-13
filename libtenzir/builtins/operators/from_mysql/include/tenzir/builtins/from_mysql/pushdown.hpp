@@ -152,6 +152,8 @@ struct TablePlan {
   std::vector<std::string> pushed;
   /// Predicates that the operator evaluates, in order.
   ir::OptimizeFilter local;
+  /// The columns of the table, or none if the plan did not need them.
+  std::vector<TableColumn> columns;
 };
 
 /// Plans a read of a table with `columns`, an empty list if the table is
@@ -162,6 +164,36 @@ auto make_table_plan(std::span<TableColumn const> columns,
                      ir::OptimizeFilter filter,
                      Option<ir::OptimizeProjection> const& projection)
   -> TablePlan;
+
+/// Whether `make_aggregate_query` supports every function of `aggregation`.
+/// Whether it supports their inputs depends on the table's columns.
+auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
+  -> bool;
+
+/// Builds a query that computes `aggregation` over `table` with `columns`,
+/// keeping the rows where all of the rendered predicates in `where` hold.
+/// Returns `None` if MySQL cannot compute some output column exactly as TQL
+/// does, in which case the operator aggregates locally.
+///
+/// The query selects output column `i` as the result column
+/// `pushdown::aggregation_column(i)`, which `pushdown::nest_aggregation`
+/// arranges into the output fields, and is `None` if the table has a column
+/// of that name. It supports:
+///
+/// - Group keys on integer and text columns. A text column groups by its
+///   bytes, as `CAST(... AS BINARY)`, since its collation would merge values
+///   that differ in case, accents, or trailing spaces. The query selects the
+///   key with `ANY_VALUE`, which returns the text as stored, while the binary
+///   string may arrive as a blob.
+/// - `count()`, and `count(x)` on any column of the model, cast to `SIGNED`,
+///   which TQL reads as `int`.
+/// - `min(x)` and `max(x)` on integer columns. TQL rejects strings, and reads
+///   no other column type that MySQL compares like TQL.
+auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
+                          std::span<TableColumn const> columns,
+                          std::string_view table,
+                          std::span<std::string const> where)
+  -> Option<std::string>;
 
 /// Builds the query that reads `table` according to `plan`, with `LIMIT
 /// limit` if every predicate was pushed.

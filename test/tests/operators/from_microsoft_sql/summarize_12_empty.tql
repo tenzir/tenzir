@@ -1,0 +1,10 @@
+// A summary without group keys yields one event for an empty input, also when
+// SQL Server computes it: `count()` is `0` and `min` is `null`.
+from_microsoft_sql table="agg",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where id > 100
+summarize rows=count(), lo=min(n)

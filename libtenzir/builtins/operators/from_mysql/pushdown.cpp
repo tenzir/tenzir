@@ -9,6 +9,8 @@
 #include "tenzir/builtins/from_mysql/pushdown.hpp"
 
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/string.hpp>
+#include <tenzir/pushdown/aggregation.hpp>
 #include <tenzir/pushdown/read.hpp>
 #include <tenzir/pushdown/translate.hpp>
 #include <tenzir/try.hpp>
@@ -286,8 +288,10 @@ auto make_table_plan(std::span<TableColumn const> columns,
   if (columns.empty()) {
     // Without columns, nothing translates, and `SELECT *` reads the table
     // as it is, or fails as it would without any hints.
-    return TablePlan{
-      .selection = "*", .pushed = {}, .local = std::move(filter)};
+    return TablePlan{.selection = "*",
+                     .pushed = {},
+                     .local = std::move(filter),
+                     .columns = {}};
   }
   auto split = pushdown::split_filter(
     std::move(filter), make_column_model(columns), MysqlRenderer{columns});
@@ -296,7 +300,91 @@ auto make_table_plan(std::span<TableColumn const> columns,
     .selection = std::move(selection),
     .pushed = std::move(split.pushed),
     .local = std::move(split.remaining),
+    .columns = {columns.begin(), columns.end()},
   };
+}
+
+auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
+  -> bool {
+  return std::ranges::all_of(
+    aggregation.columns, [](ir::OptimizeAggregation::Column const& column) {
+      if (not column.function) {
+        return true;
+      }
+      auto const& function = *column.function;
+      return function == "count"
+             or ((function == "min" or function == "max") and column.input);
+    });
+}
+
+auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
+                          std::span<TableColumn const> columns,
+                          std::string_view table,
+                          std::span<std::string const> where)
+  -> Option<std::string> {
+  if (aggregation.columns.empty() or columns.empty()
+      or not supports_aggregate_functions(aggregation)) {
+    return None{};
+  }
+  auto const model = make_column_model(columns);
+  auto const renderer = MysqlRenderer{columns};
+  auto selection = std::vector<std::string>{};
+  auto groups = std::vector<std::string>{};
+  for (auto i = size_t{0}; i < aggregation.columns.size(); ++i) {
+    auto const& column = aggregation.columns[i];
+    // An alias that names a column could change what the query reads.
+    // MySQL compares column names case-insensitively.
+    auto alias = pushdown::aggregation_column(i);
+    if (std::ranges::any_of(columns, [&](TableColumn const& column) {
+          return detail::ascii_icase_equal(column.name, alias);
+        })) {
+      return None{};
+    }
+    auto input = Option<pushdown::FieldValue>{};
+    auto sql = Option<std::string>{};
+    if (column.input) {
+      TRY(input, pushdown::translate_field(*column.input, model));
+      TRY(sql, renderer.render(input->expr));
+    }
+    auto value = std::string{};
+    if (not column.function) {
+      TENZIR_ASSERT(input);
+      auto const& type = input->column.type;
+      if (is<pushdown::StringType>(type)) {
+        TENZIR_ASSERT(column.input->size() == 1);
+        value = fmt::format("ANY_VALUE({})",
+                            quote_identifier(column.input->front()));
+      } else if (is<pushdown::IntType>(type)) {
+        value = *sql;
+      } else {
+        return None{};
+      }
+      groups.push_back(std::move(*sql));
+    } else if (*column.function == "count") {
+      value = fmt::format("CAST(COUNT({}) AS SIGNED)",
+                          sql ? *sql : std::string{"*"});
+    } else {
+      TENZIR_ASSERT(input);
+      if (not is<pushdown::IntType>(input->column.type)) {
+        return None{};
+      }
+      value = fmt::format("{}({})", *column.function == "min" ? "MIN" : "MAX",
+                          *sql);
+    }
+    selection.push_back(
+      fmt::format("{} AS {}", value, quote_identifier(alias)));
+  }
+  auto query = fmt::format("SELECT {} FROM {}", fmt::join(selection, ", "),
+                           quote_identifier(table));
+  if (not where.empty()) {
+    fmt::format_to(std::back_inserter(query), " WHERE {}",
+                   fmt::join(where, " AND "));
+  }
+  if (not groups.empty()) {
+    fmt::format_to(std::back_inserter(query), " GROUP BY {}",
+                   fmt::join(groups, ", "));
+  }
+  return query;
 }
 
 auto make_table_query(TablePlan const& plan, std::string_view table,

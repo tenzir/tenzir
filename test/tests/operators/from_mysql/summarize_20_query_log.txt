@@ -1,0 +1,12 @@
+{
+  query: "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1`, CAST(COUNT(`n`) AS SIGNED) AS `__tenzir_aggregate_2`, MIN(`n`) AS `__tenzir_aggregate_3`, MAX(`id`) AS `__tenzir_aggregate_4` FROM `agg` WHERE (`id` > 1 OR `n` IS NULL) GROUP BY CAST(`s` AS BINARY)",
+}
+{
+  query: "SELECT * FROM `agg` WHERE (`id` > 1 OR `n` IS NULL)",
+}
+{
+  query: "SELECT CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_0`, MIN(`n`) AS `__tenzir_aggregate_1` FROM `agg` WHERE `id` > 100",
+}
+{
+  query: "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1` FROM `agg` GROUP BY CAST(`s` AS BINARY)",
+}

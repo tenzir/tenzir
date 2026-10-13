@@ -1,0 +1,11 @@
+// ClickHouse filters, groups, and aggregates the rows: the `where` and the
+// `summarize` go into the query. The result equals that of
+// `39_summarize_local.tql`, which aggregates the same rows locally.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where x > 0 or n == null
+summarize y, events=count(), names=count(s), lo=min(x), hi=max(id), meta.level=max(meta.level)
+sort y

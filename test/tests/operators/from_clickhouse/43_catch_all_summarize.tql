@@ -1,0 +1,10 @@
+// A field of a catch-all table may live partly in the catch-all column, so
+// even a summary over an addressable column runs locally, on the reconstructed
+// events. `46_catch_all_query_log.tql` checks that no aggregate query ran.
+from_clickhouse table="fc_catch_all",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+summarize class_uid, n=count(), last=max(time)
+sort class_uid

@@ -1,0 +1,3 @@
+{
+  aggregate_queries: 0,
+}

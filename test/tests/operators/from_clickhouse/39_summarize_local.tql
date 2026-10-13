@@ -1,0 +1,11 @@
+// A predicate that ClickHouse cannot evaluate keeps all rows but stays local,
+// so the operator aggregates locally, with the result of `38_summarize.tql`.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where x > 0 or n == null
+where id.string() != ""
+summarize y, events=count(), names=count(s), lo=min(x), hi=max(id), meta.level=max(meta.level)
+sort y

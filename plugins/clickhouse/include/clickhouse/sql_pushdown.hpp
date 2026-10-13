@@ -136,6 +136,37 @@ auto make_select_query(std::string_view table, SqlSchema const* schema,
                        std::span<const std::string> where,
                        Option<uint64_t> limit) -> std::string;
 
+/// Whether `make_aggregate_query` supports every function of `aggregation`.
+/// Whether it supports their inputs depends on the table's schema.
+auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
+  -> bool;
+
+/// Renders a query that computes `aggregation` over `table`, keeping the rows
+/// where all of the rendered predicates in `where` hold. Returns `None` if
+/// ClickHouse cannot compute some output column exactly as TQL does, in which
+/// case the operator aggregates locally.
+///
+/// The query selects output column `i` as the flat result column
+/// `pushdown::aggregation_column(i)`, which `pushdown::nest_aggregation`
+/// arranges into the output fields. ClickHouse resolves a name to an alias
+/// before a column, so the query is `None` if the table has a column of that
+/// name. Each column is computed from the value that TQL sees for its input
+/// field (see `pushdown::translate_field`). It supports:
+///
+/// - Group keys on booleans, integers, strings, enums, UUIDs, IP addresses,
+///   and temporal values. TQL compares each of them like `GROUP BY` does.
+///   Floating-point keys stay local, because `GROUP BY` equates `NaN` with
+///   itself and `-0.0` with `0.0`.
+/// - `count()`, and `count(x)` on any column of the model, cast to `Int64`,
+///   which TQL reads as `int`.
+/// - `min(x)` and `max(x)` on integers and temporal values, with the `OrNull`
+///   combinator so that an aggregation without group keys over no rows yields
+///   `NULL` instead of the type's default value.
+auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
+                          SqlSchema const& schema, std::string_view table,
+                          std::span<const std::string> where)
+  -> Option<std::string>;
+
 /// Quotes `name` as a ClickHouse identifier using backticks.
 auto quote_sql_identifier(std::string_view name) -> std::string;
 

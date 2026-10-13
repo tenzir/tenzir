@@ -1,0 +1,12 @@
+{
+  query: "SELECT `y` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1`, toInt64(count(`s`)) AS `__tenzir_aggregate_2`, minOrNull(`x`) AS `__tenzir_aggregate_3`, maxOrNull(`id`) AS `__tenzir_aggregate_4`, maxOrNull(`meta`.`level`) AS `__tenzir_aggregate_5` FROM fc_pushdown WHERE (`x` > 0 OR `n` IS NULL) GROUP BY `y`",
+}
+{
+  query: "SELECT `id`, `x`, `y`, `n`, `s`, CAST(tuple(`meta`.`level`), 'Tuple(`level` Nullable(Int64))') AS `meta` FROM fc_pushdown WHERE (`x` > 0 OR `n` IS NULL)",
+}
+{
+  query: "SELECT toInt64(count()) AS `__tenzir_aggregate_0`, minOrNull(`x`) AS `__tenzir_aggregate_1`, minOrNull(`meta`.`level`) AS `__tenzir_aggregate_2` FROM fc_pushdown WHERE `id` > 100",
+}
+{
+  query: "SELECT `meta`.`source` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1` FROM fc_pushdown GROUP BY `meta`.`source`",
+}

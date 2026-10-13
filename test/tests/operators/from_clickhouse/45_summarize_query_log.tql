@@ -1,0 +1,7 @@
+// The aggregations of `38_summarize.tql` and `40_summarize_empty.tql` ran in
+// ClickHouse, while `39_summarize_local.tql` read the rows.
+from_clickhouse sql="SELECT query FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Select' AND has(tables, 'default.fc_pushdown') AND (query LIKE '%__tenzir_aggregate_%' OR query LIKE '%`x` > 0 OR `n` IS NULL%') ORDER BY event_time_microseconds",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
