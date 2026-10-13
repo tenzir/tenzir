@@ -1,3 +1,7 @@
-pipeline_list
-where id == "repro"
+every 100ms {
+  pipeline_list
+  where id == "repro"
+  where state in ["completed", "failed", "stopped"]
+}
+head 1
 select id, state, error
