@@ -1,0 +1,6 @@
+warning: HTTP error 503, attempt 1/6, retrying after 1s
+ --> tests/operators/to_google_cloud_monitoring/08_retry.tql:2:1
+  |
+2 | to_google_cloud_monitoring project="test-project",
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |

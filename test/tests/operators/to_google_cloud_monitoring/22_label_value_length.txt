@@ -1,0 +1,2 @@
+warning: value of metric label `value` is longer than 1024 characters
+  = note: skipping event

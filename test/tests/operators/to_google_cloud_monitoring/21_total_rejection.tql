@@ -1,0 +1,14 @@
+// Cloud Monitoring rejects the first point because it lacks a label that
+// another writer added. As the response confirms that no point was written,
+// the next point counts as the first of its series, even though it ends only
+// 2s later.
+from {value: 1, timestamp: 2026-01-01T00:00:00Z},
+     {value: 2, timestamp: 2026-01-01T00:00:02Z}
+metric = "tenzir/grow/rejected"
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  max_pending_series=1,
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

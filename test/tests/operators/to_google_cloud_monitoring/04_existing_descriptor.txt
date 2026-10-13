@@ -1,0 +1,5 @@
+warning: metric `custom.googleapis.com/tenzir/existing_int` has value type `INT64` in Cloud Monitoring, but the event has a non-integer value
+  = note: skipping event
+
+warning: metric `custom.googleapis.com/tenzir/existing_cumulative` has kind `CUMULATIVE` in Cloud Monitoring, but the event has kind `GAUGE`
+  = note: skipping event

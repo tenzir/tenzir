@@ -1,0 +1,16 @@
+// The first point adds the new label `x` as the 30th label next to the 29
+// labels the operator knows. Meanwhile, another writer added `extra` as the
+// 30th label. When the next event refreshes the descriptor, the pending point
+// with `x` no longer fits, so the operator drops it and writes the next point
+// with the 30 labels of the descriptor.
+from {labels: {x: "1"}, timestamp: 2026-01-01T00:00:00Z},
+     {labels: {l01: "a"}, timestamp: 2026-01-01T00:00:10Z}
+metric = "tenzir/full/pending"
+value = 1
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  _descriptor_refresh_interval=0s,
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

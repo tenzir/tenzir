@@ -1,0 +1,17 @@
+// Another writer adds the label `extra` right after the operator created the
+// descriptor. The first request of the flush lacks it and is rejected. The
+// operator then fetches the descriptor again before it sends the rest of the
+// flush, so the second request carries the label and gets written.
+from {}
+repeat 201
+enumerate index
+metric = "tenzir/grow/batched"
+value = index
+timestamp = 2026-01-01T00:00:00Z
+labels = {index: index}
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

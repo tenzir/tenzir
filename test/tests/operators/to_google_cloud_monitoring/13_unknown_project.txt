@@ -1,0 +1,8 @@
+error: Cloud Monitoring rejected the metric descriptor creation: HTTP 404
+ --> tests/operators/to_google_cloud_monitoring/13_unknown_project.tql:6:1
+  |
+6 | to_google_cloud_monitoring project="wrong-project",
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: Project not found: /v3/projects/wrong-project/metricDescriptors
+  = hint: check that the project exists and has the Cloud Monitoring API enabled

@@ -1,0 +1,1 @@
+warning: dropped 1 cumulative point(s) whose new start timestamp is less than 1ms after the end of the previous point

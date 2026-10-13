@@ -1,0 +1,21 @@
+warning: histograms with 2 bounds must have 3 bucket counts, got 2
+  = note: skipping event
+
+warning: histogram bucket counts add up to 3, but the count is 4
+  = note: skipping event
+
+warning: histogram bounds must be strictly increasing
+  = note: skipping event
+
+warning: histograms must have at least one bound
+  = note: Cloud Monitoring requires at least one explicit bucket bound
+  = note: skipping event
+
+warning: histogram count must be an integer from 0 to 9223372036854775807, got `uint`
+  = note: skipping event
+
+warning: histogram bucket counts overflow
+  = note: skipping event
+
+warning: metric type `summary` is not supported
+  = note: skipping event

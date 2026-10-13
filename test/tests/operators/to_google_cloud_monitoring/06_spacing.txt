@@ -1,0 +1,7 @@
+warning: dropped 2 point(s) that ended less than 5s after the previous point of their series
+  --> tests/operators/to_google_cloud_monitoring/06_spacing.tql:14:1
+   |
+14 | to_google_cloud_monitoring project="test-project",
+   | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = hint: Cloud Monitoring accepts at most one point per series every 5s; increase `flush_interval`

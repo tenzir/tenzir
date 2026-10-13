@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {metric: "tenzir/x", value: 1}
+to_google_cloud_monitoring project="test-project",
+  resource_labels={node_id: "n1"}

@@ -1,0 +1,26 @@
+from {
+  metric: "tenzir/events_total",
+  value: 42,
+  start_timestamp: 2026-01-01T00:00:00Z,
+  timestamp: 2026-01-01T00:00:30Z,
+  type: "counter",
+}, {
+  metric: "tenzir/events_total",
+  value: 43,
+  timestamp: 2026-01-01T00:00:30Z,
+  labels: {missing: "start"},
+  type: "counter",
+}, {
+  metric: "tenzir/events_total",
+  value: 44,
+  start_timestamp: 2026-01-01T00:00:30Z,
+  timestamp: 2026-01-01T00:00:30Z,
+  labels: {empty: "interval"},
+  type: "counter",
+}
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

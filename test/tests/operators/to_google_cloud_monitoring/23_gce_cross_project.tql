@@ -1,0 +1,9 @@
+// The instance belongs to `test-project`, but the operator writes to
+// `other-project`. The detected resource must name the project that the
+// operator writes to.
+from {metric: "tenzir/cross_project", value: 1, timestamp: 2026-01-01T00:00:00Z}
+to_google_cloud_monitoring project="other-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _metadata_url=env("GOOGLE_CLOUD_MONITORING_METADATA_URL"),
+  _now=2026-01-01T00:01:00Z

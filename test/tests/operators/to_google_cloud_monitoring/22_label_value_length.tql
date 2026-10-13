@@ -1,0 +1,15 @@
+// Cloud Monitoring limits label values to 1024 characters. A value of 600
+// three-byte characters (1800 bytes) is within that limit, while a value of
+// 1025 characters is not.
+from {value: "日".repeat(600)},
+     {value: "x".repeat(1025)}
+labels = {value: value}
+metric = "tenzir/label_value_length"
+value = 1
+timestamp = 2026-01-01T00:00:00Z
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

@@ -1,0 +1,20 @@
+// With room for two series, writing a series evicts the one with the oldest
+// point: `c` evicts `a`, and the second point of `a` evicts `b`. The second
+// points of `a` and `b` are therefore written even though they end less than 5s
+// after the first ones. Without the bound, the operator would drop both.
+from {series: "a", timestamp: 2026-01-01T00:00:00Z},
+     {series: "b", timestamp: 2026-01-01T00:00:01Z},
+     {series: "c", timestamp: 2026-01-01T00:00:02Z},
+     {series: "a", timestamp: 2026-01-01T00:00:03Z},
+     {series: "b", timestamp: 2026-01-01T00:00:04Z}
+metric = "tenzir/series_state"
+value = 1
+labels = {series: series}
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  max_pending_series=1,
+  _max_sent_series=2,
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

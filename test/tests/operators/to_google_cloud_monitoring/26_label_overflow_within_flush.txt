@@ -1,0 +1,10 @@
+warning: Cloud Monitoring rejected 200 of 200 point(s): HTTP 400
+  --> tests/operators/to_google_cloud_monitoring/26_label_overflow_within_flush.tql:13:1
+   |
+13 | to_google_cloud_monitoring project="test-project",
+   | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: One or more TimeSeries could not be written
+   = note: 200 point(s): code 3
+
+warning: dropped 1 point(s) whose labels would exceed the 30 labels of their metric

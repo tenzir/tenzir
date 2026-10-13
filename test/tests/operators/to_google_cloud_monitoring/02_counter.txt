@@ -1,0 +1,5 @@
+warning: cumulative metrics require a start timestamp
+  = note: skipping event
+
+warning: metric start timestamp must be before the timestamp
+  = note: skipping event

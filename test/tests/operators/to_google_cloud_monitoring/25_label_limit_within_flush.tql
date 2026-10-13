@@ -1,0 +1,18 @@
+// The operator knows 29 labels of the descriptor, while another writer already
+// added `extra` as the 30th. The first request includes the new label `x`, so
+// Cloud Monitoring rejects it. Refreshing the descriptor must replace `x` with
+// `extra`, so that the remaining series stay within 30 labels and get written.
+from {}
+repeat 201
+enumerate index
+metric = "tenzir/full/batched"
+value = index
+timestamp = 2026-01-01T00:00:00Z
+labels = {l01: index.string()}
+labels = {x: "1"} if index == 0 else labels
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

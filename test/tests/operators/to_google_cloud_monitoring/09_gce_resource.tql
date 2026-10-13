@@ -1,0 +1,5 @@
+from {metric: "tenzir/race/gce", value: 1, timestamp: 2026-01-01T00:00:00Z}
+to_google_cloud_monitoring service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _metadata_url=env("GOOGLE_CLOUD_MONITORING_METADATA_URL"),
+  _now=2026-01-01T00:01:00Z

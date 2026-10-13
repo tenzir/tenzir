@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {metric: "tenzir/x", value: 1}
+to_google_cloud_monitoring project="test-project",
+  metric_prefix="custom.googleapis.com//",
+  resource_type="global",
+  resource_labels={project_id: "test-project"}

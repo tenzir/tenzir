@@ -1,0 +1,6 @@
+error: invalid `metric_prefix`: metric type `custom.googleapis.com//x` contains an empty path element
+ --> tests/operators/to_google_cloud_monitoring/12_invalid_prefix.tql:7:17
+  |
+7 |   metric_prefix="custom.googleapis.com//",
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

@@ -6,7 +6,8 @@
 }:
 # The four APIs the plugins look for, and no more: `storage` for gcs and
 # iceberg, `pubsub` for google-cloud-pubsub, `logging` for
-# to_google_cloud_logging, and `oauth2` for to_google_secops. A plugin whose API
+# to_google_cloud_logging, and `oauth2` for to_google_secops and
+# to_google_cloud_monitoring. A plugin whose API
 # is missing disables itself with nothing but a CMake warning, so the list has
 # to be complete on every platform - the nixpkgs default carries no `oauth2`,
 # and the static list used to carry no `logging`. It matches

@@ -1,0 +1,20 @@
+// Series `a` coalesces to its newest point before the first flush. The second
+// flush drops both points because they end less than 5s after the points that
+// the first flush wrote.
+from {series: "a", value: 1, timestamp: 2026-01-01T00:00:01Z},
+     {series: "a", value: 3, timestamp: 2026-01-01T00:00:03Z},
+     {series: "a", value: 2, timestamp: 2026-01-01T00:00:02Z},
+     {series: "b", value: 1, timestamp: 2026-01-01T00:00:01Z},
+     {series: "a", value: 5, timestamp: 2026-01-01T00:00:05Z},
+     {series: "b", value: 4, timestamp: 2026-01-01T00:00:04Z},
+     {series: "a", value: 9, timestamp: 2026-01-01T00:00:09Z},
+     {series: "b", value: 9, timestamp: 2026-01-01T00:00:09Z}
+metric = "tenzir/spacing"
+labels = {series: series}
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  max_pending_series=2,
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

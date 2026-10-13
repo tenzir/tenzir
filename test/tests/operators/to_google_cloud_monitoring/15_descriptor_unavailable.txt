@@ -1,0 +1,7 @@
+warning: failed to look up metric descriptor for `custom.googleapis.com/tenzir/broken/gauge`: HTTP 500: Internal error
+ --> tests/operators/to_google_cloud_monitoring/15_descriptor_unavailable.tql:6:1
+  |
+6 | to_google_cloud_monitoring project="test-project",
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: skipping events of this metric for 1min

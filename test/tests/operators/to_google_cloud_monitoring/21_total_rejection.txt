@@ -1,0 +1,8 @@
+warning: Cloud Monitoring rejected 1 of 1 point(s): HTTP 400
+ --> tests/operators/to_google_cloud_monitoring/21_total_rejection.tql:8:1
+  |
+8 | to_google_cloud_monitoring project="test-project",
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: One or more TimeSeries could not be written
+  = note: 1 point(s): code 3

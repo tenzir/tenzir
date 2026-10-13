@@ -1,0 +1,6 @@
+error: `resource_labels` requires `resource_type`
+ --> tests/operators/to_google_cloud_monitoring/11_resource_labels_without_type.tql:7:19
+  |
+7 |   resource_labels={node_id: "n1"}
+  |                   ^^^^^^^^^^^^^^^
+  |

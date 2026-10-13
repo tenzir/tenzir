@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {metric: "tenzir/unauthenticated", value: 1, timestamp: 2026-01-01T00:00:00Z}
+to_google_cloud_monitoring project="wrong-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

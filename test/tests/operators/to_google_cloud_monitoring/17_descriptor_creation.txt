@@ -1,0 +1,16 @@
+warning: failed to create metric descriptor for `custom.googleapis.com/tenzir/bad_unit` with its description and unit: HTTP 400
+ --> tests/operators/to_google_cloud_monitoring/17_descriptor_creation.tql:8:1
+  |
+8 | to_google_cloud_monitoring project="test-project",
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: The unit `invalid-unit` is invalid
+  = note: creating the descriptor without a description and unit
+
+warning: failed to look up metric descriptor for `custom.googleapis.com/tenzir/quota/gauge`: HTTP 429: Quota exceeded for metric descriptors
+ --> tests/operators/to_google_cloud_monitoring/17_descriptor_creation.tql:8:1
+  |
+8 | to_google_cloud_monitoring project="test-project",
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: skipping events of this metric for 1min

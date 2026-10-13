@@ -1,0 +1,29 @@
+warning: metric type `custom.googleapis.com/tenzir/bad name` contains invalid character ` `
+  = note: skipping event
+
+warning: metric name must not be empty
+  = note: skipping event
+
+warning: metric value must be a number, got `string`
+  = note: skipping event
+
+warning: metric value is `null`
+  = note: skipping event
+
+warning: invalid metric type `guage`
+  = note: skipping event
+
+warning: multiple metric labels map to the label key `a_b`
+  = note: skipping event
+
+warning: metric labels must be a `record`, got `string`
+  = note: skipping event
+
+warning: metric timestamp 2025-12-30T00:00:00Z is more than 25 hours in the past
+  = note: skipping event
+
+warning: metric timestamp 2026-01-01T00:10:00Z is more than 5 minutes in the future
+  = note: skipping event
+
+warning: metric value must be finite
+  = note: skipping event

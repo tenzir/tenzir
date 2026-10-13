@@ -1,0 +1,13 @@
+// The operator knows 29 labels, while another writer already added a 30th. A
+// point with a different new label is rejected, and the refreshed descriptor
+// must replace the rejected label, or the metric would exceed 30 labels.
+from {value: 1, timestamp: 2026-01-01T00:00:00Z, labels: {new: "x"}},
+     {value: 2, timestamp: 2026-01-01T00:00:10Z, labels: {l01: "a"}}
+metric = "tenzir/full/gauge"
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  max_pending_series=1,
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z

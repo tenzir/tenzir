@@ -1,0 +1,18 @@
+// After a reset, a cumulative series must start at least 1ms after the end of
+// its previous point. Series `close` restarts 1µs after it, series `gap` 1ms
+// after it.
+from {series: "close", start_timestamp: 2026-01-01T00:00:00Z, timestamp: 2026-01-01T00:00:10Z},
+     {series: "gap", start_timestamp: 2026-01-01T00:00:00Z, timestamp: 2026-01-01T00:00:10Z},
+     {series: "close", start_timestamp: 2026-01-01T00:00:10.000001Z, timestamp: 2026-01-01T00:00:20Z},
+     {series: "gap", start_timestamp: 2026-01-01T00:00:10.001Z, timestamp: 2026-01-01T00:00:20Z}
+metric = "tenzir/resets_total"
+type = "counter"
+value = 1
+labels = {series: series}
+to_google_cloud_monitoring project="test-project",
+  service_credentials=env("GOOGLE_CLOUD_MONITORING_CREDENTIALS"),
+  resource_type="generic_node",
+  resource_labels={location: "global", namespace: "tenzir", node_id: "n1"},
+  max_pending_series=2,
+  _api_url=env("GOOGLE_CLOUD_MONITORING_URL"),
+  _now=2026-01-01T00:01:00Z
