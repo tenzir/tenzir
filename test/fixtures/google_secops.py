@@ -88,6 +88,12 @@ _ENTITIES_PATH = re.compile(
     r"^/v1/projects/[^/]+/locations/[^/]+/instances/[^/]+/entities:import$"
 )
 _INGESTION_PATH = "/v2/unstructuredlogentries:batchCreate"
+# Log types that make the mock reject otherwise valid requests, so that tests
+# can exercise how the operator handles credential and permission errors.
+_REJECTED_LOG_TYPES = {
+    "UNAUTHENTICATED": (401, "Request had invalid authentication credentials."),
+    "PERMISSION_DENIED": (403, "The caller does not have permission"),
+}
 
 
 def _service_credentials(token_uri: str) -> str:
@@ -191,6 +197,10 @@ def _make_ingestion_handler(
             if err:
                 self._json_response(400, {"error": err})
                 return
+            if rejection := _REJECTED_LOG_TYPES.get(_log_type(self.path, payload)):
+                code, message = rejection
+                self._json_response(code, {"error": message})
+                return
             capture = {
                 "path": self.path,
                 "payload": payload,
@@ -275,6 +285,17 @@ def _make_ingestion_handler(
             self.wfile.write(body)
 
     return IngestionHandler
+
+
+def _log_type(path: str, payload: dict) -> str | None:  # type: ignore[type-arg]
+    if path == _INGESTION_PATH:
+        return payload.get("log_type")
+    if "/logTypes/" in path:
+        return path.split("/logTypes/", 1)[1].split("/", 1)[0]
+    inline_source = payload.get("inlineSource")
+    if isinstance(inline_source, dict):
+        return inline_source.get("logType")
+    return None
 
 
 def _validate_payload(path: str, payload: object) -> str | None:

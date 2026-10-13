@@ -1,0 +1,18 @@
+---
+error: true
+---
+
+// Rejected credentials also stop a pipeline whose input never ends.
+every 10ms {
+  from {text: "hello world"}
+}
+to_google_secops project="test-project",
+                 region="us",
+                 instance="test-instance",
+                 log_text=text,
+                 log_entry_time=2026-01-01T00:00:00,
+                 collection_time=2026-01-01T00:00:01,
+                 log_type="PERMISSION_DENIED",
+                 service_credentials=env("GOOGLE_SECOPS_SERVICE_CREDENTIALS"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL"),
+                 batch_timeout=100ms

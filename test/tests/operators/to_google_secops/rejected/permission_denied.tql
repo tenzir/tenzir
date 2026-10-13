@@ -1,0 +1,15 @@
+---
+error: true
+---
+
+// A 403 response fails the pipeline instead of silently discarding the batch.
+from {text: "hello world"}
+to_google_secops api="ingestion",
+                 log_text=text,
+                 log_type="PERMISSION_DENIED",
+                 private_key=env("GOOGLE_SECOPS_PRIVATE_KEY"),
+                 client_email=env("GOOGLE_SECOPS_CLIENT_EMAIL"),
+                 customer_id=env("GOOGLE_SECOPS_CUSTOMER_ID"),
+                 _token_url=env("GOOGLE_SECOPS_TOKEN_URL"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL"),
+                 batch_timeout=1s

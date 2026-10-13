@@ -1,0 +1,8 @@
+error: Google SecOps rejected the request: HTTP 403
+ --> tests/operators/to_google_secops/rejected/continuous_input.tql:9:1
+  |
+9 | to_google_secops project="test-project",
+  | ^^^^^^^^^^^^^^^^
+  |
+  = note: response body: {"error": "The caller does not have permission"}
+  = hint: check that the credentials grant permission to ingest into the Google SecOps instance
