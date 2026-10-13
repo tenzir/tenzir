@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 from collections.abc import Sequence
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 
 from tenzir_bench.compare import (
@@ -172,6 +173,19 @@ def resolve_build_entry(paths: BenchPaths, build: BuildSpec) -> Path:
     raise RuntimeError(f"{build.label}: unsupported build kind {build.kind}")
 
 
+def load_excluded_patterns(bench_root: Path) -> list[str]:
+    excluded_file = bench_root / "excluded.txt"
+    if not excluded_file.exists():
+        return []
+    patterns: list[str] = []
+    for raw_line in excluded_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        patterns.append(line)
+    return patterns
+
+
 def _selected_benchmark_paths(
     bench_root: Path,
     benchmarks: Sequence[str] | None = None,
@@ -179,7 +193,15 @@ def _selected_benchmark_paths(
     benchmarks_root = bench_root / "benchmarks"
     if benchmarks:
         return [benchmarks_root / benchmark for benchmark in benchmarks]
-    return [bench_root]
+    if not benchmarks_root.is_dir():
+        return [bench_root]
+    excluded = load_excluded_patterns(bench_root)
+    return [
+        directory
+        for directory in sorted(benchmarks_root.iterdir())
+        if directory.is_dir()
+        and not any(fnmatch(directory.name, pattern) for pattern in excluded)
+    ]
 
 
 def _to_compare_build(
@@ -285,14 +307,8 @@ def load_contexts(
     *,
     benchmarks: Sequence[str] | None = None,
 ) -> list:
-    benchmarks_root = bench_root / "benchmarks"
-    definition_paths = (
-        [benchmarks_root / benchmark for benchmark in benchmarks]
-        if benchmarks
-        else [bench_root]
-    )
     definitions = load_definitions_from_paths(
-        definition_paths,
+        _selected_benchmark_paths(bench_root, benchmarks),
         version_supplier=lambda: executor.build_info().version,
         root=bench_root,
     )

@@ -1,0 +1,7 @@
+# Benchmarks that unselected runs skip. The nightly and release reference runs
+# select no benchmarks, so they skip these. Select them explicitly to run them,
+# e.g., `@tenzir-bot bench benchmarks=to_iceberg_*`.
+
+# `to_iceberg` regressed under the new data model and exceeds the CI timeout
+# (TNZ-1671).
+to_iceberg_*

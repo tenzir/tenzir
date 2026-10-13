@@ -592,6 +592,25 @@ from file
     assert contexts[0].definition.implementation_id == "neo"
 
 
+def test_selected_benchmark_paths_skips_excluded_benchmarks_by_default(
+    tmp_path: Path,
+) -> None:
+    bench_root = tmp_path / "bench"
+    for name in ("from_kafka_route53", "to_iceberg_ocsf_layouts"):
+        (bench_root / "benchmarks" / name).mkdir(parents=True)
+    (bench_root / "excluded.txt").write_text(
+        "# comment\n\nto_iceberg_*\n",
+        encoding="utf-8",
+    )
+
+    assert run_benchmarks_module._selected_benchmark_paths(bench_root) == [
+        bench_root / "benchmarks" / "from_kafka_route53"
+    ]
+    assert run_benchmarks_module._selected_benchmark_paths(
+        bench_root, ["to_iceberg_ocsf_layouts"]
+    ) == [bench_root / "benchmarks" / "to_iceberg_ocsf_layouts"]
+
+
 def test_gh_api_slurps_paginated_json(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
 
