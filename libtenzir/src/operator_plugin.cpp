@@ -679,11 +679,11 @@ public:
     return desc_->name;
   }
 
-  auto parallelizable() const -> bool override {
-    if (desc_->parallelizable_when) {
-      return (*desc_->parallelizable_when)(materialize_args());
+  auto max_parallelism() const -> size_t override {
+    if (desc_->max_parallelism) {
+      return (*desc_->max_parallelism)(materialize_args());
     }
-    return desc_->parallelizable;
+    return ir::Operator::max_parallelism();
   }
 
   auto partition_keys() const -> std::vector<ast::expression> override {

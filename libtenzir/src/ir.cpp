@@ -477,7 +477,7 @@ auto ir::pipeline::optimize(OptimizeRequest req,
     // An operator that runs across multiple parallel instances has its output
     // reordered by the gather that follows it, so its consumer cannot rely on
     // its order anyway.
-    if (octx.can_any_op_reorder and op->parallelizable()) {
+    if (octx.can_any_op_reorder and op->max_parallelism() > 1) {
       req.order = EventOrder::unordered;
     }
     // Operators see and forward only simplified predicates.

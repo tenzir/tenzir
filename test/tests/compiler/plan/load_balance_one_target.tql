@@ -1,0 +1,4 @@
+// A single target keeps the sink single-instance even at degree six.
+let $over = ["alpha"]
+from {x: 1}
+load_balance $over { discard }

@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace tenzir {
 
@@ -948,8 +949,8 @@ public:
       MatchOpNova{args_}.with_name("match")};
   }
 
-  auto parallelizable() const -> bool override {
-    return true;
+  auto max_parallelism() const -> size_t override {
+    return std::numeric_limits<size_t>::max();
   }
 
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,

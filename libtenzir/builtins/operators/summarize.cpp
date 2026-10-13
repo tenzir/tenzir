@@ -2227,21 +2227,21 @@ public:
     };
   }
 
-  auto parallelizable() const -> bool override {
+  auto max_parallelism() const -> size_t override {
     // Without group-by keys, there is a single global aggregation state that
     // all rows must reach. Replicating the operator would yield one partial
     // result per instance.
     if (config_.groups.empty()) {
-      return false;
+      return 1;
     }
     // Counted event emission requires one instance to keep a pipeline-wide
     // event count.
     if (config_.emission == Emission::event and config_.emit_every != 1) {
-      return false;
+      return 1;
     }
     // Other final and per-event emission can use hash partitioning because it
     // routes each group to exactly one instance.
-    return true;
+    return std::numeric_limits<size_t>::max();
   }
 
   auto partition_keys() const -> std::vector<ast::expression> override {

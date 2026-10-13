@@ -49,14 +49,19 @@ public:
   explicit LoadBalance(LoadBalanceArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto start(JobId job, OpCtx& ctx) -> Task<void> override {
     if (started_) {
       co_return;
     }
     started_ = true;
-    workers_.assign(args_.over.inner.size(), Worker{});
-    active_workers_ = workers_.size();
+    TENZIR_ASSERT(job.total <= args_.over.inner.size());
+    workers_.assign(args_.over.inner.size(), Worker{.active = false});
     for (auto i = size_t{0}; i < args_.over.inner.size(); ++i) {
+      if (i % job.total != job.index) {
+        continue;
+      }
+      workers_[i].active = true;
+      ++active_workers_;
       auto pipe = args_.pipe.inner;
       pipe.bind(args_.over_id, as_constant_kind(args_.over.inner[i]));
       if (not co_await ctx.plan_and_spawn_sub<table_slice>(
@@ -162,17 +167,24 @@ public:
   explicit LoadBalanceNova(LoadBalanceArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto start(JobId job, OpCtx& ctx) -> Task<void> override {
     if (started_) {
       co_return;
     }
     started_ = true;
+    TENZIR_ASSERT(job.total <= args_.over.inner.size());
     if (done_) {
       co_return;
     }
     if (workers_.empty()) {
-      workers_.assign(args_.over.inner.size(), Worker{});
-      active_workers_ = workers_.size();
+      workers_.assign(args_.over.inner.size(), Worker{.active = false});
+      for (auto i = size_t{0}; i < args_.over.inner.size(); ++i) {
+        if (i % job.total != job.index) {
+          continue;
+        }
+        workers_[i].active = true;
+        ++active_workers_;
+      }
     }
     for (auto i = size_t{0}; i < args_.over.inner.size(); ++i) {
       if (not workers_[i].active) {
@@ -319,6 +331,11 @@ public:
     auto over = d.positional("over", &LoadBalanceArgs::over, "list");
     auto pipe = d.pipeline(&LoadBalanceArgs::pipe, SubOptimize::from_downstream,
                            {{"over", &LoadBalanceArgs::over_id}});
+    // Each target belongs to one replica, so never spawn more replicas than
+    // targets. An idle sink replica would otherwise stop its upstream branch.
+    d.max_parallelism([](const LoadBalanceArgs& args) {
+      return args.over.inner.size();
+    });
     d.validate([over](DescribeCtx& ctx) -> Empty {
       if (auto entries = ctx.get(over); entries and entries->inner.empty()) {
         diagnostic::error("expected list to not be empty")

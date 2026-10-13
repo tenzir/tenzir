@@ -1,6 +1,7 @@
 let $over = ["alpha"]
 from {x: 1}, {x: 2}
-parallel 1 {
+// The one-target cap keeps this sink single-instance.
+parallel 6 {
   load_balance $over {
     worker = $over
     to_stdout {

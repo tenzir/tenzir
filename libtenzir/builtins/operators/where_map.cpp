@@ -49,6 +49,8 @@
 #include <caf/actor_from_state.hpp>
 #include <caf/expected.hpp>
 
+#include <limits>
+
 namespace tenzir::plugins::where {
 
 namespace {
@@ -693,8 +695,8 @@ public:
     };
   }
 
-  auto parallelizable() const -> bool override {
-    return true;
+  auto max_parallelism() const -> size_t override {
+    return std::numeric_limits<size_t>::max();
   }
 
   friend auto inspect(auto& f, where_ir& x) -> bool {

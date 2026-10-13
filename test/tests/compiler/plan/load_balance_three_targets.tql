@@ -1,0 +1,4 @@
+// Parallelize up to the number of targets, not the requested degree six.
+let $over = ["alpha", "beta", "gamma"]
+from {x: 1}
+load_balance $over { discard }

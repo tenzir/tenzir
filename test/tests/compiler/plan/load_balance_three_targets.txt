@@ -1,0 +1,9 @@
+● {input}
+│
+● from
+╎
+● load_balance(x3)
+│
+● pass
+│
+● {output}

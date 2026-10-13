@@ -26,6 +26,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <limits>
 #include <ranges>
 #include <utility>
 
@@ -356,8 +357,8 @@ public:
       IfOpNova{args_.condition}.with_name("if")};
   }
 
-  auto parallelizable() const -> bool override {
-    return true;
+  auto max_parallelism() const -> size_t override {
+    return std::numeric_limits<size_t>::max();
   }
 
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,

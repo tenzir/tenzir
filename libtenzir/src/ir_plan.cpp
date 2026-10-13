@@ -36,7 +36,8 @@ auto make_identity_ir() -> Box<ir::Operator>;
 auto derive_parallelism(const ir::Operator& op,
                         const Option<ast::expression>& partition_keys,
                         size_t degree, size_t limit_partitions) -> size_t {
-  auto p = op.parallelizable() ? degree : 1;
+  auto p = std::min(degree, op.max_parallelism());
+  TENZIR_ASSERT(p > 0);
   // A keyed operator needs a hash-partitioned exchange on its input: an
   // upstream at degree `n` opens `n * parallelism` channels, and every pushed
   // slice is split into up to `parallelism` partitions. Unlike the keyless
@@ -75,8 +76,8 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   // between the legs and serialize the block.
   const auto matched = up_degree == down_degree
                        and up.parallelism == down.parallelism and not down_keyed
-                       and up.op->parallelizable()
-                       and down.op->parallelizable();
+                       and up.op->max_parallelism() > 1
+                       and down.op->max_parallelism() > 1;
   if (matched and par_scopes_.back().fuse == parallelism::Fusing::parallel) {
     return ChannelKind::fused;
   }

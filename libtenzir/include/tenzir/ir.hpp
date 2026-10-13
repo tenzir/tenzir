@@ -203,10 +203,10 @@ public:
   /// well.
   virtual auto spawn(element_type_tag input) const -> AnyOperator = 0;
 
-  /// Whether the planner may replicate this operator across parallel
-  /// instances.
-  virtual auto parallelizable() const -> bool {
-    return false;
+  /// The maximum number of parallel instances of this operator. One means
+  /// the operator cannot be replicated. The result must be at least one.
+  virtual auto max_parallelism() const -> size_t {
+    return 1;
   }
 
   /// Return the expressions that determine how input is partitioned across the
@@ -866,8 +866,8 @@ public:
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override;
 
-  auto parallelizable() const -> bool override {
-    return true;
+  auto max_parallelism() const -> size_t override {
+    return std::numeric_limits<size_t>::max();
   }
 
   template <class Inspector>

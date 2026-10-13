@@ -23,6 +23,7 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <span>
 #include <string_view>
@@ -226,6 +227,8 @@ using Optimizer
 using PartitionKeys
   = std::function<auto(const Any&)->std::vector<ast::expression>>;
 
+using MaxParallelism = std::function<auto(const Any&)->size_t>;
+
 struct Description {
   std::string name;
   std::string docs;
@@ -250,8 +253,7 @@ struct Description {
   // FIXME: Document.
   Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
-  bool parallelizable = false;
-  Option<std::function<auto(const Any&)->bool>> parallelizable_when;
+  Option<MaxParallelism> max_parallelism;
   Option<PartitionKeys> partition_keys;
 };
 
@@ -870,8 +872,21 @@ public:
     desc_.name = std::move(name);
   }
 
+  /// Permit any number of parallel instances.
   auto parallelizable() -> void {
-    desc_.parallelizable = true;
+    desc_.max_parallelism = [](const Any&) -> size_t {
+      return std::numeric_limits<size_t>::max();
+    };
+  }
+
+  /// Limit the number of instances based on parsed arguments. The result must
+  /// be at least one; a cap above one enables parallel execution.
+  template <class F>
+    requires std::convertible_to<std::invoke_result_t<F, const Args&>, size_t>
+  auto max_parallelism(F cap) -> void {
+    desc_.max_parallelism = [cap = std::move(cap)](const Any& args) -> size_t {
+      return cap(args.as<Args>());
+    };
   }
 
   /// Declares that the subpipeline is part of the enclosing pipeline and is
@@ -885,13 +900,14 @@ public:
   /// Declare that parallelizability depends on the parsed arguments.
   ///
   /// `predicate` receives the `Args` bundle and returns whether the operator
-  /// may be replicated. This overrides the plain `parallelizable()` flag.
+  /// may be replicated. A false result limits it to one instance.
   template <class F>
     requires std::convertible_to<std::invoke_result_t<F, const Args&>, bool>
   auto parallelizable(F predicate) -> void {
-    desc_.parallelizable_when
-      = [predicate = std::move(predicate)](const Any& args) -> bool {
-      return predicate(args.as<Args>());
+    desc_.max_parallelism
+      = [predicate = std::move(predicate)](const Any& args) -> size_t {
+      return predicate(args.as<Args>()) ? std::numeric_limits<size_t>::max()
+                                        : 1;
     };
   }
 

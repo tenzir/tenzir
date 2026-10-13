@@ -459,14 +459,15 @@ private:
 /// Identifies the job of one runtime instance of an operator, that is, the
 /// share of the work that this instance is responsible for.
 ///
-/// The planner may replicate a `parallelizable()` operator into `degree`
-/// runtime instances, which are exact clones of each other. Operators that
+/// The planner may replicate an operator whose `max_parallelism()` exceeds 1
+/// into multiple runtime instances, up to the requested degree. The instances
+/// are exact clones of each other. Operators that
 /// generate work themselves — sources, most notably — must therefore split
 /// that work deterministically, such that every item is claimed by exactly one
-/// instance. `index` identifies this instance among the `degree` instances of
+/// instance. `index` identifies this instance among the `total` instances of
 /// the same planned operator.
 struct JobId {
-  /// The zero-based index of this instance, always less than `degree`.
+  /// The zero-based index of this instance, always less than `total`.
   size_t index = 0;
 
   /// The total number of instances of this operator, always at least one.
