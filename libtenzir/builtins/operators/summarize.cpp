@@ -26,6 +26,7 @@
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/eval_util.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/nova/union_array.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -1530,7 +1531,7 @@ public:
       = std::vector<nova::ArrayBuilder<nova::Data>>(config_.aggregates.size());
     auto const append
       = [&](nova::storage::Index row, NovaBucket& bucket, bool reset) {
-          auto single = nova::subslice(events, row, row + 1);
+          auto single = nova::mask_slice(events, row, row + 1);
           for (auto [aggregation, state, builder] :
                std::views::zip(aggregations_, bucket.states, builders)) {
             aggregation->update(single, *state, ctx);
@@ -1853,7 +1854,7 @@ public:
         nova::storage::for_each_true(batch.mask, [&](auto row) {
           last = row;
         });
-        pending_event_ = nova::subslice(input, last, last + 1);
+        pending_event_ = nova::physically_slice(input, last, last + 1);
         if (events_since_emit_ == emit_every) {
           co_await push(state_->enrich(*pending_event_, ctx.dh()));
           if (config_.mode == Mode::reset) {

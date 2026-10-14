@@ -164,29 +164,4 @@ auto Events::Meta::make_empty(storage::Index length, std::string_view name)
   };
 }
 
-auto subslice(Events const& events, storage::Index begin, storage::Index end)
-  -> Events {
-  TENZIR_ASSERT_LEQ(0, begin);
-  TENZIR_ASSERT_LEQ(begin, end);
-  TENZIR_ASSERT_LEQ(end, events.length());
-  auto data = ArrayBuilder<Record>{};
-  auto mask = storage::BitMap::Builder{};
-  auto names = ArrayBuilder<String>{};
-  auto import_times = ArrayBuilder<Time>{};
-  auto internal = ArrayBuilder<Bool>{};
-  for (auto i = begin; i < end; ++i) {
-    auto record = data.record();
-    for (auto [name, value] : events.data.get(i)) {
-      append_row(record.field(name), value);
-    }
-    mask.emplace_back(events.mask.get(i));
-    names.data(*events.meta.name.get(i));
-    import_times.data(*events.meta.import_time.get(i));
-    internal.data(*events.meta.internal.get(i));
-  }
-  return Events{data.finish(), mask.finish(),
-                Events::Meta{names.finish(), import_times.finish(),
-                             internal.finish()}};
-}
-
 } // namespace tenzir::nova

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova/slice.hpp"
 #include "tenzir/nova/sort.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -125,7 +126,7 @@ TEST("bounded sort copies input views even before reaching the bound") {
                       Events::Meta::make_empty(length)};
   auto buffer = SortBuffer{{Order::ascending}, uint64_t{3}};
   for (auto row = storage::Index{0}; row < 3; ++row) {
-    auto view = subslice(input, row, row + 1);
+    auto view = mask_slice(input, row, row + 1);
     auto key = view.data.field("payload")->data;
     buffer.add(std::move(view), {std::move(key)});
     CHECK_EQUAL(buffer.rows(), detail::narrow<size_t>(row + 1));

@@ -11,6 +11,7 @@
 #include <tenzir/async/task.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -151,7 +152,7 @@ public:
       if (delay <= duration::zero()) {
         continue;
       }
-      auto preceding = nova::subslice(input, begin, i);
+      auto preceding = nova::mask_slice(input, begin, i);
       if (preceding.mask.any()) {
         co_await push(std::move(preceding));
         begin = i;
@@ -159,7 +160,7 @@ public:
       co_await sleep_for(delay);
     }
     if (begin != input.length()) {
-      co_await push(nova::subslice(input, begin, input.length()));
+      co_await push(nova::mask_slice(input, begin, input.length()));
     }
   }
 

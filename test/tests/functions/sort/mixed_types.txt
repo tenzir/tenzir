@@ -1,0 +1,42 @@
+warning: `sort` expected `record` or `list`, got a different type
+ --> tests/functions/sort/mixed_types.tql:8:10
+  |
+8 | x = sort(x)
+  |          ~
+  |
+{
+  i: 0,
+  x: [
+    1,
+    2,
+    3,
+    null,
+  ],
+}
+{
+  i: 1,
+  x: {
+    a: {
+      c: null,
+      d: [
+        {
+          y: 2,
+          z: 1,
+        },
+      ],
+    },
+    b: 1,
+  },
+}
+{
+  i: 2,
+  x: null,
+}
+{
+  i: 3,
+  x: null,
+}
+{
+  i: 5,
+  x: {},
+}

@@ -69,6 +69,7 @@
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/nova/type_definition.hpp>
 #include <tenzir/nova/type_id.hpp>
 #include <tenzir/nova_json_printer.hpp>
@@ -588,8 +589,8 @@ struct managed_serve_operator {
           break;
         }
       }
-      result.push_back(nova::subslice(events, 0, end));
-      events = nova::subslice(events, end, events.length());
+      result.push_back(nova::mask_slice(events, 0, end));
+      events = nova::mask_slice(events, end, events.length());
       count = 0;
     }
     return result;
@@ -1041,7 +1042,7 @@ struct serve_manager_state {
       if (++it != row.end()) {
         continue;
       }
-      found->chart = nova::subslice(input, index, index + 1);
+      found->chart = nova::physically_slice(input, index, index + 1);
       mask.set(index, false);
     }
     input.mask = std::move(mask).finish();

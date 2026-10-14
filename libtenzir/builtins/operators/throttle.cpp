@@ -17,6 +17,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -440,8 +441,8 @@ private:
 
   static auto select_range(nova::Events const& input, size_t begin, size_t end)
     -> nova::Events {
-    return nova::subslice(input, detail::narrow<nova::storage::Index>(begin),
-                          detail::narrow<nova::storage::Index>(end));
+    return nova::mask_slice(input, detail::narrow<nova::storage::Index>(begin),
+                            detail::narrow<nova::storage::Index>(end));
   }
 
   auto finalize(Push<Events>& push, OpCtx& ctx)

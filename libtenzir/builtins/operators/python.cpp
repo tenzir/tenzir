@@ -31,6 +31,7 @@
 #include <tenzir/nova/arrow_metadata.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/fundamental_array_builder.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
@@ -981,7 +982,8 @@ public:
     for (auto row : nova::storage::true_bits(input.mask)) {
       // Convert one row at a time so record shapes do not get merged into a
       // nullable schema that changes Python's field-presence semantics.
-      auto slices = nova::to_table_slices(nova::subslice(input, row, row + 1));
+      auto slices
+        = nova::to_table_slices(nova::mask_slice(input, row, row + 1));
       TENZIR_ASSERT(slices.size() == 1);
       auto slice = std::move(slices.front());
       if (not pending.empty() and pending.back().schema() != slice.schema()) {

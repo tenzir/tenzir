@@ -297,33 +297,8 @@ private:
     }
     auto events = nova::Events{std::move(*records), std::move(batch.mask),
                                std::move(batch.meta)};
-    auto begin = nova::storage::Index{0};
-    while (begin < events.length()) {
-      while (begin < events.length() and not events.mask.get(begin)) {
-        ++begin;
-      }
-      if (begin == events.length()) {
-        break;
-      }
-      auto const name = *events.meta.name.get(begin);
-      auto const import_time = *events.meta.import_time.get(begin);
-      auto const internal = *events.meta.internal.get(begin);
-      auto end = begin + 1;
-      while (end < events.length()) {
-        if (events.mask.get(end)
-            and (*events.meta.name.get(end) != name
-                 or *events.meta.import_time.get(end) != import_time
-                 or *events.meta.internal.get(end) != internal)) {
-          break;
-        }
-        ++end;
-      }
-      auto rows = nova::subslice(events, begin, end);
-      for (auto& slice : nova::to_table_slices(rows)) {
-        slice.import_time(import_time);
-        co_await push(std::move(slice));
-      }
-      begin = end;
+    for (auto& slice : nova::to_table_slices(events)) {
+      co_await push(std::move(slice));
     }
   }
 

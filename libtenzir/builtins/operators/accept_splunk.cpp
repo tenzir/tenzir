@@ -28,6 +28,7 @@
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/nova/json_parser.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
@@ -1496,12 +1497,8 @@ public:
         auto events
           = nova::Events{std::move(data), nova::storage::BitMap{length, true},
                          nova::Events::Meta::make_empty(length, schema_name)};
-        auto const batch_size = detail::narrow<nova::storage::Index>(
-          defaults::import::table_slice_size);
-        for (auto begin = nova::storage::Index{0}; begin < length;
-             begin += batch_size) {
-          co_await push(nova::subslice(events, begin,
-                                       std::min(length, begin + batch_size)));
+        if (length > 0) {
+          co_await push(std::move(events));
         }
         auto rows = static_cast<uint64_t>(length);
         events_read_counter_.add(rows);

@@ -7,9 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/comparison.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/list_util.hpp"
+#include "tenzir/nova/slice.hpp"
 #include "tenzir/option.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
@@ -28,6 +31,7 @@
 #include <arrow/util/bitmap_ops.h>
 
 #include <algorithm>
+#include <numeric>
 #include <ranges>
 #include <string_view>
 #include <vector>
@@ -328,70 +332,177 @@ auto eval_nova_sort_predicate(nova::BinaryLambdaArgument const& cmp,
     });
 }
 
-template <class Builder>
-auto append_sorted_records(Builder&& builder, nova::RowView<nova::Data> value)
-  -> void {
+auto sort_record_fields(nova::Array<nova::Data> const& array,
+                        nova::storage::BitMap const& rows)
+  -> Option<nova::Array<nova::Data>>;
+
+/// Sorts the fields of the records in `rows` by name, recursing into their
+/// fields. Only the shapes change; the field values are shared. Returns `None`
+/// if all fields are sorted already.
+auto sort_record_fields(nova::Array<nova::Record> const& array,
+                        nova::storage::BitMap const& rows)
+  -> Option<nova::Array<nova::Record>> {
   using namespace nova;
-  match(value, [&]<class T>(nova::RowView<T> value) {
-    if constexpr (std::same_as<T, Null>) {
-      builder.null();
-    } else if constexpr (std::same_as<T, List>) {
-      auto output = builder.list();
-      for (auto element : value) {
-        append_sorted_records(output, element);
-      }
-    } else if constexpr (std::same_as<T, Record>) {
-      auto fields = std::vector<std::pair<std::string_view, RowView<Data>>>{};
-      for (auto field : value) {
-        fields.push_back(field);
-      }
-      std::ranges::sort(fields, std::less<>{},
-                        &decltype(fields)::value_type::first);
-      auto output = builder.record();
-      for (auto const& [name, field] : fields) {
-        append_sorted_records(output.field(name), field);
-      }
-    } else {
-      builder.data(*value);
+  auto record = array.to_primary();
+  auto const& physical = *as<storage::RecordStorage>(record.storage());
+  auto arrays = physical.arrays;
+  auto changed = false;
+  for (auto& field : arrays) {
+    if (auto sorted = sort_record_fields(field.data, rows & field.present)) {
+      field.data = std::move(*sorted);
+      changed = true;
     }
-  });
+  }
+  // Rows of the same shape sort the same way, so the sorted shape is resolved
+  // once per shape. Shapes interned below are never read from the indices.
+  constexpr auto unresolved = ShapeTable::ShapeId{-1};
+  auto table = physical.shape_table;
+  auto sorted_shapes
+    = std::vector<ShapeTable::ShapeId>(table.size(), unresolved);
+  auto indices = Option<Array<Record>::IndicesStorage::Mutable>{};
+  for (auto row : storage::true_bits(rows)) {
+    auto const shape = physical.shape_indices.get(row);
+    if (shape < 0) {
+      continue;
+    }
+    auto& sorted_shape = sorted_shapes[static_cast<size_t>(shape)];
+    if (sorted_shape == unresolved) {
+      // Copy the fields, as interning a shape invalidates the span.
+      auto const fields = table.fields(shape);
+      auto sorted = std::vector<storage::Index>(fields.begin(), fields.end());
+      std::ranges::sort(sorted, std::less<>{}, [&](storage::Index field) {
+        return physical.names_by_index[static_cast<size_t>(field)];
+      });
+      sorted_shape = table.with_fields(sorted);
+    }
+    if (sorted_shape == shape) {
+      continue;
+    }
+    if (not indices) {
+      indices.emplace(physical.shape_indices);
+    }
+    indices->set(row, sorted_shape);
+  }
+  if (not indices and not changed) {
+    return None{};
+  }
+  return Array<Record>{
+    indices ? std::move(*indices).finish() : physical.shape_indices,
+    std::move(table),
+    physical.names,
+    std::move(arrays),
+  };
 }
 
-template <class Builder>
-auto append_sorted_list(Builder&& builder, nova::RowView<nova::List> value,
-                        bool descending, nova::BinaryLambdaArgument const& cmp,
-                        nova::Events const* scope, nova::EvalFrame const& frame,
-                        nova_comparator_warning_state& warnings) -> void {
+/// Sorts the fields of the records within the lists in `rows`, but not the
+/// lists themselves.
+auto sort_record_fields(nova::Array<nova::List> const& array,
+                        nova::storage::BitMap const& rows)
+  -> Option<nova::Array<nova::List>> {
   using namespace nova;
-  auto elements = std::vector<RowView<Data>>{};
-  for (auto element : value) {
-    elements.push_back(element);
+  auto list = array.to_primary();
+  auto const& physical = as<storage::ListStorage>(list.storage());
+  auto values
+    = sort_record_fields(physical.values(), expand_mask(rows, physical));
+  if (not values) {
+    return None{};
   }
-  if (cmp) {
-    TENZIR_ASSERT(scope);
-    // `desc` reverses the comparator instead of the result, so that it stays
-    // a strict weak ordering and `stable_sort` keeps ties in input order.
-    std::stable_sort(elements.begin(), elements.end(), [&](auto lhs, auto rhs) {
-      return descending ? eval_nova_sort_predicate(cmp, rhs, lhs, *scope, frame,
-                                                   warnings)
-                        : eval_nova_sort_predicate(cmp, lhs, rhs, *scope, frame,
-                                                   warnings);
+  return Array<List>{physical.spans(), std::move(*values)};
+}
+
+auto sort_record_fields(nova::Array<nova::Data> const& array,
+                        nova::storage::BitMap const& rows)
+  -> Option<nova::Array<nova::Data>> {
+  using namespace nova;
+  if (not rows.any()) {
+    return None{};
+  }
+  return match(
+    array,
+    [&](Array<Record> const& records) -> Option<Array<Data>> {
+      if (auto sorted = sort_record_fields(records, rows)) {
+        return Array<Data>{std::move(*sorted)};
+      }
+      return None{};
+    },
+    [&](Array<List> const& lists) -> Option<Array<Data>> {
+      if (auto sorted = sort_record_fields(lists, rows)) {
+        return Array<Data>{std::move(*sorted)};
+      }
+      return None{};
+    },
+    [&](UnionArray const& alternatives) -> Option<Array<Data>> {
+      auto changed = false;
+      auto sort_alternative
+        = [&]<class Tag>(MaskedArray<Array<Tag>> alternative) -> Array<Tag> {
+        if (auto sorted = sort_record_fields(alternative.data,
+                                             rows & alternative.present)) {
+          changed = true;
+          return std::move(*sorted);
+        }
+        return std::move(alternative.data);
+      };
+      auto result = alternatives.map_alternative<Record>(sort_alternative);
+      result = std::move(result).map_alternative<List>(sort_alternative);
+      if (not changed) {
+        return None{};
+      }
+      return Array<Data>{std::move(result)};
+    },
+    [](auto const&) -> Option<Array<Data>> {
+      return None{};
     });
-    auto output = builder.list();
-    for (auto element : elements) {
-      append_row(output, element);
+}
+
+/// Sorts the elements of the lists in `rows`. The other rows are empty.
+auto sort_lists(nova::Array<nova::List> const& lists,
+                nova::storage::BitMap const& rows, SortArgs const& args,
+                nova::EvalFrame const& frame) -> nova::Array<nova::List> {
+  using namespace nova;
+  auto const order = args.descending ? Order::descending : Order::ascending;
+  auto const* input = frame.input();
+  auto warnings = nova_comparator_warning_state{};
+  auto builder = ArrayBuilder<List>{};
+  auto indices = std::vector<storage::Index>{};
+  auto next = storage::Index{0};
+  for (auto row : storage::true_bits(rows)) {
+    builder.skip_n(row - next);
+    next = row + 1;
+    auto const list = lists.get(row);
+    indices.resize(static_cast<size_t>(list.length()));
+    std::iota(indices.begin(), indices.end(), storage::Index{0});
+    if (args.cmp) {
+      // The comparator sees its enclosing event, so that captures such as
+      // `pivot` resolve per row. Slicing the event and copying both operands
+      // for every comparison is expensive, see TNZ-1704.
+      auto const scope
+        = input ? physically_slice(*input, row, row + 1)
+                : Events{Array<Record>::make_empty(1), storage::BitMap{1, true},
+                         Events::Meta::make_empty(1)};
+      // `desc` reverses the comparator instead of the result, so that it stays
+      // a strict weak ordering and `stable_sort` keeps ties in input order.
+      std::ranges::stable_sort(indices, [&](storage::Index lhs,
+                                            storage::Index rhs) {
+        if (args.descending) {
+          std::swap(lhs, rhs);
+        }
+        return eval_nova_sort_predicate(args.cmp, list.get(lhs), list.get(rhs),
+                                        scope, frame, warnings);
+      });
+    } else {
+      std::ranges::stable_sort(indices, [&](storage::Index lhs,
+                                            storage::Index rhs) {
+        return weak_order(list.get(lhs), list.get(rhs), order)
+               == std::weak_ordering::less;
+      });
     }
-    return;
+    auto output = builder.list();
+    for (auto index : indices) {
+      append_row(output, list.get(index));
+    }
   }
-  auto const order = descending ? Order::descending : Order::ascending;
-  std::stable_sort(
-    elements.begin(), elements.end(), [order](auto lhs, auto rhs) {
-      return nova::weak_order(lhs, rhs, order) == std::weak_ordering::less;
-    });
-  auto output = builder.list();
-  for (auto element : elements) {
-    append_row(output, element);
-  }
+  builder.skip_n(lists.length() - next);
+  return builder.finish();
 }
 
 class SortFunction final {
@@ -399,56 +510,58 @@ public:
   static auto eval(SortArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
-    auto builder = ArrayBuilder<Data>{};
-    auto invalid = false;
-    auto record_descending = false;
-    auto warnings = nova_comparator_warning_state{};
-    auto const* input = frame.input();
-    for (auto row = storage::Index{0}; row < frame.length(); ++row) {
-      if (not frame.mask().get(row)) {
-        builder.skip();
-        continue;
-      }
-      auto value = args.x.data.get(row);
-      auto scope = Option<Events>{};
-      if (args.cmp) {
-        // The comparator sees its enclosing event, so that captures such as
-        // `pivot` resolve per row.
-        scope = input ? subslice(*input, row, row + 1)
-                      : Events{Array<Record>::make_empty(1),
-                               storage::BitMap{1, true},
-                               Events::Meta::make_empty(1)};
-      }
-      match(value, [&]<class T>(RowView<T> value) {
-        if constexpr (std::same_as<T, Null>) {
-          builder.null();
-        } else if constexpr (std::same_as<T, List>) {
-          append_sorted_list(builder, value, args.descending, args.cmp,
-                             scope ? std::addressof(*scope) : nullptr, frame,
-                             warnings);
-        } else if constexpr (std::same_as<T, Record>) {
-          record_descending |= args.descending or bool{args.cmp};
-          append_sorted_records(builder, RowView<Data>{value});
-        } else {
-          invalid = true;
-          builder.null();
-        }
-      });
+    // Lists sort into lists and records into records, so both alternatives are
+    // sorted on their own and only joined at the end. Everything else is null.
+    auto const& mask = frame.mask();
+    auto const lists = args.x.data.get_alternative<List>();
+    auto const records = args.x.data.get_alternative<Record>();
+    auto const list_rows
+      = lists ? mask & lists->present : storage::BitMap{frame.length(), false};
+    auto const record_rows = records ? mask & records->present
+                                     : storage::BitMap{frame.length(), false};
+    auto other_rows = mask.and_not(list_rows | record_rows);
+    auto invalid = other_rows;
+    if (auto nulls = args.x.data.get_alternative<Null>()) {
+      invalid = std::move(invalid).and_not(nulls->present);
     }
-    if (invalid) {
+    if (invalid.any()) {
       diagnostic::warning("`sort` expected `record` or `list`, got a different "
                           "type")
         .primary(args.x.source)
         .emit(frame);
     }
-    if (record_descending) {
+    if (record_rows.any() and (args.descending or args.cmp)) {
       diagnostic::warning(
         "`desc` and `cmp` are only applied when sorting lists")
         .primary(args.call)
         .note("record fields are always sorted ascending by key")
         .emit(frame);
     }
-    return builder.finish();
+    auto sorted_lists = Option<Array<List>>{};
+    if (list_rows.any()) {
+      sorted_lists = sort_lists(lists->data, list_rows, args, frame);
+    }
+    auto sorted_records = Option<Array<Record>>{};
+    if (record_rows.any()) {
+      sorted_records = sort_record_fields(records->data, record_rows)
+                         .unwrap_or(records->data);
+    }
+    auto result = Option<Array<Data>>{};
+    if (sorted_lists and sorted_records) {
+      result
+        = with_merged({Array<Data>{std::move(*sorted_records)}, record_rows},
+                      {Array<Data>{std::move(*sorted_lists)}, list_rows});
+    } else if (sorted_lists) {
+      result = Array<Data>{std::move(*sorted_lists)};
+    } else if (sorted_records) {
+      result = Array<Data>{std::move(*sorted_records)};
+    } else {
+      return frame.null();
+    }
+    if (other_rows.any()) {
+      return std::move(*result).null_where(std::move(other_rows));
+    }
+    return std::move(*result);
   }
 };
 

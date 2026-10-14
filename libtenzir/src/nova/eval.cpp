@@ -391,7 +391,7 @@ auto Evaluator::eval(Option<Events const&> events, EvalCtx ctx) -> Array<Data> {
   auto run = _::EvalRun{*this, input, ctx};
   // The root frame establishes the invariant that every frame's mask is a
   // subset of the input's mask; `EvalFrame::narrow` preserves it.
-  auto frame = EvalFrame{run, active_mask(events)};
+  auto frame = EvalFrame{run, events ? events->mask : storage::BitMap{1, true}};
   return run.eval(*expression_, std::move(frame));
 }
 

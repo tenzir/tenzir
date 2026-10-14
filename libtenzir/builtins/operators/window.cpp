@@ -21,6 +21,7 @@
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
@@ -1689,7 +1690,7 @@ struct EventRef {
       = std::remove_reference_t<decltype(f)>::is_loading;
     auto event = nova::Events{};
     if constexpr (not is_loading) {
-      event = nova::subslice(*x.batch, x.row, x.row + 1);
+      event = nova::physically_slice(*x.batch, x.row, x.row + 1);
     }
     if (not f.object(x).fields(f.field("event", event))) {
       return false;

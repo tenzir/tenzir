@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/function_plugin.hpp"
 
 namespace tenzir::nova {
@@ -56,6 +57,22 @@ inline auto resolve_list(ValueArgument const& arg, EvalFrame frame,
       }
       return None{};
     });
+}
+
+/// The element rows belonging to the rows of `shape` selected by `mask`.
+inline auto expand_mask(storage::BitMap const& mask,
+                        storage::ListStorage const& shape) -> storage::BitMap {
+  if (auto constant = mask.as_constant()) {
+    return storage::BitMap{shape.values().length(), *constant};
+  }
+  auto result = storage::BitMap::Mutable{shape.values().length()};
+  for (auto row : storage::true_bits(mask)) {
+    auto const& span = shape.spans()[row];
+    for (auto index = span.begin; index < span.end; ++index) {
+      result.set(index, true);
+    }
+  }
+  return std::move(result).finish();
 }
 
 } // namespace tenzir::nova

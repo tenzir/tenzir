@@ -20,4 +20,3 @@ accept_splunk env("HTTP_REQUEST_ENDPOINT"),
 head 8193
 measure
 summarize events=sum(events), batches=count(), max_batch=max(events)
-this = {events: events, batches: batches, bounded: max_batch <= 8192}

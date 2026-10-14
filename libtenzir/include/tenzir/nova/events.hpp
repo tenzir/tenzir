@@ -12,7 +12,6 @@
 #include "tenzir/nova/bitmap.hpp"
 #include "tenzir/nova/fundamental_array.hpp"
 #include "tenzir/nova/record_array.hpp"
-#include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
 
 #include <cstddef>
@@ -99,20 +98,6 @@ auto inspect(Inspector& f, Events& events) -> bool {
     events = std::move(decoded).unwrap();
   }
   return true;
-}
-
-/// Returns the physical row range `[begin, end)`, including inactive rows and
-/// their metadata.
-auto subslice(Events const& events, storage::Index begin, storage::Index end)
-  -> Events;
-
-/// The rows a function evaluates over: the input's active rows, or the single
-/// constant row that stands in for "no input".
-inline auto active_mask(Option<Events const&> events) -> storage::BitMap {
-  if (events) {
-    return events->mask;
-  }
-  return storage::BitMap{1, true};
 }
 
 } // namespace tenzir::nova
