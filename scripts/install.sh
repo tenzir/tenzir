@@ -228,7 +228,7 @@ action "Installing package into ${prefix}"
 if [ "${package_format}" = "RPM" ]; then
   require_root
   cmd1="$sudo yum -y --nogpgcheck localinstall \"${tmpdir}/${package}\""
-  cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
+  cmd2="[ ! -d /run/systemd/system ] || $sudo systemctl status tenzir-node"
   echo "This script is about to run the following commands:"
   echo
   echo "  - ${cmd1}"
@@ -241,7 +241,7 @@ if [ "${package_format}" = "RPM" ]; then
 elif [ "${package_format}" = "DEB" ]; then
   require_root
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
-  cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
+  cmd2="[ ! -d /run/systemd/system ] || $sudo systemctl status tenzir-node"
   echo "This script is about to run the following commands:"
   echo
   echo "  - ${cmd1}"
@@ -321,7 +321,7 @@ if [ -n "${TENZIR_TOKEN:-}" ]; then
   fi
 
   # Write config using tenzir and sudo tee.
-  ${prefix}/bin/tenzir run -qq "${tql_pipeline}" | $sudo tee "${config_file}" >/dev/null
+  TENZIR_UNIFIED=0 "${prefix}/bin/tenzir" -qq "${tql_pipeline}" | $sudo tee "${config_file}" >/dev/null
   echo "Token configured in ${config_file}"
 
   # Restart the service if it's already running (RPM/DEB packages auto-start it).
@@ -334,7 +334,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"
-tenzir run -q 'version | select version | write_ndjson'
+TENZIR_UNIFIED=0 tenzir -q 'version | select version | write_ndjson'
 
 # Inform about next steps.
 action "Providing guidance"
