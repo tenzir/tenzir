@@ -15,6 +15,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/saturating_arithmetic.hpp"
+#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/importer.hpp"
@@ -174,6 +175,7 @@ void catalog_state::advance_maintenance(time now) {
     return;
   }
   deciding_maintenance = true;
+  const auto started = std::chrono::steady_clock::now();
   if (now >= next_policy_flush) {
     static_cast<void>(flush_policy_markers());
   }
@@ -241,6 +243,13 @@ void catalog_state::advance_maintenance(time now) {
   }
   arm_maintenance_wakeup(now);
   deciding_maintenance = false;
+  // Runs on the catalog thread between queries, merges, and transform
+  // completions, so its duration is what everything else waits for.
+  TENZIR_TRACEPOINT(catalog_maintenance,
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                      std::chrono::steady_clock::now() - started)
+                      .count(),
+                    rebuild.has_value(), active_transformations.size());
 }
 
 void catalog_state::arm_maintenance_wakeup(time now) {
@@ -603,6 +612,8 @@ auto catalog_state::begin_rebuild(rebuild_options options) -> caf::error {
   if (rebuild->options.automatic) {
     rebuild->collected_groups = std::exchange(closed_rebuild_groups, {});
   }
+  TENZIR_TRACEPOINT(rebuild_run_start, rebuild->generation,
+                    rebuild->options.automatic, rebuild->options.parallel);
   TENZIR_DEBUG("{} starts a{} rebuild of {}{} partitions with {} thread(s)",
                name, rebuild->options.automatic ? "n automatic" : " manual",
                rebuild->options.all ? "all" : "outdated",
@@ -667,6 +678,8 @@ auto catalog_state::stop_rebuild(const rebuild_stop_options& options)
 void catalog_state::finish_rebuild() {
   TENZIR_ASSERT(rebuild);
   auto run = *std::exchange(rebuild, None{});
+  TENZIR_TRACEPOINT(rebuild_run_end, run.generation, run.transformed,
+                    run.results, run.quarantined, run.deferred);
   if (run.transformed == 0) {
     TENZIR_VERBOSE("{} had nothing to rebuild", name);
   } else {
@@ -748,6 +761,8 @@ void catalog_state::schedule_rebuild(time now) {
     rebuild->selected += size;
     ++rebuild->running;
     rebuild->running_partitions += size;
+    TENZIR_TRACEPOINT(rebuild_batch_start, rebuild->generation, size,
+                      rebuild->batch_byte_budget, rebuild->running);
     auto options = TransformOptions{
       .minimum_partition_reduction = 1,
       .minimum_reduction_ratio = rebuild_day(batch.front().max_import_time)
@@ -774,6 +789,10 @@ void catalog_state::schedule_rebuild(time now) {
         }
         --rebuild->running;
         rebuild->running_partitions -= size;
+        TENZIR_TRACEPOINT(rebuild_batch_done, generation,
+                          result.input_partitions.size(),
+                          result.output_partitions.size(), result.skipped,
+                          rebuild->running);
         if (result.skipped) {
           // The loader may accept too few inputs to meet the reduction
           // constraint. Keep them visited for this run instead of retrying
@@ -828,6 +847,8 @@ void catalog_state::schedule_rebuild(time now) {
         }
         --rebuild->running;
         rebuild->running_partitions -= size;
+        TENZIR_TRACEPOINT(rebuild_batch_failed, generation, size,
+                          rebuild->running);
         // The transformer blames a store decode failure on the partition it
         // came from, so we can quarantine exactly the culprit instead of
         // treating the whole batch as suspect. Without the quarantine the

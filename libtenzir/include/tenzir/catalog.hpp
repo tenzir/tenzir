@@ -289,11 +289,12 @@ struct catalog_lookup_worker_state {
   catalog_lookup_engine engine = {};
 };
 
-/// Spawns a catalog lookup worker.
+/// Spawns a catalog lookup worker. `worker_index` names its thread when the
+/// worker runs detached.
 auto catalog_lookup_worker(
   catalog_lookup_worker_actor::stateful_pointer<catalog_lookup_worker_state>
     self,
-  tenzir::taxonomies taxonomies, size_t sketch_cache_bytes)
+  tenzir::taxonomies taxonomies, size_t sketch_cache_bytes, size_t worker_index)
   -> catalog_lookup_worker_actor::behavior_type;
 
 /// One outstanding candidate set, keyed by `query_context::id`.

@@ -13,6 +13,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
+#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/import_conversion.hpp"
 #include "tenzir/import_routing.hpp"
@@ -26,6 +27,7 @@
 #include "tenzir/table_slice.hpp"
 
 #include <caf/config_value.hpp>
+#include <caf/detail/set_thread_name.hpp>
 #include <caf/settings.hpp>
 
 #include <algorithm>
@@ -191,6 +193,9 @@ auto importer::handle_events(nova::Events events) -> caf::result<void> {
     flush_nova();
   }
   if (pending_nova_requests > 0) {
+    // The caller waits until the index has taken every flushed batch.
+    TENZIR_TRACEPOINT(importer_backpressure, pending_nova_requests,
+                      nova_accept_waiters.size());
     auto rp = self->make_response_promise<void>();
     nova_accept_waiters.push_back(rp);
     return rp;
@@ -287,6 +292,8 @@ void importer::flush_nova() {
     = std::exchange(unpersisted_nova_events, std::vector<nova::Events>{});
   auto source_order
     = std::exchange(unpersisted_nova_input_events, std::vector<nova::Events>{});
+  TENZIR_TRACEPOINT(importer_flush, buffered.size(), unpersisted_nova_bytes,
+                    pending_nova_requests);
   unpersisted_nova_bytes = 0;
   for (auto& events : source_order) {
     auto internal = false;
@@ -386,6 +393,9 @@ void importer::release_snapshot_barrier(uuid token) {
 }
 
 auto importer::make_behavior() -> importer_actor::behavior_type {
+  if (self->getf(caf::local_actor::is_detached_flag)) {
+    caf::detail::set_thread_name("tnz.importer");
+  }
   const auto config = check(to<record>(content(self->config())));
   if (auto policy = retention_policy::make(config)) {
     retention_policy = std::move(*policy);
@@ -438,7 +448,20 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
     [this, builder = std::move(builder),
-     actor_metrics_builder = detail::make_actor_metrics_builder()]() mutable {
+     actor_metrics_builder = detail::make_actor_metrics_builder(),
+     deadline = self->clock().now()]() mutable {
+      // How late this tick runs against its scheduled deadline, in
+      // microseconds, and how many messages wait in the mailbox. The loop
+      // keeps fixed deadlines, so lag does not reset after a stall: each
+      // catch-up tick reports its own lateness. Lag means the actor could
+      // not get to its mailbox; a growing mailbox means it cannot keep up.
+      const auto tick = self->clock().now();
+      TENZIR_TRACEPOINT(
+        importer_tick,
+        std::chrono::duration_cast<std::chrono::microseconds>(
+          tick - std::exchange(deadline, deadline + defaults::metrics_interval))
+          .count(),
+        self->mailbox().size());
       handle_slice(detail::generate_actor_metrics(actor_metrics_builder, self));
       const auto now = time::clock::now();
       for (const auto& [schema, count] : schema_counters) {

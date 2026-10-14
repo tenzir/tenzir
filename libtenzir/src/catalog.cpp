@@ -571,6 +571,8 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions,
   // Close the previous hour before admitting either ingested partitions or
   // replacement outputs, so both wait for the next automatic collection.
   close_rebuild_collection(time::clock::now());
+  TENZIR_TRACEPOINT(catalog_merge, partitions.size(),
+                    source == merge_source::ingest, leases.size());
   update_synopses([&](synopsis_map& map) {
     // Clone each touched schema exactly once for the whole batch.
     auto cloned = std::unordered_map<type, schema_synopsis_map*>{};
@@ -689,6 +691,8 @@ auto catalog_state::add_lease(const uuid& query,
     return 0;
   }
   const auto owner_addr = owner->address();
+  TENZIR_TRACEPOINT(catalog_lease_add, fmt::to_string(query).c_str(),
+                    partitions.size(), leases.size());
   for (const auto& partition : partitions) {
     ++pin_counts[partition];
   }
@@ -762,6 +766,8 @@ void catalog_state::release_lease(const uuid& query) {
   }
   const auto lease = std::move(it->second);
   leases.erase(it);
+  TENZIR_TRACEPOINT(catalog_lease_release, fmt::to_string(query).c_str(),
+                    lease.partitions.size(), leases.size());
   for (const auto& partition : lease.partitions) {
     unpin(partition);
   }
@@ -836,6 +842,8 @@ void catalog_state::sweep_deferred() {
     holders.erase(std::unique(holders.begin(), holders.end()), holders.end());
     // The holder keeps its pin; it simply finds the files gone. That is the
     // trade the timeout makes, and it is loud on purpose.
+    TENZIR_TRACEPOINT(catalog_erase_forced, fmt::to_string(partition).c_str(),
+                      holders.size(), deferred.size());
     TENZIR_WARN("{} deletes partition {} after waiting {} for {} to release "
                 "it; a reader that has not opened it yet will read short",
                 *self, partition, data{deferred_erase_timeout},
@@ -979,10 +987,12 @@ void catalog_state::retire_erased(const uuid& partition,
     .quarantine_error = None{},
     .deadline = deferred_erase_deadline(),
   };
-  if (pin_counts.contains(partition)) {
+  if (const auto pins = pin_counts.find(partition); pins != pin_counts.end()) {
     TENZIR_DEBUG("{} defers the deletion of partition {} because a retriever "
                  "still holds it",
                  *self, partition);
+    TENZIR_TRACEPOINT(catalog_erase_deferred, fmt::to_string(partition).c_str(),
+                      pins->second, deferred.size() + 1);
     deferred.emplace(partition, std::move(erasure));
     return;
   }
@@ -1288,6 +1298,11 @@ void catalog_state::dispose_of(
     if (footprint > 0) {
       deleting[partition] = footprint;
     }
+    TENZIR_TRACEPOINT(catalog_dispose_begin, fmt::to_string(partition).c_str(),
+                      footprint, deleting.size());
+  } else {
+    TENZIR_TRACEPOINT(catalog_dispose_begin, fmt::to_string(partition).c_str(),
+                      0, deleting.size());
   }
   // A partition whose synopsis failed to serialize can end up with an empty
   // `resource::url` (see e.g. `active_partition.cpp`'s handling of a failed
@@ -1340,6 +1355,8 @@ void catalog_state::dispose_of(
       // would erase the tombstone and orphan the store forever. Re-park and
       // retry instead.
       deleting.erase(partition);
+      TENZIR_TRACEPOINT(catalog_dispose_end, fmt::to_string(partition).c_str(),
+                        true, deleting.size());
       TENZIR_WARN("{} retries disposing of partition {} because it could not "
                   "confirm whether a store remains",
                   *self, partition);
@@ -1386,6 +1403,8 @@ void catalog_state::dispose_of(
     [this, partition, entry, rp, release_marker]() mutable {
       ++storage_generation;
       deleting.erase(partition);
+      TENZIR_TRACEPOINT(catalog_dispose_end, fmt::to_string(partition).c_str(),
+                        false, deleting.size());
       release_marker(entry.marker);
       erase_marker_if_unreferenced(entry.marker);
       if (rp) {
@@ -1395,6 +1414,8 @@ void catalog_state::dispose_of(
     },
     [this, partition, entry, rp, release_marker](caf::error&& err) mutable {
       deleting.erase(partition);
+      TENZIR_TRACEPOINT(catalog_dispose_end, fmt::to_string(partition).c_str(),
+                        true, deleting.size());
       release_marker(entry.marker);
       TENZIR_WARN("{} failed to dispose of partition {} and will retry: {}",
                   *self, partition, err);
@@ -1622,13 +1643,19 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   // the sketch-cache budget; the caches need no coordination, because
   // partition ids are never reused (the defensive re-merge case is covered by
   // `invalidate_sketches`).
+  //
+  // The workers are detached. A lookup walks every synopsis in the database
+  // and, with lazy sketches, reads a file per candidate; on the shared
+  // scheduler that work displaced the importer, the index, and every export
+  // bridge and partition reader for its whole duration.
   const auto workers = std::max<size_t>(1, lookup_parallelism);
   self->state().lookup_pool.reserve(workers);
   for (auto i = size_t{0}; i < workers; ++i) {
     // Also stop workers if initialization below exits before a behavior exists.
-    self->state().lookup_pool.push_back(self->spawn<caf::linked>(
-      catalog_lookup_worker, self->state().lookup_engine.taxonomies,
-      sketch_cache_bytes / workers));
+    self->state().lookup_pool.push_back(
+      self->spawn<caf::detached + caf::linked>(
+        catalog_lookup_worker, self->state().lookup_engine.taxonomies,
+        sketch_cache_bytes / workers, i));
   }
   // Load the on-disk state before installing the behavior below. The catalog
   // is detached, so blocking here only delays this actor; everything sent to
@@ -1665,7 +1692,16 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
     }};
     detail::weak_run_delayed_loop(
       self, defaults::metrics_interval,
-      [self, builder = std::move(builder)]() mutable {
+      [self, builder = std::move(builder),
+       deadline = self->clock().now()]() mutable {
+        const auto tick = self->clock().now();
+        TENZIR_TRACEPOINT(
+          catalog_tick,
+          std::chrono::duration_cast<std::chrono::microseconds>(
+            tick
+            - std::exchange(deadline, deadline + defaults::metrics_interval))
+            .count(),
+          self->mailbox().size());
         const auto importer
           = self->system().registry().get<importer_actor>("tenzir.importer");
         if (not importer) {
@@ -1921,6 +1957,8 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
       }
       const auto query = query_context.id;
+      TENZIR_TRACEPOINT(catalog_candidates_begin, fmt::to_string(query).c_str(),
+                        all_ids.size(), state.leases.size());
       const auto generation
         = state.add_lease(query, self->current_sender(), std::move(all_ids));
       auto rp = self->make_response_promise<catalog_lookup_result>();
@@ -1930,11 +1968,15 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         .request(state.next_lookup_worker(), caf::infinite)
         .then(
           [self, rp, query, generation](catalog_lookup_result& result) mutable {
-            self->state().narrow_lease(query, generation,
-                                       partition_ids(result));
+            auto ids = partition_ids(result);
+            TENZIR_TRACEPOINT(catalog_candidates_end,
+                              fmt::to_string(query).c_str(), ids.size(), false);
+            self->state().narrow_lease(query, generation, ids);
             rp.deliver(std::move(result));
           },
           [self, rp, query, generation](caf::error& error) mutable {
+            TENZIR_TRACEPOINT(catalog_candidates_end,
+                              fmt::to_string(query).c_str(), 0, true);
             self->state().narrow_lease(query, generation, {});
             rp.deliver(std::move(error));
           });

@@ -28,6 +28,7 @@
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/index.hpp"
@@ -247,6 +248,8 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
     if (first_error->valid()) {
       rp.deliver(*first_error);
     } else if (buffered_nova_bytes > max_buffered_nova_bytes) {
+      TENZIR_TRACEPOINT(index_pressure, buffered_nova_bytes,
+                        nova_pressure_waiters.size());
       nova_pressure_waiters.push_back(rp);
     } else {
       rp.deliver();
@@ -417,7 +420,11 @@ void index_state::decommission_nova_active_partition(
                                        });
   nova_active_partitions.erase(it);
   ++pending_publications;
+  TENZIR_TRACEPOINT(index_persist_begin, fmt::to_string(generation).c_str(),
+                    pending_publications);
   auto done = [this, generation, completion](caf::error error) {
+    TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(generation).c_str(),
+                      error.valid(), pending_publications);
     retire_nova_partition(generation, error);
     complete_publication(error);
     if (completion) {
@@ -538,6 +545,8 @@ void index_state::decommission_active_partition(
   const auto part_path = paths.partition(id);
   const auto synopsis_path = paths.synopsis(id);
   ++pending_publications;
+  TENZIR_TRACEPOINT(index_persist_begin, fmt::to_string(id).c_str(),
+                    pending_publications);
   TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
   self->mail(atom::persist_v, part_path, synopsis_path)
@@ -559,6 +568,8 @@ void index_state::decommission_active_partition(
               [=, this](atom::ok) {
                 TENZIR_TRACE("{} inserted partition {} {} to the catalog",
                              *self, schema, id);
+                TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(id).c_str(),
+                                  false, pending_publications);
                 retire_partition(id, caf::exit_reason::normal);
                 complete_publication(caf::none);
                 if (completion) {
@@ -566,6 +577,8 @@ void index_state::decommission_active_partition(
                 }
               },
               [=, this](const caf::error& err) {
+                TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(id).c_str(),
+                                  true, pending_publications);
                 TENZIR_ERROR("{} failed to commit partition {} {} to the "
                              "catalog, "
                              "the contained data will not be available for "
@@ -580,6 +593,8 @@ void index_state::decommission_active_partition(
         });
       },
       [=, this](caf::error& err) {
+        TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(id).c_str(), true,
+                          pending_publications);
         TENZIR_ERROR("{} failed to persist partition {} {} and evicts data "
                      "from "
                      "memory to preserve process integrity: {}",
@@ -655,6 +670,8 @@ void index_state::publish_or_defer(std::function<void()> action) {
     action();
   } else {
     deferred_publications.push_back(std::move(action));
+    TENZIR_TRACEPOINT(index_publish_deferred, deferred_publications.size(),
+                      publication_barriers.size());
   }
 }
 
@@ -834,8 +851,15 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().active_partition_timeout = active_partition_timeout;
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
-    [self, actor_metrics_builder
-           = detail::make_actor_metrics_builder()]() mutable {
+    [self, actor_metrics_builder = detail::make_actor_metrics_builder(),
+     deadline = self->clock().now()]() mutable {
+      const auto tick = self->clock().now();
+      TENZIR_TRACEPOINT(
+        index_tick,
+        std::chrono::duration_cast<std::chrono::microseconds>(
+          tick - std::exchange(deadline, deadline + defaults::metrics_interval))
+          .count(),
+        self->mailbox().size());
       const auto importer
         = self->system().registry().get<importer_actor>("tenzir.importer");
       // There exists a very unlikely scenario where the importer was not
