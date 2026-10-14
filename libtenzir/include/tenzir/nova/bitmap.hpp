@@ -103,6 +103,8 @@ public:
     inline auto true_count() const noexcept -> Index;
     inline auto get(Index i) const -> bool;
     inline auto set(Index i, bool value) -> bool;
+    /// Sets the bits in `[begin, end)` to `value`, a word at a time.
+    inline auto set_range(Index begin, Index end, bool value) -> void;
     inline auto copy_from(BitMap const& other) -> void;
     inline auto finish() && -> BitMap;
     inline auto operator|=(const BitMap& other) -> Mutable&;
@@ -620,6 +622,29 @@ inline auto BitMap::Mutable::set(Index i, bool value) -> bool {
     --true_count_;
   }
   return true;
+}
+
+inline auto BitMap::Mutable::set_range(Index begin, Index end, bool value)
+  -> void {
+  TENZIR_ASSERT_LEQ(0, begin);
+  TENZIR_ASSERT_LEQ(begin, end);
+  TENZIR_ASSERT_LEQ(end, length_);
+  while (begin < end) {
+    auto& word = data_.begin()[begin >> word_shift];
+    const auto offset = begin & bit_mask;
+    const auto count = std::min(word_bits - offset, end - begin);
+    const auto bits
+      = (count == word_bits ? ~Word{0} : (Word{1} << count) - 1) << offset;
+    const auto was_set = static_cast<Index>(std::popcount(word & bits));
+    if (value) {
+      word |= bits;
+      true_count_ += count - was_set;
+    } else {
+      word &= ~bits;
+      true_count_ -= was_set;
+    }
+    begin += count;
+  }
 }
 
 inline auto BitMap::Mutable::copy_from(BitMap const& other) -> void {

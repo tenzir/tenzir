@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Capturing `this` subsumes `y`, but both require an enclosing input.
+from {result: [1].map(x => {event: this, y: y})}

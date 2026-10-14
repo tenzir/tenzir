@@ -1,0 +1,176 @@
+warning: binary operator `+` does not accept the argument type combination `(int, string)`
+ --> tests/functions/list_map/nested_captures.tql:8:32
+  |
+8 | sums = xs.map(x => ys.map(y => x + y))
+  |                                ~~~~~
+  |
+
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
+ --> tests/functions/list_map/nested_captures.tql:9:34
+  |
+9 | kept = xs.map(x => ys.where(y => y > x * 10))
+  |                                  ~~~~~~~~~~
+  |
+
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
+  --> tests/functions/list_map/nested_captures.tql:10:39
+   |
+10 | counts = xs.map(x => ys.count_if(y => y > x * 10))
+   |                                       ~~~~~~~~~~
+   |
+{
+  xs: [
+    1,
+    2,
+  ],
+  ys: [
+    10,
+    20,
+    30,
+  ],
+  sums: [
+    [
+      11,
+      21,
+      31,
+    ],
+    [
+      12,
+      22,
+      32,
+    ],
+  ],
+  kept: [
+    [
+      20,
+      30,
+    ],
+    [
+      30,
+    ],
+  ],
+  counts: [
+    2,
+    1,
+  ],
+  same: [
+    [
+      10,
+      20,
+      30,
+    ],
+    [
+      10,
+      20,
+      30,
+    ],
+  ],
+}
+{
+  xs: [
+    3,
+  ],
+  ys: [
+    40,
+  ],
+  sums: [
+    [
+      43,
+    ],
+  ],
+  kept: [
+    [
+      40,
+    ],
+  ],
+  counts: [
+    1,
+  ],
+  same: [
+    [
+      40,
+    ],
+  ],
+}
+{
+  xs: [],
+  ys: [
+    50,
+  ],
+  sums: [],
+  kept: [],
+  counts: [],
+  same: [],
+}
+{
+  xs: [
+    4,
+    5,
+  ],
+  ys: null,
+  sums: [
+    null,
+    null,
+  ],
+  kept: [
+    null,
+    null,
+  ],
+  counts: [
+    null,
+    null,
+  ],
+  same: [
+    null,
+    null,
+  ],
+}
+{
+  xs: [
+    6,
+    7,
+    8,
+  ],
+  ys: [
+    "a",
+    60,
+  ],
+  sums: [
+    [
+      null,
+      66,
+    ],
+    [
+      null,
+      67,
+    ],
+    [
+      null,
+      68,
+    ],
+  ],
+  kept: [
+    [],
+    [],
+    [],
+  ],
+  counts: [
+    0,
+    0,
+    0,
+  ],
+  same: [
+    [
+      "a",
+      60,
+    ],
+    [
+      "a",
+      60,
+    ],
+    [
+      "a",
+      60,
+    ],
+  ],
+}

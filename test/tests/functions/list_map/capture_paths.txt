@@ -1,0 +1,248 @@
+warning: event does not have field
+  --> tests/functions/list_map/capture_paths.tql:13:31
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                               ~~~
+   |
+   = hint: append `?` to suppress this warning
+
+warning: cannot access field of non-record type
+  --> tests/functions/list_map/capture_paths.tql:13:31
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                               ~~~ not a record
+   ⋮
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                   -
+   |
+
+warning: event does not have field
+  --> tests/functions/list_map/capture_paths.tql:13:42
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                          ~~~
+   |
+   = hint: append `?` to suppress this warning
+
+warning: expected `record` or `list`
+  --> tests/functions/list_map/capture_paths.tql:13:42
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                          ~~~ has type `string`
+   |
+
+warning: event does not have field
+  --> tests/functions/list_map/capture_paths.tql:13:56
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                                        ~~~
+   |
+   = hint: append `?` to suppress this warning
+
+warning: cannot access field of non-record type
+  --> tests/functions/list_map/capture_paths.tql:13:56
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                                        ~~~ not a record
+   ⋮
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                                            -
+   |
+
+warning: record does not have field
+  --> tests/functions/list_map/capture_paths.tql:13:56
+   |
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                                        ~~~
+   ⋮
+13 | paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+   |                                                            - field does not exist
+   |
+   = hint: append `?` to suppress this warning
+
+warning: event does not have field
+  --> tests/functions/list_map/capture_paths.tql:14:25
+   |
+14 | whole = xs.map(x => {a: rec.a?, rec: rec})
+   |                         ~~~
+   |
+   = hint: append `?` to suppress this warning
+
+warning: cannot access field of non-record type
+  --> tests/functions/list_map/capture_paths.tql:14:25
+   |
+14 | whole = xs.map(x => {a: rec.a?, rec: rec})
+   |                         ~~~ not a record
+   ⋮
+14 | whole = xs.map(x => {a: rec.a?, rec: rec})
+   |                             -
+   |
+
+warning: event does not have field
+  --> tests/functions/list_map/capture_paths.tql:14:38
+   |
+14 | whole = xs.map(x => {a: rec.a?, rec: rec})
+   |                                      ~~~
+   |
+   = hint: append `?` to suppress this warning
+{
+  rec: {
+    a: 1,
+    b: "one",
+    c: {
+      d: true,
+      e: "unused",
+    },
+  },
+  xs: [
+    1,
+    2,
+  ],
+  paths: [
+    {
+      x: 1,
+      a: 1,
+      b: "one",
+      d: true,
+    },
+    {
+      x: 2,
+      a: 1,
+      b: "one",
+      d: true,
+    },
+  ],
+  whole: [
+    {
+      a: 1,
+      rec: {
+        a: 1,
+        b: "one",
+        c: {
+          d: true,
+          e: "unused",
+        },
+      },
+    },
+    {
+      a: 1,
+      rec: {
+        a: 1,
+        b: "one",
+        c: {
+          d: true,
+          e: "unused",
+        },
+      },
+    },
+  ],
+}
+{
+  rec: {
+    a: 2,
+    c: {
+      e: "unused",
+    },
+  },
+  xs: [
+    3,
+  ],
+  paths: [
+    {
+      x: 3,
+      a: 2,
+      b: null,
+      d: null,
+    },
+  ],
+  whole: [
+    {
+      a: 2,
+      rec: {
+        a: 2,
+        c: {
+          e: "unused",
+        },
+      },
+    },
+  ],
+}
+{
+  rec: {},
+  xs: [
+    4,
+  ],
+  paths: [
+    {
+      x: 4,
+      a: null,
+      b: null,
+      d: null,
+    },
+  ],
+  whole: [
+    {
+      a: null,
+      rec: {},
+    },
+  ],
+}
+{
+  rec: "not a record",
+  xs: [
+    5,
+  ],
+  paths: [
+    {
+      x: 5,
+      a: null,
+      b: null,
+      d: null,
+    },
+  ],
+  whole: [
+    {
+      a: null,
+      rec: "not a record",
+    },
+  ],
+}
+{
+  rec: null,
+  xs: [
+    6,
+  ],
+  paths: [
+    {
+      x: 6,
+      a: null,
+      b: null,
+      d: null,
+    },
+  ],
+  whole: [
+    {
+      a: null,
+      rec: null,
+    },
+  ],
+}
+{
+  xs: [
+    7,
+  ],
+  paths: [
+    {
+      x: 7,
+      a: null,
+      b: null,
+      d: null,
+    },
+  ],
+  whole: [
+    {
+      a: null,
+      rec: null,
+    },
+  ],
+}

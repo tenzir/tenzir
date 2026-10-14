@@ -141,6 +141,13 @@ public:
     : length_{length}, value_(std::move(value)) {
   }
 
+  /// The same constant at another length, sharing the value.
+  auto with_length(Index length) const -> ConstantStorage {
+    auto result = *this;
+    result.length_ = length;
+    return result;
+  }
+
   /// Shares a subvalue owned by this immutable constant. `value` must remain
   /// alive for the lifetime of this constant's payload.
   template <class T, class V = T>

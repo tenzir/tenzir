@@ -1,0 +1,14 @@
+from {
+  events: [
+    {rec: {a: 1, b: "one", c: {d: true, e: "unused"}}, xs: [1, 2]},
+    {rec: {a: 2, c: {e: "unused"}}, xs: [3]},
+    {rec: {}, xs: [4]},
+    {rec: "not a record", xs: [5]},
+    {rec: null, xs: [6]},
+    {xs: [7]},
+  ],
+}
+unroll events
+this = events
+paths = xs.map(x => {x: x, a: rec.a?, b: rec["b"]?, d: rec.c.d?})
+whole = xs.map(x => {a: rec.a?, rec: rec})

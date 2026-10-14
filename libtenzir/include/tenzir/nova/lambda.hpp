@@ -11,12 +11,41 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/instantiate_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant.hpp"
 
 #include <span>
 #include <string_view>
 #include <vector>
 
 namespace tenzir::nova {
+
+/// Marks a lambda body that reads the enclosing event as a whole, through
+/// `this`. No set of field paths describes what such a body needs.
+struct ThisTag {
+  location source;
+};
+
+/// What a lambda body reads from the enclosing input: the field paths, none
+/// of which is a prefix of another, or the whole event.
+using LambdaCaptures = variant<std::span<ast::field_path const>, ThisTag>;
+
+/// The owning counterpart of `LambdaCaptures`.
+using LambdaCaptureStorage = variant<std::vector<ast::field_path>, ThisTag>;
+
+namespace _ {
+
+inline auto borrow(LambdaCaptureStorage const& captures) -> LambdaCaptures {
+  return match(
+    captures,
+    [](std::vector<ast::field_path> const& paths) -> LambdaCaptures {
+      return std::span<ast::field_path const>{paths};
+    },
+    [](ThisTag capture) -> LambdaCaptures {
+      return capture;
+    });
+}
+
+} // namespace _
 
 /// A prepared unary lambda: the borrowed AST node plus its capture analysis.
 ///
@@ -53,9 +82,9 @@ public:
     return node_->body;
   }
 
-  /// The fields the body reads from the enclosing input.
-  auto captures() const -> std::span<ast::identifier const> {
-    return captures_;
+  /// What the body reads from the enclosing input.
+  auto captures() const -> LambdaCaptures {
+    return _::borrow(captures_);
   }
 
   auto location() const -> ::tenzir::location {
@@ -70,13 +99,12 @@ public:
   }
 
 private:
-  LambdaArgument(ast::lambda_expr const* node,
-                 std::vector<ast::identifier> captures)
+  LambdaArgument(ast::lambda_expr const* node, LambdaCaptureStorage captures)
     : node_{node}, captures_{std::move(captures)} {
   }
 
   ast::lambda_expr const* node_ = nullptr;
-  std::vector<ast::identifier> captures_;
+  LambdaCaptureStorage captures_;
 };
 
 /// A prepared binary lambda, such as the `cmp` comparator of `sort`.
@@ -104,15 +132,9 @@ public:
     return node_->body;
   }
 
-  /// The fields the body reads from the enclosing input.
-  auto captures() const -> std::span<ast::identifier const> {
-    return captures_;
-  }
-
-  /// Whether the body reads the enclosing event as a whole, through `this`.
-  /// Such a body needs the entire row in scope, not just its captures.
-  auto captures_this() const -> bool {
-    return captures_this_;
+  /// What the body reads from the enclosing input.
+  auto captures() const -> LambdaCaptures {
+    return _::borrow(captures_);
   }
 
   auto location() const -> ::tenzir::location {
@@ -128,16 +150,12 @@ public:
 
 private:
   BinaryLambdaArgument(ast::lambda_expr const* node,
-                       std::vector<ast::identifier> captures,
-                       bool captures_this)
-    : node_{node},
-      captures_{std::move(captures)},
-      captures_this_{captures_this} {
+                       LambdaCaptureStorage captures)
+    : node_{node}, captures_{std::move(captures)} {
   }
 
   ast::lambda_expr const* node_ = nullptr;
-  std::vector<ast::identifier> captures_;
-  bool captures_this_ = false;
+  LambdaCaptureStorage captures_;
 };
 
 } // namespace tenzir::nova

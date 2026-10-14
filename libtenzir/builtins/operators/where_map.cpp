@@ -9,6 +9,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/broadcast.hpp"
 #include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/events.hpp"
@@ -738,26 +739,13 @@ public:
     if (not list or not active.any()) {
       return frame.null();
     }
-    auto primary = list->data.to_primary();
-    auto const& storage = as<storage::ListStorage>(primary.storage());
-    auto predicates
-      = frame.narrow(active).eval_elements(args.predicate, storage);
-    auto evaluated = [&] {
-      if (predicates.length() == 0) {
-        return storage::BitMap{0, false};
-      }
-      auto result = storage::BitMap::Mutable{predicates.length()};
-      for (auto i = storage::Index{0}; i < frame.length(); ++i) {
-        if (not active.get(i)) {
-          continue;
-        }
-        auto const& span = storage.spans()[i];
-        for (auto j = span.begin; j < span.end; ++j) {
-          result.set(j, true);
-        }
-      }
-      return std::move(result).finish();
-    }();
+    auto evaluated = frame.eval_elements(args.predicate, *list);
+    auto const& elements = evaluated.list;
+    auto const& predicates = evaluated.results;
+    auto selected
+      = broadcast_mask(std::span{elements.spans().begin(),
+                                 static_cast<std::size_t>(elements.length())},
+                       active, predicates.length());
     auto boolean = predicates.get_alternative<Bool>();
     auto null_predicate = predicates.get_alternative<Null>();
     auto boolean_present = boolean
@@ -766,12 +754,12 @@ public:
     auto null_present = null_predicate
                           ? null_predicate->present
                           : storage::BitMap{predicates.length(), false};
-    if (evaluated.and_not(boolean_present).and_not(null_present).any()) {
+    if (selected.and_not(boolean_present).and_not(null_present).any()) {
       diagnostic::warning("expected `bool`")
         .primary(args.predicate.body())
         .emit(frame);
     }
-    auto kept = boolean ? evaluated & boolean_present
+    auto kept = boolean ? selected & boolean_present
                             & as<storage::BitMap>(boolean->data.storage())
                         : storage::BitMap{predicates.length(), false};
     auto builder = ArrayBuilder<List>{};
@@ -781,10 +769,10 @@ public:
         continue;
       }
       auto result = builder.list();
-      auto const& span = storage.spans()[i];
+      auto const& span = elements.spans()[i];
       for (auto j = span.begin; j < span.end; ++j) {
         if (kept.get(j)) {
-          append_row(result, storage.values().get(j));
+          append_row(result, elements.values().get(j));
         }
       }
     }
@@ -856,13 +844,11 @@ public:
       return frame.null();
     }
     // The frame expands the mask and the captures to the element rows,
-    // applies the lambda, and hands back the flattened results, which keep
-    // the input's spans and so re-nest without a copy.
-    auto primary = list->data.to_primary();
-    auto const& storage = as<storage::ListStorage>(primary.storage());
-    auto elements = frame.narrow(active).eval_elements(args.lambda, storage);
-    auto mapped
-      = Array<Data>{Array<List>{storage.spans(), std::move(elements)}};
+    // applies the lambda, and hands back the flattened results with the spans
+    // that re-nest them without a copy.
+    auto evaluated = frame.eval_elements(args.lambda, *list);
+    auto mapped = Array<Data>{
+      Array<List>{evaluated.list.spans(), std::move(evaluated.results)}};
     // Rows that were not mapped (a null or non-list subject) become nulls.
     return std::move(mapped).null_where(present.and_not(active));
   }

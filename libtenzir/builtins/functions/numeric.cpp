@@ -365,16 +365,19 @@ public:
     auto const& storage = as<storage::ListStorage>(primary.storage());
     // Null elements are neither counted nor shown to the predicate.
     auto const element_nulls = storage.values().get_alternative<Null>();
-    auto const rows = frame.narrow(list_rows);
-    auto const results
+    auto const list = MaskedArray<Array<List>>{primary, lists->present};
+    auto const non_null
       = element_nulls
-          ? rows.eval_elements(
-              args.predicate, storage,
-              storage::BitMap{storage.values().length(), true}.and_not(
-                element_nulls->present))
-          : rows.eval_elements(args.predicate, storage);
-    auto const bools = results.get_alternative<Bool>();
-    auto const result_nulls = results.get_alternative<Null>();
+          ? storage::BitMap{storage.values().length(), true}.and_not(
+              element_nulls->present)
+          : storage::BitMap{storage.values().length(), true};
+    auto const evaluated = frame.eval_elements(args.predicate, list, non_null);
+    // The elements the predicate ran over may be laid out anew, so the nulls
+    // to skip come from them.
+    auto const& elements = evaluated.list;
+    auto const null_elements = elements.values().get_alternative<Null>();
+    auto const bools = evaluated.results.get_alternative<Bool>();
+    auto const result_nulls = evaluated.results.get_alternative<Null>();
     auto const* bits
       = bools ? &as<storage::BitMap>(bools->data.storage()) : nullptr;
     auto non_bool = false;
@@ -386,9 +389,9 @@ public:
         continue;
       }
       auto count = Int{0};
-      auto const [begin, end] = storage.spans()[row];
+      auto const [begin, end] = elements.spans()[row];
       for (auto i = begin; i < end; ++i) {
-        if (element_nulls and element_nulls->present.get(i)) {
+        if (null_elements and null_elements->present.get(i)) {
           continue;
         }
         if (bools and bools->present.get(i)) {

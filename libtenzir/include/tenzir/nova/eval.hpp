@@ -64,6 +64,17 @@ struct ValueArgument {
   ValueArgument(Array<Data> data, ::tenzir::location source);
 };
 
+/// The results of evaluating a lambda for the elements of a list column.
+struct ElementResults {
+  /// The list the lambda ran over. Where rows share elements, as after a
+  /// capture broadcast one list to many rows, every evaluated row gets its own
+  /// copy of them, because each needs its own results. The spans of the rows
+  /// that were not evaluated are unspecified.
+  storage::ListStorage list;
+  /// One result per value of `list`.
+  Array<Data> results;
+};
+
 /// A borrowed argument expression that the function evaluates itself, through
 /// `EvalFrame::eval`, instead of receiving it as a `ValueArgument`. For
 /// functions that decide which rows an operand is needed for, or whether it is
@@ -161,19 +172,18 @@ public:
   auto eval(LambdaArgument const& lambda,
             MaskedArray<Array<Data>> subject) const -> Array<Data>;
 
-  /// Evaluates `lambda` for every element of the rows of `list` selected by
-  /// `mask()`, with the parameter bound to the element and captures broadcast
-  /// from the element's row. Returns the flattened element results; pair them
-  /// with `list.spans()` to rebuild a list column.
+  /// Evaluates `lambda` for every element of the lists of `mask()` that are
+  /// present in `list`, with the parameter bound to the element and captures
+  /// broadcast from the element's row. Passing a primary list avoids
+  /// converting it twice.
+  ///
+  /// `elements`, which is sized like the values of `list`, restricts the
+  /// evaluation to its elements, such as to skip nulls the body must not see.
+  /// The results of the other elements are unspecified.
   auto eval_elements(LambdaArgument const& lambda,
-                     storage::ListStorage const& list) const -> Array<Data>;
-
-  /// Like above, but only for the elements that are also in `elements`, which
-  /// is sized like `list.values()`. The other elements hold unspecified
-  /// values. For skipping elements the body must not see, such as nulls.
-  auto
-  eval_elements(LambdaArgument const& lambda, storage::ListStorage const& list,
-                storage::BitMap const& elements) const -> Array<Data>;
+                     MaskedArray<Array<List>> const& list,
+                     Option<storage::BitMap const&> elements = None{}) const
+    -> ElementResults;
 
   /// An all-null result for `mask()`. Not `&&`-qualified: it only reads the
   /// frame's length, so a frame can hand out several.
@@ -204,12 +214,6 @@ private:
 
   auto detached_impl(storage::BitMap mask, void* ctx,
                      void (*f)(void*, EvalFrame)) const -> void;
-
-  /// `eval_elements` for exactly the elements of `elements`, which must
-  /// belong to the rows of `mask()`.
-  auto eval_selected_elements(LambdaArgument const& lambda,
-                              storage::ListStorage const& list,
-                              storage::BitMap elements) const -> Array<Data>;
 
   _::EvalRun* run_;
   storage::BitMap mask_;

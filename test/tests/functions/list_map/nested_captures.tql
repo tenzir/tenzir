@@ -1,0 +1,11 @@
+// Nested lambdas over a captured list: the inner list is broadcast to every
+// element of the outer one, so its rows share their elements.
+from {xs: [1, 2], ys: [10, 20, 30]},
+  {xs: [3], ys: [40]},
+  {xs: [], ys: [50]},
+  {xs: [4, 5], ys: null},
+  {xs: [6, 7, 8], ys: ["a", 60]}
+sums = xs.map(x => ys.map(y => x + y))
+kept = xs.map(x => ys.where(y => y > x * 10))
+counts = xs.map(x => ys.count_if(y => y > x * 10))
+same = xs.map(x => ys)

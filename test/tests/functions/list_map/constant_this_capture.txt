@@ -1,0 +1,6 @@
+error: expected a constant expression
+ --> tests/functions/list_map/constant_this_capture.tql:6:36
+  |
+6 | from {result: [1].map(x => {event: this, y: y})}
+  |                                    ^^^^
+  |

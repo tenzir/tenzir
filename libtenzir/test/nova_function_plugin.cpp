@@ -23,6 +23,7 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/tql2/registry.hpp"
 
+#include <fmt/ranges.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/CurrentExecutor.h>
 
@@ -331,6 +332,17 @@ auto root_field(std::string name) -> ast::expression {
     ast::root_field{ast::identifier{std::move(name), location::unknown}}};
 }
 
+auto field(ast::expression left, std::string name) -> ast::expression {
+  return ast::expression{
+    ast::field_access{std::move(left), location::unknown, false,
+                      ast::identifier{std::move(name), location::unknown}}};
+}
+
+auto add(ast::expression left, ast::expression right) -> ast::expression {
+  return ast::expression{
+    ast::binary_expr{std::move(left), ast::binary_op::add, std::move(right)}};
+}
+
 auto named(std::string name, ast::expression value) -> ast::expression {
   return ast::expression{ast::assignment{root_field(std::move(name)),
                                          location::unknown, std::move(value)}};
@@ -521,14 +533,42 @@ TEST("instantiate requires a lambda for lambda arguments") {
   auto result = instantiate(desc, call({lambda("a", root_field("a"))}),
                             InstantiateCtx{dh, reg});
   REQUIRE(result);
-  CHECK(args_of<LambdaArgs>(*result).fn.captures().empty());
+  // Renders the captured paths, or `this` for a body that reads it.
+  auto captures = [&](ast::expression body) -> std::vector<std::string> {
+    auto instantiated = instantiate(desc, call({lambda("a", std::move(body))}),
+                                    InstantiateCtx{dh, reg});
+    REQUIRE(instantiated);
+    auto const captured = args_of<LambdaArgs>(*instantiated).fn.captures();
+    if (is<nova::ThisTag>(captured)) {
+      return {"this"};
+    }
+    auto rendered = std::vector<std::string>{};
+    for (auto const& path : as<std::span<ast::field_path const>>(captured)) {
+      auto names = std::vector<std::string>{};
+      for (auto const& segment : path.path()) {
+        names.push_back(segment.id.name);
+      }
+      rendered.push_back(fmt::format("{}", fmt::join(names, ".")));
+    }
+    return rendered;
+  };
+  using strings = std::vector<std::string>;
+  CHECK_EQUAL(captures(root_field("a")), strings{});
+  CHECK_EQUAL(captures(field(root_field("a"), "b")), strings{});
   // Fields the body does not bind itself are captures of the input.
-  result = instantiate(desc, call({lambda("a", root_field("y"))}),
-                       InstantiateCtx{dh, reg});
-  REQUIRE(result);
-  const auto& captures = args_of<LambdaArgs>(*result).fn.captures();
-  REQUIRE_EQUAL(captures.size(), size_t{1});
-  CHECK_EQUAL(captures[0].name, "y");
+  CHECK_EQUAL(captures(root_field("y")), strings{"y"});
+  CHECK_EQUAL(
+    captures(add(field(root_field("y"), "z"), field(root_field("y"), "w"))),
+    (strings{"y.z", "y.w"}));
+  // A captured path subsumes the paths below it, in either order.
+  CHECK_EQUAL(captures(add(field(root_field("y"), "z"), root_field("y"))),
+              strings{"y"});
+  CHECK_EQUAL(captures(add(root_field("y"), field(root_field("y"), "z"))),
+              strings{"y"});
+  // Reading `this` subsumes every path.
+  CHECK_EQUAL(captures(add(field(root_field("y"), "z"),
+                           ast::expression{ast::this_{location::unknown}})),
+              strings{"this"});
 }
 
 TEST("instantiate rejects lambdas for expression arguments") {
@@ -899,16 +939,33 @@ TEST("lambda bodies are prepared by the enclosing evaluator") {
 
 TEST("lambda captures are rejected when there is no input") {
   auto reg = TestRegistry{};
-  auto dh = collecting_diagnostic_handler{};
-  auto evaluator = tenzir::test::make_evaluator(
-    ast::expression{call("lambda_fn", {lambda("a", root_field("y"))})}, dh,
-    reg);
-  REQUIRE(evaluator);
-  CHECK(std::move(dh).collect().empty());
-  auto eval_dh = collecting_diagnostic_handler{};
-  evaluator->eval(EvalCtx{eval_dh});
-  CHECK_EQUAL(first_error(std::move(eval_dh).collect()),
-              "expected a constant expression");
+  auto check_capture
+    = [&](ast::expression body, location source = location::unknown) {
+        auto dh = collecting_diagnostic_handler{};
+        auto evaluator = tenzir::test::make_evaluator(
+          ast::expression{call("lambda_fn", {lambda("a", std::move(body))})},
+          dh, reg);
+        REQUIRE(evaluator);
+        CHECK(std::move(dh).collect().empty());
+        auto eval_dh = collecting_diagnostic_handler{};
+        evaluator->eval(EvalCtx{eval_dh});
+        auto diags = std::move(eval_dh).collect();
+        REQUIRE_EQUAL(diags.size(), size_t{1});
+        CHECK_EQUAL(diags.front().message, "expected a constant expression");
+        REQUIRE_EQUAL(diags.front().annotations.size(), size_t{1});
+        CHECK(diags.front().annotations.front().primary);
+        CHECK_EQUAL(diags.front().annotations.front().source, source);
+      };
+  check_capture(root_field("y"));
+  auto const source = location{10, 14, 1, 2};
+  check_capture(ast::expression{ast::this_{source}}, source);
+  // Reading `this` subsumes the free field in the capture analysis.
+  check_capture(add(ast::expression{ast::this_{source}}, root_field("y")),
+                source);
+  // With multiple reads, report the first `this` keyword.
+  check_capture(add(ast::expression{ast::this_{source}},
+                    ast::expression{ast::this_{location{20, 24, 1, 2}}}),
+                source);
 }
 
 TEST("speculative constant evaluation of function calls stays silent") {

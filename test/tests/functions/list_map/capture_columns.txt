@@ -1,0 +1,172 @@
+warning: expected `list`, got a different type
+  --> tests/functions/list_map/capture_columns.tql:13:9
+   |
+13 | pairs = xs.map(x => {x: x, name: name, n: n?})
+   |         ~~
+   |
+
+warning: expected `list`, got a different type
+  --> tests/functions/list_map/capture_columns.tql:14:9
+   |
+14 | above = xs.where(x => x > n?)
+   |         ~~
+   |
+
+warning: expected `list`, got a different type
+  --> tests/functions/list_map/capture_columns.tql:15:8
+   |
+15 | keys = xs.map(x => this.keys())
+   |        ~~
+   |
+{
+  name: "alpha",
+  n: 1,
+  unused: "wide",
+  xs: [
+    1,
+    2,
+  ],
+  pairs: [
+    {
+      x: 1,
+      name: "alpha",
+      n: 1,
+    },
+    {
+      x: 2,
+      name: "alpha",
+      n: 1,
+    },
+  ],
+  above: [
+    2,
+  ],
+  keys: [
+    [
+      "name",
+      "n",
+      "unused",
+      "xs",
+      "pairs",
+      "above",
+      "x",
+    ],
+    [
+      "name",
+      "n",
+      "unused",
+      "xs",
+      "pairs",
+      "above",
+      "x",
+    ],
+  ],
+}
+{
+  name: "beta",
+  xs: [
+    3,
+  ],
+  pairs: [
+    {
+      x: 3,
+      name: "beta",
+      n: null,
+    },
+  ],
+  above: [],
+  keys: [
+    [
+      "name",
+      "xs",
+      "pairs",
+      "above",
+      "x",
+    ],
+  ],
+}
+{
+  name: null,
+  n: 3,
+  xs: [],
+  pairs: [],
+  above: [],
+  keys: [],
+}
+{
+  name: "delta",
+  n: 4,
+  xs: null,
+  pairs: null,
+  above: null,
+  keys: null,
+}
+{
+  name: "epsilon",
+  n: 5,
+  xs: "not a list",
+  pairs: null,
+  above: null,
+  keys: null,
+}
+{
+  name: "zeta",
+  n: 6,
+  unused: "wide",
+  xs: [
+    7,
+    8,
+    9,
+  ],
+  pairs: [
+    {
+      x: 7,
+      name: "zeta",
+      n: 6,
+    },
+    {
+      x: 8,
+      name: "zeta",
+      n: 6,
+    },
+    {
+      x: 9,
+      name: "zeta",
+      n: 6,
+    },
+  ],
+  above: [
+    7,
+    8,
+    9,
+  ],
+  keys: [
+    [
+      "name",
+      "n",
+      "unused",
+      "xs",
+      "pairs",
+      "above",
+      "x",
+    ],
+    [
+      "name",
+      "n",
+      "unused",
+      "xs",
+      "pairs",
+      "above",
+      "x",
+    ],
+    [
+      "name",
+      "n",
+      "unused",
+      "xs",
+      "pairs",
+      "above",
+      "x",
+    ],
+  ],
+}

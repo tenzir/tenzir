@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <tuple>
 #include <vector>
 
 using namespace tenzir::nova;
@@ -593,5 +594,25 @@ TEST("bitmap mutable handles an empty bitmap") {
     auto copy = std::move(BitMap::Mutable{BitMap{Index{0}, value}}).finish();
     CHECK_EQUAL(copy.length(), Index{0});
     CHECK_EQUAL(copy.true_count(), Index{0});
+  }
+}
+
+TEST("bitmap set_range matches setting every bit") {
+  auto ranges = std::vector<std::tuple<Index, Index, bool>>{
+    {0, 0, true},     {3, 200, true},  {100, 140, false}, {127, 129, false},
+    {250, 300, true}, {0, 300, false}, {5, 6, true},      {128, 256, true}};
+  auto ranged = BitMap::Mutable{300};
+  auto single = BitMap::Mutable{300};
+  for (auto const& [begin, end, value] : ranges) {
+    ranged.set_range(begin, end, value);
+    for (auto i = begin; i < end; ++i) {
+      single.set(i, value);
+    }
+    CHECK_EQUAL(ranged.true_count(), single.true_count());
+  }
+  auto const lhs = std::move(ranged).finish();
+  auto const rhs = std::move(single).finish();
+  for (auto i = Index{0}; i < 300; ++i) {
+    CHECK_EQUAL(lhs.get(i), rhs.get(i));
   }
 }

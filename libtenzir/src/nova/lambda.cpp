@@ -9,27 +9,38 @@
 #include "tenzir/nova/lambda.hpp"
 
 #include "tenzir/nova/bitmap_iteration.hpp"
-#include "tenzir/nova/data_array_builder.hpp"
+#include "tenzir/nova/broadcast.hpp"
 #include "tenzir/nova/eval_internal.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/list_array.hpp"
 
 #include <algorithm>
-#include <unordered_set>
+#include <cstdint>
+#include <limits>
+#include <span>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace tenzir::nova {
 
 namespace {
 
-/// Discovers the free fields of a lambda body, i.e. the fields it reads from
-/// the enclosing input rather than from its own parameters.
-class Captures final : public ast::visitor<Captures> {
-public:
-  explicit Captures(std::string parameter) : bound_{std::move(parameter)} {
-  }
+using Path = std::span<ast::field_path::segment const>;
 
-  explicit Captures(std::vector<std::string> parameters)
+auto is_prefix(Path prefix, Path path) -> bool {
+  return prefix.size() <= path.size()
+         and std::ranges::equal(prefix, path.first(prefix.size()),
+                                [](auto const& lhs, auto const& rhs) {
+                                  return lhs.id.name == rhs.id.name;
+                                });
+}
+
+/// Discovers the free fields of a lambda body, i.e. the field paths it reads
+/// from the enclosing input rather than from its own parameters.
+class CaptureFinder final : public ast::visitor<CaptureFinder> {
+public:
+  explicit CaptureFinder(std::vector<std::string> parameters)
     : bound_{std::move(parameters)} {
   }
 
@@ -38,23 +49,20 @@ public:
     enter(x);
   }
 
-  auto visit(ast::root_field& x) -> void {
-    add(x.id);
-  }
-
-  auto visit(ast::this_&) -> void {
-    // `this` reads the enclosing event as a whole, so no single field name
-    // describes what the body needs.
-    captures_this = true;
-  }
-
   template <class T>
-    requires concepts::one_of<T, ast::field_access, ast::index_expr>
+    requires concepts::one_of<T, ast::root_field, ast::field_access,
+                              ast::index_expr>
   auto visit(T& x) -> void {
     if (auto path = ast::field_path::try_from(x)) {
-      add(path->path().front().id);
+      add(std::move(*path));
     } else {
       enter(x);
+    }
+  }
+
+  auto visit(ast::this_& x) -> void {
+    if (not captures_this_) {
+      captures_this_ = ThisTag{x.get_location()};
     }
   }
 
@@ -72,90 +80,126 @@ public:
     visit(x.right);
   }
 
-  std::vector<ast::identifier> captures;
-  bool captures_this = false;
+  auto result() && -> LambdaCaptureStorage {
+    if (captures_this_) {
+      return *captures_this_;
+    }
+    return std::move(paths_);
+  }
 
 private:
-  auto add(ast::identifier const& id) -> void {
-    if (std::ranges::find(bound_, id.name) == bound_.end()
-        and seen_.insert(id.name).second) {
-      captures.push_back(id);
+  auto add(ast::field_path path) -> void {
+    auto const segments = path.path();
+    if (segments.empty()
+        or std::ranges::find(bound_, segments.front().id.name)
+             != bound_.end()) {
+      return;
     }
+    // A captured path subsumes the paths below it.
+    if (std::ranges::any_of(paths_, [&](ast::field_path const& other) {
+          return is_prefix(other.path(), segments);
+        })) {
+      return;
+    }
+    std::erase_if(paths_, [&](ast::field_path const& other) {
+      return is_prefix(segments, other.path());
+    });
+    paths_.push_back(std::move(path));
   }
 
   std::vector<std::string> bound_;
-  std::unordered_set<std::string> seen_;
+  std::vector<ast::field_path> paths_;
+  Option<ThisTag> captures_this_;
 };
 
-/// The element rows belonging to the rows of `shape` selected by `mask`.
-auto expand_mask(storage::BitMap const& mask, storage::ListStorage const& shape)
-  -> storage::BitMap {
-  if (auto constant = mask.as_constant()) {
-    return storage::BitMap{shape.values().length(), *constant};
-  }
-  auto result = storage::BitMap::Mutable{shape.values().length()};
-  for (auto row : storage::true_bits(mask)) {
-    auto const& span = shape.spans()[row];
-    for (auto index = span.begin; index < span.end; ++index) {
-      result.set(index, true);
-    }
-  }
-  return std::move(result).finish();
+/// Whether a lambda body reads anything that `input` has, in which case it
+/// sees the enclosing record.
+auto reads_input(LambdaCaptures const& captures, Array<Record> const& input)
+  -> bool {
+  return match(
+    captures,
+    [](ThisTag) {
+      return true;
+    },
+    [&](std::span<ast::field_path const> paths) {
+      return std::ranges::any_of(paths, [&](ast::field_path const& path) {
+        return input.field(path.path().front().id.name).is_some();
+      });
+    });
 }
 
-/// Broadcasts a captured column from each row of `shape` to that row's
-/// elements, so the body sees the enclosing row's value for every element.
-auto expand_capture(MaskedArray<Array<Data>> field,
-                    storage::ListStorage const& shape,
-                    storage::BitMap const& mask) -> MaskedArray<Array<Data>> {
-  auto active = std::move(field.present) & mask;
-  auto builder = ArrayBuilder<Data>{};
-  for (auto row : storage::true_bits(active)) {
-    auto const& [begin, end] = shape.spans()[row];
-    if (begin == end) {
+auto project(Array<Record> const& record, std::span<Path const> paths)
+  -> Array<Record>;
+
+/// Restricts the records in `column` to the fields that `paths` lead into.
+/// Other values stay as they are, so that the body reports the same
+/// diagnostics for them.
+auto project(Array<Data> column, std::span<Path const> paths) -> Array<Data> {
+  return std::move(column).map_alternative<Record>(
+    [&](MaskedArray<Array<Record>> records) -> Array<Record> {
+      return project(records.data, paths);
+    });
+}
+
+/// Like above, for the non-empty `paths` relative to `record`. Records without
+/// a field of a path keep their other captured fields.
+auto project(Array<Record> const& record, std::span<Path const> paths)
+  -> Array<Record> {
+  auto fields
+    = std::vector<std::pair<std::string_view, Array<Record>::MaskedArray>>{};
+  auto below = std::vector<Path>{};
+  for (auto const& path : paths) {
+    auto const name = std::string_view{path.front().id.name};
+    if (std::ranges::any_of(fields, [&](auto const& field) {
+          return field.first == name;
+        })) {
       continue;
     }
-    builder.skip_n(begin - builder.length());
-    auto value = field.data.get(row);
-    for (auto index = begin; index < end; ++index) {
-      append_row(builder, value);
-    }
-  }
-  builder.skip_n(shape.values().length() - builder.length());
-  return {builder.finish(), expand_mask(active, shape)};
-}
-
-/// Broadcasts one metadata column from each row of `shape` to that row's
-/// elements, mirroring `expand_capture` for the typed metadata arrays.
-template <fundamental_type Tag>
-auto expand_meta_column(Array<Tag> const& column,
-                        storage::ListStorage const& shape) -> Array<Tag> {
-  auto builder = ArrayBuilder<Tag>{};
-  auto const rows = std::min(column.length(), shape.length());
-  for (auto row = storage::Index{0}; row < rows; ++row) {
-    auto const& [begin, end] = shape.spans()[row];
-    if (begin == end) {
+    auto field = record.field(name);
+    if (not field) {
       continue;
     }
-    builder.skip_n(begin - builder.length());
-    auto const value = *column.get(row);
-    for (auto index = begin; index < end; ++index) {
-      builder.data(value);
+    below.clear();
+    for (auto const& other : paths) {
+      if (other.front().id.name == name) {
+        below.push_back(other.subspan(1));
+      }
     }
+    // No path is a prefix of another, so one that ends here is the only one.
+    if (not below.front().empty()) {
+      field->data = project(std::move(field->data), below);
+    }
+    fields.emplace_back(name, std::move(*field));
   }
-  builder.skip_n(shape.values().length() - builder.length());
-  return builder.finish();
+  if (fields.empty()) {
+    return Array<Record>::make_empty(record.length());
+  }
+  return Array<Record>::from_fields(fields);
 }
 
-/// Lifts row-space event metadata into the element space of `shape`, so a
-/// lambda body evaluated per element still sees its enclosing event's origin.
-auto expand_meta(Events::Meta const& meta, storage::ListStorage const& shape)
-  -> Events::Meta {
-  return Events::Meta{
-    .name = expand_meta_column(meta.name, shape),
-    .import_time = expand_meta_column(meta.import_time, shape),
-    .internal = expand_meta_column(meta.internal, shape),
-  };
+/// The record a lambda body sees in element space: the captured fields of
+/// `input`, broadcast from each row selected by `rows` to its elements. A body
+/// that reads `this` gets the whole record.
+auto broadcast_captures(LambdaCaptures const& captures, Events const& input,
+                        std::span<storage::Span const> spans,
+                        storage::BitMap const& rows, storage::Index length)
+  -> Array<Record> {
+  return match(
+    captures,
+    [&](ThisTag) {
+      return broadcast(input.data, spans, rows, length);
+    },
+    [&](std::span<ast::field_path const> captured) {
+      if (captured.empty()) {
+        return Array<Record>::make_empty(length);
+      }
+      auto paths = std::vector<Path>{};
+      paths.reserve(captured.size());
+      for (auto const& path : captured) {
+        paths.push_back(path.path());
+      }
+      return broadcast(project(input.data, paths), spans, rows, length);
+    });
 }
 
 } // namespace
@@ -166,9 +210,9 @@ auto LambdaArgument::make(ast::lambda_expr& lambda, InstantiateCtx ctx)
     diagnostic::error("expected unary lambda").primary(lambda).emit(ctx);
     return failure::promise();
   }
-  auto captures = Captures{lambda.param(0).name};
+  auto captures = CaptureFinder{{lambda.param(0).name}};
   captures.visit(lambda.body);
-  return LambdaArgument{std::addressof(lambda), std::move(captures.captures)};
+  return LambdaArgument{std::addressof(lambda), std::move(captures).result()};
 }
 
 auto BinaryLambdaArgument::make(ast::lambda_expr& lambda, InstantiateCtx ctx)
@@ -178,11 +222,10 @@ auto BinaryLambdaArgument::make(ast::lambda_expr& lambda, InstantiateCtx ctx)
     return failure::promise();
   }
   auto captures
-    = Captures{std::vector{lambda.param(0).name, lambda.param(1).name}};
+    = CaptureFinder{std::vector{lambda.param(0).name, lambda.param(1).name}};
   captures.visit(lambda.body);
   return BinaryLambdaArgument{std::addressof(lambda),
-                              std::move(captures.captures),
-                              captures.captures_this};
+                              std::move(captures).result()};
 }
 
 auto EvalFrame::eval(LambdaArgument const& lambda,
@@ -195,15 +238,11 @@ auto EvalFrame::eval(LambdaArgument const& lambda,
   if (subject.present.true_count() == 0) {
     return Array<Data>{Array<Null>{storage::NullStorage{length}}};
   }
-  auto record = Array<Record>::make_empty(input.length());
-  for (auto const& capture : lambda.captures()) {
-    if (input.data.field(capture.name)) {
-      // Like the legacy evaluator, captures retain the enclosing record; the
-      // parameter overwrites its field below.
-      record = input.data;
-      break;
-    }
-  }
+  // Like the legacy evaluator, captures retain the enclosing record; the
+  // parameter overwrites its field below.
+  auto record = reads_input(lambda.captures(), input.data)
+                  ? input.data
+                  : Array<Record>::make_empty(input.length());
   auto mask = subject.present;
   record = std::move(record).with_field_overwrite(lambda.param(),
                                                   std::move(subject));
@@ -229,20 +268,11 @@ auto EvalFrame::eval(BinaryLambdaArgument const& lambda,
   }
   lhs.present = present;
   rhs.present = present;
-  auto record = Array<Record>::make_empty(input.length());
   // Like the unary case, captures retain the enclosing record; the parameters
-  // overwrite their fields below. A body that reads `this` needs the whole
-  // row, which no capture name describes.
-  if (lambda.captures_this()) {
-    record = input.data;
-  } else {
-    for (auto const& capture : lambda.captures()) {
-      if (input.data.field(capture.name)) {
-        record = input.data;
-        break;
-      }
-    }
-  }
+  // overwrite their fields below.
+  auto record = reads_input(lambda.captures(), input.data)
+                  ? input.data
+                  : Array<Record>::make_empty(input.length());
   record
     = std::move(record).with_field_overwrite(lambda.param(0), std::move(lhs));
   record
@@ -261,9 +291,20 @@ auto EvalFrame::eval(LambdaArgument const& lambda,
   if (subject.present.true_count() == 0) {
     return Array<Data>{Array<Null>{storage::NullStorage{length}}};
   }
-  if (not lambda.captures().empty()) {
+  auto const capture_location = match(
+    lambda.captures(),
+    [](ThisTag capture) -> Option<location> {
+      return capture.source;
+    },
+    [](std::span<ast::field_path const> paths) -> Option<location> {
+      if (paths.empty()) {
+        return None{};
+      }
+      return paths.front().get_location();
+    });
+  if (capture_location) {
     diagnostic::error("expected a constant expression")
-      .primary(lambda.captures().front().location)
+      .primary(*capture_location)
       .emit(dh());
     return Array<Data>{Array<Null>{storage::NullStorage{length}}};
   }
@@ -274,54 +315,77 @@ auto EvalFrame::eval(LambdaArgument const& lambda,
 }
 
 auto EvalFrame::eval_elements(LambdaArgument const& lambda,
-                              storage::ListStorage const& list) const
-  -> Array<Data> {
-  return eval_selected_elements(lambda, list, expand_mask(mask(), list));
-}
-
-auto EvalFrame::eval_elements(LambdaArgument const& lambda,
-                              storage::ListStorage const& list,
-                              storage::BitMap const& elements) const
-  -> Array<Data> {
-  TENZIR_ASSERT_EQ(elements.length(), list.values().length());
-  return eval_selected_elements(lambda, list,
-                                expand_mask(mask(), list) & elements);
-}
-
-auto EvalFrame::eval_selected_elements(LambdaArgument const& lambda,
-                                       storage::ListStorage const& list,
-                                       storage::BitMap elements) const
-  -> Array<Data> {
+                              MaskedArray<Array<List>> const& list,
+                              Option<storage::BitMap const&> elements) const
+  -> ElementResults {
   TENZIR_ASSERT(lambda);
-  auto subject = MaskedArray<Array<Data>>{list.values(), elements};
-  // Element space, not row space: the result has one row per list element,
-  // so it is sized by `list.values()`, never by this frame's length.
-  auto result
-    = Array<Data>{Array<Null>{storage::NullStorage{elements.length()}}};
-  if (elements.true_count() != 0) {
-    auto const* input = this->input();
-    if (input) {
-      auto record = Array<Record>::make_empty(list.values().length());
-      for (auto const& capture : lambda.captures()) {
-        if (input->data.field(capture.name)) {
-          auto expanded = expand_capture(
-            {Array<Data>{input->data}, input->mask}, list, mask());
-          auto records = expanded.data.get_alternative<Record>();
-          TENZIR_ASSERT(records);
-          record = std::move(records->data);
-          break;
-        }
-      }
-      auto events
-        = Events{std::move(record), elements, expand_meta(input->meta, list)};
-      result = eval(lambda, std::move(subject), events);
-    } else {
-      result = eval(lambda, std::move(subject));
-    }
+  auto const primary = list.data.to_primary();
+  auto layout = as<storage::ListStorage>(primary.storage());
+  auto const rows = mask() & list.present;
+  auto filter = elements.map([](storage::BitMap const& x) {
+    return x;
+  });
+  if (filter) {
+    TENZIR_ASSERT_EQ(filter->length(), layout.values().length());
   }
-  // The body produced a value for every element of `elements`, so the result
-  // is already valid across it.
-  return result;
+  auto spans = std::span<storage::Span const>{
+    layout.spans().begin(), static_cast<std::size_t>(layout.length())};
+  auto selected = broadcast_mask(spans, rows, layout.values().length());
+  auto total = int64_t{0};
+  storage::for_each_true(rows, [&](storage::Index row) {
+    total += spans[row].end - spans[row].begin;
+  });
+  if (selected.true_count() != total) {
+    // Rows share elements, but every row needs its own results, so each gets
+    // its own copy of its elements, one row after another.
+    TENZIR_ASSERT_LEQ(total, std::numeric_limits<storage::Index>::max());
+    auto ranges = std::vector<storage::Span>{};
+    auto owned = storage::DataOwner<storage::Span[]>::make_value(
+      layout.length(), storage::Span{0, 0});
+    auto offset = storage::Index{0};
+    storage::for_each_true(rows, [&](storage::Index row) {
+      auto const span = spans[row];
+      owned[row] = {offset, offset + (span.end - span.begin)};
+      offset += span.end - span.begin;
+      ranges.push_back(span);
+    });
+    if (filter) {
+      filter = concatenate_ranges(*filter, ranges);
+    }
+    layout = storage::ListStorage{std::move(owned),
+                                  concatenate_ranges(layout.values(), ranges)};
+    spans = {layout.spans().begin(), static_cast<std::size_t>(layout.length())};
+    selected = storage::BitMap{offset, true};
+  }
+  // Element space, not row space: the results have one row per element of
+  // the layout, never this frame's length.
+  auto const length = layout.values().length();
+  if (filter) {
+    selected = std::move(selected) & *filter;
+  }
+  if (not selected.any()) {
+    return {
+      std::move(layout),
+      Array<Data>{Array<Null>{storage::NullStorage{length}}},
+    };
+  }
+  auto subject = MaskedArray<Array<Data>>{layout.values(), selected};
+  auto const* input = this->input();
+  if (not input) {
+    auto results = eval(lambda, std::move(subject));
+    return {std::move(layout), std::move(results)};
+  }
+  auto events = Events{
+    broadcast_captures(lambda.captures(), *input, spans, rows, length),
+    std::move(selected),
+    Events::Meta{
+      .name = broadcast(input->meta.name, spans, rows, length),
+      .import_time = broadcast(input->meta.import_time, spans, rows, length),
+      .internal = broadcast(input->meta.internal, spans, rows, length),
+    },
+  };
+  auto results = eval(lambda, std::move(subject), events);
+  return {std::move(layout), std::move(results)};
 }
 
 } // namespace tenzir::nova

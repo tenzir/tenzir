@@ -1,0 +1,15 @@
+from {
+  events: [
+    {name: "alpha", n: 1, unused: "wide", xs: [1, 2]},
+    {name: "beta", xs: [3]},
+    {name: null, n: 3, xs: []},
+    {name: "delta", n: 4, xs: null},
+    {name: "epsilon", n: 5, xs: "not a list"},
+    {name: "zeta", n: 6, unused: "wide", xs: [7, 8, 9]},
+  ],
+}
+unroll events
+this = events
+pairs = xs.map(x => {x: x, name: name, n: n?})
+above = xs.where(x => x > n?)
+keys = xs.map(x => this.keys())
