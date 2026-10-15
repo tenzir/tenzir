@@ -18,7 +18,9 @@ class ExecutedError(Exception):
         ("tenzir", "", [], "tenzir-engine", ["tenzir"]),
         ("tenzir", "", ["from {}"], "tenzir-engine", ["tenzir", "from {}"]),
         ("tenzir", "0", ["--help"], "tenzir-engine", ["tenzir", "--help"]),
-        ("tenzir", "No", ["up", "name"], "tenzir-engine", ["tenzir", "up", "name"]),
+        ("tenzir", "No", ["up", "name"], "platform-cli", ["tenzir", "up", "name"]),
+        ("tenzir", "", ["up"], "platform-cli", ["tenzir", "up"]),
+        ("tenzir", "", ["down", "name"], "tenzir-engine", ["tenzir", "down", "name"]),
         (
             "tenzir",
             "FALSE",
@@ -109,6 +111,7 @@ class ExecutedError(Exception):
         ),
         ("tenzir-ctl", "", ["platform"], "tenzir-engine", ["tenzir-ctl", "platform"]),
         ("tenzir-rebuild", "1", [], "tenzir-engine", ["tenzir-rebuild"]),
+        ("tenzir-node", "", ["up"], "tenzir-engine", ["tenzir-node", "up"]),
     ],
 )
 def test_wheel_dispatch(

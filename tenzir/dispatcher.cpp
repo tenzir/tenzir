@@ -116,6 +116,8 @@ auto main(int argc, char** argv) -> int {
       }
     } else if (command == "platform") {
       return run_platform_cli(libexec, name, argv + 2, argv + argc);
+    } else if (command == "up") {
+      return run_platform_cli(libexec, name, argv + 1, argv + argc);
     }
   }
   auto arguments = std::vector<char*>{argv, argv + argc};

@@ -80,6 +80,8 @@ def exec_binary(name: str) -> NoReturn:
                 _exec_platform_cli(arguments)
         elif arguments[:1] == ["platform"]:
             _exec_platform_cli(arguments[1:])
+        elif arguments[:1] == ["up"]:
+            _exec_platform_cli(arguments)
     # Try packaged binary first, then PATH.
     for p in _candidate_paths("tenzir"):
         if p.is_file() and os.access(p, os.X_OK):

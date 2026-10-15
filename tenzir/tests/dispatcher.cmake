@@ -58,9 +58,12 @@ foreach (
   check("${mode}" tenzir "${engine}run\nfrom {x: 1}\n" run "from {x: 1}")
   check("${mode}" tenzir "${engine}run\n-f\npipeline.tql\n" run -f pipeline.tql)
   check("${mode}" tenzir "${engine}run\n--\n-r\n" run -- -r)
+  check("${mode}" tenzir "${platform}up\nname\n-d\n" up name -d)
+  check("${mode}" tenzir "${platform}up\n" up)
   foreach (name tenzir-node tenzir-ctl tenzir-rebuild tenzir-up)
     check("${mode}" "${name}" "${engine}run\n-r\n" run -r)
     check("${mode}" "${name}" "${engine}platform\n--help\n" platform --help)
+    check("${mode}" "${name}" "${engine}up\n" up)
   endforeach ()
 endforeach ()
 foreach (
@@ -77,7 +80,7 @@ foreach (
   check("${mode}" tenzir "${platform}--help\n" platform --help)
   check("${mode}" tenzir "${platform}" platform)
   check("${mode}" tenzir "${engine}run\n-r\nfrom {x: 1}\n" run -r "from {x: 1}")
-  check("${mode}" tenzir "${engine}up\nname\n" up name)
+  check("${mode}" tenzir "${engine}down\nname\n" down name)
   check("${mode}" tenzir "${engine}--help\n" --help)
   check("${mode}" tenzir "${engine}unknown\n--flag\na b\n" unknown --flag "a b")
   check("${mode}" tenzir "${engine}")
@@ -93,7 +96,6 @@ foreach (mode 1 true yes arbitrary)
     -f
     p.tql
     --remote)
-  check("${mode}" tenzir "${platform}up\nname\n-d\n" up name -d)
   check("${mode}" tenzir "${platform}down\nname\n" down name)
   check("${mode}" tenzir "${platform}--help\n" --help)
   check("${mode}" tenzir "${platform}unknown\n--flag\na b\n" unknown --flag
