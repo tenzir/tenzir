@@ -1,0 +1,6 @@
+let $types = {
+  "EVENT-ADD": "Create",
+  "EVENT-DEL": "Delete",
+}
+from {code: "EVENT-ADD"}, {code: "EVENT-DEL"}, {code: "EVENT-REN"}
+known = $types.has(code)
