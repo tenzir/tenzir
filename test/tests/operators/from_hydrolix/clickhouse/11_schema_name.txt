@@ -1,0 +1,3 @@
+{
+  schema: "hydrolix.default.fh_events",
+}

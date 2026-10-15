@@ -13,6 +13,7 @@
   "to_google_cloud_logging"
   "to_google_cloud_monitoring"
   "to_google_secops"
+  "to_hydrolix"
   "to_sentinelone_data_lake"
   "to_splunk"
   "vast"

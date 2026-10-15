@@ -1,0 +1,9 @@
+// Hydrolix reads only the partitions of the time range, which a `where` can
+// push into the query only as a constant: `let` evaluates `now()` once.
+let $since = now() - 36500d
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where time > $since
+summarize events=count()

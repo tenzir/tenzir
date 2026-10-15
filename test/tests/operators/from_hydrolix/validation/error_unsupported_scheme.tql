@@ -1,0 +1,4 @@
+---
+error: true
+---
+from_hydrolix "ftp://example.invalid", token="token", table="a.b"

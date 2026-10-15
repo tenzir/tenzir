@@ -1,0 +1,9 @@
+error: `sql` and `table` are mutually exclusive
+ --> tests/operators/from_hydrolix/validation/error_table_and_sql.tql:4:74
+  |
+4 | from_hydrolix "https://example.invalid", token="token", table="a.b", sql="SELECT 1"
+  |                                                                          ^^^^^^^^^^
+  ⋮
+4 | from_hydrolix "https://example.invalid", token="token", table="a.b", sql="SELECT 1"
+  |                                                               -----
+  |

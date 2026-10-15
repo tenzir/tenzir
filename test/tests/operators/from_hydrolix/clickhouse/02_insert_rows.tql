@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fh_events VALUES ('2026-01-01 00:00:01', 1, 'alice', 1.5), ('2026-01-01 00:00:02', 2, 'bob', 2.5), ('2026-01-01 00:00:03', 3, 'carol', 3.5)",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

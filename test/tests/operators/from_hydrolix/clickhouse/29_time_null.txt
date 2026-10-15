@@ -1,0 +1,18 @@
+warning: malformed Hydrolix values in `t`: DateTime64 value is out of range after rescaling to nanoseconds
+ --> tests/operators/from_hydrolix/clickhouse/29_time_null.tql:2:1
+  |
+2 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ~~~~~~~~~~~~~
+  |
+{
+  id: 1,
+}
+{
+  id: 3,
+}
+{
+  id: 7,
+}
+{
+  id: 8,
+}

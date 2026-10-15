@@ -224,6 +224,32 @@ auto format_date(int64_t days) -> std::string {
                      unsigned{ymd.month()}, unsigned{ymd.day()});
 }
 
+/// The function that yields the stored tick count of a column of `type`, or
+/// `None` if there is none. The tick count is a plain `Int64` with which a
+/// guard can compare, and it is `NULL` for a `NULL` value.
+///
+/// The `toUnixTimestamp64*` functions convert to their own unit, so only the
+/// one at the column's precision returns the tick count unchanged. Another one
+/// either throws when the conversion overflows or truncates, which ruins the
+/// guard's exactness at the edge of the range. `reinterpretAsInt64` returns
+/// the tick count at every precision.
+auto tick_count_function(pushdown::TimeType const& type)
+  -> Option<std::string_view> {
+  if (not type.native_type.starts_with("DateTime64(")) {
+    return None{};
+  }
+  switch (type.unit) {
+    case 1'000'000:
+      return "toUnixTimestamp64Milli";
+    case 1'000:
+      return "toUnixTimestamp64Micro";
+    case 1:
+      return "toUnixTimestamp64Nano";
+    default:
+      return "reinterpretAsInt64";
+  }
+}
+
 } // namespace
 
 // -- ClickHouseRenderer -------------------------------------------------------
@@ -356,6 +382,35 @@ auto ClickHouseRenderer::render_call(pushdown::Call const& x,
     }
   }
   TENZIR_UNREACHABLE();
+}
+
+auto ClickHouseRenderer::render_comparison(pushdown::Binary const& x,
+                                           Fragment const& left,
+                                           Fragment const& right) const
+  -> Option<Fragment> {
+  if (target_ != SqlTarget::hydrolix
+      or x.origin != pushdown::ComparisonOrigin::time_guard) {
+    return SqlRenderer::render_comparison(x, left, right);
+  }
+  // Hydrolix reads a time range from a guard on its bare primary column,
+  // which then spans past 2262 or before 1677. A query option such as
+  // `hdx_query_max_timerange_sec` rejects the upper bound, and the lower one
+  // overflows Hydrolix's partition catalog, which then finds no rows. A guard
+  // on the column's tick count means the same, but Hydrolix's range analysis
+  // skips it. Other temporal types cannot be Hydrolix's primary timestamp,
+  // so their guards stay bare.
+  auto const& literal = as<pushdown::Literal>(*x.right);
+  auto const& value = as<pushdown::TimeValue>(literal.value);
+  TENZIR_ASSERT(x.op == pushdown::BinaryOp::geq
+                or x.op == pushdown::BinaryOp::leq);
+  auto ticks = tick_count_function(value.type);
+  if (not ticks) {
+    return SqlRenderer::render_comparison(x, left, right);
+  }
+  return sql_binary(x.op == pushdown::BinaryOp::geq ? ">=" : "<=",
+                    sql_call(*ticks, std::array{left}),
+                    sql_atom(fmt::to_string(value.ticks)),
+                    Fragment::Kind::predicate);
 }
 
 auto ClickHouseRenderer::render_conditional(Fragment const& condition,
@@ -535,13 +590,13 @@ auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
 
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
                           SqlSchema const& schema, std::string_view table,
-                          std::span<const std::string> where)
+                          std::span<const std::string> where, SqlTarget target)
   -> Option<std::string> {
   if (aggregation.columns.empty()
       or not supports_aggregate_functions(aggregation)) {
     return None{};
   }
-  auto const renderer = ClickHouseRenderer{};
+  auto const renderer = ClickHouseRenderer{target};
   auto selection = std::vector<std::string>{};
   auto groups = std::vector<std::string>{};
   for (auto i = size_t{0}; i < aggregation.columns.size(); ++i) {

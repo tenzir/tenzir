@@ -19,11 +19,14 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/string.hpp"
+#include "tenzir/http.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova_flag.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/read.hpp"
@@ -31,11 +34,13 @@
 #include "tenzir/tql2/filter.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <boost/url/parse.hpp>
 #include <clickhouse/client.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
 
 #include <algorithm>
+#include <cctype>
 #include <unordered_set>
 #include <utility>
 
@@ -45,6 +50,16 @@ namespace {
 
 constexpr auto clickhouse_plaintext_port = uint64_t{9000};
 constexpr auto clickhouse_tls_port = uint64_t{9440};
+
+/// The user name that makes Hydrolix treat the password as an API token.
+constexpr auto hydrolix_token_user = std::string_view{"__api_token__"};
+
+/// The connection arguments of `from_hydrolix`, which replace the explicit
+/// ones of `from_clickhouse`.
+struct HydrolixConnectionArgs {
+  located<secret> url;
+  located<secret> token;
+};
 
 struct FromClickhouseArgs {
   located<secret> uri = {secret::make_literal(""), location::unknown};
@@ -59,7 +74,237 @@ struct FromClickhouseArgs {
   /// Apply every accepted predicate: in SQL where exact, locally otherwise.
   OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
     optimization;
+  /// Set when the operator runs as `from_hydrolix`. Not an argument of
+  /// `from_clickhouse`, so only the conversion from `FromHydrolixArgs` sets it.
+  Option<HydrolixConnectionArgs> hydrolix = None{};
 };
+
+struct FromHydrolixArgs {
+  located<secret> url;
+  located<secret> token;
+  Option<located<std::string>> table;
+  Option<located<std::string>> sql;
+  Option<located<uint64_t>> port = None{};
+  Option<located<data>> tls;
+  location operator_location;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
+    optimization;
+};
+
+/// Runs `from_hydrolix` as `from_clickhouse` against the cluster's native
+/// ClickHouse interface.
+auto to_clickhouse_args(FromHydrolixArgs args) -> FromClickhouseArgs {
+  auto result = FromClickhouseArgs{};
+  result.table = std::move(args.table);
+  result.port = args.port;
+  result.sql = std::move(args.sql);
+  result.tls = std::move(args.tls);
+  result.operator_location = args.operator_location;
+  result.optimization = std::move(args.optimization);
+  result.hydrolix = HydrolixConnectionArgs{
+    .url = std::move(args.url),
+    .token = std::move(args.token),
+  };
+  return result;
+}
+
+/// The names that tell users which backend an operator talks to.
+struct BackendNames {
+  std::string_view operator_name;
+  std::string_view service;
+  std::string_view schema_prefix;
+};
+
+auto backend_names(bool hydrolix) -> BackendNames {
+  if (hydrolix) {
+    return {"from_hydrolix", "Hydrolix", "hydrolix"};
+  }
+  return {"from_clickhouse", "ClickHouse", "clickhouse"};
+}
+
+/// Asks the server to compress the blocks it sends, which shrinks results that
+/// cross a network at little CPU cost.
+auto with_read_compression(::clickhouse::ClientOptions options)
+  -> ::clickhouse::ClientOptions {
+  options.SetCompressionMethod(::clickhouse::CompressionMethod::LZ4);
+  return options;
+}
+
+auto sql_target(FromClickhouseArgs const& args) -> SqlTarget {
+  return args.hydrolix.has_value() ? SqlTarget::hydrolix
+                                   : SqlTarget::clickhouse;
+}
+
+/// Fails a checkpoint. A query has no cursor to resume from, so a restored
+/// operator would run it again and repeat the events that earlier checkpoints
+/// committed.
+[[noreturn]] auto reject_checkpoint(FromClickhouseArgs const& args) -> void {
+  diagnostic::error("{} does not support checkpoints yet",
+                    backend_names(args.hydrolix.has_value()).operator_name)
+    .primary(args.operator_location)
+    .throw_();
+}
+
+/// Creates the counter of the events that the operator reads.
+auto make_events_counter(bool hydrolix, OpCtx& ctx) -> MetricsCounter {
+  auto label = hydrolix ? MetricsLabel{"operator", "from_hydrolix"}
+                        : MetricsLabel{"operator", "from_clickhouse"};
+  return ctx.make_counter(label, MetricsDirection::read,
+                          MetricsVisibility::external_, MetricsUnit::events);
+}
+
+/// The native ClickHouse endpoint of a Hydrolix cluster.
+struct HydrolixEndpoint {
+  std::string host;
+  uint16_t port = 0;
+  std::string token;
+  TlsConfig tls;
+};
+
+/// Derives the native endpoint from the cluster URL of `from_hydrolix`. The
+/// URL names the cluster as in `to_hydrolix`, so only its scheme and host
+/// matter: the scheme decides TLS, which in turn decides the default port.
+auto resolve_hydrolix_endpoint(HydrolixConnectionArgs const& hydrolix,
+                               Option<located<uint64_t>> const& port,
+                               Option<located<data>> const& tls, OpCtx& ctx)
+  -> Task<Option<HydrolixEndpoint>> {
+  auto& dh = ctx.dh();
+  auto url = std::string{};
+  auto token = std::string{};
+  auto requests = std::vector<secret_request>{
+    make_secret_request("url", hydrolix.url, url, dh),
+    make_secret_request("token", hydrolix.token, token, dh),
+  };
+  if (not co_await ctx.resolve_secrets(std::move(requests))) {
+    co_return None{};
+  }
+  if (token.empty()) {
+    diagnostic::error("`token` must not be empty")
+      .primary(hydrolix.token)
+      .emit(dh);
+    co_return None{};
+  }
+  // An explicit scheme states whether the connection must use TLS. It takes
+  // the place of the `tls` argument, so that the node configuration cannot
+  // turn TLS off for an `https://` URL and send the token in plain text.
+  auto scheme_tls = Option<bool>{};
+  auto const end = url.find("://");
+  auto const is_scheme_char = [](char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) != 0 or c == '+'
+           or c == '-' or c == '.';
+  };
+  // A `://` after the authority, for example in the query, is no scheme.
+  if (end != std::string::npos and end > 0
+      and std::ranges::all_of(std::string_view{url}.substr(0, end),
+                              is_scheme_char)) {
+    auto scheme = detail::ascii_tolower(std::string_view{url}.substr(0, end));
+    if (scheme != "http" and scheme != "https") {
+      diagnostic::error("`url` must use the `http` or `https` scheme")
+        .primary(hydrolix.url, "got `{}`", scheme)
+        .emit(dh);
+      co_return None{};
+    }
+    url.replace(0, end, scheme);
+    scheme_tls = scheme == "https";
+  }
+  auto effective_tls = tls;
+  if (not effective_tls and scheme_tls) {
+    effective_tls = located<data>{data{*scheme_tls}, hydrolix.url.source};
+  }
+  auto resolved
+    = tls_options::from_optional(effective_tls)
+        .resolve(url, hydrolix.url.source, ctx.actor_system().config(), dh);
+  if (not resolved) {
+    co_return None{};
+  }
+  http::add_default_url_scheme(url, resolved->tls.inner);
+  auto parsed = boost::urls::parse_uri(url);
+  if (not parsed or parsed->host_address().empty()) {
+    diagnostic::error("failed to parse `url`")
+      .primary(hydrolix.url)
+      .hint("pass the URL of the cluster, e.g., `https://acme.hydrolix.live`")
+      .emit(dh);
+    co_return None{};
+  }
+  auto const default_port
+    = resolved->tls.inner ? clickhouse_tls_port : clickhouse_plaintext_port;
+  co_return HydrolixEndpoint{
+    // Without the brackets of an IPv6 literal.
+    .host = std::string{parsed->host_address()},
+    .port = detail::narrow_cast<uint16_t>(port ? port->inner : default_port),
+    .token = std::move(token),
+    .tls = std::move(*resolved),
+  };
+}
+
+/// Explains the errors of a Hydrolix cluster that stem from its access
+/// control and query guards.
+auto add_hydrolix_hints(diagnostic_builder diag, int code,
+                        std::string_view message) -> diagnostic_builder {
+  // See ClickHouse's `ErrorCodes.cpp`.
+  constexpr auto unknown_table = 60;
+  constexpr auto unknown_database = 81;
+  constexpr auto access_denied = 497;
+  constexpr auto authentication_failed = 516;
+  if (code == authentication_failed) {
+    return std::move(diag).hint(
+      "check that `token` is a valid Hydrolix token that has not expired");
+  }
+  if (code == unknown_table or code == unknown_database
+      or code == access_denied) {
+    // Hydrolix hides the tables that an account cannot query, and a table
+    // exists for queries only once it has a transform.
+    return std::move(diag)
+      .hint("check that the table exists and has a transform")
+      .hint("check that the account of `token` has the `select_sql` "
+            "permission on the table");
+  }
+  if (message.contains("hdx_query_timerange_required")
+      or message.contains("Maximum time range exceeded")) {
+    // A `where` pushes only constant bounds into the query, so `now()` needs
+    // a `let` that evaluates it once.
+    return std::move(diag).hint(
+      "restrict the query to a time range on the table's primary timestamp, "
+      "e.g., with `let $since = now() - 1h` before `from_hydrolix` and "
+      "`where time > $since` after it");
+  }
+  return diag;
+}
+
+/// Replaces every occurrence of `secret` in `text`.
+auto redact(std::string text, std::string_view secret) -> std::string {
+  if (secret.empty()) {
+    return text;
+  }
+  for (auto pos = text.find(secret); pos != std::string::npos;
+       pos = text.find(secret, pos)) {
+    text.replace(pos, secret.size(), "***");
+    pos += 3;
+  }
+  return text;
+}
+
+/// Reports a failed query with the hints that fit its backend. For
+/// `from_hydrolix`, `token` is the token that the server may echo, for
+/// example as part of a failed query, and that the report must not reveal.
+auto query_error(bool hydrolix, std::string_view token, bool tls_enabled,
+                 Option<int> code, std::string_view raw_message)
+  -> diagnostic_builder {
+  auto names = backend_names(hydrolix);
+  auto message = hydrolix ? redact(std::string{raw_message}, token)
+                          : std::string{raw_message};
+  auto diag
+    = code ? diagnostic::error("{} error {}: {}", names.service, *code, message)
+           : diagnostic::error("{} error: {}", names.service, message);
+  if (hydrolix and code) {
+    // The server answered, so the connection and its TLS setting work.
+    return add_hydrolix_hints(std::move(diag), *code, message);
+  }
+  return add_tls_client_diagnostic_hints(std::move(diag), tls_enabled,
+                                         names.service,
+                                         clickhouse_plaintext_port,
+                                         clickhouse_tls_port);
+}
 
 /// The key of the subpipeline that aggregates locally.
 constexpr auto aggregation_sub_key = int64_t{0};
@@ -72,6 +317,8 @@ struct QueryPlan {
   std::string schema_name;
   OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
     optimization;
+  /// The server whose dialect the pushed predicates use.
+  SqlTarget target;
 };
 
 /// Announces the predicates that the operator evaluates itself. Sent before
@@ -149,15 +396,16 @@ auto split_validated_table_name(std::string_view table)
   return {None{}, table};
 }
 
-auto make_schema_name_from_table(std::string_view table) -> std::string {
+auto make_schema_name_from_table(std::string_view prefix,
+                                 std::string_view table) -> std::string {
   auto split = split_validated_table_name(table);
   auto table_name = unquote_identifier_component(split.table);
   if (split.database) {
-    return fmt::format("clickhouse.{}.{}",
+    return fmt::format("{}.{}.{}", prefix,
                        unquote_identifier_component(*split.database),
                        table_name);
   }
-  return fmt::format("clickhouse.{}", table_name);
+  return fmt::format("{}.{}", prefix, table_name);
 }
 
 /// Whether `SELECT *` may leave out a column with the default kind `kind`.
@@ -209,8 +457,9 @@ struct PreparedQuery {
 auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
                       Option<ir::OptimizeProjection> const& projection)
   -> PreparedQuery {
-  auto split = pushdown::split_filter(std::move(plan.optimization.filter),
-                                      schema.model(), ClickHouseRenderer{});
+  auto split
+    = pushdown::split_filter(std::move(plan.optimization.filter),
+                             schema.model(), ClickHouseRenderer{plan.target});
   // The limit counts events after the whole filter chain, so it can only go
   // into the query if the chain did.
   auto limit = Option<uint64_t>{};
@@ -271,11 +520,12 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
   // locally, on the reconstructed events.
   auto const& aggregation = plan.optimization.aggregation;
   if (aggregation and not catch_all) {
-    auto split = pushdown::split_filter(plan.optimization.filter,
-                                        schema.model(), ClickHouseRenderer{});
+    auto split
+      = pushdown::split_filter(plan.optimization.filter, schema.model(),
+                               ClickHouseRenderer{plan.target});
     if (split.remaining.empty()) {
       if (auto query = make_aggregate_query(*aggregation, schema, *plan.table,
-                                            split.pushed)) {
+                                            split.pushed, plan.target)) {
         return PreparedQuery{
           .text = std::move(*query),
           .local_filter = {},
@@ -301,67 +551,33 @@ public:
   explicit FromClickhouse(FromClickhouseArgs args) : args_{std::move(args)} {
   }
 
+  explicit FromClickhouse(FromHydrolixArgs args)
+    : args_{to_clickhouse_args(std::move(args))} {
+  }
+
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto ssl_opts = args_.tls ? tls_options{*args_.tls} : tls_options{};
-    auto ssl = ssl_opts.resolve(ctx.actor_system().config(), ctx.dh());
-    if (not ssl) {
+    events_counter_ = make_events_counter(args_.hydrolix.has_value(), ctx);
+    auto options = co_await make_client_options(ctx);
+    if (not options) {
+      // No query task runs that could end the operator, so it ends here, as
+      // `FromClickhouseEvents` does.
+      done_ = true;
       co_return;
     }
-    tls_enabled_ = ssl->tls.inner;
-    auto const default_port
-      = tls_enabled_ ? clickhouse_tls_port : clickhouse_plaintext_port;
-    auto client_args = easy_client::arguments{
-      .host = "",
-      .port = args_.port ? *args_.port
-                         : located<uint64_t>{default_port, location::unknown},
-      .user = "default",
-      .password = "",
-      .default_database = None{},
-      .ssl = std::move(*ssl),
-      .table = {},
-      .mode = {mode::append, location::unknown},
-      .primary = None{},
-      .operator_location = args_.operator_location,
-    };
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto has_uri = args_.uri.inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", args_.uri, uri, ctx.dh()));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, client_args.host, ctx.dh()));
-      requests.push_back(
-        make_secret_request("user", args_.user, client_args.user, ctx.dh()));
-      requests.push_back(make_secret_request("password", args_.password,
-                                             client_args.password, ctx.dh()));
-    }
-    auto ok = co_await ctx.resolve_secrets(std::move(requests));
-    if (not ok) {
-      co_return;
-    }
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri.source, ctx.dh());
-      if (not parsed) {
-        co_return;
-      }
-      apply_connection_uri(client_args, *parsed);
-      if (not parsed->has_port()) {
-        client_args.port = located<uint64_t>{default_port, location::unknown};
-      }
-    }
-    auto options = client_args.make_options();
+    auto const names = backend_names(args_.hydrolix.has_value());
     // The query text is only decided on the query thread: with optimizer hints
     // in table mode, it depends on the table's schema.
     auto plan = QueryPlan{
       .table = None{},
       .sql = {},
-      .schema_name = "clickhouse.query",
+      .schema_name = fmt::format("{}.query", names.schema_prefix),
       .optimization = args_.optimization,
+      .target = sql_target(args_),
     };
     if (args_.table) {
       plan.table = args_.table->inner;
-      plan.schema_name = make_schema_name_from_table(args_.table->inner);
+      plan.schema_name
+        = make_schema_name_from_table(names.schema_prefix, args_.table->inner);
     } else {
       plan.sql = args_.sql->inner;
     }
@@ -372,7 +588,7 @@ public:
       }
     });
     // The actual query task.
-    ctx.spawn_task([this, options = std::move(options), plan = std::move(plan),
+    ctx.spawn_task([this, options = std::move(*options), plan = std::move(plan),
                     &dh = ctx.dh(),
                     loc = args_.operator_location]() mutable -> Task<void> {
       auto transformed_dh = transforming_diagnostic_handler{
@@ -422,6 +638,7 @@ public:
         }
         emitted_ += slice.rows();
         if (slice.rows() > 0) {
+          events_counter_.add(slice.rows());
           co_await push(std::move(slice));
         }
         if (args_.optimization.limit
@@ -446,24 +663,104 @@ public:
     return done_ ? OperatorState::done : OperatorState::normal;
   }
 
+  auto snapshot(Serde&) -> void override {
+    reject_checkpoint(args_);
+  }
+
 private:
+  /// Resolves the connection arguments, which may be secrets.
+  auto make_client_options(OpCtx& ctx)
+    -> Task<Option<::clickhouse::ClientOptions>> {
+    if (args_.hydrolix) {
+      auto endpoint = co_await resolve_hydrolix_endpoint(
+        *args_.hydrolix, args_.port, args_.tls, ctx);
+      if (not endpoint) {
+        co_return None{};
+      }
+      tls_enabled_ = endpoint->tls.tls.inner;
+      auto client_args = easy_client::arguments{
+        .host = std::move(endpoint->host),
+        .port = located<uint64_t>{endpoint->port, location::unknown},
+        .user = std::string{hydrolix_token_user},
+        .password = std::move(endpoint->token),
+        .default_database = None{},
+        .ssl = std::move(endpoint->tls),
+        .table = {},
+        .mode = {mode::append, location::unknown},
+        .primary = None{},
+        .operator_location = args_.operator_location,
+      };
+      co_return with_read_compression(client_args.make_options());
+    }
+    auto ssl_opts = args_.tls ? tls_options{*args_.tls} : tls_options{};
+    auto ssl = ssl_opts.resolve(ctx.actor_system().config(), ctx.dh());
+    if (not ssl) {
+      co_return None{};
+    }
+    tls_enabled_ = ssl->tls.inner;
+    auto const default_port
+      = tls_enabled_ ? clickhouse_tls_port : clickhouse_plaintext_port;
+    auto client_args = easy_client::arguments{
+      .host = "",
+      .port = args_.port ? *args_.port
+                         : located<uint64_t>{default_port, location::unknown},
+      .user = "default",
+      .password = "",
+      .default_database = None{},
+      .ssl = std::move(*ssl),
+      .table = {},
+      .mode = {mode::append, location::unknown},
+      .primary = None{},
+      .operator_location = args_.operator_location,
+    };
+    auto uri = std::string{};
+    auto requests = std::vector<secret_request>{};
+    auto has_uri = args_.uri.inner != secret::make_literal("");
+    if (has_uri) {
+      requests.push_back(make_secret_request("uri", args_.uri, uri, ctx.dh()));
+    } else {
+      requests.push_back(
+        make_secret_request("host", args_.host, client_args.host, ctx.dh()));
+      requests.push_back(
+        make_secret_request("user", args_.user, client_args.user, ctx.dh()));
+      requests.push_back(make_secret_request("password", args_.password,
+                                             client_args.password, ctx.dh()));
+    }
+    auto ok = co_await ctx.resolve_secrets(std::move(requests));
+    if (not ok) {
+      co_return None{};
+    }
+    if (has_uri) {
+      auto parsed = parse_connection_uri(uri, args_.uri.source, ctx.dh());
+      if (not parsed) {
+        co_return None{};
+      }
+      apply_connection_uri(client_args, *parsed);
+      if (not parsed->has_port()) {
+        client_args.port = located<uint64_t>{default_port, location::unknown};
+      }
+    }
+    co_return with_read_compression(client_args.make_options());
+  }
+
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
                  diagnostic_handler& dh) -> Task<void> {
     try {
       auto first_schema = Option<type>{};
+      auto const service = backend_names(args_.hydrolix.has_value()).service;
       auto on_data = [&](::clickhouse::Block const& block) {
         if (runtime_->should_cancel()) {
           return false;
         }
-        auto slice = block_to_table_slice(block, plan.schema_name, dh);
+        auto slice = block_to_table_slice(block, plan.schema_name, service, dh);
         if (not slice) {
           return not runtime_->should_cancel();
         }
         if (not first_schema) {
           first_schema = slice->schema();
         } else if (slice->schema() != *first_schema) {
-          diagnostic::warning(
-            "ClickHouse query schema changed during execution")
+          diagnostic::warning("{} query schema changed during execution",
+                              backend_names(args_.hydrolix.has_value()).service)
             .hint("continuing to emit data with the new schema")
             .emit(dh);
         }
@@ -473,7 +770,9 @@ private:
       co_await spawn_blocking([&]() {
         auto client = ::clickhouse::Client{options};
         auto prepared = prepare_query(client, plan);
-        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared.text);
+        TENZIR_DEBUG("{} runs `{}`",
+                     backend_names(args_.hydrolix.has_value()).operator_name,
+                     prepared.text);
         runtime_->produce_plan(std::move(prepared.local_filter));
         auto query = ::clickhouse::Query{std::move(prepared.text)};
         query.SetSetting("max_block_size",
@@ -495,17 +794,14 @@ private:
       throw;
     } catch (const ::clickhouse::ServerError& e) {
       if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
-        add_tls_client_diagnostic_hints(
-          diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what()),
-          tls_enabled_, "ClickHouse", clickhouse_plaintext_port,
-          clickhouse_tls_port)
+        query_error(args_.hydrolix.has_value(), options.password, tls_enabled_,
+                    e.GetCode(), e.what())
           .emit(dh);
       }
     } catch (const std::exception& e) {
       if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
-        add_tls_client_diagnostic_hints(
-          diagnostic::error("ClickHouse error: {}", e.what()), tls_enabled_,
-          "ClickHouse", clickhouse_plaintext_port, clickhouse_tls_port)
+        query_error(args_.hydrolix.has_value(), options.password, tls_enabled_,
+                    None{}, e.what())
           .emit(dh);
       }
     }
@@ -517,6 +813,7 @@ private:
   bool tls_enabled_ = false;
   bool done_ = false;
   ir::OptimizeFilter local_filter_;
+  MetricsCounter events_counter_;
   uint64_t emitted_ = 0;
 };
 
@@ -528,59 +825,35 @@ public:
     : args_{std::move(args)} {
   }
 
+  explicit FromClickhouseEvents(FromHydrolixArgs args)
+    : args_{to_clickhouse_args(std::move(args))} {
+  }
+
   auto start(OpCtx& ctx) -> Task<void> override {
     auto& dh = ctx.dh();
     remaining_ = args_.optimization.limit;
-    auto tls = tls_options::from_optional(args_.tls).resolve(
-      ctx.actor_system().config(), dh);
-    if (not tls) {
+    events_counter_ = make_events_counter(args_.hydrolix.has_value(), ctx);
+    auto connection = co_await make_connection_args(ctx);
+    if (not connection) {
       done_ = true;
       co_return;
     }
-    auto const tls_enabled = tls->tls.inner;
-    auto connection = ConnectionArgs{};
-    connection.tls = std::move(*tls);
-    auto const default_port
-      = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
-    connection.port = detail::narrow_cast<uint16_t>(
-      args_.port ? args_.port->inner : default_port);
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto const has_uri = args_.uri.inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, connection.host, dh));
-      requests.push_back(
-        make_secret_request("user", args_.user, connection.user, dh));
-      requests.push_back(make_secret_request("password", args_.password,
-                                             connection.password, dh));
-    }
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      done_ = true;
-      co_return;
-    }
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
-      if (not parsed) {
-        done_ = true;
-        co_return;
-      }
-      connection.port = detail::narrow_cast<uint16_t>(default_port);
-      connection.apply_uri(*parsed);
-    }
+    auto const tls_enabled = connection->tls and connection->tls->tls.inner;
+    auto const hydrolix = args_.hydrolix.has_value();
+    auto const names = backend_names(hydrolix);
     // The query text is only decided on the query thread: with optimizer hints
     // in table mode, it depends on the table's schema.
     auto plan = QueryPlan{
       .table = None{},
       .sql = {},
-      .schema_name = "clickhouse.query",
+      .schema_name = fmt::format("{}.query", names.schema_prefix),
       .optimization = args_.optimization,
+      .target = sql_target(args_),
     };
     if (args_.table) {
       plan.table = args_.table->inner;
-      plan.schema_name = make_schema_name_from_table(args_.table->inner);
+      plan.schema_name
+        = make_schema_name_from_table(names.schema_prefix, args_.table->inner);
     } else {
       plan.sql = args_.sql->inner;
     }
@@ -591,8 +864,8 @@ public:
       }
     });
     // The actual query task.
-    ctx.spawn_task([shared = shared_, connection = std::move(connection),
-                    plan = std::move(plan), tls_enabled, &dh,
+    ctx.spawn_task([shared = shared_, connection = std::move(*connection),
+                    plan = std::move(plan), tls_enabled, hydrolix, &dh,
                     loc = args_.operator_location]() mutable -> Task<void> {
       auto transformed_dh = transforming_diagnostic_handler{
         dh, [loc](diagnostic diag) {
@@ -602,7 +875,8 @@ public:
           return diag;
         }};
       co_await run_query(std::move(shared), std::move(connection),
-                         std::move(plan), tls_enabled, transformed_dh);
+                         std::move(plan), tls_enabled, hydrolix,
+                         transformed_dh);
     });
   }
 
@@ -652,6 +926,11 @@ public:
         // after them; when it went into the SQL query this is a no-op.
         auto events = pushdown::apply_read(std::move(x.events), filters_,
                                            remaining_, ctx.dh());
+        if (events.active_count() > 0) {
+          // The rows enter the pipeline here, even if a local aggregation
+          // consumes them.
+          events_counter_.add(events.active_count());
+        }
         if (events.active_count() > 0 and aggregating_locally_) {
           if (auto sub = ctx.get_sub(aggregation_sub_key)) {
             // The subpipeline closes its input only when it fails, which it
@@ -707,14 +986,64 @@ public:
   }
 
   auto snapshot(Serde&) -> void override {
-    // A query has no cursor to resume from, so a restored operator would run
-    // it again and repeat the events that earlier checkpoints committed.
-    diagnostic::error("from_clickhouse does not support checkpoints yet")
-      .primary(args_.operator_location)
-      .throw_();
+    reject_checkpoint(args_);
   }
 
 private:
+  /// Resolves the connection arguments, which may be secrets.
+  auto make_connection_args(OpCtx& ctx) -> Task<Option<ConnectionArgs>> {
+    auto& dh = ctx.dh();
+    auto connection = ConnectionArgs{};
+    if (args_.hydrolix) {
+      auto endpoint = co_await resolve_hydrolix_endpoint(
+        *args_.hydrolix, args_.port, args_.tls, ctx);
+      if (not endpoint) {
+        co_return None{};
+      }
+      connection.host = std::move(endpoint->host);
+      connection.port = endpoint->port;
+      connection.user = std::string{hydrolix_token_user};
+      connection.password = std::move(endpoint->token);
+      connection.tls = std::move(endpoint->tls);
+      co_return connection;
+    }
+    auto tls = tls_options::from_optional(args_.tls).resolve(
+      ctx.actor_system().config(), dh);
+    if (not tls) {
+      co_return None{};
+    }
+    auto const default_port
+      = tls->tls.inner ? clickhouse_tls_port : clickhouse_plaintext_port;
+    connection.tls = std::move(*tls);
+    connection.port = detail::narrow_cast<uint16_t>(
+      args_.port ? args_.port->inner : default_port);
+    auto uri = std::string{};
+    auto requests = std::vector<secret_request>{};
+    auto const has_uri = args_.uri.inner != secret::make_literal("");
+    if (has_uri) {
+      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
+    } else {
+      requests.push_back(
+        make_secret_request("host", args_.host, connection.host, dh));
+      requests.push_back(
+        make_secret_request("user", args_.user, connection.user, dh));
+      requests.push_back(make_secret_request("password", args_.password,
+                                             connection.password, dh));
+    }
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      co_return None{};
+    }
+    if (has_uri) {
+      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
+      if (not parsed) {
+        co_return None{};
+      }
+      connection.port = detail::narrow_cast<uint16_t>(default_port);
+      connection.apply_uri(*parsed);
+    }
+    co_return connection;
+  }
+
   struct EventsMessage {
     nova::Events events;
   };
@@ -759,18 +1088,19 @@ private:
     }
   };
 
-  static auto
-  run_query(Arc<Shared> shared, ConnectionArgs connection, QueryPlan plan,
-            bool tls_enabled, diagnostic_handler& dh) -> Task<void> {
+  static auto run_query(Arc<Shared> shared, ConnectionArgs connection,
+                        QueryPlan plan, bool tls_enabled, bool hydrolix,
+                        diagnostic_handler& dh) -> Task<void> {
     // Whether the query computes the aggregation, decided before it runs.
     auto aggregated = false;
     try {
       auto catch_all = Option<CatchAllLayout>{};
+      auto const service = backend_names(hydrolix).service;
       auto on_data = [&](::clickhouse::Block const& block) {
         if (shared->should_cancel()) {
           return false;
         }
-        auto events = block_to_events(block, plan.schema_name, dh);
+        auto events = block_to_events(block, plan.schema_name, service, dh);
         if (not events) {
           return not shared->should_cancel();
         }
@@ -784,7 +1114,7 @@ private:
             columns.push_back(block.GetColumnName(i));
           }
           events = reconstruct_catch_all(std::move(*events), columns,
-                                         *catch_all, dh);
+                                         *catch_all, service, dh);
         }
         shared->produce(EventsMessage{std::move(*events)});
         return not shared->should_cancel();
@@ -792,7 +1122,7 @@ private:
       co_await spawn_blocking([&]() {
         // Tables without a database, in `table` and in `sql`, refer to the
         // database of the URI.
-        auto options = connection.to_client_options();
+        auto options = with_read_compression(connection.to_client_options());
         if (connection.default_database) {
           options.SetDefaultDatabase(*connection.default_database);
         }
@@ -801,7 +1131,8 @@ private:
         if (not prepared) {
           return;
         }
-        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared->text);
+        TENZIR_DEBUG("{} runs `{}`", backend_names(hydrolix).operator_name,
+                     prepared->text);
         aggregated = prepared->aggregated;
         if (plan.optimization.aggregation and not aggregated) {
           shared->produce(AggregateLocallyMessage{});
@@ -840,17 +1171,14 @@ private:
       throw;
     } catch (const ::clickhouse::ServerError& e) {
       if (not shared->should_cancel()) {
-        add_tls_client_diagnostic_hints(
-          diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what()),
-          tls_enabled, "ClickHouse", clickhouse_plaintext_port,
-          clickhouse_tls_port)
+        query_error(hydrolix, connection.password, tls_enabled, e.GetCode(),
+                    e.what())
           .emit(dh);
       }
     } catch (const std::exception& e) {
       if (not shared->should_cancel()) {
-        add_tls_client_diagnostic_hints(
-          diagnostic::error("ClickHouse error: {}", e.what()), tls_enabled,
-          "ClickHouse", clickhouse_plaintext_port, clickhouse_tls_port)
+        query_error(hydrolix, connection.password, tls_enabled, None{},
+                    e.what())
           .emit(dh);
       }
     }
@@ -865,6 +1193,7 @@ private:
   /// Whether the read passes its events to the subpipeline that aggregates
   /// them, until that subpipeline ends.
   bool aggregating_locally_ = false;
+  MetricsCounter events_counter_;
 };
 
 class Plugin final : public virtual OperatorPlugin {
@@ -940,8 +1269,69 @@ public:
   }
 };
 
+/// Reads from Hydrolix through the native ClickHouse interface of its query
+/// engine, which accepts a Hydrolix token as the password of a special user.
+class FromHydrolixPlugin final : public virtual OperatorPlugin {
+public:
+  auto name() const -> std::string override {
+    return "from_hydrolix";
+  }
+
+  auto describe() const -> Description override {
+    auto d
+      = Describer<FromHydrolixArgs, FromClickhouse, FromClickhouseEvents>{};
+    d.positional("url", &FromHydrolixArgs::url);
+    d.named("token", &FromHydrolixArgs::token);
+    auto table_arg = d.named("table", &FromHydrolixArgs::table);
+    auto sql_arg = d.named("sql", &FromHydrolixArgs::sql);
+    auto port_arg = d.named("port", &FromHydrolixArgs::port);
+    auto tls_validate
+      = tls_options{}.add_to_describer(d, &FromHydrolixArgs::tls);
+    d.operator_location(&FromHydrolixArgs::operator_location);
+    d.validate(
+      [=, tls_validate = std::move(tls_validate)](DescribeCtx& ctx) -> Empty {
+        tls_validate(ctx);
+        auto table = ctx.get(table_arg);
+        auto sql = ctx.get(sql_arg);
+        if (not table and not sql) {
+          diagnostic::error("no query specified")
+            .hint("specify `table` or `sql`")
+            .emit(ctx);
+          return {};
+        }
+        if (table and sql) {
+          diagnostic::error("`sql` and `table` are mutually exclusive")
+            .primary(sql->source)
+            .secondary(table->source)
+            .emit(ctx);
+          return {};
+        }
+        if (auto port = ctx.get(port_arg)) {
+          if (port->inner == 0 or port->inner > 65535) {
+            diagnostic::error("`port` must be between 1 and 65535")
+              .primary(port->source, "got `{}`", port->inner)
+              .emit(ctx);
+          }
+        }
+        if (table) {
+          std::ignore
+            = validate_table_name<true>(table->inner, table->source, ctx);
+        }
+        return {};
+      });
+    d.optimization(&FromHydrolixArgs::optimization);
+    d.aggregation([](FromHydrolixArgs const& args,
+                     ir::OptimizeAggregation const& aggregation) -> bool {
+      return nova_enabled() and args.table and not args.sql
+             and supports_aggregate_functions(aggregation);
+    });
+    return d.without_optimize();
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::clickhouse
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::clickhouse::Plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::clickhouse::FromHydrolixPlugin)

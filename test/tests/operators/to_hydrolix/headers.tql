@@ -1,0 +1,25 @@
+---
+fixtures:
+  - hydrolix:
+      table_token: table-secret
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 1
+      compressed: false
+      headers:
+        X-Hdx-Token: table-secret
+        X-Hdx-Project: demo
+        X-Hdx-Intake-Pool: security
+      events:
+        test.events:
+          - {id: 1, value: null}
+---
+from {id: 1, value: null}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.events",
+  table_token="table-secret",
+  headers={"X-Hdx-Project": "demo", "X-Hdx-Intake-Pool": "security"},
+  include_nulls=true,
+  compress=false

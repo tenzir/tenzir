@@ -482,6 +482,136 @@ constexpr auto types_cases = std::to_array<Case>({
   Case{"i32 < f", ""},
 });
 
+auto hydrolix_schema() -> SqlSchema {
+  auto schema = SqlSchema{};
+  schema.add_column("i64", "Int64");
+  schema.add_column("d32", "Date32");
+  schema.add_column("t0", "DateTime64(0)");
+  schema.add_column("t1", "DateTime64(1)");
+  schema.add_column("t2", "Nullable(DateTime64(2))");
+  schema.add_column("t3", "DateTime64(3, 'UTC')");
+  schema.add_column("t3b", "DateTime64(3)");
+  schema.add_column("t4", "DateTime64(4)");
+  schema.add_column("t5", "DateTime64(5)");
+  schema.add_column("t6", "DateTime64(6)");
+  schema.add_column("t7", "DateTime64(7)");
+  schema.add_column("t8", "DateTime64(8)");
+  schema.add_column("t9", "DateTime64(9)");
+  return schema;
+}
+
+// For Hydrolix, the guards of `DateTime64` columns compare the stored tick
+// count, which Hydrolix's time range analysis ignores. Comparisons that the
+// predicate calls for stay on the bare column, even at the edge of the range.
+constexpr auto hydrolix_cases = std::to_array<Case>({
+  Case{"t3 > 2024-01-01", "(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+                          "toUnixTimestamp64Milli(`t3`) <= 9223372036854 AND "
+                          "`t3` > fromUnixTimestamp64Milli(1704067200000))"},
+  // A user's comparison with the upper edge is no guard.
+  Case{"t3 <= 2262-04-11T23:47:16.854",
+       "(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854 AND `t3` <= "
+       "fromUnixTimestamp64Milli(9223372036854))"},
+  Case{"t3 > 2262-04-11T23:47:16.854",
+       "(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854 AND `t3` > "
+       "fromUnixTimestamp64Milli(9223372036854))"},
+  // Guards keep their spelling in junctions, negations, and conditionals.
+  Case{"t3 > 2024-01-01 and t3 < 2024-01-02",
+       "(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854 AND `t3` > "
+       "fromUnixTimestamp64Milli(1704067200000)) AND "
+       "(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854 AND `t3` < "
+       "fromUnixTimestamp64Milli(1704153600000))"},
+  Case{"t3 > 2024-01-01 or i64 == 1",
+       "((toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854 AND `t3` > "
+       "fromUnixTimestamp64Milli(1704067200000)) OR `i64` = 1)"},
+  Case{"not (t3 < 2024-01-01)",
+       "NOT if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3` < "
+       "fromUnixTimestamp64Milli(1704067200000), NULL)"},
+  Case{"not not (t3 < 2024-01-01)",
+       "NOT NOT if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3` < "
+       "fromUnixTimestamp64Milli(1704067200000), NULL)"},
+  // Equality needs no guard.
+  Case{"t3 == 2024-01-01T00:00:00.123",
+       "`t3` = fromUnixTimestamp64Milli(1704067200123)"},
+  Case{"t3 != 2024-01-01T00:00:00.123",
+       "`t3` != fromUnixTimestamp64Milli(1704067200123)"},
+  Case{"t3 in [2024-01-01, 2024-01-02]",
+       "`t3` IN (fromUnixTimestamp64Milli(1704067200000), "
+       "fromUnixTimestamp64Milli(1704153600000))"},
+  // Null checks and comparisons of two columns see the guarded value.
+  Case{"t3 == null", "if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+                     "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3`, "
+                     "NULL) IS NULL"},
+  Case{"t3 != null", "if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+                     "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3`, "
+                     "NULL) IS NOT NULL"},
+  Case{"t3 < t3b", "if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+                   "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3`, NULL) "
+                   "< if(toUnixTimestamp64Milli(`t3b`) >= -9223372036854 AND "
+                   "toUnixTimestamp64Milli(`t3b`) <= 9223372036854, `t3b`, "
+                   "NULL)"},
+  Case{"t3 == t3b",
+       "((if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3`, NULL) IS NULL AND "
+       "if(toUnixTimestamp64Milli(`t3b`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3b`) <= 9223372036854, `t3b`, NULL) IS NULL) "
+       "OR (if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3`, NULL) IS NOT NULL "
+       "AND if(toUnixTimestamp64Milli(`t3b`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3b`) <= 9223372036854, `t3b`, NULL) IS NOT "
+       "NULL AND if(toUnixTimestamp64Milli(`t3`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3`) <= 9223372036854, `t3`, NULL) = "
+       "if(toUnixTimestamp64Milli(`t3b`) >= -9223372036854 AND "
+       "toUnixTimestamp64Milli(`t3b`) <= 9223372036854, `t3b`, NULL)))"},
+  // Precisions 3 and 6 have a function that returns the tick count, the
+  // others reinterpret the column.
+  Case{"t0 > 2024-01-01", "(reinterpretAsInt64(`t0`) >= -9223372036 AND "
+                          "reinterpretAsInt64(`t0`) <= 9223372036 AND `t0` > "
+                          "CAST(fromUnixTimestamp64Nano(1704067200000000000), "
+                          "'DateTime64(0)'))"},
+  Case{"t1 > 2024-01-01", "(reinterpretAsInt64(`t1`) >= -92233720368 AND "
+                          "reinterpretAsInt64(`t1`) <= 92233720368 AND `t1` > "
+                          "CAST(fromUnixTimestamp64Nano(1704067200000000000), "
+                          "'DateTime64(1)'))"},
+  Case{"t2 > 2024-01-01", "(reinterpretAsInt64(`t2`) >= -922337203685 AND "
+                          "reinterpretAsInt64(`t2`) <= 922337203685 AND `t2` > "
+                          "CAST(fromUnixTimestamp64Nano(1704067200000000000), "
+                          "'DateTime64(2)'))"},
+  Case{"t4 > 2024-01-01",
+       "(reinterpretAsInt64(`t4`) >= -92233720368547 AND "
+       "reinterpretAsInt64(`t4`) <= 92233720368547 AND `t4` > "
+       "CAST(fromUnixTimestamp64Nano(1704067200000000000), 'DateTime64(4)'))"},
+  Case{"t5 > 2024-01-01",
+       "(reinterpretAsInt64(`t5`) >= -922337203685477 AND "
+       "reinterpretAsInt64(`t5`) <= 922337203685477 AND `t5` > "
+       "CAST(fromUnixTimestamp64Nano(1704067200000000000), 'DateTime64(5)'))"},
+  Case{"t6 > 2024-01-01", "(toUnixTimestamp64Micro(`t6`) >= -9223372036854775 "
+                          "AND toUnixTimestamp64Micro(`t6`) <= "
+                          "9223372036854775 AND `t6` > "
+                          "fromUnixTimestamp64Micro(1704067200000000))"},
+  Case{"t7 > 2024-01-01",
+       "(reinterpretAsInt64(`t7`) >= -92233720368547758 AND "
+       "reinterpretAsInt64(`t7`) <= 92233720368547758 AND `t7` > "
+       "CAST(fromUnixTimestamp64Nano(1704067200000000000), 'DateTime64(7)'))"},
+  Case{"t8 > 2024-01-01",
+       "(reinterpretAsInt64(`t8`) >= -922337203685477580 AND "
+       "reinterpretAsInt64(`t8`) <= 922337203685477580 AND `t8` > "
+       "CAST(fromUnixTimestamp64Nano(1704067200000000000), 'DateTime64(8)'))"},
+  // `DateTime64(9)` needs no guard.
+  Case{"t9 > 2024-01-01", "`t9` > "
+                          "fromUnixTimestamp64Nano(1704067200000000000)"},
+  // Hydrolix's primary timestamp is a `DateTime` or `DateTime64`, so the
+  // guard of a `Date32` column stays bare.
+  Case{"d32 > 2024-01-01", "(`d32` <= toDate32('2262-04-11') AND `d32` > "
+                           "toDate32('2024-01-01'))"},
+});
+
 auto strings_schema() -> SqlSchema {
   auto schema = SqlSchema{};
   schema.add_column("id", "UInt64");
@@ -567,16 +697,21 @@ constexpr auto strings_cases = std::to_array<Case>({
   Case{R"sql(s in ["1.1.1.1", "::1"])sql", "`s` IN ('1.1.1.1', '::1')"},
 });
 
-auto check_pushdown(SqlSchema const& schema, std::span<Case const> cases)
-  -> void {
+auto check_pushdown(SqlSchema const& schema, std::span<Case const> cases,
+                    SqlTarget target = SqlTarget::clickhouse) -> void {
   for (auto const& x : cases) {
     auto filter = ir::OptimizeFilter{};
     filter.push_back(parse(x.predicate));
     auto split = pushdown::split_filter(std::move(filter), schema.model(),
-                                        ClickHouseRenderer{});
+                                        ClickHouseRenderer{target});
     CHECK_EQUAL(fmt::format("{}: {}", x.predicate,
                             fmt::join(split.pushed, " AND ")),
                 fmt::format("{}: {}", x.predicate, x.pushed));
+    // Hydrolix needs no prefilters, so each predicate pushes whole and leaves
+    // nothing local, which keeps limits and aggregations pushable.
+    if (target == SqlTarget::hydrolix) {
+      CHECK(split.remaining.empty());
+    }
   }
 }
 
@@ -588,6 +723,10 @@ TEST("pushdown of numbers and plain strings") {
 
 TEST("pushdown of temporal, address, enum, and other types") {
   check_pushdown(types_schema(), types_cases);
+}
+
+TEST("pushdown of time guards for hydrolix") {
+  check_pushdown(hydrolix_schema(), hydrolix_cases, SqlTarget::hydrolix);
 }
 
 TEST("pushdown of ip literals against string columns") {

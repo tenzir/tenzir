@@ -1,0 +1,20 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 2
+      events:
+        test.events:
+          - {id: 1, transform: null}
+        test.events/custom:
+          - {id: 2, transform: "custom"}
+---
+// A `null` transform falls back to the default transform of the table.
+from {id: 1, transform: null},
+     {id: 2, transform: "custom"}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.events",
+  transform=transform,
+  include_nulls=true

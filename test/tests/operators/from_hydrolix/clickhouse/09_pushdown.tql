@@ -1,0 +1,7 @@
+// The `where` and `select` go into the query of the table.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where id >= 2 and name != "bob"
+select name

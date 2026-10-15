@@ -1,0 +1,4 @@
+{
+  name: "bob",
+  user: "__api_token__",
+}

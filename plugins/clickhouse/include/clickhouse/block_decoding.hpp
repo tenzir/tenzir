@@ -39,24 +39,37 @@ enum class DecodedKind {
   blob,
   list,
   record,
+  /// A record with one field per key of a `Map`, whose names are the text of
+  /// the keys. Its fields therefore depend on the data and may differ between
+  /// rows.
+  map,
 };
 
 struct DecodedType {
   DecodedKind kind;
-  /// The element type of a list, or the field types of a record.
+  /// The element type of a list, the field types of a record, or the key and
+  /// value types of a map.
   std::vector<DecodedType> children;
   /// The field names of a record.
   std::vector<std::string> names;
 };
 
 /// Returns what a column of `type` decodes into, or `None` if it does not
-/// decode. A list or record does not decode if any of its elements does not.
+/// decode. A list, record, or map does not decode if any of its elements does
+/// not.
 auto classify(::clickhouse::TypeRef const& type) -> Option<DecodedType>;
 
+/// Returns whether `type` contains a map anywhere. The decoder for table
+/// slices needs a type that does not depend on the data, so it drops such
+/// columns.
+auto contains_map(DecodedType const& type) -> bool;
+
 /// Returns whether a column of the ClickHouse type `type`, spelled as
-/// `DESCRIBE TABLE` renders it, decodes. A column of a type that does not
-/// decode is absent from the operator's output, as is a tuple with any element
-/// of such a type.
+/// `DESCRIBE TABLE` renders it, decodes to a value of the same shape in every
+/// row and with either decoder. A column of a type that does not decode is
+/// absent from the operator's output, as is a tuple with any element of such a
+/// type. A column that contains a map decodes with the events decoder only,
+/// so it does not count as decodable here: its fields stay out of pushdown.
 auto is_decodable_type(std::string_view type) -> bool;
 
 struct UnwrappedType {
@@ -94,10 +107,15 @@ auto rescale_decimal_to_nanos(int64_t value, size_t precision)
 auto seconds_to_nanos(int64_t seconds) -> Option<int64_t>;
 auto days_to_nanos(int64_t days) -> Option<int64_t>;
 
+/// Warns that the column at `path` is dropped. `service` names the backend
+/// for the user, such as `ClickHouse` or `Hydrolix`.
 auto emit_unsupported_column_warning(value_path path, std::string_view text,
+                                     std::string_view service,
                                      diagnostic_handler& dh) -> void;
 
+/// Warns that a block is dropped since none of its columns are decodable.
 auto emit_empty_block_warning(std::string_view schema_name,
-                              diagnostic_handler& dh) -> void;
+                              std::string_view service, diagnostic_handler& dh)
+  -> void;
 
 } // namespace tenzir::plugins::clickhouse

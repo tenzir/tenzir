@@ -1,0 +1,7 @@
+// Maps with differing keys per row, an empty map, a non-string key, a `NULL`
+// value, and a nested map.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_maps ENGINE = MergeTree ORDER BY id AS SELECT * FROM values('id Int64, catchall Map(String, Nullable(String)), codes Map(UInt16, String), nested Map(String, Map(String, Int64))', (1, map('class_uid', '4001', 'raw_data', NULL), map(200, 'ok'), map('a', map('x', 1))), (2, map(), map(), map()), (3, map('class_uid', '3002', 'severity_id', '1'), map(404, 'missing', 500, 'error'), map('b', map('y', 2, 'z', 3))))",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

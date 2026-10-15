@@ -1,0 +1,38 @@
+{
+  id: 1,
+  catchall: {
+    class_uid: "4001",
+    raw_data: null,
+  },
+  codes: {
+    "200": "ok",
+  },
+  nested: {
+    a: {
+      x: 1,
+    },
+  },
+}
+{
+  id: 2,
+  catchall: {},
+  codes: {},
+  nested: {},
+}
+{
+  id: 3,
+  catchall: {
+    class_uid: "3002",
+    severity_id: "1",
+  },
+  codes: {
+    "404": "missing",
+    "500": "error",
+  },
+  nested: {
+    b: {
+      y: 2,
+      z: 3,
+    },
+  },
+}

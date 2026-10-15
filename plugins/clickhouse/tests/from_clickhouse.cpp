@@ -12,17 +12,25 @@
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <fmt/format.h>
+
+#include <string_view>
 
 using namespace tenzir;
 
-TEST("Nova from_clickhouse rejects saving and restoring checkpoints") {
-  auto const* plugin = plugins::find<OperatorPlugin>("from_clickhouse");
+namespace {
+
+/// Checks that every instance of `name` that the spawn `Output` creates
+/// rejects saving and restoring a checkpoint.
+template <class Output>
+auto check_rejects_checkpoints(std::string_view name) -> void {
+  auto const* plugin = plugins::find<OperatorPlugin>(name);
   REQUIRE(plugin);
   auto desc = plugin->describe();
   REQUIRE(desc.set_operator_location);
   auto source = location{17, 29};
   for (auto& spawn : desc.spawns) {
-    auto* create = try_as<Spawn<void, nova::Events>>(spawn);
+    auto* create = try_as<Spawn<void, Output>>(spawn);
     if (not create) {
       continue;
     }
@@ -41,7 +49,7 @@ TEST("Nova from_clickhouse rejects saving and restoring checkpoints") {
         rejected = true;
         CHECK_EQUAL(error.severity, severity::error);
         CHECK_EQUAL(error.message,
-                    "from_clickhouse does not support checkpoints yet");
+                    fmt::format("{} does not support checkpoints yet", name));
         REQUIRE_EQUAL(error.annotations.size(), size_t{1});
         CHECK(error.annotations.front().primary);
         CHECK_EQUAL(error.annotations.front().source, source);
@@ -51,5 +59,17 @@ TEST("Nova from_clickhouse rejects saving and restoring checkpoints") {
     }
     return;
   }
-  FAIL("Nova from_clickhouse is not registered");
+  FAIL("{} has no spawn for this output", name);
+}
+
+} // namespace
+
+TEST("from_clickhouse rejects saving and restoring checkpoints") {
+  check_rejects_checkpoints<nova::Events>("from_clickhouse");
+  check_rejects_checkpoints<table_slice>("from_clickhouse");
+}
+
+TEST("from_hydrolix rejects saving and restoring checkpoints") {
+  check_rejects_checkpoints<nova::Events>("from_hydrolix");
+  check_rejects_checkpoints<table_slice>("from_hydrolix");
 }

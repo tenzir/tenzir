@@ -1,0 +1,7 @@
+// Hydrolix's default transform keeps unmapped fields in a `catchall` map. A
+// `Point` is a type that the operator does not decode.
+from_clickhouse sql="CREATE TABLE fh_catchall ENGINE = MergeTree ORDER BY id AS SELECT toInt64(1) AS id, CAST(map('class_uid', '1001', 'raw_data', NULL), 'Map(String, Nullable(String))') AS catchall, CAST((1.0, 2.0), 'Point') AS location",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

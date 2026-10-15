@@ -137,12 +137,21 @@ auto to_legacy_type(DecodedType const& decoded) -> type {
       }
       return type{record_type{fields}};
     }
+    case DecodedKind::map:
+      // `infer_type` rejects maps.
+      TENZIR_UNREACHABLE();
   }
   TENZIR_UNREACHABLE();
 }
 
+/// The type of a column, or `None` if this decoder drops it. A table slice has
+/// one schema, so maps, whose fields depend on the data, are dropped.
 auto infer_type(::clickhouse::TypeRef const& type_ref) -> Option<type> {
-  return classify(type_ref).transform(to_legacy_type);
+  auto decoded = classify(type_ref);
+  if (not decoded or contains_map(*decoded)) {
+    return None{};
+  }
+  return to_legacy_type(*decoded);
 }
 
 struct normalized_column {
@@ -829,7 +838,8 @@ auto build_series(ConstColumnRef const& column, value_path path,
                   diagnostic_handler& dh) -> Option<series> {
   auto normalized = normalize_column(column);
   if (not normalized) {
-    emit_unsupported_column_warning(path, column->Type()->GetName(), dh);
+    // Unreachable for nested columns, since `block_to_table_slice` already
+    // classified the whole type of their top-level column.
     return None{};
   }
   return match(
@@ -863,7 +873,8 @@ auto build_series(ConstColumnRef const& column, value_path path,
 } // namespace
 
 auto block_to_table_slice(::clickhouse::Block const& block,
-                          std::string_view schema_name, diagnostic_handler& dh)
+                          std::string_view schema_name,
+                          std::string_view service, diagnostic_handler& dh)
   -> Option<table_slice> {
   if (block.GetColumnCount() == 0 or block.GetRowCount() == 0) {
     return None{};
@@ -873,8 +884,15 @@ auto block_to_table_slice(::clickhouse::Block const& block,
   arrays.reserve(block.GetColumnCount());
   fields.reserve(block.GetColumnCount());
   for (auto column = size_t{0}; column < block.GetColumnCount(); ++column) {
-    auto result = build_series(
-      block[column], value_path{}.field(block.GetColumnName(column)), dh);
+    auto path = value_path{}.field(block.GetColumnName(column));
+    // `infer_type` checks nested types too, so only top-level columns can be
+    // unsupported.
+    if (not infer_type(block[column]->Type())) {
+      emit_unsupported_column_warning(path, block[column]->Type()->GetName(),
+                                      service, dh);
+      continue;
+    }
+    auto result = build_series(block[column], path, dh);
     if (not result) {
       continue;
     }
@@ -882,7 +900,7 @@ auto block_to_table_slice(::clickhouse::Block const& block,
     fields.emplace_back(block.GetColumnName(column), std::move(result->type));
   }
   if (fields.empty()) {
-    emit_empty_block_warning(schema_name, dh);
+    emit_empty_block_warning(schema_name, service, dh);
     return None{};
   }
   auto runtime_schema = type{schema_name, record_type{fields}};

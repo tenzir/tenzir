@@ -1,0 +1,9 @@
+warning: Hydrolix rejected 1 of 3 events
+  --> tests/operators/to_hydrolix/partial.tql:14:1
+   |
+14 | to_hydrolix env("HYDROLIX_URL"),
+   | ~~~~~~~~~~~
+   |
+   = note: table: `test.partial`
+   = note: reason: value of unsigned column is negative -1
+   = hint: check that the transform matches the events

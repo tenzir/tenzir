@@ -1,0 +1,8 @@
+warning: failed to send events to Hydrolix, retrying in 1s
+  --> tests/operators/to_hydrolix/rate_limit.tql:14:1
+   |
+14 | to_hydrolix env("HYDROLIX_URL"),
+   | ~~~~~~~~~~~
+   |
+   = note: reason: HTTP status 429
+   = note: table: `test.busy`

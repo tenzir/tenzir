@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fh_metrics VALUES (1), (2), (3)",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

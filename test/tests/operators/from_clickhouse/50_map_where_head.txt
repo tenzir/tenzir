@@ -1,0 +1,7 @@
+{
+  id: 3,
+  catchall: {
+    class_uid: "3002",
+    severity_id: "1",
+  },
+}

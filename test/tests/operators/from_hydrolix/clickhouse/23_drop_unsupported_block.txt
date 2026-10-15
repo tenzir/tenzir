@@ -1,0 +1,14 @@
+warning: dropping Hydrolix column `location` with unsupported type `Point`
+ --> tests/operators/from_hydrolix/clickhouse/23_drop_unsupported_block.tql:2:1
+  |
+2 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ~~~~~~~~~~~~~
+  |
+  = hint: cast unsupported columns in SQL or omit them from the result
+
+warning: dropping Hydrolix block for schema `hydrolix.query` because no supported columns remained
+ --> tests/operators/from_hydrolix/clickhouse/23_drop_unsupported_block.tql:2:1
+  |
+2 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ~~~~~~~~~~~~~
+  |

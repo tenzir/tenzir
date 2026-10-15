@@ -1,0 +1,8 @@
+error: Hydrolix error 60: DB::Exception: Table default.does_not_exist does not exist
+ --> tests/operators/from_hydrolix/clickhouse/14_unknown_table.tql:4:1
+  |
+4 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |
+  = hint: check that the table exists and has a transform
+  = hint: check that the account of `token` has the `select_sql` permission on the table

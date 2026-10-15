@@ -14,13 +14,17 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/list_array.hpp"
 #include "tenzir/nova/record_array.hpp"
+#include "tenzir/nova/record_array_builder.hpp"
 #include "tenzir/nova/storage.hpp"
+#include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova/union_array.hpp"
 #include "tenzir/tag.hpp"
 #include "tenzir/value_path.hpp"
 
+#include <arrow/util/utf8.h>
 #include <clickhouse/columns/array.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/decimal.h>
@@ -29,6 +33,7 @@
 #include <clickhouse/columns/ip6.h>
 #include <clickhouse/columns/json.h>
 #include <clickhouse/columns/lowcardinality.h>
+#include <clickhouse/columns/map.h>
 #include <clickhouse/columns/nullable.h>
 #include <clickhouse/columns/numeric.h>
 #include <clickhouse/columns/string.h>
@@ -51,11 +56,17 @@ namespace {
 using nova::storage::Index;
 using ConstColumnRef = std::shared_ptr<::clickhouse::Column const>;
 
-/// Warns about the malformed values of one column, at most once.
+/// Warns about the malformed values of one column, at most once. `service`
+/// names the backend for the user, such as `ClickHouse` or `Hydrolix`.
 class MalformedWarning {
 public:
-  MalformedWarning(value_path const& path, diagnostic_handler& dh)
-    : path_{path}, dh_{dh} {
+  MalformedWarning(value_path const& path, std::string_view service,
+                   diagnostic_handler& dh)
+    : path_{path}, service_{service}, dh_{dh} {
+  }
+
+  auto service() const -> std::string_view {
+    return service_;
   }
 
   template <class... Ts>
@@ -64,13 +75,14 @@ public:
       return;
     }
     emitted_ = true;
-    diagnostic::warning("malformed ClickHouse values in `{}`: {}", path_,
+    diagnostic::warning("malformed {} values in `{}`: {}", service_, path_,
                         fmt::format(str, std::forward<Ts>(xs)...))
       .emit(dh_);
   }
 
 private:
   value_path const& path_;
+  std::string_view service_;
   diagnostic_handler& dh_;
   bool emitted_ = false;
 };
@@ -411,15 +423,15 @@ auto decode_low_cardinality(::clickhouse::ColumnLowCardinality const& values,
     case ::clickhouse::Type::JSON:
       break;
   }
-  warning.emit("unsupported LowCardinality ClickHouse type `{}`",
+  warning.emit("unsupported LowCardinality {} type `{}`", warning.service(),
                logical.type->GetName());
   nulls.set_all();
   return make_nulls(length);
 }
 
 auto column_to_array(ConstColumnRef const& column, DecodedType const& type,
-                     value_path const& path, diagnostic_handler& dh)
-  -> Option<nova::Array<nova::Data>>;
+                     value_path const& path, std::string_view service,
+                     diagnostic_handler& dh) -> Option<nova::Array<nova::Data>>;
 
 auto decode_blobs(::clickhouse::ColumnArray const& values, Index length,
                   NullRows& nulls, MalformedWarning& warning)
@@ -440,9 +452,10 @@ auto decode_blobs(::clickhouse::ColumnArray const& values, Index length,
 
 auto decode_list(::clickhouse::ColumnArray const& values,
                  DecodedType const& type, Index length, value_path const& path,
-                 diagnostic_handler& dh) -> Option<nova::Array<nova::Data>> {
-  auto elements
-    = column_to_array(values.GetData(), type.children[0], path.list(), dh);
+                 std::string_view service, diagnostic_handler& dh)
+  -> Option<nova::Array<nova::Data>> {
+  auto elements = column_to_array(values.GetData(), type.children[0],
+                                  path.list(), service, dh);
   if (not elements) {
     return None{};
   }
@@ -460,11 +473,11 @@ auto decode_list(::clickhouse::ColumnArray const& values,
 
 auto decode_tuple(::clickhouse::ColumnTuple const& values,
                   DecodedType const& type, Index length, value_path const& path,
-                  diagnostic_handler& dh) -> Option<nova::Array<nova::Data>> {
+                  std::string_view service, diagnostic_handler& dh)
+  -> Option<nova::Array<nova::Data>> {
   if (values.TupleSize() != type.names.size()) {
-    diagnostic::warning("malformed ClickHouse values in `{}`: unexpected "
-                        "tuple size",
-                        path)
+    diagnostic::warning("malformed {} values in `{}`: unexpected tuple size",
+                        service, path)
       .emit(dh);
     return None{};
   }
@@ -472,15 +485,15 @@ auto decode_tuple(::clickhouse::ColumnTuple const& values,
   arrays.reserve(type.names.size());
   for (auto i = size_t{0}; i < type.names.size(); ++i) {
     auto field_path = path.field(type.names[i]);
-    auto array
-      = column_to_array(values.At(i), type.children[i], field_path, dh);
+    auto array = column_to_array(values.At(i), type.children[i], field_path,
+                                 service, dh);
     if (not array) {
       return None{};
     }
     if (array->length() != length) {
-      diagnostic::warning("malformed ClickHouse values in `{}`: unexpected "
-                          "tuple field length",
-                          field_path)
+      diagnostic::warning("malformed {} values in `{}`: unexpected tuple "
+                          "field length",
+                          service, field_path)
         .emit(dh);
       return None{};
     }
@@ -498,8 +511,63 @@ auto decode_tuple(::clickhouse::ColumnTuple const& values,
   return nova::Array<nova::Record>::from_fields(fields);
 }
 
+/// Decodes a `Map` into records with one field per key. The text of a key
+/// names its field, and the last of two equal keys wins.
+auto decode_map(::clickhouse::ColumnMap const& values, DecodedType const& type,
+                Index length, value_path const& path, std::string_view service,
+                diagnostic_handler& dh) -> Option<nova::Array<nova::Data>> {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  if (length == 0) {
+    return builder.finish();
+  }
+  // The client keeps the array of key-value tuples to itself and hands out one
+  // row at a time, so this gathers the rows into a single tuple column, whose
+  // keys and values then decode like any other column.
+  auto entries = values.GetAsColumn(0)->CloneEmpty();
+  auto sizes = std::vector<Index>{};
+  sizes.reserve(detail::narrow<size_t>(length));
+  for (auto row = Index{0}; row < length; ++row) {
+    auto entry = values.GetAsColumn(detail::narrow<size_t>(row));
+    sizes.push_back(detail::narrow<Index>(entry->Size()));
+    entries->Append(entry);
+  }
+  auto tuple = entries->As<::clickhouse::ColumnTuple>();
+  if (not tuple or tuple->TupleSize() != 2) {
+    diagnostic::warning("malformed {} values in `{}`: unexpected map layout",
+                        service, path)
+      .emit(dh);
+    return None{};
+  }
+  auto keys
+    = column_to_array(tuple->At(0), type.children[0], path, service, dh);
+  auto items
+    = column_to_array(tuple->At(1), type.children[1], path, service, dh);
+  if (not keys or not items) {
+    return None{};
+  }
+  auto warning = MalformedWarning{path, service, dh};
+  auto entry = Index{0};
+  for (auto size : sizes) {
+    auto record = builder.record();
+    for (auto end = entry + size; entry < end; ++entry) {
+      // A field name must be valid UTF-8, but `stringify` passes string keys
+      // through as they are.
+      auto name = nova::stringify(keys->get(entry));
+      if (not name
+          or not arrow::util::ValidateUTF8(
+            reinterpret_cast<uint8_t const*>(name->data()), name->size())) {
+        warning.emit("map key is not valid UTF-8");
+        continue;
+      }
+      nova::append_row(record.field(*name), items->get(entry));
+    }
+  }
+  return builder.finish();
+}
+
 auto column_to_array(ConstColumnRef const& column, DecodedType const& type,
-                     value_path const& path, diagnostic_handler& dh)
+                     value_path const& path, std::string_view service,
+                     diagnostic_handler& dh)
   -> Option<nova::Array<nova::Data>> {
   auto const length = detail::narrow<Index>(column->Size());
   auto nulls = NullRows{length};
@@ -510,7 +578,7 @@ auto column_to_array(ConstColumnRef const& column, DecodedType const& type,
     }
     effective = nullable->Nested();
   }
-  auto warning = MalformedWarning{path, dh};
+  auto warning = MalformedWarning{path, service, dh};
   auto strings = [&](auto const& values) {
     return decode_rows<nova::String>(length, nulls, warning, [&](Index row) {
       return Option{values.At(detail::narrow<size_t>(row))};
@@ -640,9 +708,11 @@ auto column_to_array(ConstColumnRef const& column, DecodedType const& type,
         if (type.kind == DecodedKind::blob) {
           return decode_blobs(values, length, nulls, warning);
         }
-        return decode_list(values, type, length, path, dh);
+        return decode_list(values, type, length, path, service, dh);
       } else if constexpr (std::same_as<Column, ColumnTuple>) {
-        return decode_tuple(values, type, length, path, dh);
+        return decode_tuple(values, type, length, path, service, dh);
+      } else if constexpr (std::same_as<Column, ColumnMap>) {
+        return decode_map(values, type, length, path, service, dh);
       } else if constexpr (std::same_as<Column, ColumnLowCardinality>) {
         return decode_low_cardinality(values, length, nulls, warning);
       } else if constexpr (std::same_as<Column, ColumnNothing>) {
@@ -651,7 +721,7 @@ auto column_to_array(ConstColumnRef const& column, DecodedType const& type,
         TENZIR_UNREACHABLE();
       } else {
         // `classify` rejects every other type.
-        warning.emit("unsupported ClickHouse runtime type `{}`",
+        warning.emit("unsupported {} runtime type `{}`", warning.service(),
                      values.GetType().GetName());
         nulls.set_all();
         return make_nulls(length);
@@ -666,8 +736,8 @@ auto column_to_array(ConstColumnRef const& column, DecodedType const& type,
 } // namespace
 
 auto block_to_events(::clickhouse::Block const& block,
-                     std::string_view schema_name, diagnostic_handler& dh)
-  -> Option<nova::Events> {
+                     std::string_view schema_name, std::string_view service,
+                     diagnostic_handler& dh) -> Option<nova::Events> {
   if (block.GetColumnCount() == 0 or block.GetRowCount() == 0) {
     return None{};
   }
@@ -682,10 +752,11 @@ auto block_to_events(::clickhouse::Block const& block,
     auto path = root.field(name);
     auto type = classify(block[i]->Type());
     if (not type) {
-      emit_unsupported_column_warning(path, block[i]->Type()->GetName(), dh);
+      emit_unsupported_column_warning(path, block[i]->Type()->GetName(),
+                                      service, dh);
       continue;
     }
-    auto array = column_to_array(block[i], *type, path, dh);
+    auto array = column_to_array(block[i], *type, path, service, dh);
     if (not array) {
       continue;
     }
@@ -693,7 +764,7 @@ auto block_to_events(::clickhouse::Block const& block,
     arrays.push_back(std::move(*array));
   }
   if (arrays.empty()) {
-    emit_empty_block_warning(schema_name, dh);
+    emit_empty_block_warning(schema_name, service, dh);
     return None{};
   }
   auto fields = std::vector<

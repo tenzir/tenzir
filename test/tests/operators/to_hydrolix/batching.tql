@@ -1,0 +1,23 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 3
+      events:
+        test.events:
+          - {id: 1, text: "aaaaaaaaaa"}
+          - {id: 2, text: "bbbbbbbbbb"}
+          - {id: 3, text: "cccccccccc"}
+---
+// Every event fills up a request, so each one gets a request of its own. The
+// last event exceeds `max_content_length` and is skipped.
+from {id: 1, text: "aaaaaaaaaa"},
+     {id: 2, text: "bbbbbbbbbb"},
+     {id: 3, text: "cccccccccc"},
+     {id: 4, text: "dddddddddddddddddddddddddddddddddddddddd"}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.events",
+  max_content_length=40,
+  parallel=1

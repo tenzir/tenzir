@@ -1,0 +1,8 @@
+// The guards exclude rows 7 and 8, whose `t` is `null` in TQL.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_times"
+where t > 2024-01-01
+sort id
+select id

@@ -1,0 +1,7 @@
+// Integers are ticks of the column's precision. Rows 2 and 6 lie on the edges
+// of the range that TQL decodes, rows 3 and 7 one tick beyond them.
+from_clickhouse sql="INSERT INTO fh_times VALUES (1, '1500-01-01 00:00:00', '1500-01-01 00:00:00'), (2, -9223372036854, -922337203685), (3, -9223372036855, -922337203686), (4, '1850-01-01 00:00:00', '1850-01-01 00:00:00'), (5, '2024-06-01 00:00:00', '2024-06-01 00:00:00'), (6, 9223372036854, 922337203685), (7, 9223372036855, 922337203686), (8, '2299-01-01 00:00:00', '2299-01-01 00:00:00'), (9, '2024-06-02 00:00:00', NULL)",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

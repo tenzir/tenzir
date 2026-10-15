@@ -1,0 +1,4 @@
+{
+  read_events: 3,
+  written_events: 3,
+}

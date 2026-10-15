@@ -1,0 +1,12 @@
+---
+error: true
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 0
+---
+from {id: 1}
+to_hydrolix env("HYDROLIX_URL"),
+  token="wrong-token",
+  table="test.events"

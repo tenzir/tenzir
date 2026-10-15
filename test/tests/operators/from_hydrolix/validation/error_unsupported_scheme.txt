@@ -1,0 +1,6 @@
+error: `url` must use the `http` or `https` scheme
+ --> tests/operators/from_hydrolix/validation/error_unsupported_scheme.tql:4:15
+  |
+4 | from_hydrolix "ftp://example.invalid", token="token", table="a.b"
+  |               ^^^^^^^^^^^^^^^^^^^^^^^ got `ftp`
+  |

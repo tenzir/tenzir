@@ -1,0 +1,7 @@
+---
+error: true
+---
+// The error must not repeat the URL, which may be a secret. The URL uses
+// `http` so that the test does not depend on the CA certificates of the host.
+from {x: 1}
+to_hydrolix "http://?credential=sensitive", token="token", table="test.events"

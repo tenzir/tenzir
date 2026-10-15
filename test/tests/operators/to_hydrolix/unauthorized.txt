@@ -1,0 +1,9 @@
+error: Hydrolix rejected events with HTTP status 401
+  --> tests/operators/to_hydrolix/unauthorized.tql:10:1
+   |
+10 | to_hydrolix env("HYDROLIX_URL"),
+   | ^^^^^^^^^^^
+   |
+   = note: table: `test.events`
+   = note: response: {"code": 401, "message": "invalid token"}
+   = hint: check that `token` is a valid Hydrolix bearer token

@@ -131,7 +131,19 @@ auto classify(::clickhouse::TypeRef const& type) -> Option<DecodedType> {
       }
       return result;
     }
-    case ::clickhouse::Type::Map:
+    case ::clickhouse::Type::Map: {
+      auto map = unwrapped.type->As<::clickhouse::MapType>();
+      auto key = classify(map->GetKeyType());
+      auto value = classify(map->GetValueType());
+      if (not key or not value) {
+        return None{};
+      }
+      auto result
+        = DecodedType{.kind = DecodedKind::map, .children = {}, .names = {}};
+      result.children.push_back(std::move(*key));
+      result.children.push_back(std::move(*value));
+      return result;
+    }
     case ::clickhouse::Type::Point:
     case ::clickhouse::Type::Ring:
     case ::clickhouse::Type::Polygon:
@@ -143,6 +155,13 @@ auto classify(::clickhouse::TypeRef const& type) -> Option<DecodedType> {
   return None{};
 }
 
+auto contains_map(DecodedType const& type) -> bool {
+  return type.kind == DecodedKind::map
+         or std::ranges::any_of(type.children, [](DecodedType const& child) {
+              return contains_map(child);
+            });
+}
+
 auto is_decodable_type(std::string_view type) -> bool {
   // The client builds the columns it receives with the same factory, so a type
   // it rejects never reaches the decoder either.
@@ -151,7 +170,8 @@ auto is_decodable_type(std::string_view type) -> bool {
     if (not column) {
       return false;
     }
-    return classify(column->Type()).has_value();
+    auto decoded = classify(column->Type());
+    return decoded and not contains_map(*decoded);
   } catch (std::exception const&) {
     return false;
   }
@@ -299,19 +319,20 @@ auto days_to_nanos(int64_t days) -> Option<int64_t> {
 }
 
 auto emit_unsupported_column_warning(value_path path, std::string_view text,
+                                     std::string_view service,
                                      diagnostic_handler& dh) -> void {
-  diagnostic::warning("dropping ClickHouse column `{}` with unsupported type "
-                      "`{}`",
-                      path, text)
+  diagnostic::warning("dropping {} column `{}` with unsupported type `{}`",
+                      service, path, text)
     .hint("cast unsupported columns in SQL or omit them from the result")
     .emit(dh);
 }
 
 auto emit_empty_block_warning(std::string_view schema_name,
-                              diagnostic_handler& dh) -> void {
-  diagnostic::warning("dropping ClickHouse block for schema `{}` because no "
+                              std::string_view service, diagnostic_handler& dh)
+  -> void {
+  diagnostic::warning("dropping {} block for schema `{}` because no "
                       "supported columns remained",
-                      schema_name)
+                      service, schema_name)
     .emit(dh);
 }
 

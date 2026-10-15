@@ -1,0 +1,8 @@
+---
+error: true
+---
+// The error repeats the query, which contains the token.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              sql="SELECT throwIf(1, 'echo test-token')"

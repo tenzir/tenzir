@@ -1,0 +1,9 @@
+error: conflicting TLS settings
+ --> tests/operators/from_hydrolix/validation/error_tls_conflict.tql:4:15
+  |
+4 | from_hydrolix "https://example.invalid", token="token", table="a.b", tls=false
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^ url enables TLS
+  ⋮
+4 | from_hydrolix "https://example.invalid", token="token", table="a.b", tls=false
+  |                                                                          ^^^^^ option disables TLS
+  |

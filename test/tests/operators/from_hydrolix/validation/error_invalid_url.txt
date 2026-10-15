@@ -1,0 +1,7 @@
+error: failed to parse `url`
+ --> tests/operators/from_hydrolix/validation/error_invalid_url.tql:4:15
+  |
+4 | from_hydrolix "https://", token="token", table="a.b"
+  |               ^^^^^^^^^^
+  |
+  = hint: pass the URL of the cluster, e.g., `https://acme.hydrolix.live`

@@ -1,0 +1,13 @@
+---
+error: true
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 1
+---
+from {id: 1}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.missing",
+  transform="edr"

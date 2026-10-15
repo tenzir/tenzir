@@ -1,0 +1,6 @@
+// Writes the queries of the earlier tests to `system.query_log`.
+from_clickhouse sql="SYSTEM FLUSH LOGS",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

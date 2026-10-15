@@ -1,0 +1,4 @@
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              sql="SELECT name, currentUser() AS user FROM default.fh_events WHERE id = 2"

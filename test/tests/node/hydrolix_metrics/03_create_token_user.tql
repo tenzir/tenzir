@@ -1,0 +1,6 @@
+// Hydrolix accepts its tokens as the password of this user.
+from_clickhouse sql="CREATE USER `__api_token__` IDENTIFIED BY 'test-token'",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

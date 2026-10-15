@@ -1,0 +1,8 @@
+error: Hydrolix error 497: DB::Exception: __api_token__: Not enough privileges. To execute this query, it's necessary to have the grant SHOW COLUMNS ON restricted.secrets
+ --> tests/operators/from_hydrolix/clickhouse/16_access_denied.tql:4:1
+  |
+4 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |
+  = hint: check that the table exists and has a transform
+  = hint: check that the account of `token` has the `select_sql` permission on the table

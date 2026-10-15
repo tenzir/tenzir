@@ -1,0 +1,7 @@
+// Each map becomes a record with one field per key.
+from_clickhouse table="fc_maps",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort id

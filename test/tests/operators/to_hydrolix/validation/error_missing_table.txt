@@ -1,0 +1,8 @@
+error: required argument `table` was not provided
+ --> tests/operators/to_hydrolix/validation/error_missing_table.tql:5:1
+  |
+5 | to_hydrolix "https://example.invalid", token="token"
+  | ^^^^^^^^^^^
+  |
+  = usage: to_hydrolix url:string, table=string, token=string, [transform=string, table_token=string, headers=record, include_nulls=bool, max_content_length=int, buffer_timeout=duration, parallel=int, compress=bool, tls=record]
+  = docs: https://tenzir.com/docs/reference/operators/to_hydrolix

@@ -352,14 +352,24 @@ auto time_literal(TimeType const& type, int64_t ticks) -> Expr {
 }
 
 /// The conditions under which TQL sees a value rather than `null` for the
-/// temporal column `x`. None are needed if it always does.
+/// temporal column `x`. None are needed if it always does. Each is marked as a
+/// guard, so that a renderer can tell it from a user's comparison with the
+/// same edge.
 auto time_guard(Expr const& x, TimeType const& type) -> std::vector<Expr> {
   auto result = std::vector<Expr>{};
+  auto guard = [&](BinaryOp op, int64_t ticks) {
+    return Binary{
+      .op = op,
+      .left = x,
+      .right = time_literal(type, ticks),
+      .origin = ComparisonOrigin::time_guard,
+    };
+  };
   if (type.guard_lo) {
-    result.push_back(binary(BinaryOp::geq, x, time_literal(type, type.lo)));
+    result.emplace_back(guard(BinaryOp::geq, type.lo));
   }
   if (type.guard_hi) {
-    result.push_back(binary(BinaryOp::leq, x, time_literal(type, type.hi)));
+    result.emplace_back(guard(BinaryOp::leq, type.hi));
   }
   return result;
 }

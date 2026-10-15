@@ -1,0 +1,9 @@
+error: Hydrolix rejected events with HTTP status 403
+  --> tests/operators/to_hydrolix/forbidden.tql:12:1
+   |
+12 | to_hydrolix env("HYDROLIX_URL"),
+   | ^^^^^^^^^^^
+   |
+   = note: table: `test.events`
+   = note: response: {"code": 403, "message": "invalid table token"}
+   = hint: check that `token` grants the `ingest_table` permission and that `table_token` matches a table access token, if the table requires one

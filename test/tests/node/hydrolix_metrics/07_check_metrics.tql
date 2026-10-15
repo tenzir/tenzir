@@ -1,0 +1,12 @@
+// `from_hydrolix` reports the rows it reads as ingress, and `to_hydrolix` the
+// events it accepts as egress, including the one that the table `test.partial`
+// rejects. Wait until both pipelines reported all three.
+every 1s {
+  metrics "pipeline"
+  where pipeline_id in ["00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"]
+  read_events = ingress.events if pipeline_id.ends_with("1") else 0
+  written_events = egress.events if pipeline_id.ends_with("2") else 0
+  summarize read_events=sum(read_events), written_events=sum(written_events)
+  where read_events >= 3 and written_events >= 3
+}
+head 1

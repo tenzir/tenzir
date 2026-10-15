@@ -57,10 +57,12 @@ auto make_catch_all_layout(std::span<ColumnDescription const> description,
 /// column that `layout` does not know. Strings of `JSON` columns become values,
 /// inferring types as `parse_json` does. The rows must have been read with
 /// `json_type_escape_dots_in_keys=1`, so that literal dotted keys stay apart
-/// from nested paths.
+/// from nested paths. `service` names the backend in warnings, such as
+/// `ClickHouse` or `Hydrolix`.
 auto reconstruct_catch_all(nova::Events events,
                            std::span<std::string_view const> columns,
-                           CatchAllLayout const& layout, diagnostic_handler& dh)
+                           CatchAllLayout const& layout,
+                           std::string_view service, diagnostic_handler& dh)
   -> nova::Events;
 
 } // namespace tenzir::plugins::clickhouse

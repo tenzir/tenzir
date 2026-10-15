@@ -1,0 +1,8 @@
+error: required argument `token` was not provided
+ --> tests/operators/from_hydrolix/validation/error_missing_token.tql:4:1
+  |
+4 | from_hydrolix "https://example.invalid", table="a.b"
+  | ^^^^^^^^^^^^^
+  |
+  = usage: from_hydrolix url:string, token=string, [table=string, sql=string, port=int, tls=record]
+  = docs: https://tenzir.com/docs/reference/operators/from_hydrolix

@@ -1,0 +1,18 @@
+{
+  time: 2026-01-01T00:00:01Z,
+  id: 1,
+  name: "alice",
+  score: 1.5,
+}
+{
+  time: 2026-01-01T00:00:02Z,
+  id: 2,
+  name: "bob",
+  score: 2.5,
+}
+{
+  time: 2026-01-01T00:00:03Z,
+  id: 3,
+  name: "carol",
+  score: 3.5,
+}

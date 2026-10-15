@@ -1,0 +1,7 @@
+// `DateTime64` columns hold instants that TQL decodes to `null`: before
+// 1677-09-21T00:12:43.145224192 and after 2262-04-11T23:47:16.854775807.
+from_clickhouse sql="CREATE TABLE fh_times (id Int64, t DateTime64(3, 'UTC'), c Nullable(DateTime64(2, 'UTC'))) ENGINE = MergeTree ORDER BY id",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

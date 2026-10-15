@@ -1,0 +1,8 @@
+// A comparison with the upper edge is the user's, not a guard.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_times"
+where t <= 2262-04-11T23:47:16.854 and c != null
+sort id
+select id

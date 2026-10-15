@@ -1,0 +1,8 @@
+warning: event too large for given `max_content_length`
+  --> tests/operators/to_hydrolix/batching.tql:22:22
+   |
+22 |   max_content_length=40,
+   |                      ~~
+   |
+   = note: skipped 1 event
+   = note: the largest serialized event has 59 bytes

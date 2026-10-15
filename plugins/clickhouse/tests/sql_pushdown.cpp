@@ -693,9 +693,11 @@ TEST("predicates without an exact translation stay local") {
   // Generated columns are not part of `SELECT *` by default.
   CHECK(not translate("gen == 1"));
   CHECK(not translate("gen > 1 and x > 1"));
-  // Columns that the operator cannot decode are not in the local result, and
-  // neither are the elements of a tuple that contains one.
+  // Fields of maps, which only the events decoder reads, and elements of a
+  // tuple that contains one stay local.
   CHECK(not translate("bad == 1"));
+  CHECK(not translate("bad.k == 1"));
+  CHECK(not translate("bad[\"k\"] == 1"));
   CHECK(not translate("half.ok == \"x\""));
   CHECK(not translate("half.ok.starts_with(\"x\")"));
   // Unknown columns, `this`, and unknown functions.
@@ -807,8 +809,10 @@ TEST("nested projections") {
               std::string{"SELECT CAST(tuple(`m`.`h`), 'Tuple(`h` "
                           "Tuple(Int64))') AS `m` FROM t"});
   CHECK_EQUAL(select({"id.nope"}), std::string{"SELECT `id` FROM t"});
-  // Narrowing a tuple that the operator cannot decode as a whole would make
-  // the requested element decodable and change the result, so it stays whole.
+  // A map and a tuple that contains one stay whole: the fields of a map depend
+  // on the data, and only the events decoder reads them.
+  schema.add_column("mp", "Map(String, String)");
+  CHECK_EQUAL(select({"mp.k"}), std::string{"SELECT `mp` FROM t"});
   schema.add_column("half", "Tuple(ok String, bad Map(String, Int64))");
   CHECK_EQUAL(select({"half.ok"}), std::string{"SELECT `half` FROM t"});
   CHECK_EQUAL(select({"m.a", "half.ok"}),
@@ -824,6 +828,7 @@ TEST("decodable types") {
   CHECK(is_decodable_type("Decimal(10, 2)"));
   CHECK(is_decodable_type("Enum8('a' = 1)"));
   CHECK(is_decodable_type("DateTime64(3, 'UTC')"));
+  // Maps decode with the events decoder only, and pushdown leaves them alone.
   CHECK(not is_decodable_type("Map(String, Int64)"));
   CHECK(not is_decodable_type("Tuple(a String, b Map(String, Int64))"));
   CHECK(not is_decodable_type("Array(Map(String, Int64))"));
@@ -862,13 +867,15 @@ auto call(std::vector<std::string> output, std::string function,
 }
 
 auto aggregate(std::vector<ir::OptimizeAggregation::Column> columns,
-               std::vector<std::string> where = {}) -> Option<std::string> {
+               std::vector<std::string> where = {},
+               SqlTarget target = SqlTarget::clickhouse)
+  -> Option<std::string> {
   auto aggregation = ir::OptimizeAggregation{
     .columns = std::move(columns),
     .schema_name = "tenzir.summarize",
     .fallback = {},
   };
-  return make_aggregate_query(aggregation, make_schema(), "tbl", where);
+  return make_aggregate_query(aggregation, make_schema(), "tbl", where, target);
 }
 
 } // namespace
@@ -910,6 +917,30 @@ TEST("aggregate query rendering") {
                 "toDate32('2262-04-11'), `d32`, NULL)"});
 }
 
+TEST("aggregate queries for hydrolix spell time guards on tick counts") {
+  CHECK_EQUAL(aggregate({key({"d32"}, {"d32"}),
+                         call({"t"}, "max", std::vector<std::string>{"stamp"})},
+                        {}, SqlTarget::hydrolix),
+              std::string{
+                "SELECT if(`d32` <= toDate32('2262-04-11'), `d32`, NULL) AS "
+                "`__tenzir_aggregate_0`, maxOrNull(if(toUnixTimestamp64Milli("
+                "`stamp`) >= -9223372036854 AND "
+                "toUnixTimestamp64Milli(`stamp`) "
+                "<= 9223372036854, `stamp`, NULL)) AS `__tenzir_aggregate_1` "
+                "FROM tbl GROUP BY if(`d32` <= toDate32('2262-04-11'), `d32`, "
+                "NULL)"});
+  CHECK_EQUAL(aggregate({key({"stamp"}, {"stamp"}), call({"n"}, "count")}, {},
+                        SqlTarget::hydrolix),
+              std::string{
+                "SELECT if(toUnixTimestamp64Milli(`stamp`) >= -9223372036854 "
+                "AND toUnixTimestamp64Milli(`stamp`) <= 9223372036854, "
+                "`stamp`, NULL) AS `__tenzir_aggregate_0`, toInt64(count()) AS "
+                "`__tenzir_aggregate_1` FROM tbl GROUP BY "
+                "if(toUnixTimestamp64Milli(`stamp`) >= -9223372036854 AND "
+                "toUnixTimestamp64Milli(`stamp`) <= 9223372036854, `stamp`, "
+                "NULL)"});
+}
+
 TEST("aggregations that stay local") {
   auto count = call({"n"}, "count");
   // `GROUP BY` equates `NaN` with itself and `-0.0` with `0.0`.
@@ -934,7 +965,8 @@ TEST("aggregations that stay local") {
     .schema_name = "tenzir.summarize",
     .fallback = {},
   };
-  CHECK(not make_aggregate_query(aggregation, schema, "tbl", {}));
+  CHECK(not make_aggregate_query(aggregation, schema, "tbl", {},
+                                 SqlTarget::clickhouse));
   CHECK(supports_aggregate_functions(aggregation));
   aggregation.columns.push_back(
     call({"s"}, "sum", std::vector<std::string>{"x"}));

@@ -1,0 +1,6 @@
+// The `catchall` map becomes a record, and the warning about the dropped
+// `Point` column names Hydrolix.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_catchall"

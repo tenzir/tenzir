@@ -1,0 +1,6 @@
+error: `port` must be between 1 and 65535
+ --> tests/operators/from_hydrolix/validation/error_port_zero.tql:4:75
+  |
+4 | from_hydrolix "https://example.invalid", token="token", table="a.b", port=0
+  |                                                                           ^ got `0`
+  |

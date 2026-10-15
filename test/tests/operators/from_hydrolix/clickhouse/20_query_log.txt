@@ -1,0 +1,12 @@
+{
+  query: "SELECT name, currentUser() AS user FROM default.fh_events WHERE id = 2",
+}
+{
+  query: "SELECT `id`, `name` FROM default.fh_events WHERE `id` >= 2 AND `name` != 'bob'",
+}
+{
+  query: "SELECT toInt64(count()) AS `__tenzir_aggregate_0`, minOrNull(`id`) AS `__tenzir_aggregate_1`, maxOrNull(`id`) AS `__tenzir_aggregate_2` FROM default.fh_events WHERE `id` > 1",
+}
+{
+  query: "SELECT toInt64(count()) AS `__tenzir_aggregate_0` FROM default.fh_events WHERE (toUnixTimestamp64Milli(`time`) >= -9223372036854 AND toUnixTimestamp64Milli(`time`) <= 9223372036854 AND `time` > <since>)",
+}

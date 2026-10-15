@@ -1,0 +1,7 @@
+---
+error: true
+---
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="wrong-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              sql="SELECT 1"

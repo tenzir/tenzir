@@ -1,0 +1,6 @@
+error: Hydrolix error 395: DB::Exception: echo ***: while executing 'FUNCTION throwIf(1_UInt8 :: 1, 'echo ***'_String :: 2) -> throwIf(1_UInt8, 'echo ***'_String) UInt8 : 3'
+ --> tests/operators/from_hydrolix/clickhouse/18_redact_token.tql:5:1
+  |
+5 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |

@@ -1,0 +1,4 @@
+---
+error: true
+---
+from_hydrolix "https://example.invalid", table="a.b"

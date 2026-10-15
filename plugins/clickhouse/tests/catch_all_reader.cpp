@@ -46,7 +46,7 @@ auto reconstruct(nova::Events events,
   }
   columns.insert(columns.end(), added.begin(), added.end());
   return reconstruct_catch_all(std::move(events), columns, layout(description),
-                               dh);
+                               "ClickHouse", dh);
 }
 
 /// Builds the events that `block_to_events` decodes from `rows`, which hold

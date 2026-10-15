@@ -1,0 +1,4 @@
+---
+error: true
+---
+from_hydrolix "https://example.invalid", token="token", table="a.b", port=0

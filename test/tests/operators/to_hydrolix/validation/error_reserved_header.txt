@@ -1,0 +1,7 @@
+error: `headers` must not set `x-hdx-table`
+ --> tests/operators/to_hydrolix/validation/error_reserved_header.tql:6:11
+  |
+6 |   headers={"x-hdx-table": "other.table"}
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `to_hydrolix` sets this header itself

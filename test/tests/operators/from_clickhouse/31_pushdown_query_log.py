@@ -123,12 +123,12 @@ CREATE TABLE {TABLE} (
   y String,
   n Nullable(Int64),
   meta Tuple(source String, level Int64),
-  half Tuple(ok String, bad Map(String, Int64)),
+  half Tuple(ok String, bad Point),
   d Int64 DEFAULT x * 10,
   a String ALIAS concat(y, '-alias'),
   m Int64 MATERIALIZED x + 1
 ) ENGINE = MergeTree ORDER BY id;
-INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1), ('x', map('k', 1))), (2, -1, 'bar', 2, ('b', 2), ('y', map())), (3, 0, '1.1.1.1', NULL, ('c', 3), ('z', map()));
+INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1), ('x', (1., 2.))), (2, -1, 'bar', 2, ('b', 2), ('y', (1., 2.))), (3, 0, '1.1.1.1', NULL, ('c', 3), ('z', (1., 2.)));
 """
     )
     source = f'from_clickhouse table="{TABLE}",\n  {CONNECTION}\n'

@@ -1,0 +1,7 @@
+error: Hydrolix error 395: DB::Exception: hdx_query_timerange_required is set to true. Your query needs a time range filter in a WHERE clause: while executing 'FUNCTION throwIf(1_UInt8 :: 1, 'hdx_query_timerange_required is set to true. Your query needs a time range filter in a WHERE clause... :: 2) -> throwIf(1_UInt8, 'hdx_query_timerange_required is set to true. Your query needs a time range filter ... UInt8 : 3'
+ --> tests/operators/from_hydrolix/clickhouse/17_time_range_required.tql:5:1
+  |
+5 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |
+  = hint: restrict the query to a time range on the table's primary timestamp, e.g., with `let $since = now() - 1h` before `from_hydrolix` and `where time > $since` after it

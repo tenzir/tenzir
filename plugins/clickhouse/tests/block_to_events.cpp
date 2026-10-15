@@ -20,10 +20,12 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/test/test.hpp>
 
+#include <arrow/util/utf8.h>
 #include <clickhouse/columns/array.h>
 #include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/decimal.h>
+#include <clickhouse/columns/geo.h>
 #include <clickhouse/columns/ip4.h>
 #include <clickhouse/columns/ip6.h>
 #include <clickhouse/columns/lowcardinality.h>
@@ -51,9 +53,10 @@ struct Decoded {
   std::vector<diagnostic> diagnostics;
 };
 
-auto decode(ch::Block const& block) -> Decoded {
+auto decode(ch::Block const& block, std::string_view service = "ClickHouse")
+  -> Decoded {
   auto dh = collecting_diagnostic_handler{};
-  auto events = block_to_events(block, "test", dh);
+  auto events = block_to_events(block, "test", service, dh);
   return {std::move(events), std::move(dh).collect()};
 }
 
@@ -68,7 +71,7 @@ auto rows(nova::Events const& events) -> std::vector<data> {
 
 auto legacy_rows(ch::Block const& block) -> std::vector<data> {
   auto dh = null_diagnostic_handler{};
-  auto slice = block_to_table_slice(block, "test", dh);
+  auto slice = block_to_table_slice(block, "test", "ClickHouse", dh);
   REQUIRE(slice);
   auto result = std::vector<data>{};
   for (auto&& row : slice->values()) {
@@ -111,6 +114,30 @@ auto make_nullable(std::vector<Option<T>> const& values)
     nulls->Append(value ? 0 : 1);
   }
   return std::make_shared<ch::ColumnNullable>(nested, nulls);
+}
+
+/// Builds a `Map` column whose rows take the next `sizes[i]` pairs of `keys`
+/// and `values`.
+auto make_map(ch::ColumnRef keys, ch::ColumnRef values,
+              std::vector<size_t> const& sizes) -> ch::ColumnRef {
+  auto tuple = std::make_shared<ch::ColumnTuple>(
+    std::vector<ch::ColumnRef>{std::move(keys), std::move(values)});
+  auto array = std::make_shared<ch::ColumnArray>(tuple->CloneEmpty());
+  auto offset = size_t{0};
+  for (auto size : sizes) {
+    array->AppendAsColumn(tuple->Slice(offset, size));
+    offset += size;
+  }
+  return std::make_shared<ch::ColumnMap>(array);
+}
+
+auto make_strings(std::vector<std::string_view> const& values)
+  -> std::shared_ptr<ch::ColumnString> {
+  auto result = std::make_shared<ch::ColumnString>();
+  for (auto value : values) {
+    result->Append(value);
+  }
+  return result;
 }
 
 /// A block with the types that decode the same with either data model.
@@ -321,26 +348,113 @@ TEST("values out of range become null with one warning per column") {
   CHECK_EQUAL(field(result[1], "dt64"), data{});
 }
 
+TEST("warnings name the service") {
+  auto dt64 = std::make_shared<ch::ColumnDateTime64>(0);
+  dt64->Append(std::numeric_limits<int64_t>::max());
+  auto tuple = std::make_shared<ch::ColumnTuple>(
+    std::vector<ch::ColumnRef>{dt64}, std::vector<std::string>{"a"});
+  auto list = std::make_shared<ch::ColumnArray>(tuple->CloneEmpty());
+  list->AppendAsColumn(tuple);
+  auto decoded = decode(make_block({{"l", list}}), "Hydrolix");
+  REQUIRE(decoded.events);
+  REQUIRE_EQUAL(decoded.diagnostics.size(), size_t{1});
+  CHECK_EQUAL(decoded.diagnostics[0].message,
+              "malformed Hydrolix values in `l[].a`: DateTime64 value is out "
+              "of range after rescaling to nanoseconds");
+}
+
+TEST("maps become records with a field per key") {
+  // The shape of Hydrolix's `catchall Map(String, Nullable(String))`. The
+  // second row is empty, and the last of two equal keys wins.
+  auto catchall = make_map(
+    make_strings(
+      {"class_uid", "raw_data", "class_uid", "severity_id", "class_uid"}),
+    make_nullable<ch::ColumnString>(std::vector<Option<std::string_view>>{
+      "4001", None{}, "3002", "1", "3005"}),
+    {2, 0, 3});
+  auto numbers = std::make_shared<ch::ColumnUInt64>();
+  numbers->Append(1);
+  numbers->Append(20);
+  auto by_number = make_map(numbers, make_strings({"a", "b"}), {1, 0, 1});
+  auto inner_values = std::make_shared<ch::ColumnInt64>();
+  inner_values->Append(1);
+  inner_values->Append(2);
+  auto inner = make_map(make_strings({"x", "y"}), inner_values, {1, 1});
+  auto nested = make_map(make_strings({"a", "b"}), inner, {2, 0, 0});
+  auto decoded = decode(make_block(
+    {{"catchall", catchall}, {"by_number", by_number}, {"nested", nested}}));
+  REQUIRE(decoded.events);
+  CHECK(decoded.diagnostics.empty());
+  CHECK_EQUAL(
+    rows(*decoded.events),
+    (std::vector<data>{
+      record{
+        {"catchall", record{{"class_uid", "4001"}, {"raw_data", data{}}}},
+        {"by_number", record{{"1", "a"}}},
+        {"nested", record{{"a", record{{"x", int64_t{1}}}},
+                          {"b", record{{"y", int64_t{2}}}}}},
+      },
+      record{
+        {"catchall", record{}},
+        {"by_number", record{}},
+        {"nested", record{}},
+      },
+      record{
+        {"catchall", record{{"class_uid", "3005"}, {"severity_id", "1"}}},
+        {"by_number", record{{"20", "b"}}},
+        {"nested", record{}},
+      },
+    }));
+}
+
+TEST("map keys that are not valid UTF-8 are skipped") {
+  // The `tenzir` binary initializes Arrow's UTF-8 tables at startup.
+  arrow::util::InitializeUTF8();
+  auto map = make_map(make_strings({"ok", "\xff", "bad\xc3"}),
+                      make_strings({"a", "b", "c"}), {2, 1});
+  auto decoded = decode(make_block({{"m", map}}));
+  REQUIRE(decoded.events);
+  REQUIRE_EQUAL(decoded.diagnostics.size(), size_t{1});
+  CHECK_EQUAL(decoded.diagnostics[0].message,
+              "malformed ClickHouse values in `m`: map key is not valid UTF-8");
+  CHECK_EQUAL(rows(*decoded.events),
+              (std::vector<data>{record{{"m", record{{"ok", "a"}}}},
+                                 record{{"m", record{}}}}));
+}
+
+TEST("the table slice decoder drops maps") {
+  auto ok = std::make_shared<ch::ColumnUInt64>();
+  ok->Append(1);
+  auto map = make_map(make_strings({"k"}), make_strings({"v"}), {1});
+  auto dh = collecting_diagnostic_handler{};
+  auto slice = block_to_table_slice(make_block({{"ok", ok}, {"m", map}}),
+                                    "test", "ClickHouse", dh);
+  REQUIRE(slice);
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+  CHECK_EQUAL(diagnostics[0].message,
+              "dropping ClickHouse column `m` with unsupported type "
+              "`Map(String, String)`");
+  CHECK_EQUAL(slice->columns(), size_t{1});
+}
+
 TEST("unsupported columns are dropped") {
   auto ok = std::make_shared<ch::ColumnUInt64>();
   ok->Append(1);
-  auto map
-    = std::make_shared<ch::ColumnMapT<ch::ColumnString, ch::ColumnUInt64>>(
-      std::make_shared<ch::ColumnString>(),
-      std::make_shared<ch::ColumnUInt64>());
-  map->Append(std::map<std::string, uint64_t>{{"k", 1}});
-  auto decoded = decode(make_block({{"ok", ok}, {"dropped", map}}));
+  auto point = std::make_shared<ch::ColumnPoint>();
+  point->Append(std::make_tuple(1.0, 2.0));
+  auto decoded = decode(make_block({{"ok", ok}, {"dropped", point}}));
   REQUIRE(decoded.events);
   REQUIRE_EQUAL(decoded.diagnostics.size(), size_t{1});
   CHECK_EQUAL(decoded.diagnostics[0].message,
               "dropping ClickHouse column `dropped` with unsupported type "
-              "`Map(String, UInt64)`");
+              "`Point`");
   CHECK_EQUAL(rows(*decoded.events),
               (std::vector<data>{record{{"ok", uint64_t{1}}}}));
-  auto only_map = decode(make_block({{"dropped", map}}));
-  CHECK(not only_map.events);
-  REQUIRE_EQUAL(only_map.diagnostics.size(), size_t{2});
-  CHECK_EQUAL(only_map.diagnostics[1].message,
+  auto only_point = decode(make_block({{"dropped", point}}));
+  CHECK(not only_point.events);
+  REQUIRE_EQUAL(only_point.diagnostics.size(), size_t{2});
+  CHECK_EQUAL(only_point.diagnostics[1].message,
               "dropping ClickHouse block for schema `test` because no "
               "supported columns remained");
 }

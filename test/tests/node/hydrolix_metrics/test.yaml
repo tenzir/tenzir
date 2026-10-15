@@ -1,0 +1,7 @@
+# Runs `from_hydrolix` and `to_hydrolix` in a node to check that they report
+# the events that cross the pipeline boundary.
+suite: hydrolix-metrics
+fixtures: [node, clickhouse, hydrolix]
+timeout: 120
+skip:
+  on: fixture-unavailable

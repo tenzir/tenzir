@@ -1,0 +1,54 @@
+warning: `table` must not be `null`
+  --> tests/operators/to_hydrolix/invalid_table.tql:23:9
+   |
+23 |   table=table,
+   |         ~~~~~
+   |
+   = note: skipped 1 event
+
+warning: `table` must have the form `project.table`, got "events"
+  --> tests/operators/to_hydrolix/invalid_table.tql:23:9
+   |
+23 |   table=table,
+   |         ~~~~~
+   |
+   = note: skipped 1 event
+
+warning: `table` must be `string`, got `int`
+  --> tests/operators/to_hydrolix/invalid_table.tql:23:9
+   |
+23 |   table=table,
+   |         ~~~~~
+   |
+
+warning: `table` must have the form `project.table`, got "test.events\nX-Hdx-Transform: other"
+  --> tests/operators/to_hydrolix/invalid_table.tql:23:9
+   |
+23 |   table=table,
+   |         ~~~~~
+   |
+   = note: skipped 1 event
+
+warning: `transform` must not contain control characters, got "edr\nX-Other: 1"
+  --> tests/operators/to_hydrolix/invalid_table.tql:24:13
+   |
+24 |   transform=transform?
+   |             ~~~~~~~~~
+   |
+   = note: skipped 1 event
+
+warning: `table` must have the form `project.table`, got "test.events.extra"
+  --> tests/operators/to_hydrolix/invalid_table.tql:23:9
+   |
+23 |   table=table,
+   |         ~~~~~
+   |
+   = note: skipped 1 event
+
+warning: `table` must have the form `project.table`, got "test..events"
+  --> tests/operators/to_hydrolix/invalid_table.tql:23:9
+   |
+23 |   table=table,
+   |         ~~~~~
+   |
+   = note: skipped 1 event

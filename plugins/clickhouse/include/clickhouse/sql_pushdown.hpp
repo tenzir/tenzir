@@ -96,12 +96,28 @@ private:
   pushdown::ColumnModel model_;
 };
 
+/// The server that answers a rendered query.
+enum class SqlTarget {
+  /// ClickHouse.
+  clickhouse,
+  /// Hydrolix, which answers ClickHouse SQL through a ClickHouse query engine.
+  /// It derives the time range of a query from the comparisons of the bare
+  /// primary timestamp column and rejects or misreads the range that a time
+  /// guard spans, but it ignores comparisons of a function of the column.
+  hydrolix,
+};
+
 /// Spells the pushdown IR in ClickHouse SQL.
 ///
 /// ClickHouse computes integer arithmetic in a type that holds the exact
 /// result and floating-point arithmetic in `Float64`, so the default spelling
 /// of arithmetic delivers the result types of the IR.
 class ClickHouseRenderer final : public pushdown::SqlRenderer {
+public:
+  explicit ClickHouseRenderer(SqlTarget target = SqlTarget::clickhouse)
+    : target_{target} {
+  }
+
 private:
   auto quote_identifier(std::string_view name) const -> std::string override;
 
@@ -121,9 +137,15 @@ private:
   render_call(pushdown::Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment> override;
 
+  auto render_comparison(pushdown::Binary const& x, Fragment const& left,
+                         Fragment const& right) const
+    -> Option<Fragment> override;
+
   auto render_conditional(Fragment const& condition, Fragment const& then,
                           Fragment const& otherwise) const
     -> Option<Fragment> override;
+
+  SqlTarget target_;
 };
 
 /// Renders the `SELECT` for `table`. `schema` is required when `projection`
@@ -162,9 +184,11 @@ auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
 /// - `min(x)` and `max(x)` on integers and temporal values, with the `OrNull`
 ///   combinator so that an aggregation without group keys over no rows yields
 ///   `NULL` instead of the type's default value.
+///
+/// The query renders the group keys and inputs for `target`.
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
                           SqlSchema const& schema, std::string_view table,
-                          std::span<const std::string> where)
+                          std::span<const std::string> where, SqlTarget target)
   -> Option<std::string>;
 
 /// Quotes `name` as a ClickHouse identifier using backticks.

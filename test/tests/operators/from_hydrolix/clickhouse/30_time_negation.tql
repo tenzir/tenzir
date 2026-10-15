@@ -1,0 +1,8 @@
+// Under a negation, a comparison of a `null` value stays `null`.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_times"
+where not (t >= 2000-01-01)
+sort id
+select id

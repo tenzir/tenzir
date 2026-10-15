@@ -145,7 +145,9 @@ struct Float64Spec : Unchecked {
   }
 };
 
-/// Strings are sent as views into the batch, which outlives the insert.
+/// Strings are copied into the column. Views would dangle: the writers read
+/// from arrays that they derive from the batch, such as the materialized fields
+/// of a constant record, and these arrays end before the insert.
 struct StringSpec : Unchecked {
   using Value = std::string_view;
   static constexpr auto expected = std::string_view{"string"};
@@ -160,7 +162,7 @@ struct StringSpec : Unchecked {
     auto column = std::make_shared<::clickhouse::ColumnString>();
     column->Reserve(values.size());
     for (auto value : values) {
-      column->AppendNoManagedLifetime(value);
+      column->Append(value);
     }
     return wrap_nullable(std::move(column), std::move(nulls));
   }

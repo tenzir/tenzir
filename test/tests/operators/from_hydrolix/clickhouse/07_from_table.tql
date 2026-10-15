@@ -1,0 +1,7 @@
+// The URL decides TLS and only names the host: the query goes to the native
+// interface on `port`.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+sort id

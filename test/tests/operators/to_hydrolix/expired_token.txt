@@ -1,0 +1,7 @@
+error: `token` expired at 2023-11-14T22:13:20Z
+ --> tests/operators/to_hydrolix/expired_token.tql:7:9
+  |
+7 |   token="eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZW56aXIiLCJleHAiOjE3MDAwMDAwMDB9.c2lnbmF0dXJl",
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: issue a new Hydrolix service account token

@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: 1}
+to_hydrolix "ftp://example.invalid", token="token", table="test.events"

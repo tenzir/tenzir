@@ -15,10 +15,13 @@
 
 #include <clickhouse/block.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::clickhouse {
 
 auto block_to_table_slice(::clickhouse::Block const& block,
-                          std::string_view schema_name, diagnostic_handler& dh)
+                          std::string_view schema_name,
+                          std::string_view service, diagnostic_handler& dh)
   -> Option<table_slice>;
 
 } // namespace tenzir::plugins::clickhouse

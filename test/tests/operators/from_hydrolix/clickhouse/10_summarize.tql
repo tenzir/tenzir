@@ -1,0 +1,8 @@
+// ClickHouse filters and aggregates the rows: the `where` and the `summarize`
+// go into the query.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where id > 1
+summarize events=count(), lo=min(id), hi=max(id)

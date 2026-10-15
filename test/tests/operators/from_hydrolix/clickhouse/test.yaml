@@ -1,0 +1,8 @@
+# Hydrolix serves queries through a ClickHouse query engine and accepts its
+# tokens as the password of the `__api_token__` user, which these tests set up
+# in a plain ClickHouse server.
+suite: from-hydrolix
+fixtures: [clickhouse]
+timeout: 180
+skip:
+  on: fixture-unavailable

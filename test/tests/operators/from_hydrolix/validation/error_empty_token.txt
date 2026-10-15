@@ -1,0 +1,6 @@
+error: `token` must not be empty
+ --> tests/operators/from_hydrolix/validation/error_empty_token.tql:4:48
+  |
+4 | from_hydrolix "https://example.invalid", token="", table="a.b"
+  |                                                ^^
+  |

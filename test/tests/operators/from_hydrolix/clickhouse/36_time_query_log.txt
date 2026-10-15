@@ -1,0 +1,24 @@
+{
+  query: "SELECT `id`, `t` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` > fromUnixTimestamp64Milli(1704067200000))",
+}
+{
+  query: "SELECT `id`, `t` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` < fromUnixTimestamp64Milli(946684800000))",
+}
+{
+  query: "SELECT `id`, `t` FROM default.fh_times WHERE if(toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854, `t`, NULL) IS NULL",
+}
+{
+  query: "SELECT `id`, `t` FROM default.fh_times WHERE NOT if(toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854, `t` >= fromUnixTimestamp64Milli(946684800000), NULL)",
+}
+{
+  query: "SELECT `id`, `c` FROM default.fh_times WHERE ((reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685 AND `c` > CAST(fromUnixTimestamp64Nano(1704067200000000000), 'DateTime64(2)')) OR if(reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685, `c`, NULL) IS NULL)",
+}
+{
+  query: "SELECT `id`, `t`, `c` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` <= fromUnixTimestamp64Milli(9223372036854)) AND if(reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685, `c`, NULL) IS NOT NULL",
+}
+{
+  query: "SELECT toInt64(count()) AS `__tenzir_aggregate_0`, minOrNull(if(reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685, `c`, NULL)) AS `__tenzir_aggregate_1`, maxOrNull(if(toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854, `t`, NULL)) AS `__tenzir_aggregate_2` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` > fromUnixTimestamp64Milli(946684800000))",
+}
+{
+  query: "SELECT `id`, `t` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` > fromUnixTimestamp64Milli(1717243200000)) LIMIT 5",
+}

@@ -454,7 +454,7 @@ CREATE TABLE {TYPE_TABLE} (
   ip4 IPv4,
   ip6 Nullable(IPv6),
   e Enum8('low' = 1, 'high' = 2, 'a\\\\b' = 3, 'tab\\there' = 4),
-  half Tuple(ok String, bad Map(String, Int64)),
+  half Tuple(ok String, bad Point),
   uid UUID,
   uid2 UUID,
   fs FixedString(4),
@@ -472,7 +472,7 @@ INSERT INTO {TYPE_TABLE} SELECT
   toDateTime(1704112496) AS dt, NULL AS dt2,
   fromUnixTimestamp64Milli(1704067200123) AS dt3, fromUnixTimestamp64Milli(1704067200123) AS dt3b,
   fromUnixTimestamp64Nano(1704067200000000001) AS dt9,
-  toIPv4('10.0.0.1') AS ip4, NULL AS ip6, 'low' AS e, ('x', map('k', 1)) AS half, toUUID('{UUID}') AS uid, toUUID('{UUID}') AS uid2,
+  toIPv4('10.0.0.1') AS ip4, NULL AS ip6, 'low' AS e, ('x', (1., 2.)) AS half, toUUID('{UUID}') AS uid, toUUID('{UUID}') AS uid2,
   'ab' AS fs, 'abc' AS s, 'abc' AS t, -2147483648 AS i32, NULL AS u32, NULL AS n32, 255 AS u8,
   9223372036854775807 AS i64, 0.1 AS f
 UNION ALL SELECT
@@ -480,28 +480,28 @@ UNION ALL SELECT
   toDateTime(0), CAST(fromUnixTimestamp64Milli(1704067200120), 'DateTime64(2)'),
   fromUnixTimestamp64Milli(-2208988800000), fromUnixTimestamp64Milli(10413791999999),
   fromUnixTimestamp64Nano(-2208988800000000000),
-  toIPv4('192.168.1.5'), toIPv6('::1'), 'high', ('y', map('k', 2)), toUUID('{UUID}'), generateUUIDv4(),
+  toIPv4('192.168.1.5'), toIPv6('::1'), 'high', ('y', (1., 2.)), toUUID('{UUID}'), generateUUIDv4(),
   'abcd', 'b', 'abc', 0, 0, NULL, 0, -9223372036854775807, 1
 UNION ALL SELECT
   3, toDate('2149-06-06'), toDate('2149-06-06'), toDate32('2299-12-31'),
   toDateTime(4294967295), CAST(fromUnixTimestamp64Milli(1704067200000), 'DateTime64(2)'),
   fromUnixTimestamp64Milli(10413791999999), fromUnixTimestamp64Milli(10413791999999),
   fromUnixTimestamp64Nano(9223372036854775807),
-  toIPv4('0.0.0.0'), toIPv6('10.0.0.1'), 'a\\\\b', ('x', map()), generateUUIDv4(), generateUUIDv4(),
+  toIPv4('0.0.0.0'), toIPv6('10.0.0.1'), 'a\\\\b', ('x', (1., 2.)), generateUUIDv4(), generateUUIDv4(),
   'a', '', 'b', 3, 4294967295, 3, 1, 0, -0.0
 UNION ALL SELECT
   4, toDate('2024-01-02'), toDate('2000-01-01'), toDate32('2262-04-11'),
   toDateTime(1704112497), CAST(fromUnixTimestamp64Milli(-2208988800000), 'DateTime64(2)'),
   fromUnixTimestamp64Milli(9223372036854), fromUnixTimestamp64Milli(1704067200000),
   fromUnixTimestamp64Nano(-9223372036854775808),
-  toIPv4('255.255.255.255'), toIPv6('2001:db8::1'), 'tab\\there', ('z', map()), generateUUIDv4(), generateUUIDv4(),
+  toIPv4('255.255.255.255'), toIPv6('2001:db8::1'), 'tab\\there', ('z', (1., 2.)), generateUUIDv4(), generateUUIDv4(),
   'abc', 'é', 'é', 2147483647, 3, 0, 2, 1, 16777217
 UNION ALL SELECT
   5, toDate('2000-06-15'), toDate('2000-06-15'), toDate32('2000-06-15'),
   toDateTime(946684800), CAST(fromUnixTimestamp64Milli(9223372036854), 'DateTime64(2)'),
   fromUnixTimestamp64Milli(1704067200000), fromUnixTimestamp64Milli(-2208988800000),
   fromUnixTimestamp64Nano(0),
-  toIPv4('10.255.255.255'), toIPv6('10.255.255.255'), 'low', ('x', map()), generateUUIDv4(), generateUUIDv4(),
+  toIPv4('10.255.255.255'), toIPv6('10.255.255.255'), 'low', ('x', (1., 2.)), generateUUIDv4(), generateUUIDv4(),
   'zzzz', 'abcabc', 'abcd', 7, NULL, 7, 3, 9007199254740993, 0.5;
 """
 

@@ -1,0 +1,27 @@
+warning: failed to send events to Hydrolix, retrying in 1s
+  --> tests/operators/to_hydrolix/retries_exhausted.tql:11:1
+   |
+11 | to_hydrolix env("HYDROLIX_URL"),
+   | ~~~~~~~~~~~
+   |
+   = note: reason: HTTP status 503
+   = note: table: `test.unavailable`
+
+warning: failed to send events to Hydrolix, retrying in 2s
+  --> tests/operators/to_hydrolix/retries_exhausted.tql:11:1
+   |
+11 | to_hydrolix env("HYDROLIX_URL"),
+   | ~~~~~~~~~~~
+   |
+   = note: reason: HTTP status 503
+   = note: table: `test.unavailable`
+
+error: failed to send events to Hydrolix: HTTP status 503
+  --> tests/operators/to_hydrolix/retries_exhausted.tql:11:1
+   |
+11 | to_hydrolix env("HYDROLIX_URL"),
+   | ^^^^^^^^^^^
+   |
+   = note: table: `test.unavailable`
+   = note: response: {"code": 503, "message": "not ready"}
+   = note: gave up after 3 attempts

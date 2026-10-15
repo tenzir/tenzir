@@ -1,0 +1,8 @@
+// The guards decide which rows are `null` in TQL.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_times"
+where t == null
+sort id
+select id

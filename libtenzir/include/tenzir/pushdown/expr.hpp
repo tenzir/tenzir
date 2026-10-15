@@ -148,6 +148,21 @@ enum class ArithmeticType {
   floating,
 };
 
+/// Why translation emits a comparison. The origin never changes what a
+/// comparison means, only what a renderer may know about it.
+enum class ComparisonOrigin {
+  /// A comparison that the translated predicate calls for.
+  ordinary,
+  /// A guard of a temporal column, which excludes the stored ticks that TQL
+  /// decodes to `null` (see `TimeType::guard_lo` and `TimeType::guard_hi`).
+  /// Its left operand is the column, its right a `TimeValue` at the edge of
+  /// the column's range, and its operator `geq` or `leq`. A user's comparison
+  /// with the same edge stays `ordinary`. A target that reads ranges from the
+  /// comparisons on a column, as Hydrolix does with its primary timestamp,
+  /// may spell a guard so that its range analysis ignores it.
+  time_guard,
+};
+
 /// A comparison or an arithmetic operation.
 struct Binary {
   BinaryOp op;
@@ -168,6 +183,9 @@ struct Binary {
   /// which a renderer does not see, so that a dialect that computes in the
   /// operand types can widen them to it.
   ArithmeticType type = ArithmeticType::integer;
+  /// Why translation emits the comparison, which is meaningful only for the
+  /// comparison operators.
+  ComparisonOrigin origin = ComparisonOrigin::ordinary;
 };
 
 /// Whether all of at least two operands are `true`.

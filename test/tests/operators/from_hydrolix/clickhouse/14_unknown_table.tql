@@ -1,0 +1,7 @@
+---
+error: true
+---
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.does_not_exist"

@@ -1,0 +1,24 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 2
+      compressed: true
+      headers:
+        Content-Encoding: gzip
+      events:
+        test.a/edr:
+          - {id: 1, table: test.a, message: "hello"}
+          - {id: 3, table: test.a, nested: {list: [1, 2]}}
+        test.b/edr:
+          - {id: 2, table: test.b, ts: "2026-01-02T03:04:05.123Z"}
+---
+// Events go to the table that `table` names, one request per destination.
+from {id: 1, table: "test.a", message: "hello", dropped: null},
+     {id: 2, table: "test.b", ts: 2026-01-02T03:04:05.123Z},
+     {id: 3, table: "test.a", nested: {list: [1, 2]}}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table=table,
+  transform="edr"

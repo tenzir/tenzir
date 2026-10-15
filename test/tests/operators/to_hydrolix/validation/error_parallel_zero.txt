@@ -1,0 +1,6 @@
+error: `parallel` must be at least 1
+ --> tests/operators/to_hydrolix/validation/error_parallel_zero.tql:6:12
+  |
+6 |   parallel=0
+  |            ^
+  |

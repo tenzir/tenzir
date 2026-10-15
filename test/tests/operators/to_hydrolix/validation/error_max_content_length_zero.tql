@@ -1,0 +1,6 @@
+---
+error: true
+---
+from {x: 1}
+to_hydrolix "https://example.invalid", table="test.events", token="token",
+  max_content_length=0

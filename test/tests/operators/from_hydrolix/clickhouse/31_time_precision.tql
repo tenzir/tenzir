@@ -1,0 +1,8 @@
+// A `Nullable(DateTime64(2))` column, combined with `or`.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_times"
+where c > 2024-01-01 or c == null
+sort id
+select id

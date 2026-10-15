@@ -1,0 +1,7 @@
+error: `url` must contain a host
+ --> tests/operators/to_hydrolix/validation/error_url_without_host.tql:7:13
+  |
+7 | to_hydrolix "http://?credential=sensitive", token="token", table="test.events"
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: pass the URL of the cluster, e.g., `https://acme.hydrolix.live`

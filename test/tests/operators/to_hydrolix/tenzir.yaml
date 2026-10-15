@@ -1,0 +1,5 @@
+tenzir:
+  nova: true
+  secrets:
+    hydrolix-header: header-secret
+    hydrolix-url-credential: url-secret

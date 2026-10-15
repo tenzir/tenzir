@@ -1,0 +1,5 @@
+// A result without supported columns yields no events.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              sql="SELECT location FROM default.fh_catchall"

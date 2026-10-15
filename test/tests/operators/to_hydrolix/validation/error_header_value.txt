@@ -1,0 +1,6 @@
+error: header values must be `string` or `secret`
+ --> tests/operators/to_hydrolix/validation/error_header_value.tql:6:11
+  |
+6 |   headers={"X-Hdx-Project": 42}
+  |           ^^^^^^^^^^^^^^^^^^^^^
+  |

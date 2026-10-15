@@ -51,8 +51,8 @@ auto path_of(std::string_view name) -> std::vector<ast::field_path::segment> {
 /// Parses the JSON strings that ClickHouse sends for a `JSON` column. Keys
 /// stay literal, so that `{"a.b": 1}` keeps its dotted field name.
 auto parse_json_column(nova::Array<nova::Data> const& data,
-                       std::string_view column, diagnostic_handler& dh)
-  -> nova::Array<nova::Data> {
+                       std::string_view column, std::string_view service,
+                       diagnostic_handler& dh) -> nova::Array<nova::Data> {
   auto const length = data.length();
   auto const strings = data.get_alternative<nova::String>();
   auto builder = nova::EventBuilder::make_prevalidated({}, dh);
@@ -83,7 +83,7 @@ auto parse_json_column(nova::Array<nova::Data> const& data,
     }
   }
   if (failed) {
-    diagnostic::warning("failed to parse JSON of ClickHouse column `{}`",
+    diagnostic::warning("failed to parse JSON of {} column `{}`", service,
                         column)
       .note("affected values are `null`")
       .emit(dh);
@@ -127,13 +127,14 @@ auto make_catch_all_layout(std::span<ColumnDescription const> description,
 
 auto reconstruct_catch_all(nova::Events events,
                            std::span<std::string_view const> columns,
-                           CatchAllLayout const& layout, diagnostic_handler& dh)
+                           CatchAllLayout const& layout,
+                           std::string_view service, diagnostic_handler& dh)
   -> nova::Events {
   auto const length = events.length();
   auto result = nova::Array<nova::Record>::make_empty(length);
   if (auto catch_all = events.data.field(layout.column)) {
     auto parsed = nova::MaskedArray<nova::Array<nova::Data>>{
-      parse_json_column(catch_all->data, layout.column, dh),
+      parse_json_column(catch_all->data, layout.column, service, dh),
       std::move(catch_all->present),
     };
     result = nova::records_or_empty(std::move(parsed), length,
@@ -153,7 +154,7 @@ auto reconstruct_catch_all(nova::Events events,
     }
     auto const* known = layout.find(name);
     if (known and known->json) {
-      field->data = parse_json_column(field->data, name, dh);
+      field->data = parse_json_column(field->data, name, service, dh);
     }
     auto const path = known ? known->path : path_of(name);
     result = nova::assign_nested_field(std::move(result), path,

@@ -25,7 +25,7 @@ namespace tenzir::plugins::clickhouse {
 /// `null` with one warning per column. Returns `None` for an empty block and
 /// for a block without any decodable column.
 auto block_to_events(::clickhouse::Block const& block,
-                     std::string_view schema_name, diagnostic_handler& dh)
-  -> Option<nova::Events>;
+                     std::string_view schema_name, std::string_view service,
+                     diagnostic_handler& dh) -> Option<nova::Events>;
 
 } // namespace tenzir::plugins::clickhouse

@@ -1,0 +1,17 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 2
+      events:
+        test.busy:
+          - {id: 1}
+---
+// The operator keeps the batch and retries it after HTTP 429, even when
+// `Retry-After` reaches to the end of the retry window.
+from {id: 1}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.busy",
+  _retry_timeout=1s

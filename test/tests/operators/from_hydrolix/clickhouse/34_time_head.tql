@@ -1,0 +1,9 @@
+// Guards leave no predicate local, so the limit goes into the query too.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_times"
+where t > 2024-06-01T12:00:00
+head 5
+sort id
+select id

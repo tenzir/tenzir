@@ -1,0 +1,24 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 1
+      events:
+        test.events:
+          - {id: 3, table: "test.events"}
+---
+// Events without a valid `project.table` or with a transform that an HTTP
+// header cannot carry are skipped with a warning.
+from {id: 1, table: null},
+     {id: 2, table: "events"},
+     {id: 3, table: "test.events"},
+     {id: 4, table: 42},
+     {id: 5, table: "test.events\nX-Hdx-Transform: other"},
+     {id: 6, table: "test.events", transform: "edr\nX-Other: 1"},
+     {id: 7, table: "test.events.extra"},
+     {id: 8, table: "test..events"}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table=table,
+  transform=transform?

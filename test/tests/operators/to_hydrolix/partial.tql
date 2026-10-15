@@ -1,0 +1,16 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 1
+      events:
+        test.partial:
+          - {id: 1}
+          - {id: 3}
+---
+// Hydrolix accepts some events and rejects others with HTTP 207.
+from {id: 1}, {id: 2}, {id: 3}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.partial"

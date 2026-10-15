@@ -1,0 +1,6 @@
+let $read = f"from_hydrolix \"http://{env("CLICKHOUSE_HOST")}\", token=\"test-token\", port={env("CLICKHOUSE_PORT")}, table=\"default.fh_metrics\"\ndiscard"
+let $write = f"from {{id: 1}}, {{id: 2}}, {{id: 3}}\nto_hydrolix \"{env("HYDROLIX_URL")}\", token=\"test-token\", table=\"test.partial\", buffer_timeout=100ms"
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: $read}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000002", definition: $write}
+discard

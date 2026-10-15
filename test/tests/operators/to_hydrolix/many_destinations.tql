@@ -1,0 +1,21 @@
+---
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 200
+      destinations: 200
+      event_count: 200
+---
+// Every event has a destination of its own, so batches never fill up. The
+// operator sends the oldest batches early to stay within its memory budget of
+// 16 times `max_content_length`.
+from {}
+repeat 200
+enumerate i
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table=f"test.t{i}",
+  max_content_length=40,
+  buffer_timeout=1h,
+  parallel=2

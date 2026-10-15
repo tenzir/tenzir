@@ -1,0 +1,14 @@
+---
+error: true
+fixtures: [hydrolix]
+assertions:
+  fixtures:
+    hydrolix:
+      requests: 3
+---
+// The operator retries until the retry window passed, then gives up.
+from {id: 1}
+to_hydrolix env("HYDROLIX_URL"),
+  token="test-token",
+  table="test.unavailable",
+  _retry_timeout=2s

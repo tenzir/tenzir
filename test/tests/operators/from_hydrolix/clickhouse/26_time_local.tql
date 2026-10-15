@@ -1,0 +1,15 @@
+// With `sql`, every predicate runs locally, which is the result that the
+// pushed predicates of the next tests must reproduce.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              sql="SELECT * FROM default.fh_times"
+sort id
+select id,
+  t_null=t == null,
+  c_null=c == null,
+  after=t > 2024-01-01,
+  before=t < 2000-01-01,
+  not_after=not (t >= 2000-01-01),
+  c_after_or_null=c > 2024-01-01 or c == null,
+  edge=t <= 2262-04-11T23:47:16.854 and c != null

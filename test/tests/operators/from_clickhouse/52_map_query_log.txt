@@ -1,0 +1,9 @@
+{
+  query: "SELECT * FROM fc_maps",
+}
+{
+  query: "SELECT catchall, nested['b'] AS b FROM fc_maps WHERE id = 3",
+}
+{
+  query: "SELECT `id`, `catchall` FROM fc_maps",
+}

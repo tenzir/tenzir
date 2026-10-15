@@ -1,0 +1,7 @@
+error: Hydrolix error 516: DB::Exception: __api_token__: Authentication failed: password is incorrect, or there is no user with such name
+ --> tests/operators/from_hydrolix/clickhouse/13_wrong_token.tql:4:1
+  |
+4 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |
+  = hint: check that `token` is a valid Hydrolix token that has not expired
