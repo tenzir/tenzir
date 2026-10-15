@@ -20,6 +20,7 @@
 #include "tenzir/table_slice.hpp"
 
 #include <caf/config_value.hpp>
+#include <caf/detail/set_thread_name.hpp>
 #include <caf/settings.hpp>
 
 namespace tenzir {
@@ -140,6 +141,9 @@ void importer::flush(Option<type> schema) {
 }
 
 auto importer::make_behavior() -> importer_actor::behavior_type {
+  if (self->getf(caf::local_actor::is_detached_flag)) {
+    caf::detail::set_thread_name("tnz.importer");
+  }
   const auto config = check(to<record>(content(self->config())));
   if (auto policy = retention_policy::make(config)) {
     retention_policy = std::move(*policy);

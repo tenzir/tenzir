@@ -1622,13 +1622,19 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   // the sketch-cache budget; the caches need no coordination, because
   // partition ids are never reused (the defensive re-merge case is covered by
   // `invalidate_sketches`).
+  //
+  // The workers are detached. A lookup walks every synopsis in the database
+  // and, with lazy sketches, reads a file per candidate; on the shared
+  // scheduler that work displaced the importer, the index, and every export
+  // bridge and partition reader for its whole duration.
   const auto workers = std::max<size_t>(1, lookup_parallelism);
   self->state().lookup_pool.reserve(workers);
   for (auto i = size_t{0}; i < workers; ++i) {
     // Also stop workers if initialization below exits before a behavior exists.
-    self->state().lookup_pool.push_back(self->spawn<caf::linked>(
-      catalog_lookup_worker, self->state().lookup_engine.taxonomies,
-      sketch_cache_bytes / workers));
+    self->state().lookup_pool.push_back(
+      self->spawn<caf::detached + caf::linked>(
+        catalog_lookup_worker, self->state().lookup_engine.taxonomies,
+        sketch_cache_bytes / workers, i));
   }
   // Load the on-disk state before installing the behavior below. The catalog
   // is detached, so blocking here only delays this actor; everything sent to

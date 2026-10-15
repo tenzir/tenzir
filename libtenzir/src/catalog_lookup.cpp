@@ -29,6 +29,7 @@
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/time_synopsis.hpp"
 
+#include <caf/detail/set_thread_name.hpp>
 #include <caf/make_copy_on_write.hpp>
 
 #include <chrono>
@@ -87,9 +88,11 @@ auto finalize_lookup(catalog_lookup_result&& candidates,
   }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     stopwatch::now() - start);
-  TENZIR_DEBUG("catalog found {} candidate partitions ({} events) in "
-               "{} microseconds",
-               num_candidate_partitions, num_candidate_events, delta.count());
+  // Verbose, not debug: a slow lookup is the first thing to look for when a
+  // node stops answering, and this is the only place that measures it.
+  TENZIR_VERBOSE("catalog found {} candidate partitions ({} events) in "
+                 "{} microseconds",
+                 num_candidate_partitions, num_candidate_events, delta.count());
   TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
   return std::move(candidates);
 }
@@ -673,8 +676,13 @@ auto catalog_lookup_engine::lookup_impl(
 auto catalog_lookup_worker(
   catalog_lookup_worker_actor::stateful_pointer<catalog_lookup_worker_state>
     self,
-  tenzir::taxonomies taxonomies, size_t sketch_cache_bytes)
+  tenzir::taxonomies taxonomies, size_t sketch_cache_bytes, size_t worker_index)
   -> catalog_lookup_worker_actor::behavior_type {
+  if (self->getf(caf::local_actor::is_detached_flag)) {
+    // Linux truncates thread names to 15 characters.
+    caf::detail::set_thread_name(
+      fmt::format("tnz.lookup-{}", worker_index).c_str());
+  }
   self->state().engine.taxonomies = std::move(taxonomies);
   self->state().engine.sketches = sketch_cache{sketch_cache_bytes};
   return {

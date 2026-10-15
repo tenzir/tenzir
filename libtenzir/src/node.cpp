@@ -396,7 +396,11 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
 
 auto spawn_importer(node_actor::stateful_pointer<node_state> self,
                     const index_actor& index) -> importer_actor {
-  auto importer = self->spawn(caf::actor_from_state<tenzir::importer>, index);
+  // Detached, like the index and the catalog: the importer sits on every
+  // ingest and metrics path, and a scheduler busy with lookups or partition
+  // reads must not delay it.
+  auto importer = self->spawn<caf::detached>(
+    caf::actor_from_state<tenzir::importer>, index);
   TENZIR_ASSERT(importer);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
                                     "importer");
