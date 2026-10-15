@@ -12,6 +12,7 @@
 #include "tenzir/nova/arrow_metadata.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/censor.hpp"
+#include "tenzir/nova/schema_discovery.hpp"
 #include "tenzir/nova/stringify.hpp"
 #include "tenzir/nova_json_printer.hpp"
 #include "tenzir/option.hpp"
@@ -20,237 +21,11 @@
 #include <arrow/util/utf8.h>
 
 #include <limits>
-#include <map>
 #include <utility>
 
 namespace tenzir {
 
 namespace {
-
-auto refine(type const& lhs, type const& rhs) -> Result<type, std::string> {
-  if (lhs == rhs or is<null_type>(rhs)) {
-    return lhs;
-  }
-  if (is<null_type>(lhs)) {
-    return rhs;
-  }
-  if (auto left = try_as<list_type>(lhs)) {
-    if (auto right = try_as<list_type>(rhs)) {
-      TRY(auto element, refine(left->value_type(), right->value_type()));
-      return type{list_type{element}};
-    }
-  }
-  if (auto left = try_as<record_type>(lhs)) {
-    if (auto right = try_as<record_type>(rhs)) {
-      if (left->num_fields() != right->num_fields()) {
-        return Err{"record field sets differ"};
-      }
-      auto fields = std::vector<struct record_type::field>{};
-      for (auto i = size_t{0}; i < left->num_fields(); ++i) {
-        auto a = left->field(i);
-        auto b = right->field(i);
-        if (a.name != b.name) {
-          return Err{"record field names or order differ"};
-        }
-        TRY(auto field_type, refine(a.type, b.type));
-        fields.emplace_back(std::string{a.name}, std::move(field_type));
-      }
-      return type{record_type{fields}};
-    }
-  }
-  return Err{"concrete value types differ"};
-}
-
-// Discover types from columns, constructing each distinct schema once. Rows
-// only carry schema IDs; scalar values never participate in discovery.
-class SchemaDiscovery {
-public:
-  SchemaDiscovery() {
-    std::ignore = intern(type{null_type{}});
-  }
-
-  auto types() const -> std::vector<type> const& {
-    return types_;
-  }
-
-  auto discover(nova::Array<nova::Data> const& array,
-                nova::storage::BitMap const& selected)
-    -> Result<std::vector<size_t>, std::string> {
-    auto result = std::vector<size_t>(array.length(), 0);
-    if (not selected.any()) {
-      return result;
-    }
-    TRY(match(
-      array,
-      [&](nova::UnionArray const& union_) -> Result<void, std::string> {
-        for (auto const& alternative : union_.fields()) {
-          auto mask = selected & alternative.present;
-          if (not mask.any()) {
-            continue;
-          }
-          TRY(auto ids,
-              discover(nova::Array<nova::Data>{alternative.data}, mask));
-          nova::storage::for_each_true(mask, [&](auto row) {
-            result[row] = ids[row];
-          });
-        }
-        return {};
-      },
-      [&]<class T>(nova::Array<T> const& values) -> Result<void, std::string> {
-        if constexpr (std::same_as<T, nova::Record>) {
-          TRY(result, discover_record(values, selected));
-        } else if constexpr (std::same_as<T, nova::List>) {
-          TRY(result, discover_list(values, selected));
-        } else if constexpr (std::same_as<T, nova::Secret>) {
-          return Err{"secrets cannot be stored without redaction"};
-        } else {
-          auto id = size_t{0};
-          if constexpr (not std::same_as<T, nova::Null>) {
-            id = intern(type{data_to_type_t<T>{}});
-          }
-          nova::storage::for_each_true(selected, [&](auto row) {
-            result[row] = id;
-          });
-        }
-        return {};
-      }));
-    return result;
-  }
-
-private:
-  auto intern(type value) -> size_t {
-    auto [it, inserted] = ids_.try_emplace(value, types_.size());
-    if (inserted) {
-      types_.push_back(std::move(value));
-    }
-    return it->second;
-  }
-
-  auto discover_record(nova::Array<nova::Record> const& array,
-                       nova::storage::BitMap const& selected)
-    -> Result<std::vector<size_t>, std::string> {
-    auto primary = array.to_primary();
-    auto const& records = *as<nova::storage::RecordStorage>(primary.storage());
-    auto masks = std::vector<nova::storage::BitMap::Mutable>{};
-    for (auto i = size_t{0}; i < records.arrays.size(); ++i) {
-      masks.emplace_back(array.length());
-    }
-    for (auto row : nova::storage::true_bits(selected)) {
-      auto shape = records.shape_indices.get(row);
-      if (shape < 0) {
-        return Err{"selected row has no record shape"};
-      }
-      for (auto field : records.shape_table.fields(shape)) {
-        masks[field].set(row, true);
-      }
-    }
-    auto columns = std::vector<std::vector<size_t>>{};
-    for (auto i = size_t{0}; i < records.arrays.size(); ++i) {
-      auto mask = std::move(masks[i]).finish() & records.arrays[i].present;
-      TRY(auto ids, discover(records.arrays[i].data, mask));
-      columns.push_back(std::move(ids));
-    }
-    auto result = std::vector<size_t>(array.length(), 0);
-    auto schemas = std::map<std::vector<size_t>, size_t>{};
-    auto signature = std::vector<size_t>{};
-    for (auto row : nova::storage::true_bits(selected)) {
-      auto shape = records.shape_indices.get(row);
-      auto fields = records.shape_table.fields(shape);
-      signature.clear();
-      signature.push_back(static_cast<size_t>(shape));
-      for (auto field : fields) {
-        signature.push_back(columns[field][row]);
-      }
-      auto it = schemas.find(signature);
-      if (it == schemas.end()) {
-        auto schema = std::vector<struct record_type::field>{};
-        for (auto field : fields) {
-          schema.emplace_back(std::string{records.names_by_index[field]},
-                              types_[columns[field][row]]);
-        }
-        it
-          = schemas.emplace(signature, intern(type{record_type{schema}})).first;
-      }
-      result[row] = it->second;
-    }
-    return result;
-  }
-
-  auto discover_list(nova::Array<nova::List> const& array,
-                     nova::storage::BitMap const& selected)
-    -> Result<std::vector<size_t>, std::string> {
-    if (auto constant = try_as<
-          nova::storage::ConstantStorage<nova::List, nova::RowView<nova::List>>>(
-          array.storage())) {
-      auto single = nova::Array<nova::List>{
-        nova::storage::ConstantStorage<nova::List, nova::RowView<nova::List>>{
-          1, constant->value()}};
-      TRY(auto ids,
-          discover_list(single.to_primary(), nova::storage::BitMap{1, true}));
-      auto result = std::vector<size_t>(array.length(), 0);
-      nova::storage::for_each_true(selected, [&](auto row) {
-        result[row] = ids[0];
-      });
-      return result;
-    }
-    auto const& lists = as<nova::storage::ListStorage>(array.storage());
-    if (lists.values().length() == 0) {
-      auto id = intern(type{list_type{type{null_type{}}}});
-      auto result = std::vector<size_t>(array.length(), 0);
-      nova::storage::for_each_true(selected, [&](auto row) {
-        result[row] = id;
-      });
-      return result;
-    }
-    auto children = nova::storage::BitMap::Mutable{lists.values().length()};
-    for (auto row : nova::storage::true_bits(selected)) {
-      auto span = lists.spans()[row];
-      for (auto i = span.begin; i < span.end; ++i) {
-        children.set(i, true);
-      }
-    }
-    TRY(auto ids, discover(lists.values(), std::move(children).finish()));
-    auto result = std::vector<size_t>(array.length(), 0);
-    auto merged = std::map<std::pair<size_t, size_t>, size_t>{};
-    auto list_types = std::map<size_t, size_t>{};
-    for (auto row : nova::storage::true_bits(selected)) {
-      auto element = size_t{0};
-      auto span = lists.spans()[row];
-      for (auto i = span.begin; i < span.end; ++i) {
-        auto next = ids[i];
-        if (element == next or next == 0) {
-          continue;
-        }
-        if (element == 0) {
-          element = next;
-          continue;
-        }
-        auto key = std::pair{element, next};
-        auto it = merged.find(key);
-        if (it == merged.end()) {
-          auto refined = refine(types_[element], types_[next]);
-          if (not refined) {
-            return Err{"list contains incompatible element types or record "
-                       "shapes"};
-          }
-          it = merged.emplace(key, intern(std::move(refined).unwrap())).first;
-        }
-        element = it->second;
-      }
-      auto it = list_types.find(element);
-      if (it == list_types.end()) {
-        it = list_types
-               .emplace(element, intern(type{list_type{types_[element]}}))
-               .first;
-      }
-      result[row] = it->second;
-    }
-    return result;
-  }
-
-  std::vector<type> types_;
-  std::map<type, size_t> ids_;
-};
 
 auto stringify_heterogeneous_lists(nova::Array<nova::Data> const& values)
   -> Result<Option<nova::Array<nova::Data>>, std::string>;
@@ -291,7 +66,7 @@ auto stringify_heterogeneous_lists(nova::Array<nova::List> const& array)
                           : std::move(primary);
   auto const& current = as<nova::storage::ListStorage>(rewritten.storage());
   auto const& elements = current.values();
-  auto discovery = SchemaDiscovery{};
+  auto discovery = nova::SchemaDiscovery{};
   TRY(auto ids, discovery.discover(
                   elements, nova::storage::BitMap{elements.length(), true}));
   auto const& types = discovery.types();
@@ -301,7 +76,7 @@ auto stringify_heterogeneous_lists(nova::Array<nova::List> const& array)
     auto span = current.spans()[row];
     auto element = type{null_type{}};
     for (auto i = span.begin; i < span.end; ++i) {
-      auto refined = refine(element, types[ids[i]]);
+      auto refined = nova::refine_null_types(element, types[ids[i]]);
       if (not refined) {
         heterogeneous[row] = true;
         any = true;
@@ -450,7 +225,7 @@ auto ImportConversionBuffer::add(nova::Events events,
       return Err{"event metadata does not match the conversion buffer"};
     }
   }
-  auto discovery = SchemaDiscovery{};
+  auto discovery = nova::SchemaDiscovery{};
   auto discovered
     = discovery.discover(nova::Array<nova::Data>{events.data}, selection);
   if (not discovered) {
@@ -463,7 +238,7 @@ auto ImportConversionBuffer::add(nova::Events events,
       auto record = rewritten->try_as<nova::Record>();
       TENZIR_ASSERT(record);
       events.data = std::move(*record);
-      discovery = SchemaDiscovery{};
+      discovery = nova::SchemaDiscovery{};
       discovered
         = discovery.discover(nova::Array<nova::Data>{events.data}, selection);
     }
@@ -490,7 +265,8 @@ auto ImportConversionBuffer::add(nova::Events events,
     }
     if (destination == unassigned) {
       for (auto i = size_t{0}; i < staged_schemas.size(); ++i) {
-        auto merged = refine(type{staged_schemas[i]}, type{incoming});
+        auto merged
+          = nova::refine_null_types(type{staged_schemas[i]}, type{incoming});
         if (merged) {
           auto schema = as<record_type>(std::move(merged).unwrap());
           if (schema != staged_schemas[i]) {

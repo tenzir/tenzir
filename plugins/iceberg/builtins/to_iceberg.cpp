@@ -22,7 +22,9 @@
 #include <tenzir/detail/string.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/arrow_export.hpp>
+#include <tenzir/nova/censor.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/nova/schema_discovery.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/si_literals.hpp>
@@ -732,34 +734,76 @@ public:
 
   auto process(Input input, OpCtx& ctx) -> Task<void> override {
     if constexpr (std::same_as<Input, nova::Events>) {
-      // The write path works on Arrow batches with a single schema, so the
-      // heterogeneous events are split into homogeneous slices first.
-      for (auto& slice : nova::to_table_slices(input)) {
-        co_await process_slice(std::move(slice), ctx);
-        if (done_) {
-          co_return;
-        }
-      }
+      co_await process_events(std::move(input), ctx);
     } else {
-      co_await process_slice(std::move(input), ctx);
+      co_await process_batch(input.schema(), to_record_batch(input), ctx);
     }
   }
 
-  auto process_slice(table_slice input, OpCtx& ctx) -> Task<void> {
-    if (done_ or input.rows() == 0) {
+  /// Splits heterogeneous events into groups of one record type each and
+  /// converts every group column by column. Event names, the internal
+  /// attribute, and import times do not reach the table, so they do not
+  /// split groups. Types that differ only in nulls share a group, so that a
+  /// column that is null in some rows does not reach table creation or
+  /// schema evolution as an unrepresentable all-null column.
+  auto process_events(nova::Events input, OpCtx& ctx) -> Task<void> {
+    if (done_ or not input.mask.any()) {
       co_return;
     }
-    if (not table_) {
-      co_await ensure_table(input, ctx);
+    // Secrets never reach the table in plain text; they are written as `***`.
+    auto [data, censored]
+      = nova::censor_secrets(nova::Array<nova::Data>{input.data});
+    if (censored) {
+      auto records = data.try_as<nova::Record>();
+      TENZIR_ASSERT(records);
+      input.data = std::move(*records);
+    }
+    auto groups = nova::group_by_schema(input, {.refine_nulls = true});
+    if (not groups) {
+      diagnostic::error("failed to convert events for Iceberg: {}",
+                        groups.unwrap_err())
+        .primary(args_.operator_location)
+        .emit(ctx.dh());
+      done_ = true;
+      co_return;
+    }
+    for (auto const& group : groups.unwrap()) {
+      auto batch
+        = nova::to_arrow_record_batch(input.data, group.schema, group.rows);
+      if (not batch) {
+        diagnostic::error("failed to convert events for Iceberg: {}",
+                          batch.unwrap_err())
+          .primary(args_.operator_location)
+          .emit(ctx.dh());
+        done_ = true;
+        co_return;
+      }
+      co_await process_batch(group.schema, std::move(batch).unwrap(), ctx);
       if (done_) {
         co_return;
       }
     }
-    co_await ensure_schema(input, ctx);
+  }
+
+  /// Writes a batch whose columns follow `schema`, a record type.
+  auto process_batch(type const& schema,
+                     std::shared_ptr<arrow::RecordBatch> input, OpCtx& ctx)
+    -> Task<void> {
+    if (done_ or input->num_rows() == 0) {
+      co_return;
+    }
+    if (not table_) {
+      co_await ensure_table(schema, ctx);
+      if (done_) {
+        co_return;
+      }
+    }
+    co_await ensure_schema(schema, ctx);
     if (done_) {
       co_return;
     }
-    auto batch = project(std::move(input), ctx);
+    auto batch = project(*input, ctx);
+    input.reset();
     if (not batch) {
       co_return;
     }
@@ -975,12 +1019,11 @@ private:
 
   /// Creates the table from the schema of the first arriving events. Only
   /// reached in the create modes when the table did not exist at start.
-  auto ensure_table(table_slice const& input, OpCtx& ctx) -> Task<void> {
-    auto const& schema = as<record_type>(input.schema());
+  auto ensure_table(type const& schema, OpCtx& ctx) -> Task<void> {
     auto options = CreateTableOptions{};
     options.location = table_location_;
     options.partition_by = partition_fields_;
-    for (auto const& field : schema.fields()) {
+    for (auto const& field : as<record_type>(schema).fields()) {
       if (field.name == default_sort_column and is<time_type>(field.type)) {
         options.sort_column = std::string{default_sort_column};
         break;
@@ -989,7 +1032,7 @@ private:
     auto dropped = std::make_shared<std::vector<std::string>>();
     auto fell_back = std::make_shared<bool>(false);
     auto table = co_await spawn_blocking(
-      [catalog = catalog_, ns = ns_, name = table_name_, ty = input.schema(),
+      [catalog = catalog_, ns = ns_, name = table_name_, ty = schema,
        options = std::move(options), dropped, fell_back,
        fall_back_to_load = mode_ == mode::create_append]() mutable
         -> Result<std::shared_ptr<ice::Table>> {
@@ -1040,8 +1083,8 @@ private:
   /// only ever stamped with field IDs the catalog has confirmed. When a
   /// concurrent writer updates the table underneath us, the commit conflicts;
   /// we reload the table and re-derive the diff against their changes.
-  auto ensure_schema(table_slice const& input, OpCtx& ctx) -> Task<void> {
-    auto fingerprint = input.schema().make_fingerprint();
+  auto ensure_schema(type const& schema, OpCtx& ctx) -> Task<void> {
+    auto fingerprint = schema.make_fingerprint();
     if (evolved_schemas_.contains(fingerprint)) {
       co_return;
     }
@@ -1059,7 +1102,7 @@ private:
     for (auto attempt = 1;; ++attempt) {
       auto dropped = std::make_shared<std::vector<std::string>>();
       auto evolved = co_await spawn_blocking(
-        [table = current, ty = input.schema(), dropped]() mutable {
+        [table = current, ty = schema, dropped]() mutable {
           return evolve_schema(table, as<record_type>(ty), *dropped);
         });
       for (auto const& reason : *dropped) {
@@ -1070,7 +1113,7 @@ private:
         if (*evolved) {
           TENZIR_DEBUG("to_iceberg: evolved schema of table `{}` for input "
                        "schema `{}` (attempt {})",
-                       args_.table_id.inner, input.schema().name(), attempt);
+                       args_.table_id.inner, fingerprint, attempt);
           // The projection target changes: open data files stay valid under
           // the old schema, but must not receive new-schema batches. Close
           // them, then adopt the evolved schema from the update response.
@@ -1103,7 +1146,7 @@ private:
           if (not schema->Equals(*target_schema_)) {
             TENZIR_DEBUG("to_iceberg: adopting concurrently evolved schema "
                          "of table `{}` for input schema `{}` (attempt {})",
-                         args_.table_id.inner, input.schema().name(), attempt);
+                         args_.table_id.inner, fingerprint, attempt);
             co_await close_all(ctx);
             if (done_) {
               co_return;
@@ -1475,18 +1518,17 @@ private:
     }
   }
 
-  /// Reorders, converts, and casts a slice's columns to the table schema,
+  /// Reorders, converts, and casts a batch's columns to the table schema,
   /// recursing into nested records. Missing columns are null-filled; unknown
-  /// columns are dropped with a one-time warning per input schema.
-  auto project(table_slice input, OpCtx& ctx)
+  /// columns are dropped with a one-time warning per column.
+  auto project(arrow::RecordBatch const& batch, OpCtx& ctx)
     -> Option<std::shared_ptr<arrow::StructArray>> {
-    auto const rows = detail::narrow_cast<int64_t>(input.rows());
-    auto batch = to_record_batch(input);
+    auto const rows = batch.num_rows();
     auto arrays = arrow::ArrayVector{};
     arrays.reserve(target_schema_->num_fields());
     auto used = std::unordered_set<std::string>{};
     for (auto const& field : target_schema_->fields()) {
-      auto column = batch->GetColumnByName(field->name());
+      auto column = batch.GetColumnByName(field->name());
       if (column) {
         used.insert(field->name());
       }
@@ -1497,7 +1539,7 @@ private:
       }
       arrays.push_back(std::move(projected));
     }
-    for (auto const& field : batch->schema()->fields()) {
+    for (auto const& field : batch.schema()->fields()) {
       if (not used.contains(field->name())) {
         warn_once(fmt::format("column `{}` does not exist in the table and "
                               "will be dropped",

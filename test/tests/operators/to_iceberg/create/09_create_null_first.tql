@@ -1,0 +1,6 @@
+// A column that is null in the first event but holds values in a later
+// event of the same batch becomes a regular column of the new table instead
+// of being dropped as unrepresentable.
+from {k: 1, x: null}, {k: 2, x: 5}
+batch 2
+to_iceberg "createns.null_first", catalog=env("ICEBERG_REST_URI")
