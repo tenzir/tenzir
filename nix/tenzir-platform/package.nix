@@ -1,5 +1,6 @@
 {
   lib,
+  callPackage,
   stdenvNoCC,
   pkgsStatic,
   bun,
@@ -22,40 +23,9 @@ let
       (src + "/tools/platform-cli/main.ts")
     ];
   };
-  nodeModules = stdenvNoCC.mkDerivation {
+  nodeModules = callPackage ./bun-node-modules.nix { } {
     pname = "tenzir-platform-node-modules";
-    version = "unstable";
     src = source;
-
-    dontConfigure = true;
-    dontFixup = true;
-
-    buildPhase = ''
-      runHook preBuild
-
-      export HOME="$TMPDIR"
-      export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
-      ${compiler}/bin/bun install \
-        --frozen-lockfile \
-        --production \
-        --ignore-scripts \
-        --no-progress
-
-      runHook postBuild
-    '';
-
-    installPhase = ''
-      runHook preInstall
-
-      mkdir -p "$out"
-      cp -R node_modules "$out/"
-
-      runHook postInstall
-    '';
-
-    outputHash = "sha256-aep9r/THNVcaV/SZrhom10HKe8urJArkYWJY+f1nI4I=";
-    outputHashAlgo = "sha256";
-    outputHashMode = "recursive";
   };
 in
 stdenvNoCC.mkDerivation {
