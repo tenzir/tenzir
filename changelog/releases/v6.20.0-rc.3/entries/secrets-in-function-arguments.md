@@ -15,4 +15,4 @@ from {user: "alice"}
 user = hmac(user, $key)
 ```
 
-These arguments accept only secrets, so that keys never appear in pipeline definitions.
+Secrets keep keys out of pipeline definitions. Like the secret arguments of operators, these arguments also accept a plain string or blob, but then the key appears in the pipeline definition.

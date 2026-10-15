@@ -70,7 +70,7 @@ New functions encrypt and decrypt values in pipelines, so that you can protect s
 - `encrypt_hpke` encrypts with a public key (RFC 9180), so that pipelines can protect data that only the holder of the private key can read.
 - `encrypt_ff1` provides format-preserving encryption (NIST SP 800-38G). The output keeps the length and alphabet of the input, and characters outside the alphabet stay in place.
 
-Every function has a `decrypt_*` counterpart. Keys must be secrets, except for the public key of `encrypt_hpke`. The optional `aad` and `tweak` arguments bind ciphertexts to their context:
+Every function has a `decrypt_*` counterpart. Read keys from a secret store, so that they stay out of pipeline definitions. Plain strings and blobs also work as keys. The optional `aad` and `tweak` arguments bind ciphertexts to their context:
 
 ```tql
 let $key = secret("pii-key").decode_hex()
@@ -82,6 +82,21 @@ email = email.encrypt_aes_gcm_siv(key=$key)
 Decryption returns `null` with a warning when the key or the associated data does not match, or when the ciphertext was modified.
 
 *By @mavam.*
+
+### Events from ClickHouse catch-all tables
+
+The `from_clickhouse` operator now returns events from a table with a catch-all column the way `to_clickhouse` received them. The fields of the catch-all column move back to the top level of the event, columns with dotted names such as `src_endpoint.ip` become nested fields, and other `JSON` columns become records again:
+
+```tql
+from_clickhouse table="security.events"
+where metadata.product.name == "Demo"
+```
+
+Previously, you had to reassemble every event yourself with `this = {...event.parse_json(), ...this}`, `drop event`, and `unflatten`. Values from `JSON` columns get their types inferred like `parse_json` does, so IP addresses and timestamps come back typed.
+
+Filters on columns without dots in their name still go into the query. All other filters on a catch-all table run in the pipeline, and the query reads every column.
+
+*By @IyeOnline and @claude.*
 
 ### Filter, projection, and limit pushdown for MySQL and SQL Server
 
@@ -132,6 +147,19 @@ Decryption works the same way with `decrypt_ff1`. Keep the guard: the round trip
 
 *By @mavam.*
 
+### Map columns in from_clickhouse
+
+The `from_clickhouse` operator now reads ClickHouse `Map(K, V)` columns as records with one field per key, instead of dropping them with a warning. Keys become field names, using their text for non-string keys, and values keep the usual type mapping, so `Map(String, Nullable(String))` yields string fields that are `null` where the map holds `NULL`. Rows may have different keys:
+
+```tql
+from_clickhouse table="events"
+where attributes.region? == "eu"
+```
+
+Filters on map fields run in Tenzir rather than in ClickHouse.
+
+*By @mavam.*
+
 ### Named in-memory DuckDB databases
 
 The `from_duckdb` and `to_duckdb` operators now support named in-memory databases such as `:memory:alerts`. Pipelines in the same node that use the same name share a database, so you can read data that another running pipeline writes without creating a file:
@@ -157,6 +185,55 @@ Read more about it in our [blog](https://tenzir.com/blog).
 To switch back to the old data model, set `tenzir.nova: false` in your `tenzir.yaml` or the environment variable `TENZIR_NOVA=false`. The old data model is deprecated and will be removed in a future release.
 
 *By @IyeOnline.*
+
+### OCSF functions
+
+The `ocsf_cast`, `ocsf_trim`, and `ocsf_derive` operators now have function counterparts of the same names. The functions take a record and accept the same options as the operators, so that you can normalize OCSF events that are nested in a field instead of being the top-level event:
+
+```tql
+from {source: "edr", ocsf: {class_uid: 1001, metadata: {version: "1.5.0"}, activity_id: 1}}
+ocsf = ocsf.ocsf_cast()
+```
+
+```tql
+{
+  source: "edr",
+  ocsf: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.5.0",
+    },
+    activity_id: 1,
+  },
+}
+```
+
+A `null` input yields `null`. For other values that are not records or that lack the OCSF `metadata` field, the functions return `null` with a warning.
+
+*By @raxyte and @IyeOnline.*
+
+### Parallel load balancing
+
+`load_balance` now distributes targets across parallel workers while keeping one pipeline per target. For example: `parallel 2 { load_balance $targets { to_tcp $targets { write_json } } }`.
+
+*By @aljazerzen.*
+
+### Read events from Hydrolix
+
+The new [`from_hydrolix`](https://tenzir.com/docs/reference/operators/from_hydrolix) operator reads events from [Hydrolix](https://hydrolix.io) tables and SQL queries, with the same URL and token as `to_hydrolix`:
+
+```tql
+let $since = now() - 1h
+from_hydrolix "https://acme.hydrolix.live",
+  token=secret("hydrolix-token"),
+  table="security.events"
+where time > $since and severity_id >= 4
+summarize class_uid, events=count()
+```
+
+The operator queries the native interface of the Hydrolix query engine. When it reads a table, Hydrolix evaluates the `where`, `select`, and `head` operators that follow, and a `summarize` that only uses `count`, `min`, and `max`, so that it reads only the partitions and columns that the pipeline needs.
+
+*By @mavam.*
 
 ### Read from and write to DuckDB databases
 
@@ -260,6 +337,19 @@ Together with `keys`, the function is the inverse of the two-argument form of `c
 
 *By @mavam.*
 
+### Secret keys for hmac
+
+The key of `hmac` can now be a secret, so that it stays out of pipeline definitions:
+
+```tql
+from {user: "alice"}
+user = hmac(user, secret("hmac-key"))
+```
+
+Transformations of a secret, such as `secret("hmac-key").decode_hex()`, still count as secrets. Plain string and blob keys continue to work.
+
+*By @mavam.*
+
 ### Secrets in function arguments
 
 Functions now accept secrets for sensitive arguments, such as the key of `hmac` and of the new encryption functions. Pass a `secret` call directly, or bind it with `let` to reuse it, including transformations such as `decode_hex`:
@@ -270,9 +360,100 @@ from {user: "alice"}
 user = hmac(user, $key)
 ```
 
-These arguments accept only secrets, so that keys never appear in pipeline definitions.
+Secrets keep keys out of pipeline definitions. Like the secret arguments of operators, these arguments also accept a plain string or blob, but then the key appears in the pipeline definition.
 
 *By @mavam and @IyeOnline.*
+
+### Send events to Hydrolix
+
+The new [`to_hydrolix`](https://tenzir.com/docs/reference/operators/to_hydrolix) operator sends events to [Hydrolix](https://hydrolix.io) through its HTTP streaming ingest API:
+
+```tql
+subscribe "ocsf"
+to_hydrolix "https://acme.hydrolix.live",
+  token=secret("hydrolix-token"),
+  table=f"security.ocsf_{class_uid}",
+  transform="tenzir_ocsf"
+```
+
+The operator batches events per table and transform, so that a single pipeline can route events to multiple tables. It compresses requests with gzip and follows the Hydrolix integration guide: it retries rate-limited and failed requests with exponential backoff for at least five minutes while holding back new events, warns about events that Hydrolix rejects, and checks on startup whether the bearer token has expired or expires soon.
+
+*By @mavam.*
+
+### SentinelOne Data Lake API keys
+
+`from_sentinelone_data_lake` now accepts `tenant=false` for SentinelOne Data Lake (SDL) API keys. Such a key scopes its queries to its own account, and previously every read without `account_ids` silently returned no events:
+
+```tql
+from_sentinelone_data_lake "https://<tenant>.sentinelone.net",
+  token=secret("sentinelone-sdl-key"),
+  tenant=false,
+  start=now() - 1h
+```
+
+Without `account_ids`, the operator still queries every account that a console or service-user token can access by default. With `account_ids`, `tenant=true` is an error.
+
+*By @mavam.*
+
+### Summaries computed in ClickHouse, MySQL, and SQL Server
+
+`from_clickhouse`, `from_mysql`, and `from_microsoft_sql` now compute a `summarize` that directly follows them in the database, so the database returns one row per group instead of every matching row:
+
+```tql
+from_mysql table="events", host="db.example.com", database="soc"
+where severity >= 3
+summarize source, alerts=count(), first=min(id)
+```
+
+This applies to table reads whose summary uses `count`, `min`, or `max`, and groups by fields that the database compares exactly like TQL: integers and text in all three, plus booleans, UUIDs, and time values in ClickHouse and SQL Server, and enums and IP addresses in ClickHouse. Text groups by its bytes, so values that differ only in case or trailing spaces stay apart, as in TQL. This includes `top` and `rare`. All other summaries, and summaries after a filter that stays in the pipeline, still run in Tenzir with the same result. The groups arrive in the order in which the database returns them. Use `sort` when you need a particular order.
+
+*By @mavam.*
+
+### Summaries computed in DuckDB
+
+`from_duckdb` now computes a `summarize` that directly follows it in the database, so DuckDB returns one row per group instead of every matching row:
+
+```tql
+from_duckdb "events.duckdb", table="alerts"
+where severity >= 3
+summarize src_ip, alerts=count(), last=max(ts)
+```
+
+This applies to table reads whose summary groups by boolean, integer, string, or time fields and uses `count`, `min`, or `max`, including `top` and `rare`. All other summaries, and summaries after a filter that stays in the pipeline, still run in Tenzir with the same result. The groups then arrive in the order in which DuckDB returns them rather than in the order of their first row, which a table does not define anyway. Use `sort` when you need a particular order.
+
+*By @mavam.*
+
+### Summaries computed in SentinelOne
+
+`from_sentinelone_data_lake` now lets SentinelOne compute a `summarize` that directly follows it, so the Data Lake returns one row per group instead of every event of the time window:
+
+```tql
+from_sentinelone_data_lake "https://example.sentinelone.net",
+  token=secret("sentinelone-token"),
+  start=now() - 1d
+summarize event.type, dataSource.name, events=count()
+```
+
+This applies to summaries that group by fields and count events with `count()`, including `top` and `rare`. Use `start` and `end` to choose the time window: a `where` before the `summarize`, including one on `timestamp`, makes the summary run in Tenzir.
+
+Tenzir checks every result from SentinelOne and summarizes the events itself when the result could differ from what TQL computes. For events without the group key, Tenzir reads just those events to confirm that the key is `null` in TQL as well, and not a record built from fields such as `endpoint.name`. Tenzir also summarizes locally when type inference turns different text such as `"true"` and `true` into the same key, or when SentinelOne omits events because of its limits. The result is the same either way. The groups arrive in the order in which SentinelOne returns them. Use `sort` when you need a particular order.
+
+*By @mavam.*
+
+### Summaries computed in the source behind renames and projections
+
+Sources that compute a `summarize` in their database or query engine now also do so when renames, assignments, or projections sit between the source and the `summarize`:
+
+```tql
+from_duckdb "events.duckdb", table="alerts"
+select ip=src_ip, ts, severity
+where severity >= 3
+summarize ip, alerts=count(), last=max(ts)
+```
+
+This applies to `from_duckdb`, `from_clickhouse`, `from_mysql`, `from_microsoft_sql`, and `from_sentinelone_data_lake`. The summary may sit behind `select` and `drop` that keep the fields it reads, and behind `select`, `set`, and plain assignments that copy fields, such as `select ip=src_ip` or `ip = src_ip`. The source then groups and aggregates its own fields, and the result keeps the new names. When the source finds that it cannot compute the summary after all, it runs these operators and the `summarize` on its events instead, with the same result. Assignments to fields that the summary does not read do not matter, unless they call a function, which could fail the pipeline. A computed value for a field that the summary reads, such as `ip = src_ip.string()`, an assignment of anything but a record literal to `this`, `head`, and filters that stay in the pipeline still keep the summary in Tenzir.
+
+*By @mavam.*
 
 ### Suricata schema types for NTP, LDAP, LLMNR, DNP3, drop, and frame events
 
@@ -332,7 +513,38 @@ The operator stores where each client left off in the state directory, so client
 
 *By @mavam.*
 
+### Write metrics to Google Cloud Monitoring
+
+The new `to_google_cloud_monitoring` operator writes metrics directly to Google Cloud Monitoring, without an intermediate Prometheus Remote Write receiver or OpenTelemetry Collector. It accepts the same fields as `to_prometheus` and maps gauges and counters to gauge and cumulative metrics. Histograms in the OTLP layout, as produced by `accept_otlp`, become distribution metrics:
+
+```tql
+accept_otlp "0.0.0.0:4317", signals=["metrics"], schema="record"
+where @name == "otel.metric.histogram"
+where aggregation_temporality == "cumulative"
+to_google_cloud_monitoring name=metric.name, help=metric.description,
+  unit=metric.unit, timestamp=time, start_timestamp=start_time,
+  labels=attributes, type="histogram"
+```
+
+The operator creates missing metric descriptors, identifies the writing node as a Compute Engine instance or as the monitored resource from `resource_type` and `resource_labels`, and keeps the newest point per series within each `flush_interval`.
+
+*By @mavam.*
+
 ## 🔧 Changes
+
+### Append as default mode for to_clickhouse
+
+The `to_clickhouse` operator now defaults to `mode="append"` and no longer creates missing tables on its own. Create the table in ClickHouse ahead of time, then write to it:
+
+```tql
+to_clickhouse table="security.alerts"
+```
+
+The `create` and `create_append` modes are deprecated and emit a warning. They continue to work for now, so pipelines that relied on automatic table creation can opt back in with an explicit `mode="create_append"` until they migrate.
+
+Because `primary` and `json` only apply when creating a table, the operator now warns when you set either of them together with `mode="append"`.
+
+*By @IyeOnline.*
 
 ### Bounded memory for limited sorting
 
@@ -461,11 +673,27 @@ As a result, a filter on OCSF fields after a normalization operator now reaches 
 
 *By @mavam.*
 
+### Filters move through if and match
+
+The optimizer now moves `where` filters in front of `if` and `match`. It rewrites the filter through each branch and routes the results by the conditions that select the branches. For example, `if x == 1 { y = a } else { y = b } | where y == 42` becomes `where a == 42 if x == 1 else b == 42` in front of the `if`. Branches that cannot keep an event drop out, so behind a `match` on the event ID whose arms assign different classes, `where class_uid == 3002` turns into a filter on the event IDs of the arms that assign `3002`.
+
+As a result, a filter on OCSF fields now reaches the source through mappings that dispatch with `if`, `match`, or `match @name`. Filters stay inside the branches when a condition is nondeterministic, such as `random() < 0.5`.
+
+Like a filter that moves in front of an assignment, a filter that moves in front of `if` or `match` drops events before the condition, scrutinee, or guard sees them. An error in the condition then no longer occurs for those events, but still occurs for every event that the filter keeps.
+
+*By @mavam.*
+
 ### Narrower input reads for aggregations
 
 `summarize` now tells upstream operators which fields it needs, so sources that support projections, such as `read_parquet`, read only the grouping keys and aggregate arguments instead of entire events. This also applies to `top` and `rare` and to `summarize` inside subpipelines, such as in `group`. A `summarize` with `emit`, `mode`, or `output` options still reads entire events.
 
 *By @mavam.*
+
+### Networking and admin tools in the container images
+
+The container images now ship `curl`, `dig`, `host`, `nslookup`, `nc`, `ip`, `ss`, `ps`, `top`, `grep`, `find`, and `less`, so you can debug a node from inside its container.
+
+*By @lava.*
 
 ### Regular expression filters in ClickHouse and DuckDB
 
@@ -480,22 +708,9 @@ TQL and both databases use the RE2 library with the same options, so the pattern
 
 *By @mavam.*
 
-### Secret keys for hmac
-
-The key of `hmac` must now be a secret, so that it stays out of pipeline definitions. Read the key from a secret store instead of passing a string:
-
-```tql
-from {user: "alice"}
-user = hmac(user, secret("hmac-key"))
-```
-
-A plain string key is an error when the pipeline starts. Transformations of a secret, such as `secret("hmac-key").decode_hex()`, still count as secrets.
-
-*By @mavam.*
-
 ### Secret seeds for Crypto-PAn
 
-The `seed` of `encrypt_cryptopan` and `decrypt_cryptopan` must now be a secret that holds exactly 32 bytes, instead of a string of hexadecimal digits:
+The `seed` of `encrypt_cryptopan` and `decrypt_cryptopan` must now hold exactly 32 bytes, instead of being a string of hexadecimal digits. Read it as a secret, so that it stays out of the pipeline definition:
 
 ```tql
 let $seed = secret("cryptopan-key").decode_hex()
@@ -503,7 +718,7 @@ from {src_ip: 192.0.2.1}
 src_ip = src_ip.encrypt_cryptopan(seed=$seed)
 ```
 
-To keep your existing pseudonyms, store the same 64 hexadecimal digits in the secret store and decode them with `decode_hex`. Previously, the functions padded shorter seeds with zeros and truncated longer ones; pad or truncate such seeds to 64 digits before you store them. A seed of another size is now an error when the pipeline starts. Without a `seed`, the functions still use a key of zeros.
+To keep your existing pseudonyms, store the same 64 hexadecimal digits in the secret store and decode them with `decode_hex`. Previously, the functions padded shorter seeds with zeros and truncated longer ones; pad or truncate such seeds to 64 digits before you store them. A seed of another size is now an error when the pipeline starts. A plain blob, such as `decode_hex("…")`, also works as a seed, but then the seed appears in the pipeline definition. Without a `seed`, the functions still use a key of zeros.
 
 *By @mavam.*
 
@@ -533,6 +748,20 @@ Invalid `Retry-After` headers, including delays outside the supported numeric ra
 
 *By @mavam.*
 
+### Storage components on dedicated threads
+
+Catalog lookups and the importer now run on dedicated threads instead of the shared actor scheduler. Previously, a lookup over a large catalog could occupy the scheduler for its whole duration, which delayed ingest, held back metrics for minutes at a time, and left retro exports such as `diagnostics` or `export` waiting for data. The threads are named `tnz.importer` and `tnz.lookup-<n>`, next to the existing `tnz.index` and `tnz.catalog`, so `top -H` and thread dumps show which component is busy.
+
+The node also exposes USDT probes for the storage engine, usable with `bpftrace` or `perf` without restarting the node. A per-second `*_tick` probe for the importer, index, and catalog reports how late each component's periodic work ran and how many messages wait in its mailbox, which shows directly which component is overloaded. Further probes mark catalog lookups, leases, merges, deferred and forced partition deletions, rebuild runs and batches, partition transforms, index persistence and backpressure, and importer backpressure. For example, to watch the importer's mailbox:
+
+```sh
+bpftrace -e 'usdt:/path/to/libtenzir.so:tenzir:importer_tick { printf("lag %d us, mailbox %d\n", arg0, arg1); }'
+```
+
+The log message that reports how long a catalog lookup took is emitted at the verbose level again.
+
+*By @tobim.*
+
 ## 🐞 Bug fixes
 
 ### `to_clickhouse` no longer crashes on IP addresses and subnets on macOS
@@ -544,6 +773,14 @@ On macOS, `to_clickhouse` no longer fails an internal assertion when writing fie
 ### Clean shutdown of live MySQL and SQL Server reads
 
 Stopping a pipeline that reads with `from_mysql live=true` or `from_microsoft_sql live=true`, for example with Ctrl+C or a node shutdown, now ends it cleanly. Previously, `from_mysql` crashed Tenzir with an internal error, and `from_microsoft_sql` kept polling until the pipeline reported that it was aborted.
+
+*By @mavam.*
+
+### ClickHouse-compatible Iceberg manifests from `to_iceberg`
+
+The `to_iceberg` operator now writes manifest files whose `partition-spec` and `schema-id` metadata follow the Iceberg specification. Previously, the `partition-spec` entry contained the full partition spec object instead of only its list of fields, and the `schema-id` entry was missing. Readers that rely on these entries, such as ClickHouse, failed to read tables written by `to_iceberg`.
+
+The fix applies to manifests that `to_iceberg` writes from now on. Existing manifests keep their previous metadata, so readers such as ClickHouse may still fail on tables that contain them.
 
 *By @mavam.*
 
@@ -578,6 +815,21 @@ ClickHouse evaluates expression defaults as well, such as `DEFAULT class_uid % 1
 Custom disk-usage checks such as `tenzir-df-percent` once again preserve data when usage is below the configured watermarks. A regression in Tenzir v6.19.0 treated percentage thresholds as byte limits, which could delete existing data and newly ingested events even with ample free disk space. Eviction now checks disk usage again after each deletion batch. This fix cannot restore data already deleted.
 
 *By @tobim.*
+
+### Filters no longer fail for events that earlier filters drop
+
+A filter that reads a field which an earlier operator assigns stays behind that operator. The optimizer could still move a later filter in front of it, which then also evaluated the later filter for events that the earlier one drops. If the later filter could fail, such as `x.slice(stride=-1)` for a string, the pipeline failed for events that it would never have seen:
+
+```tql
+from {x: "abc"}
+c = random() < 0
+where c
+where x.slice(stride=-1) == ""
+```
+
+A filter that could fail now keeps its place behind the filters that stay.
+
+*By @mavam.*
 
 ### Fix memory leaks in to_udp
 
@@ -617,6 +869,12 @@ The node no longer crashes when a TCP client connects to a listening operator an
 
 *By @tobim.*
 
+### No dropped JSON documents after very large documents
+
+When `read_json` ran on the legacy executor and encountered a document larger than 10 MB, it silently dropped every document that followed in the same input chunk. It now keeps them.
+
+*By @mavam.*
+
 ### Optional temperature in ai_prompt
 
 The `ai_prompt` operator no longer sends a `temperature` to the model unless you set one. Previously, it always sent `temperature=0.0`, so models that reject the parameter, such as `gpt-5-mini`, failed every request with an HTTP 400 error.
@@ -632,6 +890,20 @@ ai_prompt model="gpt-5-mini",
 ```
 
 Set `temperature` explicitly to keep the previous behavior, for example `temperature=0.0`.
+
+*By @mavam.*
+
+### Pipeline failure for rejected Google SecOps credentials
+
+The `to_google_secops` operator now fails the pipeline when Google SecOps rejects a request with HTTP 401 (Unauthorized) or 403 (Forbidden). Previously, the operator emitted a warning, discarded the batch, and kept going. Invalid credentials or missing permissions could therefore leave a pipeline running, or let it complete successfully, without delivering any events.
+
+The error includes the response from Google SecOps and a hint to check the credentials or their permissions for the instance.
+
+*By @mavam.*
+
+### Reading JSON split within UTF-8 characters
+
+The `read_json` operator no longer fails with `UTF8_ERROR` when an input chunk ends within a multi-byte UTF-8 character. This could happen when reading valid JSON over HTTP, where chunk boundaries fall at arbitrary bytes, for example with `from_http "…" { read_json }`. Format detection with `read_auto` also no longer rejects such JSON input.
 
 *By @mavam.*
 
