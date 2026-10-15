@@ -432,6 +432,30 @@ struct split_filter_result {
   ir::OptimizeFilter dependent;
 };
 
+/// Splits a predicate into a filter chain of its top-level `and` operands,
+/// from left to right, so that operators can move each operand on its own.
+/// Only the outermost `and`s split, not those below `or`, `not`, or other
+/// expressions.
+///
+/// The chain keeps the same events as the predicate: an event passes both if
+/// and only if every operand is `true`. A `null` or non-`bool` operand drops
+/// the event in either case, because `and` turns a non-`bool` operand into
+/// `null` and a `null` result drops the event. The chain evaluates an operand
+/// only for the events that all previous operands keep, which is a subset of
+/// the events for which `and` evaluates it, since `and` also evaluates its
+/// right operand where the left one is `null`. The chain thus never evaluates
+/// an operand where `and` would not, and so cannot introduce a warning or an
+/// error. It can suppress them, however: for an event where the left operand
+/// is `null`, `and` evaluates the right operand, but the chain does not. For
+/// example, `where a and x.slice(stride=-1) == ""` fails the pipeline for an
+/// event with `a == null` and a string `x`, but `where a | where
+/// x.slice(stride=-1) == ""` drops that event without slicing. The optimizer
+/// contract permits skipping work, and its errors and warnings, for events
+/// that a filter drops. Moving an operand past another one that stays is
+/// subject to the same rules as for any other chain, see
+/// `split_filter_by_dependents`.
+auto split_conjunction(ast::expression predicate) -> OptimizeFilter;
+
 /// Splits a filter chain into independent and dependent parts.
 /// A filter expression is dependent if its references overlap with `touched`.
 /// If refs of a filter cannot be determined (ambiguous), it is conservatively

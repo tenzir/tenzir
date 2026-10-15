@@ -1,0 +1,7 @@
+// The query takes `ok`, which is null for the row with `id == 3`. As in the
+// whole conjunction, that row does not pass, and neither does the one where
+// `ok` is false.
+from_duckdb env("DUCKDB_SEED"), table="events"
+ts = ts else now()
+where ok and ts > 2024-01-01
+select id, ok

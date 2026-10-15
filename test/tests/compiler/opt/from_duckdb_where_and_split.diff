@@ -1,0 +1,138 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:135..146 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:147..162 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:170..178 from 0
+           }
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `src_ip` @ [1]:204..210 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant ip 203.0.113.7 @ [1]:214..225 from 0,
++          location: [1]:204..225 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `ts` @ [1]:179..181 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `ts` @ [1]:184..186 from 0,
+               has_question_mark: false
+             },
+             op: "else_",
+             right: function_call {
+               fn: {
+                 path: [
+                   `now` @ [1]:192..195 from 0
+                 ],
+                 ref: std::now/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:192..197 from 0
+             },
+             location: [1]:184..197 from 0
+           },
+           location: [1]:179..197 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:198..203 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `src_ip` @ [1]:204..210 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant ip 203.0.113.7 @ [1]:214..225 from 0,
+-            location: [1]:204..225 from 0
++        Incomplete binary_expr {
++          left: root_field {
++            id: `ts` @ [1]:230..232 from 0,
++            has_question_mark: false
+           },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `ts` @ [1]:230..232 from 0,
+-              has_question_mark: false
+-            },
+-            op: "gt",
+-            right: constant time 2024-01-01T00:00:00Z @ [1]:235..245 from 0,
+-            location: [1]:230..245 from 0
+-          },
+-          location: [1]:204..245 from 0
++          op: "gt",
++          right: constant time 2024-01-01T00:00:00Z @ [1]:235..245 from 0,
++          location: [1]:230..245 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:245..245 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

@@ -1,0 +1,6 @@
+// Slicing a string with a negative stride fails. The operand `c` stays behind
+// the assignment that it reads and drops every event, so the operand behind it
+// must not move in front of it and slice `x`. Only `y == 1` moves.
+from {x: "abc", y: 1}
+c = random() < 0
+where c and x.slice(stride=-1) == "" and y == 1

@@ -1,0 +1,9 @@
+warning: expected `bool`
+  --> tests/operators/where/and_split_non_bool.tql:13:26
+   |
+13 | where t > 2020-01-01 and b and x == 1
+   |                          ~
+   |
+{
+  id: 1,
+}

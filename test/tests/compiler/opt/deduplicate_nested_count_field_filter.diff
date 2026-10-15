@@ -157,37 +157,76 @@
        },
        args: [
 -        expression binary_expr {
+-          left: binary_expr {
+-            left: field_access {
+-              left: root_field {
+-                id: `b` @ [1]:48..49 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `count` @ [1]:50..55 from 0,
+-              location: [1]:48..55 from 0
+-            },
+-            op: "eq",
+-            right: constant int64 0 @ [1]:59..60 from 0,
+-            location: [1]:48..60 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: field_access {
+-              left: root_field {
+-                id: `b` @ [1]:65..66 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `other` @ [1]:67..72 from 0,
+-              location: [1]:65..72 from 0
+-            },
+-            op: "eq",
+-            right: constant int64 1 @ [1]:76..77 from 0,
+-            location: [1]:65..77 from 0
+-          },
+-          location: [1]:48..77 from 0
 +        Incomplete binary_expr {
-           left: binary_expr {
-             left: field_access {
-               left: root_field {
-                 id: `b` @ [1]:48..49 from 0,
-                 has_question_mark: false
-               },
-               has_question_mark: false,
-               name: `count` @ [1]:50..55 from 0,
-               location: [1]:48..55 from 0
-             },
-             op: "eq",
-             right: constant int64 0 @ [1]:59..60 from 0,
-             location: [1]:48..60 from 0
-           },
-           op: "and_",
-           right: binary_expr {
-             left: field_access {
-               left: root_field {
-                 id: `b` @ [1]:65..66 from 0,
-                 has_question_mark: false
-               },
-               has_question_mark: false,
-               name: `other` @ [1]:67..72 from 0,
-               location: [1]:65..72 from 0
-             },
-             op: "eq",
-             right: constant int64 1 @ [1]:76..77 from 0,
-             location: [1]:65..77 from 0
-           },
-           location: [1]:48..77 from 0
++          left: field_access {
++            left: root_field {
++              id: `b` @ [1]:48..49 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `count` @ [1]:50..55 from 0,
++            location: [1]:48..55 from 0
++          },
++          op: "eq",
++          right: constant int64 0 @ [1]:59..60 from 0,
++          location: [1]:48..60 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: field_access {
++            left: root_field {
++              id: `b` @ [1]:65..66 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `other` @ [1]:67..72 from 0,
++            location: [1]:65..72 from 0
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:76..77 from 0,
++          location: [1]:65..77 from 0
          }
        ],
        named_args: [

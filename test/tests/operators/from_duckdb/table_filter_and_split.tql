@@ -1,0 +1,8 @@
+// The query takes `name != "alpha"`, while `ts > 2024-01-02` stays behind the
+// assignment with the nondeterministic fallback. The result is the same as for
+// the whole conjunction, including the row where `name` is null and the one
+// where `ts` is null.
+from_duckdb env("DUCKDB_SEED"), table="events"
+ts = ts else now()
+where name != "alpha" and ts > 2024-01-02
+select id, name

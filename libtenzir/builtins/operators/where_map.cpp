@@ -686,7 +686,11 @@ public:
     // must cover what the predicate references.
     auto predicate = args_.get().predicate;
     ir::add_refs_to_projection(req.projection, predicate);
-    req.filter.insert(req.filter.begin(), std::move(predicate));
+    // `where a and b` keeps the same events as `where a | where b`, so the
+    // operands join the chain separately and upstream operators can move each
+    // of them on its own, see `split_conjunction`.
+    req.filter.insert_range(req.filter.begin(),
+                            ir::split_conjunction(std::move(predicate)));
     return {
       .filter = std::move(req.filter),
       .order = req.order,

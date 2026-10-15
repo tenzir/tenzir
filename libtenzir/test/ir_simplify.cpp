@@ -421,6 +421,43 @@ TEST("substitution stops when the predicate grows beyond the bound") {
               ir::expression_size(large));
 }
 
+TEST("split conjunctions") {
+  auto const split = [](std::string_view source) {
+    return render_chain(ir::split_conjunction(parse(source)));
+  };
+  CHECK_EQUAL(split("x == 1"), render_filter({"x == 1"}));
+  CHECK_EQUAL(split("a and b"), render_filter({"a", "b"}));
+  // Every top-level `and` splits, in the order of its operands.
+  CHECK_EQUAL(split("a and b and c"), render_filter({"a", "b", "c"}));
+  CHECK_EQUAL(split("a and (b and c)"), render_filter({"a", "b", "c"}));
+  // An `and` below another expression stays whole.
+  CHECK_EQUAL(split("(a and b) or c"), render_filter({"(a and b) or c"}));
+  CHECK_EQUAL(split("not (a and b) and c"),
+              render_filter({"not (a and b)", "c"}));
+  CHECK_EQUAL(split("(a and b) == true"), render_filter({"(a and b) == true"}));
+}
+
+TEST("split conjunctions move the operands that a substitution rewrites") {
+  auto const keep_others
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    if (field.path().size() == 1 and field.path().front().id.name == "t") {
+      return None{};
+    }
+    return field.inner();
+  };
+  auto split = ir::split_filter_by_substitution(
+    ir::split_conjunction(parse("x == 1 and t > 0 and y == 2")), keep_others);
+  CHECK_EQUAL(render_chain(split.independent),
+              render_filter({"x == 1", "y == 2"}));
+  CHECK_EQUAL(render_chain(split.dependent), render_filter({"t > 0"}));
+  // An operand that could fail stays behind one that stays.
+  split = ir::split_filter_by_substitution(
+    ir::split_conjunction(parse("t > 0 and x.length() == 1")), keep_others);
+  CHECK(split.independent.empty());
+  CHECK_EQUAL(render_chain(split.dependent),
+              render_filter({"t > 0", "x.length() == 1"}));
+}
+
 TEST("predicates that could fail stay behind the ones that stay") {
   // `slice` fails for a string with a negative stride. Moving it in front of
   // `c`, which stays behind the operator, would evaluate it for the events that

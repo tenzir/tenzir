@@ -1,0 +1,10 @@
+warning: expected `bool`, but got a different type
+  --> tests/operators/where/and_split_non_bool_unsplit.tql:13:27
+   |
+13 | where (t > 2020-01-01 and b and x == 1) == true
+   |                           ~
+   |
+   = hint: the result of this expression is `null`
+{
+  id: 1,
+}

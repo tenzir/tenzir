@@ -1,0 +1,4 @@
+// Only the operand that reads the assigned field stays behind the assignment.
+from {x: 1}
+t = now()
+where x == 1 and t > 2020-01-01

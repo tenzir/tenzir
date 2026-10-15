@@ -35,6 +35,22 @@
 
 namespace tenzir {
 
+auto ir::split_conjunction(ast::expression predicate) -> OptimizeFilter {
+  auto result = OptimizeFilter{};
+  // Visits the operands from left to right, which keeps their order.
+  auto split = [&](this auto const& self, ast::expression expr) -> void {
+    if (auto* binary = try_as<ast::binary_expr>(expr);
+        binary and binary->op == ast::binary_op::and_) {
+      self(std::move(binary->left));
+      self(std::move(binary->right));
+      return;
+    }
+    result.push_back(std::move(expr));
+  };
+  split(std::move(predicate));
+  return result;
+}
+
 auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
                                     const ast::ExprRefs& touched)
   -> ir::split_filter_result {

@@ -1,0 +1,15 @@
+// `x == 1` moves in front of the assignment, and `t > 2020-01-01` stays
+// behind it. The result matches `and_split_null_unsplit.tql`, which keeps the
+// whole predicate together, including for `null` operands.
+from {id: 1, b: true, x: 1, ts: 2021-01-01},
+  {id: 2, b: true, x: 1, ts: 2019-01-01},
+  {id: 3, b: false, x: 1, ts: 2021-01-01},
+  {id: 4, b: null, x: 1, ts: 2021-01-01},
+  {id: 5, b: true, x: null, ts: 2021-01-01},
+  {id: 6, b: true, x: 2, ts: null},
+  {id: 7, b: false, x: 1, ts: null},
+  {id: 8, b: "yes", x: 1, ts: 2021-01-01},
+  {id: 9, b: null, x: null, ts: null}
+t = ts else now()
+where x == 1 and t > 2020-01-01
+select id

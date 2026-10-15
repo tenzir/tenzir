@@ -1,0 +1,5 @@
+// The query takes `src_ip == 203.0.113.7`, while `ts > 2024-01-01` stays behind
+// the assignment with the nondeterministic fallback.
+from_duckdb "events.duckdb", table="events"
+ts = ts else now()
+where src_ip == 203.0.113.7 and ts > 2024-01-01

@@ -1,0 +1,6 @@
+// Slicing a string with a negative stride fails. `a and ...` evaluates the
+// right operand where `a` is null, so the whole conjunction would fail the
+// pipeline. The split chain drops the event at `a` and never slices `x`, which
+// the optimizer may do because the event does not pass either way.
+from {a: null, x: "abc"}
+where a and x.slice(stride=-1) == ""

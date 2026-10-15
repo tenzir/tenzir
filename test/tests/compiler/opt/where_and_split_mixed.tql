@@ -1,0 +1,5 @@
+// `x == 1` cannot fail, so it moves past `t > 2020-01-01`, which stays. The
+// call to `length` could fail, so it stays behind it.
+from {x: 1, s: "abc"}
+t = now()
+where t > 2020-01-01 and x == 1 and s.length() == 3

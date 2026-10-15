@@ -1,0 +1,4 @@
+// Only the top-level `and` splits. The `and` below `or` and `not` stays whole.
+from {x: 1, y: 2}
+t = now()
+where (x == 1 or t > 2020-01-01) and not (y == 2 and t < 2020-01-01) and y == 2

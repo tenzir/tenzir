@@ -1,0 +1,8 @@
+// The query takes `id < 3`, while `ts > 2024-01-02` stays behind the assignment
+// with the nondeterministic fallback. The query must not take the limit, or the
+// row with `id == 1`, which the residual filter drops, would use it up.
+from_duckdb env("DUCKDB_SEED"), table="events"
+ts = ts else now()
+where id < 3 and ts > 2024-01-02
+head 1
+select id

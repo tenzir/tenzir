@@ -1,0 +1,158 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: [1]:71..72 from 0,
+           items: [
+             field {
+               name: `a` @ [1]:72..73 from 0,
+               expr: constant int64 1 @ [1]:75..76 from 0
+             },
+             field {
+               name: `b` @ [1]:78..79 from 0,
+               expr: constant int64 2 @ [1]:81..82 from 0
+             }
+           ],
+           end: [1]:82..83 from 0
+         }
+       ],
+       self: [1]:66..70 from 0
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `a` @ [1]:93..94 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:112..113 from 0,
++          location: [1]:107..113 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `b` @ [1]:99..100 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 2 @ [1]:123..124 from 0,
++          location: [1]:118..124 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `x` @ [1]:84..85 from 0,
+             has_question_mark: false
+           },
+           right: unary_expr {
+             op: "move",
+             expr: root_field {
+               id: `a` @ [1]:93..94 from 0,
+               has_question_mark: false
+             },
+             location: [1]:88..94 from 0
+           },
+           location: [1]:84..94 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `y` @ [1]:95..96 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `b` @ [1]:99..100 from 0,
+             has_question_mark: false
+           },
+           location: [1]:95..100 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:101..106 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:124..124 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `x` @ [1]:107..108 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 1 @ [1]:112..113 from 0,
+-            location: [1]:107..113 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `y` @ [1]:118..119 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 2 @ [1]:123..124 from 0,
+-            location: [1]:118..124 from 0
+-          },
+-          location: [1]:107..124 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ]
+ }
