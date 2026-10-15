@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <span>
 #include <utility>
 
 namespace tenzir {
@@ -84,6 +85,47 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
     result.independent.push_back(std::move(simplified));
   }
   return result;
+}
+
+auto ir::rewrite_aggregation(OptimizeAggregation aggregation,
+                             ast::FieldSubstitution const& fields)
+  -> Option<OptimizeAggregation> {
+  for (auto& column : aggregation.columns) {
+    if (not column.input) {
+      continue;
+    }
+    auto const& input = *column.input;
+    TENZIR_ASSERT(not input.empty());
+    auto expr = ast::expression{ast::root_field{
+      ast::identifier{input.front(), location::unknown},
+      false,
+    }};
+    for (auto const& name : std::span{input}.subspan(1)) {
+      expr = ast::expression{ast::field_access{
+        std::move(expr),
+        location::unknown,
+        false,
+        ast::identifier{name, location::unknown},
+      }};
+    }
+    auto field = ast::field_path::try_from(std::move(expr));
+    TENZIR_ASSERT(field);
+    TRY(auto resolved, fields(*field));
+    TRY(auto path, ast::field_path::try_from(std::move(resolved)));
+    if (path.has_this() or path.path().empty()) {
+      return None{};
+    }
+    auto segments = std::vector<std::string>{};
+    segments.reserve(path.path().size());
+    for (auto const& segment : path.path()) {
+      if (segment.has_question_mark) {
+        return None{};
+      }
+      segments.push_back(segment.id.name);
+    }
+    column.input = std::move(segments);
+  }
+  return aggregation;
 }
 
 auto ir::is_field_path_prefix(const ast::field_path& prefix,
@@ -494,14 +536,27 @@ auto ir::pipeline::optimize(OptimizeRequest req,
       std::move_iterator{opt.replacement.operators.begin()},
       std::move_iterator{opt.replacement.operators.end()});
   }
-  // Let an operator compute the aggregation that directly follows it. This
-  // runs after the walk, when every operator has absorbed what it can, so that
-  // predicates kept between the two operators prevent the fusion.
+  // Let an operator compute an aggregation that follows it, either directly
+  // or behind operators that can rewrite the aggregation over their input,
+  // such as renames. This runs after the walk, when every operator has
+  // absorbed what it can, so that predicates kept between the operators
+  // prevent the fusion. The fallback replays the skipped operators.
   auto& ops = replacement.operators;
-  for (auto i = size_t{0}; i + 1 < ops.size(); ++i) {
-    auto aggregation = ops[i + 1]->aggregation();
-    if (aggregation and ops[i]->absorb_aggregation(*aggregation)) {
-      ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(i + 1));
+  for (auto j = size_t{1}; j < ops.size(); ++j) {
+    auto aggregation = ops[j]->aggregation();
+    for (auto k = j; aggregation and k > 0;) {
+      --k;
+      if (ops[k]->absorb_aggregation(*aggregation)) {
+        ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(k + 1),
+                  ops.begin() + detail::narrow<std::ptrdiff_t>(j + 1));
+        j = k;
+        break;
+      }
+      aggregation = ops[k]->rewrite_aggregation(std::move(*aggregation));
+      if (aggregation) {
+        auto& fallback = aggregation->fallback.operators;
+        fallback.insert(fallback.begin(), ops[k]->copy());
+      }
     }
   }
   return {
@@ -536,6 +591,12 @@ auto ir::Operator::absorb_aggregation(OptimizeAggregation const& aggregation)
   -> bool {
   TENZIR_UNUSED(aggregation);
   return false;
+}
+
+auto ir::Operator::rewrite_aggregation(OptimizeAggregation aggregation) const
+  -> Option<OptimizeAggregation> {
+  TENZIR_UNUSED(aggregation);
+  return None{};
 }
 
 auto ir::Operator::copy() const -> Box<Operator> {

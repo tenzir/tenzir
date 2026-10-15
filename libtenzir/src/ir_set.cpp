@@ -1451,6 +1451,40 @@ auto ir::SetIr::optimize(ir::OptimizeRequest req,
   };
 }
 
+auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation) const
+  -> Option<OptimizeAggregation> {
+  for (auto const& assignment : assignments_) {
+    // The source skips the assignments, so none may fail the pipeline, also
+    // not one whose value the summary does not read. This includes targets
+    // that type inference rejects, such as `move this` with Nova events.
+    auto dh = null_diagnostic_handler{};
+    if (not ir::is_infallible(assignment.left)
+        or not ir::is_infallible(assignment.right)
+        or not validate_nova_target(assignment, dh)) {
+      return None{};
+    }
+    // Assigning a value other than a record to `this` leaves an empty record,
+    // whose fields a source would read from the value instead. Only record
+    // literals without spreads, such as the one that `select` assigns, have
+    // fields with a direct equivalent.
+    auto target = ast::field_path::try_from(assignment.left);
+    if (not target or not target->path().empty()) {
+      continue;
+    }
+    auto const* record = try_as<ast::record>(assignment.right);
+    if (not record or std::ranges::any_of(record->items, [](auto const& item) {
+          return is<ast::spread>(item);
+        })) {
+      return None{};
+    }
+  }
+  auto rewrite = SetRewrite{assignments_};
+  return ir::rewrite_aggregation(std::move(aggregation),
+                                 [&](ast::field_path const& field) {
+                                   return rewrite.resolve(field);
+                                 });
+}
+
 auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
   -> failure_or<element_type_tag> {
   if (input.is<table_slice>()) {

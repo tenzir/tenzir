@@ -1,0 +1,12 @@
+{
+  kind: "DNS Resolved",
+  n: 3,
+}
+{
+  kind: "IP Connect",
+  n: 2,
+}
+{
+  kind: "Process Creation",
+  n: 1,
+}

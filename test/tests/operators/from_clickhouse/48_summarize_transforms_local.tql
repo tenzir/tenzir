@@ -1,0 +1,15 @@
+// A predicate that ClickHouse cannot evaluate keeps all rows but stays local,
+// so the operators run locally, with the result of
+// `47_summarize_transforms.tql`.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where id.string() != ""
+select key=y, ident=id, level=meta.level, value=x, junk=f
+drop junk
+where ident < 100
+first = ident
+summarize key, events=count(), hi=max(level), lo=min(value), low_id=min(first)
+sort key

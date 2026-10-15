@@ -1,0 +1,13 @@
+// ClickHouse does not group by a `Float64` column, which the operator finds
+// only once it reads the table's columns. It then aggregates its rows locally,
+// with the rename before the summary. Without it, the summary would read
+// fields that the rows do not have.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+select key=f, ident=id
+where ident < 100
+summarize key, events=count(), hi=max(ident)
+sort key

@@ -1,0 +1,8 @@
+// The operators of `table_summarize_transforms_fallback.tql` without any
+// pushdown, with the same result.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where id.string() != ""
+select key=score, id, port=meta.port
+first_id = id
+summarize key, n=count(), first=min(first_id), port=max(port)
+sort key

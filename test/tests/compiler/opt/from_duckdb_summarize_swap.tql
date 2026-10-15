@@ -1,0 +1,6 @@
+// Every right-hand side of a `select` reads its input, so the swap maps each
+// field to the other one: the group key reads `dst_ip` and the argument
+// reads `src_ip`.
+from_duckdb "events.duckdb", table="events"
+select src_ip=dst_ip, dst_ip=src_ip
+summarize src_ip, first=min(dst_ip)

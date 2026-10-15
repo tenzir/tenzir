@@ -1,0 +1,28 @@
+{
+  key: "bar",
+  events: 1,
+  hi: null,
+  lo: 0,
+  low_id: 2,
+}
+{
+  key: "baz",
+  events: 1,
+  hi: 3,
+  lo: 9,
+  low_id: 4,
+}
+{
+  key: "foo",
+  events: 2,
+  hi: 2,
+  lo: -5,
+  low_id: 1,
+}
+{
+  key: "qux",
+  events: 1,
+  hi: 4,
+  lo: 11,
+  low_id: 5,
+}

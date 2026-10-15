@@ -1,0 +1,11 @@
+// A rejected aggregate query falls back to aggregating locally, after
+// running the rename and the `drop` on the events of the window, with the
+// result of `26_transforms.tql`.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate_rejected"]
+select kind=event.type, source=dataSource.name
+drop source
+summarize kind, n=count()
+sort kind

@@ -1,0 +1,41 @@
+warning: cannot access field of non-record type
+ --> tests/operators/from_duckdb/table_summarize_transforms_local.tql:5:34
+  |
+5 | select key=ok, id, when=ts, port=meta.port, name
+  |                                  ~~~~ not a record
+  ⋮
+5 | select key=ok, id, when=ts, port=meta.port, name
+  |                                       ----
+  |
+
+warning: record does not have field
+ --> tests/operators/from_duckdb/table_summarize_transforms_local.tql:5:34
+  |
+5 | select key=ok, id, when=ts, port=meta.port, name
+  |                                  ~~~~
+  ⋮
+5 | select key=ok, id, when=ts, port=meta.port, name
+  |                                       ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+{
+  key: false,
+  n: 1,
+  first: 2,
+  latest: 2024-01-02T11:30:00Z,
+  port: 443,
+}
+{
+  key: true,
+  n: 1,
+  first: 1,
+  latest: 2024-01-01T10:00:00Z,
+  port: 80,
+}
+{
+  key: null,
+  n: 1,
+  first: 3,
+  latest: null,
+  port: null,
+}

@@ -1,0 +1,15 @@
+{
+  key: -2.0,
+  n: 1,
+  first: 3,
+}
+{
+  key: 1.5,
+  n: 1,
+  first: 1,
+}
+{
+  key: null,
+  n: 1,
+  first: 2,
+}

@@ -54,7 +54,7 @@ auto can_aggregate_locally(ir::OptimizeAggregation const& aggregation,
   auto const source
     = aggregation.fallback.operators.empty()
         ? location::unknown
-        : aggregation.fallback.operators.front()->main_location();
+        : aggregation.fallback.operators.back()->main_location();
   diagnostic::error(
     "`summarize` does not support checkpointing with `--nova` yet")
     .primary(source)

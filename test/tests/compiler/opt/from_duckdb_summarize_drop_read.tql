@@ -1,0 +1,4 @@
+// The `summarize` reads a record that the `drop` changes, so it stays local.
+from_duckdb "events.duckdb", table="events"
+drop meta.raw
+summarize meta, events=count()

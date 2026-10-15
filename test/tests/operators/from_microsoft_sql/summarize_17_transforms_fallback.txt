@@ -1,0 +1,30 @@
+warning: expected `int`, `uint`, `float`, `duration`, or `time`, got `string`
+  --> tests/operators/from_microsoft_sql/summarize_17_transforms_fallback.tql:12:37
+   |
+12 | summarize key, rows=count(), hi=max(word), last=max(ident)
+   |                                     ~~~~
+   |
+{
+  key: "A",
+  rows: 1,
+  hi: null,
+  last: 2,
+}
+{
+  key: "a",
+  rows: 2,
+  hi: null,
+  last: 5,
+}
+{
+  key: "a ",
+  rows: 1,
+  hi: null,
+  last: 3,
+}
+{
+  key: null,
+  rows: 1,
+  hi: null,
+  last: 4,
+}

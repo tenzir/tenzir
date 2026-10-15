@@ -250,6 +250,11 @@ struct Description {
   /// materialized arguments. Set by `Describer::aggregation`.
   Option<std::function<auto(const Any&, const ir::OptimizeAggregation&)->bool>>
     accepts_aggregation;
+  /// Rewrites an aggregation over the operator's output into one over its
+  /// input. Set by `Describer::rewrite_aggregation`.
+  Option<std::function<auto(DescribeCtx&, ir::OptimizeAggregation)
+                         ->Option<ir::OptimizeAggregation>>>
+    rewrite_aggregation;
   // FIXME: Document.
   Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -1379,9 +1384,11 @@ public:
     }
   }
 
-  /// Lets the operator take over an aggregation that directly follows it,
-  /// such as a `summarize`, if `accepts` returns `true` for the operator's
-  /// arguments and the aggregation. Requires binding `opt::Aggregation`.
+  /// Lets the operator take over an aggregation that follows it, such as a
+  /// `summarize`, if `accepts` returns `true` for the operator's arguments and
+  /// the aggregation. The aggregation may follow directly or behind operators
+  /// that rewrote it, as in `ir::Operator::absorb_aggregation`. Requires
+  /// binding `opt::Aggregation`.
   ///
   /// The optimizer asks after absorbing filters, limits, and projections into
   /// the operator, and only if no limit applies to its events. Decide on what
@@ -1399,6 +1406,26 @@ public:
           const Any& args, const ir::OptimizeAggregation& aggregation) mutable {
           return accepts(args.as<Args>(), aggregation);
         };
+  }
+
+  /// Lets the operator pass an aggregation that follows it to the operator
+  /// before it, as in `ir::Operator::rewrite_aggregation`, whose contract the
+  /// callback must meet. The callback returns the aggregation over the
+  /// operator's input whose result equals that of the given aggregation over
+  /// its output, or `None`, typically through `ir::rewrite_aggregation`.
+  ///
+  /// The callback sees the parsed arguments, but not the filters, limits, or
+  /// projections that the operator absorbed. The optimizer does not call it
+  /// while the operator has absorbed a filter, a limit, or an aggregation, or
+  /// has unresolved arguments. It does not exclude operators with a pipeline
+  /// argument, whose effects the callback must account for. Diagnostics of
+  /// the callback are discarded, so it declines by returning `None`.
+  template <class F>
+    requires concepts::invokable_r<Option<ir::OptimizeAggregation>, F&,
+                                   DescribeCtx&, ir::OptimizeAggregation>
+  auto rewrite_aggregation(F rewrite) -> void {
+    TENZIR_ASSERT(not desc_.rewrite_aggregation);
+    desc_.rewrite_aggregation = std::move(rewrite);
   }
 
   /// Overrides the default optimization behavior.
@@ -1444,6 +1471,8 @@ public:
   ///
   /// The filters are not propagated.
   /// Upstream is required to produce ordered events.
+  /// This concerns the optimization walk only. Aggregations still reach the
+  /// operator through `aggregation` and `rewrite_aggregation`.
   auto without_optimize() -> Description {
     return optimize(
       [](DescribeCtx&, EventOrder, ir::OptimizeFilter filter) -> Optimization {

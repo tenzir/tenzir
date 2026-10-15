@@ -1,0 +1,12 @@
+// DuckDB computes the summary behind a rename, a `drop`, and an assignment
+// that copies a field: the group key and the arguments read the table's
+// columns. The result equals that of `table_summarize_transforms_local.tql`,
+// which runs the same operators locally. Only the local `select` warns about
+// the field of the null struct `meta`, which shows that DuckDB computed this
+// summary.
+from_duckdb env("DUCKDB_SEED"), table="events"
+select key=ok, id, when=ts, port=meta.port, name
+drop name
+first_id = id
+summarize key, n=count(), first=min(first_id), latest=max(when), port=max(port)
+sort key

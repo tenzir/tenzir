@@ -1,0 +1,297 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:170..181 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:182..197 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:205..213 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
++      order: "ordered",
++      projection: [
+         {
+-          left: this_ [0]:0..0 from 0,
+-          right: record {
+-            begin: [0]:0..0 from 0,
+-            items: [
+-              
+-            ],
+-            end: [0]:0..0 from 0
++          expr: root_field {
++            id: `src_ip` @ [1]:243..249 from 0,
++            has_question_mark: false
+           },
+-          location: [0]:0..0 from 0
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:243..249 from 0,
++              has_question_mark: false
++            }
++          ]
+         },
+         {
+-          left: root_field {
+-            id: `src_ip` @ [1]:221..227 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
++          expr: root_field {
+             id: `dst_ip` @ [1]:228..234 from 0,
+             has_question_mark: false
+           },
+-          location: [1]:221..234 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `dst_ip` @ [1]:236..242 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `src_ip` @ [1]:243..249 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:236..249 from 0
++          has_this: false,
++          path: [
++            {
++              id: `dst_ip` @ [1]:228..234 from 0,
++              has_question_mark: false
++            }
++          ]
+         }
+       ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:250..259 from 0,
+-      cfg: {
+-        aggregates: [
++      aggregation: {
++        columns: [
+           {
+-            dest: {
+-              expr: root_field {
+-                id: `first` @ [1]:268..273 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
++            output: [
++              "src_ip"
++            ],
++            input: [
++              "dst_ip"
++            ]
++          },
++          {
++            output: [
++              "first"
++            ],
++            function: "min",
++            input: [
++              "src_ip"
++            ]
++          }
++        ],
++        schema_name: "tenzir.summarize",
++        fallback: {
++          lets: [
++            
++          ],
++          operators: [
++            SetIr {
++              assignments: [
+                 {
+-                  id: `first` @ [1]:268..273 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `min` @ [1]:274..277 from 0
+-                ],
+-                ref: std::min/fn
+-              },
+-              args: [
+-                root_field {
+-                  id: `dst_ip` @ [1]:278..284 from 0,
+-                  has_question_mark: false
++                  left: this_ [0]:0..0 from 0,
++                  right: record {
++                    begin: [0]:0..0 from 0,
++                    items: [
++                      
++                    ],
++                    end: [0]:0..0 from 0
++                  },
++                  location: [0]:0..0 from 0
++                },
++                {
++                  left: root_field {
++                    id: `src_ip` @ [1]:221..227 from 0,
++                    has_question_mark: false
++                  },
++                  right: root_field {
++                    id: `dst_ip` @ [1]:228..234 from 0,
++                    has_question_mark: false
++                  },
++                  location: [1]:221..234 from 0
++                },
++                {
++                  left: root_field {
++                    id: `dst_ip` @ [1]:236..242 from 0,
++                    has_question_mark: false
++                  },
++                  right: root_field {
++                    id: `src_ip` @ [1]:243..249 from 0,
++                    has_question_mark: false
++                  },
++                  location: [1]:236..249 from 0
+                 }
+               ],
+-              method: false,
+-              location: [1]:274..285 from 0
++              order: "ordered"
++            },
++            summarize {
++              self: [1]:250..259 from 0,
++              cfg: {
++                aggregates: [
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `first` @ [1]:268..273 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `first` @ [1]:268..273 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `min` @ [1]:274..277 from 0
++                        ],
++                        ref: std::min/fn
++                      },
++                      args: [
++                        root_field {
++                          id: `dst_ip` @ [1]:278..284 from 0,
++                          has_question_mark: false
++                        }
++                      ],
++                      method: false,
++                      location: [1]:274..285 from 0
++                    }
++                  }
++                ],
++                groups: [
++                  {
++                    expr: {
++                      expr: root_field {
++                        id: `src_ip` @ [1]:260..266 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `src_ip` @ [1]:260..266 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    }
++                  }
++                ],
++                indices: [
++                  -1,
++                  0
++                ],
++                emission: "final",
++                mode: "reset",
++                output: "summary",
++                emit_every: 1
++              }
+             }
+-          }
++          ]
++        }
++      }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:285..285 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:260..266 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:260..266 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

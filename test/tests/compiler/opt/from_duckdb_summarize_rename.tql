@@ -1,0 +1,6 @@
+// `from_duckdb` takes over the `summarize` behind a `select` that renames
+// fields. The group key and the argument read the source fields, and the
+// outputs keep the new names.
+from_duckdb "events.duckdb", table="events"
+select ip=src_ip, level=severity
+summarize ip, events=count(), worst=max(level)

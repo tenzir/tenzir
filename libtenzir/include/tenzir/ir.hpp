@@ -183,17 +183,49 @@ public:
   /// returns `None`.
   virtual auto aggregation() const -> Option<OptimizeAggregation>;
 
-  /// Take over `aggregation`, which the operator directly after this one
-  /// computes from this operator's output. Return whether this operator now
+  /// Take over `aggregation`, which an operator after this one computes from
+  /// this operator's output, either directly or behind operators that
+  /// rewrote it as in `rewrite_aggregation`. Return whether this operator now
   /// emits the result of the aggregation, in which case the optimizer removes
-  /// the operator after it. The default declines.
+  /// the aggregating operator and the operators between the two. Their copies
+  /// lead `aggregation.fallback`, in the order in which they run. The default
+  /// declines.
   ///
   /// This runs after the optimization walk, so an implementation knows the
   /// filters and limits it absorbed. It must decline unless it can produce
   /// the result exactly, either by computing it or by running
-  /// `aggregation.fallback` on what it would otherwise emit.
+  /// `aggregation.fallback` on what it would otherwise emit. An operator that
+  /// keeps the aggregation must also substitute its fallback in `substitute`,
+  /// whose operators may reference bindings.
   virtual auto absorb_aggregation(OptimizeAggregation const& aggregation)
     -> bool;
+
+  /// Return an aggregation over this operator's input whose result equals
+  /// that of `aggregation` over this operator's output, so that the optimizer
+  /// may remove this operator, or `None` if there is none. The default returns
+  /// `None`, and an implementation may always decline.
+  ///
+  /// Returning an aggregation asserts, for every input that the operator
+  /// accepts, that removing the operator ahead of the aggregation changes
+  /// nothing observable:
+  ///
+  /// - The operator keeps every event, without adding events, and the
+  ///   aggregation does not depend on any order that the operator changes.
+  /// - Each field that the aggregation reads holds the value and type of the
+  ///   input field that the result names instead.
+  /// - The operator has no side effects, such as writes or subpipelines with
+  ///   their own outputs, and cannot fail the pipeline, also where the
+  ///   aggregation does not read its result. As for
+  ///   `OptimizeRequest::filter`, warnings may differ.
+  ///
+  /// Rewrite only the inputs of the columns, for example through the free
+  /// function `rewrite_aggregation`, and leave the outputs, the schema name,
+  /// and the fallback as they are. On success, the optimizer offers the result
+  /// to the operator before this one, and prepends a copy of this operator to
+  /// its `fallback`. This runs after the optimization walk and must not modify
+  /// the operator.
+  virtual auto rewrite_aggregation(OptimizeAggregation aggregation) const
+    -> Option<OptimizeAggregation>;
 
   /// Return the executable matching this operator.
   ///
@@ -427,6 +459,18 @@ auto split_filter_by_substitution(OptimizeFilter filter,
                                   ast::FieldSubstitution const& fields,
                                   ast::MetaSubstitution const& meta = {})
   -> split_filter_result;
+
+/// Rewrites the inputs of `aggregation` with `fields`, which resolves fields
+/// of an operator's output to expressions over its input, as for
+/// `split_filter_by_substitution`. Returns `None` unless every input resolves
+/// to a plain field path without `?`. Outputs and the fallback stay as they
+/// are.
+///
+/// This serves operators that keep every event, as in
+/// `Operator::rewrite_aggregation`.
+auto rewrite_aggregation(OptimizeAggregation aggregation,
+                         ast::FieldSubstitution const& fields)
+  -> Option<OptimizeAggregation>;
 
 /// Simplifies a predicate without changing which events it keeps.
 ///
@@ -862,6 +906,9 @@ public:
 
   auto optimize(OptimizeRequest req,
                 const OptimizeCtx& octx) && -> OptimizeResult override;
+
+  auto rewrite_aggregation(OptimizeAggregation aggregation) const
+    -> Option<OptimizeAggregation> override;
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override;

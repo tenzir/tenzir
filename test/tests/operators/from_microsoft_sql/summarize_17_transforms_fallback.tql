@@ -1,0 +1,13 @@
+// SQL Server computes `max` only for numbers and times, which the operator
+// finds only once it reads the table's columns. It then aggregates locally,
+// after the rename, so that the keys and `last` read the renamed fields. TQL's
+// `max` does not take text either, so it warns and yields `null` for `hi`.
+from_microsoft_sql table="agg",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+select key=s, word=s, ident=id
+summarize key, rows=count(), hi=max(word), last=max(ident)
+sort key

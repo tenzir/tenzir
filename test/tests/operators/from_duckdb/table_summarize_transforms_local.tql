@@ -1,0 +1,9 @@
+// A predicate that DuckDB cannot evaluate keeps all rows but stays local, so
+// the operators run locally, with the result of `table_summarize_transforms.tql`.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where id.string() != ""
+select key=ok, id, when=ts, port=meta.port, name
+drop name
+first_id = id
+summarize key, n=count(), first=min(first_id), latest=max(when), port=max(port)
+sort key

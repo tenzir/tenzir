@@ -1,0 +1,6 @@
+// The assignment overwrites the field that the `summarize` groups by, so the
+// summary stays local.
+from_duckdb "events.duckdb", table="events"
+select src_ip, severity
+severity = severity + 1
+summarize severity, events=count()

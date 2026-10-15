@@ -1,0 +1,5 @@
+// A computed value has no equivalent in the source, so the `summarize` stays
+// local, behind the assignment.
+from_duckdb "events.duckdb", table="events"
+level = severity * 2
+summarize src_ip, events=count(), worst=max(level)

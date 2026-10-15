@@ -1,0 +1,6 @@
+// A `head` counts the events before the summary, so the `summarize` stays
+// local, also behind a `select`.
+from_duckdb "events.duckdb", table="events"
+select src_ip
+head 10
+summarize src_ip, events=count()

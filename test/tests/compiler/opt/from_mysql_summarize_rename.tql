@@ -1,0 +1,4 @@
+// `from_mysql` takes over the `summarize` behind a rename.
+from_mysql table="events", host="localhost"
+select ip=src_ip, id
+summarize ip, events=count(), first=min(id)

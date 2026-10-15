@@ -1,0 +1,5 @@
+// The `summarize` does not read the assigned field, but the function call can
+// fail the pipeline, so the assignment and the summary stay local.
+from_duckdb "events.duckdb", table="events"
+contents = file_contents(path)
+summarize src_ip, events=count()

@@ -1,0 +1,32 @@
+{
+  key: "A",
+  rows: 1,
+  latest: {
+    ts: 2023-12-31T22:00:00Z,
+  },
+  lo: null,
+}
+{
+  key: "a",
+  rows: 1,
+  latest: {
+    ts: 2024-01-05T00:00:00Z,
+  },
+  lo: 9223372036854775807,
+}
+{
+  key: "a ",
+  rows: 1,
+  latest: {
+    ts: null,
+  },
+  lo: 7,
+}
+{
+  key: null,
+  rows: 1,
+  latest: {
+    ts: 2024-01-04T05:00:00Z,
+  },
+  lo: -9223372036854775808,
+}

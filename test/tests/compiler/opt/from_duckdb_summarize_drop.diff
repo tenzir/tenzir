@@ -1,0 +1,428 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:138..149 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:150..165 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:173..181 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:215..221 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:215..221 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `severity` @ [1]:249..257 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `severity` @ [1]:249..257 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `payload` @ [1]:187..194 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `payload` @ [1]:187..194 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `meta` @ [1]:196..200 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `raw` @ [1]:201..204 from 0,
++            location: [1]:196..204 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `meta` @ [1]:196..200 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `raw` @ [1]:201..204 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      aggregation: {
++        columns: [
++          {
++            output: [
++              "src_ip"
++            ],
++            input: [
++              "src_ip"
++            ]
++          },
++          {
++            output: [
++              "events"
++            ],
++            function: "count"
++          },
++          {
++            output: [
++              "worst"
++            ],
++            function: "max",
++            input: [
++              "severity"
++            ]
++          }
++        ],
++        schema_name: "tenzir.summarize",
++        fallback: {
++          lets: [
++            
++          ],
++          operators: [
++            GenericIr {
++              desc: "drop",
++              store: {
++                op: {
++                  path: [
++                    `drop` @ [1]:182..186 from 0
++                  ],
++                  ref: std::drop/op
++                },
++                args: [
++                  field_path {
++                    expr: root_field {
++                      id: `payload` @ [1]:187..194 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `payload` @ [1]:187..194 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  },
++                  field_path {
++                    expr: field_access {
++                      left: root_field {
++                        id: `meta` @ [1]:196..200 from 0,
++                        has_question_mark: false
++                      },
++                      has_question_mark: false,
++                      name: `raw` @ [1]:201..204 from 0,
++                      location: [1]:196..204 from 0
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `meta` @ [1]:196..200 from 0,
++                        has_question_mark: false
++                      },
++                      {
++                        id: `raw` @ [1]:201..204 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              },
++              filter: [
++                
++              ],
++              order: "ordered"
++            },
++            summarize {
++              self: [1]:205..214 from 0,
++              cfg: {
++                aggregates: [
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `events` @ [1]:223..229 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `events` @ [1]:223..229 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `count` @ [1]:230..235 from 0
++                        ],
++                        ref: std::count/fn
++                      },
++                      args: [
++                        
++                      ],
++                      method: false,
++                      location: [1]:230..237 from 0
++                    }
++                  },
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `worst` @ [1]:239..244 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `worst` @ [1]:239..244 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `max` @ [1]:245..248 from 0
++                        ],
++                        ref: std::max/fn
++                      },
++                      args: [
++                        root_field {
++                          id: `severity` @ [1]:249..257 from 0,
++                          has_question_mark: false
++                        }
++                      ],
++                      method: false,
++                      location: [1]:245..258 from 0
++                    }
++                  }
++                ],
++                groups: [
++                  {
++                    expr: {
++                      expr: root_field {
++                        id: `src_ip` @ [1]:215..221 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `src_ip` @ [1]:215..221 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    }
++                  }
++                ],
++                indices: [
++                  -1,
++                  0,
++                  1
++                ],
++                emission: "final",
++                mode: "reset",
++                output: "summary",
++                emit_every: 1
++              }
++            }
++          ]
++        }
++      }
+     },
+     GenericIr {
+-      desc: "drop",
++      desc: "to_stdout",
+       store: {
+         op: {
+           path: [
+-            `drop` @ [1]:182..186 from 0
++            `to_stdout` @ [1]:258..258 from 0
+           ],
+-          ref: std::drop/op
++          ref: std::to_stdout/op
+         },
+         args: [
+-          field_path {
+-            expr: root_field {
+-              id: `payload` @ [1]:187..194 from 0,
+-              has_question_mark: false
+-            },
+-            has_this: false,
+-            path: [
+-              {
+-                id: `payload` @ [1]:187..194 from 0,
+-                has_question_mark: false
+-              }
+-            ]
+-          },
+-          field_path {
+-            expr: field_access {
+-              left: root_field {
+-                id: `meta` @ [1]:196..200 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `raw` @ [1]:201..204 from 0,
+-              location: [1]:196..204 from 0
+-            },
+-            has_this: false,
+-            path: [
+-              {
+-                id: `meta` @ [1]:196..200 from 0,
+-                has_question_mark: false
+-              },
+-              {
+-                id: `raw` @ [1]:201..204 from 0,
+-                has_question_mark: false
+-              }
+-            ]
+-          }
++          
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:205..214 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:223..229 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:223..229 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:230..235 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:230..237 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `worst` @ [1]:239..244 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `worst` @ [1]:239..244 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `max` @ [1]:245..248 from 0
+-                ],
+-                ref: std::max/fn
+-              },
+-              args: [
+-                root_field {
+-                  id: `severity` @ [1]:249..257 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
+-              method: false,
+-              location: [1]:245..258 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:215..221 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:215..221 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0,
+-          1
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
+     }
+   ]
+ }

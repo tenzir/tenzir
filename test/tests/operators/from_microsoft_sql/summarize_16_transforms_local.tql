@@ -1,0 +1,16 @@
+// A predicate that SQL Server cannot evaluate keeps all rows but stays local,
+// so the operators run locally, with the result of
+// `summarize_15_transforms.tql`.
+from_microsoft_sql table="agg",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where id.string() != ""
+select key=s, ident=id, value=n, when=ts, junk=f
+drop junk
+where ident > 1 or value == null
+stamp = when
+summarize key, rows=count(), latest.ts=max(stamp), lo=min(value)
+sort key

@@ -1,0 +1,442 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_sql",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_sql` @ [1]:68..86 from 0
+           ],
+           ref: std::from_microsoft_sql/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "events" @ [1]:93..101 from 0
+           },
+           {
+             index: 4,
+             value: located "localhost" @ [1]:108..119 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `ts` @ [1]:151..153 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `ts` @ [1]:151..153 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:143..149 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:143..149 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `payload` @ [1]:125..132 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `payload` @ [1]:125..132 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      aggregation: {
++        columns: [
++          {
++            output: [
++              "ip"
++            ],
++            input: [
++              "src_ip"
++            ]
++          },
++          {
++            output: [
++              "events"
++            ],
++            function: "count"
++          },
++          {
++            output: [
++              "first"
++            ],
++            function: "min",
++            input: [
++              "ts"
++            ]
++          }
++        ],
++        schema_name: "tenzir.summarize",
++        fallback: {
++          lets: [
++            
++          ],
++          operators: [
++            GenericIr {
++              desc: "drop",
++              store: {
++                op: {
++                  path: [
++                    `drop` @ [1]:120..124 from 0
++                  ],
++                  ref: std::drop/op
++                },
++                args: [
++                  field_path {
++                    expr: root_field {
++                      id: `payload` @ [1]:125..132 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `payload` @ [1]:125..132 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              },
++              filter: [
++                
++              ],
++              order: "ordered"
++            },
++            SetIr {
++              assignments: [
++                {
++                  left: this_ [0]:0..0 from 0,
++                  right: record {
++                    begin: [0]:0..0 from 0,
++                    items: [
++                      
++                    ],
++                    end: [0]:0..0 from 0
++                  },
++                  location: [0]:0..0 from 0
++                },
++                {
++                  left: root_field {
++                    id: `ip` @ [1]:140..142 from 0,
++                    has_question_mark: false
++                  },
++                  right: root_field {
++                    id: `src_ip` @ [1]:143..149 from 0,
++                    has_question_mark: false
++                  },
++                  location: [1]:140..149 from 0
++                },
++                {
++                  left: root_field {
++                    id: `ts` @ [1]:151..153 from 0,
++                    has_question_mark: false
++                  },
++                  right: root_field {
++                    id: `ts` @ [1]:151..153 from 0,
++                    has_question_mark: false
++                  },
++                  location: [1]:151..153 from 0
++                }
++              ],
++              order: "ordered"
++            },
++            summarize {
++              self: [1]:154..163 from 0,
++              cfg: {
++                aggregates: [
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `events` @ [1]:168..174 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `events` @ [1]:168..174 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `count` @ [1]:175..180 from 0
++                        ],
++                        ref: std::count/fn
++                      },
++                      args: [
++                        
++                      ],
++                      method: false,
++                      location: [1]:175..182 from 0
++                    }
++                  },
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `first` @ [1]:184..189 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `first` @ [1]:184..189 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `min` @ [1]:190..193 from 0
++                        ],
++                        ref: std::min/fn
++                      },
++                      args: [
++                        root_field {
++                          id: `ts` @ [1]:194..196 from 0,
++                          has_question_mark: false
++                        }
++                      ],
++                      method: false,
++                      location: [1]:190..197 from 0
++                    }
++                  }
++                ],
++                groups: [
++                  {
++                    expr: {
++                      expr: root_field {
++                        id: `ip` @ [1]:164..166 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `ip` @ [1]:164..166 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    }
++                  }
++                ],
++                indices: [
++                  -1,
++                  0,
++                  1
++                ],
++                emission: "final",
++                mode: "reset",
++                output: "summary",
++                emit_every: 1
++              }
++            }
++          ]
++        }
++      }
+     },
+     GenericIr {
+-      desc: "drop",
++      desc: "to_stdout",
+       store: {
+         op: {
+           path: [
+-            `drop` @ [1]:120..124 from 0
++            `to_stdout` @ [1]:197..197 from 0
+           ],
+-          ref: std::drop/op
++          ref: std::to_stdout/op
+         },
+         args: [
+-          field_path {
+-            expr: root_field {
+-              id: `payload` @ [1]:125..132 from 0,
+-              has_question_mark: false
+-            },
+-            has_this: false,
+-            path: [
+-              {
+-                id: `payload` @ [1]:125..132 from 0,
+-                has_question_mark: false
+-              }
+-            ]
+-          }
++          
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
+-        {
+-          left: this_ [0]:0..0 from 0,
+-          right: record {
+-            begin: [0]:0..0 from 0,
+-            items: [
+-              
+-            ],
+-            end: [0]:0..0 from 0
+-          },
+-          location: [0]:0..0 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `ip` @ [1]:140..142 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `src_ip` @ [1]:143..149 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:140..149 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `ts` @ [1]:151..153 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `ts` @ [1]:151..153 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:151..153 from 0
+-        }
+-      ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:154..163 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:168..174 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:168..174 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:175..180 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:175..182 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `first` @ [1]:184..189 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `first` @ [1]:184..189 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `min` @ [1]:190..193 from 0
+-                ],
+-                ref: std::min/fn
+-              },
+-              args: [
+-                root_field {
+-                  id: `ts` @ [1]:194..196 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
+-              method: false,
+-              location: [1]:190..197 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `ip` @ [1]:164..166 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `ip` @ [1]:164..166 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0,
+-          1
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
+     }
+   ]
+ }

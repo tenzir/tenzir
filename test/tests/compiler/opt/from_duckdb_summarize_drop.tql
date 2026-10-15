@@ -1,0 +1,5 @@
+// `from_duckdb` takes over the `summarize` behind a `drop` of fields that the
+// summary does not read. The fallback replays the `drop`.
+from_duckdb "events.duckdb", table="events"
+drop payload, meta.raw
+summarize src_ip, events=count(), worst=max(severity)

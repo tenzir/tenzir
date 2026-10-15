@@ -1,0 +1,5 @@
+// `from_duckdb` takes over the `summarize` behind a `select` that keeps every
+// field that the summary reads. The fallback replays the `select`.
+from_duckdb "events.duckdb", table="events"
+select src_ip, severity, ts
+summarize src_ip, events=count(), worst=max(severity)

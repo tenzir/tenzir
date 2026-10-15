@@ -1,0 +1,10 @@
+// DuckDB does not group by a `DOUBLE` column, which the operator finds only
+// once it reads the table's columns. It then aggregates its rows locally, with
+// the `select` and the assignment before the summary. Without them, the
+// summary would read fields that the rows do not have. The `select` warns
+// about the field of the null struct `meta`.
+from_duckdb env("DUCKDB_SEED"), table="events"
+select key=score, id, port=meta.port
+first_id = id
+summarize key, n=count(), first=min(first_id), port=max(port)
+sort key

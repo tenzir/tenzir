@@ -1,0 +1,4 @@
+// `from_clickhouse` takes over the `summarize` behind a rename.
+from_clickhouse table="events", host="localhost"
+ip = src_ip
+summarize ip, events=count(), first.seen=min(ts)

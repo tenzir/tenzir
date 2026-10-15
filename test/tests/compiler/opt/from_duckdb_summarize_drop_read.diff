@@ -1,0 +1,192 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:78..89 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:90..105 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:113..121 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `meta` @ [1]:146..150 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `meta` @ [1]:146..150 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `meta` @ [1]:127..131 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `raw` @ [1]:132..135 from 0,
++            location: [1]:127..135 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `meta` @ [1]:127..131 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `raw` @ [1]:132..135 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "drop",
+       store: {
+         op: {
+           path: [
+             `drop` @ [1]:122..126 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `meta` @ [1]:127..131 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `raw` @ [1]:132..135 from 0,
+               location: [1]:127..135 from 0
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `meta` @ [1]:127..131 from 0,
+                 has_question_mark: false
+               },
+               {
+                 id: `raw` @ [1]:132..135 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     summarize {
+       self: [1]:136..145 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `events` @ [1]:152..158 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `events` @ [1]:152..158 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:159..164 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:159..166 from 0
+             }
+           }
+         ],
+         groups: [
+           {
+             expr: {
+               expr: root_field {
+                 id: `meta` @ [1]:146..150 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `meta` @ [1]:146..150 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         indices: [
+           -1,
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:166..166 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ]
+ }

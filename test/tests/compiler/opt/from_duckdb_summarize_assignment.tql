@@ -1,0 +1,6 @@
+// `from_duckdb` takes over the `summarize` behind assignments that copy
+// fields, also behind several of them in a row.
+from_duckdb "events.duckdb", table="events"
+ip = src_ip
+set level = severity, note = "unused"
+summarize ip, events=count(), worst=max(level)

@@ -1,0 +1,5 @@
+// `from_microsoft_sql` takes over the `summarize` behind a rename.
+from_microsoft_sql table="events", host="localhost"
+drop payload
+select ip=src_ip, ts
+summarize ip, events=count(), first=min(ts)

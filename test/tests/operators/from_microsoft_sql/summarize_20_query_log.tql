@@ -1,6 +1,8 @@
 // The aggregations of the earlier tests ran in SQL Server, while
-// `summarize_11_local.tql` read the rows.
-from_microsoft_sql sql="SELECT t.text AS query FROM sys.dm_exec_cached_plans AS p CROSS APPLY sys.dm_exec_sql_text(p.plan_handle) AS t WHERE t.text LIKE 'SELECT%FROM [[]agg]%' AND t.text NOT LIKE '%dm_exec%' ORDER BY t.text",
+// `summarize_11_local.tql`, `summarize_16_transforms_local.tql`, and
+// `summarize_17_transforms_fallback.tql` read the rows. The binary collation
+// orders the queries by code point.
+from_microsoft_sql sql="SELECT t.text AS query FROM sys.dm_exec_cached_plans AS p CROSS APPLY sys.dm_exec_sql_text(p.plan_handle) AS t WHERE t.text LIKE 'SELECT%FROM [[]agg]%' AND t.text NOT LIKE '%dm_exec%' ORDER BY t.text COLLATE Latin1_General_BIN2",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),
                    user=env("MSSQL_ADMIN_USER"),

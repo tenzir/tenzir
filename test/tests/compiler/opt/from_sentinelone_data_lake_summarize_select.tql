@@ -1,0 +1,5 @@
+// `from_sentinelone_data_lake` takes over the `summarize` behind a `select`
+// that keeps or renames the fields that the summary reads.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
+select kind=event.type
+summarize kind, events=count()

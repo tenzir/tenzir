@@ -782,6 +782,11 @@ public:
     for (auto& expr : filter_) {
       TRY(expr.substitute(ctx));
     }
+    // The fallback can contain operators that the aggregation skipped, which
+    // may reference bindings of an enclosing subpipeline.
+    if (aggregation_) {
+      TRY(aggregation_->fallback.substitute(ctx, instantiate));
+    }
     return {};
   }
 
@@ -934,6 +939,18 @@ public:
     }
     aggregation_ = aggregation;
     return true;
+  }
+
+  auto rewrite_aggregation(ir::OptimizeAggregation aggregation) const
+    -> Option<ir::OptimizeAggregation> override {
+    // Filters and limits that the operator absorbed drop events.
+    if (not desc_->rewrite_aggregation or not filter_.empty() or limit_
+        or aggregation_ or not store_.is_resolved(*desc_)) {
+      return None{};
+    }
+    auto noop_dh = null_diagnostic_handler{};
+    auto ctx = describe_ctx(noop_dh);
+    return (*desc_->rewrite_aggregation)(ctx, std::move(aggregation));
   }
 
   auto main_location() const -> location override {

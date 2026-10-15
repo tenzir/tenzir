@@ -285,3 +285,31 @@
   query: "| columns timestamp, event.type",
   filter: null,
 }
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, event.type, dataSource.name",
+  filter: null,
+}
+{
+  scope: "aggregate_rejected",
+  status: 500,
+  type: "PQ",
+  query: "| group __tenzir_aggregate_1 = count(), __tenzir_aggregate_2 = count() by __tenzir_aggregate_0 = event.type | limit 100000",
+  filter: null,
+}
+{
+  scope: "aggregate_rejected",
+  status: 200,
+  type: "PQ",
+  query: "| columns timestamp, dataSource.name, event.type",
+  filter: null,
+}

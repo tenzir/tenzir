@@ -1,0 +1,6 @@
+// The `where` behind the rename goes into the source as a predicate over the
+// source field, so `from_duckdb` still takes over the `summarize`.
+from_duckdb "events.duckdb", table="events"
+select ip=src_ip, level=severity
+where level >= 3
+summarize ip, events=count()

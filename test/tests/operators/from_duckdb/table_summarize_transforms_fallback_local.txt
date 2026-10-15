@@ -1,0 +1,38 @@
+warning: cannot access field of non-record type
+ --> tests/operators/from_duckdb/table_summarize_transforms_fallback_local.tql:5:28
+  |
+5 | select key=score, id, port=meta.port
+  |                            ~~~~ not a record
+  ⋮
+5 | select key=score, id, port=meta.port
+  |                                 ----
+  |
+
+warning: record does not have field
+ --> tests/operators/from_duckdb/table_summarize_transforms_fallback_local.tql:5:28
+  |
+5 | select key=score, id, port=meta.port
+  |                            ~~~~
+  ⋮
+5 | select key=score, id, port=meta.port
+  |                                 ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning
+{
+  key: -2.0,
+  n: 1,
+  first: 3,
+  port: null,
+}
+{
+  key: 1.5,
+  n: 1,
+  first: 1,
+  port: 80,
+}
+{
+  key: null,
+  n: 1,
+  first: 2,
+  port: 443,
+}
