@@ -1,0 +1,6 @@
+{
+  ike: {
+    role: "initiator",
+    alg_prf: "prf-hmac-sha256",
+  },
+}

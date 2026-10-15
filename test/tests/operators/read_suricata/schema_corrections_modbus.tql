@@ -1,0 +1,2 @@
+from_stdin { read_suricata }
+| select modbus.request.exception.code, modbus.request.diagnostic.code, modbus.request.mei.code

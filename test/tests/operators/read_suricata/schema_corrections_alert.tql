@@ -1,0 +1,2 @@
+from_stdin { read_suricata }
+| select app_proto, alert.action, alert.signature

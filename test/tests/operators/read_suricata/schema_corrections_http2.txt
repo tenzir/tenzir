@@ -1,0 +1,9 @@
+{
+  http: {
+    http2: {
+      request: {
+        has_multiple: "headers",
+      },
+    },
+  },
+}

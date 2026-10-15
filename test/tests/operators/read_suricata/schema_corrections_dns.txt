@@ -1,0 +1,10 @@
+{
+  dns: {
+    type: "request",
+  },
+}
+{
+  dns: {
+    type: "response",
+  },
+}

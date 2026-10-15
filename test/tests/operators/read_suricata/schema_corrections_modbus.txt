@@ -1,0 +1,15 @@
+{
+  modbus: {
+    request: {
+      exception: {
+        code: "illegal_function",
+      },
+      diagnostic: {
+        code: "return_query_data",
+      },
+      mei: {
+        code: "read_device_id",
+      },
+    },
+  },
+}

@@ -1,0 +1,1 @@
+{"event_type":"modbus","modbus":{"request":{"exception":{"raw":1,"code":"illegal_function"},"diagnostic":{"raw":2,"code":"return_query_data","data":"probe"},"mei":{"raw":3,"code":"read_device_id","data":"identity"}}}}

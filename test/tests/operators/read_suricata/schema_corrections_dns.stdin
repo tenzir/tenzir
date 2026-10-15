@@ -1,0 +1,2 @@
+{"event_type":"dns","dns":{"type":"request"}}
+{"event_type":"dns","dns":{"type":"response"}}

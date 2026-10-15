@@ -44,7 +44,6 @@ type suricata.component.flow = record {
     bytes_toserver: uint64,
     bytes_toclient: uint64
   },
-  tcp: suricata.component.tcp,
   emergency: bool
 }
 
@@ -113,7 +112,6 @@ type suricata.quic = suricata.component.common + record {
 
 type suricata.alert = suricata.component.common + record {
   alert: record {
-    app_proto: string,
     action: enum {
       allowed,
       blocked
@@ -308,7 +306,9 @@ type suricata.dns = suricata.component.common + record {
     version: uint64,
     type: enum {
       answer,
-      query
+      query,
+      request,
+      response
     },
     id: uint64 #index=hash,
     flags: string,
@@ -562,19 +562,9 @@ type suricata.http2_header = record {
 
 type suricata.http2_stream = record {
   settings: list<suricata.http2_setting>,
-  headers: list<suricata.http2_header>,
   error_code: string,
-  has_multiple: bool,
+  has_multiple: string,
   priority: uint64
-}
-
-type suricata.http2 = suricata.component.common + record {
-  tx_id: uint64 #index=hash,
-  http2: record {
-    stream_id: uint64,
-    request: suricata.http2_stream,
-    response: suricata.http2_stream
-  }
 }
 
 type suricata.fileinfo = suricata.component.common + record {
@@ -609,6 +599,7 @@ type suricata.fileinfo = suricata.component.common + record {
 
 type suricata.flow = suricata.component.common + record {
   flow: suricata.component.flow,
+  tcp: suricata.component.tcp
 }
 
 type suricata.frame = suricata.component.common + record {
@@ -668,6 +659,7 @@ type suricata.ike = suricata.component.common + record {
     message_id: uint64,
     exchange_type: uint64,
     exchange_type_verbose: string,
+    role: string,
     sa_life_type: string,
     sa_life_type_raw: uint64,
     sa_life_duration: string,
@@ -680,6 +672,7 @@ type suricata.ike = suricata.component.common + record {
     alg_auth_raw: uint64,
     alg_dh: string,
     alg_dh_raw: uint64,
+    alg_prf: string,
     sa_key_length: string,
     sa_key_length_raw: uint64,
     alg_esn: string,
@@ -705,7 +698,6 @@ type suricata.ike = suricata.component.common + record {
       vendor_ids: list<string>
     },
     ikev2: record {
-      role: string,
       errors: uint64,
       notify: list<string>
     }
@@ -1063,44 +1055,37 @@ type suricata.mqtt = suricata.component.common + record {
   }
 }
 
+type suricata.modbus_message = record {
+  transaction_id: uint64,
+  protocol_id: uint64,
+  unit_id: uint64,
+  function_code: string,
+  function_raw: uint64,
+  access_type: string,
+  category: string,
+  error_flags: string,
+  exception: record {
+    raw: uint64,
+    code: string
+  },
+  diagnostic: record {
+    raw: uint64,
+    code: string,
+    data: string
+  },
+  mei: record {
+    raw: uint64,
+    code: string,
+    data: string
+  }
+}
+
 type suricata.modbus = suricata.component.common + record {
   tx_id: uint64 #index=hash,
   modbus: record {
     id: uint64,
-    request: record {
-      transaction_id: uint64,
-      protocol_id: uint64,
-      unit_id: uint64,
-      function_code: string,
-      function_raw: uint64,
-      access_type: string,
-      category: string,
-      error_flags: string
-    },
-    response: record {
-      transaction_id: uint64,
-      protocol_id: uint64,
-      unit_id: uint64,
-      function_code: string,
-      function_raw: uint64,
-      access_type: string,
-      category: string,
-      error_flags: string
-    },
-    exception: record {
-      raw: uint64,
-      code: string
-    },
-    diagnostic: record {
-      raw: uint64,
-      code: string,
-      data: string
-    },
-    mei: record {
-      raw: uint64,
-      code: string,
-      data: string
-    }
+    request: suricata.modbus_message,
+    response: suricata.modbus_message
   }
 }
 
@@ -1112,6 +1097,7 @@ type suricata.netflow = suricata.component.common + record {
     end: time,
     age: uint64
   },
+  tcp: suricata.component.tcp,
   app_proto: string
 }
 
@@ -1285,7 +1271,7 @@ type suricata.rdp = suricata.component.common + record {
       build: string,
       client_name: string,
       function_keys: uint64,
-      product_id: string,
+      product_id: uint64,
       capabilities: list<string>,
       connection_hint: string,
       ime: string,

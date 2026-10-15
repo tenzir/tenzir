@@ -1,0 +1,1 @@
+{"event_type":"alert","app_proto":"http","alert":{"action":"allowed","signature":"test"}}

@@ -1,0 +1,2 @@
+from_stdin { read_suricata }
+| select http.http2.request.has_multiple

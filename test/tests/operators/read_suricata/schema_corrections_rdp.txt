@@ -1,0 +1,7 @@
+{
+  rdp: {
+    client: {
+      product_id: 42,
+    },
+  },
+}
