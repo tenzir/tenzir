@@ -1,0 +1,12 @@
+{
+  code: "EVENT-ADD",
+  known: true,
+}
+{
+  code: "EVENT-DEL",
+  known: true,
+}
+{
+  code: "EVENT-REN",
+  known: false,
+}

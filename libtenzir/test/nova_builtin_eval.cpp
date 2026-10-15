@@ -427,6 +427,33 @@ TEST("has on a non-record column warns with the type") {
   CHECK_EQUAL(diags[0].message, "expected `record`, got `int`");
 }
 
+TEST("has looks up a field name that differs between rows") {
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto row = builder.record();
+    row.field("x").record().field("a").data(Int{1});
+    row.field("name").data(std::string{"a"});
+  }
+  {
+    auto row = builder.record();
+    row.field("x").record().field("a").data(Int{2});
+    row.field("name").data(std::string{"b"});
+  }
+  {
+    auto row = builder.record();
+    row.field("x").record().field("a").data(Int{3});
+    row.field("name").null();
+  }
+  auto events = make_events(builder.finish());
+  auto dh = collecting_diagnostic_handler{};
+  auto result = eval(call("has", {root_field("x"), root_field("name")}), events,
+                     storage::BitMap{3, true}, dh);
+  CHECK_EQUAL(bool_at(result, 0), Option{true});
+  CHECK_EQUAL(bool_at(result, 1), Option{false});
+  CHECK(is_null_at(result, 2));
+  CHECK(std::move(dh).collect().empty());
+}
+
 TEST("trimming rewrites spans while sharing the input characters") {
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("x").data(std::string{"  alpha  "});

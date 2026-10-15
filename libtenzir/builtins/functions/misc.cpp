@@ -651,7 +651,8 @@ public:
 
 struct HasArgs {
   nova::ValueArgument x;
-  located<std::string> field;
+  nova::ValueArgument field;
+  location call;
 };
 
 class HasFunction final {
@@ -659,12 +660,38 @@ public:
   static auto eval(HasArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
     using namespace nova;
+    using ConstantString
+      = storage::ConstantStorage<typename Type<String>::DataType,
+                                 typename Type<String>::ViewType>;
+    if (auto names = args.field.data.try_as<String>()) {
+      if (auto const* name = try_as<ConstantString>(names->storage())) {
+        return eval_constant(args, name->get(0), frame);
+      }
+    }
+    // The name differs between rows, such as when it comes from a field of the
+    // input, so look it up row by row.
+    return apply_kernel<2>(frame, "has", {args.x, args.field}, args.call,
+                           [](diagnostic_handler&, RowView<Record> record,
+                              std::string_view name) -> Option<Bool> {
+                             for (auto const& field : record) {
+                               if (field.first == name) {
+                                 return true;
+                               }
+                             }
+                             return false;
+                           });
+  }
+
+private:
+  static auto eval_constant(HasArgs const& args, std::string_view name,
+                            nova::EvalFrame frame) -> nova::Array<nova::Data> {
+    using namespace nova;
     auto const& present = frame.mask();
     auto subject = args.x;
     auto const none = storage::BitMap{present.length(), false};
     auto has_field = [&](Array<Record> const& rec,
                          storage::BitMap const& rows) -> storage::BitMap {
-      auto field = rec.field(args.field.inner);
+      auto field = rec.field(name);
       return field ? field->present & rows : none;
     };
     return match(
@@ -714,7 +741,8 @@ public:
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<HasArgs, HasFunction>{};
     d.positional("x", &HasArgs::x, "record");
-    d.positional("field", &HasArgs::field);
+    d.positional("field", &HasArgs::field, "string");
+    d.call_location(&HasArgs::call);
     return std::move(d).finish();
   }
 
