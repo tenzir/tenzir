@@ -176,6 +176,14 @@ directories, including internal helper headers; do not use relative includes.
 - [executor.md](.agents/references/executor.md): Executor and pipeline execution
 - [operator-review.md](.agents/references/operator-review.md): TQL operator review checklist
 
+### Cancellation
+
+Cancellation is always the fast path. A cancelled task stops promptly and does
+only the cleanup that memory safety requires, such as joining what it spawned.
+When an API also needs a slow, graceful stop, such as draining connections,
+flushing, or publishing pending state, have it take a `StopFlag`
+(`tenzir/async/stop_flag.hpp`). Do not repurpose cancellation for it.
+
 ### Rust-inspired vocabulary and helpers
 
 Prefer these Tenzir abstractions over direct standard-library use in new code
