@@ -130,13 +130,6 @@ else ()
   set(CMAKE_POSITION_INDEPENDENT_CODE "${_pic_before}")
   unset(_pic_before)
 
-  # iceberg-cpp generates version.h into ${CMAKE_BINARY_DIR}/src/iceberg, which
-  # is only correct when it is the top-level project; its include paths expect
-  # the file relative to its own binary dir.
-  file(COPY_FILE "${CMAKE_BINARY_DIR}/src/iceberg/version.h"
-       "${CMAKE_CURRENT_BINARY_DIR}/aux/iceberg-cpp/src/iceberg/version.h"
-       ONLY_IF_DIFFERENT)
-
   # iceberg-cpp enables CMAKE_COMPILE_WARNING_AS_ERROR for its own targets; we
   # do not want a vendored dependency to break our build on new compiler
   # warnings.

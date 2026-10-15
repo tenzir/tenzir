@@ -12,6 +12,7 @@
   nanoarrow,
   nlohmann_json,
   spdlog,
+  utf8proc,
   curl,
   openssl,
   zlib,
@@ -22,16 +23,17 @@
 
 stdenv.mkDerivation {
   pname = "iceberg-cpp";
-  # Development pin of apache/iceberg-cpp main (D2 in the to_iceberg plan);
-  # re-pin to the voted 0.4.0 release artifact before promoting the operator
+  # Development pin of apache/iceberg-cpp main (D2 in the to_iceberg plan)
+  # after 0.4.0, which lacks the manifest header fix (apache/iceberg-cpp#1017);
+  # re-pin to the voted 0.5.0 release artifact before promoting the operator
   # to stable.
-  version = "0.4.0-unstable-2026-07-04";
+  version = "0.5.0-unstable-2026-10-15";
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "iceberg-cpp";
-    rev = "131f9763ecca8b5985e48bb06a957b4bebc6779f";
-    hash = "sha256-ScNb35HlK2NfdTLaOOrC+EPv1h9F30XWPjaQ2TyNNtY=";
+    rev = "7686cfeae7e735980405b20a2eb7f88b76f0ff6f";
+    hash = "sha256-HNN64wSpPQHy4rYqH+r95KTHCLTtIZ20QxVKfp+gmiM=";
   };
 
   nativeBuildInputs = [
@@ -48,9 +50,8 @@ stdenv.mkDerivation {
     lz4
   ];
 
-  # Upstream fixes shared with the bundled CMake fallback:
-  # - The installed CMake config records the system Avro dependency as
-  #   `Avro`, but avro-cpp installs `avro-cpp-config.cmake`.
+  # Upstream fixes shared with the bundled CMake fallback (the Avro target
+  # reuse and CRoaring amalgamation hunks only affect the bundled build):
   # - EnsureS3Initialized() fails (and caches the failure) when the host
   #   application already initialized Arrow's S3 subsystem, which Tenzir's
   #   s3 plugin always does.
@@ -58,6 +59,7 @@ stdenv.mkDerivation {
   #   field type, but LiteralCaster::CastTo refuses null literals, so any
   #   data file with a null partition value fails to commit. The stats
   #   themselves handle null fine (contains_null); feed it directly.
+  # - url_encoder.cc uses int8_t without including <cstdint>.
   # - A commit POST whose response never arrives surfaced as a generic REST
   #   error, so Transaction::Commit's cleanup deleted the manifest list even
   #   though the server may have committed it; report the no-response case
@@ -66,19 +68,12 @@ stdenv.mkDerivation {
   #   transparently re-send a commit whose response was lost.
   patches = [ ../../plugins/iceberg/aux/iceberg-cpp.patch ];
 
-  postPatch = ''
-    substituteInPlace CMakeLists.txt \
-      --replace-fail \
-        'set(CMAKE_COMPILE_WARNING_AS_ERROR ON)' \
-        'set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)'
-  '';
-
   # Exactly the ICEBERG_SYSTEM_DEPENDENCIES that the installed
   # iceberg-config.cmake runs find_dependency() over at consumer configure
   # time, so the non-static build needs them propagated: "ZLIB;nanoarrow;
-  # roaring;nlohmann_json;spdlog;Threads;AWSSDK;Arrow;Parquet;avro-cpp;
-  # zstd;cpr" -- Threads is system-provided, and Arrow plus Parquet both
-  # resolve to arrow-cpp.
+  # roaring;utf8proc;nlohmann_json;spdlog;Threads;AWSSDK;Arrow;Parquet;
+  # avro-cpp;zstd;cpr" -- Threads is system-provided, and Arrow plus Parquet
+  # both resolve to arrow-cpp.
   propagatedBuildInputs = [
     arrow-cpp
     avro-cpp
@@ -88,11 +83,15 @@ stdenv.mkDerivation {
     nanoarrow
     nlohmann_json
     spdlog
+    utf8proc
     zlib
     zstd
   ];
 
   cmakeFlags = [
+    # Upstream sets COMPILE_WARNING_AS_ERROR on its own targets; new compiler
+    # warnings must not break the dependency build.
+    "--compile-no-warning-as-error"
     "-DICEBERG_BUILD_STATIC=ON"
     "-DICEBERG_BUILD_SHARED=OFF"
     "-DICEBERG_BUILD_TESTS=OFF"
@@ -118,19 +117,16 @@ stdenv.mkDerivation {
     "-DLZ4_STATIC_LIB=${lib.getLib lz4}/lib/liblz4.a"
   ];
 
-  # Upstream's header install list misses the first two, but the installed
-  # rest_catalog.h includes session_catalog.h. arrow_io_internal.h is
-  # excluded as internal, but its ArrowFileSystemFileIO is bundle-exported
-  # and Tenzir's iceberg plugin wraps it around Arrow's GcsFileSystem to
-  # back gs:// table locations until upstream grows a native GCS FileIO.
+  # Upstream installs all headers except those named *internal*.
+  # arrow_io_internal.h is excluded, but its ArrowFileSystemFileIO is
+  # bundle-exported and Tenzir's iceberg plugin wraps it around Arrow's
+  # GcsFileSystem to back gs:// table locations until upstream grows a
+  # native GCS FileIO.
   # sigv4_auth_manager_internal.h is likewise internal, but its
   # SigV4AuthSession is rest-exported and Tenzir's iceberg plugin signs
   # managed AWS catalog requests with it through a live credentials
   # provider.
   postInstall = ''
-    install -m 644 -Dt $out/include/iceberg/catalog \
-      ../src/iceberg/catalog/session_catalog.h \
-      ../src/iceberg/catalog/session_context.h
     install -m 644 -Dt $out/include/iceberg/arrow \
       ../src/iceberg/arrow/arrow_io_internal.h
     install -m 644 -Dt $out/include/iceberg/catalog/rest/auth \

@@ -13,13 +13,13 @@
 # consumes via find_package(avro-cpp CONFIG).
 stdenv.mkDerivation {
   pname = "avro-cpp";
-  version = "1.13.0-unstable-2026-05-12";
+  version = "1.13.0-unstable-2026-10-14";
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "avro";
-    rev = "997d50d312613e921598aaed30b082f9bcf9c6ea";
-    hash = "sha256-5iZDYiolvkDAw2WJY+BBuS+sjuHniW+5k6dwqOFzNuY=";
+    rev = "3a207fa6e87c535b95eafca4cf5a6ef524d77df2";
+    hash = "sha256-Oe7K8LC2Gf0TRmsOx+r5f4oc1YdtjN7ZbeRWS6NFl7w=";
   };
 
   sourceRoot = "source/lang/c++";

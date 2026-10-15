@@ -8,11 +8,11 @@
 
 stdenv.mkDerivation rec {
   pname = "nanoarrow";
-  version = "0.8.0";
+  version = "0.9.0";
 
   src = fetchurl {
     url = "https://archive.apache.org/dist/arrow/apache-arrow-nanoarrow-${version}/apache-arrow-nanoarrow-${version}.tar.gz";
-    hash = "sha256-bmHigZyROOkJK6MrVo7W9FlJKLMGFxk3JR6qr6fcK4w=";
+    hash = "sha256-gBIAoOlehp1cS961tTXbpYVRSCu3grfci9WZyLboys8=";
   };
 
   nativeBuildInputs = [

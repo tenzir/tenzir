@@ -10,9 +10,11 @@
 
 #include "tenzir/plugins/iceberg/detail/file_io.hpp"
 
+#include <tenzir/atomic.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/api.h>
@@ -34,9 +36,11 @@
 #include <iceberg/catalog/rest/http_request.h>
 #include <iceberg/catalog/rest/rest_catalog.h>
 #include <iceberg/data/data_writer.h>
+#include <iceberg/data_table_scan.h>
 #include <iceberg/expression/literal.h>
 #include <iceberg/file_io_registry.h>
 #include <iceberg/location_provider.h>
+#include <iceberg/logging/logger.h>
 #include <iceberg/manifest/manifest_entry.h>
 #include <iceberg/parquet/parquet_register.h>
 #include <iceberg/partition_field.h>
@@ -91,6 +95,58 @@ constexpr auto gcp_auth_type = std::string_view{"gcp"};
 /// same live AWS credentials provider used by the S3 data plane.
 constexpr auto aws_auth_type = std::string_view{"tenzir-aws-sigv4"};
 
+/// Routes iceberg-cpp's log records into Tenzir's logger. Without it,
+/// iceberg-cpp logs through its own spdlog logger to stdout, where the records
+/// mix with pipeline output. iceberg-cpp reports failures through its result
+/// values, which surface as diagnostics; its info and warning records cover
+/// routine progress and recovered conditions, such as successful commits,
+/// internal commit retries, and failed cleanup of staged files, so they go to
+/// the verbose log.
+class IcebergLogger final : public ice::Logger {
+public:
+  auto ShouldLog(ice::LogLevel level) const noexcept -> bool override {
+    return level != ice::LogLevel::kOff
+           and level >= level_.load(std::memory_order_relaxed);
+  }
+
+  auto Log(ice::LogMessage&& message) noexcept -> void override {
+    try {
+      switch (message.level) {
+        case ice::LogLevel::kTrace:
+          TENZIR_TRACE("iceberg: {}", message.message);
+          break;
+        case ice::LogLevel::kDebug:
+          TENZIR_DEBUG("iceberg: {}", message.message);
+          break;
+        case ice::LogLevel::kInfo:
+        case ice::LogLevel::kWarn:
+          TENZIR_VERBOSE("iceberg: {}", message.message);
+          break;
+        case ice::LogLevel::kError:
+        case ice::LogLevel::kCritical:
+        case ice::LogLevel::kFatal:
+          TENZIR_ERROR("iceberg: {}", message.message);
+          break;
+        case ice::LogLevel::kOff:
+          break;
+      }
+    } catch (...) {
+      // Logging must not throw into iceberg-cpp.
+    }
+  }
+
+  auto SetLevel(ice::LogLevel level) noexcept -> void override {
+    level_.store(level, std::memory_order_relaxed);
+  }
+
+  auto level() const noexcept -> ice::LogLevel override {
+    return level_.load(std::memory_order_relaxed);
+  }
+
+private:
+  Atomic<ice::LogLevel> level_ = ice::LogLevel::kTrace;
+};
+
 #ifdef TENZIR_ICEBERG_GCS
 
 /// Stamps a catalog request with a Google OAuth2 bearer token.
@@ -131,7 +187,7 @@ private:
 class GcpAuthManager final : public ice::rest::auth::AuthManager {
 public:
   auto
-  CatalogSession(ice::rest::HttpClient& client,
+  CatalogSession(std::shared_ptr<ice::rest::HttpClient> client,
                  std::unordered_map<std::string, std::string> const& properties)
     -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
     TENZIR_UNUSED(client);
@@ -272,7 +328,7 @@ public:
       service_{std::move(service)} {
   }
 
-  auto CatalogSession(ice::rest::HttpClient&,
+  auto CatalogSession(std::shared_ptr<ice::rest::HttpClient>,
                       std::unordered_map<std::string, std::string> const&)
     -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
     auto initialized = ice::rest::auth::InitializeAwsSdk();
@@ -409,12 +465,16 @@ auto ensure_registered() -> void {
   // linker may drop when linking the static archives, so register explicitly.
   static std::once_flag flag;
   std::call_once(flag, [] {
+    ice::SetDefaultLogger(std::make_shared<IcebergLogger>());
     ice::arrow::RegisterAll();
     ice::parquet::RegisterAll();
     ice::avro::RegisterAll();
     ice::rest::auth::AuthManagers::Register(aws_auth_type,
                                             make_aws_auth_manager);
-    ice::FileIORegistry::Register(std::string{s3_file_io}, make_s3_file_io);
+    // Without an `accepts` callback, the custom FileIOs load only through an
+    // explicit `io-impl` and never take over scheme-based resolution.
+    ice::FileIORegistry::Register(
+      std::string{s3_file_io}, {.create = make_s3_file_io, .accepts = nullptr});
 #ifdef TENZIR_ICEBERG_GCS
     ice::rest::auth::AuthManagers::Register(
       gcp_auth_type,
@@ -422,7 +482,9 @@ auto ensure_registered() -> void {
         -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
         return std::make_unique<GcpAuthManager>();
       });
-    ice::FileIORegistry::Register(std::string{gcs_file_io}, make_gcs_file_io);
+    ice::FileIORegistry::Register(std::string{gcs_file_io},
+                                  {.create = make_gcs_file_io,
+                                   .accepts = nullptr});
 #endif
   });
 }
@@ -1025,9 +1087,8 @@ auto open_catalog(CatalogConfig config)
   // Explicit S3 settings win so that S3-compatible access to non-S3 stores
   // (e.g. GCS interop with HMAC keys) keeps working; without them, Google
   // authentication implies the native GCS data plane. Otherwise, leave
-  // `io-impl` unset so iceberg-cpp detects it from the final warehouse after
-  // merging the REST server configuration; when that merge yields neither
-  // property, retry below with the local filesystem.
+  // `io-impl` unset so iceberg-cpp resolves the FileIO from the scheme of each
+  // accessed location.
   auto const selection = file_io::select_file_io(config);
   auto const has_aws_credentials = config.aws_credentials_provider != nullptr;
   auto aws_credentials_guard = std::shared_ptr<void>{};
@@ -1091,14 +1152,6 @@ auto open_catalog(CatalogConfig config)
     properties.mutable_configs()[key] = value;
   }
   auto rest_catalog = ice::rest::RestCatalog::Make(properties);
-  if (not rest_catalog.has_value()
-      and rest_catalog.error().kind == ice::ErrorKind::kInvalidArgument
-      and file_io::should_fall_back_to_local(selection,
-                                             rest_catalog.error().message)) {
-    properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
-                   std::string{ice::FileIORegistry::kArrowLocalFileIO});
-    rest_catalog = ice::rest::RestCatalog::Make(properties);
-  }
   if (not rest_catalog.has_value()) {
     return std::unexpected{translate_error(rest_catalog.error())};
   }
