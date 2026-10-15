@@ -302,7 +302,8 @@ auto into_data_member(Data value, location source) -> T {
   }
 }
 
-/// Converts a resolved-secret AST node or a constant secret to Secret.
+/// Converts a resolved-secret AST node, a constant secret, or a constant string
+/// or blob to Secret.
 auto prepare_secret(ast::expression& expr, InstantiateCtx ctx)
   -> failure_or<located<Secret>>;
 /// Turns a constant into the representation of a member of type `Member`.

@@ -174,12 +174,24 @@ auto _::prepare_secret(ast::expression& expr, InstantiateCtx ctx)
   if (auto const* resolved = try_as<Secret>(&constant)) {
     return located<Secret>{*resolved, expr.get_location()};
   }
-  // Plain values would put the sensitive value into the pipeline definition,
-  // so secret arguments accept only secrets and values derived from them.
+  // Like operator arguments of type `secret`, plain strings and blobs are
+  // promoted to secrets.
+  auto const promote = [&](std::span<std::byte const> bytes) {
+    return located<Secret>{
+      Secret{ecc::cleansing_blob{bytes.begin(), bytes.end()}},
+      expr.get_location(),
+    };
+  };
+  if (auto const* str = try_as<String>(&constant)) {
+    return promote(std::as_bytes(std::span{*str}));
+  }
+  if (auto const* blob = try_as<Blob>(&constant)) {
+    return promote(std::span{*blob});
+  }
   auto const actual = match(constant, []<class V>(V const&) {
     return Type<V>::static_name;
   });
-  diagnostic::error("expected a secret, but got `{}`", actual)
+  diagnostic::error("expected a secret, string, or blob, but got `{}`", actual)
     .primary(expr)
     .hint("use `secret(\"name\")` to read the value from a secret store")
     .emit(ctx);

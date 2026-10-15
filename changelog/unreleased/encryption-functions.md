@@ -12,7 +12,7 @@ New functions encrypt and decrypt values in pipelines, so that you can protect s
 - `encrypt_hpke` encrypts with a public key (RFC 9180), so that pipelines can protect data that only the holder of the private key can read.
 - `encrypt_ff1` provides format-preserving encryption (NIST SP 800-38G). The output keeps the length and alphabet of the input, and characters outside the alphabet stay in place.
 
-Every function has a `decrypt_*` counterpart. Keys must be secrets, except for the public key of `encrypt_hpke`. The optional `aad` and `tweak` arguments bind ciphertexts to their context:
+Every function has a `decrypt_*` counterpart. Read keys from a secret store, so that they stay out of pipeline definitions. Plain strings and blobs also work as keys. The optional `aad` and `tweak` arguments bind ciphertexts to their context:
 
 ```tql
 let $key = secret("pii-key").decode_hex()

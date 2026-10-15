@@ -1,6 +1,3 @@
----
-error: true
----
-// The private key of HPKE must be a secret as well.
+// The private key of HPKE also accepts a plain value.
 from {}
-x = decrypt_hpke("x", private_key=decode_hex("c8b5a8a159dc630b7894cea4add7d1478dbe0dc720744e8db3d3c228e6a4f36a"))
+x = decrypt_hpke(decode_hex("8e17ed32defd75eeaf0482e1a9531e6b684b5352717552662703bf00e47d163fe658d8d3d2cf439403d669fbcc344175e3dbfa793267"), private_key=decode_hex("c8b5a8a159dc630b7894cea4add7d1478dbe0dc720744e8db3d3c228e6a4f36a"), aad="tenant-a").string()

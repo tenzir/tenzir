@@ -1,16 +1,16 @@
 ---
 title: Secret keys for hmac
-type: change
+type: feature
 authors:
   - mavam
 created: 2026-10-08T19:10:06.576444Z
 ---
 
-The key of `hmac` must now be a secret, so that it stays out of pipeline definitions. Read the key from a secret store instead of passing a string:
+The key of `hmac` can now be a secret, so that it stays out of pipeline definitions:
 
 ```tql
 from {user: "alice"}
 user = hmac(user, secret("hmac-key"))
 ```
 
-A plain string key is an error when the pipeline starts. Transformations of a secret, such as `secret("hmac-key").decode_hex()`, still count as secrets.
+Transformations of a secret, such as `secret("hmac-key").decode_hex()`, still count as secrets. Plain string and blob keys continue to work.

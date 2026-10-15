@@ -1,6 +1,7 @@
----
-error: true
----
-// The seed must be a secret, so that it stays out of the pipeline definition.
-from {}
-x = 192.0.2.1.encrypt_cryptopan(seed="000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+// The seed also accepts a plain blob, which behaves like a secret with the
+// same bytes.
+let $seed = decode_hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+from {x: 192.0.2.1}
+y = x.encrypt_cryptopan(seed=$seed)
+assert y == x.encrypt_cryptopan(seed=secret("cryptopan-key").decode_hex())
+assert y.decrypt_cryptopan(seed=$seed) == x
