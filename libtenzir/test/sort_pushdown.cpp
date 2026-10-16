@@ -7,6 +7,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 
@@ -18,7 +19,7 @@ namespace {
 
 auto expression_from(std::string_view text) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto expr = parse_expression_with_location_override(text, location::unknown,
                                                       provider.as_session());
   REQUIRE(expr);
@@ -33,7 +34,7 @@ auto projection() -> Option<ir::OptimizeProjection> {
 
 auto compile_sort(base_ctx ctx, std::string_view text
                                 = "sort nested.key, -other") -> ir::pipeline {
-  auto provider = session_provider::make(ctx);
+  auto provider = session_provider::make(ctx.dh(), ctx.reg());
   auto ast = parse_pipeline_with_location_override(text, location::unknown,
                                                    provider.as_session());
   REQUIRE(ast);
@@ -54,14 +55,14 @@ auto serialize(auto const& value) -> caf::byte_buffer {
 
 TEST("sort moves every filter before selection and retains key dependencies") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
-  auto optimized
-    = compile_sort(ctx).optimize({.filter = {expression_from("keep == true")},
-                                  .order = EventOrder::ordered,
-                                  .limit = uint64_t{2},
-                                  .projection = projection()},
-                                 {});
+  auto optimized = compile_sort(ctx).optimize(
+    {.filter = {expression_from("keep == true")},
+     .order = EventOrder::ordered,
+     .limit = uint64_t{2},
+     .projection = projection()},
+    ir::OptimizeCtx{.reg = test::builtin_registry()});
   CHECK_EQUAL(optimized.filter.size(), 1u);
   CHECK(not optimized.limit);
   REQUIRE(optimized.projection);
@@ -74,19 +75,19 @@ TEST("sort moves every filter before selection and retains key dependencies") {
   for (auto text : {"sort", "sort this"}) {
     auto whole = compile_sort(ctx, text).optimize(
       {.filter = {}, .order = EventOrder::ordered, .projection = projection()},
-      {});
+      ir::OptimizeCtx{.reg = test::builtin_registry()});
     CHECK(not whole.projection);
   }
 }
 
 TEST("sort preserves its bound through repeated optimization and replanning") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   auto optimize = [](ir::pipeline pipe, Option<uint64_t> limit) {
     return std::move(pipe)
       .optimize({.filter = {}, .order = EventOrder::ordered, .limit = limit},
-                {})
+                ir::OptimizeCtx{.reg = test::builtin_registry()})
       .replacement;
   };
   auto expected = optimize(compile_sort(ctx), uint64_t{2});
@@ -104,12 +105,12 @@ TEST("sort preserves its bound through repeated optimization and replanning") {
     REQUIRE(plan);
     CHECK_EQUAL(plan->operators.size(), 1u);
   }
-  auto dropped
-    = std::move(refined).optimize({.filter = {expression_from("keep == true")},
-                                   .order = EventOrder::unordered,
-                                   .limit = uint64_t{1},
-                                   .projection = projection()},
-                                  {});
+  auto dropped = std::move(refined).optimize(
+    {.filter = {expression_from("keep == true")},
+     .order = EventOrder::unordered,
+     .limit = uint64_t{1},
+     .projection = projection()},
+    ir::OptimizeCtx{.reg = test::builtin_registry()});
   CHECK(dropped.replacement.operators.empty());
   CHECK_EQUAL(dropped.limit, uint64_t{1});
   CHECK_EQUAL(dropped.filter.size(), 1u);

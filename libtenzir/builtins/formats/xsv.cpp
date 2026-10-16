@@ -1260,7 +1260,7 @@ public:
     };
     // ── Eagerly evaluate the header expression if provided ───────────────────
     if (args_.header) {
-      auto result = const_eval(*args_.header, ctx.dh());
+      auto result = const_eval(*args_.header, ctx);
       if (not result) {
         co_return;
       }

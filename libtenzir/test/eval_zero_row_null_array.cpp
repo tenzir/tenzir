@@ -10,6 +10,7 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -33,14 +34,14 @@ auto make_slice(data row, int64_t rows) -> table_slice {
 
 auto eval_expr(std::string_view src, const table_slice& slice) -> multi_series {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(src, location::unknown, ctx);
   REQUIRE(expr);
   auto resolved = resolve_entities(*expr, ctx);
   REQUIRE(resolved);
-  return eval(*expr, slice, dh);
+  return eval(*expr, slice, base_ctx{dh, test::builtin_registry()});
 }
 
 } // namespace

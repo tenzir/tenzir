@@ -63,77 +63,79 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
 
 } // namespace
 
+auto make_builtin_registry() -> Arc<registry const> {
+  auto init = std::make_shared<registry>();
+  // Modules are exclusive to packages. Native entities must use flat names,
+  // so we reject module-qualified ones instead of creating builtin modules
+  // that would shadow package modules.
+  const auto flat = [](std::string name) -> Option<std::string> {
+    if (name.contains("::")) {
+      return None{};
+    }
+    return name;
+  };
+  // Factory plugins no longer implement operators; they only carry connector,
+  // format, and compression properties. They still contribute names so that
+  // the migration diagnostics in `ir.cpp` can pick them up. Such a name may
+  // be scoped, which must not create a builtin module. If a compiler plugin
+  // registers the flattened name, the two halves belong to the same renamed
+  // operator, so the factory joins it in the standard package. Otherwise the
+  // name exists only under its old spelling, and we park it in the deprecated
+  // package under its flattened name. Only the deprecation relay in
+  // `resolve.cpp` looks there, and only if no module of that name resolved
+  // before.
+  auto flat_ir_names = std::unordered_set<std::string>{};
+  for (const auto* op : plugins::get<operator_compiler_plugin>()) {
+    if (auto name = flat(op->operator_name())) {
+      flat_ir_names.insert(std::move(*name));
+    }
+  }
+  for (const auto* op : plugins::get<operator_factory_plugin>()) {
+    auto name = op->name();
+    auto pkg = entity_pkg_std;
+    if (auto stripped = flat(name)) {
+      name = std::move(*stripped);
+    } else {
+      for (auto pos = name.find("::"); pos != std::string::npos;
+           pos = name.find("::")) {
+        name.replace(pos, 2, "_");
+      }
+      if (not flat_ir_names.contains(name)) {
+        pkg = entity_pkg_deprecated;
+      }
+    }
+    init->add(std::string{pkg}, name, native_operator{nullptr, op});
+  }
+  const auto report_scoped = [](std::string_view name) {
+    TENZIR_ERROR("ignoring native entity `{}`: modules are reserved for "
+                 "packages; use a flat name instead",
+                 name);
+  };
+  for (const auto* op : plugins::get<operator_compiler_plugin>()) {
+    auto name = flat(op->operator_name());
+    if (not name) {
+      report_scoped(op->operator_name());
+      continue;
+    }
+    init->add(std::string{entity_pkg_std}, *name, native_operator{op, nullptr});
+  }
+  for (const auto* fn : plugins::get<function_plugin>()) {
+    auto name = flat(fn->function_name());
+    if (not name) {
+      report_scoped(fn->function_name());
+      continue;
+    }
+    init->add(std::string{entity_pkg_std}, *name, std::ref(*fn));
+  }
+  return Arc<registry const>::from_non_null(std::move(init));
+}
+
 namespace {
 
 auto global_registry_ref() -> std::shared_ptr<const registry>& {
-  static auto* reg = std::invoke([&] -> std::shared_ptr<const registry>* {
-    auto init = std::make_shared<registry>();
-    // Modules are exclusive to packages. Native entities must use flat names,
-    // so we reject module-qualified ones instead of creating builtin modules
-    // that would shadow package modules.
-    const auto flat = [](std::string name) -> Option<std::string> {
-      if (name.contains("::")) {
-        return None{};
-      }
-      return name;
-    };
-    // Factory plugins no longer implement operators; they only carry connector,
-    // format, and compression properties. They still contribute names so that
-    // the migration diagnostics in `ir.cpp` can pick them up. Such a name may
-    // be scoped, which must not create a builtin module. If a compiler plugin
-    // registers the flattened name, the two halves belong to the same renamed
-    // operator, so the factory joins it in the standard package. Otherwise the
-    // name exists only under its old spelling, and we park it in the deprecated
-    // package under its flattened name. Only the deprecation relay in
-    // `resolve.cpp` looks there, and only if no module of that name resolved
-    // before.
-    auto flat_ir_names = std::unordered_set<std::string>{};
-    for (const auto* op : plugins::get<operator_compiler_plugin>()) {
-      if (auto name = flat(op->operator_name())) {
-        flat_ir_names.insert(std::move(*name));
-      }
-    }
-    for (const auto* op : plugins::get<operator_factory_plugin>()) {
-      auto name = op->name();
-      auto pkg = entity_pkg_std;
-      if (auto stripped = flat(name)) {
-        name = std::move(*stripped);
-      } else {
-        for (auto pos = name.find("::"); pos != std::string::npos;
-             pos = name.find("::")) {
-          name.replace(pos, 2, "_");
-        }
-        if (not flat_ir_names.contains(name)) {
-          pkg = entity_pkg_deprecated;
-        }
-      }
-      init->add(std::string{pkg}, name, native_operator{nullptr, op});
-    }
-    const auto report_scoped = [](std::string_view name) {
-      TENZIR_ERROR("ignoring native entity `{}`: modules are reserved for "
-                   "packages; use a flat name instead",
-                   name);
-    };
-    for (const auto* op : plugins::get<operator_compiler_plugin>()) {
-      auto name = flat(op->operator_name());
-      if (not name) {
-        report_scoped(op->operator_name());
-        continue;
-      }
-      init->add(std::string{entity_pkg_std}, *name,
-                native_operator{op, nullptr});
-    }
-    for (const auto* fn : plugins::get<function_plugin>()) {
-      auto name = flat(fn->function_name());
-      if (not name) {
-        report_scoped(fn->function_name());
-        continue;
-      }
-      init->add(std::string{entity_pkg_std}, *name, std::ref(*fn));
-    }
-    // Leak this on purpose to prevent static destruction order fiasco.
-    return new std::shared_ptr<const registry>{std::move(init)}; // NOLINT
-  });
+  // Leak this on purpose to prevent static destruction order fiasco.
+  static auto* reg = new std::shared_ptr<const registry>{
+    make_builtin_registry().into_shared()}; // NOLINT
   return *reg;
 }
 
@@ -145,10 +147,9 @@ auto global_registry_mutex() -> std::shared_mutex& {
 
 } // namespace
 
-auto global_registry() -> std::shared_ptr<const registry> {
+auto global_registry() -> Arc<registry const> {
   auto lock = std::shared_lock{global_registry_mutex()};
-  auto& reg = global_registry_ref();
-  return reg;
+  return Arc<registry const>::from_non_null(global_registry_ref());
 }
 
 auto begin_registry_update() -> registry_update_guard {
@@ -403,17 +404,7 @@ auto registry::clone() const -> std::unique_ptr<registry> {
     auto cloned = clone_module(mod);
     out->roots_.emplace(name, std::move(*cloned));
   }
-  out->packages_root_ = packages_root_;
   return out;
-}
-
-auto registry::packages_root() const -> const entity_pkg& {
-  return packages_root_;
-}
-
-void registry::set_packages_root(entity_pkg root) {
-  TENZIR_ASSERT(not root.empty(), "packages have to be resolved somewhere");
-  packages_root_ = std::move(root);
 }
 
 auto registry::root(const entity_pkg& package) -> module_def& {

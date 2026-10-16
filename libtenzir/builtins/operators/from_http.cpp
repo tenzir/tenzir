@@ -302,8 +302,7 @@ using pagination_spec
 constexpr auto paginate_hint
   = R"(`paginate` must be `"link"`, `"odata"`, or a lambda)";
 
-auto validate_paginate(Option<ast::expression> const& expr,
-                       diagnostic_handler& dh)
+auto validate_paginate(Option<ast::expression> const& expr, base_ctx ctx)
   -> failure_or<Option<pagination_spec>> {
   if (not expr) {
     return None{};
@@ -313,7 +312,7 @@ auto validate_paginate(Option<ast::expression> const& expr,
       diagnostic::error("expected unary lambda")
         .primary(*expr)
         .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return Option<pagination_spec>{pagination_spec{
@@ -321,7 +320,7 @@ auto validate_paginate(Option<ast::expression> const& expr,
       expr->get_location(),
     }};
   }
-  TRY(auto value, const_eval(*expr, dh));
+  TRY(auto value, const_eval(*expr, ctx));
   return match(
     value.inner,
     [&](std::string const& mode) -> failure_or<Option<pagination_spec>> {
@@ -330,7 +329,7 @@ auto validate_paginate(Option<ast::expression> const& expr,
         diagnostic::error("unsupported pagination mode: `{}`", mode)
           .primary(*expr)
           .hint(paginate_hint)
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
       return Option<pagination_spec>{pagination_spec{
@@ -342,7 +341,7 @@ auto validate_paginate(Option<ast::expression> const& expr,
       diagnostic::error("expected `paginate` to be `string` or `lambda`")
         .primary(*expr)
         .hint(paginate_hint)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     });
 }
@@ -551,7 +550,7 @@ auto next_request_from_url(std::string_view url,
 namespace legacy {
 
 auto next_request_from_lambda(PaginationRequestContext const& context,
-                              table_slice const& slice, diagnostic_handler& dh)
+                              table_slice const& slice, base_ctx ctx)
   -> Option<NextRequest> {
   auto const* lambda = try_as<ast::lambda_expr>(&context.spec.inner);
   if (not lambda) {
@@ -561,10 +560,10 @@ auto next_request_from_lambda(PaginationRequestContext const& context,
     diagnostic::warning("cannot paginate over multiple events")
       .primary(context.spec)
       .note("stopping pagination")
-      .emit(dh);
+      .emit(ctx);
     return None{};
   }
-  auto ms = eval(*lambda, series{slice}, dh);
+  auto ms = eval(*lambda, series{slice}, ctx);
   auto value = ms.view3_at(0);
   return match(
     value,
@@ -572,17 +571,17 @@ auto next_request_from_lambda(PaginationRequestContext const& context,
       return None{};
     },
     [&](std::string_view url) -> Option<NextRequest> {
-      return next_request_from_url(url, context, dh);
+      return next_request_from_url(url, context, ctx);
     },
     [&](view3<record> req) -> Option<NextRequest> {
-      return next_request_from_record(materialize(req), context, dh);
+      return next_request_from_record(materialize(req), context, ctx);
     },
     [&](auto const&) -> Option<NextRequest> {
       diagnostic::error("expected `paginate` to be `string`, `record`, or "
                         "`null`, got `{}`",
                         ms.parts().front().type.kind())
         .primary(context.spec)
-        .emit(dh);
+        .emit(ctx);
       return None{};
     });
 }
@@ -1011,7 +1010,7 @@ public:
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     // prepare pagination
-    auto paginate = validate_paginate(args_.paginate, ctx.dh());
+    auto paginate = validate_paginate(args_.paginate, ctx);
     if (not paginate) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -1204,7 +1203,7 @@ public:
         .paginated_headers = resolved_headers_,
         .encode = args_.encode,
       };
-      if (auto next = next_request_from_lambda(context, slice, ctx.dh())) {
+      if (auto next = next_request_from_lambda(context, slice, ctx)) {
         pagination_.next_request = std::move(*next);
       }
     }
@@ -1388,7 +1387,7 @@ public:
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     // prepare pagination
-    auto paginate = validate_paginate(args_.paginate, ctx.dh());
+    auto paginate = validate_paginate(args_.paginate, ctx);
     if (not paginate) {
       lifecycle_ = Lifecycle::done;
       co_return;

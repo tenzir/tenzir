@@ -494,7 +494,7 @@ auto ArgumentStore::substitute(const Description& desc, substitute_ctx ctx,
   // Run custom validation if provided.
   if (desc.validator) {
     auto error_tracker = error_tracking_handler{ctx};
-    auto validate_ctx = describe_ctx(desc, error_tracker);
+    auto validate_ctx = describe_ctx(desc, error_tracker, ctx.reg());
     (*desc.validator)(validate_ctx);
     if (error_tracker.had_error()) {
       return failure::promise();
@@ -652,8 +652,10 @@ auto ArgumentStore::is_resolved(const Description& desc) const -> bool {
 }
 
 auto ArgumentStore::describe_ctx(const Description& desc,
-                                 diagnostic_handler& dh) const -> DescribeCtx {
-  return DescribeCtx{args_, named_args_, pipeline_, desc, main_location(), dh};
+                                 diagnostic_handler& dh,
+                                 registry const& reg) const -> DescribeCtx {
+  return DescribeCtx{args_,           named_args_, pipeline_, desc,
+                     main_location(), dh,          reg};
 }
 
 class GenericIr final : public ir::Operator {
@@ -701,10 +703,10 @@ public:
     return GenericIr{std::move(*this)};
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx dh) const
     -> failure_or<element_type_tag> override {
     if (desc_->spawner) {
-      auto ctx = describe_ctx(dh);
+      auto ctx = describe_ctx(dh, dh.reg());
       TRY(auto spawn, (*desc_->spawner)(input, ctx));
       if (spawn) {
         return match(
@@ -736,15 +738,17 @@ public:
                               aggregation_);
   }
 
-  auto describe_ctx(diagnostic_handler& dh) const -> DescribeCtx {
-    return store_.describe_ctx(*desc_, dh);
+  auto describe_ctx(diagnostic_handler& dh, registry const& reg) const
+    -> DescribeCtx {
+    return store_.describe_ctx(*desc_, dh, reg);
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const& reg) const
+    -> AnyOperator override {
     auto spawner = Option<AnySpawn>{};
     if (desc_->spawner) {
       auto noop_dh = null_diagnostic_handler{};
-      auto ctx = describe_ctx(noop_dh);
+      auto ctx = describe_ctx(noop_dh, reg);
       auto result = (*desc_->spawner)(input, ctx);
       TENZIR_ASSERT(result);
       if (*result) {
@@ -834,7 +838,7 @@ public:
                                               .order = EventOrder::ordered},
                           octx);
           // fork is filter barrier
-          sub.replacement.prepend(std::move(sub.filter));
+          sub.replacement.prepend(std::move(sub.filter), octx.reg);
           pipe->pipeline.inner = std::move(sub.replacement);
           ir::merge_projection(req.projection, sub.projection);
           // only relax upstream ordering if both branches are ok with unordered
@@ -870,7 +874,7 @@ public:
     }
     // run optimizer
     auto noop_dh = null_diagnostic_handler{};
-    auto ctx = describe_ctx(noop_dh);
+    auto ctx = describe_ctx(noop_dh, octx.reg.get());
     auto optimization
       = (*desc_->optimizer)(ctx, ir::OptimizeRequest{
                                    .filter = std::move(filter),
@@ -906,14 +910,15 @@ public:
     if (pipe and desc_->pipeline
         and desc_->pipeline->sub_optimize == SubOptimize::from_downstream) {
       // special case: down stream is the subpipeline
-      pipe->pipeline.inner.prepend(std::move(optimization.filter_self));
+      pipe->pipeline.inner.prepend(std::move(optimization.filter_self),
+                                   octx.reg);
       optimization.filter_self.clear();
     }
     if (not optimization.drop) {
       replacement.emplace_back(std::move(*this));
     }
     for (auto& expr : optimization.filter_self) {
-      replacement.push_back(make_where_ir(expr));
+      replacement.push_back(make_where_ir(expr, octx.reg));
     }
     return {
       .filter = std::move(optimization.filter_upstream),
@@ -941,7 +946,8 @@ public:
     return true;
   }
 
-  auto rewrite_aggregation(ir::OptimizeAggregation aggregation) const
+  auto rewrite_aggregation(ir::OptimizeAggregation aggregation,
+                           ir::OptimizeCtx const& octx) const
     -> Option<ir::OptimizeAggregation> override {
     // Filters and limits that the operator absorbed drop events.
     if (not desc_->rewrite_aggregation or not filter_.empty() or limit_
@@ -949,7 +955,7 @@ public:
       return None{};
     }
     auto noop_dh = null_diagnostic_handler{};
-    auto ctx = describe_ctx(noop_dh);
+    auto ctx = describe_ctx(noop_dh, octx.reg.get());
     return (*desc_->rewrite_aggregation)(ctx, std::move(aggregation));
   }
 

@@ -46,9 +46,6 @@
 
 namespace tenzir {
 
-// Forward declaration to avoid including registry.hpp.
-auto global_registry() -> std::shared_ptr<const registry>;
-
 /// Type-erased pull.
 using AnyOpPull
   = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
@@ -90,8 +87,7 @@ struct OutputPort {
 template <class T>
 class OpPushWrapper final : public Push<T> {
 public:
-  OpPushWrapper(OutputPort& port, diagnostic_handler& dh)
-    : port_{port}, dh_{dh} {
+  OpPushWrapper(OutputPort& port, base_ctx ctx) : port_{port}, ctx_{ctx} {
   }
 
   auto operator()(T output) -> Task<void> override {
@@ -136,7 +132,7 @@ public:
         }
       } else {
         // Shuffle: hash-partition rows by the key expression.
-        auto values = eval(*port_.key, output, dh_);
+        auto values = eval(*port_.key, output, ctx_);
         TENZIR_ASSERT(values.length()
                       == detail::narrow<int64_t>(output.rows()));
         auto jobs = static_cast<uint64_t>(port_.lanes.size());
@@ -164,7 +160,8 @@ public:
         }
       } else {
         // Shuffle: hash-partition the active rows by the key expression.
-        auto values = port_.key_evaluator->eval(output, nova::EvalCtx{dh_});
+        auto values
+          = port_.key_evaluator->eval(output, nova::EvalCtx{ctx_.dh()});
         TENZIR_ASSERT(values.length() == output.length());
         auto jobs = static_cast<uint64_t>(port_.lanes.size());
         for (auto& [bucket, part] :
@@ -179,7 +176,7 @@ public:
 
 private:
   OutputPort& port_;
-  diagnostic_handler& dh_;
+  base_ctx ctx_;
 };
 /// A type-erased stream message: either data or a signal.
 struct AnyOperatorMsg
@@ -481,6 +478,10 @@ public:
     return inner_.checkpoint_settings();
   }
 
+  auto reg() const -> registry const& override {
+    return inner_.reg();
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
     return inner_.make_fused_channel<void>(std::move(id));
@@ -717,7 +718,7 @@ private:
   }
 
   auto reg() -> const registry& override {
-    return *reg_;
+    return exec_ctx_.reg();
   }
 
   auto save_checkpoint(chunk_ptr chunk) -> Task<void> override {
@@ -1229,7 +1230,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_task(std::move(result), ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->process_task(std::move(result), push, ctx_ref);
         }
       });
@@ -1245,7 +1247,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_return co_await op->finalize(ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_return co_await op->finalize(push, ctx_ref);
         }
       });
@@ -1260,7 +1263,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->prepare_snapshot(ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->prepare_snapshot(push, ctx_ref);
         }
       });
@@ -1275,7 +1279,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(slice), ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->process_sub(key, std::move(slice), push, ctx_ref);
         }
       });
@@ -1290,7 +1295,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(chunk), ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->process_sub(key, std::move(chunk), push, ctx_ref);
         }
       });
@@ -1305,7 +1311,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(events), ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->process_sub(key, std::move(events), push, ctx_ref);
         }
       });
@@ -1320,7 +1327,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->finish_sub(key, ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->finish_sub(key, push, ctx_ref);
         }
       });
@@ -1335,7 +1343,8 @@ private:
         if constexpr (std::same_as<Out, void>) {
           co_await op->finish_sub(key, error, ctx_ref);
         } else {
-          auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+          auto push
+            = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
           co_await op->finish_sub(key, error, push, ctx_ref);
         }
       });
@@ -1357,12 +1366,13 @@ private:
             pushes.reserve(push_downstream_.size());
             refs.reserve(push_downstream_.size());
             for (auto& port : push_downstream_) {
-              refs.push_back(&pushes.emplace_back(port, dh()));
+              refs.push_back(&pushes.emplace_back(port, base_ctx{dh(), reg()}));
             }
             auto push = PushPorts<Out>{refs};
             co_await op->process(std::move(input), push, ctx_ref);
           } else {
-            auto push = OpPushWrapper<Out>{push_downstream_[0], dh()};
+            auto push
+              = OpPushWrapper<Out>{push_downstream_[0], base_ctx{dh(), reg()}};
             co_await op->process(std::move(input), push, ctx_ref);
           }
         } else {
@@ -1863,7 +1873,6 @@ private:
   caf::actor_system& sys_;
   bool input_is_void_;
   bool output_is_void_;
-  std::shared_ptr<const registry> reg_ = global_registry();
   folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
 
   size_t next_subpipeline_id_ = 0;
@@ -2072,7 +2081,7 @@ private:
         instances_of[p].push_back(operators_.size());
         instance_of_.push_back(p);
         job_ids_.push_back(JobId{k, planned.parallelism});
-        operators_.push_back(planned.op->spawn(planned.input));
+        operators_.push_back(planned.op->spawn(planned.input, exec_ctx_.reg()));
       }
     }
     // Per-instance gathered input pulls and per-instance output ports (indexed

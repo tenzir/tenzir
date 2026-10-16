@@ -208,7 +208,7 @@ public:
           ir::add_to_projection(projection, path);
         }
         auto split = ir::split_filter_by_substitution(
-          std::move(req.filter), [&](ast::field_path const& field) {
+          std::move(req.filter), ctx.reg(), [&](ast::field_path const& field) {
             return resolve_dropped(dropped, field);
           });
         // A carried limit counts events after the whole filter chain. If we

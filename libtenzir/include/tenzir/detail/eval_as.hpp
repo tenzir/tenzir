@@ -22,24 +22,23 @@ namespace tenzir::detail {
 
 template <typename T>
 auto eval_as(std::string_view name, ast::expression const& expr,
-             table_slice const& slice, diagnostic_handler& dh)
+             table_slice const& slice, base_ctx ctx)
   -> generator<Option<view3<type_to_data_t<T>>>> {
-  return eval_as<T>(name, expr, slice, dh, [] {
+  return eval_as<T>(name, expr, slice, ctx, [] {
     return None{};
   });
 }
 
 template <typename T, class MakeDefault>
 auto eval_as(std::string_view name, ast::expression const& expr,
-             table_slice const& slice, diagnostic_handler& dh,
-             MakeDefault make_default)
+             table_slice const& slice, base_ctx ctx, MakeDefault make_default)
   -> generator<Option<view3<type_to_data_t<T>>>> {
   auto ms = std::invoke([&] {
     if (expr.get_location()) {
-      return eval(expr, slice, dh);
+      return eval(expr, slice, ctx);
     }
     auto ndh = null_diagnostic_handler{};
-    return eval(expr, slice, ndh);
+    return eval(expr, slice, base_ctx{ndh, ctx.reg()});
   });
   for (auto const& s : ms.parts()) {
     if (s.type.kind().template is<null_type>()) {
@@ -73,7 +72,7 @@ auto eval_as(std::string_view name, ast::expression const& expr,
               overflow_warned = true;
               diagnostic::warning("overflow in `{}`, got `{}`", name, *val)
                 .primary(expr)
-                .emit(dh);
+                .emit(ctx);
             }
             co_yield make_default();
             continue;
@@ -85,7 +84,7 @@ auto eval_as(std::string_view name, ast::expression const& expr,
     }
     diagnostic::warning("`{}` must be `{}`, got `{}`", name, T{}, s.type.kind())
       .primary(expr)
-      .emit(dh);
+      .emit(ctx);
     for (auto i = int64_t{}; i < s.length(); ++i) {
       co_yield make_default();
     }

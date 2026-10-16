@@ -229,7 +229,7 @@ public:
     if (startup_failed_) {
       co_return;
     }
-    auto fields = eval(args_.field, input, ctx.dh());
+    auto fields = eval(args_.field, input, ctx);
     auto slice_start = int64_t{0};
     for (auto& field : fields) {
       auto result_series = series{};

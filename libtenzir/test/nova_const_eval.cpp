@@ -14,6 +14,7 @@
 #include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
 #include "tenzir/nova/materialize.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/entity_path.hpp"
@@ -242,7 +243,7 @@ TEST("materialize converts a nested row into legacy data") {
 
 TEST("const_eval rejects secrets") {
   auto dh = collecting_diagnostic_handler{};
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   CHECK(
     not const_eval(call("secret", {constant("k")}), InstantiateCtx{dh, *reg}));
   CHECK_EQUAL(first_error(std::move(dh).collect()),

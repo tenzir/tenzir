@@ -65,7 +65,7 @@ struct arguments {
                     const function_invocation& inv, session ctx)
     -> failure_or<arguments> {
     auto dh = collecting_diagnostic_handler{};
-    auto sp = session_provider::make(dh);
+    auto sp = session_provider::make(dh, ctx.reg());
     auto args = arguments{};
     if (argument_parser2::function(name)
           .positional("list", args.field, "list")
@@ -654,7 +654,8 @@ public:
     return args_.substitute(ctx, instantiate);
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     if (input.is<nova::Events>()) {
       return WhereEvents{args_.get().predicate}.with_name("where");
     }
@@ -662,7 +663,7 @@ public:
     return Where{args_.get().predicate}.with_name("where");
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is<nova::Events>()) {
       return tag_v<nova::Events>;
@@ -671,7 +672,7 @@ public:
       // TODO: Do not duplicate these messages across the codebase.
       diagnostic::error("operator expects events")
         .primary(args_.main_location())
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return tag_v<table_slice>;

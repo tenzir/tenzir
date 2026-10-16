@@ -16,6 +16,7 @@
 #include "tenzir/session.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/tql2/registry.hpp"
 
 #include <string_view>
 
@@ -61,7 +62,8 @@ struct retention_policy {
 
   static auto make(const record& cfg) -> caf::expected<retention_policy> {
     auto dh = collecting_diagnostic_handler{};
-    auto sp = session_provider::make(dh);
+    auto reg = global_registry();
+    auto sp = session_provider::make(dh, *reg);
     auto result = make(cfg, sp.as_session());
     if (not result) {
       return std::move(dh).to_error();

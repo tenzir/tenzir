@@ -212,7 +212,7 @@ public:
       co_await queue_->enqueue(b.finish_assert_one_array());
       co_return;
     }
-    const auto& messages = eval(args_.message, input, ctx.dh());
+    const auto& messages = eval(args_.message, input, ctx);
     for (const auto& s : messages) {
       if (not s.type.kind().is<string_type>()
           and not s.type.kind().is<blob_type>()) {

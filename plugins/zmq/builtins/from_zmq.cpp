@@ -106,7 +106,7 @@ public:
     }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.prefix) {
-      auto prefix = const_eval(*args_.prefix, ctx.dh());
+      auto prefix = const_eval(*args_.prefix, ctx);
       if (not prefix) {
         request_stop();
         co_return;
@@ -489,7 +489,7 @@ public:
       }
       if (auto prefix = ctx.get(prefix_arg)) {
         auto noop_dh = null_diagnostic_handler{};
-        auto value = const_eval(*prefix, noop_dh);
+        auto value = const_eval(*prefix, base_ctx{noop_dh, ctx.reg()});
         if (not value or not is<std::string>(value->inner)) {
           diagnostic::error("`prefix` must be a constant string")
             .primary(prefix->get_location())

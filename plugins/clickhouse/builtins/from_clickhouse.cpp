@@ -455,11 +455,11 @@ struct PreparedQuery {
 /// Pushes as much of `plan`'s hints into a `SELECT` from its table as
 /// `schema` allows.
 auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
-                      Option<ir::OptimizeProjection> const& projection)
-  -> PreparedQuery {
-  auto split
-    = pushdown::split_filter(std::move(plan.optimization.filter),
-                             schema.model(), ClickHouseRenderer{plan.target});
+                      Option<ir::OptimizeProjection> const& projection,
+                      registry const& reg) -> PreparedQuery {
+  auto split = pushdown::split_filter(std::move(plan.optimization.filter),
+                                      schema.model(),
+                                      ClickHouseRenderer{plan.target}, reg);
   // The limit counts events after the whole filter chain, so it can only go
   // into the query if the chain did.
   auto limit = Option<uint64_t>{};
@@ -475,8 +475,8 @@ auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
 
 /// Decides the query text and which predicates stay local. Runs on the
 /// query thread because it may need a round-trip for the schema.
-auto prepare_query(::clickhouse::Client& client, QueryPlan& plan)
-  -> PreparedQuery {
+auto prepare_query(::clickhouse::Client& client, QueryPlan& plan,
+                   registry const& reg) -> PreparedQuery {
   if (not plan.table) {
     // TODO: Weaving hints into user-provided SQL requires parsing it. Until
     // then, everything runs locally.
@@ -492,15 +492,16 @@ auto prepare_query(::clickhouse::Client& client, QueryPlan& plan)
     };
   }
   auto schema = fetch_schema(client, *plan.table);
-  return make_table_query(plan, schema, plan.optimization.projection);
+  return make_table_query(plan, schema, plan.optimization.projection, reg);
 }
 
 /// Like `prepare_query`, but always describes a table to find out whether it
 /// has a catch-all column, whose events need reconstruction.
 auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
-                          diagnostic_handler& dh) -> failure_or<PreparedQuery> {
+                          diagnostic_handler& dh, registry const& reg)
+  -> failure_or<PreparedQuery> {
   if (not plan.table) {
-    return prepare_query(client, plan);
+    return prepare_query(client, plan, reg);
   }
   TRY(auto description, describe_table(client, *plan.table, dh));
   TRY(auto catch_all, make_catch_all_layout(description, dh));
@@ -522,7 +523,7 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
   if (aggregation and not catch_all) {
     auto split
       = pushdown::split_filter(plan.optimization.filter, schema.model(),
-                               ClickHouseRenderer{plan.target});
+                               ClickHouseRenderer{plan.target}, reg);
     if (split.remaining.empty()) {
       if (auto query = make_aggregate_query(*aggregation, schema, *plan.table,
                                             split.pushed, plan.target)) {
@@ -539,7 +540,7 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
   // catch-all, so the query of a catch-all table selects every column.
   auto projection = catch_all ? Option<ir::OptimizeProjection>{}
                               : plan.optimization.projection;
-  auto prepared = make_table_query(plan, schema, projection);
+  auto prepared = make_table_query(plan, schema, projection, reg);
   prepared.catch_all = std::move(catch_all);
   return prepared;
 }
@@ -589,7 +590,7 @@ public:
     });
     // The actual query task.
     ctx.spawn_task([this, options = std::move(*options), plan = std::move(plan),
-                    &dh = ctx.dh(),
+                    &dh = ctx.dh(), &reg = ctx.reg(),
                     loc = args_.operator_location]() mutable -> Task<void> {
       auto transformed_dh = transforming_diagnostic_handler{
         dh, [loc](diagnostic diag) {
@@ -598,7 +599,8 @@ public:
           }
           return diag;
         }};
-      co_await run_query(std::move(options), std::move(plan), transformed_dh);
+      co_await run_query(std::move(options), std::move(plan), transformed_dh,
+                         reg);
     });
   }
 
@@ -623,7 +625,7 @@ public:
         // Predicates without an exact SQL translation run here, with the same
         // semantics as the `where` they came from.
         for (auto const& expr : local_filter_) {
-          slice = filter2(slice, expr, ctx.dh(), false);
+          slice = filter2(slice, expr, ctx, false);
           if (slice.rows() == 0) {
             co_return;
           }
@@ -744,7 +746,7 @@ private:
   }
 
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
-                 diagnostic_handler& dh) -> Task<void> {
+                 diagnostic_handler& dh, registry const& reg) -> Task<void> {
     try {
       auto first_schema = Option<type>{};
       auto const service = backend_names(args_.hydrolix.has_value()).service;
@@ -769,7 +771,7 @@ private:
       };
       co_await spawn_blocking([&]() {
         auto client = ::clickhouse::Client{options};
-        auto prepared = prepare_query(client, plan);
+        auto prepared = prepare_query(client, plan, reg);
         TENZIR_DEBUG("{} runs `{}`",
                      backend_names(args_.hydrolix.has_value()).operator_name,
                      prepared.text);
@@ -866,6 +868,7 @@ public:
     // The actual query task.
     ctx.spawn_task([shared = shared_, connection = std::move(*connection),
                     plan = std::move(plan), tls_enabled, hydrolix, &dh,
+                    &reg = ctx.reg(),
                     loc = args_.operator_location]() mutable -> Task<void> {
       auto transformed_dh = transforming_diagnostic_handler{
         dh, [loc](diagnostic diag) {
@@ -875,8 +878,8 @@ public:
           return diag;
         }};
       co_await run_query(std::move(shared), std::move(connection),
-                         std::move(plan), tls_enabled, hydrolix,
-                         transformed_dh);
+                         std::move(plan), tls_enabled, hydrolix, transformed_dh,
+                         reg);
     });
   }
 
@@ -1090,7 +1093,8 @@ private:
 
   static auto run_query(Arc<Shared> shared, ConnectionArgs connection,
                         QueryPlan plan, bool tls_enabled, bool hydrolix,
-                        diagnostic_handler& dh) -> Task<void> {
+                        diagnostic_handler& dh, registry const& reg)
+    -> Task<void> {
     // Whether the query computes the aggregation, decided before it runs.
     auto aggregated = false;
     try {
@@ -1127,7 +1131,7 @@ private:
           options.SetDefaultDatabase(*connection.default_database);
         }
         auto client = ::clickhouse::Client{options};
-        auto prepared = prepare_events_query(client, plan, dh);
+        auto prepared = prepare_events_query(client, plan, dh, reg);
         if (not prepared) {
           return;
         }

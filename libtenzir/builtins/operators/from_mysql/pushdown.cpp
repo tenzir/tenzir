@@ -283,8 +283,8 @@ auto MysqlRenderer::render_arithmetic(pushdown::Binary const&, Fragment const&,
 
 auto make_table_plan(std::span<TableColumn const> columns,
                      ir::OptimizeFilter filter,
-                     Option<ir::OptimizeProjection> const& projection)
-  -> TablePlan {
+                     Option<ir::OptimizeProjection> const& projection,
+                     registry const& reg) -> TablePlan {
   if (columns.empty()) {
     // Without columns, nothing translates, and `SELECT *` reads the table
     // as it is, or fails as it would without any hints.
@@ -294,7 +294,7 @@ auto make_table_plan(std::span<TableColumn const> columns,
                      .columns = {}};
   }
   auto split = pushdown::split_filter(
-    std::move(filter), make_column_model(columns), MysqlRenderer{columns});
+    std::move(filter), make_column_model(columns), MysqlRenderer{columns}, reg);
   auto selection = select_columns(columns, projection, split.remaining);
   return TablePlan{
     .selection = std::move(selection),

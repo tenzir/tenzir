@@ -18,6 +18,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/pushdown/translate.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/test/registry.hpp>
 #include <tenzir/test/test.hpp>
 #include <tenzir/tql2/parser.hpp>
 #include <tenzir/tql2/resolve.hpp>
@@ -42,7 +43,7 @@ struct Case {
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -703,7 +704,8 @@ auto check_pushdown(SqlSchema const& schema, std::span<Case const> cases,
     auto filter = ir::OptimizeFilter{};
     filter.push_back(parse(x.predicate));
     auto split = pushdown::split_filter(std::move(filter), schema.model(),
-                                        ClickHouseRenderer{target});
+                                        ClickHouseRenderer{target},
+                                        test::builtin_registry());
     CHECK_EQUAL(fmt::format("{}: {}", x.predicate,
                             fmt::join(split.pushed, " AND ")),
                 fmt::format("{}: {}", x.predicate, x.pushed));

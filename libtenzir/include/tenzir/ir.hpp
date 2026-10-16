@@ -97,6 +97,10 @@ struct OptimizeRequest {
 
 /// State threaded through the optimize pass.
 struct OptimizeCtx {
+  /// The registry that the pipeline was compiled against, which the optimizer
+  /// consults for the entities that the expressions reference.
+  Ref<registry const> reg;
+
   /// Whether an operator being optimized may reorder events, in which case its
   /// consumer cannot rely on event order and operators may take faster
   /// unordered code paths. True when parallelism runs operators at a degree
@@ -150,7 +154,7 @@ public:
   /// be called before instantiation to probe input and output types. Defer
   /// validation that requires resolved argument values until instantiation or
   /// planning.
-  virtual auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  virtual auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag>
     = 0;
 
@@ -224,7 +228,8 @@ public:
   /// to the operator before this one, and prepends a copy of this operator to
   /// its `fallback`. This runs after the optimization walk and must not modify
   /// the operator.
-  virtual auto rewrite_aggregation(OptimizeAggregation aggregation) const
+  virtual auto rewrite_aggregation(OptimizeAggregation aggregation,
+                                   OptimizeCtx const& octx) const
     -> Option<OptimizeAggregation>;
 
   /// Return the executable matching this operator.
@@ -232,8 +237,10 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// `optimize` may be called in between, but only after instantiation as
-  /// well.
-  virtual auto spawn(element_type_tag input) const -> AnyOperator = 0;
+  /// well. `reg` is the registry that the pipeline was compiled against.
+  virtual auto spawn(element_type_tag input, registry const& reg) const
+    -> AnyOperator
+    = 0;
 
   /// The maximum number of parallel instances of this operator. One means
   /// the operator cannot be replicated. The result must be at least one.
@@ -320,7 +327,7 @@ struct pipeline {
 
   /// Prepend the given filter expressions as leading `where` operators,
   /// preserving their relative order.
-  auto prepend(OptimizeFilter filter) -> void;
+  auto prepend(OptimizeFilter filter, registry const& reg) -> void;
 
   /// Move `other`'s `let` bindings and operators to the back of this pipeline,
   /// preserving their relative order.
@@ -328,13 +335,13 @@ struct pipeline {
 
   /// Append the given filter expressions as trailing `where` operators,
   /// preserving their relative order.
-  auto append(OptimizeFilter filter) -> void;
+  auto append(OptimizeFilter filter, registry const& reg) -> void;
 
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
   /// @see Operator
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag>;
 
   // TODO: How do we take care that we don't propagate $-vars past the point
@@ -479,7 +486,7 @@ inline constexpr auto max_rewritten_predicate_size = size_t{4096};
 /// others stay dependent and unchanged, including those that the substitution
 /// would grow beyond a fixed bound, and those behind a dependent one whose
 /// substitution could fail, as in `split_filter_by_dependents`.
-auto split_filter_by_substitution(OptimizeFilter filter,
+auto split_filter_by_substitution(OptimizeFilter filter, registry const& reg,
                                   ast::FieldSubstitution const& fields,
                                   ast::MetaSubstitution const& meta = {})
   -> split_filter_result;
@@ -516,20 +523,23 @@ auto rewrite_aggregation(OptimizeAggregation aggregation,
 /// operator receives as an argument, unless the runtime never evaluates the
 /// operand. The runtime evaluates the branch of an `if` that the condition
 /// skips for no rows, which suffices to fail.
-auto simplify_predicate(ast::expression predicate) -> ast::expression;
+auto simplify_predicate(ast::expression predicate, registry const& reg)
+  -> ast::expression;
 
 /// Simplifies every predicate of a filter chain as in `simplify_predicate`.
 /// Drops the predicates that keep every event. If a predicate keeps no event,
 /// the chain reduces to `false` and the predicates that could fail the
 /// pipeline.
-auto simplify_filter(OptimizeFilter filter) -> OptimizeFilter;
+auto simplify_filter(OptimizeFilter filter, registry const& reg)
+  -> OptimizeFilter;
 
 /// Returns the value of the condition of an `if` if it is the same for every
 /// event, folding it as in `simplify_predicate`. A condition that is `null`
 /// for every event is `false`. Returns `None` if the condition depends on the
 /// event, does not fold, or is a constant of another type, which the runtime
 /// warns about.
-auto constant_condition(ast::expression const& condition) -> Option<bool>;
+auto constant_condition(ast::expression const& condition, registry const& reg)
+  -> Option<bool>;
 
 /// Returns the number of expression nodes in `expr`.
 auto expression_size(ast::expression const& expr) -> size_t;
@@ -797,7 +807,7 @@ auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
 /// predicate pushdown and operator elision. Any filter left over after
 /// optimization is reinserted as leading `where` operators. Expects the
 /// pipeline to be instantiated, i.e., to have no remaining `let` bindings.
-auto optimize(pipeline pipe, OptimizeCtx octx = {}) -> pipeline;
+auto optimize(pipeline pipe, OptimizeCtx octx) -> pipeline;
 
 /// Build a plan from a compiled pipeline.
 ///
@@ -815,8 +825,13 @@ auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
 /// channels; all channel-kind decisions live here.
 class PlanBuilder {
 public:
-  explicit PlanBuilder(Plan& plan, Parallelism par = {})
-    : plan_{plan}, par_scopes_{par}, scope_stack_{id_entries_} {
+  explicit PlanBuilder(Plan& plan, registry const& reg, Parallelism par = {})
+    : plan_{plan}, reg_{reg}, par_scopes_{par}, scope_stack_{id_entries_} {
+  }
+
+  /// The registry that the pipeline was compiled against.
+  auto reg() const -> registry const& {
+    return reg_;
   }
 
   /// Add an operator node
@@ -903,6 +918,7 @@ private:
                    element_type_tag type) const -> ChannelKind;
 
   Plan& plan_;
+  Ref<registry const> reg_;
   std::vector<Parallelism> par_scopes_;
   /// A tree of operator sequences mirroring the optimized IR. This is separate
   /// from the execution DAG so metrics IDs preserve IR order. Synthetic nodes
@@ -926,15 +942,17 @@ public:
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override;
 
-  auto spawn(element_type_tag input) const -> AnyOperator override;
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override;
 
   auto optimize(OptimizeRequest req,
                 const OptimizeCtx& octx) && -> OptimizeResult override;
 
-  auto rewrite_aggregation(OptimizeAggregation aggregation) const
+  auto rewrite_aggregation(OptimizeAggregation aggregation,
+                           OptimizeCtx const& octx) const
     -> Option<OptimizeAggregation> override;
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override;
 
   auto max_parallelism() const -> size_t override {
@@ -955,7 +973,8 @@ private:
 auto make_set_ir(std::vector<ast::assignment> assignments) -> Box<ir::Operator>;
 
 /// Create a `where` operator with the given expression.
-auto make_where_ir(ast::expression filter) -> Box<ir::Operator>;
+auto make_where_ir(ast::expression filter, registry const& reg)
+  -> Box<ir::Operator>;
 
 template <>
 inline constexpr auto enable_default_formatter<ir::pipeline> = true;

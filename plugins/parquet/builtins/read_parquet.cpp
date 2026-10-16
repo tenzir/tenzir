@@ -1155,7 +1155,7 @@ public:
         co_return FinalizeBehavior::done;
       }
       auto slice = pushdown::apply_read(std::move(*maybe_slice), filter_,
-                                        remaining_, ctx.dh());
+                                        remaining_, ctx);
       if (slice.rows() != 0) {
         co_await push(std::move(slice));
       }

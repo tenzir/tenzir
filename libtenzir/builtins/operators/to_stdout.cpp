@@ -48,7 +48,7 @@ struct SaveStdoutArgs {
 
 auto make_default_printer(base_ctx ctx, location self)
   -> failure_or<ir::pipeline> {
-  auto sessions = session_provider::make(static_cast<diagnostic_handler&>(ctx));
+  auto sessions = session_provider::make(ctx.dh(), ctx.reg());
   TRY(auto pipe, parse_pipeline_with_location_override("write_tql", self,
                                                        sessions.as_session()));
   auto root = compile_ctx::make_root(ctx);

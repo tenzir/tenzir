@@ -490,7 +490,7 @@ private:
   /// Processes complete records from the buffer.
   /// If is_final is true, emits a warning for incomplete trailing records.
   auto process_buffer(OpCtx& ctx, bool is_final) -> void {
-    auto sp = session_provider::make(ctx.dh());
+    auto sp = session_provider::make(ctx.dh(), ctx.reg());
     while (buffer_offset_ < buffer_.size()) {
       auto view = buffer_view();
       if (view.empty()) {
@@ -661,7 +661,7 @@ private:
   /// full. If `is_final` is true, warns about an incomplete trailing record.
   auto process_buffer(Push<nova::Events>& push, OpCtx& ctx, bool is_final)
     -> Task<void> {
-    auto sp = session_provider::make(ctx.dh());
+    auto sp = session_provider::make(ctx.dh(), ctx.reg());
     while (buffer_offset_ < buffer_.size()) {
       auto view = std::string_view{buffer_}.substr(buffer_offset_);
       auto parsed = parse_expression_stream_with_location_override(

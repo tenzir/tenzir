@@ -289,15 +289,15 @@ auto validate_partition_key(std::string_view key, const location& loc,
 
 auto append_messages(std::vector<Option<blob>>& out,
                      const ast::expression& expr, table_slice input,
-                     diagnostic_handler& dh) -> void {
-  for (const auto& messages : eval(expr, input, dh)) {
+                     base_ctx ctx) -> void {
+  for (const auto& messages : eval(expr, input, ctx)) {
     const auto append = [&](const auto& array) {
       for (auto i = int64_t{0}; i < array.length(); ++i) {
         if (array.IsNull(i)) {
           diagnostic::warning("expected `string` or `blob`, got `null`")
             .primary(expr)
             .note("event is skipped")
-            .emit(dh);
+            .emit(ctx);
           out.emplace_back(None{});
           continue;
         }
@@ -317,15 +317,15 @@ auto append_messages(std::vector<Option<blob>>& out,
                         messages.type.kind())
       .primary(expr)
       .note("events are skipped")
-      .emit(dh);
+      .emit(ctx);
     out.resize(out.size() + messages.length());
   }
 }
 
 auto append_partition_keys(std::vector<Option<std::string>>& out,
                            const ast::expression& expr, table_slice input,
-                           diagnostic_handler& dh) -> void {
-  for (const auto& keys : eval(expr, input, dh)) {
+                           base_ctx ctx) -> void {
+  for (const auto& keys : eval(expr, input, ctx)) {
     if (auto strings = keys.template as<string_type>()) {
       const auto& array = *strings->array;
       for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -333,7 +333,7 @@ auto append_partition_keys(std::vector<Option<std::string>>& out,
           diagnostic::warning("expected `string`, got `null`")
             .primary(expr)
             .note("event is skipped")
-            .emit(dh);
+            .emit(ctx);
           out.emplace_back(None{});
           continue;
         }
@@ -345,7 +345,7 @@ auto append_partition_keys(std::vector<Option<std::string>>& out,
     diagnostic::warning("expected `string`, got `{}`", keys.type.kind())
       .primary(expr)
       .note("events are skipped")
-      .emit(dh);
+      .emit(ctx);
     out.resize(out.size() + keys.length());
   }
 }
@@ -1185,11 +1185,10 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     co_return;
   }
   auto messages = std::vector<Option<blob>>{};
-  append_messages(messages, args_.message, input, ctx.dh());
+  append_messages(messages, args_.message, input, ctx);
   auto partition_keys = std::vector<Option<std::string>>{};
   if (args_.partition_key) {
-    append_partition_keys(partition_keys, *args_.partition_key, input,
-                          ctx.dh());
+    append_partition_keys(partition_keys, *args_.partition_key, input, ctx);
   }
   for (auto i = size_t{0}; i < messages.size(); ++i) {
     auto& message = messages[i];

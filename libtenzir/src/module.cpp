@@ -26,6 +26,7 @@
 #include "tenzir/source.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/registry.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/deserializer.hpp>
@@ -265,7 +266,8 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       source_map.add_source(source);
       auto dh = make_diagnostic_printer(source_map, color_diagnostics::yes,
                                         std::cerr);
-      auto sp = session_provider::make(*dh);
+      auto reg = global_registry();
+      auto sp = session_provider::make(*dh, *reg);
       auto ast = parse(*source, sp.as_session());
       if (not ast) {
         return ec::silent;

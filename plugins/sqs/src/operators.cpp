@@ -372,7 +372,7 @@ auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
     co_return;
   }
   auto& dh = ctx.dh();
-  for (const auto& messages : eval(args_.message, input, dh)) {
+  for (const auto& messages : eval(args_.message, input, ctx)) {
     const auto impl = [&](const auto& array) -> Task<void> {
       for (auto i = int64_t{0}; i < array.length(); ++i) {
         if (array.IsNull(i)) {

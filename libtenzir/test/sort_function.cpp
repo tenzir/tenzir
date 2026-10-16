@@ -10,6 +10,7 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -33,7 +34,7 @@ auto make_input_slice(data row) -> table_slice {
 
 TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr = parse_expression_with_location_override(
     "sort(xs, cmp=(l, r) => missing)", location::unknown, ctx);
@@ -45,7 +46,8 @@ TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
       {"xs", list{int64_t{3}, int64_t{1}, int64_t{2}}},
     },
   };
-  auto result = eval(*expr, make_input_slice(std::move(row)), dh);
+  auto result = eval(*expr, make_input_slice(std::move(row)),
+                     base_ctx{dh, test::builtin_registry()});
   REQUIRE_EQUAL(result.length(), int64_t{1});
   auto value = materialize(result.view3_at(0));
   auto* sorted = try_as<list>(&value);
@@ -56,7 +58,7 @@ TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
 
 TEST("sort preserves nested list value type metadata") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr = parse_expression_with_location_override("sort(r)",
                                                       location::unknown, ctx);
@@ -113,7 +115,8 @@ TEST("sort preserves nested list value type metadata") {
                                    *typed_row_array),
     std::move(input_type),
   };
-  auto result = eval(*expr, input_slice, dh);
+  auto result
+    = eval(*expr, input_slice, base_ctx{dh, test::builtin_registry()});
   auto expected_type = type{
     record_type{{
       {"xs", list_type{type{

@@ -274,7 +274,8 @@ public:
     TENZIR_UNUSED(ctx, instantiate);
     return {};
   }
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
     if (nova_enabled()) {
       return VersionEvents{}.with_name("version");
@@ -282,13 +283,13 @@ public:
     return Version{}.with_name("version");
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     // TODO: Refactor.
     if (not input.is<void>()) {
       diagnostic::error("expected void, got {}", input)
         .primary(main_location())
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     if (nova_enabled()) {

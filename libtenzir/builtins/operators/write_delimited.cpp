@@ -111,7 +111,7 @@ public:
 
   auto process_arrow(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> {
-    auto evaluated = eval(args_.value, input, ctx.dh());
+    auto evaluated = eval(args_.value, input, ctx);
     auto buffer = blob{};
     auto append_separator = [&] {
       buffer.insert(buffer.end(), separator_.begin(), separator_.end());

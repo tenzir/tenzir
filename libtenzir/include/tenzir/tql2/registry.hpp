@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/option.hpp"
@@ -142,22 +143,6 @@ public:
   auto function_names() const -> std::vector<std::string>;
   auto module_names() const -> std::vector<std::string>;
 
-  /// The root that packages are resolved in, `packages` unless a snapshot says
-  /// otherwise.
-  ///
-  /// Resolution looks in `cfg`, then `std`, then here: user overrides first,
-  /// then builtins, then whatever is installed. A caller holding several sets
-  /// of packages at once — a deployment with more than one configuration
-  /// alive — gives each set a root of its own and points this at the set it is
-  /// compiling against. Every path it resolves then names that root and goes
-  /// on naming it, so what a pipeline was compiled against cannot change under
-  /// it when another set is published.
-  auto packages_root() const -> const entity_pkg&;
-
-  /// Sets that root. Like `add`, for building a snapshot rather than for
-  /// changing one that something may be resolving against.
-  void set_packages_root(entity_pkg root);
-
   /// Register an entity. This should only be done on startup or when
   /// constructing a new snapshot of the registry.
   void add(const entity_pkg& package, std::string_view name, entity_def def);
@@ -186,14 +171,24 @@ private:
   std::unordered_map<std::string, module_def, detail::heterogeneous_string_hash,
                      std::equal_to<>>
     roots_;
-  entity_pkg packages_root_{entity_pkg_packages};
 };
 
-// TODO: This should be attached to the `session` object. However, because we
-// are still in the process of upgrading everything, we cannot consistently pass
-// this around.
-/// Return the current global registry snapshot.
-auto global_registry() -> std::shared_ptr<const registry>;
+/// Returns a registry with the entities of the loaded plugins and nothing else:
+/// no user-defined operators from the configuration and no packages.
+///
+/// Every call builds a new registry, so call it once the plugins are loaded and
+/// keep the result.
+auto make_builtin_registry() -> Arc<registry const>;
+
+/// Return the current snapshot of the process-wide registry of the `tenzir`
+/// executable: the builtins, the user-defined operators of its configuration,
+/// and the packages that the node installed.
+///
+/// Only the entry points of the `tenzir` executable and its node components
+/// read this, and each takes one snapshot that it passes explicitly to
+/// everything it compiles and runs. The library itself never reads it, and
+/// neither does the deployment, which owns its registries.
+auto global_registry() -> Arc<registry const>;
 
 // Note: Mutable access to a global registry is intentionally not exposed
 // anymore; use clone() and publish via a swap in higher-level control flows.

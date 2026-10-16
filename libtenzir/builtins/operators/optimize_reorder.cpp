@@ -41,7 +41,7 @@ public:
     return {};
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler&) const
+  auto infer_type(element_type_tag input, base_ctx) const
     -> failure_or<element_type_tag> override {
     return input;
   }
@@ -60,7 +60,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
     panic("cannot spawn optimize_reorder; it must be removed during "
           "optimization");
   }

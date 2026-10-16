@@ -4,6 +4,7 @@
 
 #include "tenzir/operator/optimization.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 
 using namespace tenzir;
@@ -115,7 +116,8 @@ TEST("order binding does not select a rewrite policy") {
     CHECK_EQUAL(value.optimization.order, EventOrder::unordered);
     CHECK_EQUAL(value.limit, uint64_t{42});
     auto dh = collecting_diagnostic_handler{};
-    auto ctx = DescribeCtx{{}, {}, {}, desc, location::unknown, dh};
+    auto ctx = DescribeCtx{
+      {}, {}, {}, desc, location::unknown, dh, test::builtin_registry()};
     auto result = (*desc.optimizer)(
       ctx, ir::OptimizeRequest{
              .filter = {ast::constant{true, location::unknown}},

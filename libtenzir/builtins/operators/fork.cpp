@@ -172,19 +172,19 @@ public:
     return args_.pipe.substitute(ctx, instantiate);
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`fork` expects events as input")
         .primary(args_.keyword)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
-    TRY(auto branch_ty, args_.pipe.infer_type(input, dh));
+    TRY(auto branch_ty, args_.pipe.infer_type(input, ctx));
     if (branch_ty.is_not<void>()) {
       diagnostic::error("`fork` subpipeline must end in a sink")
         .primary(args_.pipe_location)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return input;
@@ -212,14 +212,14 @@ public:
     // however, describes fields that the shared input must retain in addition
     // to those needed by the main output path. A branch-local limit must not
     // escape to the shared input.
-    args_.pipe.prepend(std::move(opt.filter));
+    args_.pipe.prepend(std::move(opt.filter), octx.reg);
     ir::merge_projection(projection, opt.projection);
     // A downstream filter must not be pushed past `fork`: the branch has to
     // observe every input row. It stays behind the main output port.
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     for (auto& expr : filter) {
-      replacement.push_back(make_where_ir(std::move(expr)));
+      replacement.push_back(make_where_ir(std::move(expr), octx.reg));
     }
     return {
       {},
@@ -230,7 +230,8 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     return input.match(
       [](tag<table_slice>) -> AnyOperator {
         return Box<tenzir::Operator<table_slice, table_slice, true>>{

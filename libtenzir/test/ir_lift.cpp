@@ -11,6 +11,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -28,7 +29,7 @@ namespace {
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -75,7 +76,8 @@ auto lift(std::vector<Branch> const& branches) -> std::string {
       parse_chain(branch.filter),
     });
   }
-  auto result = ir::lift_branch_filters(std::move(routed));
+  auto result
+    = ir::lift_branch_filters(std::move(routed), test::builtin_registry());
   if (not result) {
     return "<none>";
   }
@@ -97,14 +99,19 @@ TEST("conjoin filter chains") {
 }
 
 TEST("repeatable expressions") {
-  CHECK(ir::is_repeatable(parse("x == 1 and y.length() > 2")));
-  CHECK(ir::is_repeatable(parse("@name == \"foo\"")));
-  CHECK(not ir::is_repeatable(parse("now() > x")));
-  CHECK(not ir::is_repeatable(parse("random() < 0.5")));
-  CHECK(not ir::is_repeatable(parse("(move x) == 1")));
+  CHECK(ir::is_repeatable(parse("x == 1 and y.length() > 2"),
+                          test::builtin_registry()));
+  CHECK(ir::is_repeatable(parse("@name == \"foo\""), test::builtin_registry()));
+  CHECK(not ir::is_repeatable(parse("now() > x"), test::builtin_registry()));
+  CHECK(
+    not ir::is_repeatable(parse("random() < 0.5"), test::builtin_registry()));
+  CHECK(
+    not ir::is_repeatable(parse("(move x) == 1"), test::builtin_registry()));
   // An assignment in place of a value only warns.
-  CHECK(not ir::is_repeatable(parse("(x = 42) else false")));
-  CHECK(ir::is_repeatable(parse("x.slice(stride=-1) == \"\"")));
+  CHECK(not ir::is_repeatable(parse("(x = 42) else false"),
+                              test::builtin_registry()));
+  CHECK(ir::is_repeatable(parse("x.slice(stride=-1) == \"\""),
+                          test::builtin_registry()));
 }
 
 TEST("lift filters of two branches") {

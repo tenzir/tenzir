@@ -603,6 +603,23 @@ public:
     return saw_input_;
   }
 
+  /// Rebuilds the buckets of a loaded snapshot, which needs the registry to
+  /// instantiate the aggregations. Snapshots are produced by the same operator
+  /// configuration that loads them, so restoration cannot fail.
+  auto restore(session ctx) -> void {
+    for (auto it = restored_.begin(); it != restored_.end(); ++it) {
+      auto bucket = make_bucket(ctx);
+      TENZIR_ASSERT(it.value().size() == bucket.aggregations.size());
+      for (auto&& [aggregation, blob] :
+           std::views::zip(bucket.aggregations, it.value())) {
+        auto restored = aggregation->restore(std::move(blob));
+        TENZIR_ASSERT(restored);
+      }
+      groups_.emplace(it->first, std::move(bucket));
+    }
+    restored_.clear();
+  }
+
 private:
   auto finish_impl(session ctx) -> std::vector<table_slice> {
     // Special case: if there are no configured groups, and no groups were
@@ -673,32 +690,13 @@ private:
 
   // Aggregation instances serialize as one opaque blob per aggregate, so both
   // directions exchange a map from group key to aggregation blobs. Loading
-  // rebuilds each bucket by restoring freshly instantiated aggregation
-  // instances from the blobs. Snapshots are produced by the same operator
-  // configuration that loads them, so restoration cannot fail.
+  // keeps the blobs until `restore` rebuilds the buckets from them.
   friend auto inspect(auto& f, AggregationState& x) -> bool {
     if constexpr (std::remove_reference_t<decltype(f)>::is_loading) {
-      auto groups = GroupMap<std::vector<chunk_ptr>>{};
-      auto on_load = [&] {
-        // No diagnostics can occur here: the pipeline was already validated at
-        // compile time.
-        auto dh = null_diagnostic_handler{};
-        auto provider = session_provider::make(dh);
-        x.groups_.clear();
-        for (auto it = groups.begin(); it != groups.end(); ++it) {
-          auto bucket = x.make_bucket(provider.as_session());
-          TENZIR_ASSERT(it.value().size() == bucket.aggregations.size());
-          for (auto&& [aggregation, blob] :
-               std::views::zip(bucket.aggregations, it.value())) {
-            auto restored = aggregation->restore(std::move(blob));
-            TENZIR_ASSERT(restored);
-          }
-          x.groups_.emplace(it->first, std::move(bucket));
-        }
-        return true;
-      };
-      return f.object(x).on_load(on_load).fields(
-        f.field("saw_input", x.saw_input_), f.field("groups", groups));
+      x.groups_.clear();
+      x.restored_.clear();
+      return f.object(x).fields(f.field("saw_input", x.saw_input_),
+                                f.field("groups", x.restored_));
     } else {
       auto groups = GroupMap<std::vector<chunk_ptr>>{};
       for (auto const& [key, bucket] : x.groups_) {
@@ -725,6 +723,9 @@ private:
   /// allocations. Purely an optimization, hence not part of snapshots.
   size_t max_slice_groups_ = 0;
   bool saw_input_ = false;
+  /// The aggregation blobs of a loaded snapshot until `restore` turns them
+  /// into buckets.
+  GroupMap<std::vector<chunk_ptr>> restored_;
 };
 
 // ---------------------------------------------------------------------------
@@ -1048,7 +1049,8 @@ public:
         .emit(ctx);
       co_return;
     }
-    provider_.emplace(session_provider::make(ctx.dh()));
+    provider_.emplace(session_provider::make(ctx.dh(), ctx.reg()));
+    state_.restore(provider_->as_session());
     if (state_.config().emission == Emission::timer) {
       TENZIR_ASSERT(state_.config().emit_interval);
       auto emit_interval = *state_.config().emit_interval;
@@ -2140,13 +2142,14 @@ public:
     // Constant options require fully-resolved let bindings. Aggregation
     // arguments are validated during planning, once the input is known.
     if (instantiate) {
-      auto provider = session_provider::make(ctx);
+      auto provider = session_provider::make(ctx, ctx.reg());
       TRY(evaluate_options(config_, provider.as_session()));
     }
     return {};
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     if (input.is<nova::Events>()) {
       return SummarizeNova{config_, self_}.with_name("summarize");
     }
@@ -2154,27 +2157,26 @@ public:
     return Summarize{config_}.with_name("summarize");
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<nova::Events>() and input.is_not<table_slice>()) {
-      diagnostic::error("operator expects events").primary(self_).emit(dh);
+      diagnostic::error("operator expects events").primary(self_).emit(ctx);
       return failure::promise();
     }
-    auto const reg = global_registry();
     for (auto const& aggregate : config_.aggregates) {
-      auto const& fn = reg->get(aggregate.call);
+      auto const& fn = ctx.reg().get(aggregate.call);
       if (input.is<nova::Events>()) {
         if (not dynamic_cast<nova::AggregationPlugin const*>(&fn)) {
           diagnostic::error("`{}` does not support `--nova` yet",
                             fn.function_name())
             .primary(aggregate.call)
-            .emit(dh);
+            .emit(ctx);
           return failure::promise();
         }
       } else if (not dynamic_cast<aggregation_plugin const*>(&fn)) {
         diagnostic::error("`{}` requires `--nova`", fn.function_name())
           .primary(aggregate.call)
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
     }
@@ -2185,11 +2187,11 @@ public:
             diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
     auto input_type
       = input.empty() ? element_type_tag{tag_v<void>} : input.front().type;
-    TRY(infer_type(input_type, dh));
+    TRY(infer_type(input_type, base_ctx{dh, builder.reg()}));
     // Type inference also probes uninstantiated pipelines. Planning happens
     // after substitution, so constant arguments can be validated here without
     // requiring lifecycle state in the operator.
-    auto provider = session_provider::make(dh);
+    auto provider = session_provider::make(dh, builder.reg());
     auto ctx = provider.as_session();
     for (auto const& aggregate : config_.aggregates) {
       if (input_type.is<nova::Events>()) {
@@ -2292,7 +2294,7 @@ auto compile_summarize(ast::invocation inv, compile_ctx ctx)
       TRY(arg.bind(ctx));
     }
   }
-  auto provider = session_provider::make(ctx);
+  auto provider = session_provider::make(ctx, ctx.reg());
   TRY(auto config, build_config(std::move(inv.args), provider.as_session()));
   return SummarizeIr{loc, std::move(config)};
 }

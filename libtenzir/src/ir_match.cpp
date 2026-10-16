@@ -141,7 +141,7 @@ public:
 
   auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    for (auto& [lane, slice] : classify(std::move(input), ctx.dh())) {
+    for (auto& [lane, slice] : classify(std::move(input), ctx)) {
       co_await push(lane, std::move(slice));
     }
   }
@@ -149,11 +149,11 @@ public:
 private:
   /// Classifies the rows of `input` into `(arm index, subslice)` runs covering
   /// each matched row exactly once.
-  auto classify(table_slice input, diagnostic_handler& dh) const
+  auto classify(table_slice input, base_ctx ctx) const
     -> std::vector<std::pair<size_t, table_slice>> {
     auto runs = std::vector<std::pair<size_t, table_slice>>{};
     auto matched = std::vector<bool>(input.rows(), false);
-    auto scrutinee = eval(args_.scrutinee, input, dh);
+    auto scrutinee = eval(args_.scrutinee, input, ctx);
     for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
          ++arm_index) {
       auto const& arm = args_.arms[arm_index];
@@ -186,7 +186,7 @@ private:
         auto candidate_input
           = filter(input, *make_boolean_array(candidate_mask));
         auto end = int64_t{0};
-        for (auto const& predicate : eval(*arm.guard, candidate_input, dh)) {
+        for (auto const& predicate : eval(*arm.guard, candidate_input, ctx)) {
           auto const start = std::exchange(end, end + predicate.length());
           auto const typed_predicate = predicate.as<bool_type>();
           if (not typed_predicate) {
@@ -194,7 +194,7 @@ private:
               diagnostic::warning("expected `bool`, but got `{}`",
                                   predicate.type.kind())
                 .primary(*arm.guard)
-                .emit(dh);
+                .emit(ctx);
             }
             std::fill(guard_mask.begin() + start, guard_mask.begin() + end,
                       false);
@@ -366,14 +366,14 @@ private:
 };
 
 auto const_eval_match_expression(ast::expression const& expr, location source,
-                                 diagnostic_handler& dh) -> failure_or<data> {
+                                 base_ctx ctx) -> failure_or<data> {
   auto diagnostics = collecting_diagnostic_handler{};
-  auto value = const_eval(expr, diagnostics);
+  auto value = const_eval(expr, base_ctx{diagnostics, ctx.reg()});
   if (value.is_error() or not diagnostics.empty()) {
     diagnostic::error("match patterns must be constant expressions")
       .primary(source)
       .hint("use a literal, a constant expression, or `_`")
-      .emit(dh);
+      .emit(ctx);
     return failure::promise();
   }
   return std::move(value->inner);
@@ -390,8 +390,8 @@ auto compare_range_bounds(data const& lower, data const& upper)
 auto substitute_match_pattern(ast::match_pattern& pattern, substitute_ctx ctx,
                               bool instantiate) -> failure_or<void>;
 
-auto lower_match_pattern(ast::match_pattern const& pattern,
-                         diagnostic_handler& dh) -> failure_or<MatchPattern>;
+auto lower_match_pattern(ast::match_pattern const& pattern, base_ctx ctx)
+  -> failure_or<MatchPattern>;
 
 auto is_irrefutable_match_pattern(ast::match_pattern const& pattern) -> bool {
   return pattern.kind->match<bool>(
@@ -510,27 +510,27 @@ auto compare_range_bounds(data const& lower, data const& upper)
     });
 }
 
-auto lower_match_pattern(ast::match_pattern const& pattern,
-                         diagnostic_handler& dh) -> failure_or<MatchPattern> {
+auto lower_match_pattern(ast::match_pattern const& pattern, base_ctx ctx)
+  -> failure_or<MatchPattern> {
   return pattern.kind->match<failure_or<MatchPattern>>(
     [](ast::wildcard_pattern const&) -> failure_or<MatchPattern> {
       return MatchPattern{MatchPattern::Wildcard{}};
     },
     [&](ast::expression_pattern const& expr) -> failure_or<MatchPattern> {
       TRY(auto value,
-          const_eval_match_expression(expr.expr, expr.get_location(), dh));
+          const_eval_match_expression(expr.expr, expr.get_location(), ctx));
       return MatchPattern{MatchPattern::Constant{std::move(value)}};
     },
     [&](ast::range_pattern const& range) -> failure_or<MatchPattern> {
       TRY(auto lower, const_eval_match_expression(
-                        range.lower, range.lower.get_location(), dh));
+                        range.lower, range.lower.get_location(), ctx));
       TRY(auto upper, const_eval_match_expression(
-                        range.upper, range.upper.get_location(), dh));
+                        range.upper, range.upper.get_location(), ctx));
       if (compare_range_bounds(lower, upper)
           == std::partial_ordering::unordered) {
         diagnostic::error("range pattern bounds are not comparable")
           .primary(range.get_location())
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
       return MatchPattern{
@@ -709,8 +709,8 @@ auto pattern_condition(ast::expression const& scrutinee,
 /// Returns an expression that is `true` exactly for the events that `arm`
 /// takes unless an earlier arm takes them, or `None` if there is no such
 /// expression.
-auto arm_condition(MatchArgs::Arm const& arm, ast::expression const& scrutinee)
-  -> Option<ast::expression> {
+auto arm_condition(MatchArgs::Arm const& arm, ast::expression const& scrutinee,
+                   registry const& reg) -> Option<ast::expression> {
   TENZIR_ASSERT(not arm.wildcard);
   if (arm.patterns.empty() or arm.patterns.size() != arm.pattern_exprs.size()) {
     return None{};
@@ -741,7 +741,7 @@ auto arm_condition(MatchArgs::Arm const& arm, ast::expression const& scrutinee)
     TENZIR_ASSERT(condition);
     return condition;
   }
-  if (not ir::is_repeatable(*arm.guard)) {
+  if (not ir::is_repeatable(*arm.guard, reg)) {
     return None{};
   }
   if (not condition) {
@@ -873,7 +873,7 @@ public:
     outputs_events.reserve(args_.arms.size());
     auto types_known = true;
     for (const auto& arm : args_.arms) {
-      auto events = ir::returns_events(arm.pipeline);
+      auto events = ir::returns_events(arm.pipeline, octx.reg);
       types_known = types_known and events.has_value();
       outputs_events.push_back(events.value_or(false));
     }
@@ -919,17 +919,17 @@ public:
     // arms.
     auto lifted = Option<ir::OptimizeFilter>{};
     if (types_known) {
-      lifted = lift_arm_filters(arm_filters);
+      lifted = lift_arm_filters(arm_filters, octx.reg);
     }
     if (not lifted) {
       for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
-        args_.arms[i].pipeline.prepend(std::move(arm_filters[i]));
+        args_.arms[i].pipeline.prepend(std::move(arm_filters[i]), octx.reg);
       }
     }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     for (auto& expr : filter) {
-      replacement.push_back(make_where_ir(std::move(expr)));
+      replacement.push_back(make_where_ir(std::move(expr), octx.reg));
     }
     return {
       .filter = std::move(lifted).value_or(ir::OptimizeFilter{}),
@@ -939,7 +939,8 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     if (input.is<table_slice>()) {
       return Box<tenzir::Operator<table_slice, table_slice, true>>{
         MatchOp{args_}.with_name("match")};
@@ -978,21 +979,21 @@ public:
     return tails;
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
-      diagnostic::error("match operator expected events").emit(dh);
+      diagnostic::error("match operator expected events").emit(ctx);
       return failure::promise();
     }
     auto result = Option<element_type_tag>{};
     auto has_wildcard = false;
     for (auto const& arm : args_.arms) {
       has_wildcard = has_wildcard or arm.wildcard;
-      TRY(auto branch_ty, arm.pipeline.infer_type(input, dh));
+      TRY(auto branch_ty, arm.pipeline.infer_type(input, ctx));
       if (branch_ty.is<chunk_ptr>()) {
         diagnostic::error("branches must not return bytes")
           .primary(arm.source)
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
       if (not result) {
@@ -1000,7 +1001,7 @@ public:
         continue;
       }
       TRY(result,
-          combine_branch_types(*result, branch_ty, args_.match_keyword, dh));
+          combine_branch_types(*result, branch_ty, args_.match_keyword, ctx));
     }
     TENZIR_ASSERT(has_wildcard);
     // A match always has a wildcard arm, so at least one branch contributed.
@@ -1016,13 +1017,14 @@ private:
   /// Combines the residual filters of the arms into a filter for the input of
   /// `match`, or returns `None` if it cannot route the events exactly as
   /// `match` does.
-  auto lift_arm_filters(std::vector<ir::OptimizeFilter> arm_filters) const
+  auto lift_arm_filters(std::vector<ir::OptimizeFilter> arm_filters,
+                        registry const& reg) const
     -> Option<ir::OptimizeFilter> {
     TENZIR_ASSERT_EQ(arm_filters.size(), args_.arms.size());
     TENZIR_ASSERT(args_.arms.back().wildcard);
     // The scrutinee and the guards must yield the same values when `match`
     // evaluates them again.
-    if (not ir::is_repeatable(args_.scrutinee)) {
+    if (not ir::is_repeatable(args_.scrutinee, reg)) {
       return None{};
     }
     // Every arm but the wildcard arm, which takes the remaining events, needs
@@ -1034,7 +1036,7 @@ private:
         conditions.emplace_back(None{});
         continue;
       }
-      auto condition = arm_condition(arm, args_.scrutinee);
+      auto condition = arm_condition(arm, args_.scrutinee, reg);
       if (not condition) {
         return None{};
       }
@@ -1066,7 +1068,7 @@ private:
           {std::move(conditions[i]), std::move(arm_filters[i])});
       }
     }
-    return ir::lift_branch_filters(std::move(branches));
+    return ir::lift_branch_filters(std::move(branches), reg);
   }
 
   MatchArgs args_;

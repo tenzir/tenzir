@@ -151,19 +151,22 @@ auto ir::optimize(pipeline pipe, OptimizeCtx octx) -> pipeline {
   pipe = std::move(opt.replacement);
   // Leftover filters become leading `where` operators. A leftover limit or
   // projection is a hint that no source consumed, so it is dropped.
-  pipe.prepend(std::move(opt.filter));
+  pipe.prepend(std::move(opt.filter), octx.reg);
   return pipe;
 }
 
 auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
                    Parallelism parallelism) -> failure_or<Plan> {
   TRY(pipe, instantiate(std::move(pipe), ctx));
-  pipe = optimize(std::move(pipe),
-                  OptimizeCtx{.can_any_op_reorder = parallelism.degree > 1});
+  pipe
+    = optimize(std::move(pipe), OptimizeCtx{
+                                  .reg = ctx.reg(),
+                                  .can_any_op_reorder = parallelism.degree > 1,
+                                });
   // construct plan
   auto plan = Plan{};
   plan.operators.reserve(pipe.operators.size());
-  auto builder = PlanBuilder{plan, parallelism};
+  auto builder = PlanBuilder{plan, ctx.reg(), parallelism};
   auto head = input.is<void>()
                 ? PlanPorts{}
                 : PlanPorts{Port{.node = Port::input, .type = input}};
@@ -260,7 +263,7 @@ auto ir::Plan::output_id() const -> OpId const& {
 auto ir::Operator::plan(PlanBuilder& builder, PlanPorts input,
                         diagnostic_handler& dh) && -> failure_or<PlanPorts> {
   auto in = input.empty() ? element_type_tag{tag_v<void>} : input.front().type;
-  TRY(auto out_ty, infer_type(in, dh));
+  TRY(auto out_ty, infer_type(in, base_ctx{dh, builder.reg()}));
   auto node = builder.append_node(std::move(*this).move(), in, out_ty);
   if (not input.empty()) {
     builder.add_channels(input, node);
@@ -437,12 +440,13 @@ public:
     return {};
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler&) const
+  auto infer_type(element_type_tag input, base_ctx) const
     -> failure_or<element_type_tag> override {
     return input;
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     return match(input, []<class T>(tag<T>) -> AnyOperator {
       return Box<tenzir::Operator<T, T>>{PassOp<T>{}.with_name("pass")};
     });

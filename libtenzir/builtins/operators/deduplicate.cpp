@@ -304,7 +304,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
                        duration cleanup_duration, dedup_map& states,
                        int64_t& row,
                        std::chrono::steady_clock::time_point& last_cleanup_time,
-                       diagnostic_handler& dh) -> table_slice {
+                       base_ctx ctx) -> table_slice {
   const auto now = std::chrono::steady_clock::now();
   if (now > last_cleanup_time + cleanup_duration) {
     last_cleanup_time = now;
@@ -322,7 +322,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   if (slice.rows() == 0) {
     return {};
   }
-  auto keys = eval(cfg.keys, slice, dh);
+  auto keys = eval(cfg.keys, slice, ctx);
   auto offset = int64_t{};
   auto mask_builder = arrow::BooleanBuilder{arrow_memory_pool()};
   check(mask_builder.Reserve(detail::narrow_cast<int64_t>(slice.rows())));
@@ -378,7 +378,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   auto filtered = filter(slice, *mask);
   if (cfg.count_field and filtered.rows() > 0) {
     auto count_series = series{int64_type{}, finish(*count_builder)};
-    return assign(*cfg.count_field, count_series, filtered, dh,
+    return assign(*cfg.count_field, count_series, filtered, ctx,
                   assign_position::back);
   }
   return filtered;

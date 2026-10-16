@@ -10,8 +10,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
-
-#include <memory>
+#include "tenzir/ref.hpp"
 
 namespace tenzir {
 
@@ -19,7 +18,10 @@ class registry;
 
 class session_provider {
 public:
-  static auto make(diagnostic_handler& dh) -> session_provider;
+  /// Makes a provider for sessions that resolve against `reg`, which must
+  /// outlive the provider.
+  static auto make(diagnostic_handler& dh, registry const& reg)
+    -> session_provider;
 
   auto as_session() & -> session;
   auto as_session() && -> session = delete;
@@ -37,11 +39,10 @@ private:
     diagnostic_handler& dh_;
   };
 
-  explicit session_provider(diagnostic_handler& dh,
-                            std::shared_ptr<const registry> reg);
+  session_provider(diagnostic_handler& dh, registry const& reg);
 
   diagnostic_ctx dh_;
-  std::shared_ptr<const registry> reg_;
+  Ref<registry const> reg_;
 };
 
 /// This is meant to be used as a value type.
@@ -58,6 +59,8 @@ public:
   auto dh() -> diagnostic_handler&;
 
   explicit(false) operator diagnostic_handler&();
+
+  explicit(false) operator registry const&();
 
 private:
   session_provider& provider_;

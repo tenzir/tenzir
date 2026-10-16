@@ -879,15 +879,15 @@ private:
     if (input.rows() == 0) {
       co_return;
     }
-    auto name = eval(args_.name, input, ctx.dh());
-    auto value = eval(args_.value, input, ctx.dh());
-    auto timestamp = eval(args_.timestamp, input, ctx.dh());
-    auto labels = eval(args_.labels, input, ctx.dh());
-    auto type = eval(args_.type, input, ctx.dh());
-    auto help = eval(args_.help, input, ctx.dh());
-    auto unit = eval(args_.unit, input, ctx.dh());
-    auto family = eval(args_.family, input, ctx.dh());
-    auto start_timestamp = eval(args_.start_timestamp, input, ctx.dh());
+    auto name = eval(args_.name, input, ctx);
+    auto value = eval(args_.value, input, ctx);
+    auto timestamp = eval(args_.timestamp, input, ctx);
+    auto labels = eval(args_.labels, input, ctx);
+    auto type = eval(args_.type, input, ctx);
+    auto help = eval(args_.help, input, ctx);
+    auto unit = eval(args_.unit, input, ctx);
+    auto family = eval(args_.family, input, ctx);
+    auto start_timestamp = eval(args_.start_timestamp, input, ctx);
     for (auto row = int64_t{0}; row < detail::narrow<int64_t>(input.rows());
          ++row) {
       auto sample = make_sample(name.view3_at(row), value.view3_at(row),

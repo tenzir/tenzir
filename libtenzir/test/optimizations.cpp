@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/expression.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/time.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -18,7 +19,7 @@ using namespace tenzir;
 
 TEST("optimize now") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto s = session{provider};
   const auto lhs = operand{field_extractor{"x"}};
   const auto op = relational_operator::greater;
@@ -50,7 +51,7 @@ TEST("split aligns substring in predicate") {
   // Otherwise pushing the filter into a source that does not re-normalize it
   // (e.g. `subscribe`) inverts the substring check and filters out everything.
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto s = session{provider};
   auto expr = parse_expression_with_location_override(R"("needle" in haystack)",
                                                       location::unknown, s);

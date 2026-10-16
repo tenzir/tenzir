@@ -26,6 +26,7 @@
 #include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/test/nova.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -132,7 +133,7 @@ auto model_count(Data const& model, std::string_view field = "count")
 }
 
 auto make_sum(diagnostic_handler& dh) -> Box<AggregationInstance> {
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto instance
     = tenzir::test::make_aggregation(call("sum", {root_field("x")}), dh, *reg);
   REQUIRE(instance);
@@ -178,7 +179,7 @@ auto int_at(Array<Data> const& data, storage::Index i) -> Option<std::int64_t> {
 auto eval(ast::expression expression, Events events, storage::BitMap mask,
           diagnostic_handler& dh) -> Array<Data> {
   events.mask = std::move(mask);
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto evaluator
     = tenzir::test::make_evaluator(std::move(expression), dh, *reg);
   REQUIRE(evaluator);
@@ -189,7 +190,7 @@ auto eval(ast::expression expression, Events events, storage::BitMap mask,
 
 TEST("AggregationInstance::make rejects an expression that is not a call") {
   auto dh = collecting_diagnostic_handler{};
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto instance = tenzir::test::make_aggregation(root_field("x"), dh, *reg);
   CHECK(not instance);
   auto diags = std::move(dh).collect();
@@ -200,7 +201,7 @@ TEST("AggregationInstance::make rejects an expression that is not a call") {
 
 TEST("AggregationInstance::make rejects a regular function") {
   auto dh = collecting_diagnostic_handler{};
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto instance = tenzir::test::make_aggregation(
     call("length", {root_field("x")}), dh, *reg);
   CHECK(not instance);
@@ -367,7 +368,7 @@ TEST("sum as a function on a non-list column warns and is null") {
 
 TEST("Aggregation folds each group's rows into its own state") {
   auto dh = collecting_diagnostic_handler{};
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto aggregation = Aggregation::make(call("sum", {root_field("x")}),
                                        InstantiateCtx{dh, *reg});
   REQUIRE(aggregation);
@@ -418,7 +419,7 @@ TEST("count_if evaluates its predicate once per batch across groups") {
   events.mask = bitmap({true, true, true, true, false});
   auto const a_rows = std::vector<storage::Index>{0, 1, 2};
   auto const b_rows = std::vector<storage::Index>{3};
-  auto const reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto const count_if = [&](ast::expression body, diagnostic_handler& dh) {
     auto aggregation = Aggregation::make(
       call("count_if", {root_field("x"), lambda("v", std::move(body))}),
@@ -461,7 +462,7 @@ TEST("count_if evaluates its predicate once per batch across groups") {
 TEST("sketch aggregations honor masks, accumulate across batches, and reset") {
   for (auto name : {"hll", "tdigest", "quantile", "median"}) {
     auto dh = collecting_diagnostic_handler{};
-    auto reg = global_registry();
+    auto const* reg = &test::builtin_registry();
     auto aggregate
       = tenzir::test::make_aggregation(call(name, {root_field("x")}), dh, *reg);
     REQUIRE(aggregate);
@@ -549,7 +550,7 @@ TEST("HLL registers retain the persisted type-sensitive hash contract") {
     expected[index] = std::max(expected[index], rank);
   }
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto aggregate
     = tenzir::test::make_aggregation(call("hll", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
@@ -565,7 +566,7 @@ TEST("HLL registers retain the persisted type-sensitive hash contract") {
 
 TEST("quantile narrows duration limits without overflowing") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto aggregate = tenzir::test::make_aggregation(
     call("quantile", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
@@ -598,7 +599,7 @@ TEST("quantile and median list warnings are scoped to an evaluation") {
   events.mask = bitmap({false, true, true, true, true, true, true, true, true});
   for (auto name : {"quantile", "median"}) {
     auto prepare_dh = collecting_diagnostic_handler{};
-    auto reg = global_registry();
+    auto const* reg = &test::builtin_registry();
     auto evaluator = tenzir::test::make_evaluator(
       call(name, {root_field("xs")}), prepare_dh, *reg);
     REQUIRE(evaluator);
@@ -626,7 +627,7 @@ TEST("quantile and median list warnings are scoped to an evaluation") {
 
 TEST("t-digest aggregation type warnings survive resets") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto aggregate = tenzir::test::make_aggregation(
     call("tdigest", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
@@ -662,7 +663,7 @@ TEST("t-digest list type warnings are scoped to an evaluation") {
   }
   auto events = make_events(builder.finish());
   auto prepare_dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto evaluator = tenzir::test::make_evaluator(
     call("tdigest", {root_field("xs")}), prepare_dh, *reg);
   REQUIRE(evaluator);
@@ -689,7 +690,7 @@ TEST("t-digest list type warnings are scoped to an evaluation") {
 
 TEST("t-digest accessors propagate null and ignore inactive invalid queries") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto aggregate = tenzir::test::make_aggregation(
     call("tdigest", {root_field("x")}), dh, *reg);
   REQUIRE(aggregate);
@@ -713,7 +714,7 @@ TEST("t-digest accessors propagate null and ignore inactive invalid queries") {
 TEST("models accumulate selected rows across batches, reset, and merge") {
   for (auto name : {"histogram", "frequency_table", "hll", "tdigest"}) {
     auto dh = collecting_diagnostic_handler{};
-    auto reg = global_registry();
+    auto const* reg = &test::builtin_registry();
     auto aggregation
       = tenzir::test::make_aggregation(distribution_call(name), dh, *reg);
     REQUIRE(aggregation);
@@ -754,7 +755,7 @@ TEST("models accumulate selected rows across batches, reset, and merge") {
 
 TEST("histogram warnings survive resets while counts start over") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto aggregation
     = tenzir::test::make_aggregation(distribution_call("histogram"), dh, *reg);
   REQUIRE(aggregation);
@@ -783,7 +784,7 @@ TEST("histogram warnings survive resets while counts start over") {
 TEST("model failures reset independently of their warning latches") {
   for (auto name : {"frequency_table", "model_merge"}) {
     auto dh = collecting_diagnostic_handler{};
-    auto reg = global_registry();
+    auto const* reg = &test::builtin_registry();
     auto aggregation
       = tenzir::test::make_aggregation(distribution_call(name), dh, *reg);
     REQUIRE(aggregation);

@@ -74,18 +74,18 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
 }
 
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
+                                      registry const& reg,
                                       ast::FieldSubstitution const& fields,
                                       ast::MetaSubstitution const& meta)
   -> split_filter_result {
-  auto const reg = global_registry();
   auto result = split_filter_result{};
   for (auto& expr : filter) {
-    auto substituted = ast::substitute_refs(expr, *reg, fields, meta);
+    auto substituted = ast::substitute_refs(expr, reg, fields, meta);
     if (not substituted) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    auto simplified = simplify_predicate(std::move(*substituted));
+    auto simplified = simplify_predicate(std::move(*substituted), reg);
     // A predicate that grows past the bound stays behind the operator.
     auto const size = expression_size(simplified);
     if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
@@ -229,7 +229,8 @@ auto ir::intersect_projection(Option<OptimizeProjection>& projection,
   projection = std::move(result);
 }
 
-auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
+auto make_where_ir(ast::expression filter, registry const& reg)
+  -> Box<ir::Operator> {
   // TODO: This should just be a `where_ir{std::move(filter)}`.
   const auto* where = plugins::find<operator_compiler_plugin>("where");
   TENZIR_ASSERT(where);
@@ -238,8 +239,7 @@ auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   // TODO: This is a terrible workaround. We are discarding diagnostics and
   // creating a new compile context, which should be created only once.
   auto dh = null_diagnostic_handler{};
-  auto reg = global_registry();
-  auto ctx = compile_ctx::make_root(base_ctx{dh, *reg});
+  auto ctx = compile_ctx::make_root(base_ctx{dh, reg});
   auto compiled
     = where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
         .unwrap();
@@ -387,7 +387,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // Validate args and substitute them into the body AST. The
             // session adopts `udo_dh` so that diagnostics also carry the
             // call-site usage and parameters.
-            auto sp = session_provider::make(udo_dh);
+            auto sp = session_provider::make(udo_dh, ctx.reg());
             auto inv
               = operator_factory_invocation{std::move(x.op), std::move(x.args)};
             TRY(auto substituted, instantiate_user_defined_operator(
@@ -459,10 +459,12 @@ auto ir::pipeline::prepend(pipeline other) -> void {
                    std::move_iterator{other.operators.end()});
 }
 
-auto ir::pipeline::prepend(OptimizeFilter filter) -> void {
+auto ir::pipeline::prepend(OptimizeFilter filter, registry const& reg) -> void {
   operators.insert_range(operators.begin(),
                          filter | std::views::as_rvalue
-                           | std::views::transform(make_where_ir));
+                           | std::views::transform([&](ast::expression expr) {
+                               return make_where_ir(std::move(expr), reg);
+                             }));
 }
 
 auto ir::pipeline::append(pipeline other) -> void {
@@ -472,10 +474,12 @@ auto ir::pipeline::append(pipeline other) -> void {
                    std::move_iterator{other.operators.end()});
 }
 
-auto ir::pipeline::append(OptimizeFilter filter) -> void {
+auto ir::pipeline::append(OptimizeFilter filter, registry const& reg) -> void {
   operators.insert_range(operators.end(),
                          filter | std::views::as_rvalue
-                           | std::views::transform(make_where_ir));
+                           | std::views::transform([&](ast::expression expr) {
+                               return make_where_ir(std::move(expr), reg);
+                             }));
 }
 
 auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
@@ -518,12 +522,11 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::infer_type(element_type_tag input,
-                              diagnostic_handler& dh) const
+auto ir::pipeline::infer_type(element_type_tag input, base_ctx ctx) const
   -> failure_or<element_type_tag> {
   auto frontier = input;
   for (auto& op : operators) {
-    TRY(frontier, op->infer_type(frontier, dh));
+    TRY(frontier, op->infer_type(frontier, ctx));
   }
   return frontier;
 }
@@ -539,7 +542,7 @@ auto ir::pipeline::optimize(OptimizeRequest req,
       req.order = EventOrder::unordered;
     }
     // Operators see and forward only simplified predicates.
-    req.filter = simplify_filter(std::move(req.filter));
+    req.filter = simplify_filter(std::move(req.filter), octx.reg);
     auto opt = std::move(*op).optimize(std::move(req), octx);
     req = OptimizeRequest{
       .filter = std::move(opt.filter),
@@ -568,7 +571,7 @@ auto ir::pipeline::optimize(OptimizeRequest req,
         j = k;
         break;
       }
-      aggregation = ops[k]->rewrite_aggregation(std::move(*aggregation));
+      aggregation = ops[k]->rewrite_aggregation(std::move(*aggregation), octx);
       if (aggregation) {
         auto& fallback = aggregation->fallback.operators;
         fallback.insert(fallback.begin(), ops[k]->copy());
@@ -576,7 +579,7 @@ auto ir::pipeline::optimize(OptimizeRequest req,
     }
   }
   return {
-    .filter = simplify_filter(std::move(req.filter)),
+    .filter = simplify_filter(std::move(req.filter), octx.reg),
     .order = req.order,
     .replacement = std::move(replacement),
     .limit = req.limit,
@@ -586,11 +589,10 @@ auto ir::pipeline::optimize(OptimizeRequest req,
 
 auto ir::Operator::optimize(OptimizeRequest req,
                             const OptimizeCtx& octx) && -> OptimizeResult {
-  TENZIR_UNUSED(octx);
   auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
   for (auto& expr : req.filter) {
-    replacement.push_back(make_where_ir(std::move(expr)));
+    replacement.push_back(make_where_ir(std::move(expr), octx.reg));
   }
   return {
     OptimizeFilter{},
@@ -609,9 +611,10 @@ auto ir::Operator::absorb_aggregation(OptimizeAggregation const& aggregation)
   return false;
 }
 
-auto ir::Operator::rewrite_aggregation(OptimizeAggregation aggregation) const
+auto ir::Operator::rewrite_aggregation(OptimizeAggregation aggregation,
+                                       OptimizeCtx const& octx) const
   -> Option<OptimizeAggregation> {
-  TENZIR_UNUSED(aggregation);
+  TENZIR_UNUSED(aggregation, octx);
   return None{};
 }
 
@@ -653,7 +656,7 @@ auto ir::Operator::display_name() const -> std::string {
   return n;
 }
 
-auto ir::Operator::infer_type(element_type_tag input, diagnostic_handler&) const
+auto ir::Operator::infer_type(element_type_tag input, base_ctx) const
   -> failure_or<element_type_tag> {
   return input;
 }

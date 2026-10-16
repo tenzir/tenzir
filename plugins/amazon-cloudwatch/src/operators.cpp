@@ -1530,7 +1530,7 @@ auto ToCloudWatch::process(table_slice input, OpCtx& ctx) -> Task<void> {
   }
   auto& dh = ctx.dh();
   auto timestamps
-    = detail::eval_as<time_type>("timestamp", args_.timestamp, input, dh, [] {
+    = detail::eval_as<time_type>("timestamp", args_.timestamp, input, ctx, [] {
         return current_time();
       });
   auto consume_timestamps = [&](int64_t count) {
@@ -1538,7 +1538,7 @@ auto ToCloudWatch::process(table_slice input, OpCtx& ctx) -> Task<void> {
       std::ignore = timestamps.next();
     }
   };
-  for (auto const& messages : eval(args_.payload, input, dh)) {
+  for (auto const& messages : eval(args_.payload, input, ctx)) {
     auto append = [&](auto const& array) -> Task<void> {
       for (auto i = int64_t{0}; i < array.length(); ++i) {
         auto t = current_time();

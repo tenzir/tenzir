@@ -162,8 +162,8 @@ struct TablePlan {
 /// need.
 auto make_table_plan(std::span<TableColumn const> columns,
                      ir::OptimizeFilter filter,
-                     Option<ir::OptimizeProjection> const& projection)
-  -> TablePlan;
+                     Option<ir::OptimizeProjection> const& projection,
+                     registry const& reg) -> TablePlan;
 
 /// Whether `make_aggregate_query` supports every function of `aggregation`.
 /// Whether it supports their inputs depends on the table's columns.

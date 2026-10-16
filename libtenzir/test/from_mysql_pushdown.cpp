@@ -10,6 +10,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pushdown/translate.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
@@ -84,7 +85,7 @@ auto make_columns() -> std::vector<TableColumn> {
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -124,8 +125,9 @@ auto translate(std::string_view source) -> Option<std::string> {
   auto columns = make_columns();
   auto model = make_column_model(columns);
   auto expr = parse(source);
-  pushdown::adapt_to_columns(expr, model);
-  auto translated = pushdown::translate_predicate(expr, model);
+  pushdown::adapt_to_columns(expr, model, test::builtin_registry());
+  auto translated
+    = pushdown::translate_predicate(expr, model, test::builtin_registry());
   if (not translated) {
     return None{};
   }
@@ -137,8 +139,9 @@ auto prefilter(std::string_view source) -> Option<std::string> {
   auto columns = make_columns();
   auto model = make_column_model(columns);
   auto expr = parse(source);
-  pushdown::adapt_to_columns(expr, model);
-  auto translated = pushdown::translate_prefilter(expr, model);
+  pushdown::adapt_to_columns(expr, model, test::builtin_registry());
+  auto translated
+    = pushdown::translate_prefilter(expr, model, test::builtin_registry());
   if (not translated) {
     return None{};
   }
@@ -324,8 +327,9 @@ TEST("unsupported columns and arithmetic stay local") {
 TEST("plans push what translates and select what remains") {
   auto columns = make_columns();
   // Everything translates: the filter's columns need not be selected.
-  auto plan = make_table_plan(columns, filter_of({"id > 0", R"(t == "x")"}),
-                              projection_of({"s", "id"}));
+  auto plan
+    = make_table_plan(columns, filter_of({"id > 0", R"(t == "x")"}),
+                      projection_of({"s", "id"}), test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`id`, `s`");
   CHECK_EQUAL(fmt::to_string(fmt::join(plan.pushed, " AND ")),
               "`id` > 0 AND CAST(`t` AS BINARY) = _binary'x'");
@@ -336,7 +340,7 @@ TEST("plans push what translates and select what remains") {
   // A conjunct without translation stays local, keeps its column, and takes
   // the limit with it.
   plan = make_table_plan(columns, filter_of({"id > 0 and f > 1"}),
-                         projection_of({"s"}));
+                         projection_of({"s"}), test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`f`, `s`");
   CHECK_EQUAL(fmt::to_string(fmt::join(plan.pushed, " AND ")), "`id` > 0");
   REQUIRE_EQUAL(plan.local.size(), size_t{1});
@@ -344,11 +348,12 @@ TEST("plans push what translates and select what remains") {
               "SELECT `f`, `s` FROM `tbl` WHERE `id` > 0");
   // A local function call may look at any field.
   plan = make_table_plan(columns, filter_of({"t.to_upper() == \"X\""}),
-                         projection_of({"s"}));
+                         projection_of({"s"}), test::builtin_registry());
   CHECK_EQUAL(plan.selection, "*");
   CHECK(plan.pushed.empty());
   // Without a projection, downstream needs every field.
-  plan = make_table_plan(columns, filter_of({"id > 0"}), None{});
+  plan = make_table_plan(columns, filter_of({"id > 0"}), None{},
+                         test::builtin_registry());
   CHECK_EQUAL(plan.selection, "*");
   CHECK_EQUAL(make_table_query(plan, "tbl", None{}),
               "SELECT * FROM `tbl` WHERE `id` > 0");
@@ -361,28 +366,35 @@ TEST("projections keep exact names and rows") {
   auto columns = make_columns();
   // Only exact names select a column: MySQL would label `ID` as written.
   auto plan
-    = make_table_plan(columns, {}, projection_of({"ID", "missing", "t.x"}));
+    = make_table_plan(columns, {}, projection_of({"ID", "missing", "t.x"}),
+                      test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`t`");
   // An empty projection still needs the rows, so it selects the first column.
-  plan = make_table_plan(columns, {}, ir::OptimizeProjection{});
+  plan = make_table_plan(columns, {}, ir::OptimizeProjection{},
+                         test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`id`");
-  plan = make_table_plan(columns, {}, projection_of({"missing"}));
+  plan = make_table_plan(columns, {}, projection_of({"missing"}),
+                         test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`id`");
   // `SELECT *` leaves out invisible columns, so a projection does, too.
-  plan = make_table_plan(columns, {}, projection_of({"hidden", "id"}));
+  plan = make_table_plan(columns, {}, projection_of({"hidden", "id"}),
+                         test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`id`");
-  plan = make_table_plan(columns, {}, projection_of({"this"}));
+  plan = make_table_plan(columns, {}, projection_of({"this"}),
+                         test::builtin_registry());
   CHECK_EQUAL(plan.selection, "*");
   // Identifiers escape backticks.
   auto odd = std::vector<TableColumn>{other("a`b", "int", "int")};
   plan = make_table_plan(odd, filter_of({"this[\"a`b\"] > 1"}),
-                         projection_of({"this[\"a`b\"]"}));
+                         projection_of({"this[\"a`b\"]"}),
+                         test::builtin_registry());
   CHECK_EQUAL(plan.selection, "`a``b`");
   CHECK_EQUAL(fmt::to_string(fmt::join(plan.pushed, " AND ")), "`a``b` > 1");
 }
 
 TEST("unknown tables leave everything local") {
-  auto plan = make_table_plan({}, filter_of({"id > 0"}), projection_of({"id"}));
+  auto plan = make_table_plan({}, filter_of({"id > 0"}), projection_of({"id"}),
+                              test::builtin_registry());
   CHECK_EQUAL(plan.selection, "*");
   CHECK(plan.pushed.empty());
   CHECK_EQUAL(plan.local.size(), size_t{1});

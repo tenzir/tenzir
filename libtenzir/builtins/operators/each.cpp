@@ -319,7 +319,8 @@ public:
                     or std::same_as<Input, nova::Events>) {
         TRY(auto p, ctx.get(pipe));
         auto null_dh = null_diagnostic_handler{};
-        auto result = p.inner.infer_type(tag_v<void>, null_dh);
+        auto result
+          = p.inner.infer_type(tag_v<void>, base_ctx{null_dh, ctx.reg()});
         if (not result) {
           diagnostic::error("pipeline inside `each` must be a source")
             .primary(p.source)

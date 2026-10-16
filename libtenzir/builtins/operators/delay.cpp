@@ -41,7 +41,7 @@ public:
     if (not start_time_) {
       start_time_ = std::chrono::steady_clock::now();
     }
-    auto times_series = eval(expr_, input, ctx.dh());
+    auto times_series = eval(expr_, input, ctx);
     size_t begin = 0;
     size_t end = 0;
     for (auto& ser : times_series) {

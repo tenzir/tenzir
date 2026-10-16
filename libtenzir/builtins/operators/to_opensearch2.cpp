@@ -383,19 +383,19 @@ public:
         = []() -> generator<Option<view3<std::string>>> {
         co_yield None{};
       };
-      auto id = args_.id ? detail::eval_as<string_type>("id", *args_.id, input,
-                                                        ctx.dh())
-                         : null_values();
-      auto idx = args_.index
-                   ? detail::eval_as<string_type>("index", *args_.index, input,
-                                                  ctx.dh())
-                   : null_values();
+      auto id = args_.id
+                  ? detail::eval_as<string_type>("id", *args_.id, input, ctx)
+                  : null_values();
+      auto idx
+        = args_.index
+            ? detail::eval_as<string_type>("index", *args_.index, input, ctx)
+            : null_values();
       auto act
-        = detail::eval_as<string_type>("action", args_.action, input, ctx.dh());
+        = detail::eval_as<string_type>("action", args_.action, input, ctx);
       auto docs
         = eval(args_.doc ? *args_.doc
                          : ast::expression{ast::this_{args_.operator_location}},
-               input, ctx.dh());
+               input, ctx);
       co_await process_rows(docs.values3(), std::move(id), std::move(idx),
                             std::move(act), ctx);
     }

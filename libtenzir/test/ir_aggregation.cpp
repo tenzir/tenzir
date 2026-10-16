@@ -14,6 +14,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -34,7 +35,7 @@ using Path = std::vector<std::string>;
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -104,7 +105,7 @@ public:
     return Mock{std::move(*this)};
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler&) const
+  auto infer_type(element_type_tag input, base_ctx) const
     -> failure_or<element_type_tag> override {
     return input;
   }
@@ -113,7 +114,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
     TENZIR_UNREACHABLE();
   }
 
@@ -135,8 +136,10 @@ public:
     return true;
   }
 
-  auto rewrite_aggregation(ir::OptimizeAggregation aggregation) const
+  auto rewrite_aggregation(ir::OptimizeAggregation aggregation,
+                           ir::OptimizeCtx const& octx) const
     -> Option<ir::OptimizeAggregation> override {
+    TENZIR_UNUSED(octx);
     if (kind_ != Kind::rename) {
       return None{};
     }
@@ -169,8 +172,12 @@ auto make_pipeline(std::vector<Mock> ops) -> ir::pipeline {
   return result;
 }
 
+auto optimize_ctx() -> ir::OptimizeCtx {
+  return ir::OptimizeCtx{.reg = test::builtin_registry()};
+}
+
 auto optimized(ir::pipeline pipe) -> ir::pipeline {
-  return ir::optimize(std::move(pipe));
+  return ir::optimize(std::move(pipe), optimize_ctx());
 }
 
 auto names(ir::pipeline const& pipe) -> std::vector<std::string> {
@@ -190,7 +197,7 @@ auto absorbed(ir::pipeline const& pipe, size_t index)
 
 /// Compiles `source` without instantiating it, as for a subpipeline.
 auto compile(base_ctx ctx, std::string_view source) -> ir::pipeline {
-  auto provider = session_provider::make(ctx);
+  auto provider = session_provider::make(ctx.dh(), ctx.reg());
   auto ast = parse_pipeline_with_location_override(source, location::unknown,
                                                    provider.as_session());
   REQUIRE(ast);
@@ -203,7 +210,7 @@ auto compile(base_ctx ctx, std::string_view source) -> ir::pipeline {
 auto through_set(std::vector<ast::assignment> assignments)
   -> Option<ir::OptimizeAggregation> {
   return ir::SetIr{std::move(assignments)}.rewrite_aggregation(
-    make_aggregation());
+    make_aggregation(), optimize_ctx());
 }
 
 } // namespace
@@ -386,7 +393,7 @@ TEST("absorbed fallback receives the bindings of its pipeline") {
   // Only the Nova operator of `from_mysql` computes aggregations.
   set_nova_enabled(true);
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   // A `set` that reads a binding never qualifies for the rewrite, because the
   // unresolved binding could fail. This simulates an operator that does, which
@@ -400,7 +407,7 @@ TEST("absorbed fallback receives the bindings of its pipeline") {
   // instantiation, but bindings do not.
   REQUIRE(pipe.substitute(substitute_ctx{ctx, nullptr}, false));
   CHECK(not pipe.operators[1]->rewrite_aggregation(
-    *pipe.operators[2]->aggregation()));
+    *pipe.operators[2]->aggregation(), optimize_ctx()));
   auto aggregation = pipe.operators[2]->aggregation();
   REQUIRE(aggregation);
   aggregation->fallback.operators.insert(
@@ -419,12 +426,12 @@ TEST("absorbed fallback receives the bindings of its pipeline") {
 TEST("generic operators decline aggregations after absorbing events") {
   set_nova_enabled(true);
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   auto run = [&](std::string_view source) {
     auto pipe = ir::instantiate(compile(ctx, source), ctx);
     REQUIRE(pipe);
-    return names(ir::optimize(std::move(*pipe)));
+    return names(ir::optimize(std::move(*pipe), optimize_ctx()));
   };
   // `drop` passes the summary to the source.
   CHECK_EQUAL(run("from_mysql table=\"t\", host=\"h\"\n"

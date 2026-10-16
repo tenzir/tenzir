@@ -1270,7 +1270,7 @@ public:
       offset_ = 0;
       co_return;
     }
-    co_await parse_available(push, ctx.dh());
+    co_await parse_available(push, ctx);
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -1279,7 +1279,7 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (mode_ == ReadFeatherMode::file) {
-      co_await parse_file(push, ctx.dh());
+      co_await parse_file(push, ctx);
       co_return FinalizeBehavior::done;
     }
     auto trailing_bytes = truncated_bytes_ + available();
@@ -1339,8 +1339,7 @@ private:
     return result;
   }
 
-  auto parse_available(Push<table_slice>& push, diagnostic_handler& dh)
-    -> Task<void> {
+  auto parse_available(Push<table_slice>& push, base_ctx ctx) -> Task<void> {
     while (not done_) {
       auto required_size
         = detail::narrow_cast<size_t>(stream_decoder_->next_required_size());
@@ -1377,7 +1376,7 @@ private:
             emit_with_location(diagnostic::warning("truncated Feather input")
                                  .note("discarded {} trailing bytes",
                                        trailing_bytes),
-                               dh, args_.operator_location);
+                               ctx, args_.operator_location);
           }
           done_ = true;
           co_return;
@@ -1386,7 +1385,7 @@ private:
           diagnostic::error("failed to decode Feather input")
             .note("{}", decode_result.ToStringWithoutContextLines())
             .note("failed to decode the byte stream into a record batch"),
-          dh, args_.operator_location);
+          ctx, args_.operator_location);
         done_ = true;
         co_return;
       }
@@ -1403,7 +1402,7 @@ private:
             emit_with_location(
               diagnostic::error("failed to decode Feather input")
                 .note("{}", status.ToStringWithoutContextLines()),
-              dh, args_.operator_location);
+              ctx, args_.operator_location);
             done_ = true;
             co_return;
           }
@@ -1419,12 +1418,12 @@ private:
         auto batch = listener_->record_batch_buffer.front();
         listener_->record_batch_buffer.pop();
         auto slice
-          = make_table_slice(std::move(batch), dh, args_.operator_location);
+          = make_table_slice(std::move(batch), ctx, args_.operator_location);
         if (not slice) {
           done_ = true;
           co_return;
         }
-        co_await emit_slice(std::move(*slice), push, dh);
+        co_await emit_slice(std::move(*slice), push, ctx);
         if (done_) {
           co_return;
         }
@@ -1432,24 +1431,23 @@ private:
     }
   }
 
-  auto emit_slice(table_slice slice, Push<table_slice>& push,
-                  diagnostic_handler& dh) -> Task<void> {
+  auto emit_slice(table_slice slice, Push<table_slice>& push, base_ctx ctx)
+    -> Task<void> {
     slice = pushdown::apply_read(std::move(slice), args_.optimization.filter,
-                                 remaining_, dh);
+                                 remaining_, ctx);
     if (slice.rows() != 0) {
       co_await push(std::move(slice));
     }
     done_ = remaining_ == uint64_t{0};
   }
 
-  auto parse_file(Push<table_slice>& push, diagnostic_handler& dh)
-    -> Task<void> {
+  auto parse_file(Push<table_slice>& push, base_ctx ctx) -> Task<void> {
     auto input = join_chunks(std::move(file_chunks_));
     auto batches = store::decode_ipc_file(std::move(input), projection_);
     if (not batches) {
       emit_with_location(diagnostic::error("failed to decode Feather input")
                            .note("{}", batches.error()),
-                         dh, args_.operator_location);
+                         ctx, args_.operator_location);
       done_ = true;
       co_return;
     }
@@ -1457,18 +1455,18 @@ private:
       if (not batch_result) {
         emit_with_location(diagnostic::error("failed to decode Feather input")
                              .note("{}", batch_result.error()),
-                           dh, args_.operator_location);
+                           ctx, args_.operator_location);
         done_ = true;
         co_return;
       }
       auto batch = std::move(*batch_result);
       auto slice
-        = make_table_slice(std::move(batch), dh, args_.operator_location);
+        = make_table_slice(std::move(batch), ctx, args_.operator_location);
       if (not slice) {
         done_ = true;
         co_return;
       }
-      co_await emit_slice(std::move(*slice), push, dh);
+      co_await emit_slice(std::move(*slice), push, ctx);
       if (done_) {
         break;
       }

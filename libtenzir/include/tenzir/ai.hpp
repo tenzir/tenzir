@@ -165,7 +165,7 @@ auto assign_results(nova::Events& events, ast::field_path const& into,
 /// events that fail to serialize. See `InputPrinter` for the arguments.
 auto print_inputs(Option<ast::expression> const& expr,
                   ast::field_path const& into, location self,
-                  table_slice const& input, diagnostic_handler& dh)
+                  table_slice const& input, base_ctx ctx)
   -> std::vector<Option<std::string>>;
 
 /// Writes one result per event from `results` into the `into` field.

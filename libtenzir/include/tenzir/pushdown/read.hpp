@@ -40,8 +40,7 @@ auto read_projection_paths(Option<ir::OptimizeProjection> projection,
 /// The limit counts only events that survive every predicate, and `remaining`
 /// is decremented by the number of rows returned.
 auto apply_read(table_slice slice, ir::OptimizeFilter const& filter,
-                Option<uint64_t>& remaining, diagnostic_handler& dh)
-  -> table_slice;
+                Option<uint64_t>& remaining, base_ctx ctx) -> table_slice;
 
 /// Apply prepared predicates and the remaining limit by narrowing the active
 /// mask. Columns and metadata stay intact; only surviving rows count.

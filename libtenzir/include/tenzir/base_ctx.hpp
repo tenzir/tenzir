@@ -38,6 +38,14 @@ public:
     return reg_;
   }
 
+  auto dh() const -> diagnostic_handler& {
+    return dh_;
+  }
+
+  auto reg() const -> registry const& {
+    return reg_;
+  }
+
 private:
   std::reference_wrapper<diagnostic_handler> dh_;
   std::reference_wrapper<const registry> reg_;

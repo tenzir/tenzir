@@ -45,7 +45,7 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     // eval
-    auto s = eval(selector_, input, ctx.dh());
+    auto s = eval(selector_, input, ctx);
     // validate type
     if (s.type.kind().is_not<time_type>()) {
       if (s.type.kind().is_not<null_type>()) {

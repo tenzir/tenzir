@@ -36,6 +36,7 @@
 #include "tenzir/session.hpp"
 #include "tenzir/store.hpp"
 #include "tenzir/tql2/exec.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/compute/api.h>
@@ -689,15 +690,15 @@ private:
 /// Compile an AST events-to-events pipeline to an executable plan. The plan
 /// consumes and produces the event type of the current execution mode. Emits
 /// diagnostics via `dh` for any failure.
-auto compile_transform(ast::pipeline ast, diagnostic_handler& dh)
-  -> failure_or<ir::Plan> {
-  auto provider = session_provider::make(dh);
+auto compile_transform(ast::pipeline ast, diagnostic_handler& dh,
+                       registry const& reg) -> failure_or<ir::Plan> {
+  auto provider = session_provider::make(dh, reg);
   auto ctx = provider.as_session();
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   auto root = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(root));
   auto input = events_element_type();
-  TRY(auto output, ir.infer_type(input, dh));
+  TRY(auto output, ir.infer_type(input, b_ctx));
   if (output != input) {
     diagnostic::error("partition transform: pipeline must produce events, "
                       "got {}",
@@ -1234,8 +1235,12 @@ auto partition_transformer(
             co_return {};
           }
           auto dh = TransformerDiagHandler{};
-          CO_TRY(auto plan, compile_transform(
-                              as<ast::pipeline>(std::move(transform)), dh));
+          // A node component: the transform compiles and runs against the
+          // node's registry as it is now.
+          auto reg = global_registry();
+          CO_TRY(auto plan,
+                 compile_transform(as<ast::pipeline>(std::move(transform)), dh,
+                                   *reg));
           // The store holds table slices, but the transform pipeline runs on
           // the event type of the current execution mode, so we convert at
           // the boundary.
@@ -1299,7 +1304,7 @@ auto partition_transformer(
               }
             };
             co_return co_await run_plan_with_io<T>(
-              std::move(plan), sys, dh, NoProfiler{}, /*is_hidden=*/true,
+              std::move(plan), reg, sys, dh, NoProfiler{}, /*is_hidden=*/true,
               std::move(feed_input), std::move(drain_output));
           };
           if (nova_enabled()) {

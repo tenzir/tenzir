@@ -163,6 +163,10 @@ public:
   virtual auto checkpoint_settings() const -> Option<CheckpointSettings const&>
     = 0;
 
+  /// Returns the registry that the pipeline was compiled against. Operators
+  /// resolve and compile anything they create at runtime against it.
+  virtual auto reg() const -> registry const& = 0;
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 

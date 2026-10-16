@@ -50,9 +50,8 @@ auto inline has_location(const diagnostic& diag) -> bool {
 template <class OnRun>
 auto split_into_table_runs(const table_slice& slice,
                            const ast::expression& table, location table_loc,
-                           diagnostic_handler& dh, OnRun on_run)
-  -> failure_or<void> {
-  const auto table_values = eval(table, slice, dh);
+                           base_ctx ctx, OnRun on_run) -> failure_or<void> {
+  const auto table_values = eval(table, slice, ctx);
   auto begin = int64_t{0};
   for (const auto& tables : table_values.parts()) {
     auto strings = tables.as<string_type>();
@@ -60,7 +59,7 @@ auto split_into_table_runs(const table_slice& slice,
       diagnostic::warning("expected `string`, got `{}`", tables.type.kind())
         .primary(table)
         .note("event is skipped")
-        .emit(dh);
+        .emit(ctx);
       begin += tables.length();
       continue;
     }
@@ -86,11 +85,11 @@ auto split_into_table_runs(const table_slice& slice,
         diagnostic::warning("expected `string`, got `null`")
           .primary(table)
           .note("event is skipped")
-          .emit(dh);
+          .emit(ctx);
         continue;
       }
       const auto table_name = array.GetView(i);
-      if (not validate_table_name<false>(table_name, table_loc, dh)) {
+      if (not validate_table_name<false>(table_name, table_loc, ctx)) {
         TRY(flush(i));
         continue;
       }
@@ -171,9 +170,11 @@ private:
   struct ctor_token {};
 
 public:
-  explicit easy_client(arguments args, diagnostic_handler& dh, ctor_token)
+  easy_client(arguments args, diagnostic_handler& dh, registry const& reg,
+              ctor_token)
     : client_{args.make_options()},
       args_{std::move(args)},
+      reg_{reg},
       dh_{dh, [loc = args_.operator_location](diagnostic diag) -> diagnostic {
             if (not has_location(diag)) {
               diag.annotations.emplace_back(true, std::string{}, loc);
@@ -183,7 +184,7 @@ public:
   }
 
   // Precondition: `args.ssl` has been populated via `tls_options::resolve()`.
-  static auto make(arguments args, diagnostic_handler& dh)
+  static auto make(arguments args, diagnostic_handler& dh, registry const& reg)
     -> std::shared_ptr<easy_client>;
 
   /// Like `make`, but wraps the client in an async `Mutex` so it can be shared
@@ -192,8 +193,8 @@ public:
   /// copyable, so it is constructed in place inside the `Mutex`.
   ///
   /// Precondition: `args.ssl` has been populated via `tls_options::resolve()`.
-  static auto make_locked(arguments args, diagnostic_handler& dh)
-    -> Arc<Mutex<easy_client>>;
+  static auto make_locked(arguments args, diagnostic_handler& dh,
+                          registry const& reg) -> Arc<Mutex<easy_client>>;
 
   auto dh() -> diagnostic_handler& {
     return dh_;
@@ -266,6 +267,8 @@ private:
   ::clickhouse::Client client_;
   std::mutex client_mutex_;
   arguments args_;
+  /// What the table expression evaluates against.
+  Ref<registry const> reg_;
   transforming_diagnostic_handler dh_;
   detail::heterogeneous_string_hashmap<transformer_record> transformations_;
 

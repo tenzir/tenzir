@@ -123,43 +123,43 @@ auto resolve(const ast::field_path& sel, type ty)
   });
 }
 
-auto eval(const ast::expression& expr, const table_slice& input,
-          diagnostic_handler& dh) -> multi_series {
+auto eval(const ast::expression& expr, const table_slice& input, base_ctx ctx)
+  -> multi_series {
   return trace_panic(expr, [&] -> multi_series {
     // TODO: Do not create a new session here.
-    auto sp = session_provider::make(dh);
+    auto sp = session_provider::make(ctx.dh(), ctx.reg());
     auto result = evaluator{&input, sp.as_session()}.eval(expr, {});
     TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(input.rows()));
     return result;
   });
 }
 
-auto eval(const ast::field_path& expr, const table_slice& input,
-          diagnostic_handler& dh) -> series {
+auto eval(const ast::field_path& expr, const table_slice& input, base_ctx ctx)
+  -> series {
   return trace_panic(expr, [&] -> series {
-    auto result = eval(expr.inner(), input, dh);
+    auto result = eval(expr.inner(), input, ctx);
     TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(input.rows()));
     TENZIR_ASSERT(result.parts().size() == 1);
     return std::move(result.parts()[0]);
   });
 }
 
-auto eval(const ast::constant& expr, const table_slice& input,
-          diagnostic_handler& dh) -> series {
+auto eval(const ast::constant& expr, const table_slice& input, base_ctx ctx)
+  -> series {
   return trace_panic(expr, [&] -> series {
-    auto result = eval(ast::expression{expr}, input, dh);
+    auto result = eval(ast::expression{expr}, input, ctx);
     TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(input.rows()));
     TENZIR_ASSERT(result.parts().size() == 1);
     return std::move(result.parts()[0]);
   });
 }
 
-auto const_eval_series(const ast::expression& expr, diagnostic_handler& dh)
+auto const_eval_series(const ast::expression& expr, base_ctx ctx)
   -> failure_or<series> {
   return trace_panic(expr, [&] -> failure_or<series> {
     // TODO: Do not create a new session here.
     try {
-      auto sp = session_provider::make(dh);
+      auto sp = session_provider::make(ctx.dh(), ctx.reg());
       auto result = evaluator{nullptr, sp.as_session()}.eval(expr, {});
       TENZIR_ASSERT(result.length() == 1);
       TENZIR_ASSERT(result.parts().size() == 1);
@@ -170,9 +170,9 @@ auto const_eval_series(const ast::expression& expr, diagnostic_handler& dh)
   });
 }
 
-auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
+auto const_eval(const ast::expression& expr, base_ctx ctx)
   -> failure_or<located<data>> {
-  TRY(auto part, const_eval_series(expr, dh));
+  TRY(auto part, const_eval_series(expr, ctx));
   return located{materialize(view_at(*part.array, 0)), expr.get_location()};
 }
 
@@ -187,8 +187,7 @@ auto try_const_eval(const ast::expression& expr, session ctx)
       return None{};
     }
     auto const_dh = collecting_diagnostic_handler{};
-    auto const_sp = session_provider::make(const_dh);
-    if (auto result = const_eval(expr, const_dh)) {
+    if (auto result = const_eval(expr, base_ctx{const_dh, ctx.reg()})) {
       std::move(const_dh).forward_to(ctx);
       return std::move(*result);
     }
@@ -197,7 +196,7 @@ auto try_const_eval(const ast::expression& expr, session ctx)
 }
 
 auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
-          const table_slice& slice, diagnostic_handler& dh) -> multi_series {
+          const table_slice& slice, base_ctx ctx) -> multi_series {
   return trace_panic(lambda, [&] -> multi_series {
     TENZIR_ASSERT(input.array);
     TENZIR_ASSERT(input.array->values());
@@ -225,7 +224,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
       }
     }
     if (capture_offsets.empty()) {
-      return eval(lambda, series{ty, values}, dh);
+      return eval(lambda, series{ty, values}, ctx);
     }
     const auto to = check(
       ast::field_path::try_from(ast::root_field{lambda.param(0), false}));
@@ -242,13 +241,13 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
       slice.schema(),
     };
     repeated.import_time(slice.import_time());
-    const auto slice = assign(to, {ty, values}, repeated, dh);
-    return eval(lambda.body, slice, dh);
+    const auto slice = assign(to, {ty, values}, repeated, ctx);
+    return eval(lambda.body, slice, ctx);
   });
 }
 
 auto eval(const ast::lambda_expr& lambda, const multi_series& input,
-          diagnostic_handler& dh) -> multi_series {
+          base_ctx ctx) -> multi_series {
   return trace_panic(lambda, [&] -> multi_series {
     ensure_unary_lambda(lambda);
     auto result = multi_series{};
@@ -271,17 +270,17 @@ auto eval(const ast::lambda_expr& lambda, const multi_series& input,
                                  arrow::ArrayVector{part.array}),
         std::move(schema),
       };
-      result.append(eval(lambda.body, slice, dh));
+      result.append(eval(lambda.body, slice, ctx));
     }
     return result;
   });
 }
 
-auto eval(const ast::lambda_expr& lambda, const data& input,
-          diagnostic_handler& dh) -> data {
+auto eval(const ast::lambda_expr& lambda, const data& input, base_ctx ctx)
+  -> data {
   return trace_panic(lambda, [&] -> data {
     ensure_unary_lambda(lambda);
-    const auto result = eval(lambda, data_to_series(input, int64_t{1}), dh);
+    const auto result = eval(lambda, data_to_series(input, int64_t{1}), ctx);
     TENZIR_ASSERT(result.parts().size() == 1);
     TENZIR_ASSERT(result.part(0).length() == 1);
     return materialize(view_at(*result.part(0).array, 0));

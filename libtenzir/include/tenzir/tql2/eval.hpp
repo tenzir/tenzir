@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series.hpp"
@@ -17,23 +18,23 @@
 
 namespace tenzir {
 
-auto eval(const ast::expression& expr, const table_slice& input,
-          diagnostic_handler& dh) -> multi_series;
+auto eval(const ast::expression& expr, const table_slice& input, base_ctx ctx)
+  -> multi_series;
 
 // A simple selector always yields a single type.
-auto eval(const ast::field_path& expr, const table_slice& input,
-          diagnostic_handler& dh) -> series;
+auto eval(const ast::field_path& expr, const table_slice& input, base_ctx ctx)
+  -> series;
 
 // A constant always yields a single type.
-auto eval(const ast::constant& expr, const table_slice& input,
-          diagnostic_handler& dh) -> series;
+auto eval(const ast::constant& expr, const table_slice& input, base_ctx ctx)
+  -> series;
 
 /// Constant evaluates an expression to a single series (no table input).
-auto const_eval_series(const ast::expression& expr, diagnostic_handler& dh)
+auto const_eval_series(const ast::expression& expr, base_ctx ctx)
   -> failure_or<series>;
 
 /// Constant evaluates an expression, even if it is non-deterministic.
-auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
+auto const_eval(const ast::expression& expr, base_ctx ctx)
   -> failure_or<located<data>>;
 
 /// Tries to evaluate a determistic expression to a constant value. Emits
@@ -42,13 +43,13 @@ auto try_const_eval(const ast::expression& expr, session ctx)
   -> Option<located<data>>;
 
 auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
-          const table_slice& slice, diagnostic_handler& dh) -> multi_series;
+          const table_slice& slice, base_ctx ctx) -> multi_series;
 
 auto eval(const ast::lambda_expr& lambda, const multi_series& input,
-          diagnostic_handler& dh) -> multi_series;
+          base_ctx ctx) -> multi_series;
 
-auto eval(const ast::lambda_expr& lambda, const data& input,
-          diagnostic_handler& dh) -> data;
+auto eval(const ast::lambda_expr& lambda, const data& input, base_ctx ctx)
+  -> data;
 
 struct resolve_error {
   struct field_not_found {};

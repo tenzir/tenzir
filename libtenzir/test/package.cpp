@@ -10,6 +10,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/source.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/registry.hpp"
 
@@ -23,7 +24,8 @@ TEST("build_package_operator_module populates UDO source") {
   op.tql_body = "where true";
   pkg.operators.emplace(std::vector<std::string>{"echo"}, std::move(op));
   auto dh = null_diagnostic_handler{};
-  auto module = build_package_operator_module(pkg, dh);
+  auto module
+    = build_package_operator_module(pkg, dh, test::builtin_registry());
   REQUIRE(module);
   auto package_it = (*module)->defs.find("sourcepkg");
   REQUIRE(package_it != (*module)->defs.end());

@@ -258,12 +258,12 @@ auto assign_results(nova::Events& events, ast::field_path const& into,
 
 auto print_inputs(Option<ast::expression> const& expr,
                   ast::field_path const& into, location self,
-                  table_slice const& input, diagnostic_handler& dh)
+                  table_slice const& input, base_ctx ctx)
   -> std::vector<Option<std::string>> {
   auto values = expr
-                  ? eval(*expr, input, dh)
+                  ? eval(*expr, input, ctx)
                   : eval(ast::expression{ast::this_{self}},
-                         drop(input, default_input_exclusions(into), dh), dh);
+                         drop(input, default_input_exclusions(into), ctx), ctx);
   static auto const printer = json_printer{json_printer_options{
     .style = no_style(),
     .oneline = true,

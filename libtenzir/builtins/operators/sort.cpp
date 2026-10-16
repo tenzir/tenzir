@@ -54,18 +54,19 @@ public:
     return args_.substitute(ctx, instantiate);
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<nova::Events>() and input.is_not<table_slice>()) {
       diagnostic::error("operator expects events")
         .primary(main_location())
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return input;
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     if (input.is<nova::Events>()) {
       return make_sort(args_.get(), limit_);
     }

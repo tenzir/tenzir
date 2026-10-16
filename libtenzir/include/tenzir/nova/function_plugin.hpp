@@ -71,9 +71,9 @@ struct NamedArgument {
 /// locations of the named arguments that the call provided.
 class FunctionValidateCtx final : public diagnostic_handler {
 public:
-  FunctionValidateCtx(diagnostic_handler& dh,
+  FunctionValidateCtx(diagnostic_handler& dh, registry const& reg,
                       std::span<Option<location> const> named)
-    : dh_{dh}, named_{named} {
+    : dh_{dh}, reg_{reg}, named_{named} {
   }
 
   void emit(diagnostic d) override {
@@ -86,8 +86,14 @@ public:
     return named_[arg.index];
   }
 
+  /// The registry that the call is instantiated against.
+  explicit(false) operator registry const&() const {
+    return reg_;
+  }
+
 private:
   Ref<diagnostic_handler> dh_;
+  Ref<registry const> reg_;
   std::span<Option<location> const> named_;
 };
 

@@ -114,7 +114,7 @@ public:
         });
       }
     } else {
-      for (const auto& messages : eval(args_.message, input, dh)) {
+      for (const auto& messages : eval(args_.message, input, ctx)) {
         match(
           *messages.array,
           [&](const arrow::StringArray& array) {

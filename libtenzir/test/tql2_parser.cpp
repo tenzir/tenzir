@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/source.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -40,7 +41,7 @@ TEST("tql2 tokenizer: source-aware token errors use source id") {
   map.add_source(source);
   auto stream = std::stringstream{};
   auto printer = make_diagnostic_printer(map, color_diagnostics::no, stream);
-  auto provider = session_provider::make(*printer);
+  auto provider = session_provider::make(*printer, test::builtin_registry());
   auto tokens = tokenize_permissive(source->text);
   auto result = verify_tokens(tokens, *source, provider.as_session());
   CHECK(not result);
@@ -51,7 +52,7 @@ TEST("tql2 tokenizer: source-aware token errors use source id") {
 
 TEST("tql2 tokenizer: neo compatibility directive") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto source = Source::new_source("// neo: false\npass", "<input>", true);
   auto result = tokenize(*source, provider.as_session());
   CHECK(not result);
@@ -61,7 +62,8 @@ TEST("tql2 tokenizer: neo compatibility directive") {
               "setting `neo` to `false` is no longer supported");
 
   auto accepting_dh = collecting_diagnostic_handler{};
-  auto accepting_provider = session_provider::make(accepting_dh);
+  auto accepting_provider
+    = session_provider::make(accepting_dh, test::builtin_registry());
   source = Source::new_source("// neo: true\npass", "<input>", true);
   CHECK(tokenize(*source, accepting_provider.as_session()));
   CHECK(std::move(accepting_dh).collect().empty());
@@ -69,7 +71,7 @@ TEST("tql2 tokenizer: neo compatibility directive") {
 
 TEST("tql2 tokenizer: location override is exact") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto tokens = tokenize_permissive("`");
   auto override = location{42, 99, 7, 3};
   auto result = verify_tokens(tokens, override, provider.as_session());
@@ -82,7 +84,7 @@ TEST("tql2 tokenizer: location override is exact") {
 
 TEST("tql2 parser: bad type diagnostics use exact location override") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto override = location{12, 34, 5, 6};
   auto parsed = parse_type_def_with_location_override("foo bar", override,
                                                       provider.as_session());
@@ -95,7 +97,7 @@ TEST("tql2 parser: bad type diagnostics use exact location override") {
 
 TEST("tql2 parser: AST locations use exact location override") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto override = location{12, 34, 5, 6};
   auto parsed = parse_assignment_with_location_override(
     "$event.foo = 1", override, provider.as_session());
@@ -105,7 +107,7 @@ TEST("tql2 parser: AST locations use exact location override") {
 
 TEST("tql2 parser: dollar variable selector paths") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto parse = [&](std::string_view source) {
     auto assignment = parse_assignment_with_location_override(
       source, location::unknown, provider.as_session());
@@ -132,7 +134,7 @@ TEST("tql2 parser: dollar variable selector paths") {
 
 TEST("tql2 parser: expression stream parses multiple records") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto source = std::string_view{"{x:1}\n{x:2}"};
   auto parsed = parse_expression_stream_with_location_override(
     source, location::unknown, provider.as_session());
@@ -145,7 +147,7 @@ TEST("tql2 parser: expression stream parses multiple records") {
 
 TEST("tql2 parser: expression stream handles whitespace separators") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto source = std::string_view{"{x:1}   {x:2}\n\n{x:3}"};
   auto parsed = parse_expression_stream_with_location_override(
     source, location::unknown, provider.as_session());
@@ -156,7 +158,7 @@ TEST("tql2 parser: expression stream handles whitespace separators") {
 
 TEST("tql2 parser: expression stream leaves incomplete trailing suffix") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto source = std::string_view{"{x:1}\n{x:"};
   auto parsed = parse_expression_stream_with_location_override(
     source, location::unknown, provider.as_session());
@@ -169,7 +171,7 @@ TEST("tql2 parser: expression stream accepts partial UTF-8 suffix") {
   auto first_chunk = std::string{R"({msg: ")"};
   first_chunk.push_back(static_cast<char>(0xc3));
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto parsed = parse_expression_stream_with_location_override(
     first_chunk, location::unknown, provider.as_session());
   REQUIRE(parsed);
@@ -193,7 +195,7 @@ TEST("tql2 parser: expression stream accepts partial UTF-8 suffix") {
 TEST("tql2 parser: expression stream keeps parsed prefix on hard suffix "
      "error") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto source = std::string_view{"{x:1}\n{x:2}\n}"};
   auto parsed = parse_expression_stream_with_location_override(
     source, location::unknown, provider.as_session());
