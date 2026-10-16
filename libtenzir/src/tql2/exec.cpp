@@ -181,50 +181,14 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   if (had_errors) {
     return failure::promise();
   }
-  auto normalized_to_id = std::unordered_map<std::string, std::string>{};
-  normalized_to_id.reserve(packages_by_id.size());
-  auto modules = std::vector<std::unique_ptr<module_def>>{};
-  modules.reserve(packages_by_id.size());
+  auto packages = std::vector<package>{};
+  packages.reserve(packages_by_id.size());
   for (auto& [id, pkg] : packages_by_id) {
-    if (pkg.operators.empty() and pkg.lets.empty()) {
-      continue;
-    }
-    auto normalized = package_module_name(pkg.id);
-    auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
-    if (not inserted and norm_it->second != pkg.id) {
-      diagnostic::error("package '{}' conflicts with '{}' after "
-                        "normalization "
-                        "to '{}'",
-                        pkg.id, norm_it->second, normalized)
-        .emit(dh);
-      had_errors = true;
-      continue;
-    }
-    auto module = build_package_module(pkg, dh, *global_registry(), source_map);
-    if (not module) {
-      had_errors = true;
-      continue;
-    }
-    if (not(*module)->defs.empty()) {
-      modules.emplace_back(std::move(*module));
-    }
-  }
-  if (had_errors) {
-    return failure::promise();
+    packages.push_back(std::move(pkg));
   }
   auto guard = begin_registry_update();
-  auto base = guard.current();
-  auto next = base->clone();
-  for (auto& module : modules) {
-    for (auto& [name, set] : module->defs) {
-      if (not set.mod) {
-        TENZIR_ASSERT(not set.fn and not set.op);
-        continue;
-      }
-      next->replace_module(std::string{entity_pkg_packages}, name,
-                           std::move(set.mod));
-    }
-  }
+  auto next = guard.current()->clone();
+  TRY(add_packages(*next, packages, dh, source_map));
   guard.publish(std::shared_ptr<const registry>{std::move(next)});
   return {};
 }
