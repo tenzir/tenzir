@@ -21,6 +21,7 @@
 #include <tenzir/detail/syslog.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
+#include <tenzir/nova/concatenate.hpp>
 #include <tenzir/nova/event_builder.hpp>
 #include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -182,17 +183,17 @@ struct ParseSyslogFunction {
       return builder.finish_data();
     }
     chunks.push_back(builder.finish_data());
-    auto result = nova::ArrayBuilder<nova::Data>{};
-    for (auto const& chunk : chunks) {
+    auto arrays = std::vector<nova::MaskedArray<nova::Array<nova::Data>>>{};
+    auto offset = nova::storage::Index{0};
+    for (auto& chunk : chunks) {
+      auto present = nova::storage::BitMap::Builder{};
       for (auto row = nova::storage::Index{0}; row < chunk.length(); ++row) {
-        if (frame.mask().get(result.length())) {
-          nova::append_row(result, chunk.get(row));
-        } else {
-          result.skip();
-        }
+        present.emplace_back(frame.mask().get(offset + row));
       }
+      offset += chunk.length();
+      arrays.push_back({std::move(chunk), present.finish()});
     }
-    return result.finish();
+    return nova::concatenate(arrays);
   }
 };
 

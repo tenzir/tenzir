@@ -17,6 +17,7 @@
 #include <tenzir/multi_series.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/concatenate.hpp>
 #include <tenzir/nova/data_array_builder.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
@@ -1702,33 +1703,7 @@ struct EventRef {
   }
 };
 
-/// Copies rows of other batches into one dense batch, in order.
-class DenseEventsBuilder {
-public:
-  auto append(nova::Events const& batch, nova::storage::Index row) -> void {
-    auto output = data_.record();
-    for (auto [name, value] : batch.data.get(row)) {
-      nova::append_row(output.field(name), value);
-    }
-    names_.data(*batch.meta.name.get(row));
-    import_times_.data(*batch.meta.import_time.get(row));
-    internal_.data(*batch.meta.internal.get(row));
-  }
-
-  auto finish() && -> nova::Events {
-    auto data = data_.finish();
-    auto mask = nova::storage::BitMap{data.length(), true};
-    return {std::move(data),
-            std::move(mask),
-            {names_.finish(), import_times_.finish(), internal_.finish()}};
-  }
-
-private:
-  nova::ArrayBuilder<nova::Record> data_;
-  nova::ArrayBuilder<nova::String> names_;
-  nova::ArrayBuilder<nova::Time> import_times_;
-  nova::ArrayBuilder<nova::Bool> internal_;
-};
+using DenseEventsBuilder = nova::EventsAssembler;
 
 /// Selects the ascending physical `rows` of `batch`, sharing the batch under a
 /// narrowed mask unless the selection is sparse.

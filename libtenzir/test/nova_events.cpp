@@ -9,6 +9,9 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/censor.hpp"
+#include "tenzir/nova/concatenate.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/slice.hpp"
 #include "tenzir/test/test.hpp"
@@ -261,4 +264,101 @@ TEST("physical reduction shares batches without inactive rows") {
               &*as<storage::RecordStorage>(input.data.storage()));
   CHECK_EQUAL((*result.meta.name.get(0)).data(),
               (*input.meta.name.get(0)).data());
+}
+
+TEST("columnar concatenation preserves nested values and physical masks") {
+  auto first = ArrayBuilder<Data>{};
+  auto second = ArrayBuilder<Data>{};
+  auto values = std::vector<Data>{
+    Record{{"b", List{Record{{"x", Int{1}}}, Null{}}}, {"a", Int{2}}},
+    List{String{"payload"}, Record{{"z", List{Int{3}, Int{4}}}}},
+    Record{{"a", Null{}}, {"b", List{}}},
+    String{"tail"},
+  };
+  append_data(first, values[0]);
+  first.skip();
+  append_data(first, values[1]);
+  append_data(second, values[2]);
+  append_data(second, values[3]);
+  auto mask = storage::BitMap::Mutable{3};
+  mask.set(0, true);
+  mask.set(2, true);
+  auto chunks = std::vector<MaskedArray<Array<Data>>>{
+    {first.finish(), std::move(mask).finish()},
+    {second.finish(), storage::BitMap{2, true}},
+  };
+  auto result = nova::concatenate(chunks);
+  CHECK_EQUAL(result.length(), 5);
+  CHECK(equal(result.get(0), RowView<Data>{values[0]}));
+  CHECK(equal(result.get(2), RowView<Data>{values[1]}));
+  CHECK(equal(result.get(3), RowView<Data>{values[2]}));
+  CHECK(equal(result.get(4), RowView<Data>{values[3]}));
+  CHECK((*as<RowView<String>>(result.get(4))).data()
+        != (*as<RowView<String>>(chunks[1].data.get(1))).data());
+  auto record = as<RowView<Record>>(result.get(0));
+  CHECK_EQUAL((*record.begin()).first, "b");
+  auto later = as<RowView<Record>>(result.get(3));
+  CHECK_EQUAL((*later.begin()).first, "a");
+  auto fields = size_t{0};
+  for (auto field : later) {
+    std::ignore = field;
+    ++fields;
+  }
+  CHECK_EQUAL(fields, 2);
+}
+
+TEST("event assembly repeats and reverses rows across source batches") {
+  auto first = ArrayBuilder<Record>{};
+  auto second = ArrayBuilder<Record>{};
+  for (auto i = 0; i < 3; ++i) {
+    auto row = first.record();
+    row.field("id").data(Int{i});
+    row.field("nested").list().record().field("value").data("first");
+  }
+  second.record().field("other").data("second");
+  auto a = Events{first.finish(), storage::BitMap{3, true},
+                  Events::Meta::make_empty(3, "a")};
+  auto b = Events{second.finish(), storage::BitMap{1, true},
+                  Events::Meta::make_empty(1, "b")};
+  auto builder = EventsAssembler{};
+  builder.append(a, 2);
+  builder.append(a, 0);
+  builder.append(b, 0);
+  builder.append(a, 2);
+  auto result = std::move(builder).finish();
+  CHECK_EQUAL(result.length(), 4);
+  CHECK_EQUAL(result.active_count(), 4);
+  for (auto i : {0, 1, 3}) {
+    CHECK(equal(RowView<Data>{result.data.get(i)},
+                RowView<Data>{a.data.get(i == 1 ? 0 : 2)}));
+    CHECK_EQUAL(*result.meta.name.get(i), "a");
+  }
+  CHECK(equal(RowView<Data>{result.data.get(2)}, RowView<Data>{b.data.get(0)}));
+  CHECK_EQUAL(*result.meta.name.get(2), "b");
+  CHECK_EQUAL(&*as<storage::RecordStorage>(result.data.storage())
+                == &*as<storage::RecordStorage>(a.data.storage()),
+              false);
+}
+
+TEST("censoring coalesces string alternatives and preserves nested shapes") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(SecretView{reinterpret_cast<std::byte const*>("hidden"), 6});
+  builder.data("visible");
+  builder.null();
+  auto record = builder.record();
+  record.field("b").list().data(
+    SecretView{reinterpret_cast<std::byte const*>("nested"), 6});
+  record.field("a").data("unchanged");
+  auto result = censor_secrets(builder.finish());
+  CHECK(result.censored);
+  CHECK_EQUAL(*as<RowView<String>>(result.data.get(0)), "***");
+  CHECK_EQUAL(*as<RowView<String>>(result.data.get(1)), "visible");
+  CHECK(is<RowView<Null>>(result.data.get(2)));
+  auto nested = as<RowView<Record>>(result.data.get(3));
+  CHECK_EQUAL((*nested.begin()).first, "b");
+  CHECK(equal(result.data.get(3),
+              RowView<Data>{Data{Record{{"b", List{String{"***"}}},
+                                        {"a", String{"unchanged"}}}}}));
+  CHECK(not result.data.get_alternative<Secret>());
+  CHECK_EQUAL(result.data.get_alternative<String>()->present.true_count(), 2);
 }

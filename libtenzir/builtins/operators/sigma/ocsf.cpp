@@ -14,6 +14,7 @@
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/array_merge.hpp>
 #include <tenzir/series.hpp>
 
 #include <arrow/array/array_base.h>
@@ -1248,15 +1249,6 @@ auto source_identifier_of(Option<RowView<nova::Data>> const& value)
 }
 
 auto append_optional(nova::ArrayBuilder<nova::Data>& builder,
-                     Option<RowView<nova::Data>> const& value) -> void {
-  if (value) {
-    nova::append_row(builder, *value);
-  } else {
-    builder.null();
-  }
-}
-
-auto append_optional(nova::ArrayBuilder<nova::Data>& builder,
                      Option<std::string_view> value) -> void {
   if (value) {
     builder.data(*value);
@@ -1315,6 +1307,56 @@ auto resolve_field(RowView<nova::Record> const& row, std::string_view name)
     current = *nested;
   }
   return None{};
+}
+
+auto resolve_field(nova::MaskedArray<nova::Array<nova::Record>> input,
+                   std::string_view name)
+  -> nova::MaskedArray<nova::Array<nova::Data>> {
+  using namespace nova;
+  auto length = input.data.length();
+  auto absent = storage::BitMap{length, false};
+  auto nulls = Array<Data>{Array<Null>{storage::NullStorage{length}}};
+  auto exact = input.data.field(name);
+  if (exact) {
+    exact->present = std::move(exact->present) & input.present;
+  }
+  if (not name.contains('.')) {
+    return exact
+             ? MaskedArray<Array<Data>>{exact->data.null_where(
+                                          storage::BitMap{length, true}.and_not(
+                                            exact->present)),
+                                        std::move(exact->present)}
+             : MaskedArray<Array<Data>>{std::move(nulls), std::move(absent)};
+  }
+  auto nested = Option<MaskedArray<Array<Data>>>{};
+  auto parts = detail::split(name, ".");
+  for (auto i = size_t{0}; i < parts.size(); ++i) {
+    nested = input.data.field(parts[i]);
+    if (not nested) {
+      break;
+    }
+    nested->present = std::move(nested->present) & input.present;
+    if (i + 1 < parts.size()) {
+      auto records = nested->data.get_alternative<Record>();
+      if (not records) {
+        nested = None{};
+        break;
+      }
+      records->present = std::move(records->present) & nested->present;
+      input = std::move(*records);
+    }
+  }
+  auto result
+    = nested ? std::move(*nested)
+             : MaskedArray<Array<Data>>{std::move(nulls), std::move(absent)};
+  if (exact) {
+    result.data = with_merged(result, *exact);
+    result.present = std::move(result.present) | exact->present;
+  }
+  result.data
+    = std::move(result.data)
+        .null_where(storage::BitMap{length, true}.and_not(result.present));
+  return result;
 }
 
 auto resolve_presence(RowView<nova::Record> const& row, std::string_view name)
@@ -1406,6 +1448,42 @@ auto project(nova::Array<nova::Record> const& input,
              FieldProjection const& projection) -> ProjectionArrays {
   auto const length = input.length();
   TENZIR_ASSERT_EQ(length, rows.length());
+  auto project_path = [&](std::string_view path) -> ProjectionArrays {
+    auto field = resolve_field({input, rows}, path);
+    return {std::move(field.data), std::move(field.present), None{}};
+  };
+  if (is<LiteralField>(projection.value)) {
+    return project_path(sigma_field);
+  }
+  if (auto path = try_as<PathField>(projection.value);
+      path and projection.kind != ProjectedKind::source_identifier) {
+    return project_path(path->path);
+  }
+  if (auto object = try_as<ObjectListField>(projection.value)) {
+    auto field = resolve_field({input, rows}, object->path);
+    auto lists = field.data.get_alternative<nova::List>();
+    if (not lists) {
+      return {nova::Array<nova::Data>{
+                nova::Array<nova::Null>{nova::storage::NullStorage{length}}},
+              std::move(field.present), None{}};
+    }
+    auto primary = lists->data.to_primary();
+    auto const& layout = as<nova::storage::ListStorage>(primary.storage());
+    auto members = nova::Array<nova::Data>{nova::Array<nova::Null>{
+      nova::storage::NullStorage{layout.values().length()}}};
+    if (auto records = layout.values().get_alternative<nova::Record>()) {
+      if (auto member = records->data.field(object->member)) {
+        auto present = member->present & records->present;
+        members = member->data.null_where(
+          nova::storage::BitMap{members.length(), true}.and_not(present));
+      }
+    }
+    auto value = nova::Array<nova::Data>{
+      nova::Array<nova::List>{layout.spans(), std::move(members)}};
+    value = std::move(value).null_where(
+      nova::storage::BitMap{length, true}.and_not(rows & lists->present));
+    return {std::move(value), std::move(field.present), None{}};
+  }
   auto values = nova::ArrayBuilder<nova::Data>{};
   auto presence = nova::storage::BitMap::Builder{};
   auto paths = Option<nova::ArrayBuilder<nova::Data>>{};
@@ -1424,20 +1502,15 @@ auto project(nova::Array<nova::Record> const& input,
     auto const row = input.get(index);
     auto present = match(
       projection.value,
-      [&](LiteralField const&) {
-        append_optional(values, resolve_field(row, sigma_field));
-        return resolve_presence(row, sigma_field);
+      [&](LiteralField const&) -> bool {
+        TENZIR_UNREACHABLE();
       },
       [&](PathField const& value) {
-        auto projected = resolve_field(row, value.path);
-        if (projection.kind == ProjectedKind::source_identifier) {
-          auto const identifier = source_identifier_of(projected);
-          append_optional(values, identifier
-                                    ? Option<std::string_view>{*identifier}
-                                    : None{});
-        } else {
-          append_optional(values, projected);
-        }
+        TENZIR_ASSERT(projection.kind == ProjectedKind::source_identifier);
+        auto const identifier
+          = source_identifier_of(resolve_field(row, value.path));
+        append_optional(
+          values, identifier ? Option<std::string_view>{*identifier} : None{});
         return resolve_presence(row, value.path);
       },
       [&](FallbackField const& value) {
@@ -1491,25 +1564,8 @@ auto project(nova::Array<nova::Record> const& input,
         }
         return resolve_presence(row, value.path);
       },
-      [&](ObjectListField const& value) {
-        auto const objects = resolve_field(row, value.path);
-        auto const list = objects ? as_list(*objects) : None{};
-        if (not list) {
-          values.null();
-        } else {
-          auto members = values.list();
-          for (auto element : *list) {
-            auto const object = as_record(element);
-            auto const member
-              = object ? find_member(*object, value.member) : None{};
-            if (member) {
-              nova::append_row(members, *member);
-            } else {
-              members.null();
-            }
-          }
-        }
-        return resolve_presence(row, value.path);
+      [&](ObjectListField const&) -> bool {
+        TENZIR_UNREACHABLE();
       });
     presence.emplace_back(present);
   }

@@ -327,6 +327,12 @@ auto evaluate_guard(series const& input, EvaluationGuard const& guard)
 auto resolve_field(nova::RowView<nova::Record> const& row,
                    std::string_view name) -> Option<nova::RowView<nova::Data>>;
 
+/// Resolves a field column with exact-key precedence, preserving presence.
+/// Rows outside the returned presence mask hold null.
+auto resolve_field(nova::MaskedArray<nova::Array<nova::Record>> input,
+                   std::string_view name)
+  -> nova::MaskedArray<nova::Array<nova::Data>>;
+
 /// Returns whether a Sigma field exists in one row, with the same precedence
 /// as `resolve_field`. A field that exists with a `null` value is present.
 auto resolve_presence(nova::RowView<nova::Record> const& row,

@@ -12,6 +12,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/concatenate.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
@@ -380,40 +381,7 @@ private:
     }
   }
 
-  struct EventsBuilder {
-    auto append(nova::Events const& input, nova::storage::Index row) -> void {
-      auto output = data.record();
-      for (auto [name, value] : input.data.get(row)) {
-        nova::append_row(output.field(name), value);
-      }
-      names.data(*input.meta.name.get(row));
-      import_times.data(*input.meta.import_time.get(row));
-      internal.data(*input.meta.internal.get(row));
-    }
-
-    auto length() const -> nova::storage::Index {
-      return data.length();
-    }
-
-    auto finish() && -> nova::Events {
-      auto result = data.finish();
-      auto mask = nova::storage::BitMap{result.length(), true};
-      return {
-        std::move(result),
-        std::move(mask),
-        {
-          .name = names.finish(),
-          .import_time = import_times.finish(),
-          .internal = internal.finish(),
-        },
-      };
-    }
-
-    nova::ArrayBuilder<nova::Record> data;
-    nova::ArrayBuilder<nova::String> names;
-    nova::ArrayBuilder<nova::Time> import_times;
-    nova::ArrayBuilder<nova::Bool> internal;
-  };
+  using EventsBuilder = nova::EventsAssembler;
 
   Option<int64_t> begin_;
   Option<int64_t> end_;

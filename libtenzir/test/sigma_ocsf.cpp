@@ -673,3 +673,74 @@ TEST("OCSF Sigma row projections and guards") {
   CHECK(eligible.get(0));
   CHECK(not eligible.get(1));
 }
+
+TEST("OCSF Sigma column field resolution preserves exact nulls and masks") {
+  auto rows = make_rows({
+    [](auto& builder) {
+      auto row = builder.record();
+      row.field("a.b").null();
+      row.field("a").record().field("b").data(int64_t{2});
+    },
+    [](auto& builder) {
+      builder.record().field("a").record().field("b").data(int64_t{3});
+    },
+    [](auto& builder) {
+      builder.record().field("a").data(int64_t{4});
+    },
+    [](auto& builder) {
+      builder.record().field("a.b").data(int64_t{5});
+    },
+  });
+  auto mask = nova::storage::BitMap::Mutable{4};
+  mask.set(0, true);
+  mask.set(1, true);
+  mask.set(2, true);
+  auto column = ocsf::resolve_field({rows, std::move(mask).finish()}, "a.b");
+  CHECK(column.present.get(0));
+  CHECK(column.present.get(1));
+  CHECK(not column.present.get(2));
+  CHECK(not column.present.get(3));
+  CHECK(is<nova::RowView<nova::Null>>(column.data.get(0)));
+  CHECK_EQUAL(*as<nova::RowView<nova::Int>>(column.data.get(1)), 3);
+  CHECK(is<nova::RowView<nova::Null>>(column.data.get(2)));
+  CHECK(is<nova::RowView<nova::Null>>(column.data.get(3)));
+}
+
+TEST("OCSF Sigma column object projection retains empty lists and null "
+     "members") {
+  auto rows = make_rows({
+    [](auto& builder) {
+      auto list = builder.record().field("answers").list();
+      list.record().field("rdata").data("first");
+      list.null();
+      list.record().field("other").data("absent");
+      list.record().field("rdata").null();
+    },
+    [](auto& builder) {
+      builder.record().field("answers").list();
+    },
+    [](auto& builder) {
+      builder.record().field("answers").null();
+    },
+    [](auto& builder) {
+      builder.record().field("answers").list().record().field("rdata").data(
+        "masked");
+    },
+  });
+  auto mask = nova::storage::BitMap::Mutable{4};
+  mask.set(0, true);
+  mask.set(1, true);
+  mask.set(2, true);
+  auto projection = ocsf::FieldProjection{
+    .value = ocsf::ObjectListField{"answers", "rdata"},
+  };
+  auto result
+    = ocsf::project(rows, std::move(mask).finish(), "QueryResults", projection);
+  auto expected
+    = data{list{std::string{"first"}, caf::none, caf::none, caf::none}};
+  CHECK_EQUAL(nova::materialize_legacy(result.value.get(0)), expected);
+  CHECK_EQUAL(nova::materialize_legacy(result.value.get(1)), data{list{}});
+  CHECK(is<nova::RowView<nova::Null>>(result.value.get(2)));
+  CHECK(is<nova::RowView<nova::Null>>(result.value.get(3)));
+  CHECK_EQUAL(result.presence.true_count(), 3);
+}

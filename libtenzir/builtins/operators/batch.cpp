@@ -16,6 +16,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/concatenate.hpp>
 #include <tenzir/nova/data_array_builder.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -177,14 +178,22 @@ public:
   auto process(nova::Events input, Push<nova::Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    auto selected = nova::EventsAssembler{};
     for (auto row : nova::storage::true_bits(input.mask)) {
-      if (buffer_.length() == 0) {
+      if (buffered_ == 0 and selected.length() == 0) {
         start_time_ = std::chrono::steady_clock::now();
       }
-      buffer_.append(input, row);
-      if (static_cast<uint64_t>(buffer_.length()) == limit_) {
+      selected.append(input, row);
+      if (static_cast<uint64_t>(buffered_) + selected.length() == limit_) {
+        buffered_ += selected.length();
+        buffer_.push_back(
+          std::exchange(selected, nova::EventsAssembler{}).finish());
         co_await flush(push);
       }
+    }
+    if (selected.length() > 0) {
+      buffered_ += selected.length();
+      buffer_.push_back(std::move(selected).finish());
     }
     update_next_timeout();
   }
@@ -223,44 +232,9 @@ public:
   }
 
 private:
-  struct EventsBuilder {
-    auto append(nova::Events const& input, nova::storage::Index row) -> void {
-      auto output = data.record();
-      for (auto [name, value] : input.data.get(row)) {
-        nova::append_row(output.field(name), value);
-      }
-      names.data(*input.meta.name.get(row));
-      import_times.data(*input.meta.import_time.get(row));
-      internal.data(*input.meta.internal.get(row));
-    }
-
-    auto length() const -> nova::storage::Index {
-      return data.length();
-    }
-
-    auto finish() && -> nova::Events {
-      auto result = data.finish();
-      auto mask = nova::storage::BitMap{result.length(), true};
-      return {
-        std::move(result),
-        std::move(mask),
-        {
-          .name = names.finish(),
-          .import_time = import_times.finish(),
-          .internal = internal.finish(),
-        },
-      };
-    }
-
-    nova::ArrayBuilder<nova::Record> data;
-    nova::ArrayBuilder<nova::String> names;
-    nova::ArrayBuilder<nova::Time> import_times;
-    nova::ArrayBuilder<nova::Bool> internal;
-  };
-
   auto update_next_timeout() -> void {
     auto const was_null = next_timeout_.is_none();
-    next_timeout_ = buffer_.length() > 0
+    next_timeout_ = buffered_ > 0
                       ? Option{start_time_ + timeout_}
                       : Option<std::chrono::steady_clock::time_point>{None{}};
     if (was_null and next_timeout_) {
@@ -269,16 +243,20 @@ private:
   }
 
   auto flush(Push<nova::Events>& push) -> Task<void> {
-    if (buffer_.length() == 0) {
+    if (buffered_ == 0) {
       co_return;
     }
-    co_await push(std::exchange(buffer_, EventsBuilder{}).finish());
+    auto batches = std::exchange(buffer_, {});
+    buffered_ = 0;
+    co_await push(batches.size() == 1 ? std::move(batches.front())
+                                      : nova::concatenate(batches));
     next_timeout_ = None{};
   }
 
   uint64_t limit_;
   duration timeout_;
-  EventsBuilder buffer_;
+  std::vector<nova::Events> buffer_;
+  nova::storage::Index buffered_ = 0;
   std::chrono::steady_clock::time_point start_time_;
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
   mutable std::unique_ptr<Notify> buffer_ready_ = std::make_unique<Notify>();

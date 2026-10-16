@@ -4,6 +4,7 @@
 #include "tenzir/nova/censor.hpp"
 
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/array_merge.hpp"
 #include "tenzir/option.hpp"
 
 #include <concepts>
@@ -110,17 +111,17 @@ auto censor_column(Array<Data> const& values) -> Option<Array<Data>> {
         columns.push_back(std::move(column));
       }
       if (changed) {
-        // Rebuild only changed unions to merge secret and string alternatives.
-        auto builder = ArrayBuilder<Data>{};
-        for (auto row = storage::Index{0}; row < array.length(); ++row) {
-          auto index = array.alternative_index_at(row);
-          if (index < 0) {
-            builder.null();
-          } else {
-            append_row(builder, columns[index].get(row));
-          }
+        auto result
+          = Array<Data>{Array<Null>{storage::NullStorage{array.length()}}};
+        auto present = storage::BitMap{array.length(), false};
+        for (auto i = size_t{0}; i < columns.size(); ++i) {
+          auto const& rows = array.fields()[i].present;
+          result = with_merged({std::move(result), present},
+                               {std::move(columns[i]), rows});
+          present = std::move(present) | rows;
         }
-        return builder.finish();
+        return std::move(result).null_where(
+          storage::BitMap{array.length(), true}.and_not(present));
       }
     }
     return None{};

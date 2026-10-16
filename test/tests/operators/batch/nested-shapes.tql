@@ -1,0 +1,7 @@
+from {seq: 0, payload: {b: [{s: "zero"}, null], a: 0}},
+     {seq: 1, other: "masked"},
+     {seq: 2, payload: {a: 2, b: []}},
+     {seq: 3, extra: [null, {k: "three"}]},
+     {seq: 4, payload: {b: [4], a: null}}
+where seq != 1
+batch 2

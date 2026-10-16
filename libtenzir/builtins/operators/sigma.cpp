@@ -32,11 +32,14 @@
 #include <tenzir/io/read.hpp>
 #include <tenzir/multi_series.hpp>
 #include <tenzir/nova/array_builder.hpp>
+#include <tenzir/nova/array_merge.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
+#include <tenzir/nova/broadcast.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova/function_plugin.hpp>
 #include <tenzir/nova/materialize.hpp>
+#include <tenzir/nova/slice.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -4044,8 +4047,7 @@ auto append_nova_finding(nova::ArrayBuilder<nova::Record>& builder,
     }
   }
   auto evidences = finding.field("evidences").list();
-  nova::append_row(evidences.record().field("data"),
-                   nova::RowView<nova::Data>{event});
+  evidences.record().field("data").record();
   auto provenance = evidences.record();
   provenance.field("name").data(std::string_view{"SigmaMatch"});
   provenance.field("data").record();
@@ -4103,6 +4105,7 @@ auto build_nova_output(nova::Events const& input,
       matched = MatchedRow{&source, row};
     }
   }
+  auto selected = nova::storage::BitMap::Mutable{input.length()};
   auto builder = nova::ArrayBuilder<nova::Record>{};
   auto const now = time::clock::now();
   for (auto row : nova::storage::true_bits(input.mask)) {
@@ -4110,6 +4113,7 @@ auto build_nova_output(nova::Events const& input,
     if (not matched.source) {
       continue;
     }
+    selected.set(row, true);
     auto const event = input.data.get(row);
     switch (format) {
       case sigma_format::ocsf:
@@ -4118,16 +4122,49 @@ auto build_nova_output(nova::Events const& input,
         break;
       case sigma_format::plain: {
         auto result = builder.record();
-        nova::append_row(result.field("event"),
-                         nova::RowView<nova::Data>{event});
+        result.field("event").record();
         append_legacy(result.field("rule"), entry.yaml);
         break;
       }
     }
   }
-  return make_nova_events(builder.finish(), format == sigma_format::ocsf
-                                              ? "ocsf.detection_finding"
-                                              : "tenzir.sigma");
+  auto output = builder.finish();
+  if (output.length() == 0) {
+    return make_nova_events(std::move(output), format == sigma_format::ocsf
+                                                 ? "ocsf.detection_finding"
+                                                 : "tenzir.sigma");
+  }
+  auto events = nova::physically_reduce_to_mask(
+    nova::Events{input.data, std::move(selected).finish(), input.meta});
+  auto rows = nova::storage::BitMap{output.length(), true};
+  if (format == sigma_format::plain) {
+    output = std::move(output).with_field_overwrite(
+      "event", {nova::Array<nova::Data>{std::move(events.data)}, rows});
+  } else {
+    auto evidences
+      = output.field("evidences")->data.get_alternative<nova::List>()->data;
+    auto const& layout = as<nova::storage::ListStorage>(evidences.storage());
+    auto members = layout.values().get_alternative<nova::Record>()->data;
+    auto first = std::vector<nova::storage::Span>{};
+    for (auto span : layout.spans()) {
+      first.push_back({span.begin, span.begin + 1});
+    }
+    auto present = nova::broadcast_mask(first, rows, members.length());
+    auto data = nova::broadcast(events.data, first, rows, members.length());
+    auto previous = members.field("data");
+    TENZIR_ASSERT(previous);
+    auto merged = nova::with_merged(
+      *previous, {nova::Array<nova::Data>{std::move(data)}, present});
+    members = std::move(members).with_field_overwrite(
+      "data", {std::move(merged), previous->present | present});
+    auto lists = nova::Array<nova::List>{
+      layout.spans(), nova::Array<nova::Data>{std::move(members)}};
+    output = std::move(output).with_field_overwrite(
+      "evidences", {nova::Array<nova::Data>{std::move(lists)}, rows});
+  }
+  return make_nova_events(std::move(output), format == sigma_format::ocsf
+                                               ? "ocsf.detection_finding"
+                                               : "tenzir.sigma");
 }
 
 /// One group of rows that share a plan, prepared for evaluation. A group
@@ -4146,25 +4183,13 @@ struct PreparedGroup {
 /// results scale with the group rather than the full batch.
 auto gather_group(nova::Events const& input,
                   std::span<nova::storage::Index const> rows) -> nova::Events {
-  auto data = nova::ArrayBuilder<nova::Record>{};
-  auto names = nova::ArrayBuilder<nova::String>{};
-  auto import_times = nova::ArrayBuilder<nova::Time>{};
-  auto internal = nova::ArrayBuilder<nova::Bool>{};
+  auto mask = nova::storage::BitMap::Mutable{input.length()};
   for (auto row : rows) {
-    auto record = data.record();
-    for (auto [name, value] : input.data.get(row)) {
-      nova::append_row(record.field(name), value);
-    }
-    names.data(*input.meta.name.get(row));
-    import_times.data(*input.meta.import_time.get(row));
-    internal.data(*input.meta.internal.get(row));
+    TENZIR_ASSERT(input.mask.get(row));
+    mask.set(row, true);
   }
-  return nova::Events{
-    data.finish(),
-    nova::storage::BitMap{detail::narrow<nova::storage::Index>(rows.size()),
-                          true},
-    {names.finish(), import_times.finish(), internal.finish()},
-  };
+  return nova::physically_reduce_to_mask(
+    nova::Events{input.data, std::move(mask).finish(), input.meta});
 }
 
 /// Projects the plan's fields and evaluates its guards for the rows of one
@@ -4666,26 +4691,12 @@ class SigmaFieldImpl final {
 public:
   static auto eval(SigmaFieldArgs const& args, nova::EvalFrame frame)
     -> nova::Array<nova::Data> {
-    auto builder = nova::ArrayBuilder<nova::Data>{};
-    for (auto row = nova::storage::Index{0}; row < frame.length(); ++row) {
-      auto const value
-        = frame.mask().get(row)
-            ? match(
-                args.input.data.get(row),
-                [&](nova::RowView<nova::Record> const& record) {
-                  return ocsf::resolve_field(record, args.field.inner);
-                },
-                [](auto const&) {
-                  return Option<nova::RowView<nova::Data>>{};
-                })
-            : None{};
-      if (value) {
-        nova::append_row(builder, *value);
-      } else {
-        builder.null();
-      }
+    auto records = args.input.data.get_alternative<nova::Record>();
+    if (not records) {
+      return frame.null();
     }
-    return builder.finish();
+    records->present = std::move(records->present) & frame.mask();
+    return ocsf::resolve_field(std::move(*records), args.field.inner).data;
   }
 };
 
