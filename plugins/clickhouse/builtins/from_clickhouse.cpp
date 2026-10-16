@@ -12,6 +12,7 @@
 #include "clickhouse/catch_all_reader.hpp"
 #include "clickhouse/connection.hpp"
 #include "clickhouse/easy_client.hpp"
+#include "clickhouse/query_diagnostics.hpp"
 #include "clickhouse/sql_pushdown.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
@@ -250,6 +251,12 @@ auto add_hydrolix_hints(diagnostic_builder diag, int code,
     return std::move(diag).hint(
       "check that `token` is a valid Hydrolix token that has not expired");
   }
+  if (code == access_denied and message.contains("grant SHOW COLUMNS")) {
+    return std::move(diag).hint(
+      "check that the account of `token` has the `show_columns_sql` "
+      "permission on the table for schema access (also granted by "
+      "`select_sql`)");
+  }
   if (code == unknown_table or code == unknown_database
       or code == access_denied) {
     // Hydrolix hides the tables that an account cannot query, and a table
@@ -284,6 +291,8 @@ auto redact(std::string text, std::string_view secret) -> std::string {
   return text;
 }
 
+} // namespace
+
 /// Reports a failed query with the hints that fit its backend. For
 /// `from_hydrolix`, `token` is the token that the server may echo, for
 /// example as part of a failed query, and that the report must not reveal.
@@ -293,6 +302,14 @@ auto query_error(bool hydrolix, std::string_view token, bool tls_enabled,
   auto names = backend_names(hydrolix);
   auto message = hydrolix ? redact(std::string{raw_message}, token)
                           : std::string{raw_message};
+  if (hydrolix and code and *code == 516) {
+    // Native authentication errors may append ClickHouse password-reset
+    // instructions, which do not apply to Hydrolix API tokens.
+    auto const boilerplate = message.find("\n\nIf you use ClickHouse Cloud");
+    if (boilerplate != std::string::npos) {
+      message.resize(boilerplate);
+    }
+  }
   auto diag
     = code ? diagnostic::error("{} error {}: {}", names.service, *code, message)
            : diagnostic::error("{} error: {}", names.service, message);
@@ -305,6 +322,8 @@ auto query_error(bool hydrolix, std::string_view token, bool tls_enabled,
                                          clickhouse_plaintext_port,
                                          clickhouse_tls_port);
 }
+
+namespace {
 
 /// The key of the subpipeline that aggregates locally.
 constexpr auto aggregation_sub_key = int64_t{0};

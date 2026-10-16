@@ -4,5 +4,4 @@ error: Hydrolix error 497: DB::Exception: __api_token__: Not enough privileges. 
 4 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
   | ^^^^^^^^^^^^^
   |
-  = hint: check that the table exists and has a transform
-  = hint: check that the account of `token` has the `select_sql` permission on the table
+  = hint: check that the account of `token` has the `show_columns_sql` permission on the table for schema access (also granted by `select_sql`)
