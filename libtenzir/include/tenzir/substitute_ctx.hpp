@@ -44,6 +44,14 @@ public:
     return ctx_;
   }
 
+  auto dh() const -> diagnostic_handler& {
+    return ctx_.dh();
+  }
+
+  auto reg() const -> registry const& {
+    return ctx_.reg();
+  }
+
 private:
   base_ctx ctx_;
   const env_t* env_;

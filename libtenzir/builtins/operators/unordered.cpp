@@ -43,9 +43,9 @@ public:
     return pipeline_.substitute(ctx, instantiate);
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
-    return pipeline_.infer_type(input, dh);
+    return pipeline_.infer_type(input, ctx);
   }
 
   auto optimize(ir::OptimizeRequest req,
@@ -76,7 +76,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
     panic("Cannot spawn unordered. It should have been optimized away.");
   }
 

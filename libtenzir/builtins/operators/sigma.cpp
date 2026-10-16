@@ -1505,6 +1505,7 @@ auto rule_identity(ir::DetectionRule const& rule) -> std::string {
 auto parse_source(std::string_view content, std::string const& origin,
                   RuleMap const& previous, FilterBank const& filter_bank,
                   ReloadState& state, diagnostic_handler& dh,
+                  registry const& reg,
                   std::span<location const> document_locations = {})
   -> SourceSnapshot {
   auto snapshot = SourceSnapshot{};
@@ -1590,7 +1591,7 @@ auto parse_source(std::string_view content, std::string const& origin,
       continue;
     }
     auto expression = std::move(lowered).unwrap();
-    auto provider = session_provider::make(dh);
+    auto provider = session_provider::make(dh, reg);
     if (not resolve_entities(expression, provider.as_session())) {
       fail_document(diagnostic::error("failed to resolve sigma rule").done());
       continue;
@@ -1653,7 +1654,8 @@ auto lower_rule(ir::DetectionRule const& rule,
 /// application from the filter bank.
 auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
                     RuleMap const& previous, FilterBank& filter_bank,
-                    ReloadState& state, diagnostic_handler& dh) -> void {
+                    ReloadState& state, diagnostic_handler& dh,
+                    registry const& reg) -> void {
   struct DetectionSlot {
     SourceSnapshot* snapshot;
     RuleKey key;
@@ -2065,7 +2067,7 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       auto result = std::move(lowered).unwrap();
       expression = std::move(result.first);
       artifacts = std::move(result.second);
-      auto provider = session_provider::make(dh);
+      auto provider = session_provider::make(dh, reg);
       resolved = bool{resolve_entities(expression, provider.as_session())};
       for (auto& artifact : artifacts) {
         resolved = resolved
@@ -2204,7 +2206,8 @@ auto collect_rule_files(std::vector<std::string> const& paths,
 /// file discovery fails, allowing the caller to keep the previous rule set.
 auto load_rules(SigmaSources const& sources, RuleMap& next,
                 RuleMap const& previous, FilterBank& filter_bank,
-                ReloadState& state, diagnostic_handler& dh) -> bool {
+                ReloadState& state, diagnostic_handler& dh, registry const& reg)
+  -> bool {
   auto files = collect_rule_files(sources.paths, dh);
   if (not files) {
     return false;
@@ -2245,7 +2248,7 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
     auto const view = std::string_view{
       reinterpret_cast<char const*>(content->data()), content->size()};
     snapshots.push_back(
-      parse_source(view, origin, previous, filter_bank, state, dh));
+      parse_source(view, origin, previous, filter_bank, state, dh, reg));
   }
   for (auto index = size_t{0}; index < sources.rules.size(); ++index) {
     auto const origin = fmt::format("<rules[{}]>", index);
@@ -2256,11 +2259,11 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
     auto const document_locations
       = inline_document_locations(sources.rules[index], rule_source);
     snapshots.push_back(parse_source(sources.rules[index], origin, previous,
-                                     filter_bank, state, dh,
+                                     filter_bank, state, dh, reg,
                                      document_locations));
   }
   // Phase 2: resolve identities and filters, then lower.
-  assemble_rules(snapshots, previous, filter_bank, state, dh);
+  assemble_rules(snapshots, previous, filter_bank, state, dh, reg);
   // Phase 3: publish one complete deterministic replacement map. Only
   // unreadable or unparseable sources retain their complete prior snapshot.
   // Assembly reapplied the current filters to those retained detections, so
@@ -2285,9 +2288,9 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
 
 auto update_rules(SigmaSources const& sources, RuleMap& rules,
                   FilterBank& filter_bank, ReloadState& state,
-                  diagnostic_handler& dh) -> bool {
+                  diagnostic_handler& dh, registry const& reg) -> bool {
   auto next = RuleMap{};
-  if (not load_rules(sources, next, rules, filter_bank, state, dh)) {
+  if (not load_rules(sources, next, rules, filter_bank, state, dh, reg)) {
     return false;
   }
   next.revision = rule_map_revision(next);
@@ -2474,10 +2477,10 @@ auto causal_trace(ir::Condition const& condition, ir::DetectionRule const& rule,
 
 /// Evaluates an expression over a slice into per-row booleans.
 auto eval_boolean(ast::expression const& expression, table_slice const& slice,
-                  diagnostic_handler& dh) -> std::vector<bool> {
+                  base_ctx ctx) -> std::vector<bool> {
   auto result = std::vector<bool>{};
   result.reserve(slice.rows());
-  for (auto series : eval(expression, slice, dh).parts()) {
+  for (auto series : eval(expression, slice, ctx).parts()) {
     if (auto const booleans = series.as<bool_type>()) {
       for (auto const value : booleans->values()) {
         result.push_back(value.has_value() and *value);
@@ -2491,10 +2494,10 @@ auto eval_boolean(ast::expression const& expression, table_slice const& slice,
 }
 
 auto eval_mask(ast::expression const& expression, table_slice const& slice,
-               diagnostic_handler& dh) -> std::shared_ptr<arrow::BooleanArray> {
+               base_ctx ctx) -> std::shared_ptr<arrow::BooleanArray> {
   auto builder = arrow::BooleanBuilder{arrow_memory_pool()};
   check(builder.Reserve(detail::narrow<int64_t>(slice.rows())));
-  for (auto part : eval(expression, slice, dh).parts()) {
+  for (auto part : eval(expression, slice, ctx).parts()) {
     if (auto const booleans = part.as<bool_type>()) {
       for (auto const value : booleans->values()) {
         check(builder.Append(value.has_value() and *value));
@@ -2539,16 +2542,17 @@ auto build_findings(table_slice const& matched_input,
                     RuleEntry const& entry,
                     std::vector<IdentifierArtifact> const& identifiers,
                     Option<FieldBindings const&> bindings,
-                    diagnostic_handler& dh) -> std::vector<table_slice> {
+                    diagnostic_handler& dh, registry const& reg)
+  -> std::vector<table_slice> {
   TENZIR_ASSERT(matched_input.rows() > 0);
   TENZIR_ASSERT(matched_input.rows() == matched_evaluation.rows());
   // Evaluate identifier and item expressions per slice, lazily for items.
   auto identifier_values
     = detail::flat_map<std::string_view, std::vector<bool>>{};
   for (auto const& identifier : identifiers) {
-    identifier_values.emplace(identifier.name,
-                              eval_boolean(identifier.expression,
-                                           matched_evaluation, dh));
+    identifier_values.emplace(
+      identifier.name, eval_boolean(identifier.expression, matched_evaluation,
+                                    base_ctx{dh, reg}));
   }
   auto value_of_at = [&](std::string_view name, size_t row) {
     auto const entry = identifier_values.find(name);
@@ -2562,7 +2566,8 @@ auto build_findings(table_slice const& matched_input,
     if (entry == item_values.end()) {
       entry = item_values
                 .emplace(&item.expression,
-                         eval_boolean(item.expression, matched_evaluation, dh))
+                         eval_boolean(item.expression, matched_evaluation,
+                                      base_ctx{dh, reg}))
                 .first;
     }
     return entry->second[row];
@@ -2577,11 +2582,12 @@ auto build_findings(table_slice const& matched_input,
     auto entry = field_values.find(field);
     if (entry == field_values.end()) {
       auto expression = make_field_expr(field, bindings);
-      auto provider = session_provider::make(dh);
+      auto provider = session_provider::make(dh, reg);
       std::ignore = resolve_entities(expression, provider.as_session());
       auto values = std::vector<data>{};
       values.reserve(matched_evaluation.rows());
-      for (auto series : eval(expression, matched_evaluation, dh).parts()) {
+      for (auto series :
+           eval(expression, matched_evaluation, base_ctx{dh, reg}).parts()) {
         for (auto value : series.values()) {
           values.push_back(materialize(value));
         }
@@ -2599,7 +2605,8 @@ auto build_findings(table_slice const& matched_input,
           std::ignore
             = resolve_entities(path_expression, provider.as_session());
           for (auto series :
-               eval(path_expression, matched_evaluation, dh).parts()) {
+               eval(path_expression, matched_evaluation, base_ctx{dh, reg})
+                 .parts()) {
             for (auto value : series.values()) {
               paths.push_back(materialize(value));
             }
@@ -2783,8 +2790,9 @@ auto build_output(table_slice const& input, table_slice const& evaluation,
                   RuleEntry const& entry, ast::expression const& expression,
                   std::vector<IdentifierArtifact> const& identifiers,
                   Option<FieldBindings const&> bindings, sigma_format format,
-                  diagnostic_handler& dh) -> std::vector<table_slice> {
-  auto const mask = eval_mask(expression, evaluation, dh);
+                  diagnostic_handler& dh, registry const& reg)
+  -> std::vector<table_slice> {
+  auto const mask = eval_mask(expression, evaluation, base_ctx{dh, reg});
   if (mask->true_count() == 0) {
     return {};
   }
@@ -2792,7 +2800,7 @@ auto build_output(table_slice const& input, table_slice const& evaluation,
   switch (format) {
     case sigma_format::ocsf:
       return build_findings(matched_input, filter(evaluation, *mask), entry,
-                            identifiers, bindings, dh);
+                            identifiers, bindings, dh, reg);
     case sigma_format::plain:
       return build_plain_matches(std::move(matched_input), entry.yaml);
   }
@@ -3169,7 +3177,8 @@ auto resolve_field_source(ocsf::Mapping const* mapping, std::string_view field)
 }
 
 auto plan_rule(SchemaEvaluationPlan& plan, auto const& schema,
-               RuleEntry const& entry, diagnostic_handler& dh) -> PlannedRule {
+               RuleEntry const& entry, diagnostic_handler& dh,
+               registry const& reg) -> PlannedRule {
   auto result = PlannedRule{};
   auto const fields = rule_fields(entry.adjusted);
   auto const keyword_field_count = schema.num_fields();
@@ -3238,7 +3247,7 @@ auto plan_rule(SchemaEvaluationPlan& plan, auto const& schema,
       continue;
     }
     auto [expression, identifiers] = std::move(lowered).unwrap();
-    auto provider = session_provider::make(dh);
+    auto provider = session_provider::make(dh, reg);
     auto resolved = bool{resolve_entities(expression, provider.as_session())};
     for (auto& identifier : identifiers) {
       resolved = resolved
@@ -3283,7 +3292,8 @@ auto plan_rule(SchemaEvaluationPlan& plan, auto const& schema,
 }
 
 auto make_schema_plan(auto const& schema, RuleMap const& rules,
-                      diagnostic_handler& dh) -> SchemaEvaluationPlan {
+                      diagnostic_handler& dh, registry const& reg)
+  -> SchemaEvaluationPlan {
   auto result = SchemaEvaluationPlan{};
   result.ocsf = schema.is_ocsf();
   if (not result.ocsf) {
@@ -3292,7 +3302,7 @@ auto make_schema_plan(auto const& schema, RuleMap const& rules,
   result.rules.reserve(rules.entries.size());
   for (auto const& [key, entry] : rules.entries) {
     TENZIR_UNUSED(key);
-    result.rules.push_back(plan_rule(result, schema, entry, dh));
+    result.rules.push_back(plan_rule(result, schema, entry, dh, reg));
   }
   return result;
 }
@@ -3539,7 +3549,8 @@ auto emit_unsupported_rule(RuleKey const& key, RuleEntry const& entry,
 auto match_slice(table_slice const& input, RuleMap const& rules,
                  sigma_mapping mapping, sigma_format format,
                  MappingState& state, SliceMatchStats& stats,
-                 diagnostic_handler& dh) -> generator<table_slice> {
+                 diagnostic_handler& dh, registry const& reg)
+  -> generator<table_slice> {
   state.reset(rules.revision, rules);
   auto direct = mapping == sigma_mapping::direct;
   SchemaEvaluationPlan const* plan = nullptr;
@@ -3548,7 +3559,7 @@ auto match_slice(table_slice const& input, RuleMap const& rules,
     plan = state.plans.get(plan_key);
     if (not plan) {
       auto compiled
-        = make_schema_plan(LegacyPlanSchema{input.schema()}, rules, dh);
+        = make_schema_plan(LegacyPlanSchema{input.schema()}, rules, dh, reg);
       auto const cost = plan_cost(compiled);
       plan = &state.plans.put(plan_key, std::move(compiled), cost);
     }
@@ -3559,7 +3570,7 @@ auto match_slice(table_slice const& input, RuleMap const& rules,
     for (auto const& [key, entry] : rules.entries) {
       TENZIR_UNUSED(key);
       auto output = build_output(input, input, entry, entry.rule,
-                                 entry.identifiers, None{}, format, dh);
+                                 entry.identifiers, None{}, format, dh, reg);
       for (auto& slice : output) {
         stats.matches += slice.rows();
         co_yield std::move(slice);
@@ -3586,7 +3597,7 @@ auto match_slice(table_slice const& input, RuleMap const& rules,
       }
       auto output
         = build_output(input, evaluation, entry, variant.expression,
-                       variant.identifiers, variant.bindings, format, dh);
+                       variant.identifiers, variant.bindings, format, dh, reg);
       for (auto& slice : output) {
         stats.matches += slice.rows();
         co_yield std::move(slice);
@@ -3900,7 +3911,7 @@ private:
     auto* evaluator = evaluators_.get(
       full_key,
       [&] {
-        auto provider = session_provider::make(ctx.dh);
+        auto provider = session_provider::make(ctx.dh, ctx.reg);
         std::ignore = resolve_entities(expression, provider.as_session());
         return std::move(expression);
       },
@@ -4309,7 +4320,7 @@ auto prepare_groups(nova::Events const& input, RuleMap const& rules,
       planned = *cached;
     } else {
       auto compiled = make_schema_plan(NovaPlanSchema{input.data.get(first)},
-                                       rules, ctx.dh);
+                                       rules, ctx.dh, ctx.reg);
       TENZIR_ASSERT(compiled.ocsf);
       TENZIR_ASSERT(compiled.rules.size() == rules.entries.size());
       auto const cost = plan_cost(compiled);
@@ -5052,7 +5063,7 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     auto rules = Option<located<data>>{};
     if (args_.rules) {
-      auto evaluated = const_eval(*args_.rules, ctx.dh());
+      auto evaluated = const_eval(*args_.rules, ctx);
       // Argument validation already ran at pipeline-construction time.
       TENZIR_ASSERT(evaluated);
       rules = std::move(*evaluated);
@@ -5077,7 +5088,7 @@ public:
     auto diagnostics
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
     std::ignore = update_rules(sources_, rules_, filter_bank_, reload_state_,
-                               diagnostics);
+                               diagnostics, ctx.reg());
     mapping_state_.reset(rules_.revision, rules_);
     metrics_ = make_metric_handler(ctx, sigma_metrics_type);
     last_update_ = std::chrono::steady_clock::now();
@@ -5095,15 +5106,16 @@ public:
     auto const now = std::chrono::steady_clock::now();
     if (not sources_.paths.empty() and now - last_update_ > refresh_interval_) {
       if (update_rules(sources_, rules_, filter_bank_, reload_state_,
-                       diagnostics)) {
+                       diagnostics, ctx.reg())) {
         mapping_state_.reset(rules_.revision, rules_);
       }
       last_update_ = now;
     }
     auto const events = static_cast<uint64_t>(input.rows());
     auto stats = SliceMatchStats{};
-    for (auto&& result : match_slice(input, rules_, mapping_, format_,
-                                     mapping_state_, stats, diagnostics)) {
+    for (auto&& result :
+         match_slice(input, rules_, mapping_, format_, mapping_state_, stats,
+                     diagnostics, ctx.reg())) {
       co_await push(std::move(result));
     }
     emit_processing_metrics(metrics_, events, stats.evaluated_rules,
@@ -5134,7 +5146,7 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     auto rules = Option<located<data>>{};
     if (args_.rules) {
-      auto evaluated = const_eval(*args_.rules, ctx.dh());
+      auto evaluated = const_eval(*args_.rules, ctx);
       // Argument validation already ran at pipeline-construction time.
       TENZIR_ASSERT(evaluated);
       rules = std::move(*evaluated);
@@ -5158,7 +5170,7 @@ public:
     auto diagnostics
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
     std::ignore = update_rules(sources_, rules_, filter_bank_, reload_state_,
-                               diagnostics);
+                               diagnostics, ctx.reg());
     state_.reset(rules_.revision, rules_);
     metrics_ = make_metric_handler(ctx, sigma_metrics_type);
     last_update_ = std::chrono::steady_clock::now();
@@ -5177,7 +5189,7 @@ public:
     auto const now = std::chrono::steady_clock::now();
     if (not sources_.paths.empty() and now - last_update_ > refresh_interval_) {
       if (update_rules(sources_, rules_, filter_bank_, reload_state_,
-                       diagnostics)) {
+                       diagnostics, ctx.reg())) {
         state_.reset(rules_.revision, rules_);
       }
       last_update_ = now;
@@ -5240,8 +5252,7 @@ public:
       };
       auto rules_value = Option<located<data>>{};
       if (rules_expression) {
-        auto evaluated = const_eval(*rules_expression,
-                                    static_cast<diagnostic_handler&>(ctx));
+        auto evaluated = const_eval(*rules_expression, ctx);
         if (not evaluated) {
           return {};
         }

@@ -6,6 +6,7 @@
 #include "tenzir/pushdown/read.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/nova.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 
@@ -30,7 +31,7 @@ auto field_names(nova::RowView<nova::Record> row) -> std::vector<std::string> {
 auto projection_from(std::initializer_list<std::string_view> fields)
   -> ir::OptimizeProjection {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto session = provider.as_session();
   auto result = ir::OptimizeProjection{};
   for (auto field : fields) {
@@ -82,7 +83,7 @@ auto events() -> nova::Events {
 
 TEST("reader filters narrow existing masks before counting the limit") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto session = provider.as_session();
   auto filters = std::vector<nova::Evaluator>{};
   for (auto text : {"id >= 2", "id <= 4"}) {
@@ -120,7 +121,7 @@ TEST("reader predicates diagnose active non-boolean rows including nulls") {
   };
   for (auto const& test : cases) {
     auto dh = collecting_diagnostic_handler{};
-    auto provider = session_provider::make(dh);
+    auto provider = session_provider::make(dh, test::builtin_registry());
     auto session = provider.as_session();
     auto expr = parse_expression_with_location_override(
       test.predicate, location::unknown, session);
@@ -145,7 +146,7 @@ TEST("reader predicates diagnose active non-boolean rows including nulls") {
 
 TEST("reader predicates do not diagnose fully inactive input") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto session = provider.as_session();
   auto expr = parse_expression_with_location_override(
     "absent", location::unknown, session);

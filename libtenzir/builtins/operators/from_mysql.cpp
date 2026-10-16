@@ -1438,9 +1438,8 @@ struct SliceFormat {
   }
 
   static auto apply(Output output, Filters& filters,
-                    Option<uint64_t>& remaining, diagnostic_handler& dh)
-    -> Output {
-    return pushdown::apply_read(std::move(output), filters, remaining, dh);
+                    Option<uint64_t>& remaining, base_ctx ctx) -> Output {
+    return pushdown::apply_read(std::move(output), filters, remaining, ctx);
   }
 };
 
@@ -1489,9 +1488,8 @@ struct EventsFormat {
   }
 
   static auto apply(Output output, Filters& filters,
-                    Option<uint64_t>& remaining, diagnostic_handler& dh)
-    -> Output {
-    return pushdown::apply_read(std::move(output), filters, remaining, dh);
+                    Option<uint64_t>& remaining, base_ctx ctx) -> Output {
+    return pushdown::apply_read(std::move(output), filters, remaining, ctx);
   }
 };
 
@@ -1833,7 +1831,7 @@ public:
 private:
   /// Plans a read of the table. Describes the table only if a hint can act on
   /// its columns.
-  auto plan_table() -> Task<MysqlResult<TablePlan>> {
+  auto plan_table(OpCtx& ctx) -> Task<MysqlResult<TablePlan>> {
     auto const& filter = args_.optimization.filter;
     auto const& projection = args_.optimization.projection;
     if (filter.empty() and not projection
@@ -1843,7 +1841,7 @@ private:
     CO_TRY(auto rows, co_await client_->query_rows_prepared(
                         describe_table_sql, {prepared_param{table_name_}}));
     auto columns = parse_table_columns(rows);
-    co_return make_table_plan(columns, filter, projection);
+    co_return make_table_plan(columns, filter, projection, ctx.reg());
   }
 
   /// Replaces the predicates that the operator evaluates itself.
@@ -1862,7 +1860,7 @@ private:
   /// emits what remains.
   auto emit(Output output, Push<Output>& push, OpCtx& ctx) -> Task<void> {
     events_read_counter_.add(Format::rows(output));
-    output = Format::apply(std::move(output), filters_, remaining_, ctx.dh());
+    output = Format::apply(std::move(output), filters_, remaining_, ctx);
     if (Format::active_rows(output) == 0) {
       co_return;
     }
@@ -2209,7 +2207,7 @@ private:
                   or std::is_same_v<Integer, uint64_t>);
     // Columns may come and go while the operator runs, so plan anew for every
     // window, just like `SELECT *` would.
-    auto planned = co_await plan_table();
+    auto planned = co_await plan_table(ctx);
     if (planned.is_err()) {
       emit_mysql_error(std::move(planned).unwrap_err(), ctx);
       co_return false;
@@ -2402,7 +2400,7 @@ public:
       // A user-provided query is opaque, so the whole filter runs here.
       local = args_.optimization.filter;
     } else if (not live_) {
-      auto plan = co_await plan_table();
+      auto plan = co_await plan_table(ctx);
       if (plan.is_err()) {
         emit_mysql_error(std::move(plan).unwrap_err(), ctx);
         co_await finish(ctx);

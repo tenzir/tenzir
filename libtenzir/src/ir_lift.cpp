@@ -224,25 +224,26 @@ auto make_if_else(ast::expression then, ast::expression condition,
 
 } // namespace
 
-auto ir::returns_events(pipeline const& branch) -> Option<bool> {
+auto ir::returns_events(pipeline const& branch, registry const& reg)
+  -> Option<bool> {
   auto dh = null_diagnostic_handler{};
-  auto output = branch.infer_type(events_element_type(), dh);
+  auto output = branch.infer_type(events_element_type(), base_ctx{dh, reg});
   if (not output) {
     return None{};
   }
   return output->is<table_slice>() or output->is<nova::Events>();
 }
 
-auto ir::is_repeatable(ast::expression const& expr) -> bool {
-  auto const reg = global_registry();
-  auto checker = RepeatabilityChecker{*reg};
+auto ir::is_repeatable(ast::expression const& expr, registry const& reg)
+  -> bool {
+  auto checker = RepeatabilityChecker{reg};
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   checker.visit(const_cast<ast::expression&>(expr));
   return checker.repeatable;
 }
 
-auto ir::lift_branch_filters(std::vector<RoutedBranch> routed)
-  -> Option<OptimizeFilter> {
+auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
+                             registry const& reg) -> Option<OptimizeFilter> {
   TENZIR_ASSERT(not routed.empty());
   auto largest = size_t{0};
   auto branches = std::vector<Branch>{};
@@ -360,7 +361,7 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed)
                 std::move_iterator{routed_filter.end()});
   result.insert(result.end(), std::move_iterator{suffix.begin()},
                 std::move_iterator{suffix.end()});
-  result = simplify_filter(std::move(result));
+  result = simplify_filter(std::move(result), reg);
   if (filter_size(result) > std::max(max_rewritten_predicate_size, largest)) {
     return None{};
   }

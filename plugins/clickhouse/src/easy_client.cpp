@@ -31,15 +31,15 @@ struct PendingGroup {
 };
 } // namespace
 
-auto easy_client::make(arguments args, diagnostic_handler& dh)
-  -> std::shared_ptr<easy_client> {
-  return std::make_shared<easy_client>(std::move(args), dh, ctor_token{});
+auto easy_client::make(arguments args, diagnostic_handler& dh,
+                       registry const& reg) -> std::shared_ptr<easy_client> {
+  return std::make_shared<easy_client>(std::move(args), dh, reg, ctor_token{});
 }
 
-auto easy_client::make_locked(arguments args, diagnostic_handler& dh)
-  -> Arc<Mutex<easy_client>> {
-  return Arc<Mutex<easy_client>>{std::in_place, std::in_place, std::move(args),
-                                 dh, ctor_token{}};
+auto easy_client::make_locked(arguments args, diagnostic_handler& dh,
+                              registry const& reg) -> Arc<Mutex<easy_client>> {
+  return Arc<Mutex<easy_client>>{
+    std::in_place, std::in_place, std::move(args), dh, reg, ctor_token{}};
 }
 
 auto easy_client::effective_table_name(std::string_view table_name) const
@@ -588,7 +588,7 @@ auto easy_client::insert_dynamic(const table_slice& slice,
   -> failure_or<void> {
   auto guard = std::scoped_lock{client_mutex_};
   return split_into_table_runs(
-    slice, args_.table, args_.table.get_location(), dh_,
+    slice, args_.table, args_.table.get_location(), base_ctx{dh_, reg_},
     [&](std::string_view table, const table_slice& run) -> failure_or<void> {
       return insert_batch_impl({run}, effective_table_name(table), query_id,
                                false);

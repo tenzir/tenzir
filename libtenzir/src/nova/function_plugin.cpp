@@ -328,7 +328,7 @@ auto FunctionDescription::instantiate(std::string_view name,
     (*set_call_location_)(args, call.get_location());
   }
   if (validator_) {
-    auto validate_ctx = FunctionValidateCtx{ctx, named_values};
+    auto validate_ctx = FunctionValidateCtx{ctx, ctx, named_values};
     TRY((*validator_)(args, validate_ctx));
   }
   if (diagnostics.failed()) {

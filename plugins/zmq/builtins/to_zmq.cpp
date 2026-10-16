@@ -69,8 +69,8 @@ auto parse_encoding(std::string_view encoding) -> Option<Encoding> {
 namespace legacy {
 
 auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
-                     diagnostic_handler& dh) -> Option<std::string> {
-  auto result = eval(expr, input, dh);
+                     base_ctx ctx) -> Option<std::string> {
+  auto result = eval(expr, input, ctx);
   auto* series = [&]() -> const tenzir::series* {
     for (const auto& item : result) {
       return &item;
@@ -84,14 +84,14 @@ auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
     if (strings->array->IsNull(0)) {
       diagnostic::warning("expected `string`, got `null`")
         .primary(expr)
-        .emit(dh);
+        .emit(ctx);
       return None{};
     }
     return std::string{strings->array->Value(0)};
   }
   diagnostic::warning("expected `string`, got `{}`", series->type.kind())
     .primary(expr)
-    .emit(dh);
+    .emit(ctx);
   return None{};
 }
 
@@ -182,7 +182,7 @@ public:
       }
       auto framed = *payload;
       if (args_.prefix) {
-        auto prefix = evaluate_prefix(*args_.prefix, row_slice, ctx.dh());
+        auto prefix = evaluate_prefix(*args_.prefix, row_slice, ctx);
         if (not prefix) {
           continue;
         }

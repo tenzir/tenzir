@@ -200,7 +200,8 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
     if (nova_enabled()) {
       return FromEventsNova{events_}.with_name("from");
@@ -208,10 +209,10 @@ public:
     return From{events_}.with_name("from");
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<void>()) {
-      diagnostic::error("expected void, got {}", input).primary(self_).emit(dh);
+      diagnostic::error("expected void, got {}", input).primary(self_).emit(ctx);
       return failure::promise();
     }
     if (nova_enabled()) {

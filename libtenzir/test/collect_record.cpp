@@ -10,6 +10,7 @@
 #include "tenzir/nova/aggregation.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/test/nova.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/registry.hpp"
 
@@ -39,7 +40,7 @@ auto collect_record_call(bool separate) -> ast::expression {
 
 auto make_collect_record(diagnostic_handler& dh, bool separate = false)
   -> Box<AggregationInstance> {
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto result
     = tenzir::test::make_aggregation(collect_record_call(separate), dh, *reg);
   REQUIRE(result);
@@ -66,7 +67,7 @@ auto result_of(AggregationInstance const& instance) -> data {
 
 TEST("collect_record scalar calls preserve sparse rows and constant lists") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto evaluator
     = tenzir::test::make_evaluator(collect_record_call(false), dh, *reg);
   REQUIRE(evaluator);
@@ -97,7 +98,7 @@ TEST("collect_record scalar calls preserve sparse rows and constant lists") {
 
 TEST("collect_record scalar calls align two columns and reset each row") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto evaluator
     = tenzir::test::make_evaluator(collect_record_call(true), dh, *reg);
   REQUIRE(evaluator);
@@ -116,7 +117,7 @@ TEST("collect_record scalar calls align two columns and reset each row") {
 TEST("collect_record skips batches without usable list alternatives") {
   auto check_null = [](Record row, bool separate, size_t warnings) {
     auto dh = collecting_diagnostic_handler{};
-    auto reg = global_registry();
+    auto const* reg = &test::builtin_registry();
     auto evaluator
       = tenzir::test::make_evaluator(collect_record_call(separate), dh, *reg);
     REQUIRE(evaluator);
@@ -140,7 +141,7 @@ TEST("collect_record skips batches without usable list alternatives") {
 
 TEST("collect_record validates list masks once per argument") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto evaluator
     = tenzir::test::make_evaluator(collect_record_call(true), dh, *reg);
   REQUIRE(evaluator);
@@ -186,7 +187,7 @@ TEST("collect_record validates list masks once per argument") {
 
 TEST("collect_record replaces duplicate values instead of merging them") {
   auto dh = collecting_diagnostic_handler{};
-  auto reg = global_registry();
+  auto const* reg = &test::builtin_registry();
   auto evaluator
     = tenzir::test::make_evaluator(collect_record_call(false), dh, *reg);
   REQUIRE(evaluator);

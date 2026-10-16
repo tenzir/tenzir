@@ -28,6 +28,7 @@
 #include "tenzir/signal_reflector.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
@@ -314,7 +315,8 @@ auto tenzir::engine_main(int argc, char** argv) -> int try {
     auto source_map = SourceMap{};
     auto dh
       = make_diagnostic_printer(source_map, color_diagnostics::yes, std::cerr);
-    auto provider = session_provider::make(*dh);
+    auto parse_reg = global_registry();
+    auto provider = session_provider::make(*dh, *parse_reg);
     auto ctx = provider.as_session();
     struct config_udo {
       ast::pipeline definition;
@@ -363,7 +365,10 @@ auto tenzir::engine_main(int argc, char** argv) -> int try {
       auto unresolved_diags = std::vector<diagnostic>{};
       for (auto& udo : udos) {
         auto resolve_dh = collecting_diagnostic_handler{};
-        auto resolve_provider = session_provider::make(resolve_dh);
+        // Every round publishes what it resolved, so look again.
+        auto resolve_reg = global_registry();
+        auto resolve_provider
+          = session_provider::make(resolve_dh, *resolve_reg);
         auto resolve_ctx = resolve_provider.as_session();
         // We already resolve entities here. This means that we can provide
         // earlier errors, but that it's impossible to form cyclic references.

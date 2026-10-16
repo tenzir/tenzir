@@ -21,11 +21,12 @@ namespace tenzir::ir {
 /// Returns whether a branch of an operator like `if` or `match` returns events,
 /// or `None` if it does not type-check for the events that the pipeline runs
 /// with.
-auto returns_events(pipeline const& branch) -> Option<bool>;
+auto returns_events(pipeline const& branch, registry const& reg)
+  -> Option<bool>;
 
 /// Returns whether evaluating `expr` again for the same event yields the same
 /// value, which requires that it is deterministic and moves no field.
-auto is_repeatable(ast::expression const& expr) -> bool;
+auto is_repeatable(ast::expression const& expr, registry const& reg) -> bool;
 
 /// A branch of an operator that routes each event to the first branch whose
 /// condition is `true`, such as `if` and `match`.
@@ -51,7 +52,7 @@ struct RoutedBranch {
 ///
 /// The conditions must be repeatable, as in `is_repeatable`, because the
 /// routing operator evaluates them again.
-auto lift_branch_filters(std::vector<RoutedBranch> branches)
-  -> Option<OptimizeFilter>;
+auto lift_branch_filters(std::vector<RoutedBranch> branches,
+                         registry const& reg) -> Option<OptimizeFilter>;
 
 } // namespace tenzir::ir

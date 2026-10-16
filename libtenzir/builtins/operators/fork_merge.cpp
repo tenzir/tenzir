@@ -97,7 +97,7 @@ public:
           .filter = std::move(f), .order = order, .projection = req.projection},
         octx);
       branch = std::move(opt.replacement);
-      branch.prepend(std::move(opt.filter));
+      branch.prepend(std::move(opt.filter), octx.reg);
       ir::merge_projection(projection, opt.projection);
       return opt.order;
     };
@@ -117,27 +117,28 @@ public:
     };
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`fork_merge` expects events as input")
         .primary(args_.keyword)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
-      TRY(auto branch_ty, args_.branches[i].infer_type(input, dh));
+      TRY(auto branch_ty, args_.branches[i].infer_type(input, ctx));
       if (branch_ty != input) {
         diagnostic::error("`fork_merge` subpipelines must produce events")
           .primary(args_.locations[i])
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
     }
     return input;
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     return input.match(
       [](tag<table_slice>) -> AnyOperator {
         return Box<tenzir::Operator<table_slice, table_slice, true>>{

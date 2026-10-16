@@ -1301,7 +1301,7 @@ auto package::to_record() const -> record {
 }
 
 auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
-                                   SourceMap* source_map)
+                                   registry const& reg, SourceMap* source_map)
   -> failure_or<std::unique_ptr<module_def>> {
   auto module = std::make_unique<module_def>();
   auto module_name = package_module_name(pkg.id);
@@ -1309,7 +1309,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
   TENZIR_ASSERT(not pkg_entry.mod);
   pkg_entry.mod = std::make_unique<module_def>();
   auto* pkg_mod = pkg_entry.mod.get();
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, reg);
   auto ctx = provider.as_session();
   auto ensure_module
     = [&](module_def& root_mod, const auto& path) -> module_def* {
@@ -1649,12 +1649,12 @@ private:
 } // namespace
 
 auto build_package_lets(const package& pkg, module_def& pkg_mod,
-                        diagnostic_handler& dh, SourceMap* source_map)
-  -> failure_or<void> {
+                        diagnostic_handler& dh, registry const& reg,
+                        SourceMap* source_map) -> failure_or<void> {
   if (pkg.lets.empty()) {
     return {};
   }
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, reg);
   auto session = provider.as_session();
   auto source = Source::new_source(
     pkg.lets, fmt::format("<packages/{}/constants.tql>", pkg.id), true);
@@ -1713,9 +1713,9 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
 }
 
 auto build_package_module(const package& pkg, diagnostic_handler& dh,
-                          SourceMap* source_map)
+                          registry const& reg, SourceMap* source_map)
   -> failure_or<std::unique_ptr<module_def>> {
-  TRY(auto module, build_package_operator_module(pkg, dh, source_map));
+  TRY(auto module, build_package_operator_module(pkg, dh, reg, source_map));
   // Operators and lets live in the same package module but in different
   // namespaces within an entity set, so add the value entities directly to the
   // package's submodule instead of building and merging a separate module.
@@ -1724,7 +1724,7 @@ auto build_package_module(const package& pkg, diagnostic_handler& dh,
   if (not pkg_mod) {
     pkg_mod = std::make_unique<module_def>();
   }
-  TRY(build_package_lets(pkg, *pkg_mod, dh, source_map));
+  TRY(build_package_lets(pkg, *pkg_mod, dh, reg, source_map));
   if (pkg_mod->defs.empty()) {
     module->defs.erase(module_name);
   }

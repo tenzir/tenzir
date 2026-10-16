@@ -286,9 +286,9 @@ public:
     if (not prep_) {
       co_return;
     }
-    auto slice = filter_input(std::move(input), ctx.dh());
+    auto slice = filter_input(std::move(input), ctx);
     if (slice.rows() > 0) {
-      auto sp = session_provider::make(ctx.dh());
+      auto sp = session_provider::make(ctx.dh(), ctx.reg());
       process_slice(slice, sp.as_session());
     }
   }
@@ -307,7 +307,7 @@ public:
 
 private:
   auto prepare(OpCtx& ctx) -> Option<Prepared> {
-    auto sp = session_provider::make(ctx.dh());
+    auto sp = session_provider::make(ctx.dh(), ctx.reg());
     auto s = sp.as_session();
     auto prep = Prepared{};
 
@@ -360,8 +360,8 @@ private:
 
   auto process_slice(table_slice const& slice, session ctx) -> void {
     auto& dh = ctx.dh();
-    auto xs = eval(args_.x, slice, dh);
-    auto gs = get_group_strings(slice, dh);
+    auto xs = eval(args_.x, slice, ctx);
+    auto gs = get_group_strings(slice, ctx);
     TENZIR_ASSERT(gs.type.kind().template is<string_type>());
     if (not xty_) {
       if (not validate_x(xs.type, dh)) {
@@ -606,13 +606,13 @@ private:
     return result;
   }
 
-  auto get_group_strings(table_slice const& slice, diagnostic_handler& dh) const
+  auto get_group_strings(table_slice const& slice, base_ctx ctx) const
     -> series {
     if (not args_.group) {
       return series::null(string_type{}, detail::narrow<int64_t>(slice.rows()));
     }
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
-    auto gss = eval(*args_.group, slice, dh);
+    auto gss = eval(*args_.group, slice, ctx);
     for (auto&& gs : gss) {
       if (gs.type.kind().template is<null_type>()) {
         check(b->AppendNulls(gs.length()));
@@ -630,7 +630,7 @@ private:
                                  enumeration_type>()) {
         diagnostic::warning("cannot group type `{}`", gs.type.kind())
           .primary(*args_.group)
-          .emit(dh);
+          .emit(ctx);
         check(b->AppendNulls(gs.length()));
         continue;
       }
@@ -656,7 +656,7 @@ private:
     return series{string_type{}, finish(*b)};
   }
 
-  auto filter_input(table_slice slice, diagnostic_handler& dh) -> table_slice {
+  auto filter_input(table_slice slice, base_ctx ctx) -> table_slice {
     // Early exit: no limits set
     if (not prep_->x_min and not prep_->x_max) {
       return slice;
@@ -678,7 +678,7 @@ private:
     // Evaluate expression and collect filtered slices
     auto results = std::vector<table_slice>{};
     auto offset = int64_t{0};
-    for (auto& f : eval(expr, slice, dh)) {
+    for (auto& f : eval(expr, slice, ctx)) {
       auto const* array = try_as<arrow::BooleanArray>(&*f.array);
       TENZIR_ASSERT(array);
       auto const len = array->length();
@@ -899,7 +899,7 @@ public:
     if (args_.res) {
       args_.res->inner = duration{std::abs(args_.res->inner.count())};
     }
-    auto sp = session_provider::make(ctx.dh());
+    auto sp = session_provider::make(ctx.dh(), ctx.reg());
     auto calls = call_map{};
     auto loc = location{};
     auto y = args_.y;

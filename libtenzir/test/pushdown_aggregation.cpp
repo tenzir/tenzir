@@ -6,6 +6,7 @@
 #include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/nova.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <chrono>
@@ -37,7 +38,7 @@ TEST("local aggregation requires a pipeline without checkpoints") {
     .fallback = {},
   };
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto const& reg = provider.as_session().reg();
   // Without checkpoints, a source may run the fallback in a subpipeline.
   auto plain = test::NovaOpCtx{dh, reg};

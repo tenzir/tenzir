@@ -23,6 +23,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/test/registry.hpp>
 #include <tenzir/test/test.hpp>
 #include <tenzir/tql2/parser.hpp>
 
@@ -236,7 +237,7 @@ auto total(std::vector<Range> const& reads) -> int64_t {
 auto compile(std::string_view text, ir::OptimizeRequest request, base_ctx ctx)
   -> ir::pipeline {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ast = parse_pipeline_with_location_override(text, location::unknown,
                                                    provider.as_session());
   REQUIRE(ast);
@@ -244,13 +245,16 @@ auto compile(std::string_view text, ir::OptimizeRequest request, base_ctx ctx)
   REQUIRE(compiled);
   auto instantiated = ir::instantiate(std::move(*compiled), ctx);
   REQUIRE(instantiated);
-  return std::move(*instantiated).optimize(std::move(request), {}).replacement;
+  return std::move(*instantiated)
+    .optimize(std::move(request),
+              ir::OptimizeCtx{.reg = test::builtin_registry()})
+    .replacement;
 }
 
 auto projection_of(std::initializer_list<std::string_view> fields)
   -> Option<ir::OptimizeProjection> {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto s = session{provider};
   auto result = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
   for (auto field : fields) {
@@ -464,11 +468,12 @@ auto run(std::shared_ptr<arrow::Buffer> buffer, ir::OptimizeRequest request,
   // Only the new data model has an implementation for files.
   set_nova_enabled(true);
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto const& reg = provider.as_session().reg();
   auto pipe = compile(options.pipeline, std::move(request), base_ctx{dh, reg});
   REQUIRE_EQUAL(pipe.operators.size(), 1u);
-  auto spawned = pipe.operators.front()->spawn(tag_v<FileHandle>);
+  auto spawned = pipe.operators.front()->spawn(tag_v<FileHandle>,
+                                               test::builtin_registry());
   auto op = std::move(as<Box<Operator<FileHandle, nova::Events>>>(spawned));
   if (options.restore) {
     load(*op, *options.restore);
@@ -526,7 +531,7 @@ auto total_rows(std::vector<nova::Events> const& batches) -> uint64_t {
 
 auto id_filter(std::string_view text) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto s = session{provider};
   auto filter
     = parse_expression_with_location_override(text, location::unknown, s);
@@ -539,14 +544,15 @@ auto id_filter(std::string_view text) -> ast::expression {
 TEST("only readers that read a file as a whole accept one") {
   set_nova_enabled(true);
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   auto request
     = ir::OptimizeRequest{.filter = {}, .order = EventOrder::ordered};
   auto accepts_files = [&](std::string_view text) {
     auto ndh = null_diagnostic_handler{};
-    auto output
-      = compile(text, request, ctx).infer_type(tag_v<FileHandle>, ndh);
+    auto output = compile(text, request, ctx)
+                    .infer_type(tag_v<FileHandle>,
+                                base_ctx{ndh, test::builtin_registry()});
     return output.is_success() and output->is<nova::Events>();
   };
   CHECK(accepts_files("read_parquet"));

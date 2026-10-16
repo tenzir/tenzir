@@ -415,13 +415,15 @@ class DescribeCtx {
 public:
   DescribeCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               Option<const PipelineArg> pipeline, const Description& desc,
-              location operator_location, diagnostic_handler& dh)
+              location operator_location, diagnostic_handler& dh,
+              registry const& reg)
     : args_{args},
       named_args_{named_args},
       pipeline_{std::move(pipeline)},
       desc_{&desc},
       operator_location_{operator_location},
-      dh_{&dh} {
+      dh_{&dh},
+      reg_{reg} {
   }
 
   /// Returns the parsed argument value or `None{}` if the caller omitted
@@ -590,6 +592,15 @@ public:
     return *dh_;
   }
 
+  explicit(false) operator base_ctx() {
+    return base_ctx{*dh_, reg_};
+  }
+
+  /// The registry that the pipeline was compiled against.
+  auto reg() const -> registry const& {
+    return reg_;
+  }
+
 private:
   template <class T>
   static auto get_impl(const Arg& value) -> Option<T> {
@@ -639,6 +650,7 @@ private:
   const Description* desc_;
   location operator_location_;
   diagnostic_handler* dh_;
+  Ref<registry const> reg_;
 };
 
 /// Renders the usage string for `desc`, for example `head [n:int]`.
@@ -688,8 +700,8 @@ public:
   auto is_resolved(const Description& desc) const -> bool;
 
   /// Creates a context for the description's callbacks.
-  auto describe_ctx(const Description& desc, diagnostic_handler& dh) const
-    -> DescribeCtx;
+  auto describe_ctx(const Description& desc, diagnostic_handler& dh,
+                    registry const& reg) const -> DescribeCtx;
 
   /// The entity that the operator was invoked with.
   auto op() const -> const ast::entity& {

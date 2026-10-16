@@ -9,6 +9,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pushdown/translate.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
@@ -153,7 +154,7 @@ auto make_columns() -> ColumnModel {
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -170,11 +171,13 @@ auto render(Option<Expr> const& expr) -> Option<std::string> {
 }
 
 auto translate(std::string_view source) -> Option<std::string> {
-  return render(translate_predicate(parse(source), make_columns()));
+  return render(translate_predicate(parse(source), make_columns(),
+                                    test::builtin_registry()));
 }
 
 auto translate_guarded(std::string_view source) -> Option<std::string> {
-  auto expr = translate_predicate(parse(source), make_columns());
+  auto expr = translate_predicate(parse(source), make_columns(),
+                                  test::builtin_registry());
   if (not expr) {
     return None{};
   }
@@ -222,8 +225,8 @@ TEST("dynamic columns only contribute monotone prefilters") {
                       "x == 9007199254740992",
                       "x == -9007199254740992"}) {
     auto expr = parse(source);
-    CHECK(not translate_predicate(expr, columns));
-    CHECK(translate_prefilter(expr, columns));
+    CHECK(not translate_predicate(expr, columns, test::builtin_registry()));
+    CHECK(translate_prefilter(expr, columns, test::builtin_registry()));
   }
   for (auto source : {"x != 42",
                       "x == null",
@@ -246,12 +249,12 @@ TEST("dynamic columns only contribute monotone prefilters") {
                       "x == 1 or y.length_bytes() > 0",
                       "not (x != null)"}) {
     auto expr = parse(source);
-    CHECK(not translate_predicate(expr, columns));
-    CHECK(not translate_prefilter(expr, columns));
+    CHECK(not translate_predicate(expr, columns, test::builtin_registry()));
+    CHECK(not translate_prefilter(expr, columns, test::builtin_registry()));
   }
   // Inference is not a license to rewrite IPs into strings on dynamic fields.
   auto expr = parse("x == 1.1.1.1");
-  adapt_to_columns(expr, columns);
+  adapt_to_columns(expr, columns, test::builtin_registry());
   CHECK(is<ip>(as<ast::constant>(as<ast::binary_expr>(expr).right).value));
 }
 
@@ -409,7 +412,8 @@ TEST("vetoed conjuncts stay local") {
   filter.push_back(parse("s.ip() in 10.0.0.0/8"));
   filter.push_back(parse("s.starts_with(\"a\")"));
   filter.push_back(parse("r.a > 0.5"));
-  auto split = split_filter(std::move(filter), make_columns(), TestRenderer{});
+  auto split = split_filter(std::move(filter), make_columns(), TestRenderer{},
+                            test::builtin_registry());
   REQUIRE_EQUAL(split.pushed.size(), size_t{2});
   CHECK_EQUAL(split.pushed[0], std::string{"\"x\" > 0"});
   CHECK_EQUAL(split.pushed[1], std::string{"starts_with(\"s\", 'a')"});
@@ -434,11 +438,14 @@ TEST("vetoed arithmetic keeps its conjunct local") {
   filter.push_back(parse("n - 1 == null"));
   // Both translate, with the arithmetic below `IN` and `IS NULL`.
   auto columns = make_columns();
-  CHECK_EQUAL(render(translate_predicate(filter[0], columns)),
-              std::string{"(\"i\" + 1) IN (2, 3)"});
-  CHECK_EQUAL(render(translate_predicate(filter[2], columns)),
-              std::string{"(\"n\" - 1) IS NULL"});
-  auto split = split_filter(std::move(filter), columns, GuardingRenderer{});
+  CHECK_EQUAL(
+    render(translate_predicate(filter[0], columns, test::builtin_registry())),
+    std::string{"(\"i\" + 1) IN (2, 3)"});
+  CHECK_EQUAL(
+    render(translate_predicate(filter[2], columns, test::builtin_registry())),
+    std::string{"(\"n\" - 1) IS NULL"});
+  auto split = split_filter(std::move(filter), columns, GuardingRenderer{},
+                            test::builtin_registry());
   REQUIRE_EQUAL(split.pushed.size(), size_t{1});
   CHECK_EQUAL(split.pushed[0], std::string{"\"x\" > 0"});
   REQUIRE_EQUAL(split.remaining.size(), size_t{2});
@@ -462,7 +469,8 @@ TEST("matching that ignores case folds both sides") {
 
 TEST("arithmetic records its result type") {
   auto arithmetic_type = [](std::string_view source) -> Option<ArithmeticType> {
-    auto expr = translate_predicate(parse(source), make_columns());
+    auto expr = translate_predicate(parse(source), make_columns(),
+                                    test::builtin_registry());
     REQUIRE(expr);
     auto const* comparison = try_as<Binary>(*expr);
     REQUIRE(comparison);
@@ -481,7 +489,8 @@ TEST("arithmetic records its result type") {
 
 TEST("floating-point values compare with double literals") {
   auto right_literal = [](std::string_view source) -> Literal {
-    auto expr = translate_predicate(parse(source), make_columns());
+    auto expr = translate_predicate(parse(source), make_columns(),
+                                    test::builtin_registry());
     REQUIRE(expr);
     auto const* comparison = try_as<Binary>(*expr);
     REQUIRE(comparison);
@@ -493,7 +502,8 @@ TEST("floating-point values compare with double literals") {
   CHECK(is<double>(right_literal("1 < r.a").value));
   CHECK(is<double>(right_literal("i / 2 > 1").value));
   CHECK(is<int64_t>(right_literal("r.i > 1").value));
-  auto set = translate_predicate(parse("r.a in [1, 2]"), make_columns());
+  auto set = translate_predicate(parse("r.a in [1, 2]"), make_columns(),
+                                 test::builtin_registry());
   REQUIRE(set);
   auto const* membership = try_as<In>(*set);
   REQUIRE(membership);
@@ -524,8 +534,8 @@ TEST("sql renderer lets dialects spell columns") {
       return sql_collate(column, "\"binary\"");
     }
   };
-  auto expr
-    = translate_predicate(parse("s == \"a\" and r.i > 1"), make_columns());
+  auto expr = translate_predicate(parse("s == \"a\" and r.i > 1"),
+                                  make_columns(), test::builtin_registry());
   REQUIRE(expr);
   CHECK_EQUAL(Collating{}.render(*expr),
               std::string{"((\"s\" COLLATE \"binary\" IS NOT NULL AND \"s\" "

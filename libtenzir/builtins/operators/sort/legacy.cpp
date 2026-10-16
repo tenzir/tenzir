@@ -50,7 +50,7 @@ public:
       indices_.emplace_back(events_.size(), i);
     }
     for (auto& key : keys_) {
-      key.chunks.emplace_back(eval(key.expr, input, ctx.dh()));
+      key.chunks.emplace_back(eval(key.expr, input, ctx));
     }
     events_.emplace_back(std::move(input));
     co_return;

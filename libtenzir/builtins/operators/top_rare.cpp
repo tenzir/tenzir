@@ -46,7 +46,7 @@ auto describe_top_rare() -> Description {
 
 auto make_replacement_ir(mode which, ast::field_path selector, location self,
                          compile_ctx ctx) -> failure_or<ir::pipeline> {
-  auto provider = session_provider::make(ctx);
+  auto provider = session_provider::make(ctx, ctx.reg());
   const auto* summarize = plugins::find<operator_compiler_plugin>("summarize");
   const auto* sort = plugins::find<operator_compiler_plugin>("sort");
   TENZIR_ASSERT(summarize);

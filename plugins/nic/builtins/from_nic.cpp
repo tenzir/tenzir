@@ -87,9 +87,9 @@ auto make_capture_file_header(int snaplen, int linktype) -> pcap::FileHeader {
   };
 }
 
-auto make_default_parser_pipeline(diagnostic_handler& dh, location self)
-  -> failure_or<ir::pipeline> {
-  auto provider = session_provider::make(dh);
+auto make_default_parser_pipeline(diagnostic_handler& dh, registry const& reg,
+                                  location self) -> failure_or<ir::pipeline> {
+  auto provider = session_provider::make(dh, reg);
   auto session = provider.as_session();
   TRY(auto ast,
       parse_pipeline_with_location_override("read_pcap", self, session));
@@ -333,7 +333,8 @@ public:
     if (args_.parser) {
       parser = args_.parser->inner;
     } else {
-      auto default_parser = make_default_parser_pipeline(ctx.dh(), args_.self);
+      auto default_parser
+        = make_default_parser_pipeline(ctx.dh(), ctx.reg(), args_.self);
       if (not default_parser) {
         done_ = true;
         co_return;

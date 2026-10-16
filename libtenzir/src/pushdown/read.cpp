@@ -80,13 +80,12 @@ auto read_projection_paths(Option<ir::OptimizeProjection> projection,
 }
 
 auto apply_read(table_slice slice, ir::OptimizeFilter const& filter,
-                Option<uint64_t>& remaining, diagnostic_handler& dh)
-  -> table_slice {
+                Option<uint64_t>& remaining, base_ctx ctx) -> table_slice {
   for (auto const& expr : filter) {
     if (slice.rows() == 0) {
       break;
     }
-    slice = filter2(slice, expr, dh, false);
+    slice = filter2(slice, expr, ctx, false);
   }
   if (remaining) {
     slice = head(std::move(slice), *remaining);

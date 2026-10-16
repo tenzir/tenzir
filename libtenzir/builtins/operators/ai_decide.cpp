@@ -791,8 +791,8 @@ public:
     }
     TENZIR_ASSERT(client_);
     auto rows = std::vector<Row>{};
-    for (auto& json : ai::print_inputs(
-           args_.state, args_.into, args_.operator_location, input, ctx.dh())) {
+    for (auto& json : ai::print_inputs(args_.state, args_.into,
+                                       args_.operator_location, input, ctx)) {
       auto& row = rows.emplace_back();
       if (json) {
         row.state = make_state(std::move(*json));

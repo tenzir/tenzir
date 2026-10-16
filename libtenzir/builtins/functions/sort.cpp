@@ -89,7 +89,7 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
   slice = assign(rhs_param_path, std::move(rhs_series), slice, ctx.dh());
   auto cmp_dh = deduplicating_diagnostic_handler{
     ctx.dh(), warning_state.eval_diagnostics};
-  auto result = eval(cmp.body, slice, cmp_dh);
+  auto result = eval(cmp.body, slice, base_ctx{cmp_dh, ctx.reg()});
   if (result.length() != 1) {
     if (not warning_state.invalid_result_length) {
       diagnostic::warning("`cmp` lambda must return exactly one value")

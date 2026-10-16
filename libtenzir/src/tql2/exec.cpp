@@ -200,7 +200,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
       had_errors = true;
       continue;
     }
-    auto module = build_package_module(pkg, dh, source_map);
+    auto module = build_package_module(pkg, dh, *global_registry(), source_map);
     if (not module) {
       had_errors = true;
       continue;
@@ -626,9 +626,10 @@ private:
 
 class TestExecCtx final : public ExecCtx {
 public:
-  explicit TestExecCtx(Profiler const& profiler, bool has_terminal = false,
-                       bool is_hidden = false)
-    : profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)},
+  explicit TestExecCtx(Arc<registry const> reg, Profiler const& profiler,
+                       bool has_terminal = false, bool is_hidden = false)
+    : reg_{std::move(reg)},
+      profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
       metrics_receiver_{try_as<NodeProfiler>(profiler)
                           ? try_as<NodeProfiler>(profiler)->metrics
@@ -704,6 +705,10 @@ public:
     -> Option<CheckpointSettings const&> override {
     // No checkpointing for now.
     return None{};
+  }
+
+  auto reg() const -> registry const& override {
+    return *reg_;
   }
 
 protected:
@@ -855,6 +860,7 @@ private:
   }
 
   Arc<PipelineMetrics> metrics_{std::in_place};
+  Arc<registry const> reg_;
   bool profiling_;
   bool record_backpressure_;
   metrics_receiver_actor metrics_receiver_;
@@ -1624,12 +1630,13 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     });
 }
 
-auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
-              Profiler profiler, bool has_terminal, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
+auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
+              DiagHandler& dh, Profiler profiler, bool has_terminal,
+              bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
   auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
+  auto exec_ctx
+    = TestExecCtx{std::move(reg), profiler, has_terminal, is_hidden};
   // The side task may never start for a sub-second pipeline. Sample after all
   // its tasks join, even when execution unwinds through cancellation.
   auto final_sample = detail::scope_guard{[&]() noexcept {
@@ -1652,20 +1659,23 @@ auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
 
 } // namespace
 
-auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
-              Profiler profiler, bool is_hidden, Notify* graceful_stop)
-  -> Task<failure_or<void>> {
-  co_return co_await run_plan(std::move(plan), sys, dh, std::move(profiler),
-                              false, is_hidden, graceful_stop);
+auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
+              DiagHandler& dh, Profiler profiler, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
+  co_return co_await run_plan(std::move(plan), std::move(reg), sys, dh,
+                              std::move(profiler), false, is_hidden,
+                              graceful_stop);
 }
 
 template <class T>
-auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+auto run_plan_with_io(ir::Plan plan, Arc<registry const> reg,
+                      caf::actor_system& sys, DiagHandler& dh,
                       Profiler profiler, bool is_hidden,
                       PipelineFeeder<T> feed_input,
                       PipelineDrainer<T> drain_output)
   -> Task<failure_or<void>> {
-  auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
+  auto exec_ctx = TestExecCtx{std::move(reg), profiler,
+                              /*has_terminal=*/false, is_hidden};
   auto final_sample = detail::scope_guard{[&]() noexcept {
     if (auto* platform = try_as<PlatformProfiler>(profiler)) {
       platform->sample(exec_ctx.take_metrics_snapshot());
@@ -1684,15 +1694,15 @@ auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
 }
 
 template auto
-run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
-                 Profiler profiler, bool is_hidden,
+run_plan_with_io(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
+                 DiagHandler& dh, Profiler profiler, bool is_hidden,
                  PipelineFeeder<table_slice> feed_input,
                  PipelineDrainer<table_slice> drain_output)
   -> Task<failure_or<void>>;
 
 template auto
-run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
-                 Profiler profiler, bool is_hidden,
+run_plan_with_io(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
+                 DiagHandler& dh, Profiler profiler, bool is_hidden,
                  PipelineFeeder<nova::Events> feed_input,
                  PipelineDrainer<nova::Events> drain_output)
   -> Task<failure_or<void>>;
@@ -1738,8 +1748,8 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
-                       diagnostic_handler& dh,
+auto run_plan_blocking(ir::Plan plan, Arc<registry const> reg,
+                       caf::actor_system& sys, diagnostic_handler& dh,
                        Option<std::string> const& profile_path,
                        Option<PlatformProfiler> const& platform_profile,
                        SourceMap const& sources,
@@ -1773,8 +1783,8 @@ auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
   auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
     co_return co_await catch_cancellation(folly::coro::co_withCancellation(
       cancel_source.getToken(),
-      run_plan(std::move(plan), sys, diag_handler, std::move(profiler),
-               has_terminal, false, &graceful_stop)));
+      run_plan(std::move(plan), std::move(reg), sys, diag_handler,
+               std::move(profiler), has_terminal, false, &graceful_stop)));
   });
 #if 0
   TENZIR_DEBUG("running pipeline on a single thread");
@@ -1865,9 +1875,9 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
 namespace {
 
 // TODO: failure_or<bool> is bad
-auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
-                  caf::actor_system& sys, SourceMap& source_map,
-                  ir::Parallelism parallelism,
+auto exec_with_ir(ast::pipeline ast, const exec_config& cfg,
+                  Arc<registry const> reg, session ctx, caf::actor_system& sys,
+                  SourceMap& source_map, ir::Parallelism parallelism,
                   PlatformDiagnosticHandler* reporting) -> failure_or<bool> {
   auto source_location = ast.get_location();
   auto make_zero_width_location
@@ -1921,17 +1931,18 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return std::move(ast).compile(root);
   };
   auto null_dh = null_diagnostic_handler{};
+  auto probe_ctx = base_ctx{null_dh, ctx.reg()};
   auto output = Option<element_type_tag>{};
   auto implicit_source = Option<std::string_view>{};
-  if (auto inferred = ir.infer_type(tag_v<void>, null_dh); inferred) {
+  if (auto inferred = ir.infer_type(tag_v<void>, probe_ctx); inferred) {
     output = *inferred;
-  } else if (auto inferred = ir.infer_type(tag_v<chunk_ptr>, null_dh);
+  } else if (auto inferred = ir.infer_type(tag_v<chunk_ptr>, probe_ctx);
              inferred and not cfg.implicit_bytes_source.empty()) {
     implicit_source = cfg.implicit_bytes_source;
-  } else if (auto inferred = ir.infer_type(events_element_type(), null_dh);
+  } else if (auto inferred = ir.infer_type(events_element_type(), probe_ctx);
              inferred and not cfg.implicit_events_source.empty()) {
     implicit_source = cfg.implicit_events_source;
-  } else if (auto inferred = ir.infer_type(tag_v<nova::Events>, null_dh);
+  } else if (auto inferred = ir.infer_type(tag_v<nova::Events>, probe_ctx);
              inferred and not cfg.implicit_events_source.empty()) {
     // Operators that have both a `table_slice` and a `nova::Events`
     // implementation reject `table_slice` input when nova is enabled, so the
@@ -1975,7 +1986,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // that stage before lowering it into the plan DAG.
   if (cfg.dump_opt_ir) {
     TRY(auto opt, ir::instantiate(std::move(ir), b_ctx));
-    auto octx = ir::OptimizeCtx{.can_any_op_reorder = parallelism.degree > 1};
+    auto octx = ir::OptimizeCtx{
+      .reg = b_ctx.reg(),
+      .can_any_op_reorder = parallelism.degree > 1,
+    };
     fmt::print("{:#?}\n", ir::optimize(std::move(opt), octx));
     return not ctx.has_failure();
   }
@@ -1992,7 +2006,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return not ctx.has_failure();
   }
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(*plan), sys, ctx, cfg.profile,
+  TRY(run_plan_blocking(std::move(*plan), std::move(reg), sys, ctx, cfg.profile,
                         cfg.platform_profile, source_map, reporting));
   return true;
 }
@@ -2009,7 +2023,10 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
   auto& handler = reporting ? static_cast<diagnostic_handler&>(*reporting) : dh;
   auto result = std::invoke([&]() -> failure_or<bool> {
     TRY(load_packages_for_exec(handler, sys, &source_map));
-    auto provider = session_provider::make(handler);
+    // The packages are published now, so this snapshot is what the pipeline
+    // compiles and runs against.
+    auto reg = global_registry();
+    auto provider = session_provider::make(handler, *reg);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source->text, ctx));
     auto tokens = tokenize_permissive(source->text);
@@ -2038,8 +2055,9 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
         .emit(ctx);
       return failure::promise();
     }
-    return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map,
-                        *parallelism, reporting ? &*reporting : nullptr);
+    return exec_with_ir(std::move(parsed), cfg, std::move(reg), ctx, sys,
+                        source_map, *parallelism,
+                        reporting ? &*reporting : nullptr);
   });
   auto success = result ? *result : false;
   if (cfg.platform_profile) {

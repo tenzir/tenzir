@@ -467,7 +467,7 @@ struct operator_arguments {
       }
       res.port = {static_cast<uint64_t>(port->inner), port->source};
     }
-    auto sp = session_provider::make(ctx);
+    auto sp = session_provider::make(ctx, ctx.reg());
     if (auto table_name = try_const_eval(res.table, sp.as_session())) {
       if (const auto* s = try_as<std::string>(table_name->inner)) {
         if (not validate_table_name<true>(*s, res.table.get_location(), ctx)) {

@@ -188,7 +188,7 @@ public:
     } else {
       // Expression evaluation path: evaluate the message= expression and
       // iterate the resulting string/blob series.
-      const auto& messages = eval(message_expr_, input, ctx.dh());
+      const auto& messages = eval(message_expr_, input, ctx);
       for (const auto& series : messages) {
         const auto impl = [&](const auto& array) -> Task<failure_or<void>> {
           for (auto row = int64_t{0}; row < array.length(); ++row) {

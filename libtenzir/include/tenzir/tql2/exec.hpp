@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/actors.hpp"
+#include "tenzir/arc.hpp"
 #include "tenzir/async/executor.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
@@ -74,9 +75,10 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys,
            SourceMap& source_map) -> bool;
 
-/// Run a closed pipeline plan.
-auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
-              Profiler profiler, bool is_hidden,
+/// Run a closed pipeline plan that was compiled against `reg`, which the run
+/// keeps alive.
+auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
+              DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
 
 /// Run a `T -> T` chain with caller-provided IO, where `T` is either
@@ -87,7 +89,8 @@ auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
 /// batches and then an `EndOfData` signal. The drainer receives the output
 /// pull endpoint and can process transformed batches incrementally.
 template <class T>
-auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+auto run_plan_with_io(ir::Plan plan, Arc<registry const> reg,
+                      caf::actor_system& sys, DiagHandler& dh,
                       Profiler profiler, bool is_hidden,
                       PipelineFeeder<T> feed_input,
                       PipelineDrainer<T> drain_output)

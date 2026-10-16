@@ -291,11 +291,10 @@ private:
     if (done_ or input.rows() == 0 or not js_) {
       return true;
     }
-    auto& dh = ctx.dh();
-    auto messages = eval(args_.message, input, dh);
+    auto messages = eval(args_.message, input, ctx);
     auto headers = Option<multi_series>{};
     if (args_.headers) {
-      headers = eval(*args_.headers, input, dh);
+      headers = eval(*args_.headers, input, ctx);
     }
     auto first_row = int64_t{0};
     auto written_bytes = uint64_t{0};

@@ -1061,7 +1061,8 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::SetIr::spawn(element_type_tag input) const -> AnyOperator {
+auto ir::SetIr::spawn(element_type_tag input, registry const&) const
+  -> AnyOperator {
   if (input.is<table_slice>()) {
     return Set{assignments_, order_}.with_name("set");
   }
@@ -1190,8 +1191,9 @@ public:
 /// determines the field's value.
 class SetRewrite {
 public:
-  explicit SetRewrite(std::vector<ast::assignment> const& assignments)
-    : registry_{global_registry()} {
+  SetRewrite(std::vector<ast::assignment> const& assignments,
+             registry const& reg)
+    : registry_{reg} {
     for (auto const& assignment : assignments) {
       auto [resolved, moved] = resolve_move_keyword(assignment);
       auto target = make_assignment_target(resolved.left);
@@ -1352,7 +1354,7 @@ private:
     return not finder.found;
   }
 
-  std::shared_ptr<registry const> registry_;
+  Ref<registry const> registry_;
   std::vector<Entry> entries_;
   std::vector<Moved> moved_;
 };
@@ -1419,12 +1421,11 @@ auto projection_for_set(const std::vector<ast::assignment>& assignments,
 
 auto ir::SetIr::optimize(ir::OptimizeRequest req,
                          const ir::OptimizeCtx& octx) && -> ir::OptimizeResult {
-  TENZIR_UNUSED(octx);
   order_ = weaker_event_order(order_, req.order);
   // Predicates that we can rewrite over our input move upstream.
-  auto rewrite = SetRewrite{assignments_};
+  auto rewrite = SetRewrite{assignments_, octx.reg};
   auto [filter_upstream, filter_self] = ir::split_filter_by_substitution(
-    std::move(req.filter),
+    std::move(req.filter), octx.reg,
     [&](ast::field_path const& field) {
       return rewrite.resolve(field);
     },
@@ -1440,7 +1441,7 @@ auto ir::SetIr::optimize(ir::OptimizeRequest req,
   ops.reserve(1 + filter_self.size());
   ops.emplace_back(ir::SetIr{std::move(*this)});
   for (auto& expr : filter_self) {
-    ops.push_back(make_where_ir(expr));
+    ops.push_back(make_where_ir(expr, octx.reg));
   }
   return {
     .filter = std::move(filter_upstream),
@@ -1451,7 +1452,8 @@ auto ir::SetIr::optimize(ir::OptimizeRequest req,
   };
 }
 
-auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation) const
+auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation,
+                                    OptimizeCtx const& octx) const
   -> Option<OptimizeAggregation> {
   for (auto const& assignment : assignments_) {
     // The source skips the assignments, so none may fail the pipeline, also
@@ -1478,25 +1480,25 @@ auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation) const
       return None{};
     }
   }
-  auto rewrite = SetRewrite{assignments_};
+  auto rewrite = SetRewrite{assignments_, octx.reg};
   return ir::rewrite_aggregation(std::move(aggregation),
                                  [&](ast::field_path const& field) {
                                    return rewrite.resolve(field);
                                  });
 }
 
-auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
+auto ir::SetIr::infer_type(element_type_tag input, base_ctx ctx) const
   -> failure_or<element_type_tag> {
   if (input.is<table_slice>()) {
     return input;
   }
   if (input.is<nova::Events>()) {
     for (const auto& assignment : assignments_) {
-      TRY(validate_nova_target(assignment, dh));
+      TRY(validate_nova_target(assignment, ctx));
     }
     return input;
   }
-  diagnostic::error("set operator expected events").emit(dh);
+  diagnostic::error("set operator expected events").emit(ctx);
   return failure::promise();
 }
 

@@ -228,7 +228,7 @@ private:
     if (args_.drop) {
       // Find the first cutoff, if any, and drop everything after it.
       auto first_cutoff = physical_count(input);
-      for (auto cutoff : find_cutoffs(input, ctx.dh())) {
+      for (auto cutoff : find_cutoffs(input, ctx)) {
         first_cutoff = cutoff;
         break;
       }
@@ -253,7 +253,7 @@ private:
     // every physical row is materialized at most once across all windows.
     auto ranges = std::vector<PhysicalRange>{};
     auto begin = size_t{0};
-    for (auto cutoff : find_cutoffs(input, ctx.dh())) {
+    for (auto cutoff : find_cutoffs(input, ctx)) {
       ranges.push_back({begin, cutoff});
       begin = cutoff;
     }
@@ -295,23 +295,23 @@ private:
     auto sent = timer_sender_->try_send(deadline);
     TENZIR_ASSERT(sent.is_ok());
   }
-  auto find_cutoffs(table_slice const& slice, diagnostic_handler& dh)
+  auto find_cutoffs(table_slice const& slice, base_ctx ctx)
     -> generator<size_t> {
-    const auto weights = eval(args_.weight, slice, dh);
+    const auto weights = eval(args_.weight, slice, ctx);
     auto offset = size_t{};
     const auto is_cutoff = [&](const auto& weight) {
       if (not weight) {
         diagnostic::warning("expected `int`, got `null`")
           .primary(args_.weight)
           .note("treating as `0`")
-          .emit(dh);
+          .emit(ctx);
         return false;
       }
       if (*weight < 0) {
         diagnostic::warning("`weight` must not be negative")
           .primary(args_.weight)
           .note("treating as `0`")
-          .emit(dh);
+          .emit(ctx);
         return false;
       }
       auto sum = checked_add(total_, *weight);
@@ -319,7 +319,7 @@ private:
         diagnostic::warning("`weight` sum overflowed")
           .primary(args_.weight)
           .note("treating as hitting the rate limit")
-          .emit(dh);
+          .emit(ctx);
         total_ = args_.rate.inner;
         return true;
       }
@@ -352,7 +352,7 @@ private:
       diagnostic::warning("expected `int`, got `{}`", part.type.kind())
         .primary(args_.weight)
         .note("treating as `0`")
-        .emit(dh);
+        .emit(ctx);
     }
   }
 

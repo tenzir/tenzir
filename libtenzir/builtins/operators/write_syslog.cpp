@@ -59,7 +59,7 @@ public:
     -> Task<void> override {
     auto& dh = ctx.dh();
     auto facility = detail::eval_as<uint64_type>(
-      "facility", args_.facility, slice, dh, [&, warned = false] mutable {
+      "facility", args_.facility, slice, ctx, [&, warned = false] mutable {
         if (not warned) {
           warned = true;
           diagnostic::warning("`facility` evaluated to `null`")
@@ -70,7 +70,7 @@ public:
         return 1;
       });
     auto severity = detail::eval_as<uint64_type>(
-      "severity", args_.severity, slice, dh, [&, warned = false] mutable {
+      "severity", args_.severity, slice, ctx, [&, warned = false] mutable {
         if (not warned) {
           warned = true;
           diagnostic::warning("`severity` evaluated to `null`")
@@ -81,19 +81,19 @@ public:
         return 6;
       });
     auto timestamp
-      = detail::eval_as<time_type>("timestamp", args_.timestamp, slice, dh);
+      = detail::eval_as<time_type>("timestamp", args_.timestamp, slice, ctx);
     auto hostname
-      = detail::eval_as<string_type>("hostname", args_.hostname, slice, dh);
+      = detail::eval_as<string_type>("hostname", args_.hostname, slice, ctx);
     auto app_name
-      = detail::eval_as<string_type>("app_name", args_.app_name, slice, dh);
-    auto process_id
-      = detail::eval_as<string_type>("process_id", args_.process_id, slice, dh);
-    auto message_id
-      = detail::eval_as<string_type>("message_id", args_.message_id, slice, dh);
+      = detail::eval_as<string_type>("app_name", args_.app_name, slice, ctx);
+    auto process_id = detail::eval_as<string_type>(
+      "process_id", args_.process_id, slice, ctx);
+    auto message_id = detail::eval_as<string_type>(
+      "message_id", args_.message_id, slice, ctx);
     auto structured_data = detail::eval_as<record_type>(
-      "structured_data", args_.structured_data, slice, dh);
+      "structured_data", args_.structured_data, slice, ctx);
     auto message
-      = detail::eval_as<string_type>("message", args_.message, slice, dh);
+      = detail::eval_as<string_type>("message", args_.message, slice, ctx);
 
     auto buffer = std::vector<char>{};
     for (auto i = size_t{}; i < slice.rows(); ++i) {

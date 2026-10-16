@@ -242,16 +242,16 @@ auto is_literal_tree(ast::expression const& expr, registry const& reg) -> bool {
 /// that TQL would compute at runtime. An expression whose evaluation warns or
 /// yields `null`, such as an overflowing product, is not folded: it stays
 /// local, where the warning reaches the user.
-auto as_literal(ast::expression const& expr) -> Option<ast::constant> {
+auto as_literal(ast::expression const& expr, registry const& reg)
+  -> Option<ast::constant> {
   if (auto const* constant = try_as<ast::constant>(expr)) {
     return *constant;
   }
-  auto reg = global_registry();
-  if (not reg or not is_literal_tree(expr, *reg)) {
+  if (not is_literal_tree(expr, reg)) {
     return None{};
   }
   auto dh = collecting_diagnostic_handler{};
-  auto result = const_eval(expr, dh);
+  auto result = const_eval(expr, base_ctx{dh, reg});
   if (not result or not std::move(dh).collect().empty()
       or is<caf::none_t>(result->inner)) {
     return None{};
@@ -635,14 +635,15 @@ auto arithmetic_op(ast::binary_op op) -> BinaryOp {
 /// columns yield an unsigned result in TQL, so only literals that cannot take
 /// the result below zero are allowed.
 auto translate_arithmetic(ast::binary_expr const& expr,
-                          ColumnModel const& columns) -> Option<Scalar> {
+                          ColumnModel const& columns, registry const& reg)
+  -> Option<Scalar> {
   auto op = expr.op;
   auto column = resolve_column(expr.left, columns);
-  auto literal = as_literal(expr.right);
+  auto literal = as_literal(expr.right, reg);
   auto column_left = true;
   if (not column or not literal) {
     column = resolve_column(expr.right, columns);
-    literal = as_literal(expr.left);
+    literal = as_literal(expr.left, reg);
     column_left = false;
     // `literal / column` divides by zero wherever the column is zero.
     if (not column or not literal or op == ast::binary_op::div) {
@@ -742,8 +743,8 @@ auto translate_scalar_function(ast::function_call const& call,
   return None{};
 }
 
-auto translate_scalar(ast::expression const& expr, ColumnModel const& columns)
-  -> Option<Scalar> {
+auto translate_scalar(ast::expression const& expr, ColumnModel const& columns,
+                      registry const& reg) -> Option<Scalar> {
   if (auto column = resolve_column(expr, columns)) {
     return column;
   }
@@ -755,7 +756,7 @@ auto translate_scalar(ast::expression const& expr, ColumnModel const& columns)
         case ast::binary_op::sub:
         case ast::binary_op::mul:
         case ast::binary_op::div:
-          return translate_arithmetic(x, columns);
+          return translate_arithmetic(x, columns, reg);
         default:
           return None{};
       }
@@ -926,12 +927,13 @@ auto pairwise(Expr left, bool left_nullable, Expr right, bool right_nullable,
 /// type, since a target converts one side otherwise, and the conversion may
 /// depend on the session time zone or overflow.
 auto translate_pairwise_comparison(ast::binary_expr const& expr,
-                                   ColumnModel const& columns) -> Option<Expr> {
-  auto left = translate_scalar(expr.left, columns);
+                                   ColumnModel const& columns,
+                                   registry const& reg) -> Option<Expr> {
+  auto left = translate_scalar(expr.left, columns, reg);
   if (not left) {
     return None{};
   }
-  auto right = translate_scalar(expr.right, columns);
+  auto right = translate_scalar(expr.right, columns, reg);
   if (not right) {
     return None{};
   }
@@ -991,21 +993,21 @@ auto translate_pairwise_comparison(ast::binary_expr const& expr,
 }
 
 auto translate_comparison(ast::binary_expr const& expr,
-                          ColumnModel const& columns, bool positive)
-  -> Option<Expr> {
+                          ColumnModel const& columns, bool positive,
+                          registry const& reg) -> Option<Expr> {
   // Exactly one side must be a literal; otherwise both must be scalars.
   auto op = expr.op;
   auto const* scalar_expr = &expr.left;
-  auto literal = as_literal(expr.right);
+  auto literal = as_literal(expr.right, reg);
   if (not literal) {
-    literal = as_literal(expr.left);
+    literal = as_literal(expr.left, reg);
     if (not literal) {
-      return translate_pairwise_comparison(expr, columns);
+      return translate_pairwise_comparison(expr, columns, reg);
     }
     scalar_expr = &expr.right;
     op = flip_comparison(op);
   }
-  auto scalar = translate_scalar(*scalar_expr, columns);
+  auto scalar = translate_scalar(*scalar_expr, columns, reg);
   if (not scalar) {
     return None{};
   }
@@ -1040,8 +1042,8 @@ auto translate_comparison(ast::binary_expr const& expr,
 /// membership is `false` for every row, `null` included, as in TQL.
 /// Dynamic columns use this only as a prefilter: mixed literals may over-match
 /// but cannot under-match, even if the local evaluator drops clashing types.
-auto translate_in_list(Scalar const& scalar, ast::list const& list)
-  -> Option<Expr> {
+auto translate_in_list(Scalar const& scalar, ast::list const& list,
+                       registry const& reg) -> Option<Expr> {
   if (list.items.empty()) {
     return None{};
   }
@@ -1052,7 +1054,7 @@ auto translate_in_list(Scalar const& scalar, ast::list const& list)
     if (not item_expr) {
       return None{};
     }
-    auto constant = as_literal(*item_expr);
+    auto constant = as_literal(*item_expr, reg);
     if (not constant or is<caf::none_t>(constant->value)) {
       return None{};
     }
@@ -1176,16 +1178,16 @@ auto translate_in_list(Scalar const& scalar, ast::list const& list)
   return membership;
 }
 
-auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns)
-  -> Option<Expr> {
+auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns,
+                  registry const& reg) -> Option<Expr> {
   if (auto const* list = try_as<ast::list>(expr.right)) {
-    auto scalar = translate_scalar(expr.left, columns);
+    auto scalar = translate_scalar(expr.left, columns, reg);
     if (not scalar or is<DynamicType>(scalar->type)) {
       return None{};
     }
-    return translate_in_list(*scalar, *list);
+    return translate_in_list(*scalar, *list, reg);
   }
-  if (auto constant = as_literal(expr.right)) {
+  if (auto constant = as_literal(expr.right, reg)) {
     if (auto const* sn = try_as<subnet>(constant->value)) {
       auto column = resolve_column(expr.left, columns);
       auto const* type = column ? try_as<IpType>(column->type) : nullptr;
@@ -1199,7 +1201,7 @@ auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns)
   // `"needle" in haystack` is a substring search on strings. Both sides
   // search bytes, find the empty needle everywhere, and yield `null` for a
   // `null` haystack.
-  auto needle = as_literal(expr.left);
+  auto needle = as_literal(expr.left, reg);
   auto const* text = needle ? try_as<std::string>(needle->value) : nullptr;
   if (not text) {
     return None{};
@@ -1216,7 +1218,8 @@ auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns)
 /// Translates a function call that yields a boolean.
 auto translate_predicate_function(ast::function_call const& call,
                                   ColumnModel const& columns,
-                                  bool dynamic = false) -> Option<Expr> {
+                                  registry const& reg, bool dynamic = false)
+  -> Option<Expr> {
   auto name = function_name(call);
   if (not name) {
     return None{};
@@ -1237,7 +1240,7 @@ auto translate_predicate_function(ast::function_call const& call,
           or label->path().front().id.name != "ignore_case") {
         return None{};
       }
-      auto flag = as_literal(named->right);
+      auto flag = as_literal(named->right, reg);
       auto const* value = flag ? try_as<bool>(flag->value) : nullptr;
       if (not value) {
         return None{};
@@ -1254,7 +1257,7 @@ auto translate_predicate_function(ast::function_call const& call,
     if (is<DynamicType>(column->type) and ignore_case) {
       return None{};
     }
-    auto prefix = as_literal(call.args[1]);
+    auto prefix = as_literal(call.args[1], reg);
     auto const* text = prefix ? try_as<std::string>(prefix->value) : nullptr;
     if (not text) {
       return None{};
@@ -1282,7 +1285,7 @@ auto translate_predicate_function(ast::function_call const& call,
     if (not column or not is<StringType>(column->type)) {
       return None{};
     }
-    auto pattern = as_literal(call.args[1]);
+    auto pattern = as_literal(call.args[1], reg);
     auto const* text = pattern ? try_as<std::string>(pattern->value) : nullptr;
     if (not text or not re2::RE2{*text, re2::RE2::CannedOptions::Quiet}.ok()) {
       return None{};
@@ -1294,22 +1297,22 @@ auto translate_predicate_function(ast::function_call const& call,
 }
 
 auto translate_predicate(ast::expression const& expr,
-                         ColumnModel const& columns, bool positive)
-  -> Option<Expr>;
+                         ColumnModel const& columns, bool positive,
+                         registry const& reg) -> Option<Expr>;
 
 /// Translates a boolean combinator or comparison. Both `and` and `or` keep the
 /// keep-or-drop outcome of a row when an operand turns from `null` to `false`,
 /// so they pass `positive` on; `not` does not.
 auto translate_binary(ast::binary_expr const& expr, ColumnModel const& columns,
-                      bool positive) -> Option<Expr> {
+                      bool positive, registry const& reg) -> Option<Expr> {
   switch (expr.op) {
     case ast::binary_op::and_:
     case ast::binary_op::or_: {
-      auto left = translate_predicate(expr.left, columns, positive);
+      auto left = translate_predicate(expr.left, columns, positive, reg);
       if (not left) {
         return None{};
       }
-      auto right = translate_predicate(expr.right, columns, positive);
+      auto right = translate_predicate(expr.right, columns, positive, reg);
       if (not right) {
         return None{};
       }
@@ -1324,9 +1327,9 @@ auto translate_binary(ast::binary_expr const& expr, ColumnModel const& columns,
     case ast::binary_op::leq:
     case ast::binary_op::gt:
     case ast::binary_op::geq:
-      return translate_comparison(expr, columns, positive);
+      return translate_comparison(expr, columns, positive, reg);
     case ast::binary_op::in:
-      return translate_in(expr, columns);
+      return translate_in(expr, columns, reg);
     default:
       return None{};
   }
@@ -1343,25 +1346,25 @@ auto translate_boolean_column(ast::expression const& expr,
 }
 
 auto translate_predicate(ast::expression const& expr,
-                         ColumnModel const& columns, bool positive)
-  -> Option<Expr> {
+                         ColumnModel const& columns, bool positive,
+                         registry const& reg) -> Option<Expr> {
   return match(
     expr,
     [&](ast::binary_expr const& x) -> Option<Expr> {
-      return translate_binary(x, columns, positive);
+      return translate_binary(x, columns, positive, reg);
     },
     [&](ast::unary_expr const& x) -> Option<Expr> {
       if (x.op != ast::unary_op::not_) {
         return None{};
       }
-      auto inner = translate_predicate(x.expr, columns, false);
+      auto inner = translate_predicate(x.expr, columns, false, reg);
       if (not inner) {
         return None{};
       }
       return Not{std::move(*inner)};
     },
     [&](ast::function_call const& x) -> Option<Expr> {
-      return translate_predicate_function(x, columns);
+      return translate_predicate_function(x, columns, reg);
     },
     [&](ast::root_field const&) -> Option<Expr> {
       return translate_boolean_column(expr, columns);
@@ -1384,8 +1387,9 @@ auto is_string_column(ast::expression const& expr, ColumnModel const& columns)
 }
 
 /// Returns the address if `expr` is an `ip` literal.
-auto as_ip_literal(ast::expression const& expr) -> Option<ip> {
-  auto literal = as_literal(expr);
+auto as_ip_literal(ast::expression const& expr, registry const& reg)
+  -> Option<ip> {
+  auto literal = as_literal(expr, reg);
   if (not literal) {
     return None{};
   }
@@ -1403,14 +1407,10 @@ auto replace_with_text(ast::expression& expr, ip const& x) -> void {
 
 /// Wraps `expr` into a call of the `ip` function, resolved the way TQL resolves
 /// it, or returns `false` if no such function is registered.
-auto wrap_in_ip_call(ast::expression& expr) -> bool {
-  auto reg = global_registry();
-  if (not reg) {
-    return false;
-  }
+auto wrap_in_ip_call(ast::expression& expr, registry const& reg) -> bool {
   for (auto pkg : {entity_pkg_cfg, entity_pkg_std}) {
     auto path = entity_path{std::string{pkg}, {"ip"}, entity_ns::fn};
-    if (not is<entity_ref>(reg->try_get(path))) {
+    if (not is<entity_ref>(reg.try_get(path))) {
       continue;
     }
     auto location = expr.get_location();
@@ -1426,14 +1426,14 @@ auto wrap_in_ip_call(ast::expression& expr) -> bool {
 }
 
 /// Adapts an equality between a string column and an `ip` literal.
-auto adapt_equality(ast::binary_expr& expr, ColumnModel const& columns)
-  -> void {
+auto adapt_equality(ast::binary_expr& expr, ColumnModel const& columns,
+                    registry const& reg) -> void {
   if (is_string_column(expr.left, columns)) {
-    if (auto x = as_ip_literal(expr.right)) {
+    if (auto x = as_ip_literal(expr.right, reg)) {
       replace_with_text(expr.right, *x);
     }
   } else if (is_string_column(expr.right, columns)) {
-    if (auto x = as_ip_literal(expr.left)) {
+    if (auto x = as_ip_literal(expr.left, reg)) {
       replace_with_text(expr.left, *x);
     }
   }
@@ -1441,8 +1441,8 @@ auto adapt_equality(ast::binary_expr& expr, ColumnModel const& columns)
 
 /// Adapts a membership test of a string column in a list of `ip` literals or
 /// in a subnet.
-auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns)
-  -> void {
+auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns,
+                      registry const& reg) -> void {
   if (not is_string_column(expr.left, columns)) {
     return;
   }
@@ -1452,7 +1452,7 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns)
     auto addresses = std::vector<ip>{};
     for (auto const& item : list->items) {
       auto const* item_expr = try_as<ast::expression>(item);
-      auto x = item_expr ? as_ip_literal(*item_expr) : None{};
+      auto x = item_expr ? as_ip_literal(*item_expr, reg) : None{};
       if (not x) {
         return;
       }
@@ -1463,9 +1463,9 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns)
     }
     return;
   }
-  auto literal = as_literal(expr.right);
+  auto literal = as_literal(expr.right, reg);
   if (literal and is<subnet>(literal->value)) {
-    wrap_in_ip_call(expr.left);
+    wrap_in_ip_call(expr.left, reg);
   }
 }
 
@@ -1476,7 +1476,8 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns)
 /// cannot establish the required implication. `and` and `or` compose these
 /// atoms in translate_prefilter, but `not` deliberately does not.
 auto translate_dynamic_atom(ast::expression const& expr,
-                            ColumnModel const& columns) -> Option<Expr> {
+                            ColumnModel const& columns, registry const& reg)
+  -> Option<Expr> {
   auto dynamic_column = [&](ast::expression const& x) -> Option<Scalar> {
     auto column = resolve_column(x, columns);
     if (not column or not is<DynamicType>(column->type)) {
@@ -1490,7 +1491,7 @@ auto translate_dynamic_atom(ast::expression const& expr,
     return binary(BinaryOp::eq, std::move(column->expr), lit(true));
   }
   if (auto const* fn = try_as<ast::function_call>(expr)) {
-    return translate_predicate_function(*fn, columns, true);
+    return translate_predicate_function(*fn, columns, reg, true);
   }
   auto const* x = try_as<ast::binary_expr>(expr);
   if (not x) {
@@ -1499,10 +1500,10 @@ auto translate_dynamic_atom(ast::expression const& expr,
   if (x->op == ast::binary_op::in) {
     if (auto const* list = try_as<ast::list>(x->right)) {
       TRY(auto column, dynamic_column(x->left));
-      return translate_in_list(column, *list);
+      return translate_in_list(column, *list, reg);
     }
     TRY(auto column, dynamic_column(x->right));
-    TRY(auto needle, as_literal(x->left));
+    TRY(auto needle, as_literal(x->left, reg));
     auto const* text = try_as<std::string>(needle.value);
     if (not text) {
       return None{};
@@ -1522,10 +1523,10 @@ auto translate_dynamic_atom(ast::expression const& expr,
   }
   auto op = x->op;
   auto column = dynamic_column(x->left);
-  auto literal = as_literal(x->right);
+  auto literal = as_literal(x->right, reg);
   if (not column or not literal) {
     column = dynamic_column(x->right);
-    literal = as_literal(x->left);
+    literal = as_literal(x->left, reg);
     op = flip_comparison(op);
   }
   if (not column or not literal) {
@@ -1599,17 +1600,17 @@ auto keep_unparsed(Scalar const& parsed, Expr condition) -> Expr {
 /// so `!=` gets none. Every other comparison is `true` only where TQL parsed
 /// the string, and the target then either agrees or did not parse it.
 auto translate_parsed_ip_comparison(ast::binary_expr const& expr,
-                                    ColumnModel const& columns)
-  -> Option<Expr> {
+                                    ColumnModel const& columns,
+                                    registry const& reg) -> Option<Expr> {
   if (expr.op == ast::binary_op::neq) {
     return None{};
   }
   auto op = expr.op;
   auto parsed = resolve_parsed_ip(expr.left, columns);
-  auto literal = as_ip_literal(expr.right);
+  auto literal = as_ip_literal(expr.right, reg);
   if (not parsed or not literal) {
     parsed = resolve_parsed_ip(expr.right, columns);
-    literal = as_ip_literal(expr.left);
+    literal = as_ip_literal(expr.left, reg);
     if (not parsed or not literal) {
       return None{};
     }
@@ -1622,21 +1623,21 @@ auto translate_parsed_ip_comparison(ast::binary_expr const& expr,
 
 /// Translates a prefilter for `ip(column) in list` or `ip(column) in subnet`.
 auto translate_parsed_ip_membership(ast::binary_expr const& expr,
-                                    ColumnModel const& columns)
-  -> Option<Expr> {
+                                    ColumnModel const& columns,
+                                    registry const& reg) -> Option<Expr> {
   auto parsed = resolve_parsed_ip(expr.left, columns);
   if (not parsed) {
     return None{};
   }
   if (auto const* list = try_as<ast::list>(expr.right)) {
     auto plain = Scalar{parsed->expr, parsed->type, false};
-    auto set = translate_in_list(plain, *list);
+    auto set = translate_in_list(plain, *list, reg);
     if (not set) {
       return None{};
     }
     return keep_unparsed(*parsed, std::move(*set));
   }
-  auto literal = as_literal(expr.right);
+  auto literal = as_literal(expr.right, reg);
   auto const* sn = literal ? try_as<subnet>(literal->value) : nullptr;
   if (not sn) {
     return None{};
@@ -1669,23 +1670,23 @@ auto collect_conjuncts(ast::expression expr, ir::OptimizeFilter& out) -> void {
 
 // -- Entry points -------------------------------------------------------------
 
-auto adapt_to_columns(ast::expression& expr, ColumnModel const& columns)
-  -> void {
+auto adapt_to_columns(ast::expression& expr, ColumnModel const& columns,
+                      registry const& reg) -> void {
   match(
     expr,
     [&](ast::binary_expr& x) {
       switch (x.op) {
         case ast::binary_op::and_:
         case ast::binary_op::or_:
-          adapt_to_columns(x.left, columns);
-          adapt_to_columns(x.right, columns);
+          adapt_to_columns(x.left, columns, reg);
+          adapt_to_columns(x.right, columns, reg);
           return;
         case ast::binary_op::eq:
         case ast::binary_op::neq:
-          adapt_equality(x, columns);
+          adapt_equality(x, columns, reg);
           return;
         case ast::binary_op::in:
-          adapt_membership(x, columns);
+          adapt_membership(x, columns, reg);
           return;
         default:
           return;
@@ -1693,27 +1694,29 @@ auto adapt_to_columns(ast::expression& expr, ColumnModel const& columns)
     },
     [&](ast::unary_expr& x) {
       if (x.op == ast::unary_op::not_) {
-        adapt_to_columns(x.expr, columns);
+        adapt_to_columns(x.expr, columns, reg);
       }
     },
     [](auto&) {});
 }
 
 auto translate_predicate(ast::expression const& expr,
-                         ColumnModel const& columns) -> Option<Expr> {
+                         ColumnModel const& columns, registry const& reg)
+  -> Option<Expr> {
   // A predicate at the top of the filter chain drops a row on `false` and on
   // `null` alike.
-  return translate_predicate(expr, columns, true);
+  return translate_predicate(expr, columns, true, reg);
 }
 
 auto translate_prefilter(ast::expression const& expr,
-                         ColumnModel const& columns) -> Option<Expr> {
+                         ColumnModel const& columns, registry const& reg)
+  -> Option<Expr> {
   // An exact translation is the tightest prefilter. It may use the positive
   // form, since a prefilter drops rows on `false` and `null` alike.
-  if (auto exact = translate_predicate(expr, columns, true)) {
+  if (auto exact = translate_predicate(expr, columns, true, reg)) {
     return exact;
   }
-  if (auto dynamic = translate_dynamic_atom(expr, columns)) {
+  if (auto dynamic = translate_dynamic_atom(expr, columns, reg)) {
     return dynamic;
   }
   auto const* binary = try_as<ast::binary_expr>(expr);
@@ -1724,19 +1727,19 @@ auto translate_prefilter(ast::expression const& expr,
     case ast::binary_op::and_: {
       // A conjunction is `true` only where every conjunct is, so any subset
       // of their prefilters is a prefilter.
-      auto left = translate_prefilter(binary->left, columns);
-      auto right = translate_prefilter(binary->right, columns);
+      auto left = translate_prefilter(binary->left, columns, reg);
+      auto right = translate_prefilter(binary->right, columns, reg);
       if (left and right) {
         return conjunction(std::move(*left), std::move(*right));
       }
       return left ? std::move(left) : std::move(right);
     }
     case ast::binary_op::or_: {
-      auto left = translate_prefilter(binary->left, columns);
+      auto left = translate_prefilter(binary->left, columns, reg);
       if (not left) {
         return None{};
       }
-      auto right = translate_prefilter(binary->right, columns);
+      auto right = translate_prefilter(binary->right, columns, reg);
       if (not right) {
         return None{};
       }
@@ -1748,9 +1751,9 @@ auto translate_prefilter(ast::expression const& expr,
     case ast::binary_op::leq:
     case ast::binary_op::gt:
     case ast::binary_op::geq:
-      return translate_parsed_ip_comparison(*binary, columns);
+      return translate_parsed_ip_comparison(*binary, columns, reg);
     case ast::binary_op::in:
-      return translate_parsed_ip_membership(*binary, columns);
+      return translate_parsed_ip_membership(*binary, columns, reg);
     default:
       return None{};
   }
@@ -1772,10 +1775,11 @@ auto translate_field(std::span<std::string const> path,
 }
 
 auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
-                  Renderer const& renderer) -> FilterSplit {
+                  Renderer const& renderer, registry const& reg)
+  -> FilterSplit {
   auto conjuncts = ir::OptimizeFilter{};
   for (auto& expr : filter) {
-    adapt_to_columns(expr, columns);
+    adapt_to_columns(expr, columns, reg);
     collect_conjuncts(std::move(expr), conjuncts);
   }
   // A translation is pushed only if the renderer can spell it.
@@ -1787,11 +1791,11 @@ auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
   };
   auto result = FilterSplit{};
   for (auto& expr : conjuncts) {
-    if (auto pushed = render(translate_predicate(expr, columns))) {
+    if (auto pushed = render(translate_predicate(expr, columns, reg))) {
       result.pushed.push_back(std::move(*pushed));
       continue;
     }
-    if (auto pushed = render(translate_prefilter(expr, columns))) {
+    if (auto pushed = render(translate_prefilter(expr, columns, reg))) {
       result.pushed.push_back(std::move(*pushed));
     }
     result.remaining.push_back(std::move(expr));

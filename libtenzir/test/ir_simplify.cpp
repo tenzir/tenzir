@@ -10,6 +10,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -27,7 +28,7 @@ namespace {
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -38,7 +39,8 @@ auto parse(std::string_view source) -> ast::expression {
 
 /// Renders the simplified predicate for comparison.
 auto simplify(std::string_view source) -> std::string {
-  return fmt::format("{:?}", ir::simplify_predicate(parse(source)));
+  return fmt::format("{:?}", ir::simplify_predicate(parse(source),
+                                                    test::builtin_registry()));
 }
 
 /// Renders a predicate as it would look after simplification.
@@ -65,7 +67,8 @@ auto parse_chain(std::vector<std::string_view> const& sources)
 
 auto simplify_filter(std::vector<std::string_view> const& sources)
   -> std::string {
-  return render_chain(ir::simplify_filter(parse_chain(sources)));
+  return render_chain(
+    ir::simplify_filter(parse_chain(sources), test::builtin_registry()));
 }
 
 auto render_filter(std::vector<std::string_view> const& sources)
@@ -100,7 +103,8 @@ auto parse_with_secret(std::string_view source) -> ast::expression {
 }
 
 auto simplify_with_secret(std::string_view source) -> std::string {
-  return fmt::format("{:?}", ir::simplify_predicate(parse_with_secret(source)));
+  return fmt::format("{:?}", ir::simplify_predicate(parse_with_secret(source),
+                                                    test::builtin_registry()));
 }
 
 auto render_with_secret(std::string_view source) -> std::string {
@@ -113,7 +117,8 @@ auto simplify_filter_with_secret(std::vector<std::string_view> const& sources)
   for (auto source : sources) {
     filter.push_back(parse_with_secret(source));
   }
-  return render_chain(ir::simplify_filter(std::move(filter)));
+  return render_chain(
+    ir::simplify_filter(std::move(filter), test::builtin_registry()));
 }
 
 } // namespace
@@ -394,7 +399,8 @@ TEST("substitution stops when the predicate grows beyond the bound") {
   auto predicate = parse("x == 1");
   auto steps = 0;
   while (true) {
-    auto split = ir::split_filter_by_substitution({predicate}, doubling);
+    auto split = ir::split_filter_by_substitution(
+      {predicate}, test::builtin_registry(), doubling);
     if (split.independent.empty()) {
       break;
     }
@@ -415,7 +421,8 @@ TEST("substitution stops when the predicate grows beyond the bound") {
   }
   large = ast::binary_expr{large, ast::binary_op::eq, parse("1")};
   REQUIRE_GREATER(ir::expression_size(large), size_t{4096});
-  auto split = ir::split_filter_by_substitution({large}, rename);
+  auto split = ir::split_filter_by_substitution(
+    {large}, test::builtin_registry(), rename);
   REQUIRE_EQUAL(split.independent.size(), size_t{1});
   CHECK_EQUAL(ir::expression_size(split.independent.front()),
               ir::expression_size(large));
@@ -446,13 +453,15 @@ TEST("split conjunctions move the operands that a substitution rewrites") {
     return field.inner();
   };
   auto split = ir::split_filter_by_substitution(
-    ir::split_conjunction(parse("x == 1 and t > 0 and y == 2")), keep_others);
+    ir::split_conjunction(parse("x == 1 and t > 0 and y == 2")),
+    test::builtin_registry(), keep_others);
   CHECK_EQUAL(render_chain(split.independent),
               render_filter({"x == 1", "y == 2"}));
   CHECK_EQUAL(render_chain(split.dependent), render_filter({"t > 0"}));
   // An operand that could fail stays behind one that stays.
   split = ir::split_filter_by_substitution(
-    ir::split_conjunction(parse("t > 0 and x.length() == 1")), keep_others);
+    ir::split_conjunction(parse("t > 0 and x.length() == 1")),
+    test::builtin_registry(), keep_others);
   CHECK(split.independent.empty());
   CHECK_EQUAL(render_chain(split.dependent),
               render_filter({"t > 0", "x.length() == 1"}));
@@ -483,7 +492,8 @@ TEST("predicates that could fail stay behind the ones that stay") {
     return field.inner();
   };
   split = ir::split_filter_by_substitution(
-    parse_chain({"c", "x.slice(stride=-1) == \"\"", "y == 1"}), keep_others);
+    parse_chain({"c", "x.slice(stride=-1) == \"\"", "y == 1"}),
+    test::builtin_registry(), keep_others);
   CHECK_EQUAL(render_chain(split.independent), render_filter({"y == 1"}));
   CHECK_EQUAL(render_chain(split.dependent),
               render_filter({"c", "x.slice(stride=-1) == \"\""}));

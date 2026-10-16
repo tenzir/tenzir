@@ -440,7 +440,7 @@ public:
       // client's internal `std::mutex` while an insert holds the connection.
       auto client = Option<Arc<Mutex<easy_client>>>{};
       try {
-        client = easy_client::make_locked(client_args, dh);
+        client = easy_client::make_locked(client_args, dh, ctx.reg());
       } catch (const panic_exception&) {
         throw;
       } catch (const ::clickhouse::OpenSSLError& e) {
@@ -482,12 +482,11 @@ public:
     // Resolve the target table per row and group the slice into contiguous
     // same-table runs. Whether a column is `JSON` depends on the concrete
     // table, so serialization is deferred to the workers.
-    auto& dh = ctx.dh();
     auto runs = std::vector<std::pair<std::string, table_slice>>{};
     // `split_into_table_runs` is infallible here: the callback never returns a
     // failure, so the walk always completes.
     std::ignore = split_into_table_runs(
-      input, args_.table, args_.table.get_location(), dh,
+      input, args_.table, args_.table.get_location(), ctx,
       [&](std::string_view table, table_slice run) -> failure_or<void> {
         runs.emplace_back(std::string{table}, std::move(run));
         return {};
@@ -1444,7 +1443,7 @@ public:
           }
         }
         if (auto table = ctx.get(table_arg)) {
-          auto sp = session_provider::make(ctx);
+          auto sp = session_provider::make(ctx, ctx.reg());
           if (auto table_name = try_const_eval(*table, sp.as_session())) {
             if (const auto* s = try_as<std::string>(table_name->inner)) {
               (void)validate_table_name<true>(*s, table->get_location(), ctx);

@@ -67,7 +67,7 @@ public:
     auto& dh = ctx.dh();
     auto end = int64_t{0};
     for (const auto& [predicate] :
-         split_multi_series(eval(condition_, input, dh))) {
+         split_multi_series(eval(condition_, input, ctx))) {
       const auto start = std::exchange(end, end + predicate.length());
       TENZIR_ASSERT(end > start);
       const auto sliced = subslice(input, start, end);
@@ -241,7 +241,7 @@ public:
     // before anything needs it instantiated.
     auto constant = Option<bool>{None{}};
     if (instantiate) {
-      constant = ir::constant_condition(args_.condition);
+      constant = ir::constant_condition(args_.condition, ctx);
     }
     if (constant.unwrap_or(true)) {
       TRY(args_.consequence.substitute(ctx, instantiate));
@@ -254,7 +254,7 @@ public:
 
   auto optimize(ir::OptimizeRequest req,
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
-    if (auto branch = taken_branch()) {
+    if (auto branch = taken_branch(octx.reg)) {
       return std::move(*branch).optimize(std::move(req), octx);
     }
     auto filter = std::move(req.filter);
@@ -264,9 +264,10 @@ public:
     // Without an explicit `else` branch, events whose condition is not `true`
     // pass through an empty one.
     auto const has_else = args_.alternative.has_value();
-    auto const cons_events = ir::returns_events(args_.consequence);
-    auto const alt_events
-      = has_else ? ir::returns_events(*args_.alternative) : Option<bool>{true};
+    auto const cons_events = ir::returns_events(args_.consequence, octx.reg);
+    auto const alt_events = has_else
+                              ? ir::returns_events(*args_.alternative, octx.reg)
+                              : Option<bool>{true};
     // If a branch does not type-check, we cannot tell whether its output
     // reaches the downstream filter, so the filter stays behind `if`.
     auto const types_known = cons_events and alt_events;
@@ -314,11 +315,11 @@ public:
     // same events in front of `if`, provided that the condition yields the
     // same value when `if` evaluates it again.
     auto lifted = Option<ir::OptimizeFilter>{};
-    if (types_known and ir::is_repeatable(args_.condition)) {
+    if (types_known and ir::is_repeatable(args_.condition, octx.reg)) {
       auto branches = std::vector<ir::RoutedBranch>{};
       branches.push_back({args_.condition, cons_filter});
       branches.push_back({None{}, alt_filter});
-      lifted = ir::lift_branch_filters(std::move(branches));
+      lifted = ir::lift_branch_filters(std::move(branches), octx.reg);
     }
     if (lifted) {
       if (not has_else and args_.alternative
@@ -327,15 +328,15 @@ public:
       }
     } else {
       // The filters stay inside their branches.
-      args_.consequence.prepend(std::move(cons_filter));
+      args_.consequence.prepend(std::move(cons_filter), octx.reg);
       if (args_.alternative) {
-        args_.alternative->prepend(std::move(alt_filter));
+        args_.alternative->prepend(std::move(alt_filter), octx.reg);
       }
     }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     for (auto& expr : kept) {
-      replacement.push_back(make_where_ir(std::move(expr)));
+      replacement.push_back(make_where_ir(std::move(expr), octx.reg));
     }
     // The branches may change the number of events, so no limit passes `if`.
     return {
@@ -347,7 +348,8 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     if (input.is<table_slice>()) {
       return Box<tenzir::Operator<table_slice, table_slice, true>>{
         IfOp{args_.condition}.with_name("if")};
@@ -391,7 +393,7 @@ public:
     return tails;
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     // `if` routes events, so it rejects other inputs as `match` does. That also
     // lets `optimize` assume events when it replaces an `if` with a constant
@@ -400,7 +402,7 @@ public:
     if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`if` requires incoming events")
         .primary(args_.condition)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     // A branch may be empty (or contain only `let`s), in which case it has no
@@ -412,21 +414,21 @@ public:
       }
       return args_.condition.get_location();
     };
-    TRY(auto then_ty, args_.consequence.infer_type(input, dh));
+    TRY(auto then_ty, args_.consequence.infer_type(input, ctx));
     auto else_ty = input;
     if (args_.alternative) {
-      TRY(else_ty, args_.alternative->infer_type(input, dh));
+      TRY(else_ty, args_.alternative->infer_type(input, ctx));
     }
     if (then_ty.is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
         .primary(branch_location(args_.consequence))
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     if (args_.alternative and else_ty.is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
         .primary(branch_location(*args_.alternative))
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     if (then_ty == else_ty) {
@@ -446,7 +448,7 @@ public:
     if (args_.alternative) {
       diag = std::move(diag).secondary(branch_location(*args_.alternative));
     }
-    std::move(diag).emit(dh);
+    std::move(diag).emit(ctx);
     return failure::promise();
   }
 
@@ -461,8 +463,8 @@ private:
   /// That keeps the type of `if`: it differs from the taken branch only if
   /// that is a sink and the other branch returns events, as for
   /// `if true { discard }`, which returns events, unlike `discard`.
-  auto taken_branch() -> Option<ir::pipeline&> {
-    auto value = ir::constant_condition(args_.condition);
+  auto taken_branch(registry const& reg) -> Option<ir::pipeline&> {
+    auto value = ir::constant_condition(args_.condition, reg);
     if (not value) {
       return None{};
     }
@@ -473,8 +475,8 @@ private:
     auto& untaken = *value ? *args_.alternative : args_.consequence;
     auto null_dh = null_diagnostic_handler{};
     auto input = events_element_type();
-    auto if_ty = infer_type(input, null_dh);
-    auto taken_ty = taken.infer_type(input, null_dh);
+    auto if_ty = infer_type(input, base_ctx{null_dh, reg});
+    auto taken_ty = taken.infer_type(input, base_ctx{null_dh, reg});
     if (if_ty and taken_ty and *if_ty == *taken_ty) {
       return taken;
     }

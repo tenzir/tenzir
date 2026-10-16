@@ -155,21 +155,21 @@ public:
     return jobs ? jobs->inner : default_jobs();
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     auto pipe = args_.pipe();
     TENZIR_ASSERT(pipe);
     if (input.is<chunk_ptr>()) {
       diagnostic::error("`parallel` does not accept bytes as input")
         .primary(args_.main_location())
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
-    TRY(auto output, pipe->inner.infer_type(input, dh));
+    TRY(auto output, pipe->inner.infer_type(input, ctx));
     if (output.is<chunk_ptr>()) {
       diagnostic::error("`parallel` subpipeline must not produce bytes")
         .primary(pipe->source)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return output;
@@ -181,9 +181,10 @@ public:
   }
 
   auto optimize(ir::OptimizeRequest req,
-                const ir::OptimizeCtx&) && -> ir::OptimizeResult override {
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     // Determine whether operators inside this parallel block may reorder.
     auto sub_octx = ir::OptimizeCtx{
+      .reg = octx.reg,
       .can_any_op_reorder = jobs() > 1,
     };
     auto pipe = args_.pipe();
@@ -203,7 +204,7 @@ public:
     // Reinsert residual filters at the front of the subpipeline so they don't
     // escape past `parallel` (no filter propagation upstream).
     pipe->inner = std::move(sub.replacement);
-    pipe->inner.prepend(std::move(sub.filter));
+    pipe->inner.prepend(std::move(sub.filter), octx.reg);
     // Return this operator as the replacement; don't propagate filter upstream.
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
@@ -215,7 +216,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
     panic("parallel must be lowered into the plan before spawning");
   }
 

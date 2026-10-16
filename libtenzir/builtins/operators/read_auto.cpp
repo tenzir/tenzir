@@ -257,7 +257,7 @@ private:
     selected_ = index;
     auto const& pipeline = selected_pipeline(index);
     auto root = compile_ctx::make_root(base_ctx{ctx});
-    auto provider = session_provider::make(ctx.dh());
+    auto provider = session_provider::make(ctx.dh(), ctx.reg());
     auto session = provider.as_session();
     auto ast = tenzir::parse(pipeline, location::unknown, session);
     TENZIR_ASSERT(ast);
@@ -498,7 +498,7 @@ private:
     selected_ = index;
     auto const& pipeline = selected_pipeline(index);
     auto root = compile_ctx::make_root(base_ctx{ctx});
-    auto provider = session_provider::make(ctx.dh());
+    auto provider = session_provider::make(ctx.dh(), ctx.reg());
     auto session = provider.as_session();
     auto ast = tenzir::parse(pipeline, location::unknown, session);
     TENZIR_ASSERT(ast);

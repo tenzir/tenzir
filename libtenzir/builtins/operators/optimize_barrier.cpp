@@ -41,19 +41,18 @@ public:
     return {};
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler&) const
+  auto infer_type(element_type_tag input, base_ctx) const
     -> failure_or<element_type_tag> override {
     return input;
   }
 
-  auto
-  optimize(ir::OptimizeRequest req,
-           const ir::OptimizeCtx& /*octx*/) && -> ir::OptimizeResult override {
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     // Pin the filters, request the strictest ordering from upstream, and
     // forward neither limit nor projection.
     auto replacement = std::vector<Box<ir::Operator>>{};
     for (auto& expr : req.filter) {
-      replacement.push_back(make_where_ir(std::move(expr)));
+      replacement.push_back(make_where_ir(std::move(expr), octx.reg));
     }
     return {
       ir::OptimizeFilter{},
@@ -62,7 +61,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
     panic("cannot spawn optimize_barrier; it must be removed during "
           "optimization");
   }

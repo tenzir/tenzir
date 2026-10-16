@@ -166,12 +166,13 @@ auto FromArrowFsOperator<Output>::start(JobId job, OpCtx& ctx) -> Task<void> {
   // that produce events do.
   if constexpr (std::same_as<Output, nova::Events>) {
     auto ndh = null_diagnostic_handler{};
-    auto output = base_args_.pipe.inner.infer_type(tag_v<FileHandle>, ndh);
+    auto output = base_args_.pipe.inner.infer_type(tag_v<FileHandle>,
+                                                   base_ctx{ndh, ctx.reg()});
     file_handles_ = output.is_success() and output->is<nova::Events>();
   }
   co_await restore(ctx);
   auto ndh = null_diagnostic_handler{};
-  co_await cleanup_files(ndh);
+  co_await cleanup_files(base_ctx{ndh, ctx.reg()});
   resume_job(ctx);
   if (base_args_.watch or not scan_complete_) {
     spawn_scan_task(ctx);
@@ -316,7 +317,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
       if (ctx.checkpoint_settings()) {
         cleanup_pending_.push_back(std::move(path));
       } else {
-        co_await cleanup_file(std::move(path), ctx.dh());
+        co_await cleanup_file(std::move(path), ctx);
       }
     });
 }
@@ -350,7 +351,7 @@ template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
 auto FromArrowFsOperator<Output>::finalize(Push<Output>&, OpCtx& ctx)
   -> Task<FinalizeBehavior> {
-  co_await cleanup_files(ctx.dh());
+  co_await cleanup_files(ctx);
   co_return FinalizeBehavior::done;
 }
 
@@ -386,20 +387,20 @@ auto FromArrowFsOperator<Output>::snapshot(Serde& serde) -> void {
 template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
 auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
-                                               diagnostic_handler& dh) const
+                                               base_ctx ctx) const
   -> Task<void> {
   if (base_args_.remove) {
-    co_await remove_file(path, dh);
+    co_await remove_file(path, ctx);
     co_return;
   }
   if (base_args_.rename) {
-    auto result = eval(*base_args_.rename, path, dh);
+    auto result = eval(*base_args_.rename, path, ctx);
     auto* new_path = try_as<std::string>(result);
     if (not new_path) {
       diagnostic::warning("expected `string`, got `{}`",
                           type::infer(result).value_or(type{}).kind())
         .primary(*base_args_.rename)
-        .emit(dh);
+        .emit(ctx);
       co_return;
     }
     auto final_path = std::filesystem::path{*new_path};
@@ -422,22 +423,21 @@ auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
       diagnostic::warning("failed to rename `{}` to `{}`", path, final_path)
         .primary(*base_args_.rename)
         .note(status.ToStringWithoutContextLines())
-        .emit(dh);
+        .emit(ctx);
       co_return;
     }
-    co_await remove_file(path, dh);
+    co_await remove_file(path, ctx);
     co_return;
   }
 }
 
 template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
-auto FromArrowFsOperator<Output>::cleanup_files(diagnostic_handler& dh)
-  -> Task<void> {
+auto FromArrowFsOperator<Output>::cleanup_files(base_ctx ctx) -> Task<void> {
   // PERF: We could probably batch these calls.
   auto tasks = std::vector<Task<void>>{};
   for (auto& path : cleanup_pending_) {
-    tasks.push_back(cleanup_file(std::move(path), dh));
+    tasks.push_back(cleanup_file(std::move(path), ctx));
   }
   co_await folly::coro::collectAllRange(std::move(tasks));
   cleanup_pending_.clear();
@@ -446,7 +446,7 @@ auto FromArrowFsOperator<Output>::cleanup_files(diagnostic_handler& dh)
 template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
 auto FromArrowFsOperator<Output>::post_commit(OpCtx& ctx) -> Task<void> {
-  co_await cleanup_files(ctx.dh());
+  co_await cleanup_files(ctx);
 }
 
 template <class Output>
@@ -994,7 +994,7 @@ auto ToArrowFsOperator<Input>::process(Input input, OpCtx& ctx) -> Task<void> {
       auto by = std::vector<series>{};
       by.reserve(fields.size());
       for (auto const& field : fields) {
-        by.emplace_back(eval(field, input, ctx.dh()));
+        by.emplace_back(eval(field, input, ctx));
       }
       auto const rows = detail::narrow<int64_t>(input.rows());
       auto boundaries = std::set<int64_t>{rows};

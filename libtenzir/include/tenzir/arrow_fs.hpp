@@ -313,9 +313,8 @@ protected:
 private:
   static constexpr size_t read_size = 10uz * 1024 * 1024;
 
-  auto cleanup_file(std::string path, diagnostic_handler& dh) const
-    -> Task<void>;
-  auto cleanup_files(diagnostic_handler& dh) -> Task<void>;
+  auto cleanup_file(std::string path, base_ctx ctx) const -> Task<void>;
+  auto cleanup_files(base_ctx ctx) -> Task<void>;
   auto restore(OpCtx& ctx) -> Task<void>;
   auto restore_processing(OpCtx& ctx) -> Task<void>;
   auto spawn_scan_task(OpCtx& ctx) -> void;

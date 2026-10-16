@@ -695,16 +695,16 @@ public:
 
 } // namespace
 
-auto ir::simplify_predicate(ast::expression predicate) -> ast::expression {
-  auto reg = global_registry();
-  auto simplifier = Simplifier{*reg};
+auto ir::simplify_predicate(ast::expression predicate, registry const& reg)
+  -> ast::expression {
+  auto simplifier = Simplifier{reg};
   simplifier.simplify(predicate, Context::logic);
   return predicate;
 }
 
-auto ir::simplify_filter(OptimizeFilter filter) -> OptimizeFilter {
-  auto reg = global_registry();
-  auto simplifier = Simplifier{*reg};
+auto ir::simplify_filter(OptimizeFilter filter, registry const& reg)
+  -> OptimizeFilter {
+  auto simplifier = Simplifier{reg};
   auto simplified = OptimizeFilter{};
   auto properties = std::vector<Properties>{};
   for (auto& predicate : filter) {
@@ -741,9 +741,9 @@ auto ir::simplify_filter(OptimizeFilter filter) -> OptimizeFilter {
   return result;
 }
 
-auto ir::constant_condition(ast::expression const& condition) -> Option<bool> {
-  auto reg = global_registry();
-  auto simplifier = Simplifier{*reg};
+auto ir::constant_condition(ast::expression const& condition,
+                            registry const& reg) -> Option<bool> {
+  auto simplifier = Simplifier{reg};
   auto simplified = condition;
   PackageLetFolder{}.visit(simplified);
   simplifier.simplify(simplified, Context::condition);

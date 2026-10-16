@@ -15,7 +15,6 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include <iterator>
-#include <ranges>
 
 namespace tenzir::plugins::merge {
 
@@ -52,22 +51,22 @@ public:
     return MergeIr{std::move(args_)};
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`merge` expects events as input")
         .primary(args_.keyword)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     // The subpipeline is a source: it must start on its own and produce events
     // in the same representation as the main input, since both lanes feed one
     // consumer.
-    TRY(auto branch_ty, args_.pipe.infer_type(tag_v<void>, dh));
+    TRY(auto branch_ty, args_.pipe.infer_type(tag_v<void>, ctx));
     if (branch_ty != input) {
       diagnostic::error("`merge` subpipeline must be a source producing events")
         .primary(args_.pipe_location)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return input;
@@ -92,9 +91,7 @@ public:
                                                .projection = req.projection},
                            octx);
     args_.pipe = std::move(opt.replacement);
-    args_.pipe.operators.insert_range(args_.pipe.operators.begin(),
-                                      opt.filter
-                                        | std::views::transform(make_where_ir));
+    args_.pipe.prepend(std::move(opt.filter), octx.reg);
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     return {
@@ -106,7 +103,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) const -> AnyOperator override {
+  auto spawn(element_type_tag, registry const&) const -> AnyOperator override {
     panic("cannot spawn merge; it must be lowered into the plan");
   }
 

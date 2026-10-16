@@ -929,7 +929,8 @@ public:
   // source/sink probing in the compiler), so the mode cannot be resolved lazily
   // in `substitute`. The mode must be a constant string, so we evaluate it from
   // its expression on demand instead.
-  auto resolve_mode(diagnostic_handler& dh) const -> failure_or<std::string> {
+  auto resolve_mode(base_ctx ctx) const -> failure_or<std::string> {
+    auto& dh = ctx.dh();
     if (not args_.mode) {
       return std::string{"readwrite"};
     }
@@ -937,13 +938,13 @@ public:
     // observe the same value. Reject non-deterministic expressions such as
     // `random()` or `now()`, which `const_eval` would otherwise re-evaluate
     // (potentially differently) on each call.
-    if (not args_.mode->is_deterministic(*global_registry())) {
+    if (not args_.mode->is_deterministic(ctx.reg())) {
       diagnostic::error("`mode` must be a constant")
         .primary(*args_.mode)
         .emit(dh);
       return failure::promise();
     }
-    TRY(auto value, const_eval(*args_.mode, dh));
+    TRY(auto value, const_eval(*args_.mode, ctx));
     auto* str = try_as<std::string>(value.inner);
     if (not str) {
       diagnostic::error("expected `string` for mode argument")
@@ -961,14 +962,14 @@ public:
     return std::move(*str);
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+  auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override {
-    TRY(auto mode, resolve_mode(dh));
+    TRY(auto mode, resolve_mode(ctx));
     if (mode == "write") {
       if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
         diagnostic::error("`cache mode=\"write\"` expects events as input")
           .primary(op_loc_)
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
       return tag_v<void>;
@@ -977,7 +978,7 @@ public:
       if (input.is_not<void>()) {
         diagnostic::error("`cache mode=\"read\"` must be used as a source")
           .primary(op_loc_)
-          .emit(dh);
+          .emit(ctx);
         return failure::promise();
       }
       if (nova_enabled()) {
@@ -989,7 +990,7 @@ public:
     if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
       diagnostic::error("`cache` expects events as input")
         .primary(op_loc_)
-        .emit(dh);
+        .emit(ctx);
       return failure::promise();
     }
     return input;
@@ -1086,6 +1087,7 @@ public:
         = located<duration>{*val, args_.write_timeout->get_location()};
     }
     args_resolved_ = std::move(args);
+    TRY(mode_resolved_, resolve_mode(base_ctx{ctx.dh(), ctx.reg()}));
     return {};
   }
 
@@ -1096,11 +1098,11 @@ public:
     return 1;
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
     TENZIR_ASSERT(args_resolved_);
-    auto null_dh = null_diagnostic_handler{};
-    auto mode = resolve_mode(null_dh);
-    TENZIR_ASSERT(mode);
+    TENZIR_ASSERT(mode_resolved_);
+    auto const& mode = mode_resolved_;
     auto args = *args_resolved_;
     if (*mode == "write") {
       if (input.is<nova::Events>()) {
@@ -1132,7 +1134,8 @@ public:
     return f.object(x).fields(
       f.field("op_loc", x.op_loc_), f.field("args", x.args_),
       f.field("default_read_timeout", x.default_read_timeout_),
-      f.field("args_resolved", x.args_resolved_));
+      f.field("args_resolved", x.args_resolved_),
+      f.field("mode_resolved", x.mode_resolved_));
   }
 
 private:
@@ -1141,6 +1144,7 @@ private:
   duration default_read_timeout_ = {};
   // Resolved arguments (set during substitute).
   Option<CacheArgs> args_resolved_;
+  Option<std::string> mode_resolved_;
 };
 
 using cache_ir_plugin = inspection_plugin<ir::Operator, CacheIr>;
@@ -1186,7 +1190,7 @@ public:
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::CompileResult> override {
     auto raw = CacheArgsRaw{};
-    auto provider = session_provider::make(ctx);
+    auto provider = session_provider::make(ctx, ctx.reg());
     auto loc = inv.op.get_location();
     TRY(argument_parser2::operator_("cache")
           .positional("id", raw.id, "string")

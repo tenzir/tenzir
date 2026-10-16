@@ -83,8 +83,8 @@ namespace tenzir::pushdown {
 /// and what it translates, so the result does not depend on how much of it
 /// was pushed. Ordering comparisons are left alone, because the textual order
 /// of addresses is not their numeric order.
-auto adapt_to_columns(ast::expression& expr, ColumnModel const& columns)
-  -> void;
+auto adapt_to_columns(ast::expression& expr, ColumnModel const& columns,
+                      registry const& reg) -> void;
 
 /// Translates `expr` into an IR predicate that keeps and drops the same rows,
 /// or returns `None` if some part of it has no such translation.
@@ -94,7 +94,8 @@ auto adapt_to_columns(ast::expression& expr, ColumnModel const& columns)
 /// alike, a guard may turn a `null` of TQL into `false`. The result is thus
 /// fit to filter by, also as an operand of `and` or `or`, but not to negate.
 auto translate_predicate(ast::expression const& expr,
-                         ColumnModel const& columns) -> Option<Expr>;
+                         ColumnModel const& columns, registry const& reg)
+  -> Option<Expr>;
 
 /// Translates `expr` into an IR predicate that holds for every row where
 /// `expr` is `true`, or returns `None` if there is none beyond `true` itself.
@@ -115,7 +116,8 @@ auto translate_predicate(ast::expression const& expr,
 /// value, `== null`, computations, and column-to-column comparisons stay local;
 /// `x != null` is the null-rejecting exception. Integers are bounded to ±2^53.
 auto translate_prefilter(ast::expression const& expr,
-                         ColumnModel const& columns) -> Option<Expr>;
+                         ColumnModel const& columns, registry const& reg)
+  -> Option<Expr>;
 
 /// The value of a field, as the target computes it.
 struct FieldValue {
@@ -151,6 +153,6 @@ struct FilterSplit {
 /// keeps `f(y)`. A remaining conjunct whose prefilter renders pushes that
 /// prefilter in addition to staying local.
 auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
-                  Renderer const& renderer) -> FilterSplit;
+                  Renderer const& renderer, registry const& reg) -> FilterSplit;
 
 } // namespace tenzir::pushdown

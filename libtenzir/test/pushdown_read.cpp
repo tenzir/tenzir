@@ -8,6 +8,7 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/pushdown/read.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 
@@ -19,7 +20,7 @@ namespace {
 
 auto expression_from(std::string_view text) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto s = session{provider};
   auto expr
     = parse_expression_with_location_override(text, location::unknown, s);
@@ -60,7 +61,7 @@ auto projection_paths(Option<ir::OptimizeProjection> const& projection)
 
 auto compile_reader(base_ctx ctx) -> ir::pipeline {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ast = parse_pipeline_with_location_override(
     "read_feather", location::unknown, provider.as_session());
   REQUIRE(ast);
@@ -143,16 +144,24 @@ TEST("reader limit counts matching rows across batches") {
   filter.push_back(expression_from("id >= 4"));
   auto remaining = Option<uint64_t>{3};
   auto dh = collecting_diagnostic_handler{};
-  CHECK_EQUAL(pushdown::apply_read(slice_from(0), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(0), filter, remaining,
+                                   base_ctx{dh, test::builtin_registry()})
+                .rows(),
               0u);
   CHECK_EQUAL(*remaining, 3u);
-  CHECK_EQUAL(pushdown::apply_read(slice_from(3), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(3), filter, remaining,
+                                   base_ctx{dh, test::builtin_registry()})
+                .rows(),
               2u);
   CHECK_EQUAL(*remaining, 1u);
-  CHECK_EQUAL(pushdown::apply_read(slice_from(6), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(6), filter, remaining,
+                                   base_ctx{dh, test::builtin_registry()})
+                .rows(),
               1u);
   CHECK_EQUAL(*remaining, 0u);
-  CHECK_EQUAL(pushdown::apply_read(slice_from(9), filter, remaining, dh).rows(),
+  CHECK_EQUAL(pushdown::apply_read(slice_from(9), filter, remaining,
+                                   base_ctx{dh, test::builtin_registry()})
+                .rows(),
               0u);
 }
 
@@ -233,7 +242,7 @@ TEST("refined reader projection includes accumulated filter dependencies") {
 TEST("runtime reader planning preserves pushed hints including after "
      "serialization") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   auto filter = ir::OptimizeFilter{};
   filter.push_back(expression_from("nested.x >= 4"));
@@ -242,7 +251,7 @@ TEST("runtime reader planning preserves pushed hints including after "
                         .order = EventOrder::ordered,
                         .limit = uint64_t{2},
                         .projection = projection_from("id")},
-    {});
+    ir::OptimizeCtx{.reg = test::builtin_registry()});
   auto pipe = std::move(optimized.replacement);
   REQUIRE_EQUAL(pipe.operators.size(), 1u);
   auto expected = serialize(pipe.operators.front());
@@ -264,7 +273,7 @@ TEST("runtime reader planning preserves pushed hints including after "
 TEST("repeated reader optimization accumulates all inputs across "
      "serialization") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   auto first = expression_from("nested.x >= 4");
   auto second = expression_from("id <= 7");
@@ -273,13 +282,13 @@ TEST("repeated reader optimization accumulates all inputs across "
                         .order = EventOrder::unordered,
                         .limit = uint64_t{2},
                         .projection = projection_from("id")},
-    {});
+    ir::OptimizeCtx{.reg = test::builtin_registry()});
   auto initial = compile_reader(ctx).optimize(
     ir::OptimizeRequest{.filter = {first},
                         .order = EventOrder::unordered,
                         .limit = uint64_t{5},
                         .projection = projection_from({"id", "unused"})},
-    {});
+    ir::OptimizeCtx{.reg = test::builtin_registry()});
   REQUIRE(initial.filter.empty());
   auto bytes = serialize(initial.replacement);
   auto restored = ir::pipeline{};
@@ -290,7 +299,7 @@ TEST("repeated reader optimization accumulates all inputs across "
                         .order = EventOrder::ordered,
                         .limit = uint64_t{2},
                         .projection = projection_from("id")},
-    {});
+    ir::OptimizeCtx{.reg = test::builtin_registry()});
   REQUIRE(refined.filter.empty());
   CHECK_EQUAL(serialize(refined.replacement), serialize(expected.replacement));
   // Neither a larger limit nor an unrestricted projection undoes acceptance.
@@ -298,13 +307,13 @@ TEST("repeated reader optimization accumulates all inputs across "
                  .optimize(ir::OptimizeRequest{.filter = {},
                                                .order = EventOrder::ordered,
                                                .limit = uint64_t{9}},
-                           {});
+                           ir::OptimizeCtx{.reg = test::builtin_registry()});
   CHECK_EQUAL(serialize(final.replacement), serialize(expected.replacement));
 }
 
 TEST("repeated reader optimization refines an existing projection") {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = base_ctx{dh, provider.as_session().reg()};
   auto optimize
     = [](ir::pipeline pipe, Option<ir::OptimizeProjection> projection) {
@@ -312,7 +321,7 @@ TEST("repeated reader optimization refines an existing projection") {
           .optimize(ir::OptimizeRequest{.filter = {},
                                         .order = EventOrder::ordered,
                                         .projection = std::move(projection)},
-                    {})
+                    ir::OptimizeCtx{.reg = test::builtin_registry()})
           .replacement;
       };
   auto expected = optimize(compile_reader(ctx), projection_from("nested.x"));

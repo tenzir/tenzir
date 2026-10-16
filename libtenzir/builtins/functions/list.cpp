@@ -1031,7 +1031,7 @@ public:
               ast::binary_op::sub,
               ast::expression{ast::root_field{ast::identifier{"r", loc}}},
             }};
-            auto result = tenzir::eval(sub, slice, ctx.dh());
+            auto result = tenzir::eval(sub, slice, ctx);
             TENZIR_ASSERT(result.parts().size() == 1);
             delta = std::move(result.part(0));
             TENZIR_ASSERT(delta.length() == num_deltas);
