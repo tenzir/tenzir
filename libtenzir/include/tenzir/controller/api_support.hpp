@@ -425,10 +425,79 @@ inline auto tag_of(std::string_view body) -> Option<std::string> {
   return std::string{view};
 }
 
+/// Percent-encodes `value` so that it is one path segment.
+///
+/// An id may hold anything its own schema allows, including the `/` and `.`
+/// of a path, and a route is matched segment by segment. So everything that
+/// is not unreserved under RFC 3986 is escaped, `/` included: an id with a
+/// slash in it must not look like two segments.
+inline auto encode_segment(std::string_view value) -> std::string {
+  constexpr auto digits = std::string_view{"0123456789ABCDEF"};
+  auto out = std::string{};
+  out.reserve(value.size());
+  for (auto character : value) {
+    auto raw = static_cast<unsigned char>(character);
+    auto unreserved = (raw >= 'A' and raw <= 'Z') or (raw >= 'a' and raw <= 'z')
+                      or (raw >= '0' and raw <= '9') or raw == '-' or raw == '.'
+                      or raw == '_' or raw == '~';
+    if (unreserved) {
+      out.push_back(character);
+      continue;
+    }
+    out.push_back('%');
+    out.push_back(digits[raw >> 4]);
+    out.push_back(digits[raw & 0x0f]);
+  }
+  return out;
+}
+
+/// Reads one percent-encoded path segment, or nothing when an escape is not
+/// one. A segment that decodes to nothing is also refused: a route binds a
+/// parameter to something.
+inline auto decode_segment(std::string_view segment) -> Option<std::string> {
+  auto value = [](char character) -> int {
+    if (character >= '0' and character <= '9') {
+      return character - '0';
+    }
+    if (character >= 'a' and character <= 'f') {
+      return character - 'a' + 10;
+    }
+    if (character >= 'A' and character <= 'F') {
+      return character - 'A' + 10;
+    }
+    return -1;
+  };
+  auto out = std::string{};
+  out.reserve(segment.size());
+  for (auto index = std::size_t{0}; index < segment.size(); ++index) {
+    if (segment[index] != '%') {
+      out.push_back(segment[index]);
+      continue;
+    }
+    if (index + 2 >= segment.size()) {
+      return None{};
+    }
+    auto high = value(segment[index + 1]);
+    auto low = value(segment[index + 2]);
+    if (high < 0 or low < 0) {
+      return None{};
+    }
+    out.push_back(static_cast<char>(high * 16 + low));
+    index += 2;
+  }
+  if (out.empty()) {
+    return None{};
+  }
+  return out;
+}
+
 /// Matches a `/a/:x/b` template against a concrete path, appending each
-/// parameter it binds. Segment counts must agree; no segment may be empty.
+/// parameter it binds, decoded. Segment counts must agree; no segment may be
+/// empty, and a parameter whose escapes are malformed is no match — the
+/// route did not bind, which is a 404 rather than a 400 about an id nobody
+/// could read.
 inline auto match_path(std::string_view pattern, std::string_view path,
-                       std::vector<std::string_view>& parameters) -> bool {
+                       std::vector<std::string>& parameters) -> bool {
   parameters.clear();
   auto next = [](std::string_view& rest) {
     auto slash = rest.find('/');
@@ -444,10 +513,11 @@ inline auto match_path(std::string_view pattern, std::string_view path,
     auto expected = next(pattern);
     auto actual = next(path);
     if (expected.starts_with(':')) {
-      if (actual.empty()) {
+      auto decoded = decode_segment(actual);
+      if (not decoded) {
         return false;
       }
-      parameters.push_back(actual);
+      parameters.push_back(std::move(*decoded));
     } else if (expected != actual) {
       return false;
     }

@@ -221,7 +221,8 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
         TENZIR_ASSERT(not set.fn and not set.op);
         continue;
       }
-      next->replace_module(std::string{"packages"}, name, std::move(set.mod));
+      next->replace_module(std::string{entity_pkg_packages}, name,
+                           std::move(set.mod));
     }
   }
   guard.publish(std::shared_ptr<const registry>{std::move(next)});

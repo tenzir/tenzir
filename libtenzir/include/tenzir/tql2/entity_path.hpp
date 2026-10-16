@@ -23,6 +23,12 @@ using entity_pkg = std::string;
 inline constexpr std::string_view entity_pkg_std = "std";
 inline constexpr std::string_view entity_pkg_cfg = "cfg";
 
+/// Where installed packages live, and the default for `registry`'s packages
+/// root. Something holding several sets of packages at once gives each set a
+/// root of its own instead, and this is then only the name of the default
+/// one.
+inline constexpr std::string_view entity_pkg_packages = "packages";
+
 /// Holds builtin entities that only exist under a formerly module-qualified
 /// name, keyed by their flattened name. Regular resolution never consults this
 /// package: only the deprecation relay does, and only after everything else,

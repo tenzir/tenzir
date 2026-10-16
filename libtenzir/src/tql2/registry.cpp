@@ -403,7 +403,17 @@ auto registry::clone() const -> std::unique_ptr<registry> {
     auto cloned = clone_module(mod);
     out->roots_.emplace(name, std::move(*cloned));
   }
+  out->packages_root_ = packages_root_;
   return out;
+}
+
+auto registry::packages_root() const -> const entity_pkg& {
+  return packages_root_;
+}
+
+void registry::set_packages_root(entity_pkg root) {
+  TENZIR_ASSERT(not root.empty(), "packages have to be resolved somewhere");
+  packages_root_ = std::move(root);
 }
 
 auto registry::root(const entity_pkg& package) -> module_def& {

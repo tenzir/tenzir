@@ -274,8 +274,9 @@ struct std::hash<tenzir::TenzirTelemetryTelemetryCount> {
 
 namespace tenzir {
 
-/// A path-safe identifier
-/// Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
+/// An identifier that may be a path
+/// Values must match
+/// `^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$`.
 class PipelineId {
 public:
   static auto make(std::string value) -> Result<PipelineId, ParseError>;
@@ -1005,18 +1006,27 @@ namespace tenzir {
 
 class Liveness {
 public:
-  Liveness(std::string status, double uptime_ms)
-    : status{std::move(status)}, uptime_ms{uptime_ms} {
+  Liveness(std::string status, double uptime_ms,
+           Option<std::int64_t> generation, Option<std::string> digest)
+    : status{std::move(status)},
+      uptime_ms{uptime_ms},
+      generation{std::move(generation)},
+      digest{std::move(digest)} {
   }
 
   std::string status;
   double uptime_ms;
+  /// `generation`, may be absent, may be null.
+  Option<std::int64_t> generation;
+  /// `digest`, may be absent, may be null.
+  Option<std::string> digest;
 
   friend auto operator==(Liveness const&, Liveness const&) -> bool = default;
 
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, Liveness const& value) -> void {
-    hash_append(h, value.status, value.uptime_ms);
+    hash_append(h, value.status, value.uptime_ms, value.generation,
+                value.digest);
   }
 };
 
@@ -1025,66 +1035,6 @@ public:
 template <>
 struct std::hash<tenzir::Liveness> {
   auto operator()(tenzir::Liveness const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-/// A pipeline as the platform wants it to exist, named for people and defined
-/// in TQL
-class Pipeline {
-public:
-  Pipeline(std::string name, std::string definition)
-    : name{std::move(name)}, definition{std::move(definition)} {
-  }
-
-  std::string name;
-  std::string definition;
-
-  friend auto operator==(Pipeline const&, Pipeline const&) -> bool = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, Pipeline const& value) -> void {
-    hash_append(h, value.name, value.definition);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::Pipeline> {
-  auto operator()(tenzir::Pipeline const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-/// The pipelines a deployment should be running
-class Configuration {
-public:
-  explicit Configuration(std::unordered_map<PipelineId, Pipeline> pipelines)
-    : pipelines{std::move(pipelines)} {
-  }
-
-  std::unordered_map<PipelineId, Pipeline> pipelines;
-
-  friend auto operator==(Configuration const&, Configuration const&) -> bool
-    = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, Configuration const& value)
-    -> void {
-    hash_append(h, value.pipelines);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::Configuration> {
-  auto operator()(tenzir::Configuration const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -1359,6 +1309,28 @@ public:
   static constexpr auto status = std::uint16_t{503};
 };
 
+class InvalidConfiguration {
+public:
+  explicit InvalidConfiguration(std::string message)
+    : message{std::move(message)} {
+  }
+
+  static constexpr auto status = std::uint16_t{400};
+
+  std::string message;
+};
+
+class ConfigurationConflict {
+public:
+  explicit ConfigurationConflict(std::string message)
+    : message{std::move(message)} {
+  }
+
+  static constexpr auto status = std::uint16_t{409};
+
+  std::string message;
+};
+
 class InvalidPipeline {
 public:
   explicit InvalidPipeline(std::string message) : message{std::move(message)} {
@@ -1459,28 +1431,37 @@ auto call(Transport& transport, PushTelemetry request)
 
 /// `GET /health`
 /// Answered as long as the deployment is running. The backend probes this
-/// through the gateway, which is where `reachable` comes from.
+/// through the gateway, which is where `reachable` comes from. It also reports
+/// which configuration the deployment has accepted, so the platform can see
+/// that the two agree and send the current one again when they do not.
 class ReadHealth {
 public:
   ReadHealth() = default;
 };
 
 /// `PUT /configuration`
-/// Hands the deployment the whole state it should be in. Sent on every change
-/// and again after a deployment reconnects, so it has to be safe to apply
-/// twice. The deployment makes its pipelines match: one that is missing is
-/// created and started, one whose name or definition differs is replaced and
-/// started again, one that is not in the configuration is stopped and removed.
-/// Answers with nothing: what the deployment made of it shows up in
-/// `listPipelines`, not in a reply the platform would have to interpret.
+/// Hands the deployment the whole state it should be in, as a tar holding the
+/// workspace files, every locked package, and a `manifest.json` with the
+/// revision, the environment, the variables, the secrets and the labels. Sent
+/// on every change and again after a deployment reconnects, so it has to be
+/// safe to apply twice. The deployment makes its pipelines match what
+/// `pipelines/` holds: one that is missing is created and started, one whose
+/// definition or settings differ is replaced and started again, one that is no
+/// longer there is stopped and removed. A revision whose generation is not
+/// higher than the one the deployment holds is refused, so a late retry cannot
+/// roll it back. Answers with nothing: what the deployment made of it shows up
+/// in `listPipelines`, not in a reply the platform would have to interpret.
 class UpdateConfiguration {
 public:
-  explicit UpdateConfiguration(Configuration payload)
+  explicit UpdateConfiguration(std::string payload)
     : payload{std::move(payload)} {
   }
 
-  Configuration payload;
+  std::string payload;
 };
+
+using UpdateConfigurationFailure
+  = variant<InvalidConfiguration, ConfigurationConflict>;
 
 /// `POST /pipelines`
 /// Hands the deployment a pipeline, whole, along with the id it is known under,
@@ -1581,7 +1562,9 @@ public:
 
   virtual auto handle(ReadHealth) -> Task<Liveness> = 0;
 
-  virtual auto handle(UpdateConfiguration request) -> Task<void> = 0;
+  virtual auto handle(UpdateConfiguration request)
+    -> Task<Result<void, UpdateConfigurationFailure>>
+    = 0;
 
   virtual auto handle(CreatePipeline request)
     -> Task<Result<void, CreatePipelineFailure>>
@@ -1666,10 +1649,6 @@ auto parse_deployment_sample(simdjson::dom::element value)
 auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError>;
 auto parse_liveness(simdjson::dom::element value)
   -> Result<Liveness, ParseError>;
-auto parse_pipeline(simdjson::dom::element value)
-  -> Result<Pipeline, ParseError>;
-auto parse_configuration(simdjson::dom::element value)
-  -> Result<Configuration, ParseError>;
 auto parse_identified_pipeline(simdjson::dom::element value)
   -> Result<IdentifiedPipeline, ParseError>;
 auto parse_pipeline_state(simdjson::dom::element value)
@@ -1716,8 +1695,6 @@ auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
 auto write_json(DeploymentSample const& value, std::string& out) -> void;
 auto write_json(Batch const& value, std::string& out) -> void;
 auto write_json(Liveness const& value, std::string& out) -> void;
-auto write_json(Pipeline const& value, std::string& out) -> void;
-auto write_json(Configuration const& value, std::string& out) -> void;
 auto write_json(IdentifiedPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineState const& value, std::string& out) -> void;
 auto write_json(PipelineStatus const& value, std::string& out) -> void;

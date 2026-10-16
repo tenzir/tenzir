@@ -16,6 +16,8 @@
 
 #include <memory>
 #include <shared_mutex>
+#include <span>
+#include <vector>
 
 namespace tenzir {
 
@@ -140,6 +142,22 @@ public:
   auto function_names() const -> std::vector<std::string>;
   auto module_names() const -> std::vector<std::string>;
 
+  /// The root that packages are resolved in, `packages` unless a snapshot says
+  /// otherwise.
+  ///
+  /// Resolution looks in `cfg`, then `std`, then here: user overrides first,
+  /// then builtins, then whatever is installed. A caller holding several sets
+  /// of packages at once — a deployment with more than one configuration
+  /// alive — gives each set a root of its own and points this at the set it is
+  /// compiling against. Every path it resolves then names that root and goes
+  /// on naming it, so what a pipeline was compiled against cannot change under
+  /// it when another set is published.
+  auto packages_root() const -> const entity_pkg&;
+
+  /// Sets that root. Like `add`, for building a snapshot rather than for
+  /// changing one that something may be resolving against.
+  void set_packages_root(entity_pkg root);
+
   /// Register an entity. This should only be done on startup or when
   /// constructing a new snapshot of the registry.
   void add(const entity_pkg& package, std::string_view name, entity_def def);
@@ -168,6 +186,7 @@ private:
   std::unordered_map<std::string, module_def, detail::heterogeneous_string_hash,
                      std::equal_to<>>
     roots_;
+  entity_pkg packages_root_{entity_pkg_packages};
 };
 
 // TODO: This should be attached to the `session` object. However, because we

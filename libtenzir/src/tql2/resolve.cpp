@@ -196,9 +196,12 @@ public:
     // scope, we can directly dispatch to the registry.
     auto pkg = std::invoke([&]() -> Option<entity_pkg> {
       // Resolution precedence: cfg (user overrides) -> std (builtins) ->
-      // packages (installed)
-      for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
-                       std::string{"packages"}}) {
+      // packages (installed). The last one is the snapshot's, so a caller
+      // holding several sets of packages resolves against the set it is
+      // compiling for rather than against whatever was published last.
+      for (const auto& pkg :
+           {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
+            reg_.packages_root()}) {
         auto path = entity_path{pkg, {x.path[0].name}, first_ns};
         if (is<entity_ref>(reg_.try_get(path))) {
           return pkg;
@@ -252,8 +255,9 @@ public:
       display += "::";
     }
     display += x.id.name;
-    // Package `let`s live only in the `packages` domain.
-    auto path = entity_path{std::string{"packages"}, segments, entity_ns::let};
+    // Package `let`s live only in the packages domain, and in the snapshot's
+    // own, for the reason the entity lookup above gives.
+    auto path = entity_path{reg_.packages_root(), segments, entity_ns::let};
     auto result = reg_.try_get(path);
     auto* ref = try_as<entity_ref>(&result);
     if (not ref) {

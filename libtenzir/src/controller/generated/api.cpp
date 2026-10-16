@@ -72,6 +72,10 @@ auto parse_too_large(simdjson::dom::element value)
   -> Result<TooLarge, ParseError>;
 auto parse_service_unavailable(simdjson::dom::element value)
   -> Result<ServiceUnavailable, ParseError>;
+auto parse_invalid_configuration(simdjson::dom::element value)
+  -> Result<InvalidConfiguration, ParseError>;
+auto parse_configuration_conflict(simdjson::dom::element value)
+  -> Result<ConfigurationConflict, ParseError>;
 auto parse_invalid_pipeline(simdjson::dom::element value)
   -> Result<InvalidPipeline, ParseError>;
 auto parse_pipeline_exists(simdjson::dom::element value)
@@ -87,6 +91,8 @@ auto write_json(CredentialConflict const& value, std::string& out) -> void;
 auto write_json(Validation const& value, std::string& out) -> void;
 auto write_json(TooLarge const& value, std::string& out) -> void;
 auto write_json(ServiceUnavailable const& value, std::string& out) -> void;
+auto write_json(InvalidConfiguration const& value, std::string& out) -> void;
+auto write_json(ConfigurationConflict const& value, std::string& out) -> void;
 auto write_json(InvalidPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineExists const& value, std::string& out) -> void;
 auto write_json(PipelineNotFound const& value, std::string& out) -> void;
@@ -272,6 +278,58 @@ auto parse_service_unavailable(simdjson::dom::element value)
 auto write_json(ServiceUnavailable const&, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"ServiceUnavailable\"";
+  out += '}';
+}
+
+auto parse_invalid_configuration(simdjson::dom::element value)
+  -> Result<InvalidConfiguration, ParseError> {
+  TRY(auto object, api::object_of(value, "InvalidConfiguration"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "InvalidConfiguration"));
+  TRY(auto tag, api::string_of(tag_raw, "InvalidConfiguration"));
+  if (tag != "InvalidConfiguration") {
+    return Err{ParseError{"InvalidConfiguration",
+                          "expected `_tag` 'InvalidConfiguration'"}};
+  }
+
+  TRY(auto message_raw, api::field(object, "message", "InvalidConfiguration"));
+  TRY(auto message,
+      api::string_of(message_raw, "InvalidConfiguration.message"));
+
+  return InvalidConfiguration{std::move(message)};
+}
+
+auto write_json(InvalidConfiguration const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"InvalidConfiguration\"";
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += '}';
+}
+
+auto parse_configuration_conflict(simdjson::dom::element value)
+  -> Result<ConfigurationConflict, ParseError> {
+  TRY(auto object, api::object_of(value, "ConfigurationConflict"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "ConfigurationConflict"));
+  TRY(auto tag, api::string_of(tag_raw, "ConfigurationConflict"));
+  if (tag != "ConfigurationConflict") {
+    return Err{ParseError{"ConfigurationConflict",
+                          "expected `_tag` 'ConfigurationConflict'"}};
+  }
+
+  TRY(auto message_raw, api::field(object, "message", "ConfigurationConflict"));
+  TRY(auto message,
+      api::string_of(message_raw, "ConfigurationConflict.message"));
+
+  return ConfigurationConflict{std::move(message)};
+}
+
+auto write_json(ConfigurationConflict const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"ConfigurationConflict\"";
+  out += ",\"message\":";
+  api::write_string(value.message, out);
   out += '}';
 }
 
@@ -495,7 +553,8 @@ auto parse_tenzir_telemetry_telemetry_count(simdjson::dom::element value)
 }
 
 auto PipelineId::make(std::string value) -> Result<PipelineId, ParseError> {
-  static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  static auto const pattern = std::regex{
+    R"(^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$)"};
   if (not std::regex_match(value, pattern)) {
     return Err{ParseError{
       "PipelineId", fmt::format("`{}` does not match the pattern", value)}};
@@ -1051,38 +1110,21 @@ auto parse_liveness(simdjson::dom::element value)
   TRY(auto uptime_ms_raw, api::field(object, "uptime_ms", "Liveness"));
   TRY(auto uptime_ms, api::double_of(uptime_ms_raw, "Liveness.uptime_ms"));
 
-  return Liveness{std::move(status), uptime_ms};
-}
-
-auto parse_pipeline(simdjson::dom::element value)
-  -> Result<Pipeline, ParseError> {
-  TRY(auto object, api::object_of(value, "Pipeline"));
-
-  TRY(auto name_raw, api::field(object, "name", "Pipeline"));
-  TRY(auto name, api::string_of(name_raw, "Pipeline.name"));
-
-  TRY(auto definition_raw, api::field(object, "definition", "Pipeline"));
-  TRY(auto definition, api::string_of(definition_raw, "Pipeline.definition"));
-
-  return Pipeline{std::move(name), std::move(definition)};
-}
-
-auto parse_configuration(simdjson::dom::element value)
-  -> Result<Configuration, ParseError> {
-  TRY(auto object, api::object_of(value, "Configuration"));
-
-  TRY(auto pipelines_raw, api::field(object, "pipelines", "Configuration"));
-  auto pipelines = std::unordered_map<PipelineId, Pipeline>{};
-  TRY(auto pipelines_object,
-      api::object_of(pipelines_raw, "Configuration.pipelines"));
-  for (auto pipelines_entry : pipelines_object) {
-    TRY(auto pipelines_key, PipelineId::make(std::string{pipelines_entry.key}));
-    TRY(auto pipelines_decoded, parse_pipeline(pipelines_entry.value));
-    pipelines.insert_or_assign(std::move(pipelines_key),
-                               std::move(pipelines_decoded));
+  auto generation = Option<std::int64_t>{None{}};
+  if (auto generation_raw = api::optional_field(object, "generation")) {
+    TRY(auto generation_present,
+        api::int64_of(*generation_raw, "Liveness.generation"));
+    generation = std::move(generation_present);
   }
 
-  return Configuration{std::move(pipelines)};
+  auto digest = Option<std::string>{None{}};
+  if (auto digest_raw = api::optional_field(object, "digest")) {
+    TRY(auto digest_present, api::string_of(*digest_raw, "Liveness.digest"));
+    digest = std::move(digest_present);
+  }
+
+  return Liveness{std::move(status), uptime_ms, std::move(generation),
+                  std::move(digest)};
 }
 
 auto parse_identified_pipeline(simdjson::dom::element value)
@@ -1561,32 +1603,17 @@ auto write_json(Liveness const& value, std::string& out) -> void {
   api::write_string(value.status, out);
   out += ",\"uptime_ms\":";
   fmt::format_to(std::back_inserter(out), "{}", value.uptime_ms);
-  out += '}';
-}
-
-auto write_json(Pipeline const& value, std::string& out) -> void {
-  out += '{';
-  out += "\"name\":";
-  api::write_string(value.name, out);
-  out += ",\"definition\":";
-  api::write_string(value.definition, out);
-  out += '}';
-}
-
-auto write_json(Configuration const& value, std::string& out) -> void {
-  out += '{';
-  out += "\"pipelines\":";
-  {
-    out += '{';
-    auto separator0 = "";
-    for (auto const& entry0 : value.pipelines) {
-      out += separator0;
-      separator0 = ",";
-      api::write_string(entry0.first.to_string(), out);
-      out += ':';
-      write_json(entry0.second, out);
-    }
-    out += '}';
+  out += ",\"generation\":";
+  if (value.generation) {
+    fmt::format_to(std::back_inserter(out), "{}", *value.generation);
+  } else {
+    out += "null";
+  }
+  out += ",\"digest\":";
+  if (value.digest) {
+    api::write_string(*value.digest, out);
+  } else {
+    out += "null";
   }
   out += '}';
 }
@@ -1652,8 +1679,9 @@ auto write_json(AdhocPipelineDefinition const& value, std::string& out)
 
 auto call(Transport& transport, ReadDeployment request)
   -> Task<Result<DeploymentInfo, variant<ReadDeploymentError, CallError>>> {
-  auto path = fmt::format("/api/deployments/{}",
-                          request.path.deployment_id.to_string());
+  auto path
+    = fmt::format("/api/deployments/{}",
+                  api::encode_segment(request.path.deployment_id.to_string()));
   auto body = std::string{};
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
                            "GET", std::move(path), std::move(body)}))
@@ -1734,8 +1762,9 @@ auto call(Transport& transport, ReadDeployment request)
 
 auto call(Transport& transport, PushTelemetry request)
   -> Task<Result<void, variant<PushTelemetryError, CallError>>> {
-  auto path = fmt::format("/api/deployments/{}/telemetry",
-                          request.path.deployment_id.to_string());
+  auto path
+    = fmt::format("/api/deployments/{}/telemetry",
+                  api::encode_segment(request.path.deployment_id.to_string()));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
@@ -1831,7 +1860,7 @@ auto call(Transport& transport, PushTelemetry request)
 
 auto dispatch(DeploymentApi& handler, HttpRequest request)
   -> Task<HttpResponse> {
-  auto parameters = std::vector<std::string_view>{};
+  auto parameters = std::vector<std::string>{};
   if (api::match_path("/health", request.path, parameters)) {
     if (request.method == "GET") {
       auto decoded = ReadHealth{};
@@ -1842,20 +1871,9 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
   }
   if (api::match_path("/configuration", request.path, parameters)) {
     if (request.method == "PUT") {
-      auto parsed = api::Document::parse(request.body, "updateConfiguration");
-      if (parsed.is_err()) {
-        co_return api::as_request_failure(api::bad_request)(
-          std::move(parsed).unwrap_err());
-      }
-      auto document = std::move(parsed).unwrap();
-      auto payload = parse_configuration(document.root());
-      if (payload.is_err()) {
-        co_return api::as_request_failure(api::bad_request)(
-          std::move(payload).unwrap_err());
-      }
-      auto decoded = UpdateConfiguration{std::move(payload).unwrap()};
-      co_await handler.handle(std::move(decoded));
-      co_return api::encode<204>();
+      auto payload = std::move(request.body);
+      auto decoded = UpdateConfiguration{std::move(payload)};
+      co_return api::encode<204>(co_await handler.handle(std::move(decoded)));
     }
     co_return HttpResponse{405,
                            R"({"error":"method not allowed","allow":["PUT"]})"};
@@ -1886,7 +1904,7 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
   if (api::match_path("/pipelines/:pipelineId/start", request.path,
                       parameters)) {
     if (request.method == "POST") {
-      auto pipeline_id = PipelineId::make(std::string{parameters[0]});
+      auto pipeline_id = PipelineId::make(std::move(parameters[0]));
       if (pipeline_id.is_err()) {
         co_return api::as_request_failure(api::bad_request)(
           std::move(pipeline_id).unwrap_err());
@@ -1901,7 +1919,7 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
   if (api::match_path("/pipelines/:pipelineId/stop", request.path,
                       parameters)) {
     if (request.method == "POST") {
-      auto pipeline_id = PipelineId::make(std::string{parameters[0]});
+      auto pipeline_id = PipelineId::make(std::move(parameters[0]));
       if (pipeline_id.is_err()) {
         co_return api::as_request_failure(api::bad_request)(
           std::move(pipeline_id).unwrap_err());
@@ -1915,7 +1933,7 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
   }
   if (api::match_path("/pipelines/:pipelineId", request.path, parameters)) {
     if (request.method == "DELETE") {
-      auto pipeline_id = PipelineId::make(std::string{parameters[0]});
+      auto pipeline_id = PipelineId::make(std::move(parameters[0]));
       if (pipeline_id.is_err()) {
         co_return api::as_request_failure(api::bad_request)(
           std::move(pipeline_id).unwrap_err());
