@@ -6,7 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-/// A compiled pipeline's fingerprint changes exactly when what it does does.
+/// A compiled pipeline's fingerprint changes exactly when what it does, or
+/// where its diagnostics point, does.
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -45,7 +46,7 @@ auto fingerprint_of(std::string_view text, registry const& reg
   auto root = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()}, sources);
   auto compiled = std::move(*parsed).compile(root);
   REQUIRE(compiled);
-  return ir::fingerprint(*compiled);
+  return ir::fingerprint(*compiled, sources);
 }
 
 /// The builtins with a package `acme`, whose operator `double` is `body` and
@@ -84,10 +85,14 @@ TEST("compiling a pipeline twice gives one fingerprint") {
   }
 }
 
-TEST("where a pipeline was written does not enter its fingerprint") {
-  CHECK_EQUAL(fingerprint_of("from {x: 1} | where x > 0 | discard"),
-              fingerprint_of("from {x: 1}\n// keep the positive ones\n"
-                             "|   where x>0\n| discard"));
+TEST("where a diagnostic would point enters a pipeline's fingerprint") {
+  CHECK_NOT_EQUAL(fingerprint_of("from {x: 1} | where x > 0 | discard"),
+                  fingerprint_of("from {x: 1}\n// keep the positive ones\n"
+                                 "|   where x>0\n| discard"));
+  // An edit that moves nothing a location points at does not: the
+  // diagnostics point where they did.
+  CHECK_EQUAL(fingerprint_of("from {x: 1} | where x > 0 | discard // a"),
+              fingerprint_of("from {x: 1} | where x > 0 | discard // b"));
 }
 
 TEST("what a pipeline does enters its fingerprint") {
@@ -104,10 +109,15 @@ TEST("a pipeline's fingerprint follows the packages it uses") {
   // Two registries built from the same package agree, although each built
   // sources of its own for the package's operators.
   CHECK_EQUAL(fingerprint_of(text, *before), fingerprint_of(text, *same));
-  // Reformatting the package changes nothing that runs.
+  // Reformatting the package moves what a diagnostic from inside its
+  // operator points at.
   auto reformatted = with_acme("// doubles\nx  =  x*2", "21");
-  CHECK_EQUAL(fingerprint_of(text, *before),
-              fingerprint_of(text, *reformatted));
+  CHECK_NOT_EQUAL(fingerprint_of(text, *before),
+                  fingerprint_of(text, *reformatted));
+  // So does moving the call, which a diagnostic from inside points at too.
+  CHECK_NOT_EQUAL(
+    fingerprint_of("from {x: acme::$base} | acme::double | discard", *before),
+    fingerprint_of("from {x: acme::$base} |  acme::double| discard", *before));
   // A changed operator or binding does.
   auto other_body = with_acme("x = x * 3", "21");
   CHECK_NOT_EQUAL(fingerprint_of(text, *before),

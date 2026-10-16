@@ -155,8 +155,7 @@ public:
   /// validation that requires resolved argument values until instantiation or
   /// planning.
   virtual auto infer_type(element_type_tag input, base_ctx ctx) const
-    -> failure_or<element_type_tag>
-    = 0;
+    -> failure_or<element_type_tag> = 0;
 
   /// Substitute variables from the context and potentially instantiate `this`.
   ///
@@ -166,8 +165,7 @@ public:
   /// depends on the operator. For example, the implementation of `if` also
   /// instantiates its subpipelines, but `every` does not.
   virtual auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void>
-    = 0;
+    -> failure_or<void> = 0;
 
   /// Return a potentially optimized version of this operator.
   ///
@@ -239,8 +237,7 @@ public:
   /// `optimize` may be called in between, but only after instantiation as
   /// well. `reg` is the registry that the pipeline was compiled against.
   virtual auto spawn(element_type_tag input, registry const& reg) const
-    -> AnyOperator
-    = 0;
+    -> AnyOperator = 0;
 
   /// The maximum number of parallel instances of this operator. One means
   /// the operator cannot be replicated. The result must be at least one.
@@ -809,14 +806,19 @@ auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
 /// pipeline to be instantiated, i.e., to have no remaining `let` bindings.
 auto optimize(pipeline pipe, OptimizeCtx octx) -> pipeline;
 
-/// A digest of what a compiled pipeline does, the same for two compiles of one
-/// definition against the same entities: where entities were written does not
-/// enter it, because source locations differ from compile to compile.
+/// A digest of what a compiled pipeline does and where its diagnostics point,
+/// the same for two compiles of one definition against the same entities.
+///
+/// Locations enter by their offsets and by the call sites in `sources`, the
+/// map `pipe` was compiled with, but not by the ids of their sources, which
+/// differ from compile to compile. So an edit that moves anything a location
+/// points at changes it, and one that moves nothing, like a changed comment of
+/// the same length, does not.
 ///
 /// Taken before `instantiate`, so values like `now()` do not enter it either.
 /// Hexadecimal SHA-256 of a canonical serialization. Every operator in `pipe`
 /// must have a serialization plugin.
-auto fingerprint(pipeline const& pipe) -> std::string;
+auto fingerprint(pipeline const& pipe, SourceMap const& sources) -> std::string;
 
 /// Build a plan from a compiled pipeline.
 ///
