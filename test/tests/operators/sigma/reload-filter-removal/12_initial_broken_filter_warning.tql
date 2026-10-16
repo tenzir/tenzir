@@ -1,0 +1,4 @@
+diagnostics live=true, retro=true
+where pipeline_id == "00000000-0000-0000-0000-000000001712" and message.search("ignores")
+select severity, message=message.replace(env("FILE_ROOT"), "<root>"), notes
+head 1

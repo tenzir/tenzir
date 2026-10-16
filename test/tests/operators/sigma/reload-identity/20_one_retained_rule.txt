@@ -1,0 +1,7 @@
+{
+  events: 20,
+  max_findings: 1,
+  titles: [
+    "Recovered",
+  ],
+}

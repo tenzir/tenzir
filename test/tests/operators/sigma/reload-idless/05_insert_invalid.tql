@@ -1,0 +1,19 @@
+// The broken document occupies Second's old index; the stream grows to three.
+from {yaml: r#"title: First updated
+detection:
+  selection: {marker: first}
+  condition: selection
+---
+title: Invalid inserted
+detection:
+  selection: {marker|madeup: inserted}
+  condition: selection
+---
+title: Second
+detection:
+  selection: {marker: second}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-idless.yaml.next" {
+  write_all yaml
+}

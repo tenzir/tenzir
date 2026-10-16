@@ -1,0 +1,3 @@
+suite: sigma-reload-retention
+fixtures: [node, local_files]
+timeout: 30

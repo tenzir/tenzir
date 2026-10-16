@@ -1,0 +1,5 @@
+// Neither failed revision repeats its warning on subsequent refreshes.
+diagnostics
+where pipeline_id in ["00000000-0000-0000-0000-000000001701", "00000000-0000-0000-0000-000000001702"]
+summarize pipeline_id, warnings=count()
+sort pipeline_id

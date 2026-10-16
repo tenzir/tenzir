@@ -1,0 +1,19 @@
+from {yaml: r#"title: Administrator filter
+name: admin-filter
+logsource: {category: process_creation}
+filter:
+  rules: [aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa]
+  selection: {User|startswith: adm_}
+  condition: not selection
+---
+title: Service filter
+id: cccccccc-cccc-4ccc-8ccc-cccccccccccc
+logsource: {category: process_creation}
+filter:
+  rules: [aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa]
+  selection: {User|startswith: svc_}
+  condition: not selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-filters.yaml" {
+  write_all yaml
+}

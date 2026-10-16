@@ -1,0 +1,5 @@
+// The administrator must be excluded before removing the filter.
+subscribe "sigma-filter-removal"
+head 20
+summarize users=distinct(user)
+users = users.sort()

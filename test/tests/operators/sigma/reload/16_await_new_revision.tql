@@ -1,0 +1,3 @@
+subscribe "sigma-reload"
+where title == "Newest"
+head 1

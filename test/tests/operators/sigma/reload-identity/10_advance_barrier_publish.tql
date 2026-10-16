@@ -1,0 +1,6 @@
+// Replace the source atomically, avoiding a refresh during a partial write.
+from_file env("FILE_ROOT") + "/sigma-identity-other.yaml.next",
+          rename=path => path.replace(".next", "") {
+  read_all
+}
+discard

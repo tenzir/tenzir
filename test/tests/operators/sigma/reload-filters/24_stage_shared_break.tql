@@ -1,0 +1,27 @@
+// Break the D filter and the F detection, remove their same-identity
+// siblings, and retitle the marker.
+from {yaml: r#"title: Broken D filter
+id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+logsource: {category: process_creation}
+filter:
+  rules: any
+  selection: {User|re: '['}
+  condition: not selection
+---
+title: Broken F detection
+id: ffffffff-ffff-4fff-8fff-ffffffffffff
+logsource: {category: process_creation}
+detection:
+  selection: {Image|re: '['}
+  condition: selection
+---
+title: Marker v2
+id: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+logsource: {category: process_creation}
+detection:
+  selection: {Image|endswith: evil.exe}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-shared.yaml.next" {
+  write_all yaml
+}

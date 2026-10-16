@@ -1,0 +1,7 @@
+{
+  titles: [
+    "Added",
+    "Also valid",
+    "New",
+  ],
+}

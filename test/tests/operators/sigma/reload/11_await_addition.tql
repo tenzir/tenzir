@@ -1,0 +1,4 @@
+// The new finding is the reload barrier, not a wall-clock delay.
+subscribe "sigma-reload"
+where title == "Added"
+head 1

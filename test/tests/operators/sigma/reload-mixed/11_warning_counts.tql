@@ -1,0 +1,3 @@
+diagnostics
+where pipeline_id == "00000000-0000-0000-0000-0000000017b0"
+summarize retained=count_if(message, x => x.search("retains last known good version of rule")), ignored=count_if(message, x => x.search("ignores rule"))

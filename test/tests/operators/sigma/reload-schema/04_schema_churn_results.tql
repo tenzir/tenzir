@@ -1,0 +1,4 @@
+// 2 identical-shape rows reuse a plan; 65 extra-field input schemas reuse the observed OCSF plan.
+subscribe "ocsf-schema-findings"
+head 68
+summarize events=count(), unique_ids=count_distinct(id)

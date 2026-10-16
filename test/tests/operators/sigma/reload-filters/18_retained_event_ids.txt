@@ -1,0 +1,4 @@
+{
+  max_per_event: 1,
+  events: 40,
+}

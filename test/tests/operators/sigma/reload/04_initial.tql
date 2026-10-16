@@ -1,0 +1,5 @@
+// All three valid siblings match; the initial invalid document is omitted.
+subscribe "sigma-reload"
+head 30
+summarize titles=distinct(title)
+titles = titles.sort()

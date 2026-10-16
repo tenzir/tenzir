@@ -1,0 +1,25 @@
+// Changing the broken document itself must emit one new warning.
+from {yaml: r#"title: Newest
+id: 11111111-1111-4111-8111-111111111111
+logsource: {category: authentication}
+detection:
+  selection: {user: alice}
+  condition: selection
+---
+title: Broken retained by id again
+id: 33333333-3333-4333-8333-333333333333
+logsource: {category: authentication}
+detection:
+  selection: {user|madeup: bob}
+  condition: selection
+---
+title: Added
+id: 55555555-5555-4555-8555-555555555555
+logsource: {category: authentication}
+detection:
+  selection: {user: carol}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload.yaml.next" {
+  write_all yaml
+}

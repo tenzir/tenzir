@@ -1,0 +1,6 @@
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000001701",
+  definition: "every 20ms {\n  from {foo: \"alpha\"}\n}\nsigma path=\"" + env("FILE_ROOT") + "/single.yaml\", mapping=\"direct\", refresh_interval=50ms\nselect title=finding_info.title\nbatch 100\npublish \"sigma-single\"",
+}
+discard

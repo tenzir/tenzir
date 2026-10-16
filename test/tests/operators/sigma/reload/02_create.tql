@@ -1,0 +1,7 @@
+// A persistent node pipeline keeps its reload state between suite steps.
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-0000000017a2",
+  definition: "every 20ms {\n  from {user: \"alice\"}, {user: \"bob\"}, {user: \"carol\"}, {user: \"dave\"}, {user: \"eve\"}\n}\nsigma path=\"" + env("FILE_ROOT") + "/sigma-reload.yaml\", mapping=\"direct\", refresh_interval=50ms\nselect title=finding_info.title\nbatch 100\npublish \"sigma-reload\"",
+}
+discard

@@ -1,0 +1,4 @@
+subscribe "sigma-reload-shared-topic"
+where title == "Marker v2"
+head 1
+select title

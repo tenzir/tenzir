@@ -1,0 +1,5 @@
+// A service user now matches, proving the valid sibling filter update took effect.
+subscribe "sigma-reload-filters-topic"
+where user == "svc_bob"
+head 1
+select user, title

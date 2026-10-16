@@ -1,0 +1,6 @@
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-0000000017b0",
+  definition: "every 25ms {\n  from {Image: \"C:\\\\evil.exe\", User: \"adm_alice\"}, {Image: \"C:\\\\evil.exe\", User: \"svc_bob\"}, {Image: \"C:\\\\evil.exe\", User: \"nobody\"}\n}\nsigma path=\"" + env("FILE_ROOT") + "/sigma-reload-shared.yaml\", mapping=\"direct\", refresh_interval=50ms\nselect user=evidences[0].data.User, title=finding_info.title\nbatch 100\npublish \"sigma-reload-shared-topic\"",
+}
+discard

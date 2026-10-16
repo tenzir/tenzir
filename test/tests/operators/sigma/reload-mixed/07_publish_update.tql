@@ -1,0 +1,5 @@
+from_file env("FILE_ROOT") + "/sigma-reload-mixed.yaml.next",
+         rename=path => path.replace(".next", "") {
+  read_all
+}
+| discard

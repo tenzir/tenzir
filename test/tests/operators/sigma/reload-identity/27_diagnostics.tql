@@ -1,0 +1,5 @@
+// Each failed document warns once; sibling barrier edits do not repeat warnings.
+diagnostics
+where pipeline_id == "00000000-0000-0000-0000-0000000017b3"
+select severity, message=message.replace(env("FILE_ROOT"), "<root>"), notes
+sort message

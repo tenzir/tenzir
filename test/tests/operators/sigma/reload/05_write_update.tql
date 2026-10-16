@@ -1,0 +1,38 @@
+// Publish the edit, retain Bob's prior rule by id, and omit a new failure.
+from {yaml: r#"title: New
+id: 11111111-1111-4111-8111-111111111111
+logsource: {category: authentication}
+detection:
+  selection: {user: alice}
+  condition: selection
+---
+title: Bad
+id: 22222222-2222-4222-8222-222222222222
+logsource: {category: authentication}
+detection:
+  selection: {user|madeup: nobody}
+  condition: selection
+---
+title: Broken retained by id
+id: 33333333-3333-4333-8333-333333333333
+logsource: {category: authentication}
+detection:
+  selection: {user|madeup: bob}
+  condition: selection
+---
+title: Removed
+id: 44444444-4444-4444-8444-444444444444
+logsource: {category: authentication}
+detection:
+  selection: {user: dave}
+  condition: selection
+---
+title: Newly invalid
+logsource: {category: authentication}
+detection:
+  selection: {user|madeup: eve}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload.yaml.next" {
+  write_all yaml
+}

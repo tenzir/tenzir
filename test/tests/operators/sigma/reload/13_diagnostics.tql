@@ -1,0 +1,6 @@
+// One warning each for initial BAD, newly invalid Eve, and retained Bob.
+// Bob's unchanged broken content must not warn again after its index changes.
+diagnostics
+where pipeline_id == "00000000-0000-0000-0000-0000000017a2"
+select severity, message=message.replace(env("FILE_ROOT"), "<root>"), notes
+sort message

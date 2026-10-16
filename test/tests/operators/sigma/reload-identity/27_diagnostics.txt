@@ -1,0 +1,38 @@
+{
+  severity: "warning",
+  message: "sigma operator ignores rule '<root>/sigma-identity-conflict.yaml'",
+  notes: [
+    {
+      kind: "note",
+      message: "duplicate rule identity `11111111-1111-4111-8111-1111111117b3`",
+    },
+  ],
+}
+{
+  severity: "warning",
+  message: "sigma operator ignores rule '<root>/sigma-identity-target.yaml'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `foo`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}
+{
+  severity: "warning",
+  message: "sigma operator retains last known good version of rule '<root>/sigma-identity-other.yaml#1'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `foo`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}

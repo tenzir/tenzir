@@ -1,0 +1,14 @@
+{
+  severity: "warning",
+  message: "sigma operator ignores rule '<root>/sigma-reload-idless.yaml#1'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `marker`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}

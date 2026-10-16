@@ -1,0 +1,6 @@
+{
+  titles: [
+    "First",
+    "Second",
+  ],
+}

@@ -1,0 +1,6 @@
+// Atomically replace the rule file after writing the complete revision.
+from_file env("FILE_ROOT") + "/filter-removal.yaml.next",
+          rename=path => path.replace(".next", "") {
+  read_all
+}
+discard

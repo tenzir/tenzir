@@ -1,0 +1,5 @@
+// Wait for the invalid revision's retention warning before checking findings.
+diagnostics live=true, retro=true
+where pipeline_id == "00000000-0000-0000-0000-000000001701" and message.search("retains last known good")
+select severity, message=message.replace(env("FILE_ROOT"), "<root>"), notes
+head 1

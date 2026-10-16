@@ -1056,6 +1056,9 @@ struct RuleMap {
   /// Argument order, then file-discovery order, then YAML document order.
   std::vector<std::pair<RuleKey, RuleEntry>> entries;
   std::unordered_map<RuleKey, size_t, RuleKeyHash> index;
+  /// Number of raw YAML documents in each successfully parsed source, including
+  /// documents that did not compile.
+  std::unordered_map<std::string, size_t> source_document_counts;
   uint64_t revision = 0;
 };
 
@@ -1071,7 +1074,7 @@ auto rule_map_revision(RuleMap const& rules) -> uint64_t {
 /// Tracks failed source and document revisions to avoid repeating the same
 /// warning on every refresh.
 struct ReloadState {
-  auto should_emit(RuleKey const& key, uint64_t revision) -> bool {
+  auto should_emit_document(std::string const& key, uint64_t revision) -> bool {
     if (auto entry = failing_documents.find(key);
         entry != failing_documents.end() and entry->second == revision) {
       return false;
@@ -1089,18 +1092,14 @@ struct ReloadState {
     return true;
   }
 
-  auto succeeded(RuleKey const& key) -> void {
-    failing_documents.erase(key);
+  auto succeeded_document(std::string const& key) -> void {
+    std::erase_if(failing_documents, [&](auto const& entry) {
+      return entry.first == key or entry.first.starts_with(key + "#compiled:");
+    });
   }
 
   auto succeeded(std::string const& origin) -> void {
     failing_sources.erase(origin);
-  }
-
-  auto prune_documents(std::string const& origin, size_t count) -> void {
-    std::erase_if(failing_documents, [&](auto const& entry) {
-      return entry.first.origin == origin and entry.first.document >= count;
-    });
   }
 
   auto
@@ -1113,9 +1112,6 @@ struct ReloadState {
   }
 
   auto reconcile(std::unordered_set<std::string> const& origins) -> void {
-    std::erase_if(failing_documents, [&](auto const& entry) {
-      return not origins.contains(entry.first.origin);
-    });
     std::erase_if(failing_sources, [&](auto const& entry) {
       // Active filter-application memos were reconciled during assembly.
       return not entry.first.starts_with("filter:")
@@ -1123,20 +1119,21 @@ struct ReloadState {
     });
   }
 
-  std::unordered_map<RuleKey, uint64_t, RuleKeyHash> failing_documents;
+  std::unordered_map<std::string, uint64_t> failing_documents;
   std::unordered_map<std::string, uint64_t> failing_sources;
 };
 
 /// A global filter retained across refreshes so that a broken filter update
 /// keeps its last-known-good application.
 struct RetainedFilter {
+  RuleKey key;
   std::string origin;
+  std::string identity;
   data yaml;
   ir::FilterRule filter;
 };
 
-/// Last-known-good filters keyed by their document label, persistent across
-/// refreshes, in deterministic first-seen order.
+/// Current and retained filters keyed by document label in deterministic order.
 struct FilterBank {
   auto insert_or_assign(std::string label, RetainedFilter filter) -> void {
     if (auto existing = index.find(label); existing != index.end()) {
@@ -1145,22 +1142,6 @@ struct FilterBank {
     }
     index.emplace(label, entries.size());
     entries.emplace_back(std::move(label), std::move(filter));
-  }
-
-  template <class Predicate>
-  auto erase_if(Predicate predicate) -> void {
-    auto kept = std::vector<std::pair<std::string, RetainedFilter>>{};
-    kept.reserve(entries.size());
-    for (auto& entry : entries) {
-      if (not predicate(entry)) {
-        kept.push_back(std::move(entry));
-      }
-    }
-    entries = std::move(kept);
-    index.clear();
-    for (auto position = size_t{0}; position < entries.size(); ++position) {
-      index.emplace(entries[position].first, position);
-    }
   }
 
   std::vector<std::pair<std::string, RetainedFilter>> entries;
@@ -1373,6 +1354,10 @@ auto retain_source(RuleMap const& previous, std::string const& origin,
       retained = true;
     }
   }
+  if (auto count = previous.source_document_counts.find(origin);
+      count != previous.source_document_counts.end()) {
+    next.source_document_counts.insert_or_assign(origin, count->second);
+  }
   return retained;
 }
 
@@ -1384,18 +1369,51 @@ struct ParsedDocument {
   ir::Document document;
   /// The location of the document inside an inline `rules` argument.
   location source = location::unknown;
+  std::string identity;
+  uint64_t revision = 0;
+  std::string memo_key;
+};
+
+/// A document that parsed as YAML but failed validation or compilation.
+/// The artifact type of a document, which decides what a failed revision can
+/// retain. Detections and filters may share an identity.
+enum class DocumentKind {
+  /// Not a record, so only positional matching applies.
+  unknown,
+  detection,
+  filter,
+};
+
+/// Classifies a document like `ir::parse_document`, which treats every record
+/// with a top-level `filter` key as a global filter.
+auto document_kind(data const& yaml) -> DocumentKind {
+  auto const* fields = try_as<record>(&yaml);
+  if (not fields) {
+    return DocumentKind::unknown;
+  }
+  return fields->contains("filter") ? DocumentKind::filter
+                                    : DocumentKind::detection;
+}
+
+struct FailedDocument {
+  RuleKey key;
+  std::string label;
+  std::string identity;
+  DocumentKind kind = DocumentKind::unknown;
+  uint64_t revision = 0;
+  diagnostic reason;
+  location source = location::unknown;
+  std::string memo_key;
 };
 
 /// The parse-phase result of one source.
 struct SourceSnapshot {
   std::string origin;
-  uint64_t revision = 0;
-  bool had_previous = false;
-  bool failed = false;
-  bool assembling_retained = false;
-  bool replacement_failed = false;
+  bool source_failed = false;
+  size_t document_count = 0;
   std::vector<ParsedDocument> documents;
-  /// Lowered artifacts, filled by the assembly phase.
+  std::vector<FailedDocument> failed_documents;
+  /// Newly lowered and retained artifacts, filled by the assembly phase.
   RuleMap replacements;
 };
 
@@ -1417,11 +1435,55 @@ auto lower_filter(ir::FilterRule const& filter)
   return lower_condition(filter.condition, expressions);
 }
 
+/// Returns the stable identity used to match one Sigma document across reloads.
+/// IDs take precedence over names; an empty value means positional matching
+/// only. Like the Sigma parser, this stringifies non-string scalars so that the
+/// identity of a failing document matches the identity of its compiled rule.
+auto document_identity(data const& yaml) -> std::string {
+  auto const* fields = try_as<record>(&yaml);
+  if (not fields) {
+    return {};
+  }
+  for (auto const field : {std::string_view{"id"}, std::string_view{"name"}}) {
+    auto const it = fields->find(std::string{field});
+    if (it == fields->end()) {
+      continue;
+    }
+    if (auto const* value = try_as<std::string>(&it->second)) {
+      return fmt::format("{}:{}", field, *value);
+    }
+    if (not is<record>(it->second) and not is<list>(it->second)
+        and not is<caf::none_t>(it->second)) {
+      return fmt::format("{}:{}", field, it->second);
+    }
+  }
+  return {};
+}
+
+auto document_memo_key(std::string_view origin, std::string_view identity,
+                       size_t index, bool duplicate_identity = false)
+  -> std::string {
+  if (identity.empty()) {
+    return fmt::format("{}#position:{}", origin, index);
+  }
+  return duplicate_identity ? fmt::format("{}#{}#{}", origin, identity, index)
+                            : fmt::format("{}#{}", origin, identity);
+}
+
+auto rule_identity(ir::DetectionRule const& rule) -> std::string {
+  if (rule.metadata.id) {
+    return fmt::format("id:{}", *rule.metadata.id);
+  }
+  if (rule.metadata.name) {
+    return fmt::format("name:{}", *rule.metadata.name);
+  }
+  return {};
+}
+
 /// Parses and validates every YAML document of one source. Cross-document
 /// resolution and final lowering with applied filters happen in the assembly
-/// phase. Loading is failure-isolated: a source whose new revision breaks
-/// retains its last-known-good artifacts, and diagnostics are emitted once per
-/// failing revision.
+/// phase. Stream failures are source-level; document failures retain only a
+/// matching prior artifact, and diagnostics are memoized by document revision.
 auto parse_source(std::string_view content, std::string const& origin,
                   RuleMap const& previous, FilterBank const& filter_bank,
                   ReloadState& state, diagnostic_handler& dh,
@@ -1429,8 +1491,7 @@ auto parse_source(std::string_view content, std::string const& origin,
   -> SourceSnapshot {
   auto snapshot = SourceSnapshot{};
   snapshot.origin = origin;
-  snapshot.revision = hash(content);
-  snapshot.had_previous
+  auto const had_previous
     = std::ranges::any_of(previous.entries,
                           [&](auto const& entry) {
                             return entry.first.origin == origin;
@@ -1440,10 +1501,10 @@ auto parse_source(std::string_view content, std::string const& origin,
          });
   auto documents = from_yaml_documents(content);
   if (not documents or documents->empty()) {
-    snapshot.failed = true;
-    if (state.should_emit(origin, snapshot.revision)) {
+    snapshot.source_failed = true;
+    if (state.should_emit(origin, hash(content))) {
       auto builder
-        = snapshot.had_previous
+        = had_previous
             ? diagnostic::warning("sigma operator retains last known good "
                                   "version of '{}'",
                                   origin)
@@ -1459,7 +1520,14 @@ auto parse_source(std::string_view content, std::string const& origin,
     return snapshot;
   }
   state.succeeded(origin);
-  state.prune_documents(origin, documents->size());
+  snapshot.document_count = documents->size();
+  auto identity_counts = std::unordered_map<std::string, size_t>{};
+  for (auto const& document : *documents) {
+    auto const identity = document_identity(document);
+    if (not identity.empty()) {
+      ++identity_counts[identity];
+    }
+  }
   auto const multiple = documents->size() > 1;
   for (auto index = size_t{0}; index < documents->size(); ++index) {
     auto const key = RuleKey{origin, index};
@@ -1467,35 +1535,24 @@ auto parse_source(std::string_view content, std::string const& origin,
     auto const doc_source = index < document_locations.size()
                               ? document_locations[index]
                               : location::unknown;
-    auto handle_failure = [&](auto&& emit_reason) {
-      snapshot.failed = true;
-      if (not state.should_emit(key, snapshot.revision)) {
-        return;
-      }
-      auto builder
-        = snapshot.had_previous
-            ? diagnostic::warning("sigma operator retains last known good "
-                                  "version of source '{}'",
-                                  origin)
-            : diagnostic::warning("sigma operator ignores rule '{}'", label);
-      if (doc_source) {
-        builder = std::move(builder).primary(doc_source);
-      }
-      emit_reason(std::move(builder));
-    };
     auto& document = (*documents)[index];
+    auto const identity = document_identity(document);
+    auto const document_revision = hash(document);
+    auto const memo_key = document_memo_key(origin, identity, index,
+                                            identity_counts[identity] > 1);
+    auto fail_document = [&](diagnostic reason) {
+      snapshot.failed_documents.push_back(FailedDocument{
+        key, label, identity, document_kind(document), document_revision,
+        std::move(reason), doc_source, memo_key});
+    };
     if (not is<record>(document)) {
-      handle_failure([&](diagnostic_builder builder) {
-        std::move(builder).note("rule is not a YAML dictionary").emit(dh);
-      });
+      fail_document(diagnostic::error("rule is not a YAML dictionary").done());
       continue;
     }
     auto parsed = ir::parse_document(document);
     if (parsed.is_err()) {
       auto reason = std::move(parsed).unwrap_err();
-      handle_failure([&](diagnostic_builder builder) {
-        append_reason(std::move(builder), reason).emit(dh);
-      });
+      fail_document(std::move(reason));
       continue;
     }
     auto parsed_document = std::move(parsed).unwrap();
@@ -1511,22 +1568,18 @@ auto parse_source(std::string_view content, std::string const& origin,
       TENZIR_UNREACHABLE();
     }();
     if (lowered.is_err()) {
-      auto reason = std::move(lowered).unwrap_err();
-      handle_failure([&](diagnostic_builder builder) {
-        append_reason(std::move(builder), reason).emit(dh);
-      });
+      fail_document(std::move(lowered).unwrap_err());
       continue;
     }
     auto expression = std::move(lowered).unwrap();
     auto provider = session_provider::make(dh);
     if (not resolve_entities(expression, provider.as_session())) {
-      handle_failure([&](diagnostic_builder builder) {
-        std::move(builder).note("failed to resolve sigma rule").emit(dh);
-      });
+      fail_document(diagnostic::error("failed to resolve sigma rule").done());
       continue;
     }
     snapshot.documents.push_back(ParsedDocument{
-      key, label, std::move(document), std::move(parsed_document), doc_source});
+      key, label, std::move(document), std::move(parsed_document), doc_source,
+      identity, document_revision, memo_key});
   }
   return snapshot;
 }
@@ -1586,47 +1639,235 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
   struct DetectionSlot {
     SourceSnapshot* snapshot;
     RuleKey key;
-    std::string const* label;
+    std::string label;
     data const* yaml;
     ir::DetectionRule const* rule;
+    RuleEntry const* fallback = nullptr;
+    uint64_t document_revision = 0;
+    std::string memo_key;
     bool retained = false;
     std::vector<ir::FilterRule const*> filters;
     std::vector<uint64_t> filter_revisions;
     location source = location::unknown;
   };
-  // Resolve identities to a fixed point. An identity conflict can roll a source
-  // back to documents with different identities, which can expose another
-  // conflict with a source that was valid in the previous pass.
-  auto detections = std::vector<DetectionSlot>{};
-  auto origins = std::unordered_set<std::string>{};
-  auto invalid_documents = std::unordered_set<RuleKey, RuleKeyHash>{};
-  for (auto& snapshot : snapshots) {
-    origins.insert(snapshot.origin);
+  auto const previous_filter_bank = filter_bank;
+  filter_bank = FilterBank{};
+  auto active_document_memos = std::unordered_set<std::string>{};
+  auto prior_rules
+    = std::unordered_map<std::string, std::vector<RuleEntry const*>>{};
+  for (auto const& [key, entry] : previous.entries) {
+    auto const identity = rule_identity(entry.detection);
+    if (not identity.empty()) {
+      prior_rules[key.origin + "\x1f" + identity].push_back(&entry);
+    }
   }
+  auto prior_filters
+    = std::unordered_map<std::string,
+                         std::vector<std::pair<std::string, RetainedFilter>>>{};
+  for (auto const& entry : previous_filter_bank.entries) {
+    auto const& retained = entry.second;
+    if (not retained.identity.empty()) {
+      prior_filters[retained.origin + "\x1f" + retained.identity].push_back(
+        entry);
+    }
+  }
+  auto find_previous_rule
+    = [&](SourceSnapshot const& snapshot, std::string_view identity,
+          size_t index, bool positional) -> RuleEntry const* {
+    if (not identity.empty()) {
+      auto const it
+        = prior_rules.find(snapshot.origin + "\x1f" + std::string{identity});
+      return it == prior_rules.end() or it->second.empty() ? nullptr
+                                                           : it->second.front();
+    }
+    if (positional and previous.source_document_counts.contains(snapshot.origin)
+        and previous.source_document_counts.at(snapshot.origin)
+              == snapshot.document_count) {
+      auto const it = previous.index.find(RuleKey{snapshot.origin, index});
+      if (it != previous.index.end()) {
+        auto const& entry = previous.entries[it->second].second;
+        if (rule_identity(entry.detection).empty()) {
+          return &entry;
+        }
+      }
+    }
+    return nullptr;
+  };
+  // Retain only an artifact of the failed document's own type, so that a
+  // detection and a filter sharing an identity never both stay active.
+  auto find_retained_rule
+    = [&](SourceSnapshot const& snapshot, FailedDocument const& failed,
+          bool positional) -> RuleEntry const* {
+    if (failed.kind == DocumentKind::filter) {
+      return nullptr;
+    }
+    return find_previous_rule(snapshot, failed.identity, failed.key.document,
+                              positional);
+  };
+  auto find_previous_filter =
+    [&](SourceSnapshot const& snapshot, std::string_view identity, size_t index,
+        bool positional) -> Option<std::pair<std::string, RetainedFilter>> {
+    if (not identity.empty()) {
+      auto const it
+        = prior_filters.find(snapshot.origin + "\x1f" + std::string{identity});
+      return it == prior_filters.end() or it->second.size() != 1
+               ? None{}
+               : Option{it->second.front()};
+    }
+    if (positional and previous.source_document_counts.contains(snapshot.origin)
+        and previous.source_document_counts.at(snapshot.origin)
+              == snapshot.document_count) {
+      auto const key = RuleKey{snapshot.origin, index};
+      for (auto const& entry : previous_filter_bank.entries) {
+        if (entry.second.origin == snapshot.origin and entry.second.key == key
+            and entry.second.identity.empty()) {
+          return entry;
+        }
+      }
+    }
+    return None{};
+  };
+  auto find_retained_filter
+    = [&](SourceSnapshot const& snapshot, FailedDocument const& failed,
+          bool positional) -> Option<std::pair<std::string, RetainedFilter>> {
+    if (failed.kind == DocumentKind::detection) {
+      return None{};
+    }
+    return find_previous_filter(snapshot, failed.identity, failed.key.document,
+                                positional);
+  };
+  auto detections = std::vector<DetectionSlot>{};
+  auto invalid_documents = std::unordered_set<RuleKey, RuleKeyHash>{};
+  // Keep individually failed documents available to identity resolution and
+  // filters, while valid sibling documents continue through the new snapshot.
+  for (auto& snapshot : snapshots) {
+    if (snapshot.source_failed) {
+      continue;
+    }
+    auto const positional
+      = previous.source_document_counts.contains(snapshot.origin)
+        and previous.source_document_counts.at(snapshot.origin)
+              == snapshot.document_count;
+    auto used_rules = std::unordered_set<RuleEntry const*>{};
+    auto used_filters = std::unordered_set<std::string>{};
+    auto claimed_filter_identities = std::unordered_set<std::string>{};
+    for (auto const& document : snapshot.documents) {
+      if (try_as<ir::FilterRule>(document.document.content)
+          and not document.identity.empty()) {
+        claimed_filter_identities.insert(document.identity);
+      }
+    }
+    for (auto const& failed : snapshot.failed_documents) {
+      auto const& memo = failed.memo_key;
+      active_document_memos.insert(memo);
+      auto prior = find_retained_rule(snapshot, failed, positional);
+      if (prior and not used_rules.insert(prior).second) {
+        prior = nullptr;
+      }
+      auto prior_filter = Option<std::pair<std::string, RetainedFilter>>{};
+      if (failed.identity.empty()
+          or not claimed_filter_identities.contains(failed.identity)) {
+        prior_filter = find_retained_filter(snapshot, failed, positional);
+      }
+      if (prior_filter
+          and not used_filters.insert(prior_filter->first).second) {
+        prior_filter = None{};
+      }
+      if (prior_filter and not failed.identity.empty()) {
+        claimed_filter_identities.insert(failed.identity);
+      }
+      auto const retained = prior or prior_filter;
+      auto builder = retained
+                       ? diagnostic::warning("sigma operator retains last "
+                                             "known good version of "
+                                             "rule '{}'",
+                                             failed.label)
+                       : diagnostic::warning("sigma operator ignores rule '{}'",
+                                             failed.label);
+      if (failed.source) {
+        builder = std::move(builder).primary(failed.source);
+      }
+      if (state.should_emit_document(memo, failed.revision)) {
+        append_reason(std::move(builder), failed.reason).emit(dh);
+      }
+    }
+  }
+  // Resolve identities to a fixed point. Duplicate new revisions are rejected
+  // per document; a matching prior artifact is retained rather than poisoning
+  // the rest of its source.
   while (true) {
     detections.clear();
     for (auto& snapshot : snapshots) {
-      if (snapshot.failed and snapshot.had_previous) {
-        snapshot.assembling_retained = true;
+      if (snapshot.source_failed) {
         for (auto const& [key, entry] : previous.entries) {
           if (key.origin == snapshot.origin) {
-            detections.push_back(DetectionSlot{&snapshot, key, &entry.label,
-                                               &entry.yaml, &entry.detection,
-                                               true});
+            detections.push_back(DetectionSlot{
+              &snapshot, key, entry.label, &entry.yaml, &entry.detection,
+              &entry, hash(entry.yaml),
+              document_memo_key(key.origin, rule_identity(entry.detection),
+                                key.document),
+              true});
             detections.back().source = entry.source;
           }
         }
         continue;
       }
-      for (auto& document : snapshot.documents) {
-        if (invalid_documents.contains(document.key)) {
-          continue;
-        }
-        if (auto const* rule
-            = try_as<ir::DetectionRule>(document.document.content)) {
+      auto const positional
+        = previous.source_document_counts.contains(snapshot.origin)
+          and previous.source_document_counts.at(snapshot.origin)
+                == snapshot.document_count;
+      auto used_prior = std::unordered_set<RuleEntry const*>{};
+      auto valid = std::vector<ParsedDocument const*>(snapshot.document_count);
+      auto failed = std::vector<FailedDocument const*>(snapshot.document_count);
+      for (auto const& document : snapshot.documents) {
+        valid[document.key.document] = &document;
+      }
+      for (auto const& document : snapshot.failed_documents) {
+        failed[document.key.document] = &document;
+      }
+      for (auto position = size_t{0}; position < snapshot.document_count;
+           ++position) {
+        if (auto const* document_ptr = valid[position]) {
+          auto const& document = *document_ptr;
+          auto const* rule
+            = try_as<ir::DetectionRule>(document.document.content);
+          if (not rule) {
+            continue;
+          }
+          if (invalid_documents.contains(document.key)) {
+            auto const* prior = find_previous_rule(
+              snapshot, document.identity, document.key.document, positional);
+            if (prior) {
+              if (used_prior.insert(prior).second) {
+                detections.push_back(
+                  DetectionSlot{&snapshot, document.key, document.label,
+                                &prior->yaml, &prior->detection, prior,
+                                document.revision, document.memo_key, true});
+                detections.back().source = document.source;
+              }
+            }
+            continue;
+          }
           detections.push_back(DetectionSlot{
-            &snapshot, document.key, &document.label, &document.yaml, rule});
+            &snapshot, document.key, document.label, &document.yaml, rule,
+            find_previous_rule(snapshot, document.identity,
+                               document.key.document, positional),
+            document.revision, document.memo_key});
           detections.back().source = document.source;
+        }
+        if (auto const* failed_ptr = failed[position]) {
+          auto const& failed = *failed_ptr;
+          auto const* prior = find_retained_rule(snapshot, failed, positional);
+          if (not prior) {
+            continue;
+          }
+          if (used_prior.insert(prior).second) {
+            detections.push_back(
+              DetectionSlot{&snapshot, failed.key, failed.label, &prior->yaml,
+                            &prior->detection, prior, failed.revision,
+                            failed.memo_key, true});
+            detections.back().source = failed.source;
+          }
         }
       }
     }
@@ -1647,21 +1888,22 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       }
       for (auto const index : indices) {
         auto& slot = detections[index];
-        // Retained slots describe already active rules. Reject conflicting new
-        // revisions rather than dropping a last-known-good rule.
         if (slot.retained) {
           continue;
         }
         changed = invalid_documents.insert(slot.key).second or changed;
-        if (not slot.snapshot->failed) {
-          slot.snapshot->failed = true;
-          changed = true;
-        }
-        if (state.should_emit(slot.key,
-                              slot.snapshot->revision ^ hash(identity))) {
-          auto builder = diagnostic::warning("sigma operator ignores rule '{}'",
-                                             *slot.label)
-                           .note("duplicate rule identity `{}`", identity);
+        auto const& memo = slot.memo_key;
+        active_document_memos.insert(memo);
+        if (state.should_emit_document(memo, slot.document_revision)) {
+          auto builder = slot.fallback
+                           ? diagnostic::warning("sigma operator retains last "
+                                                 "known good version "
+                                                 "of rule '{}'",
+                                                 slot.label)
+                           : diagnostic::warning(
+                               "sigma operator ignores rule '{}'", slot.label);
+          builder
+            = std::move(builder).note("duplicate rule identity `{}`", identity);
           if (slot.source) {
             builder = std::move(builder).primary(slot.source);
           }
@@ -1673,37 +1915,68 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       break;
     }
   }
-  // Publish filters only after parsing, lowering, entity resolution, and
-  // cross-document identity validation established the source's final state.
-  auto refreshed_origins = std::unordered_set<std::string>{};
-  auto parsed_filter_labels = std::unordered_set<std::string>{};
+  // Rebuild the filter bank in source/document order. Valid sibling filters
+  // replace independently; each failed document can claim at most one prior
+  // filter artifact.
   for (auto& snapshot : snapshots) {
-    // A failed reload is transactional: keep every banked filter from the
-    // previous source revision instead of publishing only its valid siblings.
-    auto const refresh_filters
-      = not snapshot.failed or not snapshot.had_previous;
-    if (refresh_filters) {
-      refreshed_origins.insert(snapshot.origin);
+    if (snapshot.source_failed) {
+      for (auto const& entry : previous_filter_bank.entries) {
+        if (entry.second.origin == snapshot.origin) {
+          filter_bank.insert_or_assign(entry.first, entry.second);
+        }
+      }
+      continue;
     }
-    for (auto& document : snapshot.documents) {
-      if (auto const* filter
-          = try_as<ir::FilterRule>(document.document.content);
-          filter and refresh_filters) {
-        parsed_filter_labels.insert(document.label);
-        filter_bank.insert_or_assign(document.label,
-                                     RetainedFilter{snapshot.origin,
-                                                    document.yaml, *filter});
+    auto const positional
+      = previous.source_document_counts.contains(snapshot.origin)
+        and previous.source_document_counts.at(snapshot.origin)
+              == snapshot.document_count;
+    auto used_previous_filters = std::unordered_set<std::string>{};
+    auto claimed_identities = std::unordered_set<std::string>{};
+    auto valid = std::vector<ParsedDocument const*>(snapshot.document_count);
+    auto failed = std::vector<FailedDocument const*>(snapshot.document_count);
+    for (auto const& document : snapshot.documents) {
+      valid[document.key.document] = &document;
+      if (try_as<ir::FilterRule>(document.document.content)
+          and not document.identity.empty()) {
+        claimed_identities.insert(document.identity);
+      }
+    }
+    for (auto const& document : snapshot.failed_documents) {
+      failed[document.key.document] = &document;
+    }
+    for (auto position = size_t{0}; position < snapshot.document_count;
+         ++position) {
+      if (auto const* document = valid[position]) {
+        if (auto const* filter
+            = try_as<ir::FilterRule>(document->document.content)) {
+          filter_bank.insert_or_assign(
+            document->label,
+            RetainedFilter{document->key, snapshot.origin, document->identity,
+                           document->yaml, *filter});
+        }
+      }
+      if (auto const* failed_document = failed[position]) {
+        auto const& failed = *failed_document;
+        if (not failed.identity.empty()
+            and claimed_identities.contains(failed.identity)) {
+          continue;
+        }
+        auto prior = find_retained_filter(snapshot, failed, positional);
+        if (not prior
+            or not used_previous_filters.insert(prior->first).second) {
+          continue;
+        }
+        if (not failed.identity.empty()) {
+          claimed_identities.insert(failed.identity);
+        }
+        auto retained_filter = prior->second;
+        retained_filter.key = failed.key;
+        filter_bank.insert_or_assign(failed.label, std::move(retained_filter));
       }
     }
   }
-  // Remove filters with vanished sources and filters absent from successfully
-  // validated source revisions. Failed reloads retain their complete bank state.
-  filter_bank.erase_if([&](auto const& entry) {
-    return not origins.contains(entry.second.origin)
-           or (refreshed_origins.contains(entry.second.origin)
-               and not parsed_filter_labels.contains(entry.first));
-  });
-  // Apply filters in deterministic bank order.
+  // Apply filters in deterministic bank order to the complete candidate rule set.
   auto active_filter_memos = std::unordered_set<std::string>{};
   for (auto const& [label, retained] : filter_bank.entries) {
     auto const& filter = retained.filter;
@@ -1725,8 +1998,7 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       active_filter_memos.insert(memo_key);
       auto matches = std::vector<size_t>{};
       for (auto index = size_t{0}; index < detections.size(); ++index) {
-        auto const& slot = detections[index];
-        auto const& metadata = slot.rule->metadata;
+        auto const& metadata = detections[index].rule->metadata;
         if (metadata.id == reference or metadata.name == reference) {
           matches.push_back(index);
         }
@@ -1757,74 +2029,86 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
     }
   }
   state.reconcile_filter_applications(active_filter_memos);
-  // Lower every valid detection with its filter applications.
+  // Lower rules with the current filters, falling back verbatim to the previous
+  // artifact if re-applying those filters makes a retained rule unexecutable.
   for (auto& slot : detections) {
-    auto revision = slot.snapshot->revision;
-    for (auto const filter_revision : slot.filter_revisions) {
-      revision ^= filter_revision;
-    }
-    auto handle_failure = [&](auto&& emit_reason) {
-      slot.snapshot->failed = true;
-      slot.snapshot->replacement_failed = true;
-      if (not state.should_emit(slot.key, revision)) {
-        return;
-      }
-      auto builder
-        = slot.snapshot->had_previous
-            ? diagnostic::warning("sigma operator retains last known good "
-                                  "version of source '{}'",
-                                  slot.snapshot->origin)
-            : diagnostic::warning("sigma operator ignores rule '{}'",
-                                  *slot.label);
-      if (slot.source) {
-        builder = std::move(builder).primary(slot.source);
-      }
-      emit_reason(std::move(builder));
-    };
     auto rule = *slot.rule;
     for (auto index = size_t{0}; index < slot.filters.size(); ++index) {
       rule = ir::apply_filter(std::move(rule), *slot.filters[index], index);
     }
     auto lowered = lower_rule_with_artifacts(rule);
+    auto resolved = false;
+    std::vector<IdentifierArtifact> artifacts;
+    ast::expression expression;
+    auto reason = diagnostic::error("failed to resolve sigma rule").done();
     if (lowered.is_err()) {
-      auto reason = std::move(lowered).unwrap_err();
-      handle_failure([&](diagnostic_builder builder) {
-        append_reason(std::move(builder), reason).emit(dh);
-      });
-      continue;
-    }
-    auto [expression, artifacts] = std::move(lowered).unwrap();
-    auto provider = session_provider::make(dh);
-    auto resolved = bool{resolve_entities(expression, provider.as_session())};
-    for (auto& artifact : artifacts) {
-      resolved = resolved
-                 and bool{resolve_entities(artifact.expression,
-                                           provider.as_session())};
-      for (auto& group : artifact.groups) {
-        for (auto& item : group) {
-          resolved = resolved
-                     and bool{resolve_entities(item.expression,
-                                               provider.as_session())};
+      reason = std::move(lowered).unwrap_err();
+    } else {
+      auto result = std::move(lowered).unwrap();
+      expression = std::move(result.first);
+      artifacts = std::move(result.second);
+      auto provider = session_provider::make(dh);
+      resolved = bool{resolve_entities(expression, provider.as_session())};
+      for (auto& artifact : artifacts) {
+        resolved = resolved
+                   and bool{resolve_entities(artifact.expression,
+                                             provider.as_session())};
+        for (auto& group : artifact.groups) {
+          for (auto& item : group) {
+            resolved = resolved
+                       and bool{resolve_entities(item.expression,
+                                                 provider.as_session())};
+          }
         }
+      }
+      if (not resolved) {
+        reason = diagnostic::error("failed to resolve sigma rule").done();
       }
     }
     if (not resolved) {
-      handle_failure([&](diagnostic_builder builder) {
-        std::move(builder).note("failed to resolve sigma rule").emit(dh);
-      });
+      auto compile_revision = slot.document_revision;
+      for (auto const filter_revision : slot.filter_revisions) {
+        compile_revision = hash(compile_revision, filter_revision);
+      }
+      auto const memo = slot.memo_key + "#compiled:";
+      active_document_memos.insert(memo);
+      if (not slot.retained
+          and state.should_emit_document(memo, compile_revision)) {
+        auto builder = slot.fallback
+                         ? diagnostic::warning("sigma operator retains last "
+                                               "known good version "
+                                               "of rule '{}'",
+                                               slot.label)
+                         : diagnostic::warning(
+                             "sigma operator ignores rule '{}'", slot.label);
+        if (slot.source) {
+          builder = std::move(builder).primary(slot.source);
+        }
+        append_reason(std::move(builder), reason).emit(dh);
+      }
+      if (slot.fallback) {
+        auto fallback = *slot.fallback;
+        fallback.label = slot.label;
+        slot.snapshot->replacements.insert_or_assign(slot.key,
+                                                     std::move(fallback));
+      }
       continue;
     }
     if (not slot.retained) {
-      state.succeeded(slot.key);
+      state.succeeded_document(slot.memo_key);
     }
     auto finding = make_finding_template(rule, *slot.yaml);
     auto const effective_revision = hash(finding.policy);
     slot.snapshot->replacements.insert_or_assign(
       slot.key,
-      RuleEntry{*slot.yaml, *slot.label, effective_revision, *slot.rule,
+      RuleEntry{*slot.yaml, slot.label, effective_revision, *slot.rule,
                 std::move(rule), std::move(expression), std::move(artifacts),
                 std::move(finding), slot.source});
   }
+  // Remove diagnostic memos for documents that disappeared from the snapshots.
+  std::erase_if(state.failing_documents, [&](auto const& entry) {
+    return not active_document_memos.contains(entry.first);
+  });
 }
 
 /// Discovers rule files across all path entries deterministically:
@@ -1917,8 +2201,8 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
     if (not content) {
       auto snapshot = SourceSnapshot{};
       snapshot.origin = origin;
-      snapshot.failed = true;
-      snapshot.had_previous
+      snapshot.source_failed = true;
+      auto const had_previous
         = std::ranges::any_of(previous.entries,
                               [&](auto const& entry) {
                                 return entry.first.origin == origin;
@@ -1928,7 +2212,7 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
              });
       if (state.should_emit(origin, hash(to_string(content.error())))) {
         auto builder
-          = snapshot.had_previous
+          = had_previous
               ? diagnostic::warning("sigma operator retains last known good "
                                     "version of '{}'",
                                     origin)
@@ -1959,13 +2243,20 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
   }
   // Phase 2: resolve identities and filters, then lower.
   assemble_rules(snapshots, previous, filter_bank, state, dh);
-  // Phase 3: publish per-source, retaining failed sources transactionally.
+  // Phase 3: publish one complete deterministic replacement map. Only
+  // unreadable or unparseable sources retain their complete prior snapshot.
+  // Assembly reapplied the current filters to those retained detections, so
+  // the recomputed entries replace the verbatim prior ones.
   for (auto& snapshot : snapshots) {
-    if (snapshot.failed and snapshot.had_previous
-        and (not snapshot.assembling_retained or snapshot.replacement_failed)) {
+    if (snapshot.source_failed) {
       std::ignore = retain_source(previous, snapshot.origin, next);
+      for (auto& [key, entry] : snapshot.replacements.entries) {
+        next.insert_or_assign(std::move(key), std::move(entry));
+      }
       continue;
     }
+    next.source_document_counts.insert_or_assign(snapshot.origin,
+                                                 snapshot.document_count);
     for (auto& [key, entry] : snapshot.replacements.entries) {
       next.insert_or_assign(std::move(key), std::move(entry));
     }

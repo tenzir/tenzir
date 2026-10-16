@@ -1,0 +1,5 @@
+// A subsequent subscription sees only the barrier: the old target is gone.
+subscribe "sigma-reload-identity"
+head 20
+summarize titles=distinct(title)
+titles = titles.sort()

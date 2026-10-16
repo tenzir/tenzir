@@ -1,0 +1,4 @@
+// After the refresh barrier, only the new event code should match.
+subscribe "ocsf-schema-findings"
+head 10
+summarize events=count(), ids=distinct(id)

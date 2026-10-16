@@ -1,0 +1,5 @@
+// Wait for the sibling edit, not a fixed refresh delay.
+subscribe "sigma-reload-idless"
+where title == "First updated"
+head 1
+select title

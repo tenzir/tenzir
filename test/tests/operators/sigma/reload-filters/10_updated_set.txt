@@ -1,0 +1,6 @@
+{
+  users: [
+    "nobody",
+    "svc_bob",
+  ],
+}

@@ -1,0 +1,22 @@
+from {yaml: r#"title: Filter target
+id: 22222222-2222-4222-8222-222222222222
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: '\\evil.exe'
+  condition: selection
+---
+title: Broken administrator filter
+name: initially-broken-filter
+logsource:
+  category: process_creation
+filter:
+  rules: [22222222-2222-4222-8222-222222222222]
+  selection:
+    User|re: '['
+  condition: not selection
+"#}
+to_file env("FILE_ROOT") + "/initial-broken-filter.yaml" {
+  write_all yaml
+}

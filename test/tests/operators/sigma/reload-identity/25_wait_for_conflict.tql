@@ -1,0 +1,4 @@
+subscribe "sigma-reload-identity"
+where title == "Barrier 4"
+head 1
+select title

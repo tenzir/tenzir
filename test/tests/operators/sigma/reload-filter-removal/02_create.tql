@@ -1,0 +1,6 @@
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000001711",
+  definition: "every 20ms {\n  from {Image: \"c:\\\\evil.exe\", User: \"guest\"}, {Image: \"c:\\\\evil.exe\", User: \"adm_alice\"}\n}\nsigma path=\"" + env("FILE_ROOT") + "/filter-removal.yaml\", mapping=\"direct\", refresh_interval=50ms\nselect title=finding_info.title, user=evidences[0].data.User\nbatch 100\npublish \"sigma-filter-removal\"",
+}
+discard

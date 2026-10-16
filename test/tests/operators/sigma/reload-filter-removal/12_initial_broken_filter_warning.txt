@@ -1,0 +1,18 @@
+{
+  severity: "warning",
+  message: "sigma operator ignores rule '<root>/initial-broken-filter.yaml#1'",
+  notes: [
+    {
+      kind: "note",
+      message: "invalid regular expression for Sigma field `User|re`",
+    },
+    {
+      kind: "note",
+      message: "regex: [",
+    },
+    {
+      kind: "note",
+      message: "error: missing ]: [",
+    },
+  ],
+}

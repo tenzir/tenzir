@@ -1,0 +1,14 @@
+{
+  severity: "warning",
+  message: "sigma operator retains last known good version of rule '<root>/single.yaml'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `foo`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}

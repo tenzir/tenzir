@@ -1,0 +1,9 @@
+from {yaml: r#"title: Barrier 1
+id: 11111111-1111-4111-8111-1111111117b5
+detection:
+  selection: {marker: true}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-identity-other.yaml.next" {
+  write_all yaml
+}

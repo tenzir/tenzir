@@ -1,0 +1,4 @@
+{
+  ignored: 1,
+  retained: 0,
+}

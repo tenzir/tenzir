@@ -1,0 +1,10 @@
+{
+  titles: [
+    "F detection",
+    "Marker v2",
+  ],
+  users: [
+    "adm_alice",
+    "nobody",
+  ],
+}

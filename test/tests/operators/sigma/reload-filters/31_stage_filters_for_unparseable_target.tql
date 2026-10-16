@@ -1,0 +1,21 @@
+// Switch the service filter back to excluding guests while the target source
+// stays unparseable.
+from {yaml: r#"title: Broken administrator filter
+name: admin-filter
+logsource: {category: process_creation}
+filter:
+  rules: [aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa]
+  selection: {User|re: '['}
+  condition: not selection
+---
+title: Guest filter
+id: cccccccc-cccc-4ccc-8ccc-cccccccccccc
+logsource: {category: process_creation}
+filter:
+  rules: [aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa]
+  selection: {User|startswith: guest_}
+  condition: not selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-filters.yaml.next" {
+  write_all yaml
+}

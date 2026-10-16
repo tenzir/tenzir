@@ -1,0 +1,32 @@
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000001731",
+  definition: r#"every 20ms {
+  from {}
+  repeat 69
+  enumerate index
+  id = "schema-churn-" + (index - 2).string()
+  class_uid = 1007
+  metadata = {version: "unfamiliar", event_code: "1"}
+  if index < 2 {
+    id = "plan-reuse-" + index.string()
+  }
+  if index == 67 {
+    id = "after-churn"
+  }
+  if index == 68 {
+    id = "after-rule-refresh"
+    metadata.event_code = "2"
+  }
+  if index >= 2 and index < 67 {
+    this = {...this, ...("{\"schema_" + (index - 2).string() + "\":" + (index - 2).string() + "}").parse_json()}
+  }
+  drop index
+}
+sigma path=""# + env("FILE_ROOT") + r#"/ocsf-schema.yaml", refresh_interval=50ms
+select title=finding_info.title, id=evidences[0].data.id
+batch 100
+publish "ocsf-schema-findings"
+"#,
+}
+discard

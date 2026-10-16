@@ -1,0 +1,4 @@
+{
+  severity: "warning",
+  message: "sigma operator retains last known good version of '<root>/sigma-reload-filters-target.yaml'",
+}

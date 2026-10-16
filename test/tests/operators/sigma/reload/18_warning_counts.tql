@@ -1,0 +1,6 @@
+// Two omitted documents and two distinct revisions of the retained document.
+// Its move from #2 to #1 lets us distinguish the revisions even though node
+// diagnostics deduplicate identical messages independently of Sigma.
+diagnostics
+where pipeline_id == "00000000-0000-0000-0000-0000000017a2"
+summarize ignored=count_if(message, x => x.search("ignores rule")), retained=count_if(message, x => x.search("retains last known good"))

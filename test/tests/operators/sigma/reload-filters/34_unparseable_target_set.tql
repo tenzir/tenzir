@@ -1,0 +1,4 @@
+subscribe "sigma-reload-filters-topic"
+head 40
+summarize users=distinct(user)
+select users=sort(users)

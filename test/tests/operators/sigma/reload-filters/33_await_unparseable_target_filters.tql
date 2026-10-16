@@ -1,0 +1,6 @@
+// A service user matches again: the retained target of the unparseable source
+// uses the latest external filter revision.
+subscribe "sigma-reload-filters-topic"
+where user == "svc_bob"
+head 1
+select user

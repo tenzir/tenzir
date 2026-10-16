@@ -1,0 +1,10 @@
+// A changed ID must not retain the old rule, even with the same document count.
+from {yaml: r#"title: Invalid different identity
+id: 11111111-1111-4111-8111-1111111117b4
+detection:
+  selection: {foo|madeup: alpha}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-identity-target.yaml.next" {
+  write_all yaml
+}

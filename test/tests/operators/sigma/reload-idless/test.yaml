@@ -1,0 +1,3 @@
+suite: sigma-reload-idless
+fixtures: [node, local_files]
+timeout: 30

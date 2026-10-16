@@ -1,0 +1,4 @@
+// Ensure the initial valid rule has matched before replacing it.
+subscribe "sigma-single"
+where title == "Stable"
+head 1

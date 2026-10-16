@@ -1,0 +1,4 @@
+subscribe "sigma-reload-identity"
+where title == "Original"
+head 1
+select title

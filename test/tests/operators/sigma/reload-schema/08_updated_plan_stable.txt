@@ -1,0 +1,6 @@
+{
+  events: 10,
+  ids: [
+    "after-rule-refresh",
+  ],
+}

@@ -1,0 +1,12 @@
+from {yaml: r#"title: OCSF schema plan
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/ocsf-schema.yaml" {
+  write_all yaml
+}

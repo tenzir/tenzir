@@ -1,0 +1,4 @@
+subscribe "sigma-reload-shared-topic"
+head 60
+summarize titles=distinct(title), users=distinct(user)
+select titles=sort(titles), users=sort(users)

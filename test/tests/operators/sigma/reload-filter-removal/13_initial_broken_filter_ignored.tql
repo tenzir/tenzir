@@ -1,0 +1,4 @@
+// An invalid filter with no prior version is ignored; its target remains active.
+subscribe "sigma-initial-broken-filter"
+where user == "adm_alice"
+head 1

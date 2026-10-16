@@ -1,0 +1,6 @@
+// A set of titles would hide duplicate Second findings. Count per input ID.
+subscribe "sigma-reload-idless"
+head 40
+summarize event_id, findings=count()
+assert findings == 1
+summarize events=count(), max_findings=max(findings)

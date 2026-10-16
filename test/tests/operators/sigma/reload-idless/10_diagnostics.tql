@@ -1,0 +1,5 @@
+// The inserted invalid document has no matching prior artifact and warns once.
+diagnostics
+where pipeline_id == "00000000-0000-0000-0000-0000000017b2"
+select severity, message=message.replace(env("FILE_ROOT"), "<root>"), notes
+sort message

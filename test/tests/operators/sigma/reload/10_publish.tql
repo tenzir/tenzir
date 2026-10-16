@@ -1,0 +1,6 @@
+// Rename a complete file so a refresh never observes a partial write.
+from_file env("FILE_ROOT") + "/sigma-reload.yaml.next",
+          rename=path => path.replace(".next", "") {
+  read_all
+}
+discard

@@ -1,0 +1,6 @@
+// Atomically publish the rule revision.
+from_file env("FILE_ROOT") + "/ocsf-schema.yaml.next",
+          rename=path => path.replace(".next", "") {
+  read_all
+}
+discard

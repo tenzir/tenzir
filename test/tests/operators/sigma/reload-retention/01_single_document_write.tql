@@ -1,0 +1,11 @@
+// A numeric name is the identity that matches the broken revision.
+from {yaml: r#"title: Stable
+name: 123
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/single.yaml" {
+  write_all yaml
+}

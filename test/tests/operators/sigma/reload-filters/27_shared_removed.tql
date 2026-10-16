@@ -1,0 +1,7 @@
+// Each broken document retains only its own artifact type: the D filter still
+// excludes service users, and the F detection still matches. The removed D
+// detection and F filter stay gone, so administrators match again.
+subscribe "sigma-reload-shared-topic"
+head 60
+summarize titles=distinct(title), users=distinct(user)
+select titles=sort(titles), users=sort(users)

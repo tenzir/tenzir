@@ -1,0 +1,6 @@
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-0000000017b3",
+  definition: "every 20ms {\n  from {kind: \"target\", foo: \"alpha\"}, {kind: \"barrier\", marker: true}\n}\nenumerate event_id\nsigma path=[\"" + env("FILE_ROOT") + "/sigma-identity-target.yaml\", \"" + env("FILE_ROOT") + "/sigma-identity-other.yaml\", \"" + env("FILE_ROOT") + "/sigma-identity-conflict.yaml\"], mapping=\"direct\", refresh_interval=50ms\nselect event_id=evidences[0].data.event_id, kind=evidences[0].data.kind, title=finding_info.title\nbatch 100\npublish \"sigma-reload-identity\"",
+}
+discard

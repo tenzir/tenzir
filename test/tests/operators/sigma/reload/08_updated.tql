@@ -1,0 +1,5 @@
+// No stale Old title or newly invalid Eve rule may remain active.
+subscribe "sigma-reload"
+head 30
+summarize titles=distinct(title)
+titles = titles.sort()

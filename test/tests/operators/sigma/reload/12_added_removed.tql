@@ -1,0 +1,5 @@
+// Bob survives its index shift; Dave is removed in the same refresh.
+subscribe "sigma-reload"
+head 30
+summarize titles=distinct(title)
+titles = titles.sort()

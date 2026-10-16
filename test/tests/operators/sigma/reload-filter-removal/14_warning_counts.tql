@@ -1,0 +1,4 @@
+// Removing a valid filter is silent; the initially broken filter warns once.
+diagnostics
+where pipeline_id in ["00000000-0000-0000-0000-000000001711", "00000000-0000-0000-0000-000000001712"]
+summarize ignored=count_if(message, x => x.search("ignores rule")), retained=count_if(message, x => x.search("retains last known good"))

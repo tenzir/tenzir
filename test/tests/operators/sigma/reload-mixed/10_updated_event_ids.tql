@@ -1,0 +1,5 @@
+// Verify one finding at most per unique input event after positional retention.
+subscribe "sigma-reload-mixed-topic"
+head 40
+summarize event_id, n=count()
+summarize max_per_event=max(n), events=count()

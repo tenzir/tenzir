@@ -1,0 +1,6 @@
+// The whole target source becomes invalid YAML, so it retains its prior
+// snapshot as a unit.
+from {yaml: "title: [unclosed\n"}
+to_file env("FILE_ROOT") + "/sigma-reload-filters-target.yaml.next" {
+  write_all yaml
+}

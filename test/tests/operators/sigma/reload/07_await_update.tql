@@ -1,0 +1,5 @@
+// Wait until the refresh publishes the valid sibling edit, then confirm that
+// no stale version remains active.
+subscribe "sigma-reload"
+where title == "New"
+head 1

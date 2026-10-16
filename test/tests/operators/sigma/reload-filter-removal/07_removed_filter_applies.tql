@@ -1,0 +1,4 @@
+// Once the filter document disappears, administrator events match the target.
+subscribe "sigma-filter-removal"
+where user == "adm_alice"
+head 1

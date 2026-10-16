@@ -1,0 +1,4 @@
+subscribe "sigma-reload-idless"
+head 10
+summarize titles=distinct(title)
+titles = titles.sort()

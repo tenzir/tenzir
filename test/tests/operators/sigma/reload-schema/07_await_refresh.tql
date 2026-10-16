@@ -1,0 +1,4 @@
+// Observe the updated event code before checking for stale matches.
+subscribe "ocsf-schema-findings"
+where id == "after-rule-refresh"
+head 1

@@ -1,0 +1,10 @@
+{
+  titles: [
+    "D detection",
+    "F detection",
+    "Marker",
+  ],
+  users: [
+    "nobody",
+  ],
+}

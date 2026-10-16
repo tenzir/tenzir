@@ -1,0 +1,11 @@
+// The target becomes invalid while retaining the same Sigma id.
+from {yaml: r#"title: Broken target
+id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+logsource: {category: process_creation}
+detection:
+  selection: {Image|madeup: evil.exe}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-filters-target.yaml.next" {
+  write_all yaml
+}

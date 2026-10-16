@@ -1,0 +1,42 @@
+{
+  severity: "warning",
+  message: "sigma operator ignores rule '<root>/sigma-reload.yaml#1'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `user`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}
+{
+  severity: "warning",
+  message: "sigma operator ignores rule '<root>/sigma-reload.yaml#4'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `user`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}
+{
+  severity: "warning",
+  message: "sigma operator retains last known good version of rule '<root>/sigma-reload.yaml#2'",
+  notes: [
+    {
+      kind: "note",
+      message: "unknown Sigma modifier `madeup` for field `user`",
+    },
+    {
+      kind: "hint",
+      message: "unsupported modifiers reject the rule; nothing is silently ignored",
+    },
+  ],
+}

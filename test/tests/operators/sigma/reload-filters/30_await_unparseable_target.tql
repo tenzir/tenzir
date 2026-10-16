@@ -1,0 +1,5 @@
+// Wait for the source-level retention warning before changing the filters.
+diagnostics live=true, retro=true
+where pipeline_id == "00000000-0000-0000-0000-0000000017af" and message.search("retains last known good version of '")
+head 1
+select severity, message=message.replace(env("FILE_ROOT"), "<root>")

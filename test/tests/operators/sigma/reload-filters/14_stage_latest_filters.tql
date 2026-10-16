@@ -1,0 +1,21 @@
+// Change the service filter again while the named administrator filter stays
+// unchanged and broken. The new filter excludes services, not guests.
+from {yaml: r#"title: Broken administrator filter
+name: admin-filter
+logsource: {category: process_creation}
+filter:
+  rules: [aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa]
+  selection: {User|re: '['}
+  condition: not selection
+---
+title: Latest service filter
+id: cccccccc-cccc-4ccc-8ccc-cccccccccccc
+logsource: {category: process_creation}
+filter:
+  rules: [aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa]
+  selection: {User|startswith: svc_}
+  condition: not selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-filters.yaml.next" {
+  write_all yaml
+}

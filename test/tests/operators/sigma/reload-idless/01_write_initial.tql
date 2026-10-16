@@ -1,0 +1,14 @@
+// Neither rule has an id or name: inserting a document must not shift retention.
+from {yaml: r#"title: First
+detection:
+  selection: {marker: first}
+  condition: selection
+---
+title: Second
+detection:
+  selection: {marker: second}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-idless.yaml" {
+  write_all yaml
+}

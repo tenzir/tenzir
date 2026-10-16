@@ -1,0 +1,43 @@
+// Detections and filters may share an identity. Each identity below names
+// both a detection and a filter. The marker rule shows when a refresh took
+// effect.
+from {yaml: r#"title: D detection
+id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+logsource: {category: process_creation}
+detection:
+  selection: {Image|endswith: evil.exe}
+  condition: selection
+---
+title: D filter
+id: dddddddd-dddd-4ddd-8ddd-dddddddddddd
+logsource: {category: process_creation}
+filter:
+  rules: any
+  selection: {User|startswith: svc_}
+  condition: not selection
+---
+title: F detection
+id: ffffffff-ffff-4fff-8fff-ffffffffffff
+logsource: {category: process_creation}
+detection:
+  selection: {Image|endswith: evil.exe}
+  condition: selection
+---
+title: F filter
+id: ffffffff-ffff-4fff-8fff-ffffffffffff
+logsource: {category: process_creation}
+filter:
+  rules: any
+  selection: {User|startswith: adm_}
+  condition: not selection
+---
+title: Marker
+id: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+logsource: {category: process_creation}
+detection:
+  selection: {Image|endswith: evil.exe}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-shared.yaml" {
+  write_all yaml
+}

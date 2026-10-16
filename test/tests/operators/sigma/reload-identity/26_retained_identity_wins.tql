@@ -1,0 +1,8 @@
+// Count all findings per event ID, even if duplicate findings have different titles.
+subscribe "sigma-reload-identity"
+where kind == "target"
+head 20
+summarize event_id, findings=count(), title=first(title)
+assert findings == 1
+summarize events=count(), max_findings=max(findings), titles=distinct(title)
+titles = titles.sort()

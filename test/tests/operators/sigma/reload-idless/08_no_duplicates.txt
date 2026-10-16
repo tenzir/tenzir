@@ -1,0 +1,4 @@
+{
+  events: 40,
+  max_findings: 1,
+}

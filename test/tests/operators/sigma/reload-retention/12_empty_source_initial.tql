@@ -1,0 +1,3 @@
+subscribe "sigma-empty"
+where title == "Empty source baseline"
+head 1

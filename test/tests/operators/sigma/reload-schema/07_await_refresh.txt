@@ -1,0 +1,4 @@
+{
+  title: "Refresh after",
+  id: "after-rule-refresh",
+}

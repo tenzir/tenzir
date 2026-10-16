@@ -1,0 +1,6 @@
+// Guest now matches and service no longer does: the retained target uses the
+// latest external filter revision.
+subscribe "sigma-reload-filters-topic"
+where user == "guest_alice"
+head 1
+select user, title

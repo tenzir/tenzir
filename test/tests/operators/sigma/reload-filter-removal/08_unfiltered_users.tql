@@ -1,0 +1,5 @@
+// Both users match after the removal; no stale filter remains.
+subscribe "sigma-filter-removal"
+head 20
+summarize users=distinct(user)
+users = users.sort()

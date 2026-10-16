@@ -1,0 +1,10 @@
+from {yaml: r#"title: Broken
+name: 123
+detection:
+  selection:
+    foo|madeup: alpha
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/single.yaml.next" {
+  write_all yaml
+}

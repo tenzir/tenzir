@@ -1,0 +1,5 @@
+// Whitespace forms an empty YAML stream with no documents.
+from {data: b" "}
+to_file env("FILE_ROOT") + "/empty.yaml.next" {
+  write_all data
+}

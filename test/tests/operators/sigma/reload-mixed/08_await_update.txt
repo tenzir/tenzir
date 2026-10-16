@@ -1,0 +1,4 @@
+{
+  user: "adm_alice",
+  title: "Mixed source target",
+}

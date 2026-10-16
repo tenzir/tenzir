@@ -1,0 +1,10 @@
+from {yaml: r#"title: Filter target
+id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+logsource: {category: process_creation}
+detection:
+  selection: {Image|endswith: evil.exe}
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/sigma-reload-filters-target.yaml" {
+  write_all yaml
+}

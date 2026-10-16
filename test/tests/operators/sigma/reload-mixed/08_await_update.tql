@@ -1,0 +1,6 @@
+// The retained target now matches an admin user, showing its sibling filter
+// update took effect (the old filter would still exclude this event).
+subscribe "sigma-reload-mixed-topic"
+where user == "adm_alice"
+head 1
+select user, title

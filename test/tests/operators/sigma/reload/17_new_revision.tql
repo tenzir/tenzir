@@ -1,0 +1,5 @@
+// Repeated refreshes retain Bob without repeating its warning.
+subscribe "sigma-reload"
+head 30
+summarize titles=distinct(title)
+titles = titles.sort()

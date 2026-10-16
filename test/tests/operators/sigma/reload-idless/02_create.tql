@@ -1,0 +1,7 @@
+// Enumerate outside every so each input event has a unique ID across ticks.
+// Coalesce findings to limit backpressure from short-lived subscriptions.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-0000000017b2",
+  definition: "every 20ms {\n  from {marker: \"first\"}, {marker: \"second\"}\n}\nenumerate event_id\nsigma path=\"" + env("FILE_ROOT") + "/sigma-reload-idless.yaml\", mapping=\"direct\", refresh_interval=50ms\nselect event_id=evidences[0].data.event_id, title=finding_info.title\nbatch 100\npublish \"sigma-reload-idless\"",
+}
+discard
