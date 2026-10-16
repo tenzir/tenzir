@@ -39,6 +39,7 @@ from . import package_http  # noqa: F401
 from . import packages  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
+from . import sigma_large  # noqa: F401
 from . import splunk  # noqa: F401
 from . import system_one  # noqa: F401
 from . import platform_ws  # noqa: F401

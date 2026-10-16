@@ -19,6 +19,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace tenzir::nova {
 
@@ -244,31 +245,102 @@ auto eval_boolean_operand(EvalFrame frame, ast::expression const& expr)
   };
 }
 
+/// Returns `expr` as a binary expression with operator `op`, or null.
+auto as_binary_op(ast::expression const& expr, ast::binary_op op)
+  -> ast::binary_expr const* {
+  auto const* binary = try_as<ast::binary_expr>(expr);
+  return binary and binary->op == op ? binary : nullptr;
+}
+
+/// The running result of a chain of `and`s or `or`s.
+class BooleanChain {
+public:
+  BooleanChain(bool is_and, BooleanOperand first)
+    : is_and_{is_and}, acc_{std::move(first)} {
+  }
+
+  /// Folds the next operand into the result. `next` must have been evaluated
+  /// for `remaining()`, so its bitmaps are all-false outside of it.
+  auto fold(BooleanOperand next) -> void {
+    if (is_and_) {
+      acc_.true_rows = std::move(acc_.true_rows) & next.true_rows;
+      acc_.false_rows = std::move(acc_.false_rows) | next.false_rows;
+    } else {
+      acc_.true_rows = std::move(acc_.true_rows) | next.true_rows;
+      acc_.false_rows = std::move(acc_.false_rows) & next.false_rows;
+    }
+  }
+
+  /// The rows whose result a further operand can still change, including
+  /// `null` rows. Short-circuiting is mask narrowing: the next operand is
+  /// evaluated only for these rows, and not at all when there are none.
+  auto remaining(storage::BitMap const& mask) const -> storage::BitMap {
+    return is_and_ ? mask.and_not(acc_.false_rows)
+                   : mask.and_not(acc_.true_rows);
+  }
+
+  auto finish(storage::BitMap const& mask) && -> Array<Data> {
+    auto null_rows = mask.and_not(acc_.true_rows).and_not(acc_.false_rows);
+    return Array<Data>{Array<Bool>{std::move(acc_.true_rows)}}.null_where(
+      std::move(null_rows));
+  }
+
+private:
+  bool is_and_;
+  BooleanOperand acc_;
+};
+
 /// Three-valued `and`/`or`: `null and false` is `false`, `null or true` is
 /// `true`, and every other combination with `null` is `null`.
+///
+/// A maximal subtree of the same operator is evaluated iteratively rather than
+/// recursively, so that long chains, such as generated rules with thousands of
+/// alternatives, do not grow the stack with their length. Since `and` and
+/// `or` are associative and each operand is evaluated for exactly the rows
+/// that the operands to its left left undecided, this visits the operands in
+/// source order with the same masks as the recursive evaluation, and stops as
+/// soon as no row remains undecided.
 auto eval_and_or(ast::binary_expr const& x, EvalFrame frame) -> Array<Data> {
   TENZIR_ASSERT(x.op == ast::binary_op::and_ or x.op == ast::binary_op::or_);
   auto const& mask = frame.mask();
-  auto const length = frame.length();
   auto const is_and = x.op == ast::binary_op::and_;
-  auto left = eval_boolean_operand(frame, x.left);
-  // Short-circuiting is mask narrowing: the right operand is evaluated only
-  // for the rows whose result it can still change, including `null` rows.
-  auto right_mask
-    = is_and ? mask.and_not(left.false_rows) : mask.and_not(left.true_rows);
-  auto right
-    = right_mask.any()
-        ? eval_boolean_operand(frame.narrow(std::move(right_mask)), x.right)
-        : BooleanOperand{storage::BitMap{length, false},
-                         storage::BitMap{length, false}};
-  // The right-hand bitmaps are all-false outside `right_mask`.
-  auto true_rows = is_and ? left.true_rows & right.true_rows
-                          : std::move(left.true_rows) | right.true_rows;
-  auto false_rows = is_and ? std::move(left.false_rows) | right.false_rows
-                           : left.false_rows & right.false_rows;
-  auto null_rows = mask.and_not(true_rows).and_not(false_rows);
-  return Array<Data>{Array<Bool>{std::move(true_rows)}}.null_where(
-    std::move(null_rows));
+  auto const* nested_left = as_binary_op(x.left, x.op);
+  auto const* nested_right = as_binary_op(x.right, x.op);
+  if (not nested_left and not nested_right) {
+    // The common case of two operands needs no work list.
+    auto chain = BooleanChain{is_and, eval_boolean_operand(frame, x.left)};
+    auto remaining = chain.remaining(mask);
+    if (remaining.any()) {
+      chain.fold(
+        eval_boolean_operand(frame.narrow(std::move(remaining)), x.right));
+    }
+    return std::move(chain).finish(mask);
+  }
+  // Operands still to visit, with the next one at the back. Pushing the right
+  // child before the left one yields the operands from left to right.
+  // Subtrees are only expanded once their turn comes, so operands behind a
+  // short circuit cost nothing, however deeply they nest.
+  auto pending = std::vector<ast::expression const*>{&x.right};
+  auto const* first = &x.left;
+  while (auto const* nested = as_binary_op(*first, x.op)) {
+    pending.push_back(&nested->right);
+    first = &nested->left;
+  }
+  auto chain = BooleanChain{is_and, eval_boolean_operand(frame, *first)};
+  while (not pending.empty()) {
+    auto remaining = chain.remaining(mask);
+    if (not remaining.any()) {
+      break;
+    }
+    auto const* next = pending.back();
+    pending.pop_back();
+    while (auto const* nested = as_binary_op(*next, x.op)) {
+      pending.push_back(&nested->right);
+      next = &nested->left;
+    }
+    chain.fold(eval_boolean_operand(frame.narrow(std::move(remaining)), *next));
+  }
+  return std::move(chain).finish(mask);
 }
 
 auto eval_if(const ast::binary_expr& x, const ast::expression& fallback,

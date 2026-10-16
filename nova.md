@@ -147,6 +147,12 @@ argument type combinations, warning and returning all-null for the rest without
 instantiating the body, unwrapping unions per alternative. `const_eval` is an
 `Evaluator` run with no input.
 
+### Long boolean chains
+
+Evaluation visits same-operator `and`/`or` leaves iteratively in source order,
+stopping when no active row needs another operand. Sigma balances selection
+lists too. Other AST operations still recurse; arbitrary depth is not guaranteed.
+
 ### Secrets
 
 `Secret` is a Nova fundamental type holding plaintext bytes. An owned `Secret`

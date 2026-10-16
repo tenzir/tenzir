@@ -123,16 +123,31 @@ using ExpressionMap = detail::flat_map<std::string, ast::expression>;
 namespace expression_algebra {
 
 /// Joins a set of sub-expressions into a conjunction or disjunction.
+///
+/// The operands keep their order but are combined pairwise, level by level,
+/// so that the expression tree is balanced: its depth grows logarithmically
+/// with the number of operands. Value lists of real-world rules hold
+/// hundreds of entries, and every recursive pass over the expression, from
+/// entity resolution to copying and destruction, would otherwise recurse
+/// once per entry.
 template <ast::binary_op Op>
 auto join(std::vector<ast::expression> xs) -> ast::expression {
   if (xs.empty()) {
     return ast::constant{false, location::unknown};
   }
-  auto result = std::move(xs[0]);
-  for (auto i = size_t{1}; i < xs.size(); ++i) {
-    result = ast::binary_expr{std::move(result), Op, std::move(xs[i])};
+  while (xs.size() > 1) {
+    auto next = std::vector<ast::expression>{};
+    next.reserve((xs.size() + 1) / 2);
+    for (auto i = size_t{0}; i + 1 < xs.size(); i += 2) {
+      next.emplace_back(
+        ast::binary_expr{std::move(xs[i]), Op, std::move(xs[i + 1])});
+    }
+    if (xs.size() % 2 == 1) {
+      next.push_back(std::move(xs.back()));
+    }
+    xs = std::move(next);
   }
-  return result;
+  return std::move(xs[0]);
 }
 
 } // namespace expression_algebra

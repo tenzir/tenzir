@@ -1,0 +1,9 @@
+---
+fixtures: [sigma_large]
+---
+// Each modifier has 1,500 values; last-value probes require the full list.
+from_file f"{env("SIGMA_LARGE_ROOT")}/events.json" { read_ndjson }
+sigma path=f"{env("SIGMA_LARGE_ROOT")}/rules"
+select id=evidences[0].data.id, rule=finding_info.title
+sort id, rule
+write_ndjson

@@ -1,0 +1,8 @@
+{"id":"all","rule":"all"}
+{"id":"blocked","rule":"contains"}
+{"id":"encoded-last","rule":"base64offset"}
+{"id":"first","rule":"contains"}
+{"id":"first","rule":"nested"}
+{"id":"last","rule":"contains"}
+{"id":"last","rule":"endswith"}
+{"id":"last","rule":"nested"}

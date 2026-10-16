@@ -26,7 +26,11 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <limits>
+#include <pthread.h>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 using namespace tenzir::nova;
@@ -1619,4 +1623,140 @@ TEST("record and list constants broadcast one constant value") {
     CHECK_EQUAL(materialize_legacy(list_result.get(row)), list);
   }
   CHECK(std::move(dh).collect().empty());
+}
+
+namespace {
+
+// Exercise the full lifecycle on a modest executor-sized stack.
+auto run_with_stack(std::function<void()> f) -> void {
+  auto attributes = pthread_attr_t{};
+  REQUIRE_EQUAL(pthread_attr_init(&attributes), 0);
+  REQUIRE_EQUAL(pthread_attr_setstacksize(&attributes, 2 * 1024 * 1024), 0);
+  auto thread = pthread_t{};
+  auto const created = pthread_create(
+    &thread, &attributes,
+    [](void* function) -> void* {
+      (*static_cast<std::function<void()>*>(function))();
+      return nullptr;
+    },
+    &f);
+  pthread_attr_destroy(&attributes);
+  REQUIRE_EQUAL(created, 0);
+  REQUIRE_EQUAL(pthread_join(thread, nullptr), 0);
+}
+
+} // namespace
+
+TEST("long left/right-deep and/or chains survive their full lifecycle") {
+  using enum tenzir::ast::binary_op;
+  constexpr auto count = std::int64_t{2'000};
+  auto events = make_int_field_events({0, count - 1, count + 1});
+  auto reg = tenzir::registry{};
+  for (auto op : {and_, or_}) {
+    for (auto right_deep : {false, true}) {
+      auto rows = std::vector<Option<bool>>{};
+      auto diagnostics = size_t{0};
+      run_with_stack([&] {
+        auto leaf = [&](std::int64_t i) {
+          return compare_expr(root_field("x"), op == or_ ? eq : neq,
+                              int_const(i));
+        };
+        auto expr = leaf(right_deep ? count - 1 : 0);
+        for (auto i = std::int64_t{1}; i < count; ++i) {
+          expr = right_deep
+                   ? logical_expr(leaf(count - i - 1), op, std::move(expr))
+                   : logical_expr(std::move(expr), op, leaf(i));
+        }
+        auto copy = expr;
+        auto dh = tenzir::collecting_diagnostic_handler{};
+        auto evaluator = tenzir::test::make_evaluator(std::move(copy), dh, reg);
+        if (evaluator) {
+          rows = bool_or_null_rows(evaluator->eval(events, EvalCtx{dh}),
+                                   events.length());
+        }
+        diagnostics = std::move(dh).collect().size();
+      });
+      CHECK_EQUAL(diagnostics, 0u);
+      CHECK(rows
+            == (op == or_ ? std::vector<Option<bool>>{true, true, false}
+                          : std::vector<Option<bool>>{false, false, true}));
+    }
+  }
+}
+
+TEST("boolean chains preserve nulls, mixed operators, masks, and warnings") {
+  using enum tenzir::ast::binary_op;
+  using Row = std::array<Option<bool>, 3>;
+  auto builder = ArrayBuilder<Record>{};
+  auto row_number = size_t{0};
+  for (auto const& values :
+       {Row{true, None{}, false}, Row{false, true, None{}},
+        Row{None{}, false, true}, Row{None{}, true, None{}},
+        Row{false, false, None{}}, Row{false, true, true}}) {
+    auto row = builder.record();
+    auto index = size_t{0};
+    for (auto name : {"a", "b", "c"}) {
+      auto field = row.field(name);
+      if (auto value = values[index++]) {
+        field.data(*value);
+      } else {
+        field.null();
+      }
+    }
+    // The integer is short-circuited on row 0 and masked out on row 5.
+    if (row_number == 0 or row_number == 5) {
+      row.field("bad").data(std::int64_t{7});
+    } else {
+      row.field("bad").data(false);
+    }
+    ++row_number;
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto dh = tenzir::collecting_diagnostic_handler{};
+  auto mask = bitmap_of({true, false, true, true, true, false});
+  auto check
+    = [&](tenzir::ast::expression expr, std::vector<Option<bool>> expected) {
+        auto result = eval(std::move(expr), events, mask, dh, reg);
+        auto rows = bool_or_null_rows(result, events.length());
+        for (auto i = size_t{0}; i < expected.size(); ++i) {
+          if (mask.get(static_cast<storage::Index>(i))) {
+            CHECK_EQUAL(rows[i], expected[i]);
+          }
+        }
+        CHECK(std::move(dh).collect().empty());
+      };
+  for (auto op : {and_, or_}) {
+    for (auto right_deep : {false, true}) {
+      auto expr
+        = right_deep
+            ? logical_expr(root_field("a"), op,
+                           logical_expr(root_field("b"), op, root_field("c")))
+            : logical_expr(logical_expr(root_field("a"), op, root_field("b")),
+                           op, root_field("c"));
+      check(std::move(expr),
+            op == or_
+              ? std::vector<Option<bool>>{true, true, true, true, None{}}
+              : std::vector<Option<bool>>{false, false, false, None{}, false});
+    }
+  }
+  check(logical_expr(root_field("a"), or_,
+                     logical_expr(root_field("b"), and_, root_field("c"))),
+        {true, None{}, None{}, None{}, false});
+  auto const source = tenzir::location{10, 13};
+  auto bad = tenzir::ast::expression{
+    tenzir::ast::root_field{tenzir::ast::identifier{"bad", source}}};
+  check(logical_expr(root_field("a"), or_,
+                     logical_expr(bad, or_, root_field("c"))),
+        {true, None{}, true, None{}, None{}});
+  std::ignore = eval(logical_expr(bad, or_, root_field("a")), events,
+                     storage::BitMap{events.length(), false}, dh, reg);
+  CHECK(std::move(dh).collect().empty());
+  std::ignore
+    = eval(logical_expr(bad, or_, root_field("a")), events,
+           bitmap_of({true, false, false, false, false, false}), dh, reg);
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), 1u);
+  REQUIRE_EQUAL(diagnostics[0].annotations.size(), 1u);
+  CHECK_EQUAL(diagnostics[0].annotations[0].source, source);
 }
