@@ -1,0 +1,62 @@
+{
+  Id: 0,
+  Name: "alice",
+  Addr: "10.0.0.1",
+  Port: 443,
+  Flag: true,
+  Ident: "01234567-89ab-cdef-0123-456789abcdef",
+  Amount: "443",
+  Dyn: 443,
+}
+{
+  Id: 1,
+  Name: "Alice",
+  Addr: "::ffff:10.0.0.1",
+  Port: 80,
+  Flag: false,
+  Ident: null,
+  Amount: "1.50",
+  Dyn: "443",
+}
+{
+  Id: 2,
+  Name: "ALICE",
+  Addr: "10.0.0.01",
+  Port: null,
+  Flag: null,
+  Ident: null,
+  Amount: null,
+  Dyn: 443,
+}
+{
+  Id: 3,
+  Name: "",
+  Addr: "fe80::1",
+  Port: 8443,
+  Flag: true,
+  Ident: null,
+  Amount: "0",
+  Dyn: null,
+}
+{
+  Id: 4,
+  Name: "straße",
+  Addr: "",
+  Port: 443,
+  Flag: null,
+  Ident: null,
+  Amount: "2",
+  Dyn: {
+    port: 443,
+  },
+}
+{
+  Id: 5,
+  Name: "alice ",
+  Addr: "10.0.0.0/8",
+  Port: 0,
+  Flag: false,
+  Ident: null,
+  Amount: "3",
+  Dyn: true,
+}

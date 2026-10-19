@@ -1,0 +1,27 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: multiple
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: ";\nprint Value = \"second\"\n| where (gettype(column_ifexists('Value', dynamic(null))) !in (\"string\") or tostring(column_ifexists('Value', dynamic(null))) == \"second\" or tostring(column_ifexists('Value', dynamic(null))) matches regex @'^[ \\t\\r\\n]*\"')"
+---
+
+// Appended stages apply to the last statement only, which returns the
+// `Other` table here. The local filter also decides the rows of earlier
+// tables.
+from_azure_log_analytics env("AZLOG_QUERY") + ";\nprint Value = \"second\"",
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Value == "second"

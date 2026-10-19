@@ -1,0 +1,16 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+---
+
+// Payload keys that only look like OData annotations survive, while the
+// generated `@odata.type` annotations are removed, also in nested objects.
+from_microsoft_defender "annotation-shaped",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false

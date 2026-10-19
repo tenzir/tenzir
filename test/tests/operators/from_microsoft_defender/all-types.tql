@@ -1,0 +1,28 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+---
+
+// Every column type and null spelling of the Graph wire format, with
+// OData annotations: booleans as SByte 0/1, dynamic as Object, decimals as
+// SqlDecimal strings, timespans in ISO 8601, and nulls as {}, null, or "".
+from_microsoft_defender "all-types",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+types = {
+  s: type_of(s).kind,
+  g: type_of(g).kind,
+  d: type_of(d).kind,
+  i: type_of(i).kind,
+  l: type_of(l).kind,
+  r: type_of(r).kind,
+  b: type_of(b).kind,
+  t: type_of(t).kind,
+  ts: type_of(ts).kind,
+}

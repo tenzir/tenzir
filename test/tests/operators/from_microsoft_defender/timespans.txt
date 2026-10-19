@@ -1,0 +1,44 @@
+{
+  Value: 1h,
+  nanoseconds: 3600000000000,
+}
+{
+  Value: 1.08546875d,
+  nanoseconds: 93784500000000,
+}
+{
+  Value: -100ns,
+  nanoseconds: -100,
+}
+{
+  Value: 0ns,
+  nanoseconds: 0,
+}
+{
+  Value: 2d,
+  nanoseconds: 172800000000000,
+}
+{
+  Value: 1min,
+  nanoseconds: 60000000000,
+}
+{
+  Value: 106751.99116730064d,
+  nanoseconds: 9223372036854775807,
+}
+{
+  Value: -106751.99116730064d,
+  nanoseconds: -9223372036854775807,
+}
+{
+  Value: -106751.99116730064d,
+  nanoseconds: -9223372036854775808,
+}
+{
+  Value: 106751.99116730064d,
+  nanoseconds: 9223372036854775800,
+}
+{
+  Value: -106751.99116730064d,
+  nanoseconds: -9223372036854775800,
+}

@@ -1,0 +1,15 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+---
+
+// Without OData metadata in the response, every key is payload.
+from_microsoft_defender "annotation-shaped-none",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false

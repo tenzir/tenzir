@@ -1,0 +1,31 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pushdown
+      rows: [2]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | where (gettype(column_ifexists('Name', dynamic(null))) !in ("string") or tostring(column_ifexists('Name', dynamic(null))) == "ALICE" or tostring(column_ifexists('Name', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+---
+
+// Log Analytics reports a result beyond its row and size limits as a
+// partial failure, which the operator rejects. The prefilter therefore runs
+// without a cap: it yields the complete filtered result or fails as well,
+// where a cap would silently return a filtered prefix.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Name == "ALICE"

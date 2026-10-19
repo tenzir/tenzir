@@ -1,0 +1,24 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [0]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 1
+---
+
+// Without a filter, the limit is pushed. The service returns row 0.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+head 1

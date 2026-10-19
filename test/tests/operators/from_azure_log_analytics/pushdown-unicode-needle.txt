@@ -1,0 +1,12 @@
+{
+  Id: 4,
+  Name: "straße",
+  Addr: "",
+  Port: 443,
+  Flag: null,
+  Ident: null,
+  Amount: "2",
+  Dyn: {
+    port: 443,
+  },
+}

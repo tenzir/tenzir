@@ -1,0 +1,27 @@
+---
+title: Filter, projection, and limit pushdown for Defender and Log Analytics
+type: change
+authors:
+  - mavam
+created: 2026-10-15T16:30:00.000000Z
+---
+
+The `from_microsoft_defender` and `from_azure_log_analytics` operators now push conservative prefilters and projection and limit hints from the `where`, `select`, and `head` operators that follow them into your KQL query, so that the service can return fewer rows and columns:
+
+```tql
+from_azure_log_analytics "SecurityEvent | where EventID == 4625",
+  workspace_id=secret("log-analytics-workspace"),
+  azure_auth={
+    tenant_id: "...",
+    client_id: "...",
+    client_secret: secret("azure-client-secret"),
+  }
+where Account == "CONTOSO\\alice" and Computer.starts_with("DC")
+select TimeGenerated, Account, Computer
+```
+
+Your KQL query stays as it is. The operators append trailing `where`, `project`, and `take` stages, so that they apply to the rows that your query returns. Since the types of a query's output are unknown before it runs, the appended `where` only preselects candidates: it keeps every row whose KQL type could decode to a matching TQL value, and every TQL filter still runs locally with exact TQL semantics, including case sensitivity and `null` handling. Since Defender may silently return only the first 100,000 rows of a query, a `take 100000` stage precedes the appended `where` there, so that a filter never reveals rows that Defender would have cut off. Log Analytics reports a result beyond its row and size limits as a partial failure, which the operator rejects, so its filters run on the complete result: they yield the complete filtered result or fail as well.
+
+Prefilters cover comparisons of a field with a number, equality of a field with a string or boolean, `in` with a list of literals of a single kind, `!= null`, and case-sensitive `starts_with`, `ends_with`, and substring matching. Regular expressions, IP addresses and subnets, times, negation, nested fields, lists that mix kinds, and case-insensitive matching stay local.
+
+A `head` reaches the service only if no filter precedes it and its limit fits into a 32-bit integer. A projected column that your query does not return becomes `null`, as with a local `select`. The `start` and `end` window stays unchanged, and queries that use `render`, `fork`, `facet`, or a `set` statement are sent unchanged.

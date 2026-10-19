@@ -1,0 +1,23 @@
+{
+  d: {
+    x: 1,
+    "x@odata.custom": "p",
+    "@odata.context": "c",
+    "z@odata.type": "#Int64",
+    n: {
+      y: 2,
+      "y@odata.custom": "q",
+      "@odata.id": "r",
+    },
+  },
+}
+{
+  d: [
+    {
+      x: 1,
+    },
+    {
+      "x@odata.type": "user",
+    },
+  ],
+}

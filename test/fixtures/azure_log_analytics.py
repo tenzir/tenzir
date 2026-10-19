@@ -44,6 +44,28 @@ _ROW = [
     None,
     {"text": "2026-01-01T00:00:00Z", "a.b": [1, 2, None]},
 ]
+# Deterministic data for pushdown: case-variant and IP-shaped strings, nulls,
+# KQL types that decode to TQL strings (guid, decimal), and a dynamic column
+# whose values decode to different TQL types, including a dynamic string that
+# decodes to a number.
+_PUSHDOWN_COLUMNS = [
+    {"name": "Id", "type": "long"},
+    {"name": "Name", "type": "string"},
+    {"name": "Addr", "type": "string"},
+    {"name": "Port", "type": "long"},
+    {"name": "Flag", "type": "bool"},
+    {"name": "Ident", "type": "guid"},
+    {"name": "Amount", "type": "decimal"},
+    {"name": "Dyn", "type": "dynamic"},
+]
+_PUSHDOWN_ROWS = [
+    [0, "alice", "10.0.0.1", 443, True, _WORKSPACE, "443", 443],
+    [1, "Alice", "::ffff:10.0.0.1", 80, False, None, "1.50", '"443"'],
+    [2, "ALICE", "10.0.0.01", None, None, None, None, "443"],
+    [3, "", "fe80::1", 8443, True, None, "0", None],
+    [4, "straße", "", 443, None, None, "2", {"port": 443}],
+    [5, "alice ", "10.0.0.0/8", 0, False, None, "3", True],
+]
 
 
 @dataclass(frozen=True)
@@ -51,6 +73,17 @@ class Options:
     case: str = "typed"
     bounded: bool = False
     wait: int = 180
+    # The indices of the pushdown rows that the service returns, emulating the
+    # KQL that the request appends. All rows if unset.
+    #
+    # Tests derive `rows` and `project` by hand from documented KQL semantics.
+    # They encode assumptions about the service's behavior for the asserted
+    # request, pending validation against real tenants, and do not prove what
+    # the service returns.
+    rows: list[int] | None = None
+    # The columns that the service returns, in order, emulating an appended
+    # `project`. A name without a column yields a dynamic `null`.
+    project: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +93,9 @@ class Assertions:
     ingestions: int = 0
     events: list[dict[str, Any]] | None = None
     large_event_ids: list[int] | None = None
+    # The text that follows the fixture's query in the request: any suffix that
+    # the test adds to the query, then the stages that the source appends.
+    appended: str = ""
 
 
 class Server(ThreadingHTTPServer):
@@ -71,6 +107,7 @@ class Server(ThreadingHTTPServer):
         self.ingestions = 0
         self.events: list[dict[str, Any]] = []
         self.body: bytes | None = None
+        self.query: str | None = None
         self.failures: list[str] = []
         self.request_received = threading.Event()
         self.release_response = threading.Event()
@@ -165,7 +202,12 @@ class Handler(BaseHTTPRequestHandler):
             assert body == server.body, "query changed during retry"
         server.body = body
         request = json.loads(body)
-        expected = {"query": _QUERY}
+        # The source preserves the user's query and may append stages, which
+        # `assert_test` compares exactly.
+        query = request.pop("query")
+        assert isinstance(query, str) and query.startswith(_QUERY), query
+        server.query = query
+        expected = {}
         if server.options.bounded:
             expected["timespan"] = (
                 "2026-01-01T00:00:00.000000000Z/2026-01-02T00:00:00.000000000Z"
@@ -227,7 +269,28 @@ class Handler(BaseHTTPRequestHandler):
         rows = [copy.deepcopy(_ROW)]
         table = {"name": "PrimaryResult", "columns": columns, "rows": rows}
         envelope = {"tables": [table]}
-        if case == "empty":
+        if case == "pushdown":
+            columns[:] = copy.deepcopy(_PUSHDOWN_COLUMNS)
+            selected = server.options.rows
+            if selected is None:
+                selected = list(range(len(_PUSHDOWN_ROWS)))
+            rows[:] = [copy.deepcopy(_PUSHDOWN_ROWS[i]) for i in selected]
+            if server.options.project is not None:
+                names = [column["name"] for column in columns]
+                indices = [
+                    names.index(name) if name in names else None
+                    for name in server.options.project
+                ]
+                columns[:] = [
+                    copy.deepcopy(_PUSHDOWN_COLUMNS[i])
+                    if i is not None
+                    else {"name": name, "type": "dynamic"}
+                    for name, i in zip(server.options.project, indices)
+                ]
+                rows[:] = [
+                    [row[i] if i is not None else None for i in indices] for row in rows
+                ]
+        elif case == "empty":
             rows.clear()
         elif case == "empty-tables":
             envelope["tables"].clear()
@@ -423,6 +486,11 @@ def run() -> FixtureHandle:
             assertions.queries,
         )
         assert server.tokens == assertions.tokens, (server.tokens, assertions.tokens)
+        if server.query is not None:
+            assert server.query == _QUERY + assertions.appended, (
+                server.query,
+                _QUERY + assertions.appended,
+            )
         assert server.ingestions == assertions.ingestions, (
             server.ingestions,
             assertions.ingestions,

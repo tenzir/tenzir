@@ -1,0 +1,25 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        print b = 2
+        | take 100000
+        | where (gettype(column_ifexists('a', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('a', dynamic(null))) == 2.0)
+---
+
+// Graph returns only the table of the first statement, while appended
+// stages apply to the last one, so the local filter decides.
+from_microsoft_defender "multi-statement;\nprint b = 2",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where a == 2

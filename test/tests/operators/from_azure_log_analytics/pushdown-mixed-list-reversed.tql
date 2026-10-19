@@ -1,0 +1,26 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pushdown
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: ""
+---
+
+// A dynamic string `443` decodes to the number 443, so a list that mixes
+// kinds has no sound prefilter and stays local in every element order.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Dyn in [443, "a"]

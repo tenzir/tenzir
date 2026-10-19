@@ -1,0 +1,26 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('RemotePort', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('RemotePort', dynamic(null))) == 443.0) and (gettype(column_ifexists('ActionType', dynamic(null))) !in ("string") or tostring(column_ifexists('ActionType', dynamic(null))) == "ConnectionSuccess" or tostring(column_ifexists('ActionType', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | project ['ReportId'] = column_ifexists('ReportId', dynamic(null)), ['RemoteIP'] = column_ifexists('RemoteIP', dynamic(null)), ['DeviceName'] = column_ifexists('DeviceName', dynamic(null)), ['RemotePort'] = column_ifexists('RemotePort', dynamic(null)), ['ActionType'] = column_ifexists('ActionType', dynamic(null))
+---
+
+// Pushdown over a realistic response: the fixture returns every row, and
+// the local filter decides.
+from_microsoft_defender "device-network-events",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where RemotePort == 443 and ActionType == "ConnectionSuccess"
+select DeviceName, RemoteIP, ReportId

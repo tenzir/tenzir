@@ -1,0 +1,22 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: ""
+---
+
+// Log Analytics may decode a dynamic string `443` to the number 443, so
+// the shared renderer keeps lists that mix kinds local for both
+// connectors, in every element order.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Extra in [443, "a"]

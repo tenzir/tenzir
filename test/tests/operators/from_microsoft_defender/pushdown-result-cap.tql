@@ -1,0 +1,27 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [2]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('DeviceName', dynamic(null))) !in ("string") or tostring(column_ifexists('DeviceName', dynamic(null))) == "host-b" or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+---
+
+// Advanced hunting returns at most 100,000 rows of a query. The `take` stage
+// applies that cap before the prefilter, so that the filter never reveals
+// rows that the query without the filter would not return.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where DeviceName == "host-b"

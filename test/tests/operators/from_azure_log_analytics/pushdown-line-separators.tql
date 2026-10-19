@@ -1,0 +1,29 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pushdown
+      rows: []
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | where (gettype(column_ifexists('Name', dynamic(null))) !in ("string") or tostring(column_ifexists('Name', dynamic(null))) == "a\u2028b\u2029c\u0085d" or tostring(column_ifexists('Name', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+---
+
+// U+2028, U+2029, and U+0085 are escaped, so that the literal stays on one
+// line.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Name == "a\u{2028}b\u{2029}c\u{85}d"

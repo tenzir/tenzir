@@ -1,0 +1,29 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pushdown
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: ""
+---
+
+// IP addresses and subnets, function calls, negation, and regular
+// expressions stay local.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Addr.ip() in 10.0.0.0/8 or Addr == 10.0.0.1
+where Name.to_lower() == "alice"
+where not (Port == 80)
+where Name.match_regex("^a")

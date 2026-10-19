@@ -1,0 +1,10 @@
+{
+  Timestamp: 2026-01-01T00:00:00Z,
+  Id: 0,
+  DeviceName: "host-a",
+  RemoteIP: "10.0.0.1",
+  RemotePort: 443,
+  Allowed: true,
+  ReportId: null,
+  Extra: 443,
+}

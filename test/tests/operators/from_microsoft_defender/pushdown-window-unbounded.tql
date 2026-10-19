@@ -1,0 +1,16 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+---
+
+// Without bounds, the request carries no `Timespan`.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Timestamp >= 2026-01-02

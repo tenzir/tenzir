@@ -8,6 +8,7 @@ assertions:
     azure_log_analytics:
       queries: 1
       tokens: 1
+      appended: "\n| project ['Value'] = column_ifexists('Value', dynamic(null))"
 ---
 
 from_azure_log_analytics env("AZLOG_QUERY"),

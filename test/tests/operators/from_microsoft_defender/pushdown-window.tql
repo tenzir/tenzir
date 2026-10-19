@@ -1,0 +1,19 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+---
+
+// A time predicate on the output does not narrow the window: the query
+// may have aggregated, renamed, or computed `Timestamp`.
+from_microsoft_defender "pushdown-bounded",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02
+where Timestamp >= 2026-01-01T12:00:00

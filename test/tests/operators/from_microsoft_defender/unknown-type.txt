@@ -1,4 +1,4 @@
-error: invalid Microsoft Defender response: unsupported schema type; cast the column in KQL
+error: invalid Microsoft Defender response: unsupported schema type `Unsupported`; cast the column in KQL
  --> tests/operators/from_microsoft_defender/unknown-type.tql:7:25
   |
 7 | from_microsoft_defender "unknown-type",

@@ -1,0 +1,7 @@
+warning: event does not have field
+  --> tests/operators/from_azure_log_analytics/pushdown-missing.tql:28:7
+   |
+28 | where Missing == 1
+   |       ~~~~~~~
+   |
+   = hint: append `?` to suppress this warning

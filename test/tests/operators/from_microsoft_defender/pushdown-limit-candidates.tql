@@ -1,0 +1,27 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [1, 3, 2, 0]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('Extra', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Extra', dynamic(null))) == 443.0)
+---
+
+// The service returns candidates that fail the local filter first, so the
+// limit stays local and counts only rows that pass.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Extra == 443
+head 1

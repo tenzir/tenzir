@@ -1,0 +1,10 @@
+warning: event does not have field
+  --> tests/operators/from_azure_log_analytics/pushdown-multiple-statements.tql:27:7
+   |
+27 | where Value == "second"
+   |       ~~~~~
+   |
+   = hint: append `?` to suppress this warning
+{
+  Value: "second",
+}

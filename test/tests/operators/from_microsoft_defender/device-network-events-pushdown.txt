@@ -1,0 +1,5 @@
+{
+  DeviceName: "host-a.example.com",
+  RemoteIP: "192.0.2.10",
+  ReportId: 9007199254740993,
+}

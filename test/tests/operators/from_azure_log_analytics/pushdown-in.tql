@@ -1,0 +1,28 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pushdown
+      rows: [0, 2]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | where (gettype(column_ifexists('Name', dynamic(null))) !in ("string") or tostring(column_ifexists('Name', dynamic(null))) in ("alice", "ALICE") or tostring(column_ifexists('Name', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+---
+
+// KQL's `in` is case-sensitive. The service returns rows 0 and 2.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Name in ["alice", "ALICE"]

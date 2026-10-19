@@ -1,0 +1,24 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where ((gettype(column_ifexists('Extra', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Extra', dynamic(null))) == 443.0) or (gettype(column_ifexists('ReportId', dynamic(null))) !in ("string") or tostring(column_ifexists('ReportId', dynamic(null))) == "00000000-0000-0000-0000-000000000000" or tostring(column_ifexists('ReportId', dynamic(null))) matches regex @'^[ \t\r\n]*"'))
+---
+
+// Dynamic strings and Guids fail the type guards, so the service returns
+// every row.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Extra == 443 or ReportId == "00000000-0000-0000-0000-000000000000"

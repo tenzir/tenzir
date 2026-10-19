@@ -1,6 +1,10 @@
 ---
 fixtures: [microsoft_defender]
 timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: "\n| project ['Count'] = column_ifexists('Count', dynamic(null))"
 ---
 
 from_microsoft_defender "many-rows",

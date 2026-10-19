@@ -1,0 +1,29 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pushdown
+      rows: [0, 1, 3, 4, 5]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | where (isnotnull(column_ifexists('Port', dynamic(null))) or gettype(column_ifexists('Port', dynamic(null))) !in ("int", "long", "real", "bool", "datetime", "timespan", "decimal"))
+---
+
+// A `long` decodes to `null` only from `null`. The service returns every
+// row but row 2.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Port != null

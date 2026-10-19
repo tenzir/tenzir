@@ -1,0 +1,26 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: []
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('DeviceName', dynamic(null))) !in ("string") or tostring(column_ifexists('DeviceName', dynamic(null))) == "a\u2028b\u2029c\u0085d" or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+---
+
+// U+2028, U+2029, and U+0085 are escaped, so that the literal stays on one
+// line.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where DeviceName == "a\u{2028}b\u{2029}c\u{85}d"
