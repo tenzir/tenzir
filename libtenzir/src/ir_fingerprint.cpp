@@ -11,6 +11,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/source.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/byte_buffer.hpp>
@@ -38,7 +39,7 @@ namespace {
 /// The id comes from a process-wide counter, so two compiles of one definition
 /// never agree on it. Where in its source a location points does enter: a
 /// diagnostic of a run points there, and has to be right for the text the run
-/// is shown with.
+/// is shown with. That text enters too, after the pipeline.
 class canonical_serializer final : public caf::serializer {
 public:
   explicit canonical_serializer(caf::byte_buffer& buffer) : inner_{buffer} {
@@ -267,6 +268,14 @@ auto ir::fingerprint(pipeline const& pipe, SourceMap const& sources)
   // points at too, and which the pipeline itself need not hold.
   for (auto const& call_site : sources.call_sites()) {
     ok = serializer.write(call_site);
+    TENZIR_ASSERT(ok);
+  }
+  // What a run's diagnostics quote and name: every source that took part, in
+  // the order the compile added them. An edit anywhere in one, even one that
+  // moves nothing a location points at, or a renamed file, changes it.
+  for (auto const& source : sources.sources()) {
+    ok = serializer.value(std::string_view{source->origin})
+         and serializer.value(std::string_view{source->text});
     TENZIR_ASSERT(ok);
   }
   auto hash = sha256{};

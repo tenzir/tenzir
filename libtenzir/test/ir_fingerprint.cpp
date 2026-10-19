@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// A compiled pipeline's fingerprint changes exactly when what it does, or
-/// where its diagnostics point, does.
+/// what its diagnostics show, does.
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -20,6 +20,8 @@
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/tokens.hpp"
+
+#include <fmt/format.h>
 
 #include <string>
 #include <string_view>
@@ -49,12 +51,13 @@ auto fingerprint_of(std::string_view text, registry const& reg
   return ir::fingerprint(*compiled, sources);
 }
 
-/// The builtins with a package `acme`, whose operator `double` is `body` and
+/// The builtins with a package `acme`, whose operator `op` is `body` and
 /// whose `$base` is `base`.
-auto with_acme(std::string body, std::string base) -> Arc<registry const> {
+auto with_acme(std::string body, std::string base, std::string op = "double")
+  -> Arc<registry const> {
   auto files = package_files{
     {"package.yaml", "name: Acme\n"},
-    {"operators/double.tql", std::move(body)},
+    {fmt::format("operators/{}.tql", op), std::move(body)},
     {"constants.tql", fmt::format("let $base = {}", base)},
   };
   auto dh = collecting_diagnostic_handler{};
@@ -85,14 +88,14 @@ TEST("compiling a pipeline twice gives one fingerprint") {
   }
 }
 
-TEST("where a diagnostic would point enters a pipeline's fingerprint") {
+TEST("what a diagnostic would show enters a pipeline's fingerprint") {
   CHECK_NOT_EQUAL(fingerprint_of("from {x: 1} | where x > 0 | discard"),
                   fingerprint_of("from {x: 1}\n// keep the positive ones\n"
                                  "|   where x>0\n| discard"));
-  // An edit that moves nothing a location points at does not: the
-  // diagnostics point where they did.
-  CHECK_EQUAL(fingerprint_of("from {x: 1} | where x > 0 | discard // a"),
-              fingerprint_of("from {x: 1} | where x > 0 | discard // b"));
+  // Also an edit that moves nothing a location points at: a diagnostic would
+  // quote the text around it.
+  CHECK_NOT_EQUAL(fingerprint_of("from {x: 1} | where x > 0 | discard // a"),
+                  fingerprint_of("from {x: 1} | where x > 0 | discard // b"));
 }
 
 TEST("what a pipeline does enters its fingerprint") {
@@ -114,7 +117,13 @@ TEST("a pipeline's fingerprint follows the packages it uses") {
   auto reformatted = with_acme("// doubles\nx  =  x*2", "21");
   CHECK_NOT_EQUAL(fingerprint_of(text, *before),
                   fingerprint_of(text, *reformatted));
-  // So does moving the call, which a diagnostic from inside points at too.
+  // So does renaming its file, which a diagnostic from inside names, even
+  // when nothing moves.
+  CHECK_NOT_EQUAL(fingerprint_of("from {x: acme::$base} | acme::foo | discard",
+                                 *with_acme("x = x * 2", "21", "foo")),
+                  fingerprint_of("from {x: acme::$base} | acme::bar | discard",
+                                 *with_acme("x = x * 2", "21", "bar")));
+  // And moving the call, which a diagnostic from inside points at too.
   CHECK_NOT_EQUAL(
     fingerprint_of("from {x: acme::$base} | acme::double | discard", *before),
     fingerprint_of("from {x: acme::$base} |  acme::double| discard", *before));

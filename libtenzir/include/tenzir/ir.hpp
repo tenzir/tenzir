@@ -809,14 +809,14 @@ auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
 /// pipeline to be instantiated, i.e., to have no remaining `let` bindings.
 auto optimize(pipeline pipe, OptimizeCtx octx) -> pipeline;
 
-/// A digest of what a compiled pipeline does and where its diagnostics point,
+/// A digest of what a compiled pipeline does and what its diagnostics show,
 /// the same for two compiles of one definition against the same entities.
 ///
-/// Locations enter by their offsets and by the call sites in `sources`, the
-/// map `pipe` was compiled with, but not by the ids of their sources, which
-/// differ from compile to compile. So an edit that moves anything a location
-/// points at changes it, and one that moves nothing, like a changed comment of
-/// the same length, does not.
+/// `sources` is the map `pipe` was compiled with. Locations enter by their
+/// offsets and by its call sites, but not by the ids of their sources, which
+/// differ from compile to compile. The origin and text of each of its sources
+/// enter too, so any edit to the definition or to a package file the pipeline
+/// uses changes it, even one that moves nothing a location points at.
 ///
 /// Taken before `instantiate`, so values like `now()` do not enter it either.
 /// Hexadecimal SHA-256 of a canonical serialization. Every operator in `pipe`
