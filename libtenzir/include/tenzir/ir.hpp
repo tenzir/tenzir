@@ -155,7 +155,8 @@ public:
   /// validation that requires resolved argument values until instantiation or
   /// planning.
   virtual auto infer_type(element_type_tag input, base_ctx ctx) const
-    -> failure_or<element_type_tag> = 0;
+    -> failure_or<element_type_tag>
+    = 0;
 
   /// Substitute variables from the context and potentially instantiate `this`.
   ///
@@ -165,7 +166,8 @@ public:
   /// depends on the operator. For example, the implementation of `if` also
   /// instantiates its subpipelines, but `every` does not.
   virtual auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> = 0;
+    -> failure_or<void>
+    = 0;
 
   /// Return a potentially optimized version of this operator.
   ///
@@ -237,7 +239,8 @@ public:
   /// `optimize` may be called in between, but only after instantiation as
   /// well. `reg` is the registry that the pipeline was compiled against.
   virtual auto spawn(element_type_tag input, registry const& reg) const
-    -> AnyOperator = 0;
+    -> AnyOperator
+    = 0;
 
   /// The maximum number of parallel instances of this operator. One means
   /// the operator cannot be replicated. The result must be at least one.
