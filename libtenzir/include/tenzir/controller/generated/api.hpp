@@ -1890,16 +1890,30 @@ struct std::hash<tenzir::AdhocPipelineId> {
 
 namespace tenzir {
 
+/// How the deployment renders event values to JSON: `json` renders every value
+/// the way a terminal wants it, and `typed_json` renders int64 and uint64
+/// values as strings, so that they survive every JSON parser with their
+/// precision intact and a reader with the schema can take them back to numbers
+enum class Encoding {
+  json,
+  typed_json,
+};
+
+auto to_string(Encoding value) -> std::string_view;
+
 class AdhocPipelineDefinition {
 public:
   AdhocPipelineDefinition(AdhocPipelineId adhoc_pipeline_id,
-                          std::string definition)
+                          std::string definition, Option<Encoding> encoding)
     : adhoc_pipeline_id{std::move(adhoc_pipeline_id)},
-      definition{std::move(definition)} {
+      definition{std::move(definition)},
+      encoding{std::move(encoding)} {
   }
 
   AdhocPipelineId adhoc_pipeline_id;
   std::string definition;
+  /// `encoding`, may be absent.
+  Option<Encoding> encoding;
 
   friend auto
   operator==(AdhocPipelineDefinition const&, AdhocPipelineDefinition const&)
@@ -1909,7 +1923,7 @@ public:
   template <class HashAlgorithm>
   friend auto
   hash_append(HashAlgorithm& h, AdhocPipelineDefinition const& value) -> void {
-    hash_append(h, value.adhoc_pipeline_id, value.definition);
+    hash_append(h, value.adhoc_pipeline_id, value.definition, value.encoding);
   }
 };
 
@@ -2555,6 +2569,8 @@ auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
 auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
+auto parse_encoding(simdjson::dom::element value)
+  -> Result<Encoding, ParseError>;
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   -> Result<AdhocPipelineDefinition, ParseError>;
 
@@ -2619,6 +2635,7 @@ auto write_json(SourceFile const& value, std::string& out) -> void;
 auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
+auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;
 
 } // namespace tenzir
