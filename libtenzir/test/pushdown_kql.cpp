@@ -9,6 +9,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pushdown/kql.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
@@ -27,7 +28,7 @@ namespace {
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh);
+  auto provider = session_provider::make(dh, test::builtin_registry());
   auto ctx = provider.as_session();
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
@@ -63,7 +64,8 @@ constexpr auto cap = uint64_t{1000};
 /// The appended text for a single predicate, or the empty string if nothing
 /// was pushed.
 auto where(std::string_view predicate) -> std::string {
-  auto plan = plan_kql_query("T", filters({predicate}), None{}, None{}, cap);
+  auto plan = plan_kql_query("T", filters({predicate}), None{}, None{}, cap,
+                             test::builtin_registry());
   if (not plan.filtered) {
     return {};
   }
@@ -108,7 +110,7 @@ TEST("kql renders string equality only where kql sees a string") {
                 fmt::format(R"(tostring({}) == "a\u2028b\u2029c\u0085d")", x)));
   auto separated
     = plan_kql_query("T", filters({"x == \"a\\u{2028}b\\u{2029}c\\u{85}d\""}),
-                     None{}, None{}, cap);
+                     None{}, None{}, cap, test::builtin_registry());
   CHECK(separated.filtered);
   CHECK(kql_accepts_trailing_stages(separated.query));
   // Strings have no ordering operators in KQL.
@@ -246,8 +248,9 @@ TEST("kql composes junctions") {
 
 TEST("kql plans append stages in order") {
   auto filter = filters({R"(x == 1 and y.match_regex("a"))", R"(z == "b")"});
-  auto plan = plan_kql_query("T | take 5 // comment", filter,
-                             paths({"x", "w.v", "x"}), uint64_t{3}, cap);
+  auto plan
+    = plan_kql_query("T | take 5 // comment", filter, paths({"x", "w.v", "x"}),
+                     uint64_t{3}, cap, test::builtin_registry());
   CHECK(plan.filtered);
   CHECK(plan.projected);
   // Every predicate stays local, so the limit is not pushed.
@@ -272,7 +275,7 @@ TEST("kql plans cap the query before filtering") {
   // cap, which a sorted query would never return.
   auto filter = filters({"x == 1"});
   auto plan = plan_kql_query("T | sort by y", filter, None{}, uint64_t{5},
-                             uint64_t{100'000});
+                             uint64_t{100'000}, test::builtin_registry());
   CHECK_EQUAL(plan.query,
               fmt::format("T | sort by y\n| take 100000\n| where {}",
                           number_guard(fmt::format("todouble({}) == 1.0", x))));
@@ -280,19 +283,20 @@ TEST("kql plans cap the query before filtering") {
   CHECK(not plan.limited);
   // A service that fails a truncated result needs no cap: the uncapped filter
   // yields the complete filtered result or fails, too.
-  plan = plan_kql_query("T | sort by y", filter, None{}, None{}, None{});
+  plan = plan_kql_query("T | sort by y", filter, None{}, None{}, None{},
+                        test::builtin_registry());
   CHECK_EQUAL(plan.query,
               fmt::format("T | sort by y\n| where {}",
                           number_guard(fmt::format("todouble({}) == 1.0", x))));
   CHECK(plan.filtered);
   // A projection or a limit keeps the rows of the query, or a prefix.
   plan = plan_kql_query("T | sort by y", {}, paths({"a"}), uint64_t{5},
-                        uint64_t{100'000});
+                        uint64_t{100'000}, test::builtin_registry());
   CHECK_EQUAL(plan.query, "T | sort by y\n| project ['a'] = "
                           "column_ifexists('a', dynamic(null))\n| take 5");
   // A filter without prefilters needs no cap either.
   plan = plan_kql_query("T", filters({R"(x.match_regex("a"))"}), paths({"x"}),
-                        None{}, uint64_t{100'000});
+                        None{}, uint64_t{100'000}, test::builtin_registry());
   CHECK_EQUAL(plan.query,
               "T\n| project ['x'] = column_ifexists('x', dynamic(null))");
   // A `set` statement may change how the service limits a result, so the
@@ -300,50 +304,58 @@ TEST("kql plans cap the query before filtering") {
   for (auto query : {"set notruncation;\nT", "set truncationmaxrecords=10; T",
                      "set query_take_max_records = 1000; T"}) {
     CHECK(not kql_accepts_trailing_stages(query));
-    CHECK_EQUAL(plan_kql_query(query, filter, None{}, None{}, cap).query,
+    CHECK_EQUAL(plan_kql_query(query, filter, None{}, None{}, cap,
+                               test::builtin_registry())
+                  .query,
                 query);
   }
 }
 
 TEST("kql plans push limits without filters") {
-  auto plan
-    = plan_kql_query("  T\n| project a  ", {}, None{}, uint64_t{7}, cap);
+  auto plan = plan_kql_query("  T\n| project a  ", {}, None{}, uint64_t{7}, cap,
+                             test::builtin_registry());
   CHECK_EQUAL(plan.query, "  T\n| project a  \n| take 7");
   CHECK(plan.limited);
   CHECK(not plan.filtered);
   CHECK(not plan.projected);
   // `take` counts rows in an `int`, so only limits up to 2^31 - 1 are pushed.
-  plan = plan_kql_query("T", {}, None{}, uint64_t{2147483647}, cap);
+  plan = plan_kql_query("T", {}, None{}, uint64_t{2147483647}, cap,
+                        test::builtin_registry());
   CHECK_EQUAL(plan.query, "T\n| take 2147483647");
   CHECK(plan.limited);
   for (auto limit :
        {uint64_t{0}, uint64_t{2147483648}, uint64_t{9223372036854775808u},
         std::numeric_limits<uint64_t>::max()}) {
-    plan = plan_kql_query("T", {}, None{}, limit, cap);
+    plan
+      = plan_kql_query("T", {}, None{}, limit, cap, test::builtin_registry());
     CHECK_EQUAL(plan.query, "T");
     CHECK(not plan.limited);
   }
   // A filter that renders nothing still runs locally after the limit.
   plan = plan_kql_query("T", filters({R"(x.match_regex("a"))"}), None{},
-                        uint64_t{7}, cap);
+                        uint64_t{7}, cap, test::builtin_registry());
   CHECK_EQUAL(plan.query, "T");
   CHECK(not plan.limited);
 }
 
 TEST("kql plans keep projection dependencies") {
   // A filter whose references cannot be enumerated disables projection.
-  auto plan
-    = plan_kql_query("T", filters({"this == {}"}), paths({"a"}), None{}, cap);
+  auto plan = plan_kql_query("T", filters({"this == {}"}), paths({"a"}), None{},
+                             cap, test::builtin_registry());
   CHECK_EQUAL(plan.query, "T");
-  plan = plan_kql_query("T", {}, paths({"this"}), None{}, cap);
+  plan = plan_kql_query("T", {}, paths({"this"}), None{}, cap,
+                        test::builtin_registry());
   CHECK_EQUAL(plan.query, "T");
-  plan = plan_kql_query("T", {}, ir::OptimizeProjection{}, None{}, cap);
+  plan = plan_kql_query("T", {}, ir::OptimizeProjection{}, None{}, cap,
+                        test::builtin_registry());
   CHECK_EQUAL(plan.query, "T");
-  plan = plan_kql_query("T", {}, paths({"this[\"a\\u{2028}b\"]"}), None{}, cap);
+  plan = plan_kql_query("T", {}, paths({"this[\"a\\u{2028}b\"]"}), None{}, cap,
+                        test::builtin_registry());
   CHECK_EQUAL(plan.query, "T\n| project ['a\\u2028b'] = "
                           "column_ifexists('a\\u2028b', dynamic(null))");
   CHECK(kql_accepts_trailing_stages(plan.query));
-  plan = plan_kql_query("T", {}, paths({"this[\"it's\"]"}), None{}, cap);
+  plan = plan_kql_query("T", {}, paths({"this[\"it's\"]"}), None{}, cap,
+                        test::builtin_registry());
   CHECK_EQUAL(plan.query, "T\n| project ['it\\'s'] = column_ifexists('it\\'s', "
                           "dynamic(null))");
 }
@@ -375,7 +387,9 @@ TEST("kql plans leave unfit queries unchanged") {
          "b\"",
        }) {
     CHECK(not kql_accepts_trailing_stages(query));
-    CHECK_EQUAL(plan_kql_query(query, filter, None{}, None{}, cap).query,
+    CHECK_EQUAL(plan_kql_query(query, filter, None{}, None{}, cap,
+                               test::builtin_registry())
+                  .query,
                 query);
   }
   for (auto query : {

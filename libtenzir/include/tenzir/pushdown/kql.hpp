@@ -121,7 +121,7 @@ struct KqlPlan {
 /// Returns `query` unchanged if `kql_accepts_trailing_stages` rejects it.
 auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
                     Option<ir::OptimizeProjection> const& projection,
-                    Option<uint64_t> limit, Option<uint64_t> result_cap)
-  -> KqlPlan;
+                    Option<uint64_t> limit, Option<uint64_t> result_cap,
+                    registry const& reg) -> KqlPlan;
 
 } // namespace tenzir::pushdown

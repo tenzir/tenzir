@@ -671,8 +671,8 @@ auto kql_accepts_trailing_stages(std::string_view query) -> bool {
 
 auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
                     Option<ir::OptimizeProjection> const& projection,
-                    Option<uint64_t> limit, Option<uint64_t> result_cap)
-  -> KqlPlan {
+                    Option<uint64_t> limit, Option<uint64_t> result_cap,
+                    registry const& reg) -> KqlPlan {
   TENZIR_ASSERT(not result_cap
                 or (*result_cap > 0 and *result_cap <= max_take));
   auto result = KqlPlan{.query = std::string{query}};
@@ -685,7 +685,7 @@ auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
   for (auto expr : filter) {
     collector.visit(expr);
   }
-  auto split = split_filter(filter, collector.columns, KqlRenderer{});
+  auto split = split_filter(filter, collector.columns, KqlRenderer{}, reg);
   auto where = std::string{};
   for (auto const& predicate : split.pushed) {
     auto addition = where.empty() ? fmt::format("\n| where {}", predicate)
