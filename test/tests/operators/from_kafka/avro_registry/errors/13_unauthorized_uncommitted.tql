@@ -1,0 +1,5 @@
+// Authentication failures must not acknowledge either message.
+from_http "http://" + env("KAFKA_IAM_HELPER_HTTP") + "/offsets?topic=avro_registry_unauthorized&group=avro_registry_unauthorized" {
+  read_json
+}
+assert offset == null

@@ -1,0 +1,2 @@
+suite: from-kafka-avro-errors
+timeout: 60

@@ -1,0 +1,6 @@
+error: failed to resolve Avro schema in topic avro_registry_unauthorized partition 0 at offset 0: schema registry returned HTTP 401 for /schemas/ids/7
+ --> tests/operators/from_kafka/avro_registry/errors/11_unauthorized.tql:5:19
+  |
+5 |   schema_registry=env("AVRO_REGISTRY_URL") + "/unauthorized/",
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

@@ -1,0 +1,30 @@
+// Each topic ends with a valid record. Malformed records must not prevent it
+// from being read, including when they share a fetched batch.
+from {
+  topic: "avro_bad_records",
+  records: [
+    {value: b"\x00\x00\x00\x00\x09\x00".encode_base64()},
+    {value: b"\x02garbage".encode_base64()},
+    {value: b"\x00\x01".encode_base64()},
+    {value: b"\x00\x02a\x00".encode_base64(), headers: [{key: "__value_schema_id", value: b"\x01".encode_base64()}]},
+    {value: b"\x00\x00\x00\x00\x01\x00\x02a\x00".encode_base64(), headers: [{key: "__value_schema_id", value: b"bad".encode_base64()}]},
+    {value: b"\x00\x00\x00\x00\x01\x00\x02a\x00".encode_base64(), headers: [{key: "__value_schema_id", value: ""}]},
+    {value: b"\x00\x00\x00\x00\x01\x00".encode_base64()},
+    {value: b"\x00\x00\x00\x00\x01\x00\x02a\x00\x00".encode_base64()},
+    {value: b"\x00\x00\x00\x00\x07\x02".encode_base64()},
+    {value: b"\x00\x00\x00\x00\x09\x04".encode_base64()},
+    {value: null},
+  ],
+}, {
+  topic: "avro_registry_missing",
+  records: [{value: b"\x00\x00\x00\x00\x07\x02".encode_base64()}, {value: b"\x00\x00\x00\x00\x09\x04".encode_base64()}],
+}, {
+  topic: "avro_registry_unauthorized",
+  records: [{value: b"\x00\x00\x00\x00\x07\x02".encode_base64()}, {value: b"\x00\x00\x00\x00\x09\x04".encode_base64()}],
+}
+each {
+  from_http "http://" + env("KAFKA_IAM_HELPER_HTTP") + "/seed", body=$this, encode="json" {
+    read_json
+  }
+}
+discard

@@ -1,0 +1,4 @@
+from_http "http://" + env("KAFKA_IAM_HELPER_HTTP") + "/offsets?topic=avro_bad_records&group=avro_all_bad" {
+  read_json
+}
+assert offset == 9

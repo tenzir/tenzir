@@ -1,0 +1,58 @@
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 1: unsupported Confluent schema identifier version
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 2: truncated Confluent schema ID
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 3: truncated Confluent schema GUID
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 4: unsupported Confluent schema identifier version
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 5: missing Confluent schema identifier
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 6: truncated Avro datum
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 7: unexpected trailing bytes after Avro datum
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: skipping malformed Avro message in topic avro_bad_records partition 0 at offset 8: truncated Avro datum
+ --> tests/operators/from_kafka/avro_registry/errors/04_all_malformed.tql:3:19
+  |
+3 |   schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  events: 0,
+}

@@ -1,0 +1,9 @@
+// A bad datum must not discard valid records before or after it in a batch.
+from_kafka "avro_bad_records", count=11, offset="beginning",
+  schema_registry=env("AVRO_REGISTRY_URL") + "/wrong-schema/",
+  schema_registry_headers={Authorization: "Basic dGVzdDpzZWNyZXQ="},
+  aws_region=env("KAFKA_AWS_REGION"),
+  aws_iam={access_key_id: env("KAFKA_AWS_ACCESS_KEY_ID"), secret_access_key: env("KAFKA_AWS_SECRET_ACCESS_KEY")},
+  _optimization="unordered", _worker_batch_size=11,
+  options={"bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"), "group.id": "avro_bad_batch", "auto.offset.reset": "earliest", "security.protocol": "SASL_PLAINTEXT", "enable.metrics.push": false}
+summarize values=collect(value)

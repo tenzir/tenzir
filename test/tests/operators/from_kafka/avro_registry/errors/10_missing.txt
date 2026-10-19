@@ -1,0 +1,6 @@
+error: failed to resolve Avro schema in topic avro_registry_missing partition 0 at offset 0: schema registry returned HTTP 404 for /schemas/ids/7
+ --> tests/operators/from_kafka/avro_registry/errors/10_missing.tql:6:19
+  |
+6 |   schema_registry=env("AVRO_REGISTRY_URL") + "/missing/",
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

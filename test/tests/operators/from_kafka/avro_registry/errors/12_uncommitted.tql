@@ -1,0 +1,5 @@
+// A fatal registry failure must not acknowledge either message.
+from_http "http://" + env("KAFKA_IAM_HELPER_HTTP") + "/offsets?topic=avro_registry_missing&group=avro_registry_missing" {
+  read_json
+}
+assert offset == null

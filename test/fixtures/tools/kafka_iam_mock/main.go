@@ -94,6 +94,8 @@ func run() error {
 	cluster, err := kfake.NewCluster(
 		kfake.NumBrokers(1),
 		kfake.AllowAutoTopicCreation(),
+		// Topics created by /seed must honor the fixture's partition count too.
+		kfake.DefaultNumPartitions(cfg.partitions),
 		kfake.Ports(cfg.brokerPort),
 		kfake.SeedTopics(int32(cfg.partitions), cfg.topic),
 		kfake.WithLogger(kfake.BasicLogger(os.Stderr, kfake.LogLevelNone)),
@@ -116,6 +118,7 @@ func run() error {
 	mux.HandleFunc("/health", server.handleHealth)
 	mux.HandleFunc("/seed", server.handleSeed)
 	mux.HandleFunc("/auth_events", server.handleAuthEvents)
+	mux.HandleFunc("/offsets", server.handleOffsets)
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf("127.0.0.1:%d", cfg.httpPort),
 		Handler:           mux,
@@ -392,6 +395,75 @@ func (s *mockServer) handleAuthEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.snapshotAuthEvents())
+}
+
+// Expose partition 0's progress without joining the group or consuming records.
+func (s *mockServer) handleOffsets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	group, topic := r.URL.Query().Get("group"), r.URL.Query().Get("topic")
+	if group == "" || topic == "" {
+		http.Error(w, "group and topic are required", http.StatusBadRequest)
+		return
+	}
+	client, err := kgo.NewClient(kgo.SeedBrokers(s.broker))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	req := kmsg.NewPtrOffsetFetchRequest()
+	req.Group = group
+	req.Topics = []kmsg.OffsetFetchRequestTopic{{Topic: topic, Partitions: []int32{0}}}
+	req.Groups = []kmsg.OffsetFetchRequestGroup{{
+		Group: group,
+		Topics: []kmsg.OffsetFetchRequestGroupTopic{{
+			Topic: topic, Partitions: []int32{0},
+		}},
+	}}
+	resp, err := req.RequestWith(ctx, client)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Kafka reports a group with no commits as GROUP_ID_NOT_FOUND.
+	if resp.ErrorCode == kerr.GroupIDNotFound.Code || (len(resp.Groups) == 1 && resp.Groups[0].ErrorCode == kerr.GroupIDNotFound.Code) {
+		writeJSON(w, http.StatusOK, map[string]any{"offset": nil})
+		return
+	}
+	var offset int64
+	var code int16
+	if resp.Version >= 8 && len(resp.Groups) == 1 && len(resp.Groups[0].Topics) == 1 && len(resp.Groups[0].Topics[0].Partitions) == 1 {
+		code = resp.Groups[0].ErrorCode
+		partition := resp.Groups[0].Topics[0].Partitions[0]
+		if code == 0 {
+			code = partition.ErrorCode
+		}
+		offset = partition.Offset
+	} else if resp.Version < 8 && len(resp.Topics) == 1 && len(resp.Topics[0].Partitions) == 1 {
+		code = resp.ErrorCode
+		partition := resp.Topics[0].Partitions[0]
+		if code == 0 {
+			code = partition.ErrorCode
+		}
+		offset = partition.Offset
+	} else {
+		http.Error(w, "unexpected offset fetch response", http.StatusInternalServerError)
+		return
+	}
+	if err := kerr.ErrorForCode(code); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var committed *int64
+	if offset >= 0 {
+		committed = &offset
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"offset": committed})
 }
 
 func (s *mockServer) produceRecords(topic string, records []seedRecord) error {

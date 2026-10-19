@@ -463,6 +463,7 @@ struct MessageBatch {
   std::vector<AsyncConsumerQueue::Message> messages;
   std::vector<Option<Arc<AvroDecoder>>> avro_decoders;
   std::vector<size_t> avro_payload_offsets;
+  std::vector<diagnostic> diagnostics;
   std::vector<TopicPartition> eof_partitions;
   Option<std::string> fatal_error;
   Option<ObservedAssignmentChange> assignment_change;
@@ -505,6 +506,18 @@ struct EventsResult {
   Option<EventsFrame> frame;
   bool end_of_stream = false;
 };
+
+/// Report a record-local error without cancelling consumption of later offsets.
+auto skipped_avro_message(AsyncConsumerQueue::Message const& message,
+                          std::string const& error, location source)
+  -> diagnostic {
+  return diagnostic::warning(
+           "skipping malformed Avro message in topic {} partition {} at offset "
+           "{}: {}",
+           message.topic(), message.partition(), message.offset(), error)
+    .primary(source)
+    .done();
+}
 
 /// Converts one message batch into a `TableSliceFrame`.
 ///
@@ -3148,7 +3161,7 @@ private:
     auto parsed_optimization
       = from_string<OptimizationMode>(args_._optimization);
     TENZIR_ASSERT(parsed_optimization);
-    // Avro failures must be observed before any later offsets are committed.
+    // Registry failures must be observed before later offsets are committed.
     optimization_mode_ = args_.schema_registry ? OptimizationMode::ordered
                                                : *parsed_optimization;
     worker_batch_size_ = resolve_worker_batch_size();
@@ -3635,7 +3648,18 @@ private:
             }
             CO_TRY(auto payload, message.payload());
             CO_TRY(auto header, message.last_header("__value_schema_id"));
-            CO_TRY(auto envelope, avro_envelope(payload, header));
+            auto envelope_result = avro_envelope(payload, header);
+            if (not envelope_result) {
+              fetched->diagnostics.push_back(skipped_avro_message(
+                message, std::move(envelope_result).unwrap_err(),
+                args_.schema_registry->source));
+              // Like tombstones, malformed records emit no event but still
+              // count towards the limit and advance the committable offset.
+              fetched->avro_decoders.emplace_back(None{});
+              fetched->avro_payload_offsets.push_back(0);
+              continue;
+            }
+            auto envelope = std::move(envelope_result).unwrap();
             CO_TRY(auto decoder,
                    co_await registry->resolve(envelope.schema_path));
             fetched->avro_decoders.emplace_back(std::move(decoder));
@@ -3840,6 +3864,7 @@ private:
           },
         };
         auto frame = EventsFrame{};
+        frame.diagnostics = std::move(fetched.diagnostics);
         frame.assignment_generation = fetched.assignment_generation;
         frame.eof_partitions = std::move(fetched.eof_partitions);
         frame.fatal_error = std::move(fetched.fatal_error);
@@ -3880,13 +3905,14 @@ private:
               auto decoded
                 = (*fetched.avro_decoders[i])->decode(avro_payload, true);
               if (not decoded) {
-                frame.fatal_error
-                  = fmt::format("failed to decode Avro in topic {} partition "
-                                "{} at offset {}: {}",
-                                message.topic(), message.partition(),
-                                message.offset(),
-                                std::move(decoded).unwrap_err());
-                break;
+                frame.diagnostics.push_back(
+                  skipped_avro_message(message, std::move(decoded).unwrap_err(),
+                                       args_.schema_registry->source));
+                frame.max_offsets[TopicPartition{message.topic(),
+                                                 message.partition()}]
+                  = message.offset();
+                ++frame.message_count;
+                continue;
               }
               auto value = std::move(decoded).unwrap();
               if (not avro_schema or *avro_schema != value.schema) {
@@ -3952,7 +3978,8 @@ private:
           frame.events.push_back(builder->finish());
         }
         if (not builder_dh.empty()) {
-          frame.diagnostics = builder_dh.drain();
+          frame.diagnostics.append_range(builder_dh.drain()
+                                         | std::views::as_rvalue);
         }
         if (args_.schema_registry) {
           frame.reserved_bytes = fetched.payload_bytes;
