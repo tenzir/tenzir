@@ -809,6 +809,20 @@ auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
 /// pipeline to be instantiated, i.e., to have no remaining `let` bindings.
 auto optimize(pipeline pipe, OptimizeCtx octx) -> pipeline;
 
+/// A digest of what a compiled pipeline does and what its diagnostics show,
+/// the same for two compiles of one definition against the same entities.
+///
+/// `sources` is the map `pipe` was compiled with. Locations enter by their
+/// offsets and by its call sites, but not by the ids of their sources, which
+/// differ from compile to compile. The origin and text of each of its sources
+/// enter too, so any edit to the definition or to a package file the pipeline
+/// uses changes it, even one that moves nothing a location points at.
+///
+/// Taken before `instantiate`, so values like `now()` do not enter it either.
+/// Hexadecimal SHA-256 of a canonical serialization. Every operator in `pipe`
+/// must have a serialization plugin.
+auto fingerprint(pipeline const& pipe, SourceMap const& sources) -> std::string;
+
 /// Build a plan from a compiled pipeline.
 ///
 /// This instantiates the pipeline (resolving `let` bindings and substituting
