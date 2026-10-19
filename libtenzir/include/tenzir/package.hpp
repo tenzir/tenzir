@@ -19,7 +19,9 @@
 #include <tenzir/source.hpp>
 #include <tenzir/view.hpp>
 
+#include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -252,6 +254,10 @@ struct package_contexts_map
 
 using package_examples_list = std::vector<package_example>;
 
+/// The files of a package by their path relative to its directory, with `/`
+/// separating the components, such as `operators/ingest.tql`.
+using package_files = std::map<std::string, std::string, std::less<>>;
+
 struct package final {
   std::string id;   // required to be non-empty
   std::string name; // required to be non-empty
@@ -283,7 +289,15 @@ struct package final {
   static auto parse(const view<record>& data, std::string_view package_path)
     -> caf::expected<package>;
 
+  /// Loads the package in `dir`.
   static auto load(const std::filesystem::path& dir, diagnostic_handler& dh,
+                   bool only_entities) -> failure_or<package>;
+
+  /// Loads a package from its files, as they would be in its directory.
+  /// `origin` names where they come from in diagnostics, and `default_id` is
+  /// the package's id if its `package.yaml` has none.
+  static auto load(package_files const& files, std::string_view origin,
+                   std::string_view default_id, diagnostic_handler& dh,
                    bool only_entities) -> failure_or<package>;
 
   auto to_record() const -> record;
@@ -327,5 +341,15 @@ auto build_package_module(const package& pkg, diagnostic_handler& dh,
   -> failure_or<std::unique_ptr<module_def>>;
 
 auto package_module_name(std::string_view package_id) -> std::string;
+
+/// Adds the operators and `let` bindings of `packages` to `reg`, each under its
+/// module in the `packages` root.
+///
+/// Fails without changing `reg` if a package does not build, or if two
+/// packages have the same module name. Building only parses, so the packages
+/// may refer to each other in any order: names resolve where they are used.
+auto add_packages(registry& reg, std::span<package const> packages,
+                  diagnostic_handler& dh, SourceMap* source_map = nullptr)
+  -> failure_or<void>;
 
 } // namespace tenzir

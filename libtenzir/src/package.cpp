@@ -843,17 +843,9 @@ auto package_module_name(std::string_view package_id) -> std::string {
 
 namespace {
 
-auto yaml_file_to_record(const std::filesystem::path& file, auto& dh)
-  -> failure_or<record> {
-  auto yaml = detail::load_contents(file);
-  if (not yaml) {
-    diagnostic::error("failed to load file")
-      .note("trying to load {}", file)
-      .note("error: {}", yaml.error())
-      .emit(dh);
-    return failure::promise();
-  }
-  auto data = from_yaml(*yaml);
+auto yaml_to_record(std::string_view yaml, std::string_view file,
+                    diagnostic_handler& dh) -> failure_or<record> {
+  auto data = from_yaml(yaml);
   if (not data) {
     diagnostic::error("failed to parse yaml")
       .note("trying to load {}", file)
@@ -872,20 +864,14 @@ auto yaml_file_to_record(const std::filesystem::path& file, auto& dh)
 }
 
 template <class Type>
-auto load_package_part(const std::filesystem::path& file, auto& dh)
-  -> failure_or<Type> {
-  auto content = detail::load_contents(file);
-  if (not content) {
-    diagnostic::error(content.error()).note("trying to load {}", file).emit(dh);
-    return failure::promise();
-  }
+auto parse_package_part(std::string content, std::string const& file,
+                        diagnostic_handler& dh) -> failure_or<Type> {
   caf::expected<Type> result = caf::make_error(ec::unspecified);
   if constexpr (std::same_as<Type, package_operator>) {
-    auto source
-      = Source::new_source(std::move(*content), file.generic_string(), false);
+    auto source = Source::new_source(std::move(content), file, false);
     result = Type::parse(std::move(source));
   } else {
-    result = Type::parse(*content);
+    result = Type::parse(content);
   }
   if (not result) {
     diagnostic::error("{}", result.error()).note("from file: {}", file).emit(dh);
@@ -894,59 +880,151 @@ auto load_package_part(const std::filesystem::path& file, auto& dh)
   return *result;
 }
 
-auto make_id(const std::filesystem::path& pkg_part,
-             const std::filesystem::path& parts_base, std::string_view sep)
-  -> failure_or<std::string> {
-  auto ec = std::error_code{};
-  auto relative = std::filesystem::relative(pkg_part, parts_base, ec);
-  TENZIR_ASSERT(not ec);
-  const auto* path_separator = "/";
-  auto strrep = relative.string();
-  auto components = detail::split(strrep, path_separator);
-  auto ss = std::stringstream{};
-  for (size_t i = 0; i < components.size() - 1; i++) {
-    ss << components[i] << sep;
+/// The files of `files` below `dir`, with their paths relative to it, that end
+/// in `.tql`. Only direct children unless `recursive`.
+auto tql_files_in(package_files const& files, std::string_view dir,
+                  bool recursive)
+  -> std::vector<std::pair<std::string_view, std::string const&>> {
+  auto result = std::vector<std::pair<std::string_view, std::string const&>>{};
+  auto prefix = fmt::format("{}/", dir);
+  for (auto const& [path, content] : files) {
+    if (not path.starts_with(prefix) or not path.ends_with(".tql")) {
+      continue;
+    }
+    auto relative = std::string_view{path}.substr(prefix.size());
+    if (not recursive and relative.contains('/')) {
+      continue;
+    }
+    result.emplace_back(relative, content);
   }
-  ss << relative.stem().string();
-  return ss.str();
+  return result;
+}
+
+/// Reads the files of the package in `dir` that `package::load` looks at.
+auto read_package_files(std::filesystem::path const& dir,
+                        diagnostic_handler& dh, bool only_entities)
+  -> failure_or<package_files> {
+  auto result = package_files{};
+  auto had_errors = false;
+  auto read = [&](std::filesystem::path const& file) {
+    auto content = detail::load_contents(file);
+    if (not content) {
+      diagnostic::error("failed to load file")
+        .note("trying to load {}", file)
+        .note("error: {}", content.error())
+        .emit(dh);
+      had_errors = true;
+      return;
+    }
+    auto ec = std::error_code{};
+    auto relative = std::filesystem::relative(file, dir, ec);
+    TENZIR_ASSERT(not ec);
+    result.emplace(relative.generic_string(), std::move(*content));
+  };
+  for (auto name : {"package.yaml", "config.yaml", "constants.tql"}) {
+    auto file = dir / name;
+    auto ec = std::error_code{};
+    if (std::filesystem::exists(file, ec)) {
+      read(file);
+    } else if (ec) {
+      diagnostic::error("{}", ec).note("for file {}", file).emit(dh);
+      had_errors = true;
+    }
+  }
+  auto read_tql
+    = [&](std::string_view name, bool recursive) -> failure_or<void> {
+    auto subdir = dir / name;
+    auto ec = std::error_code{};
+    if (not std::filesystem::exists(subdir, ec)) {
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while trying to load {}", subdir)
+          .emit(dh);
+        had_errors = true;
+      }
+      return {};
+    }
+    try {
+      auto is_tql = [](std::filesystem::directory_entry const& entry) {
+        return entry.path().extension() == ".tql";
+      };
+      if (recursive) {
+        for (auto const& entry :
+             std::filesystem::recursive_directory_iterator{subdir}) {
+          if (is_tql(entry)) {
+            read(entry.path());
+          }
+        }
+      } else {
+        for (auto const& entry : std::filesystem::directory_iterator{subdir}) {
+          if (is_tql(entry)) {
+            read(entry.path());
+          }
+        }
+      }
+    } catch (const std::exception& e) {
+      diagnostic::error("{}", e)
+        .note("while trying to load {} in {}", name, subdir)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  if (not only_entities) {
+    TRY(read_tql("pipelines", true));
+  }
+  TRY(read_tql("operators", true));
+  TRY(read_tql("examples", false));
+  if (had_errors) {
+    return failure::promise();
+  }
+  return result;
 }
 
 } // namespace
 
 auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                    bool only_entities) -> failure_or<package> {
+  TRY(auto files, read_package_files(dir, dh, only_entities));
+  return load(files, dir.string(), dir.filename().string(), dh, only_entities);
+}
+
+auto package::load(package_files const& files, std::string_view origin,
+                   std::string_view default_id, diagnostic_handler& dh,
+                   bool only_entities) -> failure_or<package> {
   bool had_errors = false;
-  auto package_file = dir / "package.yaml";
-  std::error_code ec;
-  if (not std::filesystem::exists(package_file, ec)) {
-    if (ec) {
-      diagnostic::error("{}", ec).note("for file {}", package_file).emit(dh);
-    } else {
-      diagnostic::error("package.yaml does not exist")
-        .note("in package directory {}", dir)
-        .emit(dh);
-    }
+  // Diagnostics name a file by where the package comes from.
+  auto file_name = [&](std::string_view path) {
+    return fmt::format("{}/{}", origin, path);
+  };
+  auto const* package_yaml = files.find("package.yaml") != files.end()
+                               ? &files.find("package.yaml")->second
+                               : nullptr;
+  if (not package_yaml) {
+    diagnostic::error("package.yaml does not exist")
+      .note("in package directory {}", origin)
+      .emit(dh);
     return failure::promise();
   }
-  TRY(auto package_record, yaml_file_to_record(package_file, dh));
+  TRY(auto package_record,
+      yaml_to_record(*package_yaml, file_name("package.yaml"), dh));
   const auto id_provided = package_record.contains("id");
   if (not id_provided) {
-    auto dir_name = dir.filename().string();
-    if (dir_name.empty()) {
+    if (default_id.empty()) {
       diagnostic::error("cannot derive package id from directory without name")
-        .note("while loading package from {}", dir)
+        .note("while loading package from {}", origin)
         .emit(dh);
       return failure::promise();
     }
-    if (not is_valid_package_identifier(dir_name)) {
+    if (not is_valid_package_identifier(default_id)) {
       diagnostic::error("invalid package id `{}` derived from directory name",
-                        dir_name)
-        .note("directory {}", dir)
+                        default_id)
+        .note("directory {}", origin)
         .note("package ids must match [A-Za-z_][A-Za-z0-9_-]*")
         .emit(dh);
       return failure::promise();
     }
-    package_record.emplace(std::string{"id"}, data{std::move(dir_name)});
+    package_record.emplace(std::string{"id"}, data{std::string{default_id}});
   }
   if (only_entities) {
     package_record.erase("pipelines");
@@ -955,7 +1033,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
   auto parsed_package = package::parse(make_view(package_record));
   if (not parsed_package) {
     diagnostic::error("failed to parse package.yaml")
-      .note("in package directory {}", dir)
+      .note("in package directory {}", origin)
       .note("encountered error {}", parsed_package.error())
       .emit(dh);
     return failure::promise();
@@ -969,26 +1047,22 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
   }
   // Support storing the `config` part in a separate file in the same
   // directory.
-  auto config_file = dir / "config.yaml";
-  if (not std::filesystem::exists(config_file, ec)) {
-    if (ec) {
-      diagnostic::error("{}", ec).note("for file {}", config_file).emit(dh);
-      had_errors = true;
-    }
-  } else {
+  if (auto config_file = files.find("config.yaml");
+      config_file != files.end()) {
     if (parsed_package->config.has_value()) {
       diagnostic::error(
         "invalid package definition: found both an inline config "
         "section and a separate 'config.yaml'")
-        .note("in package directory {}/", dir)
+        .note("in package directory {}/", origin)
         .emit(dh);
       had_errors = true;
     }
-    TRY(auto config_record, yaml_file_to_record(config_file, dh));
+    TRY(auto config_record,
+        yaml_to_record(config_file->second, file_name("config.yaml"), dh));
     auto parsed_config = package_config::parse(make_view(config_record));
     if (not parsed_config) {
       diagnostic::error("failed to parse package config")
-        .note("in package directory {}/", dir)
+        .note("in package directory {}/", origin)
         .note("got error: {}", parsed_config.error())
         .emit(dh);
       had_errors = true;
@@ -997,138 +1071,57 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
     }
   }
   if (not only_entities) {
-    auto pipelines_dir = dir / "pipelines";
-    if (not std::filesystem::exists(pipelines_dir, ec)) {
-      if (ec) {
-        diagnostic::error("{}", ec)
-          .note("while trying to load {}", pipelines_dir)
+    for (auto [relative, content] : tql_files_in(files, "pipelines", true)) {
+      auto file = file_name(fmt::format("pipelines/{}", relative));
+      if (auto pipeline
+          = parse_package_part<package_pipeline>(content, file, dh)) {
+        auto id = relative;
+        id.remove_suffix(std::string_view{".tql"}.size());
+        parsed_package->pipelines.emplace(std::string{id},
+                                          std::move(*pipeline));
+      }
+    }
+  }
+  for (auto [relative, content] : tql_files_in(files, "operators", true)) {
+    auto file = file_name(fmt::format("operators/{}", relative));
+    auto operator_ = parse_package_part<package_operator>(content, file, dh);
+    if (not operator_) {
+      continue;
+    }
+    auto stem = relative;
+    stem.remove_suffix(std::string_view{".tql"}.size());
+    auto path = std::vector<std::string>{};
+    for (auto component : detail::split(stem, "/")) {
+      path.emplace_back(component);
+    }
+    TENZIR_ASSERT(not path.empty());
+    bool valid = true;
+    for (const auto& seg : path) {
+      if (not token::parsers::identifier(seg)) {
+        diagnostic::error("invalid operator path segment `{}` (must "
+                          "match [A-Za-z_][A-Za-z0-9_]*)",
+                          seg)
+          .note("in operator file {}", file)
           .emit(dh);
-        had_errors = true;
+        valid = false;
+        break;
       }
-    } else {
-      try {
-        auto pipelines
-          = std::filesystem::recursive_directory_iterator{pipelines_dir}
-            | std::views::filter([&](const std::filesystem::path& path) {
-                return path.extension() == ".tql";
-              });
-        for (const auto& pipeline_file : pipelines) {
-          if (auto pipeline
-              = load_package_part<package_pipeline>(pipeline_file, dh)) {
-            TRY(auto id, make_id(pipeline_file.path(), pipelines_dir, "/"));
-            parsed_package->pipelines.emplace(std::move(id),
-                                              std::move(*pipeline));
-          }
-        }
-      } catch (const std::exception& e) {
-        diagnostic::error("{}", e)
-          .note("while trying to load pipelines in {}", pipelines_dir)
-          .emit(dh);
-        return failure::promise();
-      }
+    }
+    if (not valid) {
+      had_errors = true;
+      continue;
+    }
+    parsed_package->operators.emplace(std::move(path), std::move(*operator_));
+  }
+  for (auto [relative, content] : tql_files_in(files, "examples", false)) {
+    auto file = file_name(fmt::format("examples/{}", relative));
+    if (auto example_
+        = parse_package_part<package_example>(content, file, dh)) {
+      parsed_package->examples.push_back(std::move(*example_));
     }
   }
-  auto operators_dir = dir / "operators";
-  if (not std::filesystem::exists(operators_dir, ec)) {
-    if (ec) {
-      diagnostic::error("{}", ec)
-        .note("while trying to load {}", operators_dir)
-        .emit(dh);
-      had_errors = true;
-    }
-  } else {
-    try {
-      auto operators
-        = std::filesystem::recursive_directory_iterator{operators_dir}
-          | std::views::filter([&](const std::filesystem::path& path) {
-              return path.extension() == ".tql";
-            });
-      for (const auto& operator_file : operators) {
-        if (auto operator_
-            = load_package_part<package_operator>(operator_file, dh)) {
-          auto ec = std::error_code{};
-          auto relative
-            = std::filesystem::relative(operator_file, operators_dir, ec);
-          TENZIR_ASSERT(not ec);
-          const auto* path_separator = "/";
-          auto strrep = relative.replace_extension("").generic_string();
-          auto components = detail::split(strrep, path_separator);
-          TENZIR_ASSERT(not components.empty());
-          auto path = std::vector<std::string>{};
-          std::transform(components.begin(), components.end(),
-                         std::back_inserter(path), [](auto component) {
-                           return std::string{component};
-                         });
-          bool valid = true;
-          for (const auto& seg : path) {
-            if (not token::parsers::identifier(seg)) {
-              diagnostic::error("invalid operator path segment `{}` (must "
-                                "match [A-Za-z_][A-Za-z0-9_]*)",
-                                seg)
-                .note("in operator file {}", operator_file.path())
-                .emit(dh);
-              valid = false;
-              break;
-            }
-          }
-          if (not valid) {
-            had_errors = true;
-            continue;
-          }
-          parsed_package->operators.emplace(std::move(path),
-                                            std::move(*operator_));
-        }
-      }
-    } catch (const std::exception& e) {
-      diagnostic::error("{}", e)
-        .note("while trying to load operators in {}", operators_dir)
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  auto examples_dir = dir / "examples";
-  if (not std::filesystem::exists(examples_dir, ec)) {
-    if (ec) {
-      diagnostic::error("{}", ec)
-        .note("while trying to load {}", examples_dir)
-        .emit(dh);
-      had_errors = true;
-    }
-  } else {
-    try {
-      auto examples
-        = std::filesystem::directory_iterator{examples_dir}
-          | std::views::filter([&](const std::filesystem::path& path) {
-              return path.extension() == ".tql";
-            });
-      for (const auto& example_file : examples) {
-        if (auto example_
-            = load_package_part<package_example>(example_file, dh)) {
-          parsed_package->examples.push_back(std::move(*example_));
-        }
-      }
-    } catch (const std::exception& e) {
-      diagnostic::error("{}", e)
-        .note("while trying to load examples in {}", examples_dir)
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  auto constants_file = dir / "constants.tql";
-  if (std::filesystem::exists(constants_file, ec)) {
-    if (auto contents = detail::load_contents(constants_file)) {
-      parsed_package->lets = std::move(*contents);
-    } else {
-      diagnostic::error("failed to read {}", constants_file)
-        .note("error: {}", contents.error())
-        .emit(dh);
-      had_errors = true;
-    }
-  } else if (ec) {
-    diagnostic::error("{}", ec)
-      .note("while trying to load {}", constants_file)
-      .emit(dh);
-    had_errors = true;
+  if (auto constants = files.find("constants.tql"); constants != files.end()) {
+    parsed_package->lets = constants->second;
   }
   if (had_errors) {
     return failure::promise();
@@ -1729,6 +1722,52 @@ auto build_package_module(const package& pkg, diagnostic_handler& dh,
     module->defs.erase(module_name);
   }
   return module;
+}
+
+auto add_packages(registry& reg, std::span<package const> packages,
+                  diagnostic_handler& dh, SourceMap* source_map)
+  -> failure_or<void> {
+  auto had_errors = false;
+  auto normalized_to_id = std::unordered_map<std::string, std::string>{};
+  auto modules = std::vector<std::unique_ptr<module_def>>{};
+  for (auto const& pkg : packages) {
+    if (pkg.operators.empty() and pkg.lets.empty()) {
+      continue;
+    }
+    auto normalized = package_module_name(pkg.id);
+    auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
+    if (not inserted and norm_it->second != pkg.id) {
+      diagnostic::error("package '{}' conflicts with '{}' after "
+                        "normalization "
+                        "to '{}'",
+                        pkg.id, norm_it->second, normalized)
+        .emit(dh);
+      had_errors = true;
+      continue;
+    }
+    auto module = build_package_module(pkg, dh, reg, source_map);
+    if (not module) {
+      had_errors = true;
+      continue;
+    }
+    if (not(*module)->defs.empty()) {
+      modules.push_back(std::move(*module));
+    }
+  }
+  if (had_errors) {
+    return failure::promise();
+  }
+  for (auto& module : modules) {
+    for (auto& [name, set] : module->defs) {
+      if (not set.mod) {
+        TENZIR_ASSERT(not set.fn and not set.op);
+        continue;
+      }
+      reg.replace_module(std::string{entity_pkg_packages}, name,
+                         std::move(set.mod));
+    }
+  }
+  return {};
 }
 
 } // namespace tenzir
