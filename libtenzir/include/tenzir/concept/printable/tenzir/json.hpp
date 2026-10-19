@@ -79,12 +79,16 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view3<int64_t> x) -> bool {
-      out_ = fmt::format_to(out_, options_.style.number, "{}", x);
+      out_ = options_.stringify_integers
+               ? fmt::format_to(out_, options_.style.number, "\"{}\"", x)
+               : fmt::format_to(out_, options_.style.number, "{}", x);
       return true;
     }
 
     auto operator()(view3<uint64_t> x) -> bool {
-      out_ = fmt::format_to(out_, options_.style.number, "{}", x);
+      out_ = options_.stringify_integers
+               ? fmt::format_to(out_, options_.style.number, "\"{}\"", x)
+               : fmt::format_to(out_, options_.style.number, "{}", x);
       return true;
     }
 

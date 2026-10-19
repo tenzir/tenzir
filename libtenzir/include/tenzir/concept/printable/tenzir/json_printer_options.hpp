@@ -84,6 +84,10 @@ struct json_printer_options {
   /// columnar printer honors this; nulls stay null.
   bool stringify_heterogeneous_lists = false;
 
+  /// Print int64 and uint64 values as JSON strings, so that they survive
+  /// parsers that read every number as a double.
+  bool stringify_integers = false;
+
   /// Omit empty maps when printing.
   /// TODO: Remove this when removing the import command.
   bool omit_empty_maps = false;
