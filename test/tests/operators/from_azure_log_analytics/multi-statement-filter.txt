@@ -1,0 +1,11 @@
+warning: event does not have field
+  --> tests/operators/from_azure_log_analytics/multi-statement-filter.tql:26:7
+   |
+26 | where b == "y"
+   |       ~
+   |
+   = hint: did you mean `a`?
+   = hint: append `?` to suppress this warning
+{
+  b: "y",
+}

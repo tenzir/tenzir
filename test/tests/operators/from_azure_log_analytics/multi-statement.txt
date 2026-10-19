@@ -1,0 +1,16 @@
+{
+  a: 1,
+  Schema: "azure_log_analytics.PrimaryResult",
+}
+{
+  a: 2,
+  Schema: "azure_log_analytics.PrimaryResult",
+}
+{
+  b: "x",
+  Schema: "azure_log_analytics.PrimaryResult",
+}
+{
+  b: "y",
+  Schema: "azure_log_analytics.PrimaryResult",
+}

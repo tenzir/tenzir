@@ -1,0 +1,26 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: multi-statement
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: ";\nprint b = \"x\"\n| where (gettype(column_ifexists('b', dynamic(null))) !in (\"string\") or tostring(column_ifexists('b', dynamic(null))) == \"y\" or tostring(column_ifexists('b', dynamic(null))) matches regex @'^[ \\t\\r\\n]*\"')"
+---
+
+// The appended stages reach only the last statement, while the local filter
+// applies to the rows of every table.
+from_azure_log_analytics env("AZLOG_QUERY") + ";\nprint b = \"x\"",
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where b == "y"

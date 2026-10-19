@@ -113,7 +113,7 @@ struct KqlPlan {
 /// `project` stage keeps the columns that `projection` and `filter` reference,
 /// and the `take` stage is appended only for an empty `filter`, since every
 /// predicate stays local and would otherwise run after the limit, and only for
-/// a limit between 1 and 2^31 - 1. The source must enforce `limit` locally in
+/// a limit between 1 and 2^63 - 1. The source must enforce `limit` locally in
 /// any case. The planner never changes the request window: without parsing the
 /// query, no predicate on its output provably refers to the time that the
 /// window selects.

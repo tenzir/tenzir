@@ -16,7 +16,7 @@
   Flag: false,
   Ident: null,
   Amount: "1.50",
-  Dyn: "443",
+  Dyn: "\"443\"",
 }
 {
   Id: 2,

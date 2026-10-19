@@ -3,7 +3,6 @@ fixtures:
   - azure_log_analytics:
       case: duplicate-table
 timeout: 60
-error: true
 assertions:
   fixtures:
     azure_log_analytics:

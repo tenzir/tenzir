@@ -24,4 +24,4 @@ Your KQL query stays as it is. The operators append trailing `where`, `project`,
 
 Prefilters cover comparisons of a field with a number, equality of a field with a string or boolean, `in` with a list of literals of a single kind, `!= null`, and case-sensitive `starts_with`, `ends_with`, and substring matching. Regular expressions, IP addresses and subnets, times, negation, nested fields, lists that mix kinds, and case-insensitive matching stay local.
 
-A `head` reaches the service only if no filter precedes it and its limit fits into a 32-bit integer. A projected column that your query does not return becomes `null`, as with a local `select`. The `start` and `end` window stays unchanged, and queries that use `render`, `fork`, `facet`, or a `set` statement are sent unchanged.
+A `head` reaches the service only if no filter precedes it and its limit fits into a signed 64-bit integer. A projected column that your query does not return becomes `null`, as with a local `select`. The `start` and `end` window stays unchanged, and queries that use `render`, `fork`, `facet`, or a `set` statement are sent unchanged.

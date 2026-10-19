@@ -318,14 +318,17 @@ TEST("kql plans push limits without filters") {
   CHECK(plan.limited);
   CHECK(not plan.filtered);
   CHECK(not plan.projected);
-  // `take` counts rows in an `int`, so only limits up to 2^31 - 1 are pushed.
-  plan = plan_kql_query("T", {}, None{}, uint64_t{2147483647}, cap,
-                        test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T\n| take 2147483647");
-  CHECK(plan.limited);
-  for (auto limit :
-       {uint64_t{0}, uint64_t{2147483648}, uint64_t{9223372036854775808u},
-        std::numeric_limits<uint64_t>::max()}) {
+  // KQL spells counts as `long`, so only limits up to 2^63 - 1 are pushed.
+  for (auto [limit, take] :
+       {std::pair{uint64_t{2147483648}, "2147483648"},
+        std::pair{uint64_t{9223372036854775807}, "9223372036854775807"}}) {
+    plan
+      = plan_kql_query("T", {}, None{}, limit, cap, test::builtin_registry());
+    CHECK_EQUAL(plan.query, fmt::format("T\n| take {}", take));
+    CHECK(plan.limited);
+  }
+  for (auto limit : {uint64_t{0}, uint64_t{9223372036854775808u},
+                     std::numeric_limits<uint64_t>::max()}) {
     plan
       = plan_kql_query("T", {}, None{}, limit, cap, test::builtin_registry());
     CHECK_EQUAL(plan.query, "T");

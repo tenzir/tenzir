@@ -11,7 +11,7 @@ assertions:
       appended: ""
 ---
 
-// Limits beyond the `int` row count of `take` stay local.
+// Limits beyond what a KQL `long` can spell stay local.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

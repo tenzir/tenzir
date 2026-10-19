@@ -33,7 +33,9 @@ _COLUMNS = [
 ]
 _ROW = [
     "2026-01-02T03:04:05.1234567Z",
-    9223372036854775807,
+    # Log Analytics sends longs in double precision, so the largest one
+    # arrives rounded to 2^63.
+    9223372036854776000,
     -2147483648,
     1.5,
     True,
@@ -42,12 +44,15 @@ _ROW = [
     "-1.02:03:04.1234567",
     "12345678901234567890.123456789012345678",
     None,
-    {"text": "2026-01-01T00:00:00Z", "a.b": [1, 2, None]},
+    # Log Analytics sends dynamic objects, arrays, and numbers as JSON text.
+    '{"text":"2026-01-01T00:00:00Z","a.b":[1,2,null]}',
 ]
 # Deterministic data for pushdown: case-variant and IP-shaped strings, nulls,
 # KQL types that decode to TQL strings (guid, decimal), and a dynamic column
-# whose values decode to different TQL types, including a dynamic string that
-# decodes to a number.
+# whose values decode to different TQL types. As Log Analytics sends them, the
+# dynamic number 443 and the dynamic string "443" are both "443", a dynamic
+# string with quotes keeps them, an object arrives as JSON text, and a boolean
+# as a JSON boolean.
 _PUSHDOWN_COLUMNS = [
     {"name": "Id", "type": "long"},
     {"name": "Name", "type": "string"},
@@ -59,11 +64,11 @@ _PUSHDOWN_COLUMNS = [
     {"name": "Dyn", "type": "dynamic"},
 ]
 _PUSHDOWN_ROWS = [
-    [0, "alice", "10.0.0.1", 443, True, _WORKSPACE, "443", 443],
+    [0, "alice", "10.0.0.1", 443, True, _WORKSPACE, "443", "443"],
     [1, "Alice", "::ffff:10.0.0.1", 80, False, None, "1.50", '"443"'],
     [2, "ALICE", "10.0.0.01", None, None, None, None, "443"],
     [3, "", "fe80::1", 8443, True, None, "0", None],
-    [4, "straße", "", 443, None, None, "2", {"port": 443}],
+    [4, "straße", "", 443, None, None, "2", '{"port":443}'],
     [5, "alice ", "10.0.0.0/8", 0, False, None, "3", True],
 ]
 
@@ -302,6 +307,21 @@ class Handler(BaseHTTPRequestHandler):
                     "rows": [["second"]],
                 }
             )
+        elif case == "multi-statement":
+            # Each tabular statement of a query yields a table, and Log
+            # Analytics names all of them `PrimaryResult`.
+            envelope["tables"] = [
+                {
+                    "name": "PrimaryResult",
+                    "columns": [{"name": "a", "type": "long"}],
+                    "rows": [[1], [2]],
+                },
+                {
+                    "name": "PrimaryResult",
+                    "columns": [{"name": "b", "type": "string"}],
+                    "rows": [["x"], ["y"]],
+                },
+            ]
         elif case == "metadata":
             envelope.update(statistics={"query": {}}, render={"visualization": "table"})
         elif case == "dynamic-first":
@@ -321,19 +341,25 @@ class Handler(BaseHTTPRequestHandler):
         elif case == "encoded-dynamic-boundary":
             rows[0][-1] = '{"nested":[18446744073709551616]}'
         elif case == "nulls":
-            rows[:] = [[None] * len(columns)]
+            # KQL strings have no null and arrive empty; other types, guid
+            # included, arrive as JSON null.
+            rows[:] = [
+                ["" if column["type"] == "string" else None for column in columns]
+            ]
         elif case in {"dynamic", "dynamic-scalars", "mixed-list"}:
             columns[:] = [{"name": "Value", "type": "dynamic"}]
             values = {
                 "dynamic": [
-                    {"a.b": "192.0.2.1"},
-                    [1, 2],
+                    '{"a.b":"192.0.2.1"}',
+                    "[1,2]",
                     '{"text":"1h"}',
                     "plain",
                     None,
                 ],
-                "dynamic-scalars": ["42", "true", "null", '"42"'],
-                "mixed-list": [[1, "x", True, {"a": 2}]],
+                # The dynamic number 42, the dynamic strings "true", "null",
+                # and "\"42\"", and the dynamic boolean true and null.
+                "dynamic-scalars": ["42", "true", "null", '"42"', True, None],
+                "mixed-list": ['[1,"x",true,{"a":2}]'],
             }[case]
             rows[:] = [[value] for value in values]
         elif case == "timespan-limits":
@@ -362,9 +388,20 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif case == "overflow":
-            rows[0][1] = 9223372036854775808
+            rows[0][1] = 10000000000000000000
         elif case == "underflow":
-            rows[0][1] = -9223372036854775809
+            rows[0][1] = -10000000000000000000
+        elif case == "long-rounded":
+            # Longs within 512 of either end of the range round to +/-2^63,
+            # and those beyond 2^53 lose precision on the service side.
+            columns[:] = [{"name": "Value", "type": "long"}]
+            rows[:] = [
+                [9223372036854776000],
+                [-9223372036854776000],
+                ["9223372036854776000"],
+                [9223372036854775807],
+                [9007199254740992],
+            ]
         elif case == "int-overflow":
             rows[0][2] = 2147483648
         elif case == "bad-datetime":
@@ -419,7 +456,7 @@ class Handler(BaseHTTPRequestHandler):
             nested: object = 42
             for _ in range(102):
                 nested = [nested]
-            rows[0][-1] = nested
+            rows[0][-1] = json.dumps(nested)
         elif case in {"fixed-array", "fixed-object"}:
             columns[:] = [{"name": "Value", "type": "long"}]
             value = [None, {"nested": [1, 2]}]
@@ -447,10 +484,9 @@ class Handler(BaseHTTPRequestHandler):
         elif case == "duplicate-envelope":
             raw = raw[:-1] + b', "tables": []}'
         elif case == "duplicate-dynamic":
-            raw = raw.replace(
-                b'{"text": "2026-01-01T00:00:00Z", "a.b": [1, 2, null]}',
-                b'{"x": 1, "x": 2}',
-            )
+            old = json.dumps(_ROW[-1]).encode()
+            assert old in raw
+            raw = raw.replace(old, json.dumps('{"x":1,"x":2}').encode())
         self.send_body(200, raw)
 
     def log_message(self, *_: object) -> None:

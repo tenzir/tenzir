@@ -4,7 +4,7 @@
   Small: null,
   Ratio: null,
   Enabled: null,
-  Message: null,
+  Message: "",
   Id: null,
   Elapsed: null,
   Amount: null,

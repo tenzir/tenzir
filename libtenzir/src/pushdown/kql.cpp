@@ -31,8 +31,10 @@ namespace {
 /// fit stay local, which only costs reduction, never correctness.
 constexpr auto max_appendix = size_t{16'384};
 
-/// The largest row count that the planner spells in a `take` stage.
-constexpr auto max_take = uint64_t{std::numeric_limits<int32_t>::max()};
+/// The largest row count that the planner spells in a `take` stage. KQL
+/// integer literals are `long`, and both Defender and Log Analytics accept
+/// `take 9223372036854775807`.
+constexpr auto max_take = uint64_t{std::numeric_limits<int64_t>::max()};
 
 /// The bare words that make a query unfit for trailing stages: `render` must
 /// end a query, `fork` and `facet` return several tables, and a `set`
@@ -721,10 +723,8 @@ auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
       result.projected = true;
     }
   }
-  // Every predicate stays local, so a limit is only safe without one. KQL
-  // documents the row count of `take` as an `int`, so larger limits, which
-  // exceed every result cap of the services anyway, are enforced locally
-  // only.
+  // Every predicate stays local, so a limit is only safe without one. Larger
+  // limits than a `long` can spell are enforced locally only.
   if (filter.empty() and limit and *limit > 0 and *limit <= max_take) {
     appendix += fmt::format("\n| take {}", *limit);
     result.limited = true;

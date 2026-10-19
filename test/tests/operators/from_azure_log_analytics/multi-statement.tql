@@ -1,0 +1,26 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: multi-statement
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: ";\nprint b = \"x\""
+---
+
+// Log Analytics returns a table for each statement, all named
+// `PrimaryResult`, and the operator emits them in order.
+from_azure_log_analytics env("AZLOG_QUERY") + ";\nprint b = \"x\"",
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+Schema = @name

@@ -10,10 +10,10 @@ assertions:
       tokens: 1
       appended: |-
 
-        | take 2147483647
+        | take 9223372036854775807
 ---
 
-// The largest limit that fits the `int` row count of `take`.
+// The largest limit that a KQL `long` can spell.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={
@@ -24,4 +24,4 @@ from_azure_log_analytics env("AZLOG_QUERY"),
   },
   _base_url=env("AZLOG_URL"),
   tls=false
-head 2147483647
+head 9223372036854775807
