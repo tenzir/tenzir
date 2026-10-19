@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fc_catch_all_numbers SETTINGS precise_float_parsing = 1 VALUES (1, '{\"v\": 9007199254740993}'), (2, '{\"v\": 5e-324}'), (3, '{\"v\": 0.1}'), (4, '{\"v\": 9007199254740992}'), (5, '{\"v\": \"0.1\"}'), (6, '{\"v\": [0.1]}'), (7, '{\"v\": 0}'), (8, '{\"v\": -9007199254740993}'), (9, '{\"v\": -9007199254740992}'), (10, '{\"v\": 0.10000000000000002}')",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

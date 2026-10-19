@@ -1,0 +1,9 @@
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
+ --> tests/operators/from_clickhouse/57_catch_all_mixed_number_bool.tql:8:7
+  |
+8 | where n > 4 and flag
+  |       ~~~~~
+  |
+{
+  id: 1,
+}

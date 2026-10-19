@@ -1,0 +1,11 @@
+// Fields below typed paths stay local, so the record values match. Only the
+// predicate on `id` goes into the query, which `71_catch_all_more_query_log`
+// checks.
+from_clickhouse table="fc_catch_all_typed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where id <= 2
+where typed.obj.k == "value" and dyn.obj.k == "value" and dyn.obj? != null
+select id

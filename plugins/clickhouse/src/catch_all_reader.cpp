@@ -15,7 +15,9 @@
 #include "tenzir/nova/json_parser.hpp"
 
 #include <algorithm>
+#include <array>
 #include <simdjson.h>
+#include <span>
 #include <string_view>
 
 namespace tenzir::plugins::clickhouse {
@@ -99,9 +101,48 @@ auto CatchAllLayout::find(std::string_view name) const -> PlacedColumn const* {
 }
 
 auto CatchAllLayout::addressable(std::string_view name) const -> bool {
-  auto const* column = find(name);
-  return column and not column->json and column->path.size() == 1
-         and column->path[0].id.name == name;
+  auto const result = origin(std::array{std::string{name}});
+  return result and result->column == name and not result->json
+         and result->path.empty();
+}
+
+auto CatchAllLayout::origin(std::span<std::string const> path) const
+  -> Option<FieldOrigin> {
+  if (path.empty()) {
+    return None{};
+  }
+  auto const* related = static_cast<PlacedColumn const*>(nullptr);
+  for (auto const& placed : columns) {
+    auto const common = std::min(path.size(), placed.path.size());
+    auto const shared = std::ranges::equal(
+      path.first(common), std::span{placed.path}.first(common),
+      std::ranges::equal_to{}, {}, [](ast::field_path::segment const& x) {
+        return std::string_view{x.id.name};
+      });
+    if (not shared) {
+      continue;
+    }
+    if (related or placed.generated) {
+      return None{};
+    }
+    related = &placed;
+  }
+  if (not related) {
+    return FieldOrigin{
+      .column = column,
+      .json = true,
+      .path = {path.begin(), path.end()},
+    };
+  }
+  // The column lies below the field and merges into it.
+  if (related->path.size() > path.size()) {
+    return None{};
+  }
+  return FieldOrigin{
+    .column = related->name,
+    .json = related->json,
+    .path = {path.begin() + related->path.size(), path.end()},
+  };
 }
 
 auto make_catch_all_layout(std::span<ColumnDescription const> description,
@@ -116,13 +157,36 @@ auto make_catch_all_layout(std::span<ColumnDescription const> description,
     if (column.name == layout.column) {
       continue;
     }
+    auto const generated = column.default_kind == "ALIAS"
+                           or column.default_kind == "MATERIALIZED"
+                           or column.default_kind == "EPHEMERAL";
     layout.columns.push_back({
       .name = column.name,
       .path = path_of(column.name),
       .json = is_json_type(column.type),
+      .generated = generated,
     });
   }
   return Option<CatchAllLayout>{std::move(layout)};
+}
+
+auto validate_catch_all_block(::clickhouse::Block const& block,
+                              CatchAllLayout const& layout,
+                              std::string_view service, diagnostic_handler& dh)
+  -> failure_or<void> {
+  for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
+    auto const name = block.GetColumnName(i);
+    if (name == layout.column or layout.find(name)) {
+      continue;
+    }
+    diagnostic::error("{} table gained column `{}` after it was described",
+                      service, name)
+      .note("pushed filters may no longer match the reconstructed fields")
+      .hint("retry the query with the updated table schema")
+      .emit(dh);
+    return failure::promise();
+  }
+  return {};
 }
 
 auto reconstruct_catch_all(nova::Events events,

@@ -469,6 +469,8 @@ struct PreparedQuery {
   Option<CatchAllLayout> catch_all = None{};
   /// Whether the query computes the plan's aggregation.
   bool aggregated = false;
+  /// Whether the SELECT applies any filter based on the described schema.
+  bool has_pushed_filter = false;
 };
 
 /// Pushes as much of `plan`'s hints into a `SELECT` from its table as
@@ -476,9 +478,10 @@ struct PreparedQuery {
 auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
                       Option<ir::OptimizeProjection> const& projection,
                       registry const& reg) -> PreparedQuery {
-  auto split = pushdown::split_filter(std::move(plan.optimization.filter),
-                                      schema.model(),
-                                      ClickHouseRenderer{plan.target}, reg);
+  auto split
+    = pushdown::split_filter(std::move(plan.optimization.filter),
+                             schema.model(),
+                             ClickHouseRenderer{plan.target, &schema}, reg);
   // The limit counts events after the whole filter chain, so it can only go
   // into the query if the chain did.
   auto limit = Option<uint64_t>{};
@@ -489,6 +492,7 @@ auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
     .text
     = make_select_query(*plan.table, &schema, projection, split.pushed, limit),
     .local_filter = std::move(split.remaining),
+    .has_pushed_filter = not split.pushed.empty(),
   };
 }
 
@@ -525,11 +529,17 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
   TRY(auto description, describe_table(client, *plan.table, dh));
   TRY(auto catch_all, make_catch_all_layout(description, dh));
   // Reconstruction moves the fields of the catch-all column to the top level
-  // and places dotted columns at nested paths, so only columns that keep their
-  // name and value are addressable.
+  // and places dotted columns at nested paths, so predicates address a field
+  // through the column that holds it. Fields below `JSON` columns serve only
+  // as prefilters, which Hydrolix does not get, since its engine may treat
+  // `JSON` differently.
   auto schema = SqlSchema{};
-  for (auto const& column : description) {
-    if (not catch_all or catch_all->addressable(column.name)) {
+  if (catch_all) {
+    schema
+      = make_catch_all_schema(description, *catch_all, plan.optimization.filter,
+                              plan.target == SqlTarget::clickhouse);
+  } else {
+    for (auto const& column : description) {
       schema.add_column(column.name, column.type,
                         is_generated_kind(column.default_kind));
     }
@@ -542,7 +552,7 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
   if (aggregation and not catch_all) {
     auto split
       = pushdown::split_filter(plan.optimization.filter, schema.model(),
-                               ClickHouseRenderer{plan.target}, reg);
+                               ClickHouseRenderer{plan.target, &schema}, reg);
     if (split.remaining.empty()) {
       if (auto query = make_aggregate_query(*aggregation, schema, *plan.table,
                                             split.pushed, plan.target)) {
@@ -1118,9 +1128,19 @@ private:
     auto aggregated = false;
     try {
       auto catch_all = Option<CatchAllLayout>{};
+      auto validate_layout = false;
+      auto invalid_layout = false;
       auto const service = backend_names(hydrolix).service;
       auto on_data = [&](::clickhouse::Block const& block) {
-        if (shared->should_cancel()) {
+        if (invalid_layout or shared->should_cancel()) {
+          return false;
+        }
+        // The header arrives even if the pushed filter removed every row.
+        // Validate it before decoding discards zero-row blocks, and stay
+        // failed if cancellation still delivers further blocks.
+        if (validate_layout
+            and not validate_catch_all_block(block, *catch_all, service, dh)) {
+          invalid_layout = true;
           return false;
         }
         auto events = block_to_events(block, plan.schema_name, service, dh);
@@ -1162,6 +1182,7 @@ private:
         }
         shared->produce(PlanMessage{std::move(prepared->local_filter)});
         catch_all = std::move(prepared->catch_all);
+        validate_layout = catch_all and prepared->has_pushed_filter;
         auto query = ::clickhouse::Query{std::move(prepared->text)};
         if (aggregated) {
           // An aggregation without group keys must count `0` for empty
@@ -1174,6 +1195,13 @@ private:
           // inserts of `to_clickhouse` do.
           query.SetSetting("json_type_escape_dots_in_keys",
                            {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
+          // Prefilters on `JSON` fields parse their text as numbers, which
+          // must yield what TQL parses from JSON, down to the last bit.
+          if (not hydrolix) {
+            query.SetSetting("precise_float_parsing",
+                             {"1",
+                              ::clickhouse::QuerySettingsField::IMPORTANT});
+          }
         }
         query.SetSetting("max_block_size",
                          {std::to_string(defaults::import::table_slice_size),

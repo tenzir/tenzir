@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include "clickhouse/catch_all_reader.hpp"
+#include "clickhouse/table_description.hpp"
 #include "tenzir/box.hpp"
+#include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/flat_set.hpp"
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/ir.hpp"
@@ -54,6 +57,22 @@ public:
   auto add_column(std::string_view name, std::string_view type,
                   bool generated = false) -> void;
 
+  /// Makes the scalar column `name` addressable at the nested `path`, where
+  /// the reconstruction of a catch-all table places it. Tuples and types that
+  /// have no TQL counterpart stay unaddressable.
+  auto add_placed_column(std::string_view name, std::string_view type,
+                         std::vector<std::string> path) -> void;
+
+  /// Makes the field at `path` addressable as the value at `json_path` below
+  /// the `JSON` column `column`, read with `json_type_escape_dots_in_keys=1`.
+  ///
+  /// The field has a `DynamicType`, so predicates on it can only narrow the
+  /// rows as a prefilter. `ClickHouseRenderer` compares the text of the
+  /// stored value, which TQL sees as the same text, number, or boolean. A
+  /// path with an empty component stays unaddressable.
+  auto add_json_field(std::vector<std::string> path, std::string_view column,
+                      std::span<const std::string> json_path) -> void;
+
   /// The top-level columns in table order, including generated ones.
   auto columns() const -> std::span<const std::string>;
 
@@ -72,6 +91,22 @@ public:
   auto render_projection(std::string_view name,
                          std::span<const std::vector<std::string>> paths) const
     -> Option<std::string>;
+
+  /// A field below a `JSON` column.
+  struct JsonField {
+    /// The name of the `JSON` column.
+    std::string column;
+    /// The subcolumn of the field, with the dots in keys escaped as `%2E`.
+    std::string subcolumn;
+  };
+
+  /// Returns the `JSON` field at `path`, if `add_json_field` registered one.
+  auto json_field(std::span<const std::string> path) const
+    -> Option<JsonField const&>;
+
+  /// Returns the column that `add_placed_column` placed at `path`.
+  auto placed_column(std::span<const std::string> path) const
+    -> Option<std::string const&>;
 
 private:
   /// A node of a column's type structure. Tuples have children; every other
@@ -93,8 +128,24 @@ private:
   std::vector<std::string> columns_;
   detail::flat_set<std::string> generated_;
   detail::stable_map<std::string, Node> nodes_;
+  detail::flat_map<std::vector<std::string>, std::string> placed_;
+  detail::flat_map<std::vector<std::string>, JsonField> json_fields_;
   pushdown::ColumnModel model_;
 };
+
+/// Describes a catch-all table to filter pushdown, as far as the fields of the
+/// reconstructed events have a single origin (see `CatchAllLayout::origin`).
+///
+/// Plain and dotted scalar columns are addressable at their paths. If
+/// `json_fields` is set, the fields that `filter` references below the
+/// catch-all column or another `JSON` column are addressable too, as
+/// `add_json_field` describes. That excludes `JSON` columns with typed or
+/// skipped paths, since a typed path may hold a record of TQL without paths
+/// below it in ClickHouse.
+auto make_catch_all_schema(std::span<ColumnDescription const> description,
+                           CatchAllLayout const& layout,
+                           ir::OptimizeFilter const& filter, bool json_fields)
+  -> SqlSchema;
 
 /// The server that answers a rendered query.
 enum class SqlTarget {
@@ -112,10 +163,19 @@ enum class SqlTarget {
 /// ClickHouse computes integer arithmetic in a type that holds the exact
 /// result and floating-point arithmetic in `Float64`, so the default spelling
 /// of arithmetic delivers the result types of the IR.
+///
+/// With a `schema`, columns placed at nested paths render as their columns,
+/// and fields below `JSON` columns render by their text: a comparison with a
+/// string or boolean compares the text, and one with a number parses the text
+/// as `Float64` beforehand, which needs `precise_float_parsing=1`. Neither
+/// throws for any stored type, and both hold for every value that TQL sees
+/// as the literal, since ClickHouse sends the same text as JSON. Only the
+/// prefilters that translation emits for a `DynamicType` render.
 class ClickHouseRenderer final : public pushdown::SqlRenderer {
 public:
-  explicit ClickHouseRenderer(SqlTarget target = SqlTarget::clickhouse)
-    : target_{target} {
+  explicit ClickHouseRenderer(SqlTarget target = SqlTarget::clickhouse,
+                              SqlSchema const* schema = nullptr)
+    : target_{target}, schema_{schema} {
   }
 
 private:
@@ -133,6 +193,9 @@ private:
 
   auto render_ip(pushdown::IpValue const& x) const -> Option<Fragment> override;
 
+  auto render_column(std::span<std::string const> path) const
+    -> Option<Fragment> override;
+
   auto
   render_call(pushdown::Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment> override;
@@ -141,11 +204,36 @@ private:
                          Fragment const& right) const
     -> Option<Fragment> override;
 
+  auto render_arithmetic(pushdown::Binary const& x, Fragment const& left,
+                         Fragment const& right) const
+    -> Option<Fragment> override;
+
+  auto render_in(pushdown::In const& x, Fragment const& expr,
+                 std::span<Fragment const> list) const
+    -> Option<Fragment> override;
+
+  auto render_is_null(pushdown::IsNull const& x, Fragment const& operand) const
+    -> Option<Fragment> override;
+
   auto render_conditional(Fragment const& condition, Fragment const& then,
                           Fragment const& otherwise) const
     -> Option<Fragment> override;
 
+  /// Returns the `JSON` field that `x` names, if it is a column.
+  auto json_field(pushdown::Expr const& x) const
+    -> Option<SqlSchema::JsonField const&>;
+
+  /// Spells the stored value of a `JSON` field.
+  auto render_json_value(SqlSchema::JsonField const& field) const -> Fragment;
+
+  /// Spells the comparison of the text of a `JSON` field with `literal`.
+  auto render_json_comparison(pushdown::Binary const& x, Fragment const& text,
+                              pushdown::Literal const& literal,
+                              Fragment const& rendered) const
+    -> Option<Fragment>;
+
   SqlTarget target_;
+  SqlSchema const* schema_;
 };
 
 /// Renders the `SELECT` for `table`. `schema` is required when `projection`

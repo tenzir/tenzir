@@ -114,6 +114,23 @@ auto SqlRenderer::render_arithmetic(Binary const& x, Fragment const& left,
   return sql_binary(spell(x.op), left, right, Fragment::Kind::arithmetic);
 }
 
+auto SqlRenderer::render_in(In const&, Fragment const& expr,
+                            std::span<Fragment const> list) const
+  -> Option<Fragment> {
+  auto elements = std::vector<std::string>{};
+  for (auto const& element : list) {
+    elements.push_back(wrap(element, Slot::delimited));
+  }
+  return Fragment{fmt::format("{} IN ({})", wrap(expr, Slot::operand),
+                              fmt::join(elements, ", ")),
+                  Fragment::Kind::predicate};
+}
+
+auto SqlRenderer::render_is_null(IsNull const& x, Fragment const& operand) const
+  -> Option<Fragment> {
+  return sql_is_null(operand, x.negated);
+}
+
 auto SqlRenderer::render_conditional(Fragment const& condition,
                                      Fragment const& then,
                                      Fragment const& otherwise) const
@@ -261,12 +278,7 @@ auto SqlRenderer::render_fragment(Expr const& expr) const -> Option<Fragment> {
       }
       TRY(auto inner, render_fragment(*x.expr));
       TRY(auto elements, render_all(x.list));
-      auto list = std::vector<std::string>{};
-      for (auto const& element : elements) {
-        list.push_back(wrap(element, Slot::delimited));
-      }
-      return predicate(fmt::format("{} IN ({})", wrap(inner, Slot::operand),
-                                   fmt::join(list, ", ")));
+      return render_in(x, inner, elements);
     },
     [&](Between const& x) -> Option<Fragment> {
       TRY(auto inner, render_fragment(*x.expr));
@@ -278,7 +290,7 @@ auto SqlRenderer::render_fragment(Expr const& expr) const -> Option<Fragment> {
     },
     [&](IsNull const& x) -> Option<Fragment> {
       TRY(auto inner, render_fragment(*x.expr));
-      return sql_is_null(inner, x.negated);
+      return render_is_null(x, inner);
     },
     [&](Conditional const& x) -> Option<Fragment> {
       TRY(auto condition, render_fragment(*x.condition));

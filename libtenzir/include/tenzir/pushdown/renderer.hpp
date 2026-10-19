@@ -136,6 +136,17 @@ protected:
                                  Fragment const& right) const
     -> Option<Fragment>;
 
+  /// Spells the membership `x` on its rendered operand and elements, or
+  /// vetoes it. Defaults to `expr IN (list)`.
+  virtual auto render_in(In const& x, Fragment const& expr,
+                         std::span<Fragment const> list) const
+    -> Option<Fragment>;
+
+  /// Spells the null check `x` on its rendered operand, or vetoes it.
+  /// Defaults to `operand IS NULL` or `operand IS NOT NULL`.
+  virtual auto render_is_null(IsNull const& x, Fragment const& operand) const
+    -> Option<Fragment>;
+
   /// Spells a conditional on its rendered operands, or vetoes it. Defaults to
   /// `CASE WHEN`.
   virtual auto

@@ -1,0 +1,37 @@
+from {
+  id: uint(1),
+  src: {port: uint(443), host: "h1"},
+  extra: {k: "v"},
+  metadata: {product: {name: "test"}},
+  flag: true,
+  n: 5,
+  "a.b": "dot",
+  tags: ["x", "it's"],
+}, {
+  id: uint(2),
+  src: {port: uint(80), host: "h2"},
+  extra: {k: 1},
+  metadata: {product: {name: 5}},
+  flag: "true",
+  n: "7",
+  a: {b: "dot"},
+}, {
+  id: uint(3),
+  src: {port: uint(443), host: "x3"},
+  metadata: {product: {name: ["test"]}},
+  flag: false,
+  n: 2.5,
+  obj: {k: 1},
+}, {
+  id: uint(4),
+  src: {port: uint(443)},
+  metadata: {product: {name: "TEST"}, version: "test"},
+  n: null,
+  obj: {},
+}
+to_clickhouse table="fc_catch_all_mixed",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

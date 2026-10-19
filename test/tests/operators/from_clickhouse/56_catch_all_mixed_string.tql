@@ -1,0 +1,9 @@
+// ClickHouse narrows the rows by the text of the catch-all field, which keeps
+// only the string. `62_catch_all_query_log.tql` checks the query.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where metadata.product.name == "test"
+select id

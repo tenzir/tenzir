@@ -1,5 +1,7 @@
-// Only predicates on columns that keep their name go into the query. All
-// others apply to the reconstructed events, as does the projection.
+// Predicates on plain and dotted columns go into the query. Those on fields of
+// the catch-all column narrow the query and also apply to the reconstructed
+// events, as does the projection. `62_catch_all_query_log.tql` checks the
+// query.
 from_clickhouse table="fc_catch_all",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

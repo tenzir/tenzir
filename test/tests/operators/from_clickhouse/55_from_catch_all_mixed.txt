@@ -1,0 +1,75 @@
+{
+  "a.b": "dot",
+  flag: true,
+  metadata: {
+    product: {
+      name: "test",
+    },
+  },
+  n: 5,
+  src: {
+    host: "h1",
+    port: 443,
+  },
+  tags: [
+    "x",
+    "it's",
+  ],
+  id: 1,
+  extra: {
+    k: "v",
+  },
+}
+{
+  a: {
+    b: "dot",
+  },
+  flag: true,
+  metadata: {
+    product: {
+      name: 5,
+    },
+  },
+  n: "7",
+  src: {
+    host: "h2",
+    port: 80,
+  },
+  id: 2,
+  extra: {
+    k: 1,
+  },
+}
+{
+  flag: false,
+  metadata: {
+    product: {
+      name: [
+        "test",
+      ],
+    },
+  },
+  n: 2.5,
+  obj: {
+    k: 1,
+  },
+  src: {
+    host: "x3",
+    port: 443,
+  },
+  id: 3,
+  extra: {},
+}
+{
+  metadata: {
+    product: {
+      name: "TEST",
+    },
+    version: "test",
+  },
+  id: 4,
+  src: {
+    port: 443,
+  },
+  extra: {},
+}

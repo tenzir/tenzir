@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fc_catch_all_typed VALUES (1, '{\"obj\": {\"k\": \"value\"}}', '{\"obj\": {\"k\": \"value\"}}', '{}'), (2, '{\"obj\": {\"k\": \"other\"}}', '{\"obj\": \"value\"}', '{}'), (3, '{}', '{}', '{}')",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

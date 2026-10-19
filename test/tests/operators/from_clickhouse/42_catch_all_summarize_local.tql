@@ -1,5 +1,6 @@
 // The summary must run locally after catch-all reconstruction. The predicate
-// references a field stored in the JSON catch-all column and is therefore local.
+// references a field stored in the JSON catch-all column, so it narrows the
+// query but also stays local.
 from_clickhouse table="fc_catch_all",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

@@ -1,0 +1,9 @@
+// The suffix predicate is a prefilter, with exact string typing kept locally.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where src.host.ends_with("3")
+select id
+sort id

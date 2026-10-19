@@ -1,0 +1,7 @@
+// The filters of `65_catch_all_typed_json.tql`, `68_catch_all_numbers.tql`,
+// and the isolated mixed-IN, list-substring, and suffix tests (`69`–`69b`).
+from_clickhouse sql="SELECT replaceRegexpOne(query, '^.* WHERE ', '') AS filter FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Select' AND (has(tables, 'default.fc_catch_all_typed') OR has(tables, 'default.fc_catch_all_numbers') OR (has(tables, 'default.fc_catch_all_mixed') AND (query LIKE '%endsWith%' OR query LIKE '%position(%' OR query LIKE '% = 5 OR %'))) AND query NOT LIKE '%system.query_log%' ORDER BY event_time_microseconds",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

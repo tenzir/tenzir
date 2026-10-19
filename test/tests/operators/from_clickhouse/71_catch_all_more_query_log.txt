@@ -1,0 +1,15 @@
+{
+  filter: "`id` <= 2",
+}
+{
+  filter: "(((toFloat64OrNull(toString(getSubcolumn(`event`, 'v'))) >= 9007199254740992 OR toFloat64OrNull(toString(getSubcolumn(`event`, 'v'))) <= -9007199254740992) OR (toFloat64OrNull(toString(getSubcolumn(`event`, 'v'))) > 0. AND toFloat64OrNull(toString(getSubcolumn(`event`, 'v'))) < 1e-09)) OR toFloat64OrNull(toString(getSubcolumn(`event`, 'v'))) = 0.1)",
+}
+{
+  filter: "(toFloat64OrNull(toString(getSubcolumn(`event`, 'n'))) = 5 OR toString(getSubcolumn(`event`, 'n')) = '7')",
+}
+{
+  filter: "position(toString(getSubcolumn(`event`, 'tags')), 'x') > 0",
+}
+{
+  filter: "endsWith(toString(getSubcolumn(`event`, 'src.host')), '3')",
+}

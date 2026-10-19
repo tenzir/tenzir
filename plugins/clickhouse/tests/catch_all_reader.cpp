@@ -13,6 +13,11 @@
 #include <tenzir/nova/materialize.hpp>
 #include <tenzir/test/test.hpp>
 
+#include <clickhouse/columns/string.h>
+#include <fmt/format.h>
+
+#include <array>
+#include <memory>
 #include <vector>
 
 using namespace tenzir;
@@ -267,6 +272,68 @@ TEST("columns that the table gained after it was described stay") {
                               {"id", int64_t{1}},
                               {"later", int64_t{2}},
                             }}));
+}
+
+TEST("pushed filters accept known columns in an empty result header") {
+  auto const description = std::vector{
+    column("id", "String"),
+    column("extra", "JSON", "tenzir:catch_all"),
+    column("src.port", "String"),
+    column("payload", "JSON"),
+  };
+  auto generated = column("computed", "String");
+  generated.default_kind = "ALIAS";
+  auto columns = description;
+  columns.push_back(generated);
+  auto const catch_all = layout(columns);
+  // Generated columns may be absent or present, and the block order need
+  // not match DESCRIBE. Neither changes a field's described origin.
+  for (auto include_generated : {false, true}) {
+    auto header = ::clickhouse::Block{};
+    header.AppendColumn("extra",
+                        std::make_shared<::clickhouse::ColumnString>());
+    header.AppendColumn("src.port",
+                        std::make_shared<::clickhouse::ColumnString>());
+    header.AppendColumn("id", std::make_shared<::clickhouse::ColumnString>());
+    header.AppendColumn("payload",
+                        std::make_shared<::clickhouse::ColumnString>());
+    if (include_generated) {
+      header.AppendColumn("computed",
+                          std::make_shared<::clickhouse::ColumnString>());
+    }
+    auto dh = collecting_diagnostic_handler{};
+    CHECK_EQUAL(header.GetRowCount(), size_t{0});
+    CHECK(validate_catch_all_block(header, catch_all, "ClickHouse", dh));
+    CHECK(std::move(dh).collect().empty());
+  }
+}
+
+TEST("pushed filters reject added columns even when no rows survive") {
+  auto const catch_all = layout({
+    column("id", "String"),
+    column("extra", "JSON", "tenzir:catch_all"),
+    column("src.port", "String"),
+    column("payload", "JSON"),
+  });
+  // A new plain, ancestor, or descendant column can override the JSON
+  // value that the old layout used for its prefilter. In particular, an
+  // absent extra.foo must not silently filter a new explicit foo == "x".
+  for (auto name : std::array{"foo", "src", "src.hostname", "payload.k"}) {
+    auto header = ::clickhouse::Block{};
+    header.AppendColumn("extra",
+                        std::make_shared<::clickhouse::ColumnString>());
+    header.AppendColumn(name, std::make_shared<::clickhouse::ColumnString>());
+    auto dh = collecting_diagnostic_handler{};
+    CHECK_EQUAL(header.GetRowCount(), size_t{0});
+    CHECK(not validate_catch_all_block(header, catch_all, "ClickHouse", dh));
+    auto diagnostics = std::move(dh).collect();
+    REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+    CHECK_EQUAL(diagnostics[0].severity, severity::error);
+    CHECK_EQUAL(diagnostics[0].message,
+                fmt::format("ClickHouse table gained column `{}` after it was "
+                            "described",
+                            name));
+  }
 }
 
 TEST("other JSON columns become values") {

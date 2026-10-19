@@ -1,0 +1,10 @@
+// Negations stay local, as do searches for text that ClickHouse escapes in
+// lists.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where metadata.product.name != "test" or "it's" in tags
+select id
+sort id

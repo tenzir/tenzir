@@ -1,0 +1,10 @@
+// A record has no value of its own in ClickHouse, but it exists. The literal
+// key `a.b` differs from the nested field `a.b`.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where obj? != null or this["a.b"] == "dot"
+select id
+sort id

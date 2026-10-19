@@ -1,0 +1,7 @@
+// A catch-all table with `JSON` columns whose typed paths hold records:
+// ClickHouse has no paths below a `Map` or below an object in a `Dynamic`.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_catch_all_typed (id UInt32, typed JSON(obj Map(String, String)), dyn JSON(obj Dynamic), event JSON COMMENT 'tenzir:catch_all') ENGINE = MergeTree ORDER BY id",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

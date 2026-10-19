@@ -12,11 +12,14 @@
 #include "clickhouse/block_decoding.hpp"
 #include "clickhouse/transformers.hpp"
 #include "tenzir/checked_math.hpp"
+#include "tenzir/concepts.hpp"
 #include "tenzir/detail/escapers.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/translate.hpp"
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/try.hpp"
 
 #include <clickhouse/columns/factory.h>
 #include <clickhouse/types/types.h>
@@ -250,6 +253,88 @@ auto tick_count_function(pushdown::TimeType const& type)
   }
 }
 
+/// Spells a comparison operator, or returns `None` for another operator.
+auto comparison_operator(pushdown::BinaryOp op) -> Option<std::string_view> {
+  switch (op) {
+    case pushdown::BinaryOp::eq:
+      return "=";
+    case pushdown::BinaryOp::lt:
+      return "<";
+    case pushdown::BinaryOp::leq:
+      return "<=";
+    case pushdown::BinaryOp::gt:
+      return ">";
+    case pushdown::BinaryOp::geq:
+      return ">=";
+    default:
+      return None{};
+  }
+}
+
+/// Whether `toString` renders `text` verbatim inside a list element, which
+/// it quotes and escapes.
+auto is_verbatim_in_list(std::string_view text) -> bool {
+  return std::ranges::none_of(text, [](char c) {
+    auto const byte = static_cast<unsigned char>(c);
+    return c == '\'' or c == '\\' or byte < 0x20 or byte == 0x7f;
+  });
+}
+
+/// Whether `type` is `JSON` without typed or skipped paths, whose values
+/// ClickHouse spreads over a path for each value below an object. A typed
+/// path may hold a `Map`, a `Tuple`, or a `Dynamic` with an object, which TQL
+/// sees as a record without ClickHouse having paths below it.
+auto is_untyped_json(std::string_view type) -> bool {
+  auto const normalized = remove_non_significant_whitespace(type);
+  auto bare = std::string_view{normalized};
+  if (auto inner = unwrap_clickhouse_type_call(bare, "Nullable")) {
+    bare = *inner;
+  }
+  if (bare == "JSON") {
+    return true;
+  }
+  auto args = unwrap_clickhouse_type_call(bare, "JSON");
+  if (not args) {
+    return false;
+  }
+  return std::ranges::all_of(split_top_level_clickhouse_type_arguments(*args),
+                             [](std::string_view x) {
+                               return x.starts_with("max_dynamic_paths=")
+                                      or x.starts_with("max_dynamic_types=");
+                             });
+}
+
+/// Collects the paths of the fields that an expression references, outside
+/// of lambdas, whose parameters shadow fields.
+class FieldPathCollector final : public ast::visitor<FieldPathCollector> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::expression& x) -> void {
+    // Only these can be a non-empty path, and `try_from` copies its input.
+    auto const candidate = is<ast::root_field>(x) or is<ast::field_access>(x)
+                           or is<ast::index_expr>(x);
+    if (auto path = candidate ? ast::field_path::try_from(x) : None{};
+        path and not path->path().empty()) {
+      auto segments = std::vector<std::string>{};
+      for (auto const& segment : path->path()) {
+        segments.push_back(segment.id.name);
+      }
+      paths.push_back(std::move(segments));
+      return;
+    }
+    enter(x);
+  }
+
+  auto visit(ast::lambda_expr&) -> void {
+  }
+
+  std::vector<std::vector<std::string>> paths;
+};
+
 } // namespace
 
 // -- ClickHouseRenderer -------------------------------------------------------
@@ -338,9 +423,104 @@ auto ClickHouseRenderer::render_ip(pushdown::IpValue const& x) const
   return sql_call(x.v4 ? "toIPv4" : "toIPv6", std::array{std::move(address)});
 }
 
+auto ClickHouseRenderer::render_column(std::span<std::string const> path) const
+  -> Option<Fragment> {
+  if (schema_) {
+    if (auto field = schema_->json_field(path)) {
+      // The text that ClickHouse sends for the value in JSON, and an empty
+      // string for a missing one.
+      return sql_call("toString", std::array{render_json_value(*field)});
+    }
+    if (auto column = schema_->placed_column(path)) {
+      return sql_atom(quote_sql_identifier(*column));
+    }
+  }
+  return SqlRenderer::render_column(path);
+}
+
+auto ClickHouseRenderer::json_field(pushdown::Expr const& x) const
+  -> Option<SqlSchema::JsonField const&> {
+  auto const* column = try_as<pushdown::Column>(x);
+  if (not schema_ or not column) {
+    return None{};
+  }
+  return schema_->json_field(column->path);
+}
+
+auto ClickHouseRenderer::render_json_value(
+  SqlSchema::JsonField const& field) const -> Fragment {
+  // Unlike `column.path`, `getSubcolumn` never confuses a dotted column name
+  // with a path below another column, and it reads every key literally.
+  return sql_call("getSubcolumn",
+                  std::array{sql_atom(quote_sql_identifier(field.column)),
+                             sql_atom(quote_sql_string(field.subcolumn))});
+}
+
+auto ClickHouseRenderer::render_json_comparison(
+  pushdown::Binary const& x, Fragment const& text,
+  pushdown::Literal const& literal, Fragment const& rendered) const
+  -> Option<Fragment> {
+  // TQL's `!=` also holds for a value of another type, whose text may equal
+  // the literal's, so it gets no prefilter.
+  TRY(auto op, comparison_operator(x.op));
+  auto const predicate = Fragment::Kind::predicate;
+  return match(
+    literal.value,
+    [&](std::string const&) -> Option<Fragment> {
+      // TQL sees a string only where ClickHouse sends a JSON string, whose
+      // text is the stored value's. Both compare bytes.
+      return sql_binary(op, text, rendered, predicate);
+    },
+    [&](bool value) -> Option<Fragment> {
+      // TQL sees `true` for a JSON `true` and for the string `"true"`, and
+      // both have the text `true`.
+      if (x.op != pushdown::BinaryOp::eq) {
+        return None{};
+      }
+      return sql_binary(op, text,
+                        sql_atom(quote_sql_string(value ? "true" : "false")),
+                        predicate);
+    },
+    [&]<class T>(T const&) -> Option<Fragment> {
+      if constexpr (concepts::one_of<T, int64_t, uint64_t, double>) {
+        // TQL sees a number only where ClickHouse sends a JSON number, whose
+        // text parses to the same `double`, or for an integer, rounds to it.
+        // The rounding only matters at `2^53`, which translation accounts
+        // for. Parsing text that is not a number yields `NULL`.
+        return sql_binary(op, sql_call("toFloat64OrNull", std::array{text}),
+                          rendered, predicate);
+      } else {
+        return None{};
+      }
+    });
+}
+
 auto ClickHouseRenderer::render_call(pushdown::Call const& x,
                                      std::span<Fragment const> args) const
   -> Option<Fragment> {
+  for (auto i = size_t{0}; i < x.args.size(); ++i) {
+    if (not json_field(x.args[i])) {
+      continue;
+    }
+    // The subject of an affix or substring search is the text of the value.
+    if (i != 0) {
+      return None{};
+    }
+    if (x.op == pushdown::Operation::contains) {
+      // TQL's `needle in x` also searches the elements of a list, whose text
+      // contains every element verbatim, unless it needed escaping.
+      auto const* literal
+        = x.args.size() == 2 ? try_as<pushdown::Literal>(x.args[1]) : nullptr;
+      auto const* needle
+        = literal ? try_as<std::string>(literal->value) : nullptr;
+      if (not needle or not is_verbatim_in_list(*needle)) {
+        return None{};
+      }
+    } else if (x.op != pushdown::Operation::starts_with
+               and x.op != pushdown::Operation::ends_with) {
+      return None{};
+    }
+  }
   switch (x.op) {
     case pushdown::Operation::starts_with:
       TENZIR_ASSERT(args.size() == 2);
@@ -388,6 +568,16 @@ auto ClickHouseRenderer::render_comparison(pushdown::Binary const& x,
                                            Fragment const& left,
                                            Fragment const& right) const
   -> Option<Fragment> {
+  if (json_field(*x.right)) {
+    return None{};
+  }
+  if (json_field(*x.left)) {
+    auto const* literal = try_as<pushdown::Literal>(*x.right);
+    if (not literal) {
+      return None{};
+    }
+    return render_json_comparison(x, left, *literal, right);
+  }
   if (target_ != SqlTarget::hydrolix
       or x.origin != pushdown::ComparisonOrigin::time_guard) {
     return SqlRenderer::render_comparison(x, left, right);
@@ -411,6 +601,71 @@ auto ClickHouseRenderer::render_comparison(pushdown::Binary const& x,
                     sql_call(*ticks, std::array{left}),
                     sql_atom(fmt::to_string(value.ticks)),
                     Fragment::Kind::predicate);
+}
+
+auto ClickHouseRenderer::render_arithmetic(pushdown::Binary const& x,
+                                           Fragment const& left,
+                                           Fragment const& right) const
+  -> Option<Fragment> {
+  if (json_field(*x.left) or json_field(*x.right)) {
+    return None{};
+  }
+  return SqlRenderer::render_arithmetic(x, left, right);
+}
+
+auto ClickHouseRenderer::render_in(pushdown::In const& x, Fragment const& expr,
+                                   std::span<Fragment const> list) const
+  -> Option<Fragment> {
+  if (not json_field(*x.expr)) {
+    return SqlRenderer::render_in(x, expr, list);
+  }
+  // The elements may differ in type, so each one compares on its own.
+  auto equalities = std::vector<Fragment>{};
+  for (auto i = size_t{0}; i < x.list.size(); ++i) {
+    auto const* literal = try_as<pushdown::Literal>(x.list[i]);
+    if (not literal) {
+      return None{};
+    }
+    auto equality = pushdown::Binary{
+      .op = pushdown::BinaryOp::eq,
+      .left = *x.expr,
+      .right = x.list[i],
+    };
+    TRY(auto fragment,
+        render_json_comparison(equality, expr, *literal, list[i]));
+    equalities.push_back(std::move(fragment));
+  }
+  if (equalities.size() == 1) {
+    return std::move(equalities.front());
+  }
+  return sql_junction("OR", equalities);
+}
+
+auto ClickHouseRenderer::render_is_null(pushdown::IsNull const& x,
+                                        Fragment const& operand) const
+  -> Option<Fragment> {
+  auto field = json_field(*x.expr);
+  if (not field) {
+    return SqlRenderer::render_is_null(x, operand);
+  }
+  // A missing field and a JSON `null` have no text of their own.
+  if (not x.negated) {
+    return None{};
+  }
+  // ClickHouse stores no path for an object, but one for each value below
+  // it. An empty object or one with only nulls has none, and ClickHouse sends
+  // it as missing.
+  auto value = sql_is_null(render_json_value(*field), true);
+  auto prefix = quote_sql_string(fmt::format("{}.", field->subcolumn));
+  auto below = sql_call(
+    "arrayExists",
+    std::array{
+      sql_atom(
+        fmt::format("__tenzir_path -> startsWith(__tenzir_path, {})", prefix)),
+      sql_call("JSONAllPaths",
+               std::array{sql_atom(quote_sql_identifier(field->column))}),
+    });
+  return sql_junction("OR", std::array{std::move(value), std::move(below)});
 }
 
 auto ClickHouseRenderer::render_conditional(Fragment const& condition,
@@ -467,6 +722,113 @@ auto SqlSchema::add_column(std::string_view name, std::string_view type,
   }
   auto path = std::vector<std::string>{std::string{name}};
   nodes_.emplace(std::string{name}, make_node(normalized, path));
+}
+
+auto SqlSchema::add_placed_column(std::string_view name, std::string_view type,
+                                  std::vector<std::string> path) -> void {
+  TENZIR_ASSERT(not path.empty());
+  auto normalized = remove_non_significant_whitespace(type);
+  if (not is_decodable_type(normalized) or placed_.contains(path)) {
+    return;
+  }
+  auto nullable = false;
+  auto parsed = parse_type(unwrap_column_type(normalized, nullable));
+  if (not parsed) {
+    return;
+  }
+  model_.add(path, {.type = std::move(*parsed), .nullable = nullable});
+  placed_.emplace(std::move(path), std::string{name});
+}
+
+auto SqlSchema::add_json_field(std::vector<std::string> path,
+                               std::string_view column,
+                               std::span<const std::string> json_path) -> void {
+  TENZIR_ASSERT(not path.empty());
+  if (json_path.empty() or json_fields_.contains(path)
+      or std::ranges::any_of(json_path, &std::string::empty)) {
+    return;
+  }
+  // `json_type_escape_dots_in_keys=1` stores a key `a.b` at the path `a%2Eb`,
+  // and turns `%2E` back into `.` when ClickHouse sends it. A key with a
+  // literal `%2E` thus reaches TQL with a `.`, and reads from the same path.
+  auto escaped = std::vector<std::string>{};
+  for (auto const& key : json_path) {
+    escaped.push_back(detail::replace_all(key, ".", "%2E"));
+  }
+  model_.add(path, {.type = pushdown::DynamicType{}, .nullable = true});
+  json_fields_.emplace(std::move(path),
+                       JsonField{
+                         .column = std::string{column},
+                         .subcolumn = fmt::to_string(fmt::join(escaped, ".")),
+                       });
+}
+
+auto SqlSchema::json_field(std::span<const std::string> path) const
+  -> Option<JsonField const&> {
+  auto it
+    = json_fields_.find(std::vector<std::string>{path.begin(), path.end()});
+  if (it == json_fields_.end()) {
+    return None{};
+  }
+  return it->second;
+}
+
+auto SqlSchema::placed_column(std::span<const std::string> path) const
+  -> Option<std::string const&> {
+  auto it = placed_.find(std::vector<std::string>{path.begin(), path.end()});
+  if (it == placed_.end()) {
+    return None{};
+  }
+  return it->second;
+}
+
+auto make_catch_all_schema(std::span<ColumnDescription const> description,
+                           CatchAllLayout const& layout,
+                           ir::OptimizeFilter const& filter, bool json_fields)
+  -> SqlSchema {
+  auto result = SqlSchema{};
+  for (auto const& column : description) {
+    auto const* placed = layout.find(column.name);
+    if (not placed or placed->json) {
+      continue;
+    }
+    auto path = std::vector<std::string>{};
+    for (auto const& segment : placed->path) {
+      path.push_back(segment.id.name);
+    }
+    // A column that shares its field with another one, or that `SELECT *`
+    // may leave out, does not hold the field in every row.
+    auto origin = layout.origin(path);
+    if (not origin or origin->column != column.name
+        or not origin->path.empty()) {
+      continue;
+    }
+    if (path.size() == 1 and path.front() == column.name) {
+      result.add_column(column.name, column.type);
+    } else {
+      result.add_placed_column(column.name, column.type, std::move(path));
+    }
+  }
+  if (not json_fields) {
+    return result;
+  }
+  auto collector = FieldPathCollector{};
+  for (auto expr : filter) {
+    collector.visit(expr);
+  }
+  for (auto& path : collector.paths) {
+    auto origin = layout.origin(path);
+    if (not origin or not origin->json) {
+      continue;
+    }
+    auto const column = std::ranges::find(description, origin->column,
+                                          &ColumnDescription::name);
+    TENZIR_ASSERT(column != description.end());
+    if (is_untyped_json(column->type)) {
+      result.add_json_field(std::move(path), origin->column, origin->path);
+    }
+  }
+  return result;
 }
 
 auto SqlSchema::is_generated(std::string_view name) const -> bool {

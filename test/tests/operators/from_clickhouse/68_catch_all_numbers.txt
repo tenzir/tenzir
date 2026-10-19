@@ -1,0 +1,39 @@
+warning: binary operator `>` does not accept the argument type combination `(string, int)`
+  --> tests/operators/from_clickhouse/68_catch_all_numbers.tql:11:7
+   |
+11 | where v > 9007199254740992 or v < -9007199254740992 or (v > 0.0 and v < 0.000000001) or v == 0.1
+   |       ~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: binary operator `<` does not accept the argument type combination `(string, int)`
+  --> tests/operators/from_clickhouse/68_catch_all_numbers.tql:11:31
+   |
+11 | where v > 9007199254740992 or v < -9007199254740992 or (v > 0.0 and v < 0.000000001) or v == 0.1
+   |                               ~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: binary operator `>` does not accept the argument type combination `(string, float)`
+  --> tests/operators/from_clickhouse/68_catch_all_numbers.tql:11:57
+   |
+11 | where v > 9007199254740992 or v < -9007199254740992 or (v > 0.0 and v < 0.000000001) or v == 0.1
+   |                                                         ~~~~~~~
+   |
+
+warning: binary operator `<` does not accept the argument type combination `(string, float)`
+  --> tests/operators/from_clickhouse/68_catch_all_numbers.tql:11:69
+   |
+11 | where v > 9007199254740992 or v < -9007199254740992 or (v > 0.0 and v < 0.000000001) or v == 0.1
+   |                                                                     ~~~~~~~~~~~~~~~
+   |
+{
+  id: 1,
+}
+{
+  id: 2,
+}
+{
+  id: 3,
+}
+{
+  id: 8,
+}
