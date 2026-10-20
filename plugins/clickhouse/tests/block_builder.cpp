@@ -136,6 +136,47 @@ auto warned(collecting_diagnostic_handler const& dh, std::string_view text)
 
 } // namespace
 
+TEST("catch-all columns accept JSON with only storage settings") {
+  for (auto type :
+       {"JSON(max_dynamic_paths=512)", "JSON(max_dynamic_types=8)"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto schema = build_table_schema(
+      {column("n", "UInt32"), column("extra", type, "", "tenzir:catch_all")},
+      dh);
+    CHECK(schema);
+  }
+  for (auto type : {"JSON(rule String)", "JSON(SKIP rule)"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto schema = build_table_schema(
+      {column("n", "UInt32"), column("extra", type, "", "tenzir:catch_all")},
+      dh);
+    CHECK(not schema);
+  }
+}
+
+TEST("catch-all tables accept JSON with only storage settings") {
+  for (auto type : {"JSON(max_dynamic_paths=64)", "JSON(max_dynamic_types=8)",
+                    "JSON(max_dynamic_paths=64, max_dynamic_types=8)"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto schema
+      = build_table_schema({column("unmapped", type),
+                            column("extra", "JSON", "", "tenzir:catch_all")},
+                           dh);
+    CHECK(schema);
+  }
+  for (auto type :
+       {"JSON(rule String)", "JSON(SKIP rule)", "JSON(SKIP REGEXP '^tmp')",
+        "JSON(max_dynamic_paths=64, rule String)",
+        "Array(JSON(max_dynamic_paths=64))"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto schema
+      = build_table_schema({column("unmapped", type),
+                            column("extra", "JSON", "", "tenzir:catch_all")},
+                           dh);
+    CHECK(not schema);
+  }
+}
+
 TEST("rows of different shapes and types go into one insert") {
   auto schema = make_schema(
     {column("x", "Nullable(Int64)"), column("y", "Nullable(String)")});

@@ -1,0 +1,7 @@
+// The catch-all and another JSON column set only storage settings, written
+// with spaces that ClickHouse removes in the reported type.
+from_clickhouse sql="CREATE OR REPLACE TABLE tc_json_settings (time DateTime64(9), unmapped JSON(max_dynamic_paths = 64, max_dynamic_types = 8), event JSON(max_dynamic_paths = 512) COMMENT 'tenzir:catch_all') ENGINE = MergeTree ORDER BY time",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

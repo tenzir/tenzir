@@ -21,7 +21,8 @@ namespace tenzir::plugins::clickhouse {
 
 namespace {
 
-/// Finds `JSON` or `Tuple` anywhere in a type, which mapped columns cannot be.
+/// Finds `JSON` or `Tuple` anywhere in a type, which mapped columns cannot be,
+/// except for `JSON` with only storage settings at the top level.
 auto unsupported_mapping_type(std::string_view type)
   -> Option<std::string_view> {
   for (auto kind : {"JSON", "Tuple"}) {
@@ -45,11 +46,13 @@ auto unsupported_mapping_type(std::string_view type)
 auto mapping_path(ColumnDescription const& column, std::string_view type,
                   std::span<Mapping const> mappings, diagnostic_handler& dh)
   -> failure_or<std::vector<std::string>> {
-  if (auto unsupported = unsupported_mapping_type(type)) {
-    diagnostic::error("unsupported {} mapping for column `{}`", *unsupported,
-                      column.name)
-      .emit(dh);
-    return failure::promise();
+  if (not is_lossless_json(type)) {
+    if (auto unsupported = unsupported_mapping_type(type)) {
+      diagnostic::error("unsupported {} mapping for column `{}`", *unsupported,
+                        column.name)
+        .emit(dh);
+      return failure::promise();
+    }
   }
   auto path = std::vector<std::string>{};
   for (auto component : detail::split(column.name, ".")) {
