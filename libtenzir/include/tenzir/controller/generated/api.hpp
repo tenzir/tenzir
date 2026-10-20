@@ -145,11 +145,9 @@ namespace tenzir {
 
 class DeploymentInfo {
 public:
-  DeploymentInfo(DeploymentId id, Option<std::string> key_digest,
-                 WorkspaceId workspace_id, std::string name,
+  DeploymentInfo(DeploymentId id, WorkspaceId workspace_id, std::string name,
                  Option<std::string> version, Option<time> last_seen)
     : id{std::move(id)},
-      key_digest{std::move(key_digest)},
       workspace_id{std::move(workspace_id)},
       name{std::move(name)},
       version{std::move(version)},
@@ -157,8 +155,6 @@ public:
   }
 
   DeploymentId id;
-  /// `keyDigest`, may be absent, may be null.
-  Option<std::string> key_digest;
   WorkspaceId workspace_id;
   std::string name;
   /// `version`, may be absent, may be null.
@@ -172,8 +168,8 @@ public:
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, DeploymentInfo const& value)
     -> void {
-    hash_append(h, value.id, value.key_digest, value.workspace_id, value.name,
-                value.version, value.last_seen);
+    hash_append(h, value.id, value.workspace_id, value.name, value.version,
+                value.last_seen);
   }
 };
 
