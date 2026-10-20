@@ -1,0 +1,6 @@
+error: received HTTP error status 503
+  --> tests/operators/from_http/retry_exhausted_strict.tql:12:3
+   |
+12 |   from_http env("HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL"), max_retry_count=2, retry_delay=1ms {
+   |   ^^^^^^^^^
+   |

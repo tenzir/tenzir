@@ -1,0 +1,15 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - count: 3
+      method: GET
+      path: /status/retry-exhausted-503
+error: true
+---
+
+strict {
+  from_http env("HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL"), max_retry_count=2, retry_delay=1ms {
+    read_json
+  }
+}

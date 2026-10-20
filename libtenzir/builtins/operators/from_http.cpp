@@ -22,6 +22,7 @@
 #include <tenzir/http_pool.hpp>
 #include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/data_array_builder.hpp>
 #include <tenzir/nova/eval.hpp>
@@ -109,12 +110,8 @@ struct FetchError {
   std::string message;
 };
 struct FetchDone {};
-struct RetryWarning {
-  std::string message;
-};
 
-using Message
-  = variant<ResponseHeader, ResponseBody, FetchError, FetchDone, RetryWarning>;
+using Message = variant<ResponseHeader, ResponseBody, FetchError, FetchDone>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 // Builds a Proxygen request source, working around a bug in Proxygen's
@@ -968,13 +965,11 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             });
             auto delay = http::retry_delay_for_attempt(
               config.retry_delay, retries_done, retry_after);
-            // Emit a warning diagnostic before sleeping.
             auto const delay_secs
               = std::chrono::duration_cast<std::chrono::seconds>(delay);
-            co_await mq->enqueue(RetryWarning{
-              fmt::format("{}, attempt {}/{}, retrying after {}s", reason,
-                          retries_done + 1u, config.max_retry_count + 1u,
-                          delay_secs.count())});
+            TENZIR_DEBUG("from_http: {}, attempt {}/{}, retrying after {}s",
+                         reason, retries_done + 1u, config.max_retry_count + 1u,
+                         delay_secs.count());
             co_await folly::coro::sleep(delay);
             ++retries_done;
           });
@@ -1140,13 +1135,6 @@ public:
           .emit(ctx);
         pagination_.next_request = None{};
         lifecycle_ = Lifecycle::done;
-        co_return;
-      },
-      // --- RetryWarning ---
-      [&](RetryWarning warn) -> Task<void> {
-        diagnostic::warning("{}", warn.message)
-          .primary(args_.operator_location)
-          .emit(ctx);
         co_return;
       },
       // --- FetchDone ---
@@ -1531,13 +1519,6 @@ public:
           .emit(ctx);
         pagination_.next_request = None{};
         lifecycle_ = Lifecycle::done;
-        co_return;
-      },
-      // --- RetryWarning ---
-      [&](RetryWarning warn) -> Task<void> {
-        diagnostic::warning("{}", warn.message)
-          .primary(args_.operator_location)
-          .emit(ctx);
         co_return;
       },
       // --- FetchDone ---
