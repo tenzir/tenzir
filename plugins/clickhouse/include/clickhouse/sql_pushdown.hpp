@@ -96,13 +96,30 @@ public:
   struct JsonField {
     /// The name of the `JSON` column.
     std::string column;
-    /// The subcolumn of the field, with the dots in keys escaped as `%2E`.
-    std::string subcolumn;
+    /// The keys of the path below the column, with the dots in keys escaped
+    /// as `%2E`.
+    std::vector<std::string> keys;
   };
 
   /// Returns the `JSON` field at `path`, if `add_json_field` registered one.
   auto json_field(std::span<const std::string> path) const
     -> Option<JsonField const&>;
+
+  /// A field below a `JSON` column that stays unaddressable, because a column
+  /// named like the start of its subcolumn shadows it.
+  struct ShadowedField {
+    /// The path of the field in the reconstructed events.
+    std::vector<std::string> path;
+    /// The column that shadows the field.
+    std::string column;
+  };
+
+  /// Records that the column `column` shadows the field at `path`.
+  auto add_shadowed_field(std::vector<std::string> path,
+                          std::string_view column) -> void;
+
+  /// The fields that `add_shadowed_field` recorded.
+  auto shadowed_fields() const -> std::span<const ShadowedField>;
 
   /// Returns the column that `add_placed_column` placed at `path`.
   auto placed_column(std::span<const std::string> path) const
@@ -130,6 +147,7 @@ private:
   detail::stable_map<std::string, Node> nodes_;
   detail::flat_map<std::vector<std::string>, std::string> placed_;
   detail::flat_map<std::vector<std::string>, JsonField> json_fields_;
+  std::vector<ShadowedField> shadowed_;
   pushdown::ColumnModel model_;
 };
 
@@ -141,7 +159,10 @@ private:
 /// catch-all column or another `JSON` column are addressable too, as
 /// `add_json_field` describes. That excludes `JSON` columns with typed or
 /// skipped paths, since a typed path may hold a record of TQL without paths
-/// below it in ClickHouse.
+/// below it in ClickHouse. It also excludes the fields that a column named
+/// like the start of their subcolumn shadows, such as the fields below `x` in
+/// the catch-all column `event` next to a column `event.x`: ClickHouse resolves
+/// `event`.`x` to that column. `SqlSchema::shadowed_fields` lists them.
 auto make_catch_all_schema(std::span<ColumnDescription const> description,
                            CatchAllLayout const& layout,
                            ir::OptimizeFilter const& filter, bool json_fields)

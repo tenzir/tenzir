@@ -449,11 +449,16 @@ auto ClickHouseRenderer::json_field(pushdown::Expr const& x) const
 
 auto ClickHouseRenderer::render_json_value(
   SqlSchema::JsonField const& field) const -> Fragment {
-  // Unlike `column.path`, `getSubcolumn` never confuses a dotted column name
-  // with a path below another column, and it reads every key literally.
-  return sql_call("getSubcolumn",
-                  std::array{sql_atom(quote_sql_identifier(field.column)),
-                             sql_atom(quote_sql_string(field.subcolumn))});
+  // `column`.`key`... reads only the subcolumn of the path, while
+  // `getSubcolumn(column, 'path')` reads the whole `JSON` column.
+  // `make_catch_all_schema` leaves out the fields whose identifier ClickHouse
+  // would resolve to a dotted column instead.
+  auto text = quote_sql_identifier(field.column);
+  for (auto const& key : field.keys) {
+    text += '.';
+    text += quote_sql_identifier(key);
+  }
+  return sql_atom(std::move(text));
 }
 
 auto ClickHouseRenderer::render_json_comparison(
@@ -654,17 +659,19 @@ auto ClickHouseRenderer::render_is_null(pushdown::IsNull const& x,
   }
   // ClickHouse stores no path for an object, but one for each value below
   // it. An empty object or one with only nulls has none, and ClickHouse sends
-  // it as missing.
+  // it as missing. `column`.^`key`... is the object below the path, which
+  // reads only the paths below it and is `{}` without any.
   auto value = sql_is_null(render_json_value(*field), true);
-  auto prefix = quote_sql_string(fmt::format("{}.", field->subcolumn));
-  auto below = sql_call(
-    "arrayExists",
-    std::array{
-      sql_atom(
-        fmt::format("__tenzir_path -> startsWith(__tenzir_path, {})", prefix)),
-      sql_call("JSONAllPaths",
-               std::array{sql_atom(quote_sql_identifier(field->column))}),
-    });
+  auto object = quote_sql_identifier(field->column);
+  auto separator = std::string_view{".^"};
+  for (auto const& key : field->keys) {
+    object += separator;
+    object += quote_sql_identifier(key);
+    separator = ".";
+  }
+  auto below
+    = sql_binary("!=", sql_call("toString", std::array{sql_atom(object)}),
+                 sql_atom("'{}'"), Fragment::Kind::predicate);
   return sql_junction("OR", std::array{std::move(value), std::move(below)});
 }
 
@@ -740,6 +747,44 @@ auto SqlSchema::add_placed_column(std::string_view name, std::string_view type,
   placed_.emplace(std::move(path), std::string{name});
 }
 
+namespace {
+
+/// Returns the keys of a path below a `JSON` column as ClickHouse stores them.
+///
+/// `json_type_escape_dots_in_keys=1` stores a key `a.b` at the path `a%2Eb`,
+/// and turns `%2E` back into `.` when ClickHouse sends it. A key with a
+/// literal `%2E` thus reaches TQL with a `.`, and reads from the same path.
+auto escape_json_keys(std::span<const std::string> keys)
+  -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto const& key : keys) {
+    result.push_back(detail::replace_all(key, ".", "%2E"));
+  }
+  return result;
+}
+
+/// Returns the column that ClickHouse resolves `column`.`key`... to instead
+/// of the path below the `JSON` column `column`, if any: a column named after
+/// `column` and the leading keys, joined with dots.
+auto shadowing_column(std::string_view column,
+                      std::span<const std::string> keys,
+                      std::span<ColumnDescription const> description)
+  -> Option<std::string_view> {
+  auto name = std::string{column};
+  for (auto const& key : keys) {
+    name += '.';
+    name += key;
+    auto const it
+      = std::ranges::find(description, name, &ColumnDescription::name);
+    if (it != description.end()) {
+      return std::string_view{it->name};
+    }
+  }
+  return None{};
+}
+
+} // namespace
+
 auto SqlSchema::add_json_field(std::vector<std::string> path,
                                std::string_view column,
                                std::span<const std::string> json_path) -> void {
@@ -748,19 +793,20 @@ auto SqlSchema::add_json_field(std::vector<std::string> path,
       or std::ranges::any_of(json_path, &std::string::empty)) {
     return;
   }
-  // `json_type_escape_dots_in_keys=1` stores a key `a.b` at the path `a%2Eb`,
-  // and turns `%2E` back into `.` when ClickHouse sends it. A key with a
-  // literal `%2E` thus reaches TQL with a `.`, and reads from the same path.
-  auto escaped = std::vector<std::string>{};
-  for (auto const& key : json_path) {
-    escaped.push_back(detail::replace_all(key, ".", "%2E"));
-  }
   model_.add(path, {.type = pushdown::DynamicType{}, .nullable = true});
-  json_fields_.emplace(std::move(path),
-                       JsonField{
-                         .column = std::string{column},
-                         .subcolumn = fmt::to_string(fmt::join(escaped, ".")),
-                       });
+  json_fields_.emplace(std::move(path), JsonField{
+                                          .column = std::string{column},
+                                          .keys = escape_json_keys(json_path),
+                                        });
+}
+
+auto SqlSchema::add_shadowed_field(std::vector<std::string> path,
+                                   std::string_view column) -> void {
+  shadowed_.push_back({.path = std::move(path), .column = std::string{column}});
+}
+
+auto SqlSchema::shadowed_fields() const -> std::span<const ShadowedField> {
+  return shadowed_;
 }
 
 auto SqlSchema::json_field(std::span<const std::string> path) const
@@ -824,9 +870,17 @@ auto make_catch_all_schema(std::span<ColumnDescription const> description,
     auto const column = std::ranges::find(description, origin->column,
                                           &ColumnDescription::name);
     TENZIR_ASSERT(column != description.end());
-    if (is_untyped_json(column->type)) {
-      result.add_json_field(std::move(path), origin->column, origin->path);
+    if (not is_untyped_json(column->type)) {
+      continue;
     }
+    // A column named like the start of the subcolumn would answer the
+    // predicate instead of the path, so the predicate stays local.
+    if (auto shadow = shadowing_column(
+          origin->column, escape_json_keys(origin->path), description)) {
+      result.add_shadowed_field(std::move(path), *shadow);
+      continue;
+    }
+    result.add_json_field(std::move(path), origin->column, origin->path);
   }
   return result;
 }

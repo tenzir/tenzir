@@ -1,18 +1,18 @@
 {
-  filter: "`class_uid` = 4001 AND `src_endpoint.port` = 443 AND toString(getSubcolumn(`event`, 'metadata.product.name')) = 'Demo' AND toFloat64OrNull(toString(getSubcolumn(`event`, 'a%2Eb'))) = 1",
+  filter: "`class_uid` = 4001 AND `src_endpoint.port` = 443 AND toString(`event`.`metadata`.`product`.`name`) = 'Demo' AND toFloat64OrNull(toString(`event`.`a%2Eb`)) = 1",
 }
 {
-  filter: "toString(getSubcolumn(`event`, 'metadata.product.name')) = 'Demo'",
+  filter: "toString(`event`.`metadata`.`product`.`name`) = 'Demo'",
 }
 {
-  filter: "toString(getSubcolumn(`event`, 'metadata.product.name')) = 'test'",
+  filter: "toString(`event`.`metadata`.`product`.`name`) = 'test'",
 }
 {
-  filter: "toFloat64OrNull(toString(getSubcolumn(`event`, 'n'))) > 4 AND toString(getSubcolumn(`event`, 'flag')) = 'true'",
+  filter: "toFloat64OrNull(toString(`event`.`n`)) > 4 AND toString(`event`.`flag`) = 'true'",
 }
 {
-  filter: "((getSubcolumn(`event`, 'obj') IS NOT NULL OR arrayExists(__tenzir_path -> startsWith(__tenzir_path, 'obj.'), JSONAllPaths(`event`))) OR toString(getSubcolumn(`event`, 'a%2Eb')) = 'dot')",
+  filter: "((`event`.`obj` IS NOT NULL OR toString(`event`.^`obj`) != '{}') OR toString(`event`.`a%2Eb`) = 'dot')",
 }
 {
-  filter: "`src.port` = 443 AND startsWith(toString(getSubcolumn(`event`, 'src.host')), 'h') AND toString(getSubcolumn(`extra`, 'k')) = 'v'",
+  filter: "`src.port` = 443 AND startsWith(toString(`event`.`src`.`host`), 'h') AND toString(`extra`.`k`) = 'v'",
 }
