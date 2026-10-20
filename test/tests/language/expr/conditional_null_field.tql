@@ -1,0 +1,6 @@
+// Reading a null field from a record that some active rows lack must not add
+// a second `null` alternative, which broke merging the conditional's branches.
+let $m = {a: {o: null}}
+from {c: false, k: "b"}, {c: true, k: "b"}, {c: false, k: "a"}
+batch
+y = "then" if c else $m[k]?.o?

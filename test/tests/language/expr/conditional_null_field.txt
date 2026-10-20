@@ -1,0 +1,15 @@
+{
+  c: false,
+  k: "b",
+  y: null,
+}
+{
+  c: true,
+  k: "b",
+  y: "then",
+}
+{
+  c: false,
+  k: "a",
+  y: null,
+}

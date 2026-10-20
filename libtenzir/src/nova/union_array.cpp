@@ -304,6 +304,11 @@ auto Array<Data>::null_where(nova::storage::BitMap to_null) && -> Array<Data> {
     [&to_null](UnionArray&& array) -> Array<Data> {
       return Array<Data>{std::move(array).null_where(to_null)};
     },
+    [](Array<Null>&& array) -> Array<Data> {
+      // Every row is already null. Wrapping the array in a union would add a
+      // second `Null` alternative, but a union holds at most one per type.
+      return Array<Data>{std::move(array)};
+    },
     [&to_null](auto&& concrete) -> Array<Data> {
       const auto length = concrete.length();
       auto not_to_null = to_null.make_inverted();
