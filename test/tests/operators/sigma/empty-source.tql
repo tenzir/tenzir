@@ -1,0 +1,3 @@
+// An initially empty source is valid and matches nothing without warning.
+from {foo: "alpha"}
+sigma path="tests/operators/sigma/inputs/empty-rule.yaml", mapping="direct"

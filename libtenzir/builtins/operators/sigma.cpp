@@ -1519,7 +1519,7 @@ auto parse_source(std::string_view content, std::string const& origin,
            return entry.second.origin == origin;
          });
   auto documents = from_yaml_documents(content);
-  if (not documents or documents->empty()) {
+  if (not documents) {
     snapshot.source_failed = true;
     if (state.should_emit(origin, hash(content))) {
       auto builder
@@ -1528,16 +1528,13 @@ auto parse_source(std::string_view content, std::string const& origin,
                                   "version of '{}'",
                                   origin)
             : diagnostic::warning("sigma operator ignores source '{}'", origin);
-      if (documents) {
-        std::move(builder).note("source contains no YAML documents").emit(dh);
-      } else {
-        std::move(builder)
-          .note("failed to parse yaml: {}", documents.error())
-          .emit(dh);
-      }
+      std::move(builder)
+        .note("failed to parse yaml: {}", documents.error())
+        .emit(dh);
     }
     return snapshot;
   }
+  // An empty YAML stream is a successful snapshot that removes prior rules.
   state.succeeded(origin);
   snapshot.document_count = documents->size();
   auto identity_counts = std::unordered_map<std::string, size_t>{};

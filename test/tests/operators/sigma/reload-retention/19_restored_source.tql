@@ -1,0 +1,4 @@
+// Rules can be reintroduced after a successful empty snapshot.
+subscribe "sigma-empty"
+where title == "Empty source baseline"
+head 1

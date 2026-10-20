@@ -1,0 +1,5 @@
+// Only the invalid rule warns; the empty source is a successful reload.
+diagnostics
+where pipeline_id in ["00000000-0000-0000-0000-000000001701", "00000000-0000-0000-0000-000000001702"]
+summarize pipeline_id, warnings=count()
+sort pipeline_id

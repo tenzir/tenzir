@@ -10,8 +10,11 @@ assertions:
 
 // The fixture holds the first request until a second one is in flight, and
 // then answers it last.
-from {id: 1, rendezvous: 2, delay_ms: 100}, {id: 2}, {id: 3},
-     {id: 4, note: "danger"}
+// Keep one schema so `batch` does not split the rendezvous from its peers.
+from {id: 1, rendezvous: 2, delay_ms: 100, note: ""},
+     {id: 2, rendezvous: 0, delay_ms: 0, note: ""},
+     {id: 3, rendezvous: 0, delay_ms: 0, note: ""},
+     {id: 4, rendezvous: 0, delay_ms: 0, note: "danger"}
 // Requests run concurrently within a batch.
 batch 4
 ai_decide "Is this event dangerous?",

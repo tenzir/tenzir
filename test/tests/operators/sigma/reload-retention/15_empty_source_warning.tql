@@ -1,4 +1,0 @@
-diagnostics live=true, retro=true
-where pipeline_id == "00000000-0000-0000-0000-000000001702" and message.search("retains last known good")
-select severity, message=message.replace(env("FILE_ROOT"), "<root>"), notes
-head 1

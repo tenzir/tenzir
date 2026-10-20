@@ -1,0 +1,6 @@
+// Processing metrics form a reload barrier even when no findings remain.
+metrics "sigma", live=true, retro=true
+where pipeline_id == "00000000-0000-0000-0000-000000001702"
+where events > 0 and rule_evaluations == 0
+select rule_evaluations, matches
+head 1

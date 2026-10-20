@@ -1,5 +1,4 @@
 {
-  titles: [
-    "Empty source baseline",
-  ],
+  rule_evaluations: 0,
+  matches: 0,
 }

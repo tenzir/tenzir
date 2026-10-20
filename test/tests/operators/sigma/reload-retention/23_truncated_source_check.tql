@@ -1,0 +1,5 @@
+// Subsequent batches continue processing events without evaluating stale rules.
+metrics "sigma", live=true, retro=false
+where pipeline_id == "00000000-0000-0000-0000-000000001702"
+head 10
+summarize rule_evaluations=sum(rule_evaluations), matches=sum(matches)

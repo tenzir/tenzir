@@ -1,0 +1,6 @@
+// Observe fresh processing metrics after truncation, not the earlier empty state.
+metrics "sigma", live=true, retro=false
+where pipeline_id == "00000000-0000-0000-0000-000000001702"
+where events > 0 and rule_evaluations == 0
+select rule_evaluations, matches
+head 1

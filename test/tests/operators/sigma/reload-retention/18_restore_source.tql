@@ -1,0 +1,10 @@
+from {yaml: r#"title: Empty source baseline
+id: 22222222-2222-4222-8222-222222222222
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+"#}
+to_file env("FILE_ROOT") + "/empty.yaml.next" {
+  write_all yaml
+}
