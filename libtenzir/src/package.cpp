@@ -10,9 +10,9 @@
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/source.hpp"
@@ -907,11 +907,11 @@ auto read_package_files(std::filesystem::path const& dir,
   auto result = package_files{};
   auto had_errors = false;
   auto read = [&](std::filesystem::path const& file) {
-    auto content = detail::load_contents(file);
+    auto content = read_file(file, {.source = FileSource::stream});
     if (not content) {
       diagnostic::error("failed to load file")
         .note("trying to load {}", file)
-        .note("error: {}", content.error())
+        .note("error: {}", content.unwrap_err())
         .emit(dh);
       had_errors = true;
       return;
@@ -919,7 +919,11 @@ auto read_package_files(std::filesystem::path const& dir,
     auto ec = std::error_code{};
     auto relative = std::filesystem::relative(file, dir, ec);
     TENZIR_ASSERT(not ec);
-    result.emplace(relative.generic_string(), std::move(*content));
+    auto const& bytes = content.unwrap();
+    auto text = std::string{
+      bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+      bytes.size()};
+    result.emplace(relative.generic_string(), std::move(text));
   };
   for (auto name : {"package.yaml", "config.yaml", "constants.tql"}) {
     auto file = dir / name;

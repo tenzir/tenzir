@@ -19,7 +19,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/endpoint.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/io/write.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/nova_flag.hpp"
 #include "tenzir/scope_linked.hpp"
@@ -144,9 +144,16 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     // A single line of output to publish out address for scripts.
     if (const auto* path = caf::get_if<std::string>(
           &inv.options, "tenzir.start.write-endpoint")) {
-      if (auto err = io::write(*path, as_bytes(*listen_endpoint));
-          err.valid()) {
-        TENZIR_WARN("failed to write listen_endpoint to {}: {}", *path, err);
+      // Standard output is a CLI convention, not a special filesystem path.
+      if (*path == "-") {
+        std::cout << *listen_endpoint << std::flush;
+        if (not std::cout) {
+          TENZIR_WARN("failed to write listen_endpoint to stdout");
+        }
+      } else if (auto result = write_file(*path, as_bytes(*listen_endpoint));
+                 not result) {
+        TENZIR_WARN("failed to write listen_endpoint to {}: {}", *path,
+                    result.unwrap_err());
       }
     }
     if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false)) {

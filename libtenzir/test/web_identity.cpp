@@ -10,6 +10,9 @@
 
 #include "tenzir/test/test.hpp"
 
+#include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/uuid.hpp>
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -165,6 +168,33 @@ TEST("token file contents are trimmed") {
   std::filesystem::remove(path);
   REQUIRE_NOERROR(token);
   CHECK_EQUAL(*token, fake_jwt);
+}
+
+TEST("token files preserve empty input and embedded NULs within the size "
+     "limit") {
+  auto path = std::filesystem::temp_directory_path()
+              / fmt::format("tenzir-web-identity-{}.jwt", uuid::random());
+  auto cleanup = detail::scope_guard{[&]() noexcept {
+    auto error = std::error_code{};
+    std::filesystem::remove(path, error);
+  }};
+  constexpr auto limit = size_t{1024 * 1024};
+  for (auto const& content :
+       {std::string{}, std::string{"left\0right", 10}, std::string(limit, 'x'),
+        std::string(limit + 1, 'x')}) {
+    auto output = std::ofstream{path};
+    output.write(content.data(), static_cast<std::streamsize>(content.size()));
+    output.close();
+    REQUIRE(static_cast<bool>(output));
+    auto config = resolved_web_identity{resolved_token_file{path.string()}};
+    auto token = fetch_web_identity_token(config);
+    if (content.size() > limit) {
+      CHECK(not token);
+    } else {
+      REQUIRE_NOERROR(token);
+      CHECK_EQUAL(*token, content);
+    }
+  }
 }
 
 TEST("token endpoint extracts a JSON path") {

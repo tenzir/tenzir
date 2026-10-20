@@ -18,13 +18,13 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/factory.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/type.hpp"
@@ -224,13 +224,17 @@ auto load_config_files(std::vector<config_file> config_files)
   for (const auto& config : config_files) {
     auto err = std::error_code{};
     if (std::filesystem::exists(config.path, err)) {
-      auto contents = detail::load_contents(config.path);
+      auto contents = read_file(config.path, {.source = FileSource::stream});
       if (not contents) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: {}",
-                                           config.path, contents.error()));
+                                           config.path, contents.unwrap_err()));
       }
-      auto yaml = from_yaml(*contents);
+      auto const& bytes = contents.unwrap();
+      auto text = std::string_view{
+        bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+        bytes.size()};
+      auto yaml = from_yaml(text);
       if (not yaml) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: {}",

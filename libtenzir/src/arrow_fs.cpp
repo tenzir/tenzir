@@ -386,6 +386,21 @@ auto FromArrowFsOperator<Output>::snapshot(Serde& serde) -> void {
 
 template <class Output>
   requires concepts::one_of<Output, table_slice, nova::Events>
+auto FromArrowFsOperator<Output>::move_file(std::string const& source,
+                                            std::string const& target,
+                                            diagnostic_handler& dh) const
+  -> Task<arrow::Status> {
+  auto status = co_await spawn_blocking([&] {
+    return fs_->CopyFile(source, target);
+  });
+  if (status.ok()) {
+    co_await remove_file(source, dh);
+  }
+  co_return status;
+}
+
+template <class Output>
+  requires concepts::one_of<Output, table_slice, nova::Events>
 auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
                                                base_ctx ctx) const
   -> Task<void> {
@@ -408,17 +423,18 @@ auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
       auto filename = std::filesystem::path{path}.filename();
       final_path /= filename;
     }
-    auto status
-      = co_await spawn_blocking([fs = fs_, src_path = path, final_path] {
-          auto parent_path = final_path.parent_path();
-          if (not parent_path.empty() and parent_path != ".") {
-            if (auto s = fs->CreateDir(parent_path, true); not s.ok()) {
-              return s;
-            }
-          }
-          // TODO: Verify that below is equivalent to fs->Move()
-          return fs->CopyFile(src_path, final_path);
-        });
+    auto status = co_await spawn_blocking([fs = fs_, final_path] {
+      auto parent_path = final_path.parent_path();
+      if (not parent_path.empty() and parent_path != ".") {
+        if (auto s = fs->CreateDir(parent_path, true); not s.ok()) {
+          return s;
+        }
+      }
+      return arrow::Status::OK();
+    });
+    if (status.ok()) {
+      status = co_await move_file(path, final_path, ctx);
+    }
     if (not status.ok()) {
       diagnostic::warning("failed to rename `{}` to `{}`", path, final_path)
         .primary(*base_args_.rename)
@@ -426,7 +442,6 @@ auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
         .emit(ctx);
       co_return;
     }
-    co_await remove_file(path, ctx);
     co_return;
   }
 }

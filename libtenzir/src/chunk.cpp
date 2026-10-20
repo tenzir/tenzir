@@ -13,8 +13,7 @@
 #include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/io/read.hpp"
-#include "tenzir/io/save.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/logger.hpp"
 
 #include <arrow/buffer.h>
@@ -425,32 +424,28 @@ as_arrow_file(chunk_ptr chunk) noexcept {
 // -- concepts -----------------------------------------------------------------
 
 caf::error write(const std::filesystem::path& filename, const chunk_ptr& x) {
-  return io::save(filename, as_bytes(x));
+  auto result = replace_file(filename, as_bytes(x));
+  if (not result) {
+    return caf::make_error(ec::filesystem_error, result.unwrap_err());
+  }
+  return caf::none;
 }
 
 caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
                 chunk_metadata metadata) {
-  std::error_code err{};
-  const auto size = std::filesystem::file_size(filename, err);
-  if (size == static_cast<std::uintmax_t>(-1)) {
+  auto bytes = read_file(filename);
+  if (not bytes) {
     x = nullptr;
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to get file size for filename "
-                                       "{}: {}",
-                                       filename, err.message()));
+    return caf::make_error(ec::filesystem_error, bytes.unwrap_err());
   }
-  auto buffer = std::make_unique<chunk::value_type[]>(size);
-  auto view = std::span{buffer.get(), size};
-  if (auto err = io::read(filename, view); err.valid()) {
-    x = nullptr;
-    return err;
+  if (bytes.unwrap().empty()) {
+    // An empty vector may have null data, but chunk_ptr reserves that for a
+    // missing chunk. Keep the static non-null empty view and attach metadata.
+    x = chunk::make(
+      as_bytes(chunk::make_empty()), []() noexcept {}, std::move(metadata));
+  } else {
+    x = chunk::make(std::move(bytes).unwrap(), std::move(metadata));
   }
-  x = chunk::make(
-    view,
-    [buffer = std::move(buffer)]() noexcept {
-      static_cast<void>(buffer);
-    },
-    std::move(metadata));
   return caf::none;
 }
 

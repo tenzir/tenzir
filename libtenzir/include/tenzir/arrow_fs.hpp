@@ -302,6 +302,10 @@ protected:
     -> Task<void>
     = 0;
 
+  /// Moves a processed file, using copy-and-remove for object stores.
+  virtual auto move_file(std::string const& source, std::string const& target,
+                         diagnostic_handler& dh) const -> Task<arrow::Status>;
+
   /// Resolves the URL secret and returns the parsed URI.
   virtual auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>>
     = 0;

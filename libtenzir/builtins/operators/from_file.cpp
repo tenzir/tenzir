@@ -15,6 +15,8 @@
 
 #include <arrow/filesystem/localfs.h>
 
+#include <system_error>
+
 namespace tenzir::plugins::from_file {
 
 namespace {
@@ -93,6 +95,26 @@ protected:
         .note(status.ToStringWithoutContextLines())
         .emit(dh);
     }
+  }
+
+  auto move_file(std::string const& source, std::string const& target,
+                 diagnostic_handler& dh) const -> Task<arrow::Status> override {
+    // Publish complete files atomically on the same filesystem. Copying over
+    // the target would expose empty or partially written files to readers.
+    auto error = co_await spawn_blocking([&] {
+      auto result = std::error_code{};
+      std::filesystem::rename(source, target, result);
+      return result;
+    });
+    if (error == std::errc::cross_device_link) {
+      // Cross-filesystem moves cannot be atomic; preserve their copy semantics.
+      co_return co_await FromArrowFsOperator<Output>::move_file(source, target,
+                                                                dh);
+    }
+    if (error) {
+      co_return arrow::Status::IOError(error.message());
+    }
+    co_return arrow::Status::OK();
   }
 
 private:

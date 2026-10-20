@@ -15,10 +15,10 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/filter_dir.hpp"
 #include "tenzir/detail/installdirs.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
@@ -156,12 +156,16 @@ load_symbols(const std::filesystem::path& module_file, symbol_map& local) {
   if (module_file.empty()) {
     return caf::make_error(ec::filesystem_error, "empty path");
   }
-  auto str = detail::load_contents(module_file);
+  auto str = read_file(module_file, {.source = FileSource::stream});
   if (not str) {
-    return str.error();
+    return caf::make_error(ec::filesystem_error, str.unwrap_err());
   }
+  auto const& bytes = str.unwrap();
+  auto text = std::string_view{
+    bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+    bytes.size()};
   auto p = symbol_map_parser{};
-  if (not p(*str, local)) {
+  if (not p(text, local)) {
     return caf::make_error(ec::parse_error, "failed to load symbols from",
                            module_file.string());
   }
@@ -259,10 +263,14 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       = detail::filter_dir(dir, std::move(filter), max_recursion);
     for (const auto& f : *module_files) {
       TENZIR_DEBUG("loading schema {}", f);
-      auto str = detail::load_contents(f);
+      auto str = read_file(f, {.source = FileSource::stream});
       TENZIR_ASSERT(str);
       auto source_map = SourceMap{};
-      auto source = Source::new_source(*str, std::string{f}, true);
+      auto const& bytes = str.unwrap();
+      auto text = std::string{
+        bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+        bytes.size()};
+      auto source = Source::new_source(std::move(text), std::string{f}, true);
       source_map.add_source(source);
       auto dh = make_diagnostic_printer(source_map, color_diagnostics::yes,
                                         std::cerr);

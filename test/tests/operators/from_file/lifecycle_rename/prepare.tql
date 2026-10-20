@@ -1,0 +1,11 @@
+---
+assertions:
+  fixtures:
+    local_files:
+      state: unchanged
+---
+// Renaming must atomically replace an existing destination, not copy over it.
+from {old: true}
+to_file env("FILE_ROOT") + "/lifecycle/rename-target.json.done" {
+  write_json
+}

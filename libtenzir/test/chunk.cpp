@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/serialize.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/test/fixtures/filesystem.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -144,5 +145,22 @@ WITH_FIXTURE(fixture) {
     err = read(filename, y);
     CHECK_EQUAL(err, caf::none);
     CHECK_EQUAL(as_bytes(x), as_bytes(y));
+  }
+
+  TEST("empty file reads preserve a valid chunk and its metadata") {
+    auto filename = directory / "empty";
+    REQUIRE(write_file(filename, {}).is_ok());
+    auto value = chunk::make(std::string{"previous"});
+    auto error
+      = read(filename, value,
+             chunk_metadata{.content_type = std::string{"text/plain"}});
+    REQUIRE(not error);
+    REQUIRE(value);
+    CHECK_EQUAL(value->size(), 0u);
+    REQUIRE(value->metadata().content_type);
+    CHECK_EQUAL(value->metadata().content_type.unwrap(), "text/plain");
+    error = read(directory / "missing", value);
+    CHECK(error);
+    CHECK(not value);
   }
 }

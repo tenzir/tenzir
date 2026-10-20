@@ -22,11 +22,10 @@
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/partition.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/int64_synopsis.hpp"
-#include "tenzir/io/read.hpp"
-#include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/nova/data_array_builder.hpp"
@@ -1046,7 +1045,11 @@ auto catalog_state::make_policy() -> caf::error {
                                              path));
         }
         const auto resolved = path.is_absolute() ? path : dbdir / path;
-        return io::save(resolved, as_bytes(chunk));
+        auto result = replace_file(resolved, as_bytes(chunk));
+        if (not result) {
+          return caf::make_error(ec::filesystem_error, result.unwrap_err());
+        }
+        return caf::none;
       },
       .run_delayed =
         [self = this->self](duration delay, std::function<void()> what) {

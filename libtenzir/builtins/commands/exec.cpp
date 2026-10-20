@@ -9,8 +9,8 @@
 #include "tenzir/location.hpp"
 
 #include <tenzir/detail/env.hpp>
-#include <tenzir/detail/load_contents.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/file.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/source.hpp>
@@ -151,13 +151,16 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   }
   if (as_file) {
     filename = args[0];
-    auto result = detail::load_contents(filename);
+    auto result = read_file(filename, {.source = FileSource::stream});
     if (not result) {
       // TODO: Better error message.
-      printer->emit(diagnostic::error(result.error()).done());
+      printer->emit(diagnostic::error("{}", result.unwrap_err()).done());
       return false;
     }
-    content = std::move(*result);
+    auto const& bytes = result.unwrap();
+    content.assign(bytes.empty() ? ""
+                                 : reinterpret_cast<char const*>(bytes.data()),
+                   bytes.size());
   } else {
     filename = "<input>";
     content = args[0];

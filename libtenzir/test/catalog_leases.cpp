@@ -13,8 +13,8 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/index_config.hpp"
-#include "tenzir/io/save.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/partition_paths.hpp"
@@ -661,7 +661,7 @@ TEST("malformed transform markers refuse startup and retain recovery files") {
   const auto unknown = fbs::release(unknown_builder);
   for (const auto& bytes : {std::span<const std::byte>{},
                             as_bytes(valid).first(4), as_bytes(unknown)}) {
-    REQUIRE(not io::save(marker, bytes).valid());
+    REQUIRE(replace_file(marker, bytes).is_ok());
     for (auto restart = 0; restart < 2; ++restart) {
       f.start();
       {
@@ -683,7 +683,7 @@ TEST("malformed transform markers refuse startup and retain recovery files") {
       }
     }
   }
-  REQUIRE(not io::save(marker, as_bytes(valid)).valid());
+  REQUIRE(replace_file(marker, as_bytes(valid)).is_ok());
   f.start();
   auto reader = caf::scoped_actor{f.sys};
   CHECK(f.candidates(reader, uuid::random()).empty());
@@ -694,11 +694,11 @@ TEST("marker replay restores the highest issued sequence") {
   REQUIRE(f.await_shutdown());
   std::filesystem::create_directories(f.paths.markers_dir);
   for (const auto sequence : {uint64_t{42}, uint64_t{17}}) {
-    REQUIRE(not io::save(f.paths.marker(uuid::random()),
+    REQUIRE(replace_file(f.paths.marker(uuid::random()),
                          as_bytes(create_marker(
                            {}, {}, keep_original_partition::yes, false,
                            "policy token", uuid::random(), true, sequence)))
-                  .valid());
+              .is_ok());
   }
   auto state = catalog_state{};
   state.paths = f.paths;
@@ -721,12 +721,12 @@ TEST("marker replay requires stores and promotes offline staged stores") {
   const auto output = uuid::random();
   const auto marker = f.paths.marker(uuid::random());
   REQUIRE(
-    not io::save(marker, as_bytes(create_marker({input}, {output},
+    replace_file(marker, as_bytes(create_marker({input}, {output},
                                                 keep_original_partition::no)))
-          .valid());
-  REQUIRE(not io::save(f.paths.transformer_partition(output),
+      .is_ok());
+  REQUIRE(replace_file(f.paths.transformer_partition(output),
                        as_bytes(std::string_view{"partition"}))
-                .valid());
+            .is_ok());
   auto state = catalog_state{};
   state.paths = f.paths;
   // An index file alone must not authorize erasing the source data.
@@ -741,7 +741,7 @@ TEST("marker replay requires stores and promotes offline staged stores") {
   const auto staged_store
     = std::filesystem::path{f.store_of(output).string() + ".tmp"};
   REQUIRE(
-    not io::save(staged_store, as_bytes(std::string_view{"store"})).valid());
+    replace_file(staged_store, as_bytes(std::string_view{"store"})).is_ok());
   const auto excluded = state.replay_markers();
   REQUIRE(excluded);
   CHECK(excluded->contains(input));
@@ -758,10 +758,10 @@ TEST("erasure tombstones replay without a policy history invalidation") {
   const auto input = f.add_partition();
   REQUIRE(f.await_shutdown());
   std::filesystem::create_directories(f.paths.markers_dir);
-  REQUIRE(not io::save(f.paths.marker(uuid::random()),
-                       as_bytes(create_marker({input}, {},
-                                              keep_original_partition::no)))
-                .valid());
+  REQUIRE(replace_file(
+            f.paths.marker(uuid::random()),
+            as_bytes(create_marker({input}, {}, keep_original_partition::no)))
+            .is_ok());
   f.start();
   auto reader = caf::scoped_actor{f.sys};
   CHECK(f.candidates(reader, uuid::random()).empty());
@@ -781,9 +781,9 @@ TEST("failed quarantine replay retains its marker across restarts") {
   std::filesystem::create_directories(f.paths.markers_dir);
   const auto marker = f.paths.marker(uuid::random());
   REQUIRE(
-    not io::save(marker, as_bytes(create_marker(
+    replace_file(marker, as_bytes(create_marker(
                            {input}, {}, keep_original_partition::no, true)))
-          .valid());
+      .is_ok());
   for (auto attempt = 0; attempt < 2; ++attempt) {
     f.start();
     {

@@ -25,7 +25,6 @@
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/available_memory.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/pid_file.hpp"
 #include "tenzir/detail/scope_guard.hpp"
@@ -36,10 +35,10 @@
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/index_config.hpp"
-#include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
@@ -376,13 +375,17 @@ auto claim_state_directory(const std::filesystem::path& state_dir, bool claim)
   const auto pid_file = state_dir / "pid.lock";
   auto err = std::error_code{};
   if (std::filesystem::exists(pid_file, err)) {
-    auto contents = detail::load_contents(pid_file);
+    auto contents = read_file(pid_file, {.source = FileSource::stream});
     if (not contents) {
-      return diagnostic::error(contents.error())
+      return diagnostic::error("{}", contents.unwrap_err())
         .note("failed to read `{}`", pid_file)
         .to_error();
     }
-    const auto other_pid = to<int32_t>(*contents).value_or(-1);
+    auto const& bytes = contents.unwrap();
+    auto text = std::string_view{
+      bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+      bytes.size()};
+    const auto other_pid = to<int32_t>(text).value_or(-1);
     if (other_pid > 0 and other_pid != ::getpid()
         and ::getpgid(other_pid) >= 0) {
       return caf::make_error(
@@ -1312,9 +1315,10 @@ auto execute_merge(const merge_group& group,
   }};
   const auto save = [](const std::filesystem::path& path,
                        const chunk_ptr& chunk) -> caf::error {
-    if (auto error = io::save(path, std::span{chunk->data(), chunk->size()});
-        error.valid()) {
-      return diagnostic::error(error)
+    if (auto error
+        = replace_file(path, std::span{chunk->data(), chunk->size()});
+        not error) {
+      return diagnostic::error("{}", error.unwrap_err())
         .note("failed to write `{}`", path)
         .to_error();
     }

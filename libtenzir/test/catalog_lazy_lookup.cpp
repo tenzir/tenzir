@@ -13,8 +13,8 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/flatbuffer.hpp"
-#include "tenzir/io/save.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/series.hpp"
@@ -57,8 +57,8 @@ auto write_mdx(const partition_synopsis& ps) -> std::filesystem::path {
   auto chunk = fbs::release(builder);
   auto path = std::filesystem::temp_directory_path()
               / fmt::format("tnz-test-{}.mdx", uuid::random());
-  auto error = io::save(path, std::span{chunk->data(), chunk->size()});
-  TENZIR_ASSERT(not error);
+  auto result = replace_file(path, std::span{chunk->data(), chunk->size()});
+  TENZIR_ASSERT(result);
   return path;
 }
 

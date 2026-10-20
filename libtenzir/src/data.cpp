@@ -14,13 +14,13 @@
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/filter_dir.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/data.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/option.hpp"
@@ -917,11 +917,15 @@ caf::expected<std::vector<data>> from_yaml_documents(std::string_view str) {
 }
 
 caf::expected<data> load_yaml(const std::filesystem::path& file) {
-  const auto contents = detail::load_contents(file);
+  const auto contents = read_file(file, {.source = FileSource::stream});
   if (not contents) {
-    return contents.error();
+    return caf::make_error(ec::filesystem_error, contents.unwrap_err());
   }
-  if (auto yaml = from_yaml(*contents)) {
+  auto const& bytes = contents.unwrap();
+  auto text = std::string_view{
+    bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+    bytes.size()};
+  if (auto yaml = from_yaml(text)) {
     return yaml;
   } else {
     return caf::make_error(ec::parse_error, "failed to load YAML file",

@@ -118,6 +118,10 @@ def local_files() -> FixtureHandle:
         shutil.rmtree(root, ignore_errors=True)
         raise
 
+    rename_source = root / "lifecycle/rename-target.json"
+    rename_source_stat = rename_source.stat()
+    rename_source_content = rename_source.read_bytes()
+
     def _assert_test(
         *,
         test: Path,
@@ -127,6 +131,12 @@ def local_files() -> FixtureHandle:
         assertion_config = _extract_assertions(assertions)
         try:
             _verify_post_test(root, assertion_config)
+            if assertion_config.state == "renamed":
+                renamed = root / "lifecycle/rename-target.json.done"
+                if renamed.stat().st_ino != rename_source_stat.st_ino:
+                    raise RuntimeError("rename copied the file instead of moving it")
+                if renamed.read_bytes() != rename_source_content:
+                    raise RuntimeError("rename changed the file contents")
         except RuntimeError as exc:
             raise AssertionError(f"{test.name}: {exc}") from exc
 

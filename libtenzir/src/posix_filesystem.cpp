@@ -10,8 +10,7 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
-#include "tenzir/io/read.hpp"
-#include "tenzir/io/save.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/status.hpp"
 
 #include <caf/config_value.hpp>
@@ -56,19 +55,20 @@ auto read_recursive(const std::filesystem::path& root, size_t& total_size)
       result[name] = *recursive_result;
     } else if (entry.is_regular_file()) {
       auto size = entry.file_size();
-      if (total_size + size > MAX_TOTAL_SIZE) {
+      if (size > MAX_TOTAL_SIZE - total_size) {
         return diagnostic::error("max size exceeded")
           .note("for file {}", entry.path())
           .to_error();
       }
-      auto contents = io::read(entry.path());
+      auto contents
+        = read_file(entry.path(), {.max_bytes = MAX_TOTAL_SIZE - total_size});
       if (not contents) {
-        return diagnostic::error(contents.error())
+        return diagnostic::error("{}", contents.unwrap_err())
           .note("while trying to read file {}", entry.path())
           .to_error();
       }
-      total_size += contents->size();
-      result[name] = blob{contents->begin(), contents->end()};
+      total_size += contents.unwrap().size();
+      result[name] = blob{contents.unwrap().begin(), contents.unwrap().end()};
     }
   }
   return result;
@@ -91,8 +91,8 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
                                fmt::format("{} tried to write a nullptr to {}",
                                            *self, path));
       }
-      if (auto err = io::save(path, as_bytes(chk)); err.valid()) {
-        return err;
+      if (auto result = replace_file(path, as_bytes(chk)); not result) {
+        return caf::make_error(ec::filesystem_error, result.unwrap_err());
       }
       return atom::ok_v;
     },
@@ -106,10 +106,10 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         return caf::make_error(ec::no_such_file,
                                fmt::format("{} no such file: {}", *self, path));
       }
-      if (auto bytes = io::read(path)) {
-        return chunk::make(std::move(*bytes));
+      if (auto bytes = read_file(path)) {
+        return chunk::make(std::move(bytes).unwrap());
       } else {
-        return bytes.error();
+        return caf::make_error(ec::filesystem_error, bytes.unwrap_err());
       }
     },
     [self](atom::read, atom::recursive,

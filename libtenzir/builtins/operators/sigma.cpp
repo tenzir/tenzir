@@ -28,8 +28,8 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/file.hpp>
 #include <tenzir/hash/hash.hpp>
-#include <tenzir/io/read.hpp>
 #include <tenzir/multi_series.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/array_merge.hpp>
@@ -2218,7 +2218,7 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
   for (auto const& file : *files) {
     auto const origin = file.string();
     origins.insert(origin);
-    auto content = tenzir::io::read(file);
+    auto content = tenzir::read_file(file);
     if (not content) {
       auto snapshot = SourceSnapshot{};
       snapshot.origin = origin;
@@ -2231,7 +2231,7 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
           or std::ranges::any_of(filter_bank.entries, [&](auto const& entry) {
                return entry.second.origin == origin;
              });
-      if (state.should_emit(origin, hash(to_string(content.error())))) {
+      if (state.should_emit(origin, hash(content.unwrap_err()))) {
         auto builder
           = had_previous
               ? diagnostic::warning("sigma operator retains last known good "
@@ -2239,14 +2239,16 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
                                     origin)
               : diagnostic::warning("sigma operator ignores rule '{}'", origin);
         std::move(builder)
-          .note("failed to read file: {}", content.error())
+          .note("failed to read file: {}", content.unwrap_err())
           .emit(dh);
       }
       snapshots.push_back(std::move(snapshot));
       continue;
     }
+    auto const& bytes = content.unwrap();
     auto const view = std::string_view{
-      reinterpret_cast<char const*>(content->data()), content->size()};
+      bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+      bytes.size()};
     snapshots.push_back(
       parse_source(view, origin, previous, filter_bank, state, dh, reg));
   }

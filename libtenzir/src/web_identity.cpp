@@ -10,9 +10,9 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/curl.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/transfer.hpp"
@@ -301,14 +301,19 @@ auto fetch_token(const resolved_token_file& file)
       .note("size: {} bytes, maximum: {} bytes", file_size, max_token_file_size)
       .to_error();
   }
-  auto contents = detail::load_contents(file.path);
+  auto contents = read_file(file.path, {.source = FileSource::stream,
+                                        .max_bytes = max_token_file_size});
   if (not contents) {
     return diagnostic::error("failed to read web identity token file")
       .note("file: {}", file.path)
-      .note("{}", contents.error())
+      .note("{}", contents.unwrap_err())
       .to_error();
   }
-  return detail::trim(*contents);
+  auto const& bytes = contents.unwrap();
+  auto text = std::string_view{
+    bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+    bytes.size()};
+  return std::string{detail::trim(text)};
 }
 
 auto make_uri(const resolved_token_endpoint& te) -> std::string {

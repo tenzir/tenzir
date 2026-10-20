@@ -23,9 +23,8 @@
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/flatbuffer.hpp"
-#include "tenzir/io/read.hpp"
-#include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
@@ -53,8 +52,9 @@ namespace {
 auto test_file_identifier(const std::filesystem::path& file,
                           const char* identifier) -> bool {
   std::byte buffer[8];
-  if (auto err = io::read(file, std::span<std::byte>{buffer, sizeof(buffer)});
-      err.valid()) {
+  if (auto result
+      = read_file(file, std::span<std::byte>{buffer, sizeof(buffer)});
+      not result) {
     return false;
   }
   return std::memcmp(buffer + 4, identifier, 4) == 0;
@@ -131,8 +131,12 @@ auto extract_partition_synopsis(
                     partition_synopsis_path, checked.error()));
     }
   }
-  return io::save(partition_synopsis_path,
-                  std::span{chunk_out->data(), chunk_out->size()});
+  auto result = replace_file(partition_synopsis_path,
+                             std::span{chunk_out->data(), chunk_out->size()});
+  if (not result) {
+    return caf::make_error(ec::filesystem_error, result.unwrap_err());
+  }
+  return caf::none;
 }
 
 auto catalog_state::replay_markers()

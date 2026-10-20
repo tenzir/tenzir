@@ -11,8 +11,8 @@
 #include "tenzir/concept/parseable/numeric/integral.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/file.hpp"
 #include "tenzir/logger.hpp"
 
 #include <sys/file.h>
@@ -29,16 +29,21 @@ namespace {
 
 auto pid_belongs_to_tenzir(pid_t pid) -> bool {
   const auto proc_pid_path = fmt::format("/proc/{}/status", pid);
-  const auto proc_pid_contents = detail::load_contents(proc_pid_path);
+  const auto proc_pid_contents
+    = read_file(proc_pid_path, {.source = FileSource::stream});
   if (not proc_pid_contents) {
     TENZIR_DEBUG("failed to read {}: {}", proc_pid_path,
-                 proc_pid_contents.error());
+                 proc_pid_contents.unwrap_err());
     return false;
   }
   // The maximum length of the "tenzir" process name is 4, so including the
   // null-terminator we just need to read up to 4 bytes here.
   auto process_name = std::array<char, 5>{};
-  ::sscanf(proc_pid_contents->c_str(), "%*s %4s", process_name.data());
+  auto const& bytes = proc_pid_contents.unwrap();
+  auto text = std::string{
+    bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+    bytes.size()};
+  ::sscanf(text.c_str(), "%*s %4s", process_name.data());
   return std::string_view{process_name.begin(), process_name.end()} == "tenzir";
 }
 
@@ -57,13 +62,17 @@ auto acquire_pid_file(const std::filesystem::path& filename) -> caf::error {
   }
   if (exists) {
     // Attempt to read file to display an actionable error message.
-    auto contents = detail::load_contents(filename);
+    auto contents = read_file(filename, {.source = FileSource::stream});
     if (not contents) {
-      return contents.error();
+      return caf::make_error(ec::filesystem_error, contents.unwrap_err());
     }
     // If we fail to parse the file contents, we silently treat it as an invalid
     // PID.
-    const auto other_pid = to<int32_t>(*contents).value_or(-1);
+    auto const& bytes = contents.unwrap();
+    auto text = std::string_view{
+      bytes.empty() ? "" : reinterpret_cast<char const*>(bytes.data()),
+      bytes.size()};
+    const auto other_pid = to<int32_t>(text).value_or(-1);
     // Safeguard in case the pid_file already belongs to this process.
     if (other_pid == pid) {
       return caf::none;
@@ -84,7 +93,7 @@ auto acquire_pid_file(const std::filesystem::path& filename) -> caf::error {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("PID file found: {}, terminate "
                                            "process {}",
-                                           filename, *contents));
+                                           filename, text));
       }
       TENZIR_DEBUG(
         "ignores conflicting PID file because contained PID does not "
