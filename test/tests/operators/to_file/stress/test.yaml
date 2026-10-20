@@ -1,3 +1,0 @@
-suite: to-file-stress
-fixtures: [local_files]
-timeout: 60
