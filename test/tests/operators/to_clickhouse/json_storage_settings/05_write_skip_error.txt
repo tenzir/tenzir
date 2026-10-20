@@ -1,0 +1,6 @@
+error: unsupported JSON mapping for column `unmapped`
+ --> tests/operators/to_clickhouse/json_storage_settings/05_write_skip_error.tql:8:1
+  |
+8 | to_clickhouse table="tc_json_skip",
+  | ^^^^^^^^^^^^^
+  |

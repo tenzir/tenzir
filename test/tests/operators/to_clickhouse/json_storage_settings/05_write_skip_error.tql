@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+// Writing would let ClickHouse drop paths silently, so the writer rejects the
+// column before writing any row.
+from {time: 2026-10-19T10:00:00Z, unmapped: {tmp: 1}}
+to_clickhouse table="tc_json_skip",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

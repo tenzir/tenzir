@@ -367,6 +367,41 @@ TEST("refresh exceptions retain the insertion rejection and never replay") {
   CHECK_EQUAL(remaps, 0);
 }
 
+TEST("mapping validation accepts JSON with only storage settings") {
+  for (auto type : {"JSON(max_dynamic_paths=64)", "JSON(max_dynamic_types=8)",
+                    "JSON(max_dynamic_paths=64, max_dynamic_types=8)"}) {
+    auto columns = description();
+    columns.push_back({"unmapped", type, "", "", ""});
+    auto dh = collecting_diagnostic_handler{};
+    CHECK(build_transformations(columns, dh).is_success());
+  }
+  for (auto type :
+       {"JSON(rule String)", "JSON(SKIP rule)", "JSON(SKIP REGEXP '^tmp')",
+        "JSON(max_dynamic_paths=64, rule String)",
+        "Array(JSON(max_dynamic_paths=64))"}) {
+    auto columns = description();
+    columns.push_back({"unmapped", type, "", "", ""});
+    auto dh = collecting_diagnostic_handler{};
+    CHECK(not build_transformations(columns, dh).is_success());
+  }
+}
+
+TEST("catch-all columns accept JSON with only storage settings") {
+  for (auto type :
+       {"JSON(max_dynamic_paths=512)", "JSON(max_dynamic_types=8)"}) {
+    auto columns = std::vector<ColumnDescription>{
+      {"n", "UInt32", "", "", ""}, {"extra", type, "", "", "tenzir:catch_all"}};
+    auto dh = collecting_diagnostic_handler{};
+    CHECK(build_transformations(columns, dh).is_success());
+  }
+  for (auto type : {"JSON(rule String)", "JSON(SKIP rule)"}) {
+    auto columns = std::vector<ColumnDescription>{
+      {"n", "UInt32", "", "", ""}, {"extra", type, "", "", "tenzir:catch_all"}};
+    auto dh = collecting_diagnostic_handler{};
+    CHECK(not build_transformations(columns, dh).is_success());
+  }
+}
+
 TEST("mapping validation examines nested type calls and empty path "
      "components") {
   for (auto type : {"Array(Tuple(n Int64))", "Map(String,Tuple(n Int64))",

@@ -1,0 +1,7 @@
+{
+  sensor: "edge-01",
+  time: 2026-10-19T10:00:00Z,
+  unmapped: {
+    rule: "R12",
+  },
+}

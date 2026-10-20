@@ -1,0 +1,6 @@
+// A `SKIP REGEXP` clause makes ClickHouse drop matching paths.
+from_clickhouse sql="CREATE OR REPLACE TABLE tc_json_skip (time DateTime64(9), unmapped JSON(SKIP REGEXP '^tmp'), event JSON COMMENT 'tenzir:catch_all') ENGINE = MergeTree ORDER BY time",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

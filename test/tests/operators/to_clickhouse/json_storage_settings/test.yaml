@@ -1,0 +1,5 @@
+suite: to-clickhouse-json-storage-settings
+fixtures: [clickhouse]
+timeout: 180
+skip:
+  on: fixture-unavailable

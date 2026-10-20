@@ -1,0 +1,7 @@
+// The event comes back intact: `unmapped` stays nested, and the catch-all
+// field returns to the top level.
+from_clickhouse table="tc_json_settings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

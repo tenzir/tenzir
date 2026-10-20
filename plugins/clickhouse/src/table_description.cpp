@@ -72,9 +72,11 @@ auto find_catch_all(std::span<ColumnDescription const> description,
       return failure::promise();
     }
     // Restricted JSON declarations can discard paths or coerce values.
-    if (column.type != "JSON" or not column.default_kind.empty()) {
+    if (not is_lossless_json(remove_non_significant_whitespace(column.type))
+        or not column.default_kind.empty()) {
       diagnostic::error("invalid ClickHouse catch-all column `{}`", column.name)
-        .note("expected a native JSON column without a default expression")
+        .note("expected a native JSON column without typed paths, `SKIP` "
+              "clauses, or a default expression")
         .emit(dh);
       return failure::promise();
     }
@@ -110,11 +112,13 @@ auto mapping_path_for(ColumnDescription const& column,
                       diagnostic_handler& dh)
   -> failure_or<std::vector<std::string>> {
   auto type = remove_non_significant_whitespace(column.type);
-  if (auto unsupported = unsupported_mapping_type(type)) {
-    diagnostic::error("unsupported {} mapping for column `{}`", *unsupported,
-                      column.name)
-      .emit(dh);
-    return failure::promise();
+  if (not is_lossless_json(type)) {
+    if (auto unsupported = unsupported_mapping_type(type)) {
+      diagnostic::error("unsupported {} mapping for column `{}`", *unsupported,
+                        column.name)
+        .emit(dh);
+      return failure::promise();
+    }
   }
   auto path = std::vector<std::string>{};
   for (auto component : detail::split(column.name, ".")) {
@@ -158,9 +162,11 @@ auto build_transformations(std::vector<ColumnDescription> const& description,
       return failure::promise();
     }
     // Restricted JSON declarations can discard paths or coerce values.
-    if (column.type != "JSON" or not column.default_kind.empty()) {
+    if (not is_lossless_json(remove_non_significant_whitespace(column.type))
+        or not column.default_kind.empty()) {
       diagnostic::error("invalid ClickHouse catch-all column `{}`", column.name)
-        .note("expected a native JSON column without a default expression")
+        .note("expected a native JSON column without typed paths, `SKIP` "
+              "clauses, or a default expression")
         .emit(dh);
       return failure::promise();
     }

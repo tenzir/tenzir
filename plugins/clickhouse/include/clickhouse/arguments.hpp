@@ -207,6 +207,27 @@ unwrap_clickhouse_type_call(std::string_view text, std::string_view name)
   return text.substr(name.size() + 1, text.size() - name.size() - 2);
 }
 
+/// Whether `type` is `JSON` without typed or skipped paths, so its only
+/// arguments, if any, are the storage settings `max_dynamic_paths` and
+/// `max_dynamic_types`. These change how ClickHouse lays out paths, but never
+/// discard paths or coerce values. Expects a type without non-significant
+/// whitespace.
+inline auto is_lossless_json(std::string_view type) -> bool {
+  if (type == "JSON") {
+    return true;
+  }
+  auto arguments = unwrap_clickhouse_type_call(type, "JSON");
+  if (not arguments) {
+    return false;
+  }
+  return std::ranges::all_of(
+    split_top_level_clickhouse_type_arguments(*arguments),
+    [](std::string_view argument) {
+      return argument.starts_with("max_dynamic_paths=")
+             or argument.starts_with("max_dynamic_types=");
+    });
+}
+
 /// A top-level or nested field path, as a sequence of identifier segments
 /// (e.g. `["file", "xattributes"]` for `file.xattributes`). Kept as segments
 /// rather than a joined dotted string so it can be compared directly,

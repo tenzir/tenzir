@@ -1,0 +1,13 @@
+// Storage settings change how ClickHouse lays out paths, never their values,
+// so the writer accepts the column.
+from {
+  time: 2026-10-19T10:00:00Z,
+  unmapped: {rule: "R12"},
+  sensor: "edge-01",
+}
+to_clickhouse table="tc_json_settings",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"
