@@ -1,0 +1,1 @@
+error: failed to read parquet: Applying decryption properties on plaintext file

@@ -1,0 +1,17 @@
+{
+  id: 1,
+  nested: {
+    message: "sensitive",
+  },
+  values: [
+    1,
+    2,
+  ],
+}
+{
+  id: 2,
+  nested: {
+    message: "private",
+  },
+  values: [],
+}

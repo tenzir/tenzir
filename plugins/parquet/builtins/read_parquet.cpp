@@ -8,6 +8,7 @@
 
 #include "parquet/column_selection.hpp"
 #include "parquet/constant_columns.hpp"
+#include "parquet/encryption.hpp"
 #include "parquet/row_group_pruning.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/option.hpp"
@@ -32,12 +33,14 @@
 #include <arrow/util/key_value_metadata.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/schema.h>
+#include <parquet/encryption/encryption.h>
 
 namespace tenzir::plugins::parquet {
 
 TENZIR_ENUM(decimal_format, string, float_);
 
 struct ReadParquetArgs {
+  Option<located<secret>> encryption_key;
   Option<located<std::string>> decimal_format;
   OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
@@ -45,6 +48,17 @@ struct ReadParquetArgs {
 namespace {
 
 using namespace si_literals;
+
+/// Arrow reports authentication failures as exceptions or wrapped statuses.
+auto parquet_read_error(std::string_view message) -> diagnostic_builder {
+  if (message.contains("Failed decryption finalization")) {
+    return diagnostic::error(
+             "failed to decrypt Parquet data: authentication failed")
+      .note("the key may be incorrect, the file may be corrupted, or the "
+            "encryption format may be incompatible");
+  }
+  return diagnostic::error("{}", message);
+}
 
 auto format_decimal_type(std::shared_ptr<arrow::DataType> type,
                          decimal_format format)
@@ -208,7 +222,8 @@ auto plan_constants(::parquet::FileMetaData const& metadata,
 class ParquetDecoding {
 protected:
   explicit ParquetDecoding(ReadParquetArgs args)
-    : filter_{std::move(args.optimization.filter)},
+    : encryption_key_{std::move(args.encryption_key)},
+      filter_{std::move(args.optimization.filter)},
       remaining_{args.optimization.limit},
       decimal_format_{args.decimal_format ? from_string<decimal_format>(
                                               args.decimal_format->inner)
@@ -218,8 +233,8 @@ protected:
         std::move(args.optimization.projection), filter_)} {
   }
 
-  /// Prepares the pushed-down filters, once per reader.
-  auto make_filters(OpCtx& ctx) -> Task<failure_or<void>> {
+  /// Prepares encryption and filters, once per reader.
+  auto prepare_read(OpCtx& ctx) -> Task<failure_or<void>> {
     for (auto const& filter : filter_) {
       auto evaluator = co_await nova::Evaluator::make(filter, ctx);
       if (not evaluator) {
@@ -227,6 +242,13 @@ protected:
       }
       filters_.push_back(std::move(*evaluator));
     }
+    if (not encryption_key_) {
+      co_return {};
+    }
+    CO_TRY(auto key, co_await prepare_encryption_key(*encryption_key_, ctx));
+    decryption_ = ::parquet::FileDecryptionProperties::Builder{}
+                    .footer_key(std::move(key))
+                    ->build();
     co_return {};
   }
 
@@ -284,6 +306,8 @@ protected:
       filters_, remaining_, dh);
   }
 
+  Option<located<secret>> encryption_key_;
+  std::shared_ptr<::parquet::FileDecryptionProperties> decryption_;
   ir::OptimizeFilter filter_;
   Option<uint64_t> remaining_;
   decimal_format decimal_format_ = decimal_format::string;
@@ -303,7 +327,7 @@ public:
     if (remaining_ == uint64_t{0}) {
       co_return;
     }
-    if (not co_await make_filters(ctx)) {
+    if (not co_await prepare_read(ctx)) {
       co_return;
     }
   }
@@ -337,6 +361,7 @@ public:
     auto parquet_reader_properties
       = ::parquet::ReaderProperties(arrow_memory_pool());
     parquet_reader_properties.enable_buffered_stream();
+    parquet_reader_properties.file_decryption_properties(decryption_);
     auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
     arrow_reader_properties.set_batch_size(defaults::import::table_slice_size);
     // The input already is an in-memory buffer. Pre-buffering would coalesce
@@ -352,8 +377,12 @@ public:
     try {
       input_buffer = ::parquet::ParquetFileReader::Open(
         std::move(input_file), parquet_reader_properties);
-    } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
+    } catch (::parquet::ParquetInvalidOrCorruptedFileException const& err) {
       corrupted(err);
+      co_return FinalizeBehavior::done;
+    } catch (::parquet::ParquetException const& err) {
+      parquet_read_error(fmt::format("failed to read parquet: {}", err.what()))
+        .emit(ctx);
       co_return FinalizeBehavior::done;
     }
     auto metadata = input_buffer->metadata();
@@ -399,14 +428,18 @@ public:
       auto out_buffer_result = ::parquet::arrow::FileReader::Make(
         arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
       if (not out_buffer_result.ok()) {
-        diagnostic::error(
-          "{}", out_buffer_result.status().ToStringWithoutContextLines())
+        parquet_read_error(
+          out_buffer_result.status().ToStringWithoutContextLines())
           .emit(ctx);
         co_return FinalizeBehavior::done;
       }
       out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
-    } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
+    } catch (::parquet::ParquetInvalidOrCorruptedFileException const& err) {
       corrupted(err);
+      co_return FinalizeBehavior::done;
+    } catch (::parquet::ParquetException const& err) {
+      parquet_read_error(fmt::format("failed to read parquet: {}", err.what()))
+        .emit(ctx);
       co_return FinalizeBehavior::done;
     }
     if (row_groups.empty()) {
@@ -414,7 +447,7 @@ public:
     }
     auto rb_reader = out_buffer->GetRecordBatchReader(row_groups, columns);
     if (not rb_reader.ok()) {
-      diagnostic::error("{}", rb_reader.status().ToStringWithoutContextLines())
+      parquet_read_error(rb_reader.status().ToStringWithoutContextLines())
         .note("failed create record batches from input data")
         .emit(ctx);
       co_return FinalizeBehavior::done;
@@ -423,8 +456,7 @@ public:
     auto maybe_batch = reader->Next();
     while (true) {
       if (not maybe_batch.ok()) {
-        diagnostic::error("{}",
-                          maybe_batch.status().ToStringWithoutContextLines())
+        parquet_read_error(maybe_batch.status().ToStringWithoutContextLines())
           .note("failed to read record batch")
           .emit(ctx);
         co_return FinalizeBehavior::done;
@@ -528,9 +560,10 @@ public:
     if (remaining_ == uint64_t{0}) {
       co_return {};
     }
-    CO_TRY(co_await make_filters(ctx));
+    CO_TRY(co_await prepare_read(ctx));
     auto metadata = co_await spawn_blocking(
-      [file] -> arrow::Result<std::shared_ptr<::parquet::FileMetaData>> {
+      [file, decryption = decryption_]
+      -> arrow::Result<std::shared_ptr<::parquet::FileMetaData>> {
         // Like the byte path, treat an empty file as an empty input.
         ARROW_ASSIGN_OR_RAISE(auto size, file->GetSize());
         if (size == 0) {
@@ -539,6 +572,7 @@ public:
         try {
           auto properties = ::parquet::ReaderProperties{arrow_memory_pool()};
           properties.set_footer_read_size(256_Ki);
+          properties.file_decryption_properties(decryption);
           auto reader = ::parquet::ParquetFileReader::Open(file, properties);
           return reader->metadata();
         } catch (
@@ -550,7 +584,7 @@ public:
         }
       });
     if (not metadata.ok()) {
-      diagnostic::error("{}", metadata.status().message()).emit(ctx);
+      parquet_read_error(metadata.status().message()).emit(ctx);
       co_return failure::promise();
     }
     if (not *metadata) {
@@ -607,7 +641,7 @@ public:
         auto opened = std::move(*scan_prefetch_);
         scan_prefetch_ = None{};
         if (not opened.ok()) {
-          diagnostic::error("{}", opened.status().ToStringWithoutContextLines())
+          parquet_read_error(opened.status().ToStringWithoutContextLines())
             .emit(dh);
           break;
         }
@@ -629,8 +663,7 @@ public:
         scan_next_ = co_await read_scan_batch();
       }
       if (not scan_next_.ok()) {
-        diagnostic::error("{}",
-                          scan_next_.status().ToStringWithoutContextLines())
+        parquet_read_error(scan_next_.status().ToStringWithoutContextLines())
           .note("failed to read record batch")
           .emit(dh);
         break;
@@ -740,6 +773,7 @@ private:
             }
           }
           auto rows = row_group->num_rows();
+          // Cached metadata retains the file decryptor across row-group readers.
           auto parquet
             = ::parquet::ParquetFileReader::Open(file, properties, metadata);
           ARROW_ASSIGN_OR_RAISE(
@@ -1027,7 +1061,8 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
 class ReadParquet final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadParquet(ReadParquetArgs args)
-    : decimal_format_{args.decimal_format ? from_string<decimal_format>(
+    : encryption_key_{std::move(args.encryption_key)},
+      decimal_format_{args.decimal_format ? from_string<decimal_format>(
                                               args.decimal_format->inner)
                                               .value_or(decimal_format::string)
                                           : decimal_format::string},
@@ -1035,6 +1070,20 @@ public:
       remaining_{args.optimization.limit},
       projection_{pushdown::read_projection(
         std::move(args.optimization.projection), filter_)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (not encryption_key_) {
+      co_return;
+    }
+    auto key = co_await prepare_encryption_key(*encryption_key_, ctx);
+    if (not key) {
+      remaining_ = 0;
+      co_return;
+    }
+    decryption_ = ::parquet::FileDecryptionProperties::Builder{}
+                    .footer_key(std::move(*key))
+                    ->build();
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
@@ -1071,6 +1120,7 @@ public:
     auto parquet_reader_properties
       = ::parquet::ReaderProperties(arrow_memory_pool());
     parquet_reader_properties.enable_buffered_stream();
+    parquet_reader_properties.file_decryption_properties(decryption_);
     auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
     arrow_reader_properties.set_batch_size(defaults::import::table_slice_size);
     // The input already is an in-memory buffer. Pre-buffering would coalesce
@@ -1083,14 +1133,18 @@ public:
       auto out_buffer_result = ::parquet::arrow::FileReader::Make(
         arrow_memory_pool(), std::move(input_buffer), arrow_reader_properties);
       if (not out_buffer_result.ok()) {
-        diagnostic::error(
-          "{}", out_buffer_result.status().ToStringWithoutContextLines())
+        parquet_read_error(
+          out_buffer_result.status().ToStringWithoutContextLines())
           .emit(ctx);
         co_return FinalizeBehavior::done;
       }
       out_buffer = std::move(out_buffer_result).MoveValueUnsafe();
     } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
       diagnostic::error("invalid or corrupted parquet file: {}", err.what())
+        .emit(ctx);
+      co_return FinalizeBehavior::done;
+    } catch (::parquet::ParquetException const& err) {
+      parquet_read_error(fmt::format("failed to read parquet: {}", err.what()))
         .emit(ctx);
       co_return FinalizeBehavior::done;
     }
@@ -1120,15 +1174,14 @@ public:
     }
     auto rb_reader = out_buffer->GetRecordBatchReader(row_groups, columns);
     if (not rb_reader.ok()) {
-      diagnostic::error("{}", rb_reader.status().ToStringWithoutContextLines())
+      parquet_read_error(rb_reader.status().ToStringWithoutContextLines())
         .note("failed create record batches from input data")
         .emit(ctx);
       co_return FinalizeBehavior::done;
     }
     for (auto maybe_batch : **rb_reader) {
       if (not maybe_batch.ok()) {
-        diagnostic::error("{}",
-                          maybe_batch.status().ToStringWithoutContextLines())
+        parquet_read_error(maybe_batch.status().ToStringWithoutContextLines())
           .note("failed read record batch")
           .emit(ctx);
         co_return FinalizeBehavior::done;
@@ -1179,6 +1232,8 @@ public:
   }
 
 private:
+  Option<located<secret>> encryption_key_;
+  std::shared_ptr<::parquet::FileDecryptionProperties> decryption_;
   decimal_format decimal_format_ = decimal_format::string;
   std::vector<chunk_ptr> chunks_;
   ir::OptimizeFilter filter_;
@@ -1197,6 +1252,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadParquetArgs, legacy::ReadParquet, ReadParquet,
                        ReadParquetFile>{};
+    d.named("encryption_key", &ReadParquetArgs::encryption_key);
     auto decimal_format_arg
       = d.named("decimal_format", &ReadParquetArgs::decimal_format);
     d.validate([decimal_format_arg](DescribeCtx& ctx) -> Empty {

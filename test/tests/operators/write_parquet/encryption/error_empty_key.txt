@@ -1,0 +1,6 @@
+error: encryption key must contain 16, 24, or 32 bytes
+ --> tests/operators/write_parquet/encryption/error_empty_key.tql:6:30
+  |
+6 | write_parquet encryption_key=secret("empty-key")
+  |                              ^^^^^^^^^^^^^^^^^^^
+  |

@@ -1,0 +1,4 @@
+let $key = file_contents(env("TENZIR_INPUTS") + "/parquet/encryption.key", binary=true)
+from {message: "binary key file"}
+write_parquet encryption_key=$key
+read_parquet encryption_key=$key

@@ -1,0 +1,4 @@
+from {id: 1, nested: {message: "sensitive"}, values: [1, 2]},
+     {id: 2, nested: {message: "private"}, values: []}
+write_parquet encryption_key=decode_base64(secret("key256")), compression_type="zstd"
+read_parquet encryption_key=decode_base64(secret("key256"))

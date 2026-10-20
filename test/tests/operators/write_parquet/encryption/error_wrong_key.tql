@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {x: 1}
+write_parquet encryption_key=decode_base64(secret("key128"))
+read_parquet encryption_key=decode_base64(secret("wrong-key"))
