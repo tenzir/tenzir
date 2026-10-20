@@ -1,0 +1,31 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: timestamps
+      bounded: true
+      query: "  Events\n| project Id, EventTime = TimeGenerated, DeviceName, RemotePort, RemoteUrl, TextTime, Dyn  "
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: ""
+---
+
+// Local-only reference; the fixture returns every query-output row.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02
+quiet {
+  pass
+}
+where EventTime > 2026-10-19T10:03:00.1234567Z
+select Id

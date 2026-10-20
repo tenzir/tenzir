@@ -1,6 +1,13 @@
 ---
 fixtures: [microsoft_defender]
 timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('Timestamp', dynamic(null))) != "datetime" or todatetime(column_ifexists('Timestamp', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('Timestamp', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('Timestamp', dynamic(null))) >= datetime(2026-01-01T23:59:59.999999Z))
 ---
 
 // Without bounds, the request carries no `Timespan`.

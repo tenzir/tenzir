@@ -1647,6 +1647,12 @@ auto translate_dynamic_atom(ast::expression const& expr,
     }
     return None{};
   }
+  if (auto const* instant = try_as<time>(literal->value)) {
+    if (op == ast::binary_op::neq) {
+      return None{};
+    }
+    return compare(std::move(column->expr), op, lit(*instant));
+  }
   if (op == ast::binary_op::neq or not dynamic_literal_fits(*literal)
       or (is<bool>(literal->value) and op != ast::binary_op::eq)) {
     return None{};

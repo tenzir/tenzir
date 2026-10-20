@@ -1,0 +1,31 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: timestamps
+      bounded: true
+      query: "  Events\n| project Id, EventTime = TimeGenerated, DeviceName, RemotePort, RemoteUrl, TextTime, Dyn  "
+      project: ["Id","EventTime"]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['EventTime'] = column_ifexists('EventTime', dynamic(null))
+---
+
+// The exact filter runs after the conservative prefilter and before head.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02
+where EventTime == null or EventTime == 2026-10-19T10:03:00.1234567Z
+select Id

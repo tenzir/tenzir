@@ -332,6 +332,10 @@ auto SqlRenderer::render_literal(Literal const& x) const -> Option<Fragment> {
     },
     [&](IpValue const& y) -> Option<Fragment> {
       return render_ip(y);
+    },
+    [](time) -> Option<Fragment> {
+      // Decoded dynamic timestamps need a dialect-specific prefilter.
+      return None{};
     });
 }
 

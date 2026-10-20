@@ -231,7 +231,10 @@ TEST("dynamic columns only contribute monotone prefilters") {
                       "x.starts_with(\"a\", ignore_case=true)",
                       "x.to_lower() == \"alice\"",
                       "x.to_upper() in [\"ALICE\", \"BOB\"]",
-                      "x.search(\"powershell\", ignore_case=true)"}) {
+                      "x.search(\"powershell\", ignore_case=true)",
+                      "x == 2024-01-01",
+                      "x >= 2024-01-01",
+                      "2024-01-01 > x"}) {
     auto expr = parse(source);
     CHECK(not translate_predicate(expr, columns, test::builtin_registry()));
     CHECK(translate_prefilter(expr, columns, test::builtin_registry()));
@@ -249,7 +252,9 @@ TEST("dynamic columns only contribute monotone prefilters") {
                       "x == 9007199254740993",
                       "x == -9007199254740993",
                       "x == 9007199254740992.0",
-                      "x == 2024-01-01",
+                      "x != 2024-01-01",
+                      "not (x < 2024-01-01)",
+                      "x in [2024-01-01]",
                       "x.length_bytes() > 1",
                       "x.starts_with(\"ä\", ignore_case=true)",
                       "x.to_lower() != \"alice\"",
@@ -267,6 +272,12 @@ TEST("dynamic columns only contribute monotone prefilters") {
   REQUIRE(caseless);
   CHECK(is<StringMatch>(*caseless));
   CHECK(not TestRenderer{}.render(*caseless));
+  // Raw TQL timestamps are not native temporal literals. A renderer must
+  // explicitly account for dynamic decoding before it can use them.
+  auto timestamp = translate_prefilter(parse("x == 2024-01-01"), columns,
+                                       test::builtin_registry());
+  REQUIRE(timestamp);
+  CHECK(not TestRenderer{}.render(*timestamp));
   // Inference is not a license to rewrite IPs into strings on dynamic fields.
   auto expr = parse("x == 1.1.1.1");
   adapt_to_columns(expr, columns, test::builtin_registry());

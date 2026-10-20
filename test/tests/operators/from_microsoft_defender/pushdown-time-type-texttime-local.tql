@@ -1,0 +1,30 @@
+---
+fixtures:
+  - microsoft_defender:
+      case: timestamps
+      bounded: true
+      query: "  Events\n| project Id, EventTime = TimeGenerated, DeviceName, RemotePort, RemoteUrl, TextTime, Dyn  "
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: ""
+---
+
+// Local-only reference; the fixture returns every query-output row.
+from_microsoft_defender env("DEFENDER_QUERY"),
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02
+quiet {
+  pass
+}
+where TextTime == 2026-10-19T10:03:00.1234567Z
+select Id

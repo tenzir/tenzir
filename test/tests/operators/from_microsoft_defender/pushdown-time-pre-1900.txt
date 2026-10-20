@@ -1,0 +1,8 @@
+error: invalid Microsoft Defender response: invalid value in row 0, column 0
+  --> tests/operators/from_microsoft_defender/pushdown-time-pre-1900.tql:14:25
+   |
+14 | from_microsoft_defender "pre-1900",
+   |                         ^^^^^^^^^^
+   |
+   = hint: check the query's projected types and reduce its time range or output
+   = note: request ID: defender-request-123

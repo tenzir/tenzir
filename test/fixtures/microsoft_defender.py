@@ -326,6 +326,10 @@ _DEVICE_NETWORK_EVENTS_ROWS = [
 
 @dataclass(frozen=True)
 class Options:
+    # Override the original query without using its first line as the case.
+    query: str | None = None
+    case: str | None = None
+    bounded: bool = False
     # The indices of the pushdown rows that the service returns, emulating the
     # KQL that the request appends. All rows if unset.
     #
@@ -347,6 +351,7 @@ class Assertions:
 
 
 class _Server(ThreadingHTTPServer):
+    options: Options
     calls = 0
     query = ""
     appended = ""
@@ -383,7 +388,12 @@ class _Handler(BaseHTTPRequestHandler):
         query = request["Query"]
         # The source preserves the user's query, here the name of a case on
         # the first line, and may append stages, which teardown compares.
-        if not query.startswith(_QUERY):
+        if server.options.query is not None:
+            assert query.startswith(server.options.query), query
+            server.appended = query[len(server.options.query) :]
+            query = server.options.case
+            assert query is not None
+        elif not query.startswith(_QUERY):
             query, newline, appended = query.partition("\n")
             server.appended = newline + appended
         server.query = query
@@ -391,7 +401,11 @@ class _Handler(BaseHTTPRequestHandler):
         refreshing = query in {"refresh", "refresh-failed"}
         token = f"{_ACCESS_TOKEN}-{server.calls}" if refreshing else _ACCESS_TOKEN
         assert self.headers["Authorization"] == f"Bearer {token}"
-        if query in {"bounded", "pushdown-bounded"} or refreshing:
+        if (
+            server.options.bounded
+            or query in {"bounded", "pushdown-bounded"}
+            or refreshing
+        ):
             assert request["Timespan"] == (
                 "2026-01-01T00:00:00.000000000Z/2026-01-02T00:00:00.000000000Z"
             )
@@ -450,14 +464,17 @@ class _Handler(BaseHTTPRequestHandler):
             "pushdown-bounded",
             "observables",
             "observable-adversarial",
+            "timestamps",
         }:
             source_schema = _PUSHDOWN_SCHEMA
             source_rows = _PUSHDOWN_ROWS
-            if query in {"observables", "observable-adversarial"}:
+            if query in {"observables", "observable-adversarial", "timestamps"}:
                 adversarial = query == "observable-adversarial"
                 definitions = (
                     kql_observables.ADVERSARIAL_COLUMNS
                     if adversarial
+                    else kql_observables.TIME_COLUMNS
+                    if query == "timestamps"
                     else kql_observables.COLUMNS
                 )
                 types = {
@@ -472,6 +489,8 @@ class _Handler(BaseHTTPRequestHandler):
                 source_rows = (
                     kql_observables.ADVERSARIAL_ROWS
                     if adversarial
+                    else kql_observables.TIME_ROWS
+                    if query == "timestamps"
                     else kql_observables.ROWS
                 )
             selected = server.rows
@@ -590,6 +609,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"{")
             return
+        elif query == "pre-1900":
+            rows[0]["Timestamp"] = "1899-12-31T23:59:59.9999999Z"
         elif query == "bad-datetime":
             rows[0]["Timestamp"] = "DO-NOT-LOG-DATA"
         elif query == "bad-bool":
@@ -743,6 +764,7 @@ def _run(
 ) -> Iterator[dict[str, str]]:
     token = _TokenServer((_HOST, 0), _BadTokenHandler if bad_auth else token_handler)
     graph = _Server((_HOST, 0), _Handler)
+    graph.options = options or Options()
     graph.rows = options.rows if options else None
     graph.project = options.project if options else None
     threads = [
@@ -758,7 +780,7 @@ def _run(
             "DEFENDER_TENANT": _TENANT_ID,
             "DEFENDER_CLIENT": _CLIENT_ID,
             "DEFENDER_SECRET": _CLIENT_SECRET,
-            "DEFENDER_QUERY": _QUERY,
+            "DEFENDER_QUERY": graph.options.query or _QUERY,
         }
         assert not graph.failures, graph.failures
         expected_appended = assertions.appended if assertions else ""

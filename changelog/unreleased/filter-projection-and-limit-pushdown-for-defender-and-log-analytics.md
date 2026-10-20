@@ -3,7 +3,7 @@ title: Filter, projection, and limit pushdown for Defender and Log Analytics
 type: change
 authors:
   - mavam
-created: 2026-10-15T16:30:00.000000Z
+created: 2026-10-20T15:19:06.435678Z
 ---
 
 The `from_microsoft_defender` and `from_azure_log_analytics` operators now push conservative prefilters and projection and limit hints from the `where`, `select`, and `head` operators that follow them into your KQL query, so that the service can return fewer rows and columns:
@@ -30,6 +30,17 @@ where ProcessCommandLine.search("powershell", ignore_case=true)
 select DeviceName, ProcessCommandLine, RemoteIP
 ```
 
-Use `.ip()` to parse an address stored in a string. The prefilters retain Unicode, structured values, and address spellings that need local evaluation, so they can return extra candidates without changing the final matches. Case-insensitive searches with non-ASCII search strings and native IPv6 subnet ranges starting at or below `::ffff:ffff:ffff` stay local. Regular expressions, times, negation, nested field references, and lists that mix kinds also stay local.
+Use `.ip()` to parse an address stored in a string. The prefilters retain Unicode, structured values, and address spellings that need local evaluation, so they can return extra candidates without changing the final matches. Case-insensitive searches with non-ASCII search strings and native IPv6 subnet ranges starting at or below `::ffff:ffff:ffff` stay local. Regular expressions, negation, nested field references, and lists that mix kinds also stay local.
+
+Timestamp comparisons with `==`, `<`, `<=`, `>`, and `>=` also reduce candidates, including intervals combined with host, domain, or port filters:
+
+```tql
+where TimeGenerated >= 2026-10-19T10:03:00Z
+  and TimeGenerated < 2026-10-19T10:08:00Z
+  and RemotePort == 443
+select Id, DeviceName
+```
+
+Timestamp prefilters use slightly wider bounds to preserve subsecond decoding semantics, then apply the exact filter locally. They operate on the query's output, including renamed, computed, and aggregated timestamps, without narrowing the request window. Timestamp list membership and arithmetic in downstream predicates remain local.
 
 A `head` reaches the service only if no filter precedes it and its limit fits into a signed 64-bit integer. A projected column that your query does not return becomes `null`, as with a local `select`. The `start` and `end` window stays unchanged, and queries that use `render`, `fork`, `facet`, or a `set` statement are sent unchanged.

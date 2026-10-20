@@ -1,5 +1,38 @@
 """Shared synthetic hunting data for the two KQL connector fixtures."""
 
+# Output timestamps, not source-time lineage. The seven fractional digits and
+# the per-service null encodings were checked against both live APIs. Rows 9
+# and 10 cover a historical instant and the conservative upper calendar guard
+# without relying on overflow in the existing calendar decoder.
+TIME_COLUMNS = [
+    ["Id", "long"],
+    ["EventTime", "datetime"],
+    ["DeviceName", "string"],
+    ["RemotePort", "long"],
+    ["RemoteUrl", "string"],
+    ["TextTime", "string"],
+    ["Dyn", "dynamic"],
+]
+TIME_ROWS = [
+    [i, instant, "ws-01", 443, "evil.example", instant or "", instant]
+    for i, instant in enumerate(
+        [
+            "2026-10-19T10:02:59.9999999Z",
+            "2026-10-19T10:03:00Z",
+            "2026-10-19T10:03:00.1234566Z",
+            "2026-10-19T10:03:00.1234567Z",
+            "2026-10-19T10:03:00.1234568Z",
+            "2026-10-19T10:03:00.123459Z",
+            "2026-10-19T10:08:00Z",
+            None,
+            "1900-01-01T00:00:00Z",
+            "2262-01-01T00:00:00Z",
+            "1969-12-31T23:59:59.9999999Z",
+        ],
+        start=1,
+    )
+]
+
 # These rows are synthetic, not copied from tenant telemetry.
 COLUMNS = [
     ["Id", "long"],

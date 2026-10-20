@@ -11,6 +11,7 @@
 #include "tenzir/box.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/pushdown/column_model.hpp"
+#include "tenzir/time.hpp"
 #include "tenzir/variant.hpp"
 
 #include <cstdint>
@@ -61,11 +62,14 @@ struct IpValue {
   bool v4;
 };
 
-/// A constant. A `double` is always finite: TQL has no syntax for other
+/// A constant. A `time` is a decoded TQL instant for dynamic-column
+/// prefilters, unlike `TimeValue`, which describes a native temporal type.
+/// Renderers must veto `time` unless they account for decoding and precision.
+/// A `double` is always finite: TQL has no syntax for other
 /// values, and translation rejects them.
 struct Literal {
   variant<Null, bool, int64_t, uint64_t, double, std::string, EnumLabel,
-          TimeValue, IpValue>
+          TimeValue, IpValue, time>
     value;
 };
 

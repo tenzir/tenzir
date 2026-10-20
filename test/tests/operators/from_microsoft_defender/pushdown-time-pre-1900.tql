@@ -1,0 +1,23 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('Timestamp', dynamic(null))) != "datetime" or todatetime(column_ifexists('Timestamp', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('Timestamp', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('Timestamp', dynamic(null))) >= datetime(2025-12-31T23:59:59.999999Z))
+---
+
+from_microsoft_defender "pre-1900",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Timestamp >= 2026-01-01

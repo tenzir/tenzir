@@ -154,6 +154,76 @@ TEST("kql renders number comparisons in real") {
   CHECK_EQUAL(where("x > 1e300"), "");
 }
 
+TEST("kql widens timestamp comparisons around decoded instants") {
+  auto guard = [](std::string_view condition) {
+    return fmt::format("(gettype({0}) != \"datetime\" or todatetime({0}) < "
+                       "datetime(1900-01-01) or todatetime({0}) >= "
+                       "datetime(2262-01-01) or {1})",
+                       x, condition);
+  };
+  auto lower
+    = fmt::format("todatetime({}) >= datetime(2026-10-19T10:03:00.123455Z)", x);
+  auto upper
+    = fmt::format("todatetime({}) <= datetime(2026-10-19T10:03:00.123458Z)", x);
+  CHECK_EQUAL(where("x == 2026-10-19T10:03:00.1234567Z"),
+              guard(fmt::format("({} and {})", lower, upper)));
+  for (auto op : {">", ">="}) {
+    CHECK_EQUAL(where(fmt::format("x {} 2026-10-19T10:03:00.1234567Z", op)),
+                guard(lower));
+  }
+  for (auto op : {"<", "<="}) {
+    CHECK_EQUAL(where(fmt::format("x {} 2026-10-19T10:03:00.1234567Z", op)),
+                guard(upper));
+  }
+  CHECK_EQUAL(where("2026-10-19T10:03:00.1234567Z < x"), guard(lower));
+  CHECK_EQUAL(where("x >= 2026-10-19T10:03:00Z"),
+              guard(fmt::format("todatetime({}) >= "
+                                "datetime(2026-10-19T10:02:59.999999Z)",
+                                x)));
+  // Floor, rather than truncation toward zero, is required before the epoch.
+  CHECK_EQUAL(where("x < 1969-12-31T23:59:59.9999999Z"),
+              guard(fmt::format("todatetime({}) <= "
+                                "datetime(1970-01-01T00:00:00.000001Z)",
+                                x)));
+  // Nanosecond boundaries, whether tick-aligned or not, widen outwards.
+  CHECK_EQUAL(where("x > 2026-10-19T10:03:00.123456789Z"), guard(lower));
+  for (auto expression : {
+         "x != 2026-10-19",
+         "not (x == 2026-10-19)",
+         "x in [2026-10-19, 2026-10-20]",
+         "x.y >= 2026-10-19",
+         "x + 1s >= 2026-10-19",
+       }) {
+    CHECK_EQUAL(where(expression), "");
+  }
+  // Rounding in microseconds must not overflow the nanosecond time range.
+  auto renderer = KqlRenderer{};
+  for (auto instant : {time::min(), time::max()}) {
+    CHECK(renderer.render(Binary{
+      .op = BinaryOp::eq,
+      .left = Box<Expr>{Expr{Column{{"x"}}}},
+      .right = Box<Expr>{Expr{Literal{instant}}},
+    }));
+  }
+}
+
+TEST("kql timestamps filter query outputs without moving across user stages") {
+  auto query = std::string_view{
+    "T | take 7 | summarize EventTime=max(Timestamp) by DeviceName"};
+  auto plan = plan_kql_query(query, filters({"EventTime >= 2026-10-19"}),
+                             paths({"DeviceName"}), uint64_t{2}, cap,
+                             test::builtin_registry());
+  CHECK(
+    plan.query.starts_with(fmt::format("{}\n| take 1000\n| where ", query)));
+  CHECK(plan.filtered);
+  CHECK(plan.projected);
+  CHECK(not plan.limited);
+  CHECK(plan.query.ends_with("| project ['DeviceName'] = "
+                             "column_ifexists('DeviceName', dynamic(null)), "
+                             "['EventTime'] = column_ifexists('EventTime', "
+                             "dynamic(null))"));
+}
+
 TEST("kql renders booleans only where kql sees a boolean") {
   auto expected
     = fmt::format("(gettype({0}) !in (\"bool\") or tobool({0}) == true)", x);
@@ -294,7 +364,7 @@ TEST("kql vetoes predicates without a proven superset") {
   CHECK_EQUAL(where(R"(x.match_regex("a"))"), "");
   CHECK_EQUAL(where("x.ip() != 1.2.3.4"), "");
   CHECK_EQUAL(where("x.ip() > 1.2.3.4"), "");
-  CHECK_EQUAL(where("x > 2026-01-01"), "");
+  CHECK_EQUAL(where("x != 2026-01-01"), "");
   CHECK_EQUAL(where("x + 1 > 2"), "");
   CHECK_EQUAL(where("x == y"), "");
   CHECK_EQUAL(where(R"(x.to_lower() == "ä")"), "");

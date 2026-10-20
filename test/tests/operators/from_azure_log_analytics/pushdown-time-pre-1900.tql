@@ -1,0 +1,25 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: pre-1900
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | where (gettype(column_ifexists('TimeGenerated', dynamic(null))) != "datetime" or todatetime(column_ifexists('TimeGenerated', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('TimeGenerated', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('TimeGenerated', dynamic(null))) >= datetime(2025-12-31T23:59:59.999999Z))
+---
+
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where TimeGenerated >= 2026-01-01

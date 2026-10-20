@@ -1,0 +1,34 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: timestamps
+      bounded: true
+      query: "  Events\n| project Id, EventTime = TimeGenerated, DeviceName, RemotePort, RemoteUrl, TextTime, Dyn  "
+      rows: [0,1,2,3,4,5,6,9]
+      project: ["Id","EventTime","RemotePort"]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | where (gettype(column_ifexists('EventTime', dynamic(null))) != "datetime" or todatetime(column_ifexists('EventTime', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('EventTime', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('EventTime', dynamic(null))) >= datetime(2026-10-19T10:02:59.999999Z)) and (gettype(column_ifexists('EventTime', dynamic(null))) != "datetime" or todatetime(column_ifexists('EventTime', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('EventTime', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('EventTime', dynamic(null))) <= datetime(2026-10-19T10:08:00.000001Z)) and (gettype(column_ifexists('RemotePort', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('RemotePort', dynamic(null))) == 443.0)
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['EventTime'] = column_ifexists('EventTime', dynamic(null)), ['RemotePort'] = column_ifexists('RemotePort', dynamic(null))
+---
+
+// The exact filter runs after the conservative prefilter and before head.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02
+where EventTime >= 2026-10-19T10:03:00Z and EventTime < 2026-10-19T10:08:00Z and RemotePort == 443
+head 3
+select Id

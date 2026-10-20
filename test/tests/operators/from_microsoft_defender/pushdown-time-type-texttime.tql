@@ -1,0 +1,32 @@
+---
+fixtures:
+  - microsoft_defender:
+      case: timestamps
+      bounded: true
+      query: "  Events\n| project Id, EventTime = TimeGenerated, DeviceName, RemotePort, RemoteUrl, TextTime, Dyn  "
+      project: ["Id","TextTime"]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('TextTime', dynamic(null))) != "datetime" or todatetime(column_ifexists('TextTime', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('TextTime', dynamic(null))) >= datetime(2262-01-01) or (todatetime(column_ifexists('TextTime', dynamic(null))) >= datetime(2026-10-19T10:03:00.123455Z) and todatetime(column_ifexists('TextTime', dynamic(null))) <= datetime(2026-10-19T10:03:00.123458Z)))
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['TextTime'] = column_ifexists('TextTime', dynamic(null))
+---
+
+// The exact filter runs after the conservative prefilter and before head.
+from_microsoft_defender env("DEFENDER_QUERY"),
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false,
+  start=2026-01-01,
+  end=2026-01-02
+where TextTime == 2026-10-19T10:03:00.1234567Z
+select Id

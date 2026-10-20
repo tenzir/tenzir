@@ -79,6 +79,7 @@ _PUSHDOWN_ROWS = [
 class Options:
     case: str = "typed"
     bounded: bool = False
+    query: str = _QUERY
     wait: int = 180
     # The indices of the pushdown rows that the service returns, emulating the
     # KQL that the request appends. All rows if unset.
@@ -212,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
         # The source preserves the user's query and may append stages, which
         # `assert_test` compares exactly.
         query = request.pop("query")
-        assert isinstance(query, str) and query.startswith(_QUERY), query
+        assert isinstance(query, str) and query.startswith(server.options.query), query
         server.query = query
         expected = {}
         if server.options.bounded:
@@ -276,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
         rows = [copy.deepcopy(_ROW)]
         table = {"name": "PrimaryResult", "columns": columns, "rows": rows}
         envelope = {"tables": [table]}
-        if case in {"pushdown", "observables", "observable-adversarial"}:
+        if case in {"pushdown", "observables", "observable-adversarial", "timestamps"}:
             source_columns = _PUSHDOWN_COLUMNS
             source_rows = _PUSHDOWN_ROWS
             if case != "pushdown":
@@ -284,6 +285,8 @@ class Handler(BaseHTTPRequestHandler):
                 definitions = (
                     kql_observables.ADVERSARIAL_COLUMNS
                     if adversarial
+                    else kql_observables.TIME_COLUMNS
+                    if case == "timestamps"
                     else kql_observables.COLUMNS
                 )
                 source_columns = [
@@ -292,6 +295,8 @@ class Handler(BaseHTTPRequestHandler):
                 source_rows = copy.deepcopy(
                     kql_observables.ADVERSARIAL_ROWS
                     if adversarial
+                    else kql_observables.TIME_ROWS
+                    if case == "timestamps"
                     else kql_observables.ROWS
                 )
                 for row in source_rows:
@@ -427,6 +432,8 @@ class Handler(BaseHTTPRequestHandler):
             ]
         elif case == "int-overflow":
             rows[0][2] = 2147483648
+        elif case == "pre-1900":
+            rows[0][0] = "1899-12-31T23:59:59.9999999Z"
         elif case == "bad-datetime":
             rows[0][0] = "DO-NOT-LOG-DATA"
         elif case == "bad-bool":
@@ -528,7 +535,7 @@ def run() -> FixtureHandle:
         "AZLOG_URL": url,
         "AZLOG_AUTHORITY": url,
         "AZLOG_WORKSPACE": _WORKSPACE,
-        "AZLOG_QUERY": _QUERY,
+        "AZLOG_QUERY": options.query,
     }
     if binary := os.environ.get("TENZIR_BINARY"):
         build = Path(shlex.split(binary)[0]).resolve().parent.parent
@@ -546,9 +553,9 @@ def run() -> FixtureHandle:
         )
         assert server.tokens == assertions.tokens, (server.tokens, assertions.tokens)
         if server.query is not None:
-            assert server.query == _QUERY + assertions.appended, (
+            assert server.query == options.query + assertions.appended, (
                 server.query,
-                _QUERY + assertions.appended,
+                options.query + assertions.appended,
             )
         assert server.ingestions == assertions.ingestions, (
             server.ingestions,

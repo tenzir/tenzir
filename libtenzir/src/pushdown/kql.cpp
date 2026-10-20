@@ -14,6 +14,7 @@
 #include "tenzir/unicode.hpp"
 #include "tenzir/variant_traits.hpp"
 
+#include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -305,6 +306,52 @@ auto render_ip_comparison(Expr const& expr, Literal const& literal,
                      value->address, op);
 }
 
+/// Compares a decoded timestamp without assuming nanosecond-exact decoding.
+/// Both readers parse UTC clock fields through double seconds since midnight.
+/// Within a day the floating-point error is below a nanosecond; truncation to
+/// integer nanoseconds can lose another nanosecond. Widening each bound by a
+/// microsecond, then rounding outwards to microseconds, covers both effects
+/// and spells values exactly on KQL's 100-nanosecond grid. The exact predicate
+/// stays local, including its strictness and null semantics.
+///
+/// Only datetime values are restricted. Dynamic datetimes can decode to
+/// strings; keeping them unnecessarily is safe. Years before 1900 pass
+/// untouched to preserve decoder errors. Values from 2262 onward also pass,
+/// since calendar conversion can overflow the nanosecond range. The
+/// deliberately whole-year upper guard covers the partial boundary year.
+auto render_time_comparison(std::string_view column, BinaryOp op, time value)
+  -> Option<std::string> {
+  using namespace std::chrono;
+  auto render = [](auto instant) {
+    return fmt::format("datetime({:%Y-%m-%dT%H:%M:%S}Z)", instant);
+  };
+  auto lower
+    = render(std::chrono::floor<microseconds>(value) - microseconds{1});
+  auto upper = render(std::chrono::ceil<microseconds>(value) + microseconds{1});
+  auto subject = fmt::format("todatetime({})", column);
+  auto condition = std::string{};
+  switch (op) {
+    case BinaryOp::eq:
+      condition
+        = fmt::format("({0} >= {1} and {0} <= {2})", subject, lower, upper);
+      break;
+    case BinaryOp::gt:
+    case BinaryOp::geq:
+      condition = fmt::format("{} >= {}", subject, lower);
+      break;
+    case BinaryOp::lt:
+    case BinaryOp::leq:
+      condition = fmt::format("{} <= {}", subject, upper);
+      break;
+    default:
+      return None{};
+  }
+  return fmt::format("(gettype({0}) != \"datetime\" or {1} < "
+                     "datetime(1900-01-01) or {1} >= datetime(2262-01-01) "
+                     "or {2})",
+                     column, subject, condition);
+}
+
 /// Spells `column op literal`.
 ///
 /// - A number compares in `real`, where the column's value converts exactly
@@ -330,9 +377,12 @@ auto render_comparison(Binary const& x) -> Option<std::string> {
   if (not column or not literal) {
     return None{};
   }
+  TRY(auto subject, render_column(*column));
+  if (auto const* instant = try_as<time>(literal->value)) {
+    return render_time_comparison(subject, x.op, *instant);
+  }
   TRY(auto op, comparison_operator(x.op));
   TRY(auto kind, kind_of(*literal));
-  TRY(auto subject, render_column(*column));
   auto value = std::string{};
   switch (kind) {
     case Kind::string: {

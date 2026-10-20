@@ -55,7 +55,10 @@ namespace tenzir::pushdown {
 /// Supported shapes, each a superset for the reason given in the source:
 /// - `==`, `<`, `<=`, `>`, `>=` between a column and a number,
 /// - `==` between a column and a string or a boolean,
-/// - `in` of a column in a list of such literals of a single kind,
+/// - `==`, `<`, `<=`, `>`, `>=` between a column and a timestamp, with
+///   outward-rounded microsecond bounds that cover decoder precision loss,
+/// - `in` of a column in a list of string, boolean, or number literals of a
+///   single kind,
 /// - `starts_with`, `ends_with`, and substring membership, case-sensitively,
 /// - ASCII-needle case-insensitive affixes, recursive `search`/`contains`, and
 ///   equality/membership after `to_lower` or `to_upper`, keeping non-ASCII
@@ -68,7 +71,8 @@ namespace tenzir::pushdown {
 /// Everything else is vetoed and stays local, notably negation, nested field
 /// paths, membership in lists that mix kinds, ordering on strings, regular
 /// expressions, non-ASCII case-insensitive needles, IP ordering, native IPv6
-/// subnets overlapping ::/80, times, arithmetic, and `== null`.
+/// subnets overlapping ::/80, timestamp list membership, arithmetic, and
+/// `== null`.
 class KqlRenderer final : public Renderer {
 public:
   auto render(Expr const& expr) const -> Option<std::string> override;
