@@ -37,6 +37,7 @@
 
 #include <boost/url/parse.hpp>
 #include <clickhouse/client.h>
+#include <fmt/ranges.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
 
@@ -538,6 +539,14 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
     schema
       = make_catch_all_schema(description, *catch_all, plan.optimization.filter,
                               plan.target == SqlTarget::clickhouse);
+    for (auto const& shadowed : schema.shadowed_fields()) {
+      diagnostic::warning("column `{}` shadows field `{}` of `JSON` column",
+                          shadowed.column, fmt::join(shadowed.path, "."))
+        .note("predicates on the field are evaluated after reading the rows")
+        .hint("rename the column or the `JSON` column to avoid the shared "
+              "prefix")
+        .emit(dh);
+    }
   } else {
     for (auto const& column : description) {
       schema.add_column(column.name, column.type,
