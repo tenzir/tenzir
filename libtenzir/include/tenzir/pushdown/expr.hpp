@@ -74,6 +74,30 @@ struct Column {
   std::vector<std::string> path;
 };
 
+/// The string relation tested by a `StringMatch` prefilter.
+enum class StringMatchKind {
+  equal,
+  prefix,
+  suffix,
+  substring,
+};
+
+/// A positive string prefilter on a column. With `ignore_case`, the needle
+/// must be ASCII: ASCII subjects compare ignoring ASCII case, and every
+/// non-ASCII subject passes. This deliberately does not equate Unicode simple
+/// case mapping with full folding. With `recursive`, a match in any nested
+/// value also passes, as in TQL's `search`. Other values do not match.
+///
+/// Unlike `fold_case`, every rendering must be a superset, including for
+/// non-ASCII subjects. Renderers without such a guarantee must veto this node.
+struct StringMatch {
+  Column column;
+  std::string needle;
+  StringMatchKind kind;
+  bool ignore_case = false;
+  bool recursive = false;
+};
+
 /// A function whose meaning does not depend on the target.
 enum class Operation {
   /// `starts_with(string, prefix) -> bool`
@@ -233,7 +257,7 @@ struct Conditional {
 
 /// An expression of the IR.
 struct Expr : variant<Literal, Column, Call, Binary, And, Or, Not, In, Between,
-                      IsNull, Conditional> {
+                      IsNull, Conditional, StringMatch> {
   using variant::variant;
 };
 

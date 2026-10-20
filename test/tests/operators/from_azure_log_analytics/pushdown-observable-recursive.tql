@@ -1,0 +1,29 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: observable-adversarial
+      rows: [1, 2, 3, 4, 6, 10]
+      project: [Id, Extra]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | where (gettype(column_ifexists('Extra', dynamic(null))) !in ("string") or tostring(column_ifexists('Extra', dynamic(null))) contains "powershell" or tostring(column_ifexists('Extra', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('Extra', dynamic(null))) matches regex @'^[ \t\r\n]*[\[{]' or tostring(column_ifexists('Extra', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['Extra'] = column_ifexists('Extra', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Extra.search("powershell", ignore_case=true)
+select Id

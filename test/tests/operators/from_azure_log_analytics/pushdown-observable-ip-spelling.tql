@@ -1,0 +1,29 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: observable-adversarial
+      rows: [0, 1, 2, 6, 7, 8, 9, 10, 11]
+      project: [Id, Addr]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | where (isempty(parse_ipv6(tostring(column_ifexists('Addr', dynamic(null))))) or ipv6_compare(tostring(column_ifexists('Addr', dynamic(null))), "10.0.0.1") == 0)
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['Addr'] = column_ifexists('Addr', dynamic(null))
+---
+
+// Live KQL also returns compatible IPv6 row 6; the local IP comparison rejects it.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Addr.ip() == 10.0.0.1
+select Id

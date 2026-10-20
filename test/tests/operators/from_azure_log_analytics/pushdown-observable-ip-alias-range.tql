@@ -1,0 +1,27 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: observable-adversarial
+      project: [Id, Addr]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['Addr'] = column_ifexists('Addr', dynamic(null))
+---
+
+// The native subnet stays local: aliased bounds could otherwise exclude row 12.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Addr.ip() in ::/80
+select Id

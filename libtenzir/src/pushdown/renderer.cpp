@@ -297,6 +297,9 @@ auto SqlRenderer::render_fragment(Expr const& expr) const -> Option<Fragment> {
       TRY(auto then, render_fragment(*x.then));
       TRY(auto otherwise, render_fragment(*x.otherwise));
       return render_conditional(condition, then, otherwise);
+    },
+    [](StringMatch const&) -> Option<Fragment> {
+      return None{};
     });
 }
 

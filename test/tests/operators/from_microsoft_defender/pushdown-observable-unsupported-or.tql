@@ -1,0 +1,25 @@
+---
+fixtures:
+  - microsoft_defender:
+      project: [Id, AccountName, ProcessCommandLine]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['AccountName'] = column_ifexists('AccountName', dynamic(null)), ['ProcessCommandLine'] = column_ifexists('ProcessCommandLine', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_microsoft_defender "observables",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where AccountName.to_lower() == "alice" or ProcessCommandLine.match_regex("^backup")
+select Id

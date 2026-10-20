@@ -1,0 +1,29 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [0, 3, 4, 8, 11]
+      project: [Id, ProcessCommandLine]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('ProcessCommandLine', dynamic(null))) !in ("string") or tostring(column_ifexists('ProcessCommandLine', dynamic(null))) contains "powershell" or tostring(column_ifexists('ProcessCommandLine', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('ProcessCommandLine', dynamic(null))) matches regex @'^[ \t\r\n]*[\[{]' or tostring(column_ifexists('ProcessCommandLine', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['ProcessCommandLine'] = column_ifexists('ProcessCommandLine', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_microsoft_defender "observables",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where ProcessCommandLine.search("powershell", ignore_case=true) and ProcessCommandLine.match_regex("-[eE][nN][cC]")
+head 2
+select Id

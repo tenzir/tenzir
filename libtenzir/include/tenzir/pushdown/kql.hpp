@@ -56,15 +56,19 @@ namespace tenzir::pushdown {
 /// - `==`, `<`, `<=`, `>`, `>=` between a column and a number,
 /// - `==` between a column and a string or a boolean,
 /// - `in` of a column in a list of such literals of a single kind,
-/// - `starts_with`, `ends_with`, and `contains` of a column and a string,
-///   case-sensitively,
+/// - `starts_with`, `ends_with`, and substring membership, case-sensitively,
+/// - ASCII-needle case-insensitive affixes, recursive `search`/`contains`, and
+///   equality/membership after `to_lower` or `to_upper`, keeping non-ASCII
+///   subjects and values whose decoded representation might match,
+/// - IP equality and subnet membership, with optional `ip()` conversion,
+///   keeping spellings that KQL cannot parse,
 /// - `!= null` of a column,
 /// - `and` and `or` of these, where `and` drops conjuncts that do not render.
 ///
 /// Everything else is vetoed and stays local, notably negation, nested field
 /// paths, membership in lists that mix kinds, ordering on strings, regular
-/// expressions, case-insensitive matching, IP addresses and subnets, times,
-/// arithmetic, and `== null`.
+/// expressions, non-ASCII case-insensitive needles, IP ordering, native IPv6
+/// subnets overlapping ::/80, times, arithmetic, and `== null`.
 class KqlRenderer final : public Renderer {
 public:
   auto render(Expr const& expr) const -> Option<std::string> override;

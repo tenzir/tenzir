@@ -1,0 +1,28 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [2, 6]
+      project: [Id, RemoteIP]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (isempty(parse_ipv6(tostring(column_ifexists('RemoteIP', dynamic(null))))) or (ipv6_compare(tostring(column_ifexists('RemoteIP', dynamic(null))), "10.20.0.0") >= 0 and ipv6_compare(tostring(column_ifexists('RemoteIP', dynamic(null))), "10.20.255.255") <= 0))
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['RemoteIP'] = column_ifexists('RemoteIP', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_microsoft_defender "observables",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where RemoteIP.ip() in 10.20.7.8/16
+select Id

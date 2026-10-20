@@ -1,0 +1,29 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: observables
+      rows: [2, 3, 6, 7, 11]
+      project: [Id, RemoteUrl, RemoteIP]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: |-
+
+        | where ((gettype(column_ifexists('RemoteUrl', dynamic(null))) !in ("string") or tostring(column_ifexists('RemoteUrl', dynamic(null))) == "evil.example" or tostring(column_ifexists('RemoteUrl', dynamic(null))) matches regex @'^[ \t\r\n]*"') or (isempty(parse_ipv6(tostring(column_ifexists('RemoteIP', dynamic(null))))) or (ipv6_compare(tostring(column_ifexists('RemoteIP', dynamic(null))), "10.20.0.0") >= 0 and ipv6_compare(tostring(column_ifexists('RemoteIP', dynamic(null))), "10.20.255.255") <= 0)))
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['RemoteUrl'] = column_ifexists('RemoteUrl', dynamic(null)), ['RemoteIP'] = column_ifexists('RemoteIP', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where RemoteUrl == "evil.example" or RemoteIP.ip() in 10.20.0.0/16
+select Id

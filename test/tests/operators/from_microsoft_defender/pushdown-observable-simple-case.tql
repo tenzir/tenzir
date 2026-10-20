@@ -1,0 +1,28 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [2, 3, 4, 5, 6, 7]
+      project: [Id, Value]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('Value', dynamic(null))) !in ("string") or tostring(column_ifexists('Value', dynamic(null))) =~ "i" or tostring(column_ifexists('Value', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('Value', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['Value'] = column_ifexists('Value', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_microsoft_defender "observable-adversarial",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Value.to_lower() == "i"
+select Id

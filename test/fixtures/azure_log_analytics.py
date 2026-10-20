@@ -16,6 +16,8 @@ from urllib.parse import parse_qs
 
 from tenzir_test import FixtureHandle, current_options, fixture
 
+from . import kql_observables
+
 _QUERY = '  SecurityEvent\n| project Message = "azüre", TimeGenerated  '
 _WORKSPACE = "01234567-89ab-cdef-0123-456789abcdef"
 _COLUMNS = [
@@ -274,12 +276,33 @@ class Handler(BaseHTTPRequestHandler):
         rows = [copy.deepcopy(_ROW)]
         table = {"name": "PrimaryResult", "columns": columns, "rows": rows}
         envelope = {"tables": [table]}
-        if case == "pushdown":
-            columns[:] = copy.deepcopy(_PUSHDOWN_COLUMNS)
+        if case in {"pushdown", "observables", "observable-adversarial"}:
+            source_columns = _PUSHDOWN_COLUMNS
+            source_rows = _PUSHDOWN_ROWS
+            if case != "pushdown":
+                adversarial = case == "observable-adversarial"
+                definitions = (
+                    kql_observables.ADVERSARIAL_COLUMNS
+                    if adversarial
+                    else kql_observables.COLUMNS
+                )
+                source_columns = [
+                    {"name": name, "type": kind} for name, kind in definitions
+                ]
+                source_rows = copy.deepcopy(
+                    kql_observables.ADVERSARIAL_ROWS
+                    if adversarial
+                    else kql_observables.ROWS
+                )
+                for row in source_rows:
+                    for i, (_, kind) in enumerate(definitions):
+                        if kind == "dynamic" and not isinstance(row[i], str):
+                            row[i] = json.dumps(row[i])
+            columns[:] = copy.deepcopy(source_columns)
             selected = server.options.rows
             if selected is None:
-                selected = list(range(len(_PUSHDOWN_ROWS)))
-            rows[:] = [copy.deepcopy(_PUSHDOWN_ROWS[i]) for i in selected]
+                selected = list(range(len(source_rows)))
+            rows[:] = [copy.deepcopy(source_rows[i]) for i in selected]
             if server.options.project is not None:
                 names = [column["name"] for column in columns]
                 indices = [
@@ -287,7 +310,7 @@ class Handler(BaseHTTPRequestHandler):
                     for name in server.options.project
                 ]
                 columns[:] = [
-                    copy.deepcopy(_PUSHDOWN_COLUMNS[i])
+                    copy.deepcopy(source_columns[i])
                     if i is not None
                     else {"name": name, "type": "dynamic"}
                     for name, i in zip(server.options.project, indices)

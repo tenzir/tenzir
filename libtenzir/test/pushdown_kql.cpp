@@ -205,8 +205,78 @@ TEST("kql renders case-sensitive string matching") {
   CHECK_EQUAL(
     where(R"("e\u{301}" in x)"),
     string_guard(fmt::format("tostring({}) contains_cs \"e\u0301\"", x)));
-  // Ignoring case stays local.
-  CHECK_EQUAL(where(R"(x.starts_with("ab", ignore_case=true))"), "");
+  // Non-ASCII needles remain local when case is ignored.
+  CHECK_EQUAL(where(R"(x.starts_with("ä", ignore_case=true))"), "");
+}
+
+TEST("kql guards ASCII case-insensitive string prefilters") {
+  auto guarded = [](std::string_view op, std::string_view needle,
+                    bool recursive = false) {
+    auto condition
+      = fmt::format("tostring({0}) {1} \"{2}\" or tostring({0}) matches regex "
+                    "@'[^\\x00-\\x7F]'",
+                    x, op, needle);
+    if (recursive) {
+      condition += fmt::format(
+        " or tostring({}) matches regex @'^[ \\t\\r\\n]*[\\[{{]'", x);
+    }
+    return string_guard(condition);
+  };
+  CHECK_EQUAL(where(R"(x.starts_with("ab", ignore_case=true))"),
+              guarded("startswith", "ab"));
+  CHECK_EQUAL(where(R"(x.ends_with("AB", ignore_case=true))"),
+              guarded("endswith", "AB"));
+  CHECK_EQUAL(where(R"(x.to_lower() == "alice")"), guarded("=~", "alice"));
+  CHECK_EQUAL(where(R"("ALICE" == x.to_upper())"), guarded("=~", "ALICE"));
+  CHECK_EQUAL(where(R"(x.to_lower() in ["alice", "bob"])"),
+              fmt::format("({} or {})", guarded("=~", "alice"),
+                          guarded("=~", "bob")));
+  CHECK_EQUAL(where(R"(search(x, "powershell", ignore_case=true))"),
+              guarded("contains", "powershell", true));
+  CHECK_EQUAL(where(R"(x.contains("-enc", ignore_case=true))"),
+              guarded("contains", "-enc", true));
+  CHECK_EQUAL(where(R"(x.search("ALICE", exact=true, ignore_case=true))"),
+              guarded("=~", "ALICE", true));
+  CHECK_EQUAL(where(R"(x.search("", ignore_case=true))"),
+              guarded("contains", "", true));
+  CHECK_EQUAL(where(R"(x.search("ß", ignore_case=true))"), "");
+  CHECK_EQUAL(where(R"(x.to_upper() in ["A", "Ä"])"), "");
+  CHECK_EQUAL(where(R"(x.search("a", ignore_case=true) or x.match_regex("b"))"),
+              "");
+  CHECK_EQUAL(where(R"(search(this, "a", ignore_case=true))"), "");
+}
+
+TEST("kql compares parsed IPs and subnet bounds in the mapped address space") {
+  auto guard = fmt::format("isempty(parse_ipv6(tostring({})))", x);
+  auto eq = [&](std::string_view address) {
+    return fmt::format("({} or ipv6_compare(tostring({}), \"{}\") == 0)", guard,
+                       x, address);
+  };
+  CHECK_EQUAL(where("x.ip() == 10.0.0.1"), eq("10.0.0.1"));
+  CHECK_EQUAL(where("x == 10.0.0.1"), eq("10.0.0.1"));
+  CHECK_EQUAL(where("::ffff:10.0.0.1 == x.ip()"), eq("10.0.0.1"));
+  CHECK_EQUAL(where("x.ip() == 2001:db8::1"), eq("2001:db8::1"));
+  auto subnet = [&](std::string_view lo, std::string_view hi) {
+    return fmt::format("({0} or (ipv6_compare(tostring({1}), \"{2}\") >= 0 "
+                       "and ipv6_compare(tostring({1}), \"{3}\") <= 0))",
+                       guard, x, lo, hi);
+  };
+  CHECK_EQUAL(where("x.ip() in 10.20.7.8/16"),
+              subnet("10.20.0.0", "10.20.255.255"));
+  CHECK_EQUAL(where("x in 0.0.0.0/0"), subnet("0.0.0.0", "255.255.255.255"));
+  CHECK_EQUAL(where("x.ip() in 10.0.0.1/32"), subnet("10.0.0.1", "10.0.0.1"));
+  // KQL aliases compatible and mapped IPv4 addresses. Moving a subnet bound
+  // between those regions can exclude otherwise matching native addresses.
+  for (auto network :
+       {"::/0", "::/80", "::/96", "::fffe:0:0/95", "::a00:1/128"}) {
+    CHECK_EQUAL(where(fmt::format("x.ip() in {}", network)), "");
+    CHECK_EQUAL(where(fmt::format("x.ip() in {} or x == 1", network)), "");
+  }
+  CHECK_EQUAL(where("x.ip() in 2001:db8::1/128"),
+              subnet("2001:db8::1", "2001:db8::1"));
+  CHECK_EQUAL(where("x.ip() in 2001:db8::/32"),
+              subnet("2001:db8::", "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff"));
+  CHECK_EQUAL(where("x.ip() == 10.0.0.1 or x.match_regex(\"a\")"), "");
 }
 
 TEST("kql renders null checks for strictly decoded types only") {
@@ -222,13 +292,13 @@ TEST("kql vetoes predicates without a proven superset") {
   CHECK_EQUAL(where("not (x == 1)"), "");
   CHECK_EQUAL(where("x.y == 1"), "");
   CHECK_EQUAL(where(R"(x.match_regex("a"))"), "");
-  CHECK_EQUAL(where("x == 1.2.3.4"), "");
-  CHECK_EQUAL(where("x in 10.0.0.0/8"), "");
-  CHECK_EQUAL(where("x.ip() == 1.2.3.4"), "");
+  CHECK_EQUAL(where("x.ip() != 1.2.3.4"), "");
+  CHECK_EQUAL(where("x.ip() > 1.2.3.4"), "");
   CHECK_EQUAL(where("x > 2026-01-01"), "");
   CHECK_EQUAL(where("x + 1 > 2"), "");
   CHECK_EQUAL(where("x == y"), "");
-  CHECK_EQUAL(where(R"(x.to_lower() == "a")"), "");
+  CHECK_EQUAL(where(R"(x.to_lower() == "ä")"), "");
+  CHECK_EQUAL(where(R"(x.to_lower() != "a")"), "");
   CHECK_EQUAL(where("int(x, base=16) == 16"), "");
 }
 

@@ -1,0 +1,28 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [0, 3, 4, 11]
+      project: [Id, AccountName, DeviceName]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (gettype(column_ifexists('AccountName', dynamic(null))) !in ("string") or tostring(column_ifexists('AccountName', dynamic(null))) =~ "alice" or tostring(column_ifexists('AccountName', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('AccountName', dynamic(null))) matches regex @'^[ \t\r\n]*"') and ((gettype(column_ifexists('AccountName', dynamic(null))) !in ("string") or tostring(column_ifexists('AccountName', dynamic(null))) =~ "ALICE" or tostring(column_ifexists('AccountName', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('AccountName', dynamic(null))) matches regex @'^[ \t\r\n]*"') or (gettype(column_ifexists('AccountName', dynamic(null))) !in ("string") or tostring(column_ifexists('AccountName', dynamic(null))) =~ "BOB" or tostring(column_ifexists('AccountName', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('AccountName', dynamic(null))) matches regex @'^[ \t\r\n]*"')) and (gettype(column_ifexists('DeviceName', dynamic(null))) !in ("string") or tostring(column_ifexists('DeviceName', dynamic(null))) startswith "ws-" or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'^[ \t\r\n]*"') and (gettype(column_ifexists('DeviceName', dynamic(null))) !in ("string") or tostring(column_ifexists('DeviceName', dynamic(null))) endswith "01" or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'[^\x00-\x7F]' or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['AccountName'] = column_ifexists('AccountName', dynamic(null)), ['DeviceName'] = column_ifexists('DeviceName', dynamic(null))
+---
+
+// The fixture checks the exact candidate query; the full predicate remains local.
+from_microsoft_defender "observables",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where AccountName.to_lower() == "alice" and AccountName.to_upper() in ["ALICE", "BOB"] and DeviceName.starts_with("ws-", ignore_case=true) and DeviceName.ends_with("01", ignore_case=true)
+select Id

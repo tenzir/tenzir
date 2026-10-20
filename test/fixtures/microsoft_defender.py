@@ -12,6 +12,8 @@ from typing import Iterator
 
 from tenzir_test import current_assertions, current_options, fixture
 
+from . import kql_observables
+
 from .microsoft_graph import (
     _ACCESS_TOKEN,
     _CLIENT_ID,
@@ -443,15 +445,41 @@ class _Handler(BaseHTTPRequestHandler):
         envelope: dict[str, object] = {"schema": schema, "results": rows}
         if query == _QUERY:
             pass
-        elif query in {"pushdown", "pushdown-bounded"}:
+        elif query in {
+            "pushdown",
+            "pushdown-bounded",
+            "observables",
+            "observable-adversarial",
+        }:
+            source_schema = _PUSHDOWN_SCHEMA
+            source_rows = _PUSHDOWN_ROWS
+            if query in {"observables", "observable-adversarial"}:
+                adversarial = query == "observable-adversarial"
+                definitions = (
+                    kql_observables.ADVERSARIAL_COLUMNS
+                    if adversarial
+                    else kql_observables.COLUMNS
+                )
+                types = {
+                    "long": "Int64",
+                    "string": "String",
+                    "datetime": "DateTime",
+                    "dynamic": "Object",
+                }
+                source_schema = [
+                    {"name": name, "type": types[kind]} for name, kind in definitions
+                ]
+                source_rows = (
+                    kql_observables.ADVERSARIAL_ROWS
+                    if adversarial
+                    else kql_observables.ROWS
+                )
             selected = server.rows
             if selected is None:
-                selected = list(range(len(_PUSHDOWN_ROWS)))
-            schema = copy.deepcopy(_PUSHDOWN_SCHEMA)
+                selected = list(range(len(source_rows)))
+            schema = copy.deepcopy(source_schema)
             names = [column["name"] for column in schema]
-            rows = [
-                dict(zip(names, copy.deepcopy(_PUSHDOWN_ROWS[i]))) for i in selected
-            ]
+            rows = [dict(zip(names, copy.deepcopy(source_rows[i]))) for i in selected]
             if server.project is not None:
                 types = {column["name"]: column["type"] for column in schema}
                 schema = [

@@ -277,6 +277,34 @@ auto comparison_operator(BinaryOp op) -> Option<std::string_view> {
   }
 }
 
+/// Resolves the column inside a parsed-IP prefilter.
+auto parsed_ip_column(Expr const& expr) -> Option<std::string> {
+  auto const* call = try_as<Call>(expr);
+  if (not call or call->op != Operation::parse_ip or call->args.size() != 1) {
+    return None{};
+  }
+  auto const* column = try_as<Column>(call->args.front());
+  if (not column) {
+    return None{};
+  }
+  return render_column(*column);
+}
+
+/// Compares addresses rather than text or `parse_ipv4`, which rejects mapped
+/// spellings. KQL also equates IPv4-compatible and mapped addresses, which
+/// only over-matches equality; subnet bounds need the checks below.
+/// Translation separately keeps the spellings that KQL cannot parse.
+auto render_ip_comparison(Expr const& expr, Literal const& literal,
+                          std::string_view op) -> Option<std::string> {
+  auto const* value = try_as<IpValue>(literal.value);
+  if (not value) {
+    return None{};
+  }
+  TRY(auto subject, parsed_ip_column(expr));
+  return fmt::format("ipv6_compare(tostring({}), \"{}\") {} 0", subject,
+                     value->address, op);
+}
+
 /// Spells `column op literal`.
 ///
 /// - A number compares in `real`, where the column's value converts exactly
@@ -286,7 +314,17 @@ auto comparison_operator(BinaryOp op) -> Option<std::string_view> {
 ///   collation, so KQL's case-sensitive `==` keeps every row that TQL keeps.
 ///   KQL has no ordering operators on strings, so ordering is vetoed.
 /// - A boolean compares for equality only.
+/// - Parsed IPs compare in the mapped address space.
 auto render_comparison(Binary const& x) -> Option<std::string> {
+  if (auto const* literal = try_as<Literal>(*x.right);
+      literal and is<IpValue>(literal->value)) {
+    // Ordering remains local. Only equality and the bounds of a subnet use
+    // KQL's address comparison.
+    if (x.op != BinaryOp::eq) {
+      return None{};
+    }
+    return render_ip_comparison(*x.left, *literal, "==");
+  }
   auto const* column = try_as<Column>(*x.left);
   auto const* literal = try_as<Literal>(*x.right);
   if (not column or not literal) {
@@ -420,11 +458,83 @@ auto render_call(Call const& x) -> Option<std::string> {
      fmt::format("{} {} {}", converted(subject, Kind::string), op, value)});
 }
 
+/// Matches ASCII needles without relying on KQL's Unicode case mapping.
+/// Non-ASCII subjects pass even when KQL would not find the needle. Recursive
+/// search also keeps JSON-looking arrays/objects: decoding can expose escaped
+/// strings that are absent from their raw spelling. `typed` already keeps
+/// non-string values and JSON-quoted strings.
+auto render_string_match(StringMatch const& x) -> Option<std::string> {
+  if (x.ignore_case and not std::ranges::all_of(x.needle, [](unsigned char c) {
+        return c < 0x80;
+      })) {
+    return None{};
+  }
+  TRY(auto subject, render_column(x.column));
+  TRY(auto needle, quote_string(x.needle, '"'));
+  auto op = std::string_view{};
+  switch (x.kind) {
+    case StringMatchKind::equal:
+      op = x.ignore_case ? "=~" : "==";
+      break;
+    case StringMatchKind::prefix:
+      op = x.ignore_case ? "startswith" : "startswith_cs";
+      break;
+    case StringMatchKind::suffix:
+      op = x.ignore_case ? "endswith" : "endswith_cs";
+      break;
+    case StringMatchKind::substring:
+      op = x.ignore_case ? "contains" : "contains_cs";
+      break;
+  }
+  auto condition = fmt::format("tostring({}) {} {}", subject, op, needle);
+  if (x.ignore_case) {
+    condition += fmt::format(" or tostring({}) matches regex @'[^\\x00-\\x7F]'",
+                             subject);
+  }
+  if (x.recursive) {
+    condition += fmt::format(
+      " or tostring({}) matches regex @'^[ \\t\\r\\n]*[\\[{{]'", subject);
+  }
+  return typed(subject, {Kind::string, std::move(condition)});
+}
+
+/// Subnet bounds are already masked by translation, in the 128-bit address
+/// space. This also handles IPv4 /0 as the mapped /96, not IPv6 /0.
+///
+/// KQL equates IPv4-compatible addresses in ::/96 with mapped addresses in
+/// ::ffff:0:0/96. That normalization is not monotone across those regions:
+/// moving a bound can exclude even a non-aliased address inside the interval.
+/// Comparisons are monotone within mapped IPv4, and unchanged for native IPv6
+/// intervals entirely above both alias regions. Conservatively veto every
+/// other interval intersecting ::/80, rather than guarding only its subjects.
+auto render_ip_between(Between const& x) -> Option<std::string> {
+  auto const* lo = try_as<Literal>(*x.lo);
+  auto const* hi = try_as<Literal>(*x.hi);
+  auto const* lo_ip = lo ? try_as<IpValue>(lo->value) : nullptr;
+  auto const* hi_ip = hi ? try_as<IpValue>(hi->value) : nullptr;
+  if (not lo_ip or not hi_ip) {
+    return None{};
+  }
+  auto both_v4 = lo_ip->address.is_v4() and hi_ip->address.is_v4();
+  if (not both_v4
+      and lo_ip->address <= ip::v4(std::numeric_limits<uint32_t>::max())) {
+    return None{};
+  }
+  TRY(auto lower, render_ip_comparison(*x.expr, *lo, ">="));
+  TRY(auto upper, render_ip_comparison(*x.expr, *hi, "<="));
+  return fmt::format("({} and {})", lower, upper);
+}
+
 /// Spells `column != null`. KQL's `isnotnull` is `false` for a `null` of any
 /// type, but strings are never `null` in KQL, and the sources may receive an
 /// empty `guid` or `dynamic` value where KQL sees `null`. The predicate thus
 /// drops a `null` only for the types whose `null` decodes to `null` alone.
 auto render_not_null(IsNull const& x) -> Option<std::string> {
+  if (not x.negated) {
+    if (auto subject = parsed_ip_column(*x.expr)) {
+      return fmt::format("isempty(parse_ipv6(tostring({})))", *subject);
+    }
+  }
   auto const* column = try_as<Column>(*x.expr);
   if (not x.negated or not column) {
     return None{};
@@ -527,6 +637,12 @@ auto KqlRenderer::render(Expr const& expr) const -> Option<std::string> {
     [](IsNull const& x) -> Option<std::string> {
       return render_not_null(x);
     },
+    [](StringMatch const& x) -> Option<std::string> {
+      return render_string_match(x);
+    },
+    [](Between const& x) -> Option<std::string> {
+      return render_ip_between(x);
+    },
     [&](And const& x) -> Option<std::string> {
       // Dropping a conjunct only widens a superset.
       auto parts = std::vector<std::string>{};
@@ -553,7 +669,7 @@ auto KqlRenderer::render(Expr const& expr) const -> Option<std::string> {
     },
     [](auto const&) -> Option<std::string> {
       // `Not` would turn a superset into a subset. Columns, arithmetic,
-      // `Between`, and `Conditional` never come from a dynamic prefilter.
+      // and `Conditional` never come from a dynamic prefilter.
       return None{};
     });
 }

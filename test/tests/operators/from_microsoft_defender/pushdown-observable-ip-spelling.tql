@@ -1,0 +1,28 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [0, 1, 2, 6, 7, 8, 9, 10, 11]
+      project: [Id, Addr]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 100000
+        | where (isempty(parse_ipv6(tostring(column_ifexists('Addr', dynamic(null))))) or ipv6_compare(tostring(column_ifexists('Addr', dynamic(null))), "10.0.0.1") == 0)
+        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['Addr'] = column_ifexists('Addr', dynamic(null))
+---
+
+// Live KQL also returns compatible IPv6 row 6; the local IP comparison rejects it.
+from_microsoft_defender "observable-adversarial",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where Addr.ip() == 10.0.0.1
+select Id

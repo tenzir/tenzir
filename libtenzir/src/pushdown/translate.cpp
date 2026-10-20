@@ -1215,6 +1215,23 @@ auto translate_in(ast::binary_expr const& expr, ColumnModel const& columns,
 
 // -- Predicates ---------------------------------------------------------------
 
+/// Builds a conservative string prefilter without assuming that Unicode
+/// simple case mapping, full folding, and a target's collation agree.
+auto string_match(Scalar const& column, std::string const& needle,
+                  StringMatchKind kind, bool ignore_case,
+                  bool recursive = false) -> Option<Expr> {
+  if (ignore_case and not std::ranges::all_of(needle, [](unsigned char c) {
+        return c < 0x80;
+      })) {
+    return None{};
+  }
+  auto const* subject = try_as<Column>(column.expr);
+  if (not subject) {
+    return None{};
+  }
+  return StringMatch{*subject, needle, kind, ignore_case, recursive};
+}
+
 /// Translates a function call that yields a boolean.
 auto translate_predicate_function(ast::function_call const& call,
                                   ColumnModel const& columns,
@@ -1253,14 +1270,16 @@ auto translate_predicate_function(ast::function_call const& call,
             and not(dynamic and is<DynamicType>(column->type)))) {
       return None{};
     }
-    // Approximate case folding is not a guaranteed superset.
-    if (is<DynamicType>(column->type) and ignore_case) {
-      return None{};
-    }
     auto prefix = as_literal(call.args[1], reg);
     auto const* text = prefix ? try_as<std::string>(prefix->value) : nullptr;
     if (not text) {
       return None{};
+    }
+    if (is<DynamicType>(column->type) and ignore_case) {
+      return string_match(*column, *text,
+                          *name == "starts_with" ? StringMatchKind::prefix
+                                                 : StringMatchKind::suffix,
+                          true);
     }
     auto subject = std::move(column->expr);
     auto affix = lit(*text);
@@ -1273,6 +1292,47 @@ auto translate_predicate_function(ast::function_call const& call,
     return pushdown::call(*name == "starts_with" ? Operation::starts_with
                                                  : Operation::ends_with,
                           std::move(subject), std::move(affix));
+  }
+  if (dynamic and (*name == "search" or *name == "contains")) {
+    if (call.args.size() < 2 or call.args.size() > 4) {
+      return None{};
+    }
+    auto ignore_case = false;
+    auto exact = false;
+    auto seen_case = false;
+    auto seen_exact = false;
+    for (auto i = size_t{2}; i < call.args.size(); ++i) {
+      auto const* named = try_as<ast::assignment>(call.args[i]);
+      if (not named) {
+        return None{};
+      }
+      auto label = ast::field_path::try_from(named->left);
+      auto flag = as_literal(named->right, reg);
+      auto const* value = flag ? try_as<bool>(flag->value) : nullptr;
+      if (not label or label->path().size() != 1 or not value) {
+        return None{};
+      }
+      auto key = label->path().front().id.name;
+      if (key == "ignore_case" and not seen_case) {
+        ignore_case = *value;
+        seen_case = true;
+      } else if (key == "exact" and not seen_exact) {
+        exact = *value;
+        seen_exact = true;
+      } else {
+        return None{};
+      }
+    }
+    auto column = resolve_column(call.args[0], columns);
+    auto literal = as_literal(call.args[1], reg);
+    auto const* text = literal ? try_as<std::string>(literal->value) : nullptr;
+    if (not column or not is<DynamicType>(column->type) or not text) {
+      return None{};
+    }
+    return string_match(*column, *text,
+                        exact ? StringMatchKind::equal
+                              : StringMatchKind::substring,
+                        ignore_case, true);
   }
   if (*name == "match_regex") {
     // Both yield `null` for a `null` subject. TQL rejects a pattern that RE2
@@ -1497,8 +1557,57 @@ auto translate_dynamic_atom(ast::expression const& expr,
   if (not x) {
     return None{};
   }
+  // Simple lower/upper mapping is not full case folding. For ASCII needles
+  // it agrees on ASCII subjects; the string prefilter keeps every other
+  // subject. No negative comparison can use this relaxation.
+  auto case_column = [&](ast::expression const& value) -> Option<Scalar> {
+    auto const* fn = try_as<ast::function_call>(value);
+    if (not fn or fn->args.size() != 1) {
+      return None{};
+    }
+    auto name = function_name(*fn);
+    if (not name or (*name != "to_lower" and *name != "to_upper")) {
+      return None{};
+    }
+    return dynamic_column(fn->args.front());
+  };
+  if (x->op == ast::binary_op::eq) {
+    auto column = case_column(x->left);
+    auto literal = as_literal(x->right, reg);
+    if (not column or not literal) {
+      column = case_column(x->right);
+      literal = as_literal(x->left, reg);
+    }
+    if (column and literal) {
+      if (auto const* text = try_as<std::string>(literal->value)) {
+        return string_match(*column, *text, StringMatchKind::equal, true);
+      }
+    }
+  }
   if (x->op == ast::binary_op::in) {
     if (auto const* list = try_as<ast::list>(x->right)) {
+      if (auto column = case_column(x->left)) {
+        auto matches = std::vector<Expr>{};
+        for (auto const& item : list->items) {
+          auto const* item_expr = try_as<ast::expression>(item);
+          auto literal = item_expr ? as_literal(*item_expr, reg) : None{};
+          auto const* text
+            = literal ? try_as<std::string>(literal->value) : nullptr;
+          if (not text) {
+            return None{};
+          }
+          TRY(auto match,
+              string_match(*column, *text, StringMatchKind::equal, true));
+          matches.push_back(std::move(match));
+        }
+        if (matches.empty()) {
+          return None{};
+        }
+        if (matches.size() == 1) {
+          return std::move(matches.front());
+        }
+        return Or{std::move(matches)};
+      }
       TRY(auto column, dynamic_column(x->left));
       return translate_in_list(column, *list, reg);
     }
@@ -1564,21 +1673,28 @@ auto translate_dynamic_atom(ast::expression const& expr,
   return compare(std::move(column->expr), op, to_literal(*literal), true);
 }
 
-/// Resolves `ip(column)` on a string column to `parse_ip`. The result is
-/// nullable even for a non-nullable column, since the parse may fail.
+/// Resolves `ip(column)` on a string or dynamic column to `parse_ip`.
+/// A bare dynamic column also admits this prefilter for IP predicates: any
+/// decoded IP has this spelling, while unparsed spellings pass separately.
+/// The result is nullable even for a non-nullable column.
 auto resolve_parsed_ip(ast::expression const& expr, ColumnModel const& columns)
   -> Option<Scalar> {
-  auto const* call = try_as<ast::function_call>(expr);
-  if (not call or call->args.size() != 1) {
-    return None{};
-  }
-  auto name = function_name(*call);
-  if (not name or *name != "ip") {
-    return None{};
-  }
-  auto column = resolve_column(call->args.front(), columns);
-  if (not column or not is<StringType>(column->type)) {
-    return None{};
+  auto column = resolve_column(expr, columns);
+  if (not column or not is<DynamicType>(column->type)) {
+    auto const* call = try_as<ast::function_call>(expr);
+    if (not call or call->args.size() != 1) {
+      return None{};
+    }
+    auto name = function_name(*call);
+    if (not name or *name != "ip") {
+      return None{};
+    }
+    column = resolve_column(call->args.front(), columns);
+    if (not column
+        or (not is<StringType>(column->type)
+            and not is<DynamicType>(column->type))) {
+      return None{};
+    }
   }
   return Scalar{.expr
                 = pushdown::call(Operation::parse_ip, std::move(column->expr)),

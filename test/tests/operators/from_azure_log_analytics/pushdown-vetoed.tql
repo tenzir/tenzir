@@ -11,8 +11,7 @@ assertions:
       appended: ""
 ---
 
-// IP addresses and subnets, function calls, negation, and regular
-// expressions stay local.
+// Negated IP and case-mapping predicates, and regular expressions, stay local.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={
@@ -23,7 +22,7 @@ from_azure_log_analytics env("AZLOG_QUERY"),
   },
   _base_url=env("AZLOG_URL"),
   tls=false
-where Addr.ip() in 10.0.0.0/8 or Addr == 10.0.0.1
-where Name.to_lower() == "alice"
+where not (Addr.ip() != 10.0.0.1)
+where not (Name.to_lower() != "alice")
 where not (Port == 80)
 where Name.match_regex("^a")

@@ -223,7 +223,15 @@ TEST("dynamic columns only contribute monotone prefilters") {
                       "x == 1 or y == 2",
                       "x == 1 and y.length_bytes() > 0",
                       "x == 9007199254740992",
-                      "x == -9007199254740992"}) {
+                      "x == -9007199254740992",
+                      "x == 1.1.1.1",
+                      "x.ip() == 1.1.1.1",
+                      "x in 10.0.0.0/8",
+                      "x.ip() in 10.0.0.0/8",
+                      "x.starts_with(\"a\", ignore_case=true)",
+                      "x.to_lower() == \"alice\"",
+                      "x.to_upper() in [\"ALICE\", \"BOB\"]",
+                      "x.search(\"powershell\", ignore_case=true)"}) {
     auto expr = parse(source);
     CHECK(not translate_predicate(expr, columns, test::builtin_registry()));
     CHECK(translate_prefilter(expr, columns, test::builtin_registry()));
@@ -241,17 +249,24 @@ TEST("dynamic columns only contribute monotone prefilters") {
                       "x == 9007199254740993",
                       "x == -9007199254740993",
                       "x == 9007199254740992.0",
-                      "x == 1.1.1.1",
-                      "x in 10.0.0.0/8",
                       "x == 2024-01-01",
                       "x.length_bytes() > 1",
-                      "x.starts_with(\"a\", ignore_case=true)",
+                      "x.starts_with(\"ä\", ignore_case=true)",
+                      "x.to_lower() != \"alice\"",
+                      "x.to_lower() in [\"alice\", \"ä\"]",
                       "x == 1 or y.length_bytes() > 0",
                       "not (x != null)"}) {
     auto expr = parse(source);
     CHECK(not translate_predicate(expr, columns, test::builtin_registry()));
     CHECK(not translate_prefilter(expr, columns, test::builtin_registry()));
   }
+  // A renderer must explicitly implement the conservative string contract;
+  // the SQL renderer cannot silently substitute approximate Unicode folding.
+  auto caseless = translate_prefilter(parse("x.to_lower() == \"alice\""),
+                                      columns, test::builtin_registry());
+  REQUIRE(caseless);
+  CHECK(is<StringMatch>(*caseless));
+  CHECK(not TestRenderer{}.render(*caseless));
   // Inference is not a license to rewrite IPs into strings on dynamic fields.
   auto expr = parse("x == 1.1.1.1");
   adapt_to_columns(expr, columns, test::builtin_registry());

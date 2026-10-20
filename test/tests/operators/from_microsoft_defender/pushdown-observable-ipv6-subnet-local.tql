@@ -1,0 +1,25 @@
+---
+fixtures:
+  - microsoft_defender
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: ""
+---
+
+// Barrier reference: evaluate the same predicate on every source row.
+from_microsoft_defender "observables",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+quiet {
+  pass
+}
+where RemoteIP.ip() in 2001:db8::42/32
+select Id

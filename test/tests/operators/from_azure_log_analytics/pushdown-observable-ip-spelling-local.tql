@@ -1,0 +1,27 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: observable-adversarial
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      appended: ""
+---
+
+// Barrier reference: evaluate the same predicate on every source row.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+quiet {
+  pass
+}
+where Addr.ip() == 10.0.0.1
+select Id
