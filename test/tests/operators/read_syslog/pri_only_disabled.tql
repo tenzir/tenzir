@@ -1,0 +1,7 @@
+from {x: "<45>Some message"}, {
+  x: "<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a=1]missing separator",
+}, {
+  x: "<166>Sep 01 2026 16:46:57: %ASA-6-302014: Teardown TCP connection",
+}
+write_lines
+read_syslog

@@ -142,7 +142,8 @@ struct parameter_parser : parser_base<parameter_parser> {
     // ], ", \ must be escaped.
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     // We allow not escaping it in some situations to be more permissive.
-    auto can_come_after_closing_bracket = parsers::eoi | ' ' | '\n' | '[';
+    auto can_come_after_closing_bracket
+      = parsers::eoi | ' ' | '\n' | '\r' | '[';
     auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
     auto not_escaped = printable - ('"' >> can_come_after_quote);
     auto value = escaped | not_escaped;
@@ -221,7 +222,7 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     auto esc = '\\'_p;
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     auto can_come_after_closing_bracket
-      = parsers::eoi | ' '_p | '\n'_p | '['_p | ';'_p;
+      = parsers::eoi | ' '_p | '\n'_p | '\r'_p | '['_p | ';'_p;
     auto value_terminator
       = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
     auto value_char = escaped | (! value_terminator >> printable);
@@ -374,9 +375,12 @@ struct message_parser : parser_base<message_parser> {
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
+    using namespace parser_literals;
+    // Octet-framed messages can include a line terminator even without MSG.
     auto p = header_parser{} >> ' '
              >> (structured_data_parser{} | checkpoint_structured_data_parser{})
-             >> -(' ' >> message_content_parser{});
+             >> -(' ' >> message_content_parser{})
+             >> ignore(-("\r\n"_p | '\n'_p));
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
@@ -551,6 +555,7 @@ struct cisco_datetime {
 struct cisco_short_datetime {
   std::string month;
   uint16_t day = 0;
+  Option<uint16_t> year;
   uint16_t hour = 0;
   uint16_t minute = 0;
   uint16_t second = 0;
@@ -703,6 +708,7 @@ struct cisco_short_datetime_parser : parser_base<cisco_short_datetime_parser> {
         });
     auto month = std::string{};
     auto day = uint16_t{};
+    auto year = Option<uint16_t>{};
     auto hour = uint16_t{};
     auto minute = uint16_t{};
     auto second = uint16_t{};
@@ -718,6 +724,13 @@ struct cisco_short_datetime_parser : parser_base<cisco_short_datetime_parser> {
       return false;
     }
     if (not ws(f, l, unused)) {
+      return false;
+    }
+    const auto year_parser
+      = integral_parser<uint16_t, 4, 4>{}.with([](uint16_t y) {
+          return y >= 1900 and y <= 2100;
+        });
+    if (not(-(year_parser >> ignore(ws)))(f, l, year)) {
       return false;
     }
     if (not hour_parser(f, l, hour)) {
@@ -763,6 +776,7 @@ struct cisco_short_datetime_parser : parser_base<cisco_short_datetime_parser> {
     x = {};
     x.month = std::move(month);
     x.day = day;
+    x.year = year;
     x.hour = hour;
     x.minute = minute;
     x.second = second;
@@ -935,18 +949,20 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
     const auto is_prival = [](uint16_t in) {
       return in <= 191;
     };
-    const auto ws = +parsers::space;
     const auto pri_parser
-      = '<' >> integral_parser<uint16_t, 3>{}.with(is_prival) >> '>' >> ':';
-    const auto seqnum_parser = integral_parser<uint32_t, 9, 1>{};
+      = '<' >> integral_parser<uint16_t, 3>{}.with(is_prival) >> '>';
     auto parsed_pri = Option<uint16_t>{};
+    auto require_cisco_prefix = false;
     auto it = f;
     {
       auto pri = uint16_t{};
       if (pri_parser(it, l, pri)) {
-        if (not ws(it, l, unused)) {
-          return false;
+        if (it != l and *it == ':') {
+          ++it;
+        } else {
+          require_cisco_prefix = true;
         }
+        std::ignore = ignore(*parsers::space)(it, l, unused);
         parsed_pri = pri;
       }
     }
@@ -970,13 +986,21 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
         auto ts = cisco_short_datetime{};
         auto save = it2;
         if (cisco_short_datetime_parser{}(it2, l, ts)) {
-          auto const subsecond = ts.subsecond.empty()
-                                   ? std::string{}
-                                   : fmt::format(".{}", ts.subsecond);
-          auto const timezone
-            = ts.timezone ? fmt::format(" {}", *ts.timezone) : std::string{};
-          out = fmt::format("{} {} {:02}:{:02}:{:02}{}{}", ts.month, ts.day,
+          if (ts.year) {
+            require_cisco_prefix = true;
+          }
+          if (require_cisco_prefix) {
+            out.assign(save, it2);
+          } else {
+            auto const subsecond = ts.subsecond.empty()
+                                     ? std::string{}
+                                     : fmt::format(".{}", ts.subsecond);
+            auto const timezone
+              = ts.timezone ? fmt::format(" {}", *ts.timezone) : std::string{};
+            out
+              = fmt::format("{} {} {:02}:{:02}:{:02}{}{}", ts.month, ts.day,
                             ts.hour, ts.minute, ts.second, subsecond, timezone);
+          }
           cursor = it2;
           return true;
         }
@@ -1016,26 +1040,56 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
       return false;
     };
     auto timestamp = std::string{};
+    auto host = Option<std::string>{};
     if (not parse_timestamp(it, timestamp)) {
-      auto it_with_seq = it;
-      auto seq = uint32_t{};
-      if (not seqnum_parser(it_with_seq, l, seq)) {
+      auto with_prefix = it;
+      auto prefix = std::string{};
+      const auto prefix_parser = +(parsers::alnum | parsers::ch<'-'>
+                                   | parsers::ch<'_'> | parsers::ch<'.'>)
+                                 >> ':' >> ignore(*parsers::space);
+      if (not prefix_parser(with_prefix, l, prefix)) {
         return false;
       }
-      if (not ':'_p(it_with_seq, l, unused)) {
+      // A numeric prefix is the Cisco sequence number, not a hostname.
+      if (prefix.find_first_not_of("0123456789") != std::string::npos) {
+        if (not parsed_pri) {
+          return false;
+        }
+        host = std::move(prefix);
+        require_cisco_prefix = true;
+      } else if (prefix.size() > 9) {
         return false;
       }
-      std::ignore = ignore(*parsers::space)(it_with_seq, l, unused);
-      if (not parse_timestamp(it_with_seq, timestamp)) {
+      if (not parse_timestamp(with_prefix, timestamp)) {
         return false;
       }
-      it = it_with_seq;
+      it = with_prefix;
     }
     if (not ':'_p(it, l, unused)) {
       return false;
     }
     std::ignore = ignore(*parsers::space)(it, l, unused);
     auto message = std::string_view{it, l};
+    // The additional ASA and hostname forms need a Cisco message identifier
+    // so timestamp-like text does not acquire invented header fields.
+    if (require_cisco_prefix) {
+      // Validate PRI spelling for new forms without changing acceptance of
+      // existing Cisco headers that permit zero-padded priorities.
+      auto const input = std::string_view{f, l};
+      if (parsed_pri and input[1] == '0' and input[2] != '>') {
+        return false;
+      }
+      auto body = it;
+      const auto word = +(parsers::alnum | parsers::ch<'_'>);
+      const auto severity
+        = integral_parser<uint16_t, 1, 1>{}.with([](uint16_t s) {
+            return s <= 7;
+          });
+      const auto prefix = '%' >> word >> '-' >> severity >> '-' >> word >> ':';
+      if (not prefix(body, l, unused)) {
+        return false;
+      }
+    }
     auto cisco_tag = Option<std::string>{};
     if (not message.empty() and message.front() == '%') {
       auto tf = message.begin();
@@ -1057,12 +1111,51 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
       x.severity = *parsed_pri % 8;
     }
     x.timestamp = std::move(timestamp);
+    x.host = std::move(host);
     x.tag = std::move(cisco_tag);
     x.content = std::string{message};
     f = l;
     return true;
   }
 };
+
+/// Try recognizable legacy headers before the deliberately broad PRI fallback.
+inline auto parse_legacy_syslog(std::string_view input, legacy_message& msg,
+                                bool accept_pri_only) -> bool {
+  auto f = input.begin();
+  auto const l = input.end();
+  msg = {};
+  if (legacy_message_parser{}(f, l, msg) and f == l) {
+    return true;
+  }
+  f = input.begin();
+  msg = {};
+  if (cisco_legacy_message_parser{}(f, l, msg) and f == l) {
+    return true;
+  }
+  if (not accept_pri_only) {
+    return false;
+  }
+  f = input.begin();
+  msg = {};
+  auto pri = uint16_t{};
+  // RFC 3164 permits a leading zero only for the priority value zero itself.
+  if (input.size() > 2 and input[1] == '0' and input[2] != '>') {
+    return false;
+  }
+  const auto priority_parser
+    = '<' >> integral_parser<uint16_t, 3>{}.with([](uint16_t p) {
+        return p <= 191;
+      })
+      >> '>';
+  if (not priority_parser(f, l, pri)) {
+    return false;
+  }
+  msg.facility = pri / 8;
+  msg.severity = pri % 8;
+  msg.content.assign(f, l);
+  return true;
+}
 
 template <typename Message>
 struct syslog_row {
@@ -1145,7 +1238,11 @@ inline auto append_message(nova::EventBuilder::Record record,
                            legacy_message& message) -> void {
   add_optional(record, "facility", message.facility);
   add_optional(record, "severity", message.severity);
-  record.exact_field("timestamp").data(message.timestamp);
+  if (message.timestamp.empty()) {
+    record.exact_field("timestamp").null();
+  } else {
+    record.exact_field("timestamp").data(message.timestamp);
+  }
   add_optional(record, "hostname", message.host);
   add_optional(record, "app_name", message.tag);
   add_optional(record, "process_id", message.process_id);
@@ -1337,7 +1434,11 @@ public:
     auto r = builder.record();
     r.exact_field("facility").data(msg.facility);
     r.exact_field("severity").data(msg.severity);
-    r.exact_field("timestamp").data_unparsed(std::move(msg.timestamp));
+    if (msg.timestamp.empty()) {
+      r.exact_field("timestamp").null();
+    } else {
+      r.exact_field("timestamp").data_unparsed(std::move(msg.timestamp));
+    }
     r.exact_field("hostname").data(std::move(msg.host));
     r.exact_field("app_name").data(std::move(msg.tag));
     r.exact_field("process_id").data(std::move(msg.process_id));

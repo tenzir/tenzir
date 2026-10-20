@@ -1,0 +1,10 @@
+from {x: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [action:\"Accept\"]"},
+  {x: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [action:\"Accept\"]\r"},
+  {x: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [Fields@1 action:\"Accept\"]"},
+  {x: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [Fields@1 action:\"Accept\"]\r"}
+// Include the LF appended by write_lines in each frame length.
+select l = x.length_chars() + 1, line = x
+write_lines
+split_bytes 1
+read_syslog octet_counting=true, raw_message=raw
+parsed = raw.parse_syslog(octet_counting=false)

@@ -50,6 +50,7 @@ auto make_dh(diagnostic_handler& dh, location operator_loc)
 
 struct ReadSyslogArgs {
   bool octet_counting = false;
+  bool accept_pri_only = false;
   Option<ast::field_path> raw_message;
   multi_series_builder::options msb_options;
   location operator_location = location::unknown;
@@ -253,7 +254,7 @@ private:
     // Try RFC 5424.
     {
       auto msg = syslog::message{};
-      if (syslog::message_parser{}.parse(f, l, msg)) {
+      if (syslog::message_parser{}.parse(f, l, msg) and f == l) {
         for (auto& s :
              flush_for_schema_change(syslog::builder_tag::syslog_builder)) {
           co_await push(std::move(s));
@@ -268,11 +269,11 @@ private:
       }
     }
 
-    // Try RFC 3164.
+    // Try RFC 3164, Cisco headers, then PRI-prefixed text.
     {
-      f = line.begin();
       auto legacy_msg = syslog::legacy_message{};
-      if (syslog::legacy_message_parser{}.parse(f, l, legacy_msg)) {
+      if (syslog::parse_legacy_syslog(line, legacy_msg,
+                                      args_.accept_pri_only)) {
         auto tag = syslog::get_legacy_builder_tag(legacy_msg);
         for (auto& s : flush_for_schema_change(tag)) {
           co_await push(std::move(s));
@@ -285,26 +286,6 @@ private:
           target.add_new({std::move(legacy_msg), line_nr_, std::string{line}});
         } else {
           target.add_new({std::move(legacy_msg), line_nr_});
-        }
-        co_return;
-      }
-    }
-
-    // Try Cisco legacy dialect, e.g. `<189>: 2026 Apr 14 08:45:52 UTC: ...`.
-    {
-      f = line.begin();
-      auto cisco_msg = syslog::legacy_message{};
-      if (syslog::cisco_legacy_message_parser{}.parse(f, l, cisco_msg)) {
-        constexpr auto tag = syslog::builder_tag::legacy_syslog_builder;
-        for (auto& s : flush_for_schema_change(tag)) {
-          co_await push(std::move(s));
-        }
-        last_ = tag;
-        if (args_.raw_message) {
-          legacy_builder_->add_new(
-            {std::move(cisco_msg), line_nr_, std::string{line}});
-        } else {
-          legacy_builder_->add_new({std::move(cisco_msg), line_nr_});
         }
         co_return;
       }
@@ -711,20 +692,12 @@ private:
     auto legacy = syslog::legacy_message{};
     auto parsed = Option<Pending>{};
     auto tag = syslog::builder_tag::syslog_builder;
-    if (syslog::message_parser{}.parse(first, end, message)) {
+    if (syslog::message_parser{}.parse(first, end, message) and first == end) {
       parsed = Pending{std::move(message)};
-    } else {
-      first = line.begin();
-      if (syslog::legacy_message_parser{}.parse(first, end, legacy)) {
-        tag = syslog::get_legacy_builder_tag(legacy);
-        parsed = Pending{std::move(legacy)};
-      } else {
-        first = line.begin();
-        if (syslog::cisco_legacy_message_parser{}.parse(first, end, legacy)) {
-          tag = syslog::builder_tag::legacy_syslog_builder;
-          parsed = Pending{std::move(legacy)};
-        }
-      }
+    } else if (syslog::parse_legacy_syslog(line, legacy,
+                                           args_.accept_pri_only)) {
+      tag = syslog::get_legacy_builder_tag(legacy);
+      parsed = Pending{std::move(legacy)};
     }
     if (parsed) {
       co_await change_schema(tag, push);
@@ -944,6 +917,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadSyslogArgs, ReadSyslog, ReadSyslogEvents>{};
     d.named("octet_counting", &ReadSyslogArgs::octet_counting);
+    d.named("accept_pri_only", &ReadSyslogArgs::accept_pri_only);
     auto raw = d.named("raw_message", &ReadSyslogArgs::raw_message);
     d.operator_location(&ReadSyslogArgs::operator_location);
     auto msb = add_msb_to_describer(d, &ReadSyslogArgs::msb_options);
@@ -996,7 +970,7 @@ private:
     }
     auto const* f = line.begin();
     auto const* const l = line.end();
-    if (syslog::message_parser{}.parse(f, l, unused)) {
+    if (syslog::message_parser{}.parse(f, l, unused) and f == l) {
       return rd::match();
     }
     f = line.begin();
@@ -1009,6 +983,7 @@ private:
     if (syslog::cisco_legacy_message_parser{}.parse(f, l, cisco_msg)) {
       return rd::match();
     }
+    // PRI-prefixed text alone is too ambiguous for automatic detection.
     return rd::reject();
   }
 };

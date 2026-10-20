@@ -1,0 +1,17 @@
+<34>1 2003-10-11T22:14:15.003Z host app 123 ID47 [sd@1 a="1"] Standard RFC 5424
+<45>Some message
+<34>Oct 11 22:14:15 host app[123]: Standard RFC 3164
+<166>Sep 01 2026 16:46:57: %ASA-6-302014: Teardown TCP connection 243494777 for outside:172.31.129.45/10120 to inside:10.54.9.141/59125 duration 0:00:00 bytes 575 TCP FINs from inside
+<45>: HOSTNAME-123: Jan 14 05:25:06.737: %FW-6-SESS_AUDIT_TRAIL: tcp session initiator (192.168.1.13:33192) sent 22 bytes -- responder (192.168.129.11:25) sent 208 bytes
+<166>Sep 01 16:46:57.123: %ASA-6-302014: Without year, with fraction
+<189>: 1234: Apr 14 08:45:52.113 UTC: %SYS-5-CONFIG_I: Sequence number
+<0>
+<191>  Preserve leading spaces and %ASA-6-302014: in text
+continuation line
+<45>: HOSTNAME-123: Jan 14 25:25:06.737: %FW-6-SESS_AUDIT_TRAIL: Invalid hour stays text
+<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a="1"]trailing
+<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a=1]trailing
+<45>12:34:56: just a reminder
+<45>: reminder: Jan 14 05:25:06.737: no Cisco identifier
+<166>Sep 01 2026 16:46:57: %ASA-9-302014: Invalid Cisco severity stays text
+<189>: Apr 04 08:45:52.113 UTC: Existing short date keeps its formatting

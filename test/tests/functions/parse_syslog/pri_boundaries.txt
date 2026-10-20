@@ -1,0 +1,110 @@
+warning: `input` is not valid syslog
+ --> tests/functions/parse_syslog/pri_boundaries.tql:9:10
+  |
+9 | parsed = x.parse_syslog(accept_pri_only=true)
+  |          ~
+  |
+{
+  x: "<0>",
+  parsed: {
+    facility: 0,
+    severity: 0,
+    timestamp: null,
+    hostname: null,
+    app_name: null,
+    process_id: null,
+    content: "",
+  },
+}
+{
+  x: "<191>last priority",
+  parsed: {
+    facility: 23,
+    severity: 7,
+    timestamp: null,
+    hostname: null,
+    app_name: null,
+    process_id: null,
+    content: "last priority",
+  },
+}
+{
+  x: "<192>out of range",
+  parsed: null,
+}
+{
+  x: "<999>out of range",
+  parsed: null,
+}
+{
+  x: "<1234>too many digits",
+  parsed: null,
+}
+{
+  x: "<-1>negative",
+  parsed: null,
+}
+{
+  x: "<+1>signed",
+  parsed: null,
+}
+{
+  x: "<>empty priority",
+  parsed: null,
+}
+{
+  x: "< 45>space",
+  parsed: null,
+}
+{
+  x: "<45 >space",
+  parsed: null,
+}
+{
+  x: "<45missing delimiter",
+  parsed: null,
+}
+{
+  x: "<045>leading zero",
+  parsed: null,
+}
+{
+  x: "<00>leading zero",
+  parsed: null,
+}
+{
+  x: "prefix <45>not at start",
+  parsed: null,
+}
+{
+  x: "Some message",
+  parsed: null,
+}
+{
+  x: "<tag>HTML-like text",
+  parsed: null,
+}
+{
+  x: "<45><46>nested prefix stays content",
+  parsed: {
+    facility: 5,
+    severity: 5,
+    timestamp: null,
+    hostname: null,
+    app_name: null,
+    process_id: null,
+    content: "<46>nested prefix stays content",
+  },
+}
+{
+  x: "<45>app[123]: no timestamp",
+  parsed: {
+    facility: 5,
+    severity: 5,
+    timestamp: null,
+    hostname: null,
+    app_name: null,
+    process_id: null,
+    content: "app[123]: no timestamp",
+  },
+}

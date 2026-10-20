@@ -1,0 +1,3 @@
+{
+  line: "<45>: Sep 01 2026 16:46:57: ordinary text",
+}

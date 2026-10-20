@@ -39,15 +39,14 @@ namespace tenzir::plugins::syslog {
 
 namespace {
 
-auto try_parse(std::string_view input, message& msg, legacy_message& legacy_msg)
-  -> builder_tag {
+auto try_parse(std::string_view input, message& msg, legacy_message& legacy_msg,
+               bool accept_pri_only) -> builder_tag {
   auto f = input.begin();
   auto l = input.end();
   if (message_parser{}.parse(f, l, msg) and f == l) {
     return builder_tag::syslog_builder;
   }
-  f = input.begin();
-  if (legacy_message_parser{}.parse(f, l, legacy_msg) and f == l) {
+  if (parse_legacy_syslog(input, legacy_msg, accept_pri_only)) {
     return get_legacy_builder_tag(legacy_msg);
   }
   return builder_tag::unknown_syslog_builder;
@@ -55,8 +54,8 @@ auto try_parse(std::string_view input, message& msg, legacy_message& legacy_msg)
 
 template <class AddParsed, class AddNull>
 auto parse_input(std::string_view input, Option<bool> octet_counting,
-                 location source, diagnostic_handler& dh, AddParsed add_parsed,
-                 AddNull add_null) -> void {
+                 bool accept_pri_only, location source, diagnostic_handler& dh,
+                 AddParsed add_parsed, AddNull add_null) -> void {
   auto content = input;
   auto stated_length = Option<uint32_t>{};
   auto const explicit_count = octet_counting.value_or(false);
@@ -90,13 +89,14 @@ auto parse_input(std::string_view input, Option<bool> octet_counting,
   // message, falling back to the framed prefix only if that fails to parse.
   auto parsed = try_parse(
     explicit_count and excess ? content.substr(0, *stated_length) : content,
-    msg, legacy_msg);
+    msg, legacy_msg, accept_pri_only);
   auto truncated = explicit_count and excess;
   if (parsed == builder_tag::unknown_syslog_builder and excess
       and not explicit_count) {
     msg = {};
     legacy_msg = {};
-    parsed = try_parse(content.substr(0, *stated_length), msg, legacy_msg);
+    parsed = try_parse(content.substr(0, *stated_length), msg, legacy_msg,
+                       accept_pri_only);
     truncated = true;
   }
   if (parsed == builder_tag::unknown_syslog_builder) {
@@ -123,6 +123,7 @@ auto parse_input(std::string_view input, Option<bool> octet_counting,
 struct ParseSyslogArgs {
   nova::ValueArgument input;
   Option<bool> octet_counting;
+  bool accept_pri_only = false;
   nova::EventBuilder::Settings settings;
   std::array<nova::EventBuilder::Settings, 3> dialect_settings;
   location call;
@@ -165,7 +166,8 @@ struct ParseSyslogFunction {
       match(args.input.data.get(row), [&]<class T>(nova::RowView<T> value) {
         if constexpr (std::same_as<T, nova::String>) {
           parse_input(std::string_view{*value}, args.octet_counting,
-                      args.input.source, frame, add_parsed, add_null);
+                      args.accept_pri_only, args.input.source, frame,
+                      add_parsed, add_null);
         } else {
           if constexpr (not std::same_as<T, nova::Null>) {
             if (not std::exchange(warned_type, true)) {
@@ -203,6 +205,7 @@ public:
     auto d = nova::FunctionDescriber<ParseSyslogArgs, ParseSyslogFunction>{};
     d.positional("input", &ParseSyslogArgs::input, "string");
     d.named("octet_counting", &ParseSyslogArgs::octet_counting);
+    d.named_optional("accept_pri_only", &ParseSyslogArgs::accept_pri_only);
     d.call_location(&ParseSyslogArgs::call);
     auto validate = nova::add_event_builder_to_describer(
       d, &ParseSyslogArgs::settings,
@@ -241,10 +244,12 @@ public:
     // true = require octet-counting prefix, warn if missing
     // false = never parse octet-counting prefix
     auto octet_counting = Option<bool>{};
+    auto accept_pri_only = false;
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());
     parser.positional("input", expr, "string");
     parser.named("octet_counting", octet_counting);
+    parser.named("accept_pri_only", accept_pri_only);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
     msb_parser.add_settings_to_parser(
@@ -253,8 +258,8 @@ public:
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     return function_use::make([call = inv.call.get_location(),
                                msb_opts = std::move(msb_opts), octet_counting,
-                               expr
-                               = std::move(expr)](evaluator eval, session ctx) {
+                               accept_pri_only, expr = std::move(expr)](
+                                evaluator eval, session ctx) {
       return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{
           [&](const arrow::NullArray&) -> multi_series {
@@ -342,8 +347,8 @@ public:
                 add_null();
                 continue;
               }
-              parse_input(arg.Value(i), octet_counting, expr.get_location(),
-                          ctx, add_parsed, add_null);
+              parse_input(arg.Value(i), octet_counting, accept_pri_only,
+                          expr.get_location(), ctx, add_parsed, add_null);
             }
             /// We flush with a new builder tag of "unknown", as that is
             /// guaranteed to flush the last builder

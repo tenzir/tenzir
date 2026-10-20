@@ -1,0 +1,15 @@
+// Require Cisco identifiers and canonical PRI spelling for new headers.
+// Keep existing Cisco and RFC 3164 acceptance unchanged.
+from {x: "<45>: Sep 01 2026 16:46:57: ordinary text"},
+  {x: "<45>: 000199: Sep 01 2026 16:46:57: ordinary text"},
+  {x: "000199: Sep 01 2026 16:46:57: ordinary text"},
+  {x: "<045>Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+  {x: "<045>: HOST: Jan 14 05:25:06.737: %FW-6-SESS_AUDIT_TRAIL: message"},
+  {x: "<045>: Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+  {x: "<45>: Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+  {x: "<45>: 000199: Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+  {x: "000199: Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+  {x: "<0>Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+  {x: "<045>: Apr 14 08:45:52 UTC: %SYS-5-CONFIG_I: existing form"},
+  {x: "<045>Apr 14 08:45:52 host app: existing RFC 3164"}
+parsed = x.parse_syslog()

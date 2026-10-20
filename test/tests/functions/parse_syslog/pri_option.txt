@@ -1,0 +1,57 @@
+warning: `input` is not valid syslog
+ --> tests/functions/parse_syslog/pri_option.tql:4:18
+  |
+4 | default_result = x.parse_syslog()
+  |                  ~
+  |
+
+warning: `input` is not valid syslog
+ --> tests/functions/parse_syslog/pri_option.tql:5:19
+  |
+5 | disabled_result = x.parse_syslog(accept_pri_only=false)
+  |                   ~
+  |
+{
+  x: "<45>Some message",
+  default_result: null,
+  disabled_result: null,
+  enabled_result: {
+    facility: 5,
+    severity: 5,
+    timestamp: null,
+    hostname: null,
+    app_name: null,
+    process_id: null,
+    content: "Some message",
+  },
+}
+{
+  x: "<166>Sep 01 2026 16:46:57: %ASA-6-302014: Teardown TCP connection",
+  default_result: {
+    facility: 20,
+    severity: 6,
+    timestamp: "Sep 01 2026 16:46:57",
+    hostname: null,
+    app_name: "ASA-6-302014",
+    process_id: null,
+    content: "Teardown TCP connection",
+  },
+  disabled_result: {
+    facility: 20,
+    severity: 6,
+    timestamp: "Sep 01 2026 16:46:57",
+    hostname: null,
+    app_name: "ASA-6-302014",
+    process_id: null,
+    content: "Teardown TCP connection",
+  },
+  enabled_result: {
+    facility: 20,
+    severity: 6,
+    timestamp: "Sep 01 2026 16:46:57",
+    hostname: null,
+    app_name: "ASA-6-302014",
+    process_id: null,
+    content: "Teardown TCP connection",
+  },
+}
