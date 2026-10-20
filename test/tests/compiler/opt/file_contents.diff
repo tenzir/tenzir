@@ -1,0 +1,84 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:140..146 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:147..152 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `h` @ [1]:153..154 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: function_call {
+             fn: {
+               path: [
+                 `file_contents` @ [1]:158..171 from 0
+               ],
+               ref: std::file_contents/fn
+             },
+             args: [
+               constant string "inputs/only_separator.input" @ [1]:172..177 from 0
+             ],
+             method: false,
+             location: [1]:158..178 from 0
+           },
+           location: [1]:153..178 from 0
+         }
+       ],
+-      named_args: [
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:178..178 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
+     }
+   ]
+ }

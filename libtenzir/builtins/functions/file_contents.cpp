@@ -132,7 +132,7 @@ struct file_contents final : public nova::FunctionPlugin {
   }
 
   auto is_deterministic() const -> bool override {
-    return true;
+    return false;
   }
 
   auto make_function(function_invocation inv, session ctx) const

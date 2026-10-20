@@ -1,0 +1,4 @@
+// Keep the call instead of embedding the file contents in the optimized filter.
+let $path = env("TENZIR_INPUTS") + "/only_separator.input"
+export
+where h == file_contents($path)
