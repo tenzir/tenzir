@@ -218,6 +218,20 @@ A `null` input yields `null`. For other values that are not records or that lack
 
 *By @aljazerzen.*
 
+### Parquet encryption with a shared AES key
+
+You can now encrypt Parquet files before storing them on external object storage and decrypt them when reading them back:
+
+```tql
+from {message: "sensitive event"}
+write_parquet encryption_key=decode_base64(secret("PARQUET_KEY"))
+read_parquet encryption_key=decode_base64(secret("PARQUET_KEY"))
+```
+
+The `encryption_key` argument takes a raw 16-, 24-, or 32-byte AES key. The example explicitly decodes a base64-encoded secret. Secrets or binary key files that already contain raw key bytes need no decoding. All columns and the footer use the same key with `AES_GCM_V1` encryption and authentication. Reading requires the same key. A reader configured with `encryption_key` rejects plaintext files.
+
+*By @zedoraps.*
+
 ### Read events from Hydrolix
 
 The new [`from_hydrolix`](https://tenzir.com/docs/reference/operators/from_hydrolix) operator reads events from [Hydrolix](https://hydrolix.io) tables and SQL queries, with the same URL and token as `to_hydrolix`:
@@ -463,6 +477,27 @@ The `suricata.http` type now also covers HTTP/2 transactions, which Suricata log
 
 *By @satta.*
 
+### The `type_kind` function
+
+The new `type_kind` function returns the kind of a value's type as a string, such as `int`, `string`, `list`, or `record`:
+
+```tql
+from {x: 1}, {x: "a"}, {x: null}
+kind = x.type_kind()
+```
+
+```tql
+{x: 1, kind: "int"}
+{x: "a", kind: "string"}
+{x: null, kind: "null"}
+```
+
+A `null` value always has the kind `null`. Lists and records report `list` and `record`, regardless of their elements and fields.
+
+The `type_of` function is now deprecated. Replace `type_of(x).kind` with `type_kind(x)`.
+
+*By @IyeOnline.*
+
 ### Typed decisions with ai_decide
 
 The new experimental `ai_decide` operator asks a decision model typed questions about each event and attaches structured answers instead of generated text. It works with any endpoint that serves the System One API, such as hosted Jev or a local Laya server.
@@ -590,6 +625,40 @@ The database lowercases text one character at a time, which matches TQL for ASCI
 
 *By @mavam.*
 
+### Catch-all prefilters read only the referenced path
+
+Prefilters that `from_clickhouse` sends for fields in a catch-all table now make ClickHouse read only the referenced path of the `JSON` column, instead of the whole column. Filters on catch-all fields over large tables complete much faster and use far less memory on the ClickHouse server. The set of filters that reach ClickHouse is unchanged.
+
+A column whose name starts with the name of a `JSON` column and a dot, such as `event.category` next to the catch-all column `event`, shadows the fields below that prefix, because ClickHouse resolves `event.category` to the column. Filters on such fields now stay in Tenzir, and `from_clickhouse` emits a warning that names the shadowing column.
+
+*By @zedoraps.*
+
+### Conjunctions split for filter pushdown
+
+Operators that move filters upstream now move each operand of a top-level `and` on its own. Previously, a `where` with a single operand that could not move past an operator stayed entirely behind it. For example, when a mapping assigns a time field with a nondeterministic fallback, a source now still receives the field filter:
+
+```tql
+from_duckdb "events.duckdb", table="network"
+time = time else now()
+where src_endpoint.ip == 203.0.113.7 and time > 2026-01-01
+```
+
+Here, `src_endpoint.ip == 203.0.113.7` reaches the source, while `time > 2026-01-01` stays behind the assignment. A `where a and b` keeps the same events as `where a | where b`, including when an operand is `null`, so results do not change. Only the top-level `and` splits, not one inside `or` or `not`.
+
+*By @mavam.*
+
+### Continued Kafka consumption after malformed Avro messages
+
+The `from_kafka` operator now skips malformed Avro messages with a warning instead of stopping the pipeline. This keeps a single bad message from blocking later messages:
+
+```tql
+from_kafka "events", schema_registry="https://registry.example.com"
+```
+
+Warnings identify the topic, partition, and offset. Skipped messages count towards `count`, and their offsets are committed with the batch. Registry requests still retry transient failures; unrecoverable registry, authentication, and schema errors remain terminal without committing the failed batch or later offsets.
+
+*By @aljazerzen.*
+
 ### Default ai_prompt input without earlier AI results
 
 By default, `ai_prompt` sent the entire event to the model, including results that earlier AI calls had written to the event. In the following pipeline, the second call sent the summary from the first call along with its token usage and latency, although the classification only needs the alert:
@@ -659,6 +728,66 @@ If no supported constraint reaches the source, the operator reports a runtime er
 
 *By @mavam.*
 
+### Filter pushdown for ClickHouse catch-all tables
+
+The `from_clickhouse` operator now lets ClickHouse narrow the rows of a catch-all table for more filters, reducing the data sent to Tenzir.
+
+Supported filters on scalar columns now reach ClickHouse even when the column name contains dots. Fields in the catch-all support conservative prefilters, while Tenzir still applies the original filter to the reconstructed events:
+
+```tql
+from_clickhouse table="security.events"
+where src_endpoint.port == 443 and metadata.product.name == "Demo"
+```
+
+Prefilters cover positive string and numeric comparisons, boolean equality, `starts_with`, `ends_with`, safe substring searches, mixed-type `in` lists, and `!= null`. Other JSON columns in the same table qualify if they use plain `JSON` or only `max_dynamic_paths` and `max_dynamic_types` settings. Columns with any typed paths or `SKIP` clauses stay locally filtered. The marked catch-all itself still requires bare `JSON`.
+
+Unsupported predicates on JSON fields, including negation, null equality, arithmetic, regular expressions, and IP or timestamp comparisons, remain in Tenzir. Explicit columns still take precedence over catch-all values. Tables without a catch-all keep their existing behavior.
+
+*By @mavam.*
+
+### Filter, projection, and limit pushdown for Defender and Log Analytics
+
+The `from_microsoft_defender` and `from_azure_log_analytics` operators now push conservative prefilters and projection and limit hints from the `where`, `select`, and `head` operators that follow them into your KQL query, so that the service can return fewer rows and columns:
+
+```tql
+from_azure_log_analytics "SecurityEvent | where EventID == 4625",
+  workspace_id=secret("log-analytics-workspace"),
+  azure_auth={
+    tenant_id: "...",
+    client_id: "...",
+    client_secret: secret("azure-client-secret"),
+  }
+where Account == "CONTOSO\\alice" and Computer.starts_with("DC")
+select TimeGenerated, Account, Computer
+```
+
+Your KQL query stays as it is. The operators append trailing `where`, `project`, and `take` stages, so that they apply to the rows that your query returns. Since the types of a query's output are unknown before it runs, the appended `where` only preselects candidates: it keeps every row whose KQL type could decode to a matching TQL value, and every TQL filter still runs locally with exact TQL semantics, including case sensitivity and `null` handling. Since Defender may silently return only the first 100,000 rows of a query, a `take 100000` stage precedes the appended `where` there, so that a filter never reveals rows that Defender would have cut off. Log Analytics reports a result beyond its row and size limits as a partial failure, which the operator rejects, so its filters run on the complete result: they yield the complete filtered result or fail as well.
+
+Prefilters cover comparisons of a field with a number, equality of a field with a string or boolean, `in` with a list of literals of a single kind, `!= null`, and case-sensitive `starts_with`, `ends_with`, and substring matching. They also cover case-insensitive string hunts with ASCII search strings, equality and list membership after `to_lower()` or `to_upper()`, and IP equality and subnet hunts. For example, these filters can reduce the events returned by a Defender or Log Analytics source:
+
+```tql
+where ProcessCommandLine.search("powershell", ignore_case=true)
+  and RemoteIP.ip() in 10.20.0.0/16
+select DeviceName, ProcessCommandLine, RemoteIP
+```
+
+Use `.ip()` to parse an address stored in a string. The prefilters retain Unicode, structured values, and address spellings that need local evaluation, so they can return extra candidates without changing the final matches. Case-insensitive searches with non-ASCII search strings and native IPv6 subnet ranges starting at or below `::ffff:ffff:ffff` stay local. Regular expressions, negation, nested field references, and lists that mix kinds also stay local.
+
+Timestamp comparisons with `==`, `<`, `<=`, `>`, and `>=` also reduce candidates, including intervals combined with host, domain, or port filters:
+
+```tql
+where TimeGenerated >= 2026-10-19T10:03:00Z
+  and TimeGenerated < 2026-10-19T10:08:00Z
+  and RemotePort == 443
+select Id, DeviceName
+```
+
+Timestamp prefilters use slightly wider bounds to preserve subsecond decoding semantics, then apply the exact filter locally. They operate on the query's output, including renamed, computed, and aggregated timestamps, without narrowing the request window. Timestamp list membership and arithmetic in downstream predicates remain local.
+
+A `head` reaches the service only if no filter precedes it and its limit fits into a signed 64-bit integer. A projected column that your query does not return becomes `null`, as with a local `select`. The `start` and `end` window stays unchanged, and queries that use `render`, `fork`, `facet`, or a `set` statement are sent unchanged.
+
+*By @mavam.*
+
 ### Filters fold constants
 
 The optimizer now simplifies `where` filters. It evaluates parts of a predicate that do not depend on the event, drops predicates that always hold, and prunes `and`/`or` branches that cannot match. For example, `class_uid = 3002 | where class_uid == 3002 and src_ip == 1.2.3.4` sends only `src_ip == 1.2.3.4` to the source, and `where class_uid == 4001` keeps no events at all.
@@ -682,6 +811,22 @@ As a result, a filter on OCSF fields now reaches the source through mappings tha
 Like a filter that moves in front of an assignment, a filter that moves in front of `if` or `match` drops events before the condition, scrutinee, or guard sees them. An error in the condition then no longer occurs for those events, but still occurs for every event that the filter keeps.
 
 *By @mavam.*
+
+### JSON storage settings in ClickHouse catch-all tables
+
+In tables with a catch-all column, the `to_clickhouse` operator now accepts the `max_dynamic_paths` and `max_dynamic_types` settings on `JSON` columns, including the catch-all column itself. This lets you lower the path limit for a column with many rarely used paths, such as `unmapped`:
+
+```sql
+CREATE TABLE security.events (
+  time DateTime64(9, 'UTC'),
+  unmapped JSON(max_dynamic_paths=64),
+  event JSON COMMENT 'tenzir:catch_all'
+) ENGINE = MergeTree ORDER BY time;
+```
+
+The `from_clickhouse` operator reads catch-all columns with these settings as well. Type hints and `SKIP` clauses are still rejected, because ClickHouse could change or drop values.
+
+*By @zedoraps.*
 
 ### Narrower input reads for aggregations
 
@@ -770,9 +915,29 @@ On macOS, `to_clickhouse` no longer fails an internal assertion when writing fie
 
 *By @mavam.*
 
+### Atomic local file renames
+
+The `from_file` operator now publishes renamed files atomically when the source and destination are on the same local filesystem. Concurrent readers no longer see an empty or partially copied destination. Moves across filesystems still use copy-and-remove.
+
+The `sigma` operator also reads a consistent file revision when a rule file is replaced atomically, preventing spurious reload warnings and truncated rule updates.
+
+*By @mavam.*
+
 ### Clean shutdown of live MySQL and SQL Server reads
 
 Stopping a pipeline that reads with `from_mysql live=true` or `from_microsoft_sql live=true`, for example with Ctrl+C or a node shutdown, now ends it cleanly. Previously, `from_mysql` crashed Tenzir with an internal error, and `from_microsoft_sql` kept polling until the pipeline reported that it was aborted.
+
+*By @mavam.*
+
+### Cleared Sigma rules for empty files
+
+The `sigma` operator now clears a file's rules and filters when the file becomes empty or contains only whitespace and comments. Previously, it kept the last valid rules active and reported an error. For example, emptying `rules.yaml` now stops its findings on the next refresh of `sigma path="rules.yaml"`. Malformed YAML still retains the source's last valid rules.
+
+*By @mavam.*
+
+### Clearer Hydrolix authentication and permission diagnostics
+
+The `from_hydrolix` operator now gives more relevant authentication and permission diagnostics. Authentication failures omit ClickHouse password-reset instructions while retaining the token hint. Missing `SHOW COLUMNS` grants now point to Hydrolix’s `show_columns_sql` permission for schema access, which `select_sql` also grants; missing `SELECT` grants still point to `select_sql`.
 
 *By @mavam.*
 
@@ -810,11 +975,45 @@ ClickHouse evaluates expression defaults as well, such as `DEFAULT class_uid % 1
 
 *By @zedoraps.*
 
+### Correct enrichments for complex key expressions
+
+With the old data model (`tenzir.nova: false`), `context_enrich` assigned enrichments to the wrong events whenever evaluating the `key` expression cut the batch into parts, which happens when the expression produces values of different types, for example through `if`/`else` or `else` with differently typed operands. The operator looks up the keys of each part separately but collected the results in reverse order.
+
+For example, the following pipeline enriched the event looked up by IP with the entry for the hostname, and vice versa:
+
+```tql
+from {by_name: false, name: "web-1", ip: 10.0.0.1},
+     {by_name: true, name: "web-1", ip: 10.0.0.1}
+context_enrich "hosts", key=name if by_name else ip
+```
+
+A plain field as the key, such as `key=x`, was not affected: in the old data model, a column has exactly one type, so events in which `x` has different types already arrive in separate batches.
+
+*By @IyeOnline.*
+
+### Correct optimization of file contents
+
+The optimizer no longer embeds the result of `file_contents()` in a pipeline plan or duplicates branch conditions that read files. This avoids treating contents that can change as a constant.
+
+Calls to `file_contents()` are no longer supported in package constants. Pass the call directly to an operator argument instead, for example:
+
+```tql
+from_http "https://example.com", headers={"Authorization": file_contents("/run/token")}
+```
+
+*By @mavam.*
+
 ### Data loss with percentage-based disk budgets
 
 Custom disk-usage checks such as `tenzir-df-percent` once again preserve data when usage is below the configured watermarks. A regression in Tenzir v6.19.0 treated percentage thresholds as byte limits, which could delete existing data and newly ingested events even with ample free disk space. Eviction now checks disk usage again after each deletion batch. This fix cannot restore data already deleted.
 
 *By @tobim.*
+
+### Failure-isolated Sigma rule reloads
+
+The `sigma` operator now reloads multi-document rule files without blocking valid sibling updates when one document is invalid. It retains the last valid version of each affected document and continues applying valid changes from the other documents. The operator matches documents by rule ID or name, using positional matching only when neither version has an identity and the document count is unchanged.
+
+*By @mavam.*
 
 ### Filters no longer fail for events that earlier filters drop
 
@@ -857,9 +1056,31 @@ For such lists, the `/serve` endpoints stringify the elements of the served even
 
 *By @aljazerzen.*
 
+### HTTP retries in strict pipelines
+
+The `from_http` operator now retries transient HTTP and connection failures inside `strict` pipelines without emitting intermediate warnings:
+
+```tql
+strict {
+  from_http "https://api.example.com/events"
+}
+```
+
+Previously, the first retry warning became an error and stopped the pipeline before recovery could succeed. Exhausted retries still fail the request unless `error_field` captures the HTTP error response.
+
+*By @mavam.*
+
 ### Invalid ai_prompt endpoints no longer crash or reveal secrets
 
 The `ai_prompt` operator no longer crashes the pipeline when the `endpoint` is not a valid URL, for example because its port is out of range. It now reports a regular error and doesn't include the resolved endpoint in the message, so an endpoint passed as a secret stays hidden.
+
+*By @mavam.*
+
+### Microsoft Defender queries with booleans, integers, dynamic values, and nulls
+
+The `from_microsoft_defender` operator failed with an "invalid Microsoft Defender response" error for queries whose results contained booleans, 64-bit integers, dynamic values, or nulls in columns other than strings, which includes most advanced hunting tables. The operator now decodes the format that Microsoft Graph actually returns.
+
+Booleans arrive as `bool`, 64-bit integers as `int64`, `decimal` values as strings that keep their exact digits, `timespan` values as durations, and `dynamic` values as records, lists, or scalars. A `dynamic` string stays a string, even if it looks like a number or holds JSON.
 
 *By @mavam.*
 
@@ -901,6 +1122,12 @@ The error includes the response from Google SecOps and a hint to check the crede
 
 *By @mavam.*
 
+### Read errors for text inputs
+
+Loading pipeline files, configuration files, and other text inputs now reports read errors instead of silently accepting empty or partial content. For example, `tenzir -f /path/to/directory` now reports a read error rather than treating the directory as an empty pipeline. Process substitutions and inputs such as `--config=/dev/null` remain supported.
+
+*By @mavam.*
+
 ### Reading JSON split within UTF-8 characters
 
 The `read_json` operator no longer fails with `UTF8_ERROR` when an input chunk ends within a multi-byte UTF-8 character. This could happen when reading valid JSON over HTTP, where chunk boundaries fall at arbitrary bytes, for example with `from_http "…" { read_json }`. Format detection with `read_auto` also no longer rejects such JSON input.
@@ -918,3 +1145,22 @@ The `subscribe` operator no longer loses its `tenzir.metrics.subscribe` and `ten
 Stopping a pipeline while its `python` operator is still starting no longer logs misleading Python tracebacks such as `ModuleNotFoundError: No module named 'tenzir_operator'`. The operator now shuts down its Python process before it removes the process's virtual environment.
 
 *By @tobim.*
+
+### Stack safety for large Sigma selections and boolean chains
+
+Large Sigma selection lists and long `and` and `or` chains no longer exhaust the stack during evaluation. Previously, a Sigma rule with around 185 values in a selection could crash the entire pipeline.
+
+*By @mavam.*
+
+### Suricata schema fields that match EVE JSON
+
+The bundled Suricata schema now matches the EVE JSON that Suricata writes in more places:
+
+- `read_suricata` no longer warns about and drops `dns.type` for DNS events in the version 3 format of Suricata 8, whose values are `request` and `response`.
+- The `has_multiple` field of HTTP/2 transactions is now a string, such as `priority`, instead of a boolean that never parsed.
+- `rdp.client.product_id` is now an integer instead of a string.
+- The schema now expects the `tcp` object of `flow` and `netflow` events at the top level, the IKEv2 `role` in `ike`, and Modbus `exception`, `diagnostic`, and `mei` data inside `modbus.request` and `modbus.response`, where Suricata writes them.
+
+The schema no longer contains fields that Suricata never writes: `alert.app_proto`, `headers` inside `http.http2`, and the unused `suricata.http2` type.
+
+*By @satta.*
