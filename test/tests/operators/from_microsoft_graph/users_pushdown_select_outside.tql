@@ -1,0 +1,30 @@
+---
+fixtures:
+  - microsoft_graph:
+      users: 12
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /v1.0/users?$top=2
+      served_values: 22
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// `department` is not a default property: `$select` would return it, but
+// the default response omits it. The projection stays local.
+// Without the optimization barrier; both share one baseline.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false
+head 2
+select id, department?

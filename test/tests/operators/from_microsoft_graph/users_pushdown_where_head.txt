@@ -1,0 +1,28 @@
+{
+  businessPhones: [
+    "+1 555 0103",
+  ],
+  displayName: "User 3",
+  givenName: "User",
+  id: "user-3",
+  jobTitle: "Engineer",
+  mail: "user3@example.com",
+  mobilePhone: null,
+  officeLocation: "Room 3",
+  preferredLanguage: "en-US",
+  surname: "3",
+  userPrincipalName: "user3@example.com",
+}
+{
+  businessPhones: [],
+  displayName: "User 6",
+  givenName: "User",
+  id: "user-6",
+  jobTitle: "Engineer",
+  mail: "user6@example.com",
+  mobilePhone: null,
+  officeLocation: "Room 6",
+  preferredLanguage: "en-US",
+  surname: "6",
+  userPrincipalName: "user6@example.com",
+}

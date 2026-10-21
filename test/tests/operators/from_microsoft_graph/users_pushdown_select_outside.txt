@@ -1,0 +1,8 @@
+{
+  id: "user-1",
+  department: null,
+}
+{
+  id: "user-2",
+  department: null,
+}

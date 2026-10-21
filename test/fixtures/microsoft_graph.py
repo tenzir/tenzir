@@ -24,9 +24,9 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
-from tenzir_test import FixtureHandle, fixture
+from tenzir_test import FixtureHandle, current_options, fixture
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,63 @@ def _json_response_with_headers(
 
 class _TokenServer(ThreadingHTTPServer):
     token_requests: int = 0
+    expires_in: int = 4
+
+
+@dataclass(frozen=True)
+class GraphOptions:
+    # The number of users in the paged `/v1.0/users` dataset. Zero keeps the
+    # legacy two-page dataset.
+    users: int = 0
+    # Optional display names for the first users of the paged dataset.
+    display_names: list[str | None] | None = None
+    # The page size of the paged dataset without `$top`.
+    page_size: int = 3
+    # The lifetime of access tokens in seconds. The token provider refreshes
+    # after half of a short lifetime.
+    token_lifetime: int = 4
+
+
+# The properties that `List users` returns without `$select`, per the
+# Microsoft Graph v1.0 reference: "By default, only a limited set of
+# properties are returned (businessPhones, displayName, givenName, id,
+# jobTitle, mail, mobilePhone, officeLocation, preferredLanguage, surname, and
+# userPrincipalName)."
+_USERS_DEFAULT_PROPERTIES = (
+    "businessPhones",
+    "displayName",
+    "givenName",
+    "id",
+    "jobTitle",
+    "mail",
+    "mobilePhone",
+    "officeLocation",
+    "preferredLanguage",
+    "surname",
+    "userPrincipalName",
+)
+# "The default and maximum page sizes are 100 and 999 user objects".
+_USERS_MAX_PAGE_SIZE = 999
+
+
+def _paged_user(index: int) -> dict[str, object]:
+    """Returns user `index`, with properties beyond the default set."""
+    return {
+        "businessPhones": [f"+1 555 01{index:02}"] if index % 2 else [],
+        "displayName": f"User {index}",
+        "givenName": "User",
+        "id": f"user-{index}",
+        "jobTitle": "Engineer" if index % 3 == 0 else "Analyst",
+        "mail": f"user{index}@example.com",
+        "mobilePhone": None,
+        "officeLocation": None if index % 4 == 0 else f"Room {index}",
+        "preferredLanguage": "en-US",
+        "surname": f"{index}",
+        "userPrincipalName": f"user{index}@example.com",
+        # Returned only with `$select`.
+        "accountEnabled": index % 2 == 1,
+        "department": "Security" if index % 3 == 0 else "Operations",
+    }
 
 
 class _GraphServer(ThreadingHTTPServer):
@@ -77,6 +134,9 @@ class _GraphServer(ThreadingHTTPServer):
         self.lock = threading.Lock()
         self.requests: dict[str, int] = {}
         self.request_log: list[str] = []
+        # The property values that the paged `List users` dataset served.
+        self.served_values = 0
+        self.options = GraphOptions()
 
     def log_request(self, target: str) -> None:
         with self.lock:
@@ -127,7 +187,7 @@ class _TokenHandler(BaseHTTPRequestHandler):
             HTTPStatus.OK,
             {
                 "token_type": "Bearer",
-                "expires_in": 4,
+                "expires_in": server.expires_in,
                 "access_token": _ACCESS_TOKEN,
             },
         )
@@ -406,6 +466,9 @@ class _GraphHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if parts.path == "/v1.0/users" and server.options.users > 0:
+            self._paged_users(server.options, query, base_url)
+            return
         if parts.path == "/v1.0/users":
             if query.get("$skiptoken") == [_SKIPTOKEN]:
                 _json_response(
@@ -505,6 +568,77 @@ class _GraphHandler(BaseHTTPRequestHandler):
             return
         _json_response(self, HTTPStatus.NOT_FOUND, {"error": "not found"})
 
+    def _paged_users(
+        self,
+        options: GraphOptions,
+        query: dict[str, list[str]],
+        base_url: str,
+    ) -> None:
+        """Serves `List users` over a deterministic dataset.
+
+        This models the request contract, not proof of backend equivalence:
+        `$top` sets the page size up to 999, `$select` returns the requested
+        properties, unknown properties fail the request, and `@odata.nextLink`
+        carries the query options with an opaque `$skiptoken`. The only
+        supported explicit `$filter` is `accountEnabled eq true|false`.
+        """
+        for key in query:
+            if key not in ("$select", "$top", "$filter", "$skiptoken"):
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": f"unsupported query option {key}"},
+                )
+                return
+        users = [_paged_user(i) for i in range(1, options.users + 1)]
+        for user, name in zip(users, options.display_names or []):
+            user["displayName"] = name
+        if filters := query.get("$filter"):
+            values = {
+                "accountEnabled eq true": True,
+                "accountEnabled eq false": False,
+            }
+            if len(filters) != 1 or filters[0] not in values:
+                _json_response(
+                    self, HTTPStatus.BAD_REQUEST, {"error": "unsupported filter"}
+                )
+                return
+            users = [u for u in users if u["accountEnabled"] == values[filters[0]]]
+        page_size = options.page_size
+        if top := query.get("$top"):
+            page_size = min(int(top[0]), _USERS_MAX_PAGE_SIZE)
+        properties: list[str] = list(_USERS_DEFAULT_PROPERTIES)
+        if select := query.get("$select"):
+            properties = select[0].split(",")
+            unknown = [p for p in properties if p not in _paged_user(1)]
+            if unknown:
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": f"could not find a property named {unknown[0]}"},
+                )
+                return
+        offset = 0
+        if skiptoken := query.get("$skiptoken"):
+            offset = int(skiptoken[0].removeprefix("offset-"))
+        page = users[offset : offset + page_size]
+        server = cast(_GraphServer, self.server)
+        with server.lock:
+            server.served_values += len(page) * len(properties)
+        body: dict[str, object] = {
+            "@odata.context": f"{base_url}/v1.0/$metadata#users",
+            "value": [{p: user[p] for p in properties} for user in page],
+        }
+        if offset + page_size < len(users):
+            params = [
+                f"{key}={quote(values[0], safe=',')}"
+                for key, values in query.items()
+                if key != "$skiptoken"
+            ]
+            params.append(f"$skiptoken=offset-{offset + page_size}")
+            body["@odata.nextLink"] = f"{base_url}/v1.0/users?{'&'.join(params)}"
+        _json_response(self, HTTPStatus.OK, body)
+
     def log_message(self, *_: object) -> None:
         return
 
@@ -528,18 +662,34 @@ def _plugin_env() -> dict[str, str]:
 
 @dataclass(frozen=True)
 class GraphAssertions:
+    # The exact request targets, in order.
     requests: list[str] | None = None
+    # The first request targets, in order.
     request_prefix: list[str] | None = None
+    # An upper bound on the number of requests, for racy downstream stops.
+    max_requests: int | None = None
+    # The exact number of token requests.
+    token_requests: int | None = None
+    # The exact number of top-level property values sent by the paged
+    # `List users` dataset, independent of the operator's metrics counters.
+    served_values: int | None = None
+    # A lower bound on the served property values, for racy downstream stops.
+    min_served_values: int | None = None
 
 
-@fixture(name="microsoft_graph", assertions=GraphAssertions)
+@fixture(name="microsoft_graph", options=GraphOptions, assertions=GraphAssertions)
 def run() -> FixtureHandle:
+    options = current_options("microsoft_graph")
+    if not isinstance(options, GraphOptions):
+        options = GraphOptions()
     token_server = _TokenServer((_HOST, 0), _TokenHandler)
+    token_server.expires_in = options.token_lifetime
     try:
         graph_server = _GraphServer((_HOST, 0), _GraphHandler)
     except BaseException:
         token_server.server_close()
         raise
+    graph_server.options = options
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     graph_thread = threading.Thread(target=graph_server.serve_forever, daemon=True)
     token_thread.start()
@@ -561,12 +711,23 @@ def run() -> FixtureHandle:
             return
         with graph_server.lock:
             requests = list(graph_server.request_log)
+            served_values = graph_server.served_values
         if assertions.requests is not None:
             assert requests == assertions.requests, requests
         if assertions.request_prefix is not None:
             assert requests[: len(assertions.request_prefix)] == (
                 assertions.request_prefix
             ), requests
+        if assertions.max_requests is not None:
+            assert len(requests) <= assertions.max_requests, requests
+        if assertions.token_requests is not None:
+            assert token_server.token_requests == assertions.token_requests, (
+                token_server.token_requests
+            )
+        if assertions.served_values is not None:
+            assert served_values == assertions.served_values, served_values
+        if assertions.min_served_values is not None:
+            assert served_values >= assertions.min_served_values, served_values
 
     def teardown() -> None:
         token_server.shutdown()

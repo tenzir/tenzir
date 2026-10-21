@@ -1,0 +1,8 @@
+{
+  displayName: "User 1",
+  mail: "user1@example.com",
+}
+{
+  displayName: "User 2",
+  mail: "user2@example.com",
+}

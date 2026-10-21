@@ -1,0 +1,33 @@
+---
+fixtures:
+  - microsoft_graph:
+      users: 12
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /v1.0/users?$select=id,mobilePhone
+        - /v1.0/users?$select=id,mobilePhone&$skiptoken=offset-3
+        - /v1.0/users?$select=id,mobilePhone&$skiptoken=offset-6
+        - /v1.0/users?$select=id,mobilePhone&$skiptoken=offset-9
+      served_values: 24
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// No row matches: exhaust all pages without treating raw rows as matches.
+// Null fields remain available for local evaluation before projection.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false
+where mobilePhone != null
+head 2
+select id

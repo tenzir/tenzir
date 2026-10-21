@@ -1,0 +1,31 @@
+---
+fixtures:
+  - microsoft_graph:
+      users: 12
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /v1.0/users
+        - /v1.0/users?$skiptoken=offset-3
+      served_values: 66
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// Predicates stay local without `$filter` or `$top`. The limit counts
+// matches across pages and stops after the page with the second match.
+// Without the optimization barrier; both share one baseline.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false
+where jobTitle == "Engineer"
+head 2

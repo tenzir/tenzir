@@ -1,0 +1,56 @@
+{
+  businessPhones: [
+    "+1 555 0101",
+  ],
+  displayName: "User 1",
+  givenName: "User",
+  id: "user-1",
+  jobTitle: "Analyst",
+  mail: "user1@example.com",
+  mobilePhone: null,
+  officeLocation: "Room 1",
+  preferredLanguage: "en-US",
+  surname: "1",
+  userPrincipalName: "user1@example.com",
+}
+{
+  businessPhones: [],
+  displayName: "User 2",
+  givenName: "User",
+  id: "user-2",
+  jobTitle: "Analyst",
+  mail: "user2@example.com",
+  mobilePhone: null,
+  officeLocation: "Room 2",
+  preferredLanguage: "en-US",
+  surname: "2",
+  userPrincipalName: "user2@example.com",
+}
+{
+  businessPhones: [
+    "+1 555 0103",
+  ],
+  displayName: "User 3",
+  givenName: "User",
+  id: "user-3",
+  jobTitle: "Engineer",
+  mail: "user3@example.com",
+  mobilePhone: null,
+  officeLocation: "Room 3",
+  preferredLanguage: "en-US",
+  surname: "3",
+  userPrincipalName: "user3@example.com",
+}
+{
+  businessPhones: [],
+  displayName: "User 4",
+  givenName: "User",
+  id: "user-4",
+  jobTitle: "Analyst",
+  mail: "user4@example.com",
+  mobilePhone: null,
+  officeLocation: null,
+  preferredLanguage: "en-US",
+  surname: "4",
+  userPrincipalName: "user4@example.com",
+}

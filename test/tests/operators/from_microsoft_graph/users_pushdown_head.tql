@@ -1,0 +1,30 @@
+---
+fixtures:
+  - microsoft_graph:
+      users: 12
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /v1.0/users?$top=4
+      token_requests: 1
+      served_values: 44
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// `head` sizes the only page with `$top` and stops pagination; 12 users
+// take 4 pages of 3 without it.
+// Without the optimization barrier; both share one baseline.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false
+head 4

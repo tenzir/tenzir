@@ -1,0 +1,34 @@
+---
+fixtures:
+  - microsoft_graph:
+      users: 12
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      request_prefix:
+        - /v1.0/users?$top=2
+        - /v1.0/users?$top=2&$skiptoken=offset-2
+        - /v1.0/users?$top=2&$skiptoken=offset-4
+      max_requests: 6
+      min_served_values: 66
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// Explicit $top=2 is a page size, not a global result cap. Preserve it
+// and follow next links until the fifth matching row, then stop.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  odata={top: 2},
+  tls=false
+optimize_barrier
+head 5
+select id

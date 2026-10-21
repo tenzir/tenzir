@@ -1,0 +1,29 @@
+---
+fixtures:
+  - microsoft_graph:
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /beta/users
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// The beta API gets no translation.
+// With the optimization barrier; both share one baseline.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_BETA"),
+  version="beta",
+  tls=false
+optimize_barrier
+head 1
+select id

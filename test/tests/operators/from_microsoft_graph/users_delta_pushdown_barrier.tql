@@ -1,0 +1,34 @@
+---
+fixtures:
+  - microsoft_graph:
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      request_prefix:
+        - /v1.0/users/delta
+        - /v1.0/users/delta?$skiptoken=delta-page-2
+        - /v1.0/users/delta?$deltatoken=initial-token
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// Delta queries get no translation. The limit stops the source after the
+// third match, which arrives with the first poll of `@odata.deltaLink`.
+// With the optimization barrier; both share one baseline.
+from_microsoft_graph "users",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  delta=true,
+  poll_interval=10ms,
+  tls=false
+optimize_barrier
+where id != "user-2"
+head 3
+select id, displayName
