@@ -482,13 +482,6 @@ auto parse_deployment_info(simdjson::dom::element value)
   TRY(auto id_raw, api::field(object, "id", "DeploymentInfo"));
   TRY(auto id, parse_deployment_id(id_raw));
 
-  auto key_digest = Option<std::string>{None{}};
-  if (auto key_digest_raw = api::optional_field(object, "keyDigest")) {
-    TRY(auto key_digest_present,
-        api::string_of(*key_digest_raw, "DeploymentInfo.keyDigest"));
-    key_digest = std::move(key_digest_present);
-  }
-
   TRY(auto workspace_id_raw,
       api::field(object, "workspaceId", "DeploymentInfo"));
   TRY(auto workspace_id, parse_workspace_id(workspace_id_raw));
@@ -510,9 +503,8 @@ auto parse_deployment_info(simdjson::dom::element value)
     last_seen = std::move(last_seen_present);
   }
 
-  return DeploymentInfo{std::move(id),           std::move(key_digest),
-                        std::move(workspace_id), std::move(name),
-                        std::move(version),      std::move(last_seen)};
+  return DeploymentInfo{std::move(id), std::move(workspace_id), std::move(name),
+                        std::move(version), std::move(last_seen)};
 }
 
 auto TelemetryCount::make(std::int64_t value)
@@ -1278,12 +1270,6 @@ auto write_json(DeploymentInfo const& value, std::string& out) -> void {
   out += '{';
   out += "\"id\":";
   write_json(value.id, out);
-  out += ",\"keyDigest\":";
-  if (value.key_digest) {
-    api::write_string(*value.key_digest, out);
-  } else {
-    out += "null";
-  }
   out += ",\"workspaceId\":";
   write_json(value.workspace_id, out);
   out += ",\"name\":";
