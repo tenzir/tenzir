@@ -1,3 +1,10 @@
+warning: `type_of` is deprecated
+ --> tests/operators/read_avro/array_item_type.tql:4:13
+  |
+4 | item_type = type_of(value).state?.type?.kind?
+  |             ~~~~~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
 {
   value: null,
   item_type: null,

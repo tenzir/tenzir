@@ -1,5 +1,5 @@
 ---
-skip: "`type_of` and the `where` function do not support Nova yet"
+skip: "Nova has no typed nulls, so `type_kind` reports `null` for both results"
 ---
 
 from {
@@ -8,6 +8,6 @@ from {
 }
 int_result = ints.skewness()
 duration_result = durations.skewness()
-int_result_type = type_of(int_result).kind
-duration_result_type = type_of(duration_result).kind
+int_result_type = type_kind(int_result)
+duration_result_type = type_kind(duration_result)
 drop ints, durations

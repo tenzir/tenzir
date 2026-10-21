@@ -1,3 +1,10 @@
+warning: `type_of` is deprecated
+ --> tests/functions/type_of/scalars.tql:4:15
+  |
+4 | select type = type_of(x)
+  |               ~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
 {
   type: {
     name: null,
@@ -17,7 +24,7 @@
 {
   type: {
     name: null,
-    kind: "int",
+    kind: "int64",
     attributes: [],
     state: null,
   },
@@ -25,7 +32,7 @@
 {
   type: {
     name: null,
-    kind: "uint",
+    kind: "uint64",
     attributes: [],
     state: null,
   },
@@ -33,7 +40,7 @@
 {
   type: {
     name: null,
-    kind: "float",
+    kind: "double",
     attributes: [],
     state: null,
   },

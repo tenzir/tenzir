@@ -7,5 +7,5 @@ from (
   {xs: null},
   {xs: "qux"},
 )
-num_strings = xs.count_if(x => type_of(x).kind == "string")
-num_ints = xs.count_if(x => type_of(x).kind == "int")
+num_strings = xs.count_if(x => type_kind(x) == "string")
+num_ints = xs.count_if(x => type_kind(x) == "int")

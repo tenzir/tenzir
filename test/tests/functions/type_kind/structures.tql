@@ -1,0 +1,4 @@
+// The kind of a list or record does not depend on its elements or fields.
+from {x: {}}, {x: {a: null}}, {x: {b: {c: 1}, a: "x"}},
+     {x: []}, {x: [null]}, {x: [1, "x", null, 2]}
+select kind = x.type_kind()

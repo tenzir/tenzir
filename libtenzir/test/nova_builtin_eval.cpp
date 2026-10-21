@@ -815,7 +815,7 @@ TEST("type_of reports null as a type and does not inspect inactive rows") {
   auto kinds = records->field("kind");
   REQUIRE(kinds);
   CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(0)), "null");
-  CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(2)), "int");
+  CHECK_EQUAL(*as<RowView<String>>(kinds->data.get(2)), "int64");
   auto constant = eval(call("type_of", {int_const(42)}), events,
                        bitmap({false, true, false}), dh);
   auto constant_records = constant.try_as<Record>();
@@ -823,8 +823,11 @@ TEST("type_of reports null as a type and does not inspect inactive rows") {
   CHECK((is<storage::ConstantStorage<Record, RowView<Record>>>(
     constant_records->storage())));
   CHECK_EQUAL(
-    *as<RowView<String>>(constant_records->field("kind")->data.get(1)), "int");
-  CHECK(std::move(dh).collect().empty());
+    *as<RowView<String>>(constant_records->field("kind")->data.get(1)),
+    "int64");
+  for (auto const& diag : std::move(dh).collect()) {
+    CHECK_EQUAL(diag.message, "`type_of` is deprecated");
+  }
 }
 
 TEST("type_id reflects per-row record shapes") {

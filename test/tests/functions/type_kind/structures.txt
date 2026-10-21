@@ -1,0 +1,18 @@
+{
+  kind: "record",
+}
+{
+  kind: "record",
+}
+{
+  kind: "record",
+}
+{
+  kind: "list",
+}
+{
+  kind: "list",
+}
+{
+  kind: "list",
+}

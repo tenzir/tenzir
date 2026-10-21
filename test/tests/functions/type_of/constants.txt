@@ -1,7 +1,30 @@
+warning: `type_of` is deprecated
+ --> tests/functions/type_of/constants.tql:1:16
+  |
+1 | from {integer: type_of(42), null_value: type_of(null), blob: type_of(b"bytes")}
+  |                ~~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
+
+warning: `type_of` is deprecated
+ --> tests/functions/type_of/constants.tql:1:41
+  |
+1 | from {integer: type_of(42), null_value: type_of(null), blob: type_of(b"bytes")}
+  |                                         ~~~~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
+
+warning: `type_of` is deprecated
+ --> tests/functions/type_of/constants.tql:1:62
+  |
+1 | from {integer: type_of(42), null_value: type_of(null), blob: type_of(b"bytes")}
+  |                                                              ~~~~~~~~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
 {
   integer: {
     name: null,
-    kind: "int",
+    kind: "int64",
     attributes: [],
     state: null,
   },

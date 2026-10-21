@@ -18,7 +18,7 @@ metadata = {
     "event_class_id": "1s",
 }
 metadata_projection = ", ".join(
-    f"{key}, {key}_type=type_of({key}).kind" for key in metadata
+    f"{key}, {key}_type=type_kind({key})" for key in metadata
 )
 expected_metadata = {**metadata, **{f"{key}_type": "string" for key in metadata}}
 

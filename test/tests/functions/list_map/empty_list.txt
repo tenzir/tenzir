@@ -1,3 +1,26 @@
+warning: `type_of` is deprecated
+ --> tests/functions/list_map/empty_list.tql:6:10
+  |
+6 | before = type_of(x)
+  |          ~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
+
+warning: `type_of` is deprecated
+ --> tests/functions/list_map/empty_list.tql:8:9
+  |
+8 | after = type_of(x)
+  |         ~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
+
+warning: `type_of` is deprecated
+ --> tests/functions/list_map/empty_list.tql:9:11
+  |
+9 | literal = type_of([])
+  |           ~~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
 {
   x: [],
   before: {

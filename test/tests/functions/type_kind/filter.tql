@@ -1,0 +1,2 @@
+from {x: 1}, {x: "a"}, {x: null}, {x: "b"}
+where x.type_kind() == "string"

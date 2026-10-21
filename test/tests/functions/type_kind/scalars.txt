@@ -1,0 +1,33 @@
+{
+  kind: "null",
+}
+{
+  kind: "bool",
+}
+{
+  kind: "int",
+}
+{
+  kind: "uint",
+}
+{
+  kind: "float",
+}
+{
+  kind: "string",
+}
+{
+  kind: "blob",
+}
+{
+  kind: "duration",
+}
+{
+  kind: "time",
+}
+{
+  kind: "ip",
+}
+{
+  kind: "subnet",
+}

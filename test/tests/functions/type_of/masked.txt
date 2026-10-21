@@ -1,3 +1,10 @@
+warning: `type_of` is deprecated
+ --> tests/functions/type_of/masked.tql:4:15
+  |
+4 | select type = type_of(x)
+  |               ~~~~~~~~~~
+  |
+  = hint: use `type_kind(x)` instead of `type_of(x).kind`
 {
   type: {
     name: null,
@@ -9,7 +16,7 @@
           name: "a",
           type: {
             name: null,
-            kind: "int",
+            kind: "int64",
             attributes: [],
             state: null,
           },

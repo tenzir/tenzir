@@ -1,0 +1,9 @@
+{
+  kind: "record",
+}
+{
+  kind: "int",
+}
+{
+  kind: "null",
+}

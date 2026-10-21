@@ -103,6 +103,7 @@ public:
 
 struct TypeOfArgs {
   nova::ValueArgument x;
+  location call;
 };
 
 struct TypeOfFunction {
@@ -114,7 +115,7 @@ struct TypeOfFunction {
       for (auto row : storage::bitmap_iteration(frame.mask())) {
         if (row) {
           append_data(builder, type_definition(args.x.data.get(*row), {}, false,
-                                               TypeNaming::nova));
+                                               TypeNaming::legacy));
         } else {
           builder.skip();
         }
@@ -126,7 +127,7 @@ struct TypeOfFunction {
       [&]<data_type Tag>(Array<Tag> const&) -> Array<Data> {
         if constexpr (fundamental_type<Tag>) {
           return repeat(type_definition(RowView<Data>{Data{Tag{}}}, {}, false,
-                                        TypeNaming::nova),
+                                        TypeNaming::legacy),
                         frame.length());
         } else {
           return describe_rows();
@@ -138,11 +139,24 @@ struct TypeOfFunction {
   }
 };
 
+auto emit_type_of_deprecation(location call, diagnostic_handler& dh) -> void {
+  diagnostic::warning("`type_of` is deprecated")
+    .primary(call)
+    .hint("use `type_kind(x)` instead of `type_of(x).kind`")
+    .emit(dh);
+}
+
 class type_of final : public nova::FunctionPlugin {
 public:
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<TypeOfArgs, TypeOfFunction>{};
     d.positional("x", &TypeOfArgs::x);
+    d.call_location(&TypeOfArgs::call);
+    d.validate(
+      [](TypeOfArgs& args, diagnostic_handler& dh) -> failure_or<void> {
+        emit_type_of_deprecation(args.call, dh);
+        return {};
+      });
     return std::move(d).finish();
   }
 
@@ -156,6 +170,7 @@ public:
 
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
+    emit_type_of_deprecation(inv.call.get_location(), ctx);
     auto expr = ast::expression{};
     TRY(argument_parser2::function("type_of")
           .positional("x", expr, "any")
@@ -171,6 +186,134 @@ public:
           }
           return builder.finish_assert_one_array();
         });
+      });
+  }
+};
+
+struct TypeKindArgs {
+  nova::ValueArgument x;
+};
+
+struct TypeKindFunction {
+  static auto eval(TypeKindArgs const& args, nova::EvalFrame frame)
+    -> nova::Array<nova::Data> {
+    using namespace nova;
+    return match(
+      args.x.data,
+      [&]<data_type Tag>(Array<Tag> const&) -> Array<Data> {
+        return repeat(Data{String{Type<Tag>::static_name}}, frame.length());
+      },
+      [&](UnionArray const& u) -> Array<Data> {
+        auto builder = ArrayBuilder<Data>{};
+        for (auto row : storage::bitmap_iteration(frame.mask())) {
+          if (not row) {
+            builder.skip();
+            continue;
+          }
+          match(u.get(*row), [&]<data_type Tag>(RowView<Tag> const&) {
+            builder.data(Type<Tag>::static_name);
+          });
+        }
+        return builder.finish();
+      });
+  }
+};
+
+/// The kind that a value of a legacy type has in Nova, which imports
+/// enumerations as strings and maps as records.
+auto nova_kind(type const& ty) -> std::string_view {
+  using namespace nova;
+  return match(
+    ty,
+    [](null_type const&) {
+      return Type<Null>::static_name;
+    },
+    [](bool_type const&) {
+      return Type<Bool>::static_name;
+    },
+    [](int64_type const&) {
+      return Type<Int>::static_name;
+    },
+    [](uint64_type const&) {
+      return Type<UInt>::static_name;
+    },
+    [](double_type const&) {
+      return Type<Float>::static_name;
+    },
+    [](duration_type const&) {
+      return Type<Duration>::static_name;
+    },
+    [](time_type const&) {
+      return Type<Time>::static_name;
+    },
+    [](string_type const&) {
+      return Type<String>::static_name;
+    },
+    [](enumeration_type const&) {
+      return Type<String>::static_name;
+    },
+    [](ip_type const&) {
+      return Type<Ip>::static_name;
+    },
+    [](subnet_type const&) {
+      return Type<Subnet>::static_name;
+    },
+    [](list_type const&) {
+      return Type<List>::static_name;
+    },
+    [](map_type const&) {
+      return Type<Record>::static_name;
+    },
+    [](record_type const&) {
+      return Type<Record>::static_name;
+    },
+    [](blob_type const&) {
+      return Type<Blob>::static_name;
+    },
+    [](secret_type const&) {
+      return Type<Secret>::static_name;
+    });
+}
+
+/// Implements `type_kind(x)`, which returns the kind of the type of `x`, such
+/// as `int` or `record`. A `null` value has kind `null`, regardless of where it
+/// came from.
+class TypeKindPlugin final : public nova::FunctionPlugin {
+public:
+  auto name() const -> std::string override {
+    return "type_kind";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto describe() const -> nova::FunctionDescription override {
+    auto d = nova::FunctionDescriber<TypeKindArgs, TypeKindFunction>{};
+    d.positional("x", &TypeKindArgs::x, "any");
+    return std::move(d).finish();
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("type_kind")
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        TENZIR_UNUSED(ctx);
+        auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+        check(b.Reserve(eval.length()));
+        for (auto& part : eval(expr).parts()) {
+          auto kind = nova_kind(part.type);
+          for (auto i = int64_t{0}; i < part.length(); ++i) {
+            check(b.Append(part.array->IsNull(i)
+                             ? nova::Type<nova::Null>::static_name
+                             : kind));
+          }
+        }
+        return {string_type{}, finish(b)};
       });
   }
 };
@@ -1769,3 +1912,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_of)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::TypeKindPlugin)

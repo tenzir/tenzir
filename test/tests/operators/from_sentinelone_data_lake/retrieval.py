@@ -117,7 +117,7 @@ def main() -> None:
 
     for raw in ("false", "true"):
         rows, _ = run(
-            'where type_of(a).kind == "float" and b > 0 and c < 0',
+            'where type_kind(a) == "float" and b > 0 and c < 0',
             scope="hybrid_numeric_floats",
             args=f", raw={raw}",
             modes=["LOG"],

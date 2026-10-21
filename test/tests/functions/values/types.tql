@@ -16,4 +16,4 @@ from {
     record: {a: 1},
   },
 }
-select kinds=x.values().map(v => type_of(v).kind)
+select kinds=x.values().map(v => type_kind(v))

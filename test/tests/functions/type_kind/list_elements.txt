@@ -1,0 +1,22 @@
+{
+  xs: [
+    1,
+    "x",
+    null,
+    2.5,
+    [
+      1,
+    ],
+    {
+      a: 1,
+    },
+  ],
+  kinds: [
+    "int",
+    "string",
+    "null",
+    "float",
+    "list",
+    "record",
+  ],
+}

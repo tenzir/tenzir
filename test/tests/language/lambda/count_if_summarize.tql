@@ -7,6 +7,6 @@ from (
   {x: null},
 )
 summarize (
-  num_strings = x.count_if(x => type_of(x).kind == "string"),
-  num_ints = x.count_if(x => type_of(x).kind == "int"),
+  num_strings = x.count_if(x => type_kind(x) == "string"),
+  num_ints = x.count_if(x => type_kind(x) == "int"),
 )

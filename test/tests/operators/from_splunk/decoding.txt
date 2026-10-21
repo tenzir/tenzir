@@ -1,3 +1,10 @@
+warning: `type_of` is deprecated
+  --> tests/operators/from_splunk/decoding.tql:11:10
+   |
+11 |   types: type_of(this).state.fields.map(field => {
+   |          ~~~~~~~~~~~~~
+   |
+   = hint: use `type_kind(x)` instead of `type_of(x).kind`
 {
   schema: "tenzir.splunk",
   event: {
@@ -51,15 +58,15 @@
     },
     {
       name: "signed",
-      kind: "int",
+      kind: "int64",
     },
     {
       name: "unsigned",
-      kind: "uint",
+      kind: "uint64",
     },
     {
       name: "real",
-      kind: "float",
+      kind: "double",
     },
     {
       name: "null",
@@ -148,7 +155,7 @@
   types: [
     {
       name: "_raw",
-      kind: "int",
+      kind: "int64",
     },
   ],
 }

@@ -18,4 +18,4 @@ read_avro schema={
     },
   ],
 }
-choice_kind = type_of(choice).kind
+choice_kind = type_kind(choice)

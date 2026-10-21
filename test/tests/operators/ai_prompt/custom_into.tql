@@ -25,4 +25,4 @@ ai_prompt model="fixture-model",
            temperature=0.5,
            max_tokens=16
 select message, keep=context.keep, text=context.response.text,
-       latency_is_duration=type_of(context.response.latency).kind == "duration"
+       latency_is_duration=type_kind(context.response.latency) == "duration"

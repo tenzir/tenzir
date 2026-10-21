@@ -2,4 +2,4 @@ from {text: "hello"},
   {text: null},
   {text: "🚀"}
 data = blob(text)
-select value = data.string(), kind = type_of(data).kind
+select value = data.string(), kind = type_kind(data)

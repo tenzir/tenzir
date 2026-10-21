@@ -9,5 +9,5 @@ parsed = raw.decode_hex().parse_avro(schema={
     {name: "maybe", type: ["null", "string"]},
   ],
 })
-maybe_kind = type_of(parsed.maybe).kind
+maybe_kind = type_kind(parsed.maybe)
 drop raw

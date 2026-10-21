@@ -1,0 +1,6 @@
+from {
+  integer: type_kind(42),
+  null_value: type_kind(null),
+  list: type_kind([1, "x"]),
+  record: type_kind({a: 1}),
+}

@@ -1,0 +1,6 @@
+{
+  integer: "int",
+  null_value: "null",
+  list: "list",
+  record: "record",
+}

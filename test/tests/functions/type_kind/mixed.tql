@@ -1,0 +1,3 @@
+// Values of different kinds in one field each report their own kind.
+from {x: 1}, {x: "a"}, {x: null}, {x: [1]}, {x: {a: 1}}, {x: 2.5}
+kind = x.type_kind()

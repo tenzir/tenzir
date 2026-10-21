@@ -1,0 +1,28 @@
+{
+  x: 1,
+  kind: "int",
+}
+{
+  x: "a",
+  kind: "string",
+}
+{
+  x: null,
+  kind: "null",
+}
+{
+  x: [
+    1,
+  ],
+  kind: "list",
+}
+{
+  x: {
+    a: 1,
+  },
+  kind: "record",
+}
+{
+  x: 2.5,
+  kind: "float",
+}

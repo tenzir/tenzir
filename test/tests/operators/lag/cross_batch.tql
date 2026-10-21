@@ -4,4 +4,4 @@ from {value: 1},
      {value: 4}
 batch 1
 lag value=value, offset=2, into=previous
-previous_type = type_of(previous).kind
+previous_type = type_kind(previous)

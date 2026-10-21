@@ -12,4 +12,4 @@ from_microsoft_defender "strings",
   },
   _base_url=env("DEFENDER_URL"),
   tls=false
-MessageType = type_of(Message).kind
+MessageType = type_kind(Message)

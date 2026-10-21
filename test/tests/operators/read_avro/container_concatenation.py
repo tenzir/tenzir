@@ -40,7 +40,7 @@ def main() -> None:
             ],
         ),
         "from_stdin { read_avro }"
-        " | kind = type_of(value).kind | select kind | to_stdout { write_ndjson }",
+        " | kind = type_kind(value) | select kind | to_stdout { write_ndjson }",
         [{"kind": "record"}, {"kind": "null"}, {"kind": "record"}],
     )
     first = make_container(

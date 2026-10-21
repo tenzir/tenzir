@@ -18,4 +18,4 @@ ai_decide "Is this event dangerous?",
           model="fixture-decider",
           endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
 select id, keep=context.keep, probability=context.decision.answer.probability,
-       latency_is_duration=type_of(context.decision.latency).kind == "duration"
+       latency_is_duration=type_kind(context.decision.latency) == "duration"
