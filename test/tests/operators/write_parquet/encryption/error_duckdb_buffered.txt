@@ -1,0 +1,2 @@
+error: failed to decrypt Parquet data: authentication failed
+  = note: the key may be incorrect, the file may be corrupted, or the encryption format may be incompatible

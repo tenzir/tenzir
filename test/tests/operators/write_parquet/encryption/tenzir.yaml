@@ -1,0 +1,12 @@
+tenzir:
+  nova: true
+  secrets:
+    key128: "AAECAwQFBgcICQoLDA0ODw=="
+    key192: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYX"
+    key256: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+    wrong-key: "AQIDBAUGBwgJCgsMDQ4PEA=="
+    short-key: "short"
+    empty-key: ""
+    duckdb-key: "MDEyMzQ1Njc4OWFiY2RlZg=="
+    raw-key: "0123456789abcdef"
+    hex-key: "00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"

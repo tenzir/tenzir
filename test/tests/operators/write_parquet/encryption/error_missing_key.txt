@@ -1,0 +1,1 @@
+error: failed to read parquet: Could not read encrypted metadata, no decryption found in reader's properties

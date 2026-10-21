@@ -1,0 +1,6 @@
+error: encryption key must contain 16, 24, or 32 bytes
+ --> tests/operators/write_parquet/encryption/error_invalid_read_key.tql:7:29
+  |
+7 | read_parquet encryption_key=secret("short-key")
+  |                             ^^^^^^^^^^^^^^^^^^^
+  |

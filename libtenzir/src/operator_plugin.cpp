@@ -401,9 +401,13 @@ auto ArgumentStore::substitute(const Description& desc, substitute_ctx ctx,
           }
           value = detail::narrow<uint64_t>(*integer);
         }
-        if (auto* str = try_as<std::string>(value);
-            str and is<Setter<located<secret>>>(setter)) {
-          value = secret::make_literal(*str);
+        if (is<Setter<located<secret>>>(setter)) {
+          if (auto* str = try_as<std::string>(value)) {
+            value = secret::make_literal(*str);
+          } else if (auto* bytes = try_as<blob>(value)) {
+            value = secret::make_literal(std::string_view{
+              reinterpret_cast<char const*>(bytes->data()), bytes->size()});
+          }
         }
         auto result = match(
           setter,

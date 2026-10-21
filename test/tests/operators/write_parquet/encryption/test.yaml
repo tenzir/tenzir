@@ -1,0 +1,3 @@
+suite: parquet-encryption
+fixtures: [node]
+timeout: 60

@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// DuckDB 1.5.6 omits module AAD. The Arrow reader must reject these files.
+// Fixture written by DuckDB 1.5.6 with ASCII key 0123456789abcdef.
+from_file f"{env("TENZIR_INPUTS")}/parquet/encrypted-duckdb-no-aad.parquet" {
+  read_parquet encryption_key=decode_base64(secret("duckdb-key"))
+}
+select id, message

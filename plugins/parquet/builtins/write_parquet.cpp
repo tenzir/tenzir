@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/chunked_buffer_output_stream.hpp"
+#include "parquet/encryption.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -30,6 +31,7 @@
 #include <caf/expected.hpp>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/encryption/encryption.h>
 
 #include <limits>
 #include <memory>
@@ -133,14 +135,15 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
 }
 
 struct WriteParquetArgs {
+  Option<located<secret>> encryption_key;
   Option<located<int64_t>> compression_level;
   Option<located<std::string>> compression_type;
   Option<location> times_in_milliseconds;
   location operator_loc;
 };
 
-auto build_writer_props(WriteParquetArgs& args)
-  -> std::shared_ptr<::parquet::WriterProperties> {
+auto make_writer_props_builder(WriteParquetArgs& args)
+  -> ::parquet::WriterProperties::Builder {
   auto parquet_writer_props_builder = ::parquet::WriterProperties::Builder();
   if (args.compression_type) {
     auto compression_type
@@ -156,7 +159,7 @@ auto build_writer_props(WriteParquetArgs& args)
   }
   parquet_writer_props_builder.version(
     ::parquet::ParquetVersion::PARQUET_2_LATEST);
-  return parquet_writer_props_builder.build();
+  return parquet_writer_props_builder;
 }
 
 class WriteParquet final : public Operator<table_slice, chunk_ptr> {
@@ -164,9 +167,28 @@ public:
   explicit WriteParquet(WriteParquetArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx&) -> Task<void> override {
-    parquet_writer_props_ = build_writer_props(args_);
-    co_return;
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto builder = make_writer_props_builder(args_);
+    try {
+      if (args_.encryption_key) {
+        auto key = co_await prepare_encryption_key(*args_.encryption_key, ctx);
+        if (not key) {
+          failed_ = true;
+          co_return;
+        }
+        // The default encrypts all columns and the footer with this key.
+        auto encryption
+          = ::parquet::FileEncryptionProperties::Builder{std::move(*key)};
+        encryption.algorithm(::parquet::ParquetCipher::AES_GCM_V1);
+        builder.encryption(encryption.build());
+      }
+      parquet_writer_props_ = builder.build();
+    } catch (::parquet::ParquetException const& error) {
+      diagnostic::error("failed to configure parquet writer: {}", error.what())
+        .primary(args_.operator_loc)
+        .emit(ctx);
+      failed_ = true;
+    }
   }
 
   /// Checkpointing is not supported.
@@ -413,6 +435,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WriteParquetArgs, WriteParquet, WriteParquetEvents>{};
+    d.named("encryption_key", &WriteParquetArgs::encryption_key);
     auto compression_level
       = d.named("compression_level", &WriteParquetArgs::compression_level);
     auto compression_type

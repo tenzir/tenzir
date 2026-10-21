@@ -1,0 +1,6 @@
+error: encryption key must contain 16, 24, or 32 bytes
+ --> tests/operators/write_parquet/encryption/error_raw_key_length.tql:6:30
+  |
+6 | write_parquet encryption_key="asdfqwer"
+  |                              ^^^^^^^^^^
+  |

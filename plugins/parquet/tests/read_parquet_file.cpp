@@ -13,6 +13,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/chunk.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file_handle.hpp>
@@ -22,6 +23,7 @@
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/test/registry.hpp>
 #include <tenzir/test/test.hpp>
@@ -36,6 +38,7 @@
 #include <caf/binary_serializer.hpp>
 #include <folly/coro/BlockingWait.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/encryption/encryption.h>
 #include <parquet/file_reader.h>
 #include <parquet/statistics.h>
 
@@ -169,7 +172,7 @@ constexpr auto payload_size = size_t{2048};
 /// A file with a narrow `id` column and a fat `payload` column, split into
 /// several row groups. The file is a few times larger than the reader's
 /// speculative footer read, so that read alone does not cover it.
-auto make_file() -> std::shared_ptr<arrow::Buffer> {
+auto make_file(std::string key = {}) -> std::shared_ptr<arrow::Buffer> {
   auto ids = arrow::Int64Builder{};
   auto payloads = arrow::StringBuilder{};
   for (auto i = int64_t{0}; i < row_groups * rows_per_group; ++i) {
@@ -188,10 +191,15 @@ auto make_file() -> std::shared_ptr<arrow::Buffer> {
                                             payloads.Finish().ValueOrDie(),
                                           });
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
-  auto properties = ::parquet::WriterProperties::Builder{}
-                      .compression(::parquet::Compression::UNCOMPRESSED)
-                      ->disable_dictionary()
-                      ->build();
+  auto builder = ::parquet::WriterProperties::Builder{};
+  builder.compression(::parquet::Compression::UNCOMPRESSED)
+    ->disable_dictionary();
+  if (not key.empty()) {
+    builder.encryption(::parquet::FileEncryptionProperties::Builder{
+      arrow::util::SecureString{
+        std::move(key)}}.build());
+  }
+  auto properties = builder.build();
   REQUIRE(::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
                                        sink, rows_per_group, properties)
             .ok());
@@ -346,7 +354,9 @@ auto checkpoint_at(std::shared_ptr<arrow::Buffer> const& buffer, uint64_t rows,
 /// subpipelines nor tasks.
 class ReaderCtx final : public OpCtx {
 public:
-  ReaderCtx(diagnostic_handler& dh, registry const& reg) : dh_{dh}, reg_{reg} {
+  ReaderCtx(diagnostic_handler& dh, registry const& reg,
+            std::string_view encryption_key = {})
+    : dh_{dh}, reg_{reg}, encryption_key_{encryption_key} {
   }
 
   auto actor_system() -> caf::actor_system& override {
@@ -361,9 +371,16 @@ public:
     return reg_;
   }
 
-  auto resolve_secrets(std::vector<secret_request>)
+  auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>> override {
-    panic("unexpected call");
+    REQUIRE(not encryption_key_.empty());
+    for (auto& request : requests) {
+      CHECK(request.secret == secret::make_managed("parquet-key"));
+      auto bytes = as_bytes(encryption_key_);
+      CO_TRY(request.callback(resolved_secret_value{
+        ecc::cleansing_blob{bytes.begin(), bytes.end()}, false}));
+    }
+    co_return {};
   }
 
   auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior, bool)
@@ -420,6 +437,7 @@ public:
 private:
   diagnostic_handler& dh_;
   registry const& reg_;
+  std::string_view encryption_key_;
 };
 
 class CallbackPush final : public Push<nova::Events> {
@@ -458,6 +476,7 @@ struct RunOptions {
   Option<int64_t> size = None{};
   /// The reader and its arguments.
   std::string_view pipeline = "read_parquet";
+  std::string_view encryption_key = {};
 };
 
 /// Reads `buffer` through the file implementation of a `read_parquet`
@@ -481,7 +500,7 @@ auto run(std::shared_ptr<arrow::Buffer> buffer, ir::OptimizeRequest request,
   auto result = Run{};
   auto size = options.size.value_or(buffer->size());
   result.file = std::make_shared<RecordingFile>(std::move(buffer));
-  auto ctx = ReaderCtx{dh, reg};
+  auto ctx = ReaderCtx{dh, reg, options.encryption_key};
   auto push = CallbackPush{[&](nova::Events events) {
     if (result.events.empty()) {
       result.reads_at_first_batch = result.file->reads();
@@ -515,6 +534,32 @@ auto run(std::shared_ptr<arrow::Buffer> buffer, ir::OptimizeRequest request,
       }
     }
     // Once done, the scan finalizes for good.
+    CHECK_EQUAL(co_await op->finalize(push, ctx), FinalizeBehavior::done);
+  }());
+  result.diagnostics = std::move(dh).collect();
+  return result;
+}
+
+/// Exercises the byte-stream implementation with the same fixtures as the scan.
+auto run_buffered(std::shared_ptr<arrow::Buffer> buffer,
+                  ir::OptimizeRequest request, RunOptions options = {}) -> Run {
+  set_nova_enabled(true);
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh, test::builtin_registry());
+  auto const& reg = provider.as_session().reg();
+  auto pipe = compile(options.pipeline, std::move(request), base_ctx{dh, reg});
+  REQUIRE_EQUAL(pipe.operators.size(), 1u);
+  auto spawned = pipe.operators.front()->spawn(tag_v<chunk_ptr>, reg);
+  auto op = std::move(as<Box<Operator<chunk_ptr, nova::Events>>>(spawned));
+  auto result = Run{};
+  auto ctx = ReaderCtx{dh, reg, options.encryption_key};
+  auto push = CallbackPush{[&](nova::Events events) {
+    result.events.push_back(std::move(events));
+  }};
+  folly::coro::blockingWait([&]() -> Task<void> {
+    co_await op->start(JobId{}, ctx);
+    co_await op->process(chunk::copy(buffer->data(), buffer->size()), push,
+                         ctx);
     CHECK_EQUAL(co_await op->finalize(push, ctx), FinalizeBehavior::done);
   }());
   result.diagnostics = std::move(dh).collect();
@@ -2005,4 +2050,105 @@ TEST("statistics that do not decode leave their row group to the reader") {
   CHECK_EQUAL(error.notes.front().message, "failed to read record batch");
   CHECK_EQUAL(fetched(result, buffer),
               (std::vector<std::pair<int, int>>{{0, 0}, {1, 0}, {1, 1}}));
+}
+
+namespace {
+
+constexpr auto encrypted_reader
+  = R"(read_parquet encryption_key=secret("parquet-key"))";
+constexpr auto raw_key = "0123456789abcdef";
+
+} // namespace
+
+TEST("encrypted Parquet scans retain keys across row groups") {
+  auto result
+    = run(make_file(raw_key), {.filter = {}, .order = EventOrder::ordered},
+          {.pipeline = encrypted_reader, .encryption_key = raw_key});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), uint64_t{row_groups * rows_per_group});
+}
+
+TEST("encrypted Parquet scans preserve projection and limit pushdown") {
+  auto buffer = make_file(raw_key);
+  auto result = run(buffer,
+                    {.filter = {},
+                     .order = EventOrder::ordered,
+                     .limit = 2,
+                     .projection = projection_of("id")},
+                    {.pipeline = encrypted_reader, .encryption_key = raw_key});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events), 2u);
+  CHECK(total(result.file->reads()) < buffer->size());
+}
+
+TEST("encrypted Parquet scans resume from checkpoints") {
+  auto buffer = make_file(raw_key);
+  auto result = run(buffer, {.filter = {}, .order = EventOrder::ordered},
+                    {.restore = checkpoint_at(buffer, rows_per_group + 1),
+                     .pipeline = encrypted_reader,
+                     .encryption_key = raw_key});
+  CHECK(result.diagnostics.empty());
+  CHECK_EQUAL(total_rows(result.events),
+              uint64_t{(row_groups - 1) * rows_per_group - 1});
+}
+
+TEST("encrypted Parquet readers reject missing or incorrect keys") {
+  for (auto options :
+       {RunOptions{}, RunOptions{.pipeline = encrypted_reader,
+                                 .encryption_key = "fedcba9876543210"}}) {
+    for (auto read : {run, run_buffered}) {
+      auto result = read(make_file(raw_key),
+                         {.filter = {}, .order = EventOrder::ordered}, options);
+      REQUIRE(not result.diagnostics.empty());
+      if (not options.encryption_key.empty()) {
+        CHECK_EQUAL(result.diagnostics.front().message,
+                    "failed to decrypt Parquet data: authentication failed");
+      }
+      CHECK(result.events.empty());
+    }
+  }
+}
+
+TEST("encrypted Parquet readers reject tampered pages") {
+  auto buffer = make_file(raw_key);
+  auto properties = ::parquet::ReaderProperties{};
+  properties.file_decryption_properties(
+    ::parquet::FileDecryptionProperties::Builder{}
+      .footer_key(arrow::util::SecureString{std::string{raw_key}})
+      ->build());
+  auto reader = ::parquet::ParquetFileReader::Open(
+    std::make_shared<arrow::io::BufferReader>(buffer), properties);
+  auto range = column_chunk(*reader->metadata(), 0, 1);
+  auto damaged = buffer->ToString();
+  // Alter ciphertext inside the first payload page, retaining its framing.
+  damaged[range.offset + range.length / 2] ^= 1;
+  auto input = arrow::Buffer::FromString(std::move(damaged));
+  for (auto read : {run, run_buffered}) {
+    auto result
+      = read(input, {.filter = {}, .order = EventOrder::ordered},
+             {.pipeline = encrypted_reader, .encryption_key = raw_key});
+    REQUIRE(not result.diagnostics.empty());
+    CHECK_EQUAL(result.diagnostics.front().message,
+                "failed to decrypt Parquet data: authentication failed");
+  }
+}
+
+TEST("encrypted Parquet scans reject plaintext input") {
+  auto result = run(make_file(), {.filter = {}, .order = EventOrder::ordered},
+                    {.pipeline = encrypted_reader, .encryption_key = raw_key});
+  CHECK(not result.diagnostics.empty());
+  CHECK(result.events.empty());
+}
+
+TEST("encrypted Parquet readers accept binary keys") {
+  auto key = std::string(32, '\xff');
+  key[0] = '\0';
+  for (auto read : {run, run_buffered}) {
+    auto result
+      = read(make_file(key), {.filter = {}, .order = EventOrder::ordered},
+             {.pipeline = encrypted_reader, .encryption_key = key});
+    CHECK(result.diagnostics.empty());
+    CHECK_EQUAL(total_rows(result.events),
+                uint64_t{row_groups * rows_per_group});
+  }
 }
