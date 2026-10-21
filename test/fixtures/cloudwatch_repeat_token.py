@@ -11,7 +11,6 @@ from typing import Any
 
 from tenzir_test import FixtureHandle, fixture
 
-from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +72,8 @@ def run() -> FixtureHandle:
         def log_message(self, fmt: str, *args: object) -> None:
             logger.debug("cloudwatch repeat-token: %s", fmt % args if args else fmt)
 
-    port = find_free_port()
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_port
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 

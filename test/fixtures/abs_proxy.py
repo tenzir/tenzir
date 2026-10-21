@@ -249,8 +249,8 @@ class _AbsProxyHandler(BaseHTTPRequestHandler):
 
 
 def _start_proxy(config: _ProxyConfig) -> tuple[_ProxyServer, threading.Thread, int]:
-    port = find_free_port()
-    server = _ProxyServer(("127.0.0.1", port), config)
+    server = _ProxyServer(("127.0.0.1", 0), config)
+    port = server.server_port
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread, port

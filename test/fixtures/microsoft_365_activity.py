@@ -13,7 +13,6 @@ from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import fixture
 
-from ._utils import find_free_port
 
 _HOST = "127.0.0.1"
 _TENANT_ID = "11111111-2222-3333-4444-555555555555"
@@ -381,7 +380,7 @@ def _plugin_env() -> dict[str, str]:
 @fixture(name="microsoft_365_activity")
 def run() -> Iterator[dict[str, str]]:
     token_server = ThreadingHTTPServer((_HOST, 0), _TokenHandler)
-    activity_server = _ActivityServer((_HOST, find_free_port()), _ActivityHandler)
+    activity_server = _ActivityServer((_HOST, 0), _ActivityHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     activity_thread = threading.Thread(
         target=activity_server.serve_forever, daemon=True

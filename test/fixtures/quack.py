@@ -174,7 +174,7 @@ def quack() -> FixtureHandle:
                 def log_message(self, *_: object) -> None:
                     pass
 
-            proxy = ThreadingHTTPServer(("127.0.0.1", find_free_port()), Handler)
+            proxy = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(cert, key)
             proxy.socket = context.wrap_socket(proxy.socket, server_side=True)

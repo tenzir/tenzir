@@ -35,7 +35,6 @@ from typing import Any
 from urllib.parse import urlparse, parse_qs, unquote
 
 from tenzir_test import FixtureHandle, fixture
-from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +272,6 @@ class MockS3Assertions:
 
 @fixture(assertions=MockS3Assertions)
 def mock_s3() -> FixtureHandle:
-    port = find_free_port()
     data_dir = Path(tempfile.mkdtemp(prefix="tenzir-mock-s3-data-"))
     journal_path = data_dir / "_journal.json"
     state = _State(data_dir)
@@ -282,7 +280,8 @@ def mock_s3() -> FixtureHandle:
     (data_dir / BUCKET).mkdir()
 
     handler_class = type("Handler", (_Handler,), {"state": state})
-    server = HTTPServer(("127.0.0.1", port), handler_class)
+    server = HTTPServer(("127.0.0.1", 0), handler_class)
+    port = server.server_port
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     logger.info("mock_s3 listening on 127.0.0.1:%d", port)

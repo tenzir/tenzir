@@ -211,8 +211,8 @@ def _start_hlc_server(
         def log_message(self, fmt: str, *args: object) -> None:
             logger.debug("cloudwatch hlc: %s", fmt % args if args else fmt)
 
-    port = find_free_port()
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_port
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread, f"http://127.0.0.1:{port}/logs"

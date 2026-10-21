@@ -8,6 +8,7 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/concepts.hpp>
+#include <tenzir/config.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
@@ -19,9 +20,13 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/variant.hpp>
 
+// Google Cloud C++ uses variant helpers deprecated by recent Abseil releases.
+TENZIR_DIAGNOSTIC_PUSH
+TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
 #include <google/cloud/future.h>
 #include <google/cloud/internal/future_coroutines.h>
 #include <google/cloud/pubsub/publisher.h>
+TENZIR_DIAGNOSTIC_POP
 
 #include <chrono>
 #include <deque>
