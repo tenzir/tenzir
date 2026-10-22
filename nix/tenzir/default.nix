@@ -344,7 +344,6 @@ let
             excludedBundledPluginNames = privatePluginNames ++ excludedPluginNames;
             darwinDeploymentTarget = "26.0";
             plugins = [ ];
-            hasDeployment = deployment-source != null;
             withPlugins =
               if isStatic then
                 withTenzirPluginsStatic {

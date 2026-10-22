@@ -322,19 +322,3 @@ in
     extraEnv = [ "TENZIR_DEMAND__MAX_BATCHES=3" ];
   };
 }
-// lib.optionalAttrs (pkg.hasDeployment or false) {
-  tenzir-up = buildTenzirImage {
-    name = "tenzir/tenzir-up";
-    # `tenzir up` goes to the platform CLI, but the pods run the deployment
-    # itself, which the engine selects by the name it is started under.
-    entrypoint = [ "/usr/local/bin/tenzir-up" ];
-    extraLayers = [
-      {
-        copyToRoot = runCommand "tenzir-up-link" { preferLocalBuild = true; } ''
-          mkdir -p $out/usr/local/bin
-          ln -s ${pkg}/bin/tenzir $out/usr/local/bin/tenzir-up
-        '';
-      }
-    ];
-  };
-}
