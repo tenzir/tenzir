@@ -13,25 +13,33 @@
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
+  version = "2.0.0";
+  rev = "d54cbbe3df17e8e5ce68312f483b4155836112aa";
+  src = fetchFromGitHub {
+    owner = "duckdb";
+    repo = "duckdb";
+    tag = "v${version}";
+    hash = "sha256-1fhgPD/QGT/fK+BabX2dbTWOsajS6feNl5+9iw8rvwU=";
+  };
   # Keep these pins in sync with DuckDB's .github/config/extensions/*.cmake.
   # Fetch explicitly: CMake cannot access the network inside the build sandbox.
   quack = fetchzip {
-    url = "https://github.com/duckdb/duckdb-quack/archive/c1548111c1bfd16207e22fd3cb7e4bde1335b9d0.tar.gz";
-    hash = "sha256-B94mtDHNemCmPQfZIceIaFYeMy4rjwrV6OzRxK83DkQ=";
+    url = "https://github.com/duckdb/duckdb-quack/archive/f96420ed46aee9c42064bdb99ddfd1230d6c0086.tar.gz";
+    hash = "sha256-S3/yaeTiJoA3efiMPksLVGlfKm3JH7I3tzuub9v3IQg=";
   };
   httpfs = fetchzip {
-    url = "https://github.com/duckdb/duckdb-httpfs/archive/827222fb45a043a7a852d1f7aae46901492a3cda.tar.gz";
-    hash = "sha256-sUp7gHI7NzvNUdqpnODmpVgWb5gY0PsIqUXpnKuAzYw=";
+    url = "https://github.com/duckdb/duckdb-httpfs/archive/77392a72077a85897db2519fae11e2c0da972b8a.tar.gz";
+    hash = "sha256-Ni2stJrRSbTkHs+SjfuumtrhIVO917Q9uh91O2YalPM=";
   };
   excel = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-excel";
-    rev = "f4c72b5ef04a03b3a78a95b5a2ee94ba93e3178d";
-    hash = "sha256-hyHTiTfRR+hXJ7hZKt/h/Hu1zNgEYEbMozIv6WZbnfA=";
+    rev = "81bb84b115b97cc4edec4827714cac80da0127e1";
+    hash = "sha256-6Z5MLv9aT09KMSwvgsTWsWpst1nmBZ90xEHX/r98ZEk=";
   };
   extensions = writeText "duckdb-extensions.cmake" (
-    # A static binary cannot load extensions. ICU vendors symbols that clash
-    # with Tenzir's static icu4c; keep only the required file readers there.
+    # A static binary cannot load extensions. Keep its extension set limited
+    # to the required file readers and networking.
     (
       if isStatic then
         ''
@@ -41,7 +49,7 @@ let
         ''
       else
         ''
-          include("${duckdb.src}/.github/config/in_tree_extensions.cmake")
+          include("${src}/.github/config/in_tree_extensions.cmake")
         ''
     )
     + ''
@@ -50,10 +58,12 @@ let
       duckdb_extension_load(excel
         SOURCE_DIR "${excel}"
         INCLUDE_DIR "${excel}/src/excel/include")
+      duckdb_extension_statically_link(httpfs quack excel)
     ''
   );
 in
 duckdb.overrideAttrs (orig: {
+  inherit version rev src;
   # Upstream runs DuckDB's complete unit test suite in `installCheckPhase`,
   # which takes longer than building the library itself. We consume
   # `libduckdb` and the `duckdb` CLI for integration tests, so skip it.
@@ -67,7 +77,11 @@ duckdb.overrideAttrs (orig: {
     minizip-ng
     zlib
   ];
+  # DuckDB 2.0 needs the release version and commit separately. These take
+  # precedence over the legacy git-describe string from the nixpkgs recipe.
   cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
+    (lib.cmakeFeature "DUCKDB_EXPLICIT_VERSION" "v${version}")
+    (lib.cmakeFeature "GIT_COMMIT_HASH" rev)
     (lib.cmakeBool "BUILD_UNITTESTS" false)
     (lib.cmakeFeature "DUCKDB_EXTENSION_CONFIGS" "${extensions}")
   ];
@@ -86,13 +100,19 @@ duckdb.overrideAttrs (orig: {
       # Upstream assumes its own DuckDB submodule. Use the enclosing source.
       substituteInPlace extension/quack/CMakeLists.txt \
         --replace-fail 'duckdb/third_party/httplib' "\''${DUCKDB_MODULE_BASE_DIR}/third_party/httplib" \
-        --replace-fail 'duckdb/extension/autocomplete/include' "\''${DUCKDB_MODULE_BASE_DIR}/extension/autocomplete/include"
+        --replace-fail 'duckdb/extension/autocomplete/include' "\''${DUCKDB_MODULE_BASE_DIR}/extension/autocomplete/include" \
+        --replace-fail 'duckdb/third_party/mbedtls/include' "\''${DUCKDB_MODULE_BASE_DIR}/third_party/mbedtls/include"
     ''
     + lib.optionalString isStatic ''
       # DuckDB unconditionally builds shared objects alongside its archives,
       # which cannot link against static musl. Preserve the install targets.
       substituteInPlace src/CMakeLists.txt \
         --replace-fail 'add_library(duckdb SHARED' 'add_library(duckdb STATIC'
+      # Static targets expose their private link dependencies in CMake exports.
+      # DuckDB 2.0 omits this helper from its install and export targets.
+      substituteInPlace src/CMakeLists.txt \
+        --replace-fail 'TARGETS duckdb duckdb_static' \
+                       'TARGETS duckdb duckdb_static duckdb_local_extension_repository'
       substituteInPlace extension/extension_build_tools.cmake \
         --replace-fail 'add_library(''${TARGET_NAME} SHARED' \
                        'add_library(''${TARGET_NAME} STATIC'

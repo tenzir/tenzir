@@ -3,6 +3,7 @@ title: Read from and write to DuckDB databases
 type: feature
 authors:
   - mavam
+  - zedoraps
 created: 2026-10-01T18:22:18.933266Z
 ---
 
@@ -33,6 +34,8 @@ from_duckdb ":memory:",
 
 Use `sheet` to select a worksheet and `header=true` to turn its first row into field names.
 
+New database files use the DuckDB 2.0 storage format and require DuckDB 2.0 or later to open. Existing database files keep their earlier storage format and remain readable by earlier DuckDB versions.
+
 Write events to a remote table, creating it if needed:
 
 ```tql
@@ -41,4 +44,4 @@ to_duckdb "quack:analytics.example.com:443",
   token=secret("duckdb-token"), table="alerts"
 ```
 
-Remote SQL runs on the server. TLS is enabled by default except for loopback hosts. Quack is beta: failed writes can leave partial results.
+Remote SQL runs on the server. TLS is enabled by default except for loopback hosts. Remote Quack connections require a DuckDB 2.0 server; DuckDB 1.x servers are not supported.
