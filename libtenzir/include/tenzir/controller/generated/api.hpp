@@ -1428,8 +1428,8 @@ auto call(Transport& transport, PushTelemetry request)
 /// `GET /health`
 /// Answered as long as the deployment is running. The backend probes this
 /// through the gateway, which is where `reachable` comes from. It also reports
-/// which configuration the deployment has accepted, so the platform can see
-/// that the two agree and send the current one again when they do not.
+/// the generation and digest of the configuration the deployment has accepted
+/// and can read. Health probes do not restore configuration archives.
 class ReadHealth {
 public:
   ReadHealth() = default;
@@ -1439,14 +1439,14 @@ public:
 /// Hands the deployment the whole state it should be in, as a tar holding the
 /// workspace files, every locked package, and a `manifest.json` with the
 /// revision, the environment, the variables, the secrets and the labels. Sent
-/// on every change and again after a deployment reconnects, so it has to be
-/// safe to apply twice. The deployment makes its pipelines match what
-/// `pipelines/` holds: one that is missing is created and started, one whose
-/// definition or settings differ is replaced and started again, one that is no
-/// longer there is stopped and removed. A revision whose generation is not
-/// higher than the one the deployment holds is refused, so a late retry cannot
-/// roll it back. Answers with nothing: what the deployment made of it shows up
-/// in `listPipelines`, not in a reply the platform would have to interpret.
+/// for a new deployment revision; retries must still be safe to apply twice.
+/// The deployment makes its pipelines match what `pipelines/` holds: one that
+/// is missing is created and started, one whose definition or settings differ
+/// is replaced and started again, one that is no longer there is stopped and
+/// removed. A revision whose generation is not higher than the one the
+/// deployment holds is refused, so a late retry cannot roll it back. Answers
+/// with nothing: what the deployment made of it shows up in `listPipelines`,
+/// not in a reply the platform would have to interpret.
 class UpdateConfiguration {
 public:
   explicit UpdateConfiguration(std::string payload)
