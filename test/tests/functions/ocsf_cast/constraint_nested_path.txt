@@ -1,0 +1,72 @@
+{
+  class_uid: 5004,
+  category_uid: 5,
+  activity_id: 1,
+  type_uid: 500401,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Inventory",
+      vendor_name: "Example",
+    },
+  },
+  device: {
+    type_id: 2,
+    hostname: "ws-1",
+    os: {
+      name: "Windows",
+      type_id: 100,
+      sp_name: "SP1",
+    },
+  },
+}
+{
+  class_uid: 5004,
+  category_uid: 5,
+  activity_id: 1,
+  type_uid: 500401,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Inventory",
+      vendor_name: "Example",
+    },
+  },
+  device: {
+    type_id: 2,
+    hostname: "ws-1",
+    os: {
+      name: "Windows",
+      type_id: 100,
+      sp_ver: 1,
+    },
+  },
+}
+{
+  class_uid: 5004,
+  category_uid: 5,
+  activity_id: 1,
+  type_uid: 500401,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Inventory",
+      vendor_name: "Example",
+    },
+  },
+  device: {
+    type_id: 2,
+    hostname: "ws-1",
+    os: {
+      name: "Windows",
+      type_id: 100,
+      version: "10.0",
+    },
+  },
+}

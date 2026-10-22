@@ -1,3 +1,13 @@
+let $required = {
+  category_uid: 1,
+  type_uid: 100101,
+  severity_id: 1,
+  time: 2026-01-01,
+  metadata: {version: "1.5.0", product: {name: "Tenzir"}},
+  actor: {user: {name: "root"}},
+  device: {type_id: 0, hostname: "host"},
+  file: {name: "file.txt", type_id: 1},
+}
 from {x: null}, {x: 42}, {x: {}},
-     {x: {class_uid: 1001, metadata: {version: "1.5.0"}, activity_id: "bad"}}
+     {x: {...$required, class_uid: 1001, activity_id: "bad"}}
 result = ocsf_cast(x)

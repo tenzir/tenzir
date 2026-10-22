@@ -1,0 +1,130 @@
+warning: class "Authentication" needs at least one of `service`, `dst_endpoint`, but has none
+  --> tests/functions/ocsf_cast/constraints.tql:49:8
+   |
+49 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: `user` needs at least one of `account`, `name`, `uid`, but has none
+  --> tests/functions/ocsf_cast/constraints.tql:49:8
+   |
+49 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: `vulnerabilities[]` needs exactly one of `advisory`, `cve`, `cwe`, but has none
+  --> tests/functions/ocsf_cast/constraints.tql:49:8
+   |
+49 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: `vulnerabilities[]` needs exactly one of `advisory`, `cve`, `cwe`, but has more than one
+  --> tests/functions/ocsf_cast/constraints.tql:49:8
+   |
+49 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: class "Operating System Patch State" needs at least one of `device.os.sp_name`, `device.os.sp_ver`, `device.os.version`, but has none
+  --> tests/functions/ocsf_cast/constraints.tql:49:8
+   |
+49 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+{
+  class_uid: 3002,
+  category_uid: 3,
+  activity_id: 1,
+  type_uid: 300201,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "OpenSSH",
+      vendor_name: "OpenBSD",
+    },
+  },
+  user: {
+    name: "alice",
+  },
+}
+{
+  class_uid: 3002,
+  category_uid: 3,
+  activity_id: 1,
+  type_uid: 300201,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "OpenSSH",
+      vendor_name: "OpenBSD",
+    },
+  },
+  user: {
+    name: null,
+  },
+}
+{
+  class_uid: 2002,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200201,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Scanner",
+      vendor_name: "Example",
+    },
+  },
+  finding_info: {
+    uid: "1",
+    title: "Outdated OpenSSL",
+  },
+  vulnerabilities: [
+    {
+      cve: {
+        uid: "CVE-2024-0001",
+      },
+    },
+    {
+      cve: {
+        uid: "CVE-2024-0002",
+      },
+      cwe: {
+        uid: "CWE-79",
+      },
+    },
+    {
+      title: "Unclassified",
+    },
+  ],
+}
+{
+  class_uid: 5004,
+  category_uid: 5,
+  activity_id: 1,
+  type_uid: 500401,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Inventory",
+      vendor_name: "Example",
+    },
+  },
+  device: {
+    hostname: "ws-1",
+    type_id: 2,
+    os: {
+      name: "Windows",
+      type_id: 100,
+    },
+  },
+}

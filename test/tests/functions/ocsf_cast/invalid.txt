@@ -1,23 +1,30 @@
 warning: ocsf_cast expects a record
- --> tests/functions/ocsf_cast/invalid.tql:3:20
-  |
-3 | result = ocsf_cast(x)
-  |                    ~
-  |
+  --> tests/functions/ocsf_cast/invalid.tql:13:20
+   |
+13 | result = ocsf_cast(x)
+   |                    ~
+   |
 
 warning: dropping events where `metadata` does not exist
- --> tests/functions/ocsf_cast/invalid.tql:3:10
-  |
-3 | result = ocsf_cast(x)
-  |          ~~~~~~~~~~~~
-  |
+  --> tests/functions/ocsf_cast/invalid.tql:13:10
+   |
+13 | result = ocsf_cast(x)
+   |          ~~~~~~~~~~~~
+   |
 
 warning: expected type `int64` for `activity_id`, but got `string`
- --> tests/functions/ocsf_cast/invalid.tql:3:10
-  |
-3 | result = ocsf_cast(x)
-  |          ~~~~~~~~~~~~
-  |
+  --> tests/functions/ocsf_cast/invalid.tql:13:10
+   |
+13 | result = ocsf_cast(x)
+   |          ~~~~~~~~~~~~
+   |
+
+warning: required field `activity_id` is missing
+  --> tests/functions/ocsf_cast/invalid.tql:13:10
+   |
+13 | result = ocsf_cast(x)
+   |          ~~~~~~~~~~~~
+   |
 {
   x: null,
   result: null,
@@ -32,17 +39,57 @@ warning: expected type `int64` for `activity_id`, but got `string`
 }
 {
   x: {
-    class_uid: 1001,
+    category_uid: 1,
+    type_uid: 100101,
+    severity_id: 1,
+    time: 2026-01-01T00:00:00Z,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
     },
+    actor: {
+      user: {
+        name: "root",
+      },
+    },
+    device: {
+      type_id: 0,
+      hostname: "host",
+    },
+    file: {
+      name: "file.txt",
+      type_id: 1,
+    },
+    class_uid: 1001,
     activity_id: "bad",
   },
   result: {
-    class_uid: 1001,
+    category_uid: 1,
+    type_uid: 100101,
+    severity_id: 1,
+    time: 2026-01-01T00:00:00Z,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
     },
+    actor: {
+      user: {
+        name: "root",
+      },
+    },
+    device: {
+      type_id: 0,
+      hostname: "host",
+    },
+    file: {
+      name: "file.txt",
+      type_id: 1,
+    },
+    class_uid: 1001,
     activity_id: null,
   },
 }

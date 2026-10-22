@@ -32,7 +32,7 @@ type _ocsf.v1_10_0_dev.object.account = record{
   type_id: int64 #recommended #enum=41b1dc7e #sibling=type,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Actor object contains details about the user, role, application, service,
 // or process that initiated or performed a specific activity. Note that Actor
@@ -51,7 +51,7 @@ type _ocsf.v1_10_0_dev.object.actor = record{
   process: _ocsf.v1_10_0_dev.object.process #recommended,
   session: _ocsf.v1_10_0_dev.object.session #optional,
   user: _ocsf.v1_10_0_dev.object.user #recommended,
-}
+} #at_least_one=process|user|iam_role|invoked_by|session|application|app_name|app_uid
 
 // The Additional Restriction object describes supplementary access controls and
 // guardrails that constrain or limit granted permissions beyond the primary
@@ -149,7 +149,7 @@ type _ocsf.v1_10_0_dev.object.agent = record{
   uid_alt: string #optional,
   vendor_name: string #optional,
   version: string #optional,
-}
+} #at_least_one=uid|name
 
 // An autonomous AI agent that performs tasks under delegated authority.
 // Distinguished from the OCSF agent object (which describes security sensors
@@ -167,7 +167,7 @@ type _ocsf.v1_10_0_dev.object.ai_agent = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The AI Model object describes the characteristics of an AI/ML model. Examples
 // include language models like GPT-4, embedding models like text-embedding-
@@ -178,7 +178,7 @@ type _ocsf.v1_10_0_dev.object.ai_model = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Aircraft object represents any aircraft or otherwise airborne asset such
 // as an unmanned system, airplane, balloon, spacecraft, or otherwise. The
@@ -197,7 +197,7 @@ type _ocsf.v1_10_0_dev.object.aircraft = record{
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
   vertical_speed: string #optional,
-}
+} #at_least_one=name|serial_number|uid|uid_alt
 
 // The analysis target defines the scope of monitored activities, specifying
 // what entity, system or process is analyzed for activity patterns.
@@ -222,7 +222,7 @@ type _ocsf.v1_10_0_dev.object.analytic_nonrecursive = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Analytic object contains details about the analytic technique used to
 // analyze and derive insights from the data or information that led to the
@@ -241,7 +241,7 @@ type _ocsf.v1_10_0_dev.object.analytic = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // Describes an anomaly or deviation detected in a system. Anomalies are
 // unexpected activity patterns that could indicate potential issues needing
@@ -303,7 +303,7 @@ type _ocsf.v1_10_0_dev.object.application = record{
   uid_alt: string #optional,
   url: _ocsf.v1_10_0_dev.object.url #optional,
   version: string #optional,
-}
+} #at_least_one=uid|name
 
 // The Assessment object describes a point-in-time assessment, check, or
 // evaluation of a specific configuration or signal against an asset, entity,
@@ -319,7 +319,7 @@ type _ocsf.v1_10_0_dev.object.assessment = record{
   policy: _ocsf.v1_10_0_dev.object.policy #optional,
   uid: string #optional,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Attack object describes the tactic, technique, sub-technique & mitigation
 // associated to an attack.
@@ -330,7 +330,7 @@ type _ocsf.v1_10_0_dev.object.attack = record{
   tactics: list<_ocsf.v1_10_0_dev.object.tactic> #optional,
   technique: _ocsf.v1_10_0_dev.object.technique #recommended,
   version: string #recommended,
-}
+} #at_least_one=tactic|technique|sub_technique
 
 // A cryptographic attestation that an event has not been altered since it was
 // produced and was produced by the holder of a verifiable identity, providing
@@ -352,7 +352,7 @@ type _ocsf.v1_10_0_dev.object.attestation = record{
   prev_event: _ocsf.v1_10_0_dev.object.prev_event #recommended,
   signatures: list<_ocsf.v1_10_0_dev.object.digital_signature> #recommended,
   uid: string #optional,
-}
+} #at_least_one=fingerprint|signatures
 
 // An Authentication Factor object describes a category of methods used for
 // identity verification in an authentication attempt.
@@ -420,7 +420,7 @@ type _ocsf.v1_10_0_dev.object.authorization = record{
 type _ocsf.v1_10_0_dev.object.autonomous_system = record{
   name: string #recommended,
   number: int64 #recommended,
-}
+} #at_least_one=number|name
 
 // Describes the baseline or expected behavior of a system, service, or
 // component based on historical observations and measurements. It establishes
@@ -595,7 +595,7 @@ type _ocsf.v1_10_0_dev.object.container = record{
   tag: string #optional,
   tags: list<_ocsf.v1_10_0_dev.object.key_value_object> #optional,
   uid: string #recommended,
-}
+} #at_least_one=uid|name
 
 // The CPU information object contains attributes describing a physical CPU
 // package installed in the device.
@@ -662,7 +662,7 @@ type _ocsf.v1_10_0_dev.object.d3f_tactic = record{
   src_url: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Defensive Technique object describes the leaf defensive technique ID
 // and/or name associated to a countermeasure.
@@ -671,7 +671,7 @@ type _ocsf.v1_10_0_dev.object.d3f_technique = record{
   src_url: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Defensive Countermeasure object describes the tactic & technique
 // associated with a countermeasure.
@@ -679,7 +679,7 @@ type _ocsf.v1_10_0_dev.object.d3fend = record{
   d3f_tactic: _ocsf.v1_10_0_dev.object.d3f_tactic #recommended,
   d3f_technique: _ocsf.v1_10_0_dev.object.d3f_technique #recommended,
   version: string #recommended,
-}
+} #at_least_one=d3f_tactic|d3f_technique
 
 // The Data Classification object includes information about data classification
 // levels and data category types.
@@ -698,7 +698,7 @@ type _ocsf.v1_10_0_dev.object.data_classification = record{
   status_id: int64 #recommended #enum=5d1c0032 #sibling=status,
   total: int64 #optional,
   uid: string #optional,
-}
+} #at_least_one=category_id|confidentiality_id
 
 // The Data Security object describes the characteristics, techniques and
 // content of a Data Loss Prevention (DLP), Data Loss Detection (DLD), Data
@@ -724,7 +724,7 @@ type _ocsf.v1_10_0_dev.object.data_security = record{
   status_id: int64 #recommended #enum=5d1c0032 #sibling=status,
   total: int64 #optional,
   uid: string #optional,
-}
+} #at_least_one=data_lifecycle_state_id|detection_pattern|detection_system_id|policy
 
 // The database object is used for databases which are typically datastore
 // services that contain an organized collection of structured and unstructured
@@ -745,7 +745,7 @@ type _ocsf.v1_10_0_dev.object.database = record{
   type_id: int64 #required #enum=f73a806f #sibling=type,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The databucket object is a basic container that holds data, typically
 // organized through the use of data partitions.
@@ -785,7 +785,7 @@ type _ocsf.v1_10_0_dev.object.databucket = record{
   uid_numeric: int64 #optional,
   version: string #optional,
   zone: string #optional #profile=cloud,
-}
+} #at_least_one=name|uid
 
 // The DCE/RPC, or Distributed Computing Environment/Remote Procedure Call,
 // object describes the remote procedure call system for distributed computing
@@ -891,7 +891,7 @@ type _ocsf.v1_10_0_dev.object.device = record{
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|instance_uid|interface_uid|interface_name
 
 // The Device Hardware Information object contains details and specifications of
 // the physical components that make up a device. This information provides an
@@ -1028,7 +1028,7 @@ type _ocsf.v1_10_0_dev.object.download_info = record{
   src_url: string #recommended,
   type: string #optional,
   type_id: int64 #recommended #enum=d2325c7b #sibling=type,
-}
+} #at_least_one=src_endpoint|src_url|type_id
 
 // Represents a connection or relationship between two nodes in a graph.
 type _ocsf.v1_10_0_dev.object.edge = record{
@@ -1040,7 +1040,7 @@ type _ocsf.v1_10_0_dev.object.edge = record{
   target: string #required,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Email object describes the email metadata such as sender, recipients, and
 // direction, and can include embedded URLs and files.
@@ -1077,7 +1077,7 @@ type _ocsf.v1_10_0_dev.object.email = record{
   uid: string #recommended,
   urls: list<_ocsf.v1_10_0_dev.object.url> #optional,
   x_originating_ip: list<ip> #optional,
-}
+} #at_least_one=from|to
 
 // The Email Authentication object describes the Sender Policy Framework (SPF),
 // DomainKeys Identified Mail (DKIM) and Domain-based Message Authentication,
@@ -1133,14 +1133,14 @@ type _ocsf.v1_10_0_dev.object.endpoint = record{
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|instance_uid|interface_uid|interface_name
 
 // The Endpoint Connection object contains information detailing a connection
 // attempt to an endpoint.
 type _ocsf.v1_10_0_dev.object.endpoint_connection = record{
   code: int64 #recommended,
   network_endpoint: _ocsf.v1_10_0_dev.object.network_endpoint #recommended,
-}
+} #at_least_one=network_endpoint|code
 
 // The Enrichment object provides inline enrichment data for specific attributes
 // of interest within an event. It serves as a mechanism to enhance or
@@ -1213,7 +1213,7 @@ type _ocsf.v1_10_0_dev.object.evidences = record{
   verdict: string #optional,
   verdict_id: int64 #optional #enum=372f7978 #sibling=verdict,
   win_service: _ocsf.v1_10_0_dev.object.win_service #recommended #extension=win,
-}
+} #at_least_one=actor|api|connection_info|data|database|databucket|device|dst_endpoint|email|file|process|query|src_endpoint|url|user|job|script|reg_key|reg_value|win_service
 
 // The OCSF Schema Extension object provides detailed information about the
 // schema extension used to construct the event. The schema extensions are
@@ -1223,7 +1223,7 @@ type _ocsf.v1_10_0_dev.object.extension = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #required,
-}
+} #at_least_one=name|uid
 
 // The Feature object provides information about the software product feature
 // that generated a specific event. It encompasses details related to the
@@ -1234,7 +1234,7 @@ type _ocsf.v1_10_0_dev.object.feature = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The File object represents the metadata associated with a file stored in a
 // computer system. It encompasses information about the file itself, including
@@ -1380,7 +1380,7 @@ type _ocsf.v1_10_0_dev.object.firewall_rule = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Function Invocation object provides details regarding the invocation of a
 // function.
@@ -1388,7 +1388,7 @@ type _ocsf.v1_10_0_dev.object.function_invocation = record{
   error: string #optional,
   parameters: list<_ocsf.v1_10_0_dev.object.parameter> #optional,
   return_value: string #optional,
-}
+} #at_least_one=parameters|return_value|error
 
 // The GPU information object contains attributes describing graphical
 // processing hardware.
@@ -1415,7 +1415,7 @@ type _ocsf.v1_10_0_dev.object.graph = record{
   type: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Group object represents a collection or association of entities, such as
 // users, policies, or devices. It serves as a logical grouping mechanism to
@@ -1431,7 +1431,7 @@ type _ocsf.v1_10_0_dev.object.group = record{
   uid: string #recommended,
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The HASSH object contains SSH network fingerprinting values for specific
 // client/server implementations. It provides a standardized way of identifying
@@ -1522,7 +1522,7 @@ type _ocsf.v1_10_0_dev.object.iam_role = record{
   uid: string #recommended,
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Identity Activity Metrics object captures usage patterns, authentication
 // activity, credential usage and other metrics for identities across cloud and
@@ -1563,7 +1563,7 @@ type _ocsf.v1_10_0_dev.object.idp = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   url_string: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Image object provides a description of a specific Virtual Machine (VM) or
 // Container image.
@@ -1611,7 +1611,7 @@ type _ocsf.v1_10_0_dev.object.job = record{
   type_id: int64 #recommended #enum=9909dd34 #sibling=type,
   uid: string #optional,
   user: _ocsf.v1_10_0_dev.object.user #optional,
-}
+} #at_least_one=name|type_id
 
 // The action that will be performed by the job when certain conditions are met.
 type _ocsf.v1_10_0_dev.object.job_action = record{
@@ -1656,7 +1656,7 @@ type _ocsf.v1_10_0_dev.object.kb_article = record{
   src_url: string #optional,
   title: string #recommended,
   uid: string #recommended,
-}
+} #at_least_one=uid|src_url
 
 // The Kernel Resource object provides information about a specific kernel
 // resource, including its name and type. It describes essential attributes
@@ -1681,7 +1681,7 @@ type _ocsf.v1_10_0_dev.object.key_value_object = record{
   name: string #required,
   value: string #recommended,
   values: list<string> #recommended,
-}
+} #at_least_one=value|values
 
 // The Keyboard Information object contains details and attributes related to a
 // computer or device keyboard. It encompasses information that describes the
@@ -1782,7 +1782,7 @@ type _ocsf.v1_10_0_dev.object.load_balancer = record{
   status_detail: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Geo Location object describes a geographical location, usually associated
 // with an IP address.
@@ -1805,7 +1805,7 @@ type _ocsf.v1_10_0_dev.object.location = record{
   pressure_altitude: string #optional,
   provider: string #optional,
   region: string #optional,
-}
+} #at_least_one=city|country|postal_code|region
 
 // The Logger object represents the device and product where events are stored
 // with times for receipt and transmission.  This may be at the source device
@@ -1830,7 +1830,7 @@ type _ocsf.v1_10_0_dev.object.logger = record{
   uid_numeric: int64 #optional,
   untruncated_size: int64 #optional,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // This object is a used to capture strings which may be truncated by a security
 // product due to their length.
@@ -1856,7 +1856,7 @@ type _ocsf.v1_10_0_dev.object.malware = record{
   severity_id: int64 #recommended #enum=acf27835 #sibling=severity,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The malware scan information object describes characteristics, metadata of a
 // malware scanning job.
@@ -1875,7 +1875,7 @@ type _ocsf.v1_10_0_dev.object.malware_scan_info = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   unique_malware_count: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Managed Entity object describes the type and version of an entity, such
 // as a user, device, or policy.  For types in the <code>type_id</code> enum
@@ -1898,7 +1898,7 @@ type _ocsf.v1_10_0_dev.object.managed_entity = record{
   uid_numeric: int64 #optional,
   user: _ocsf.v1_10_0_dev.object.user #recommended,
   version: string #recommended,
-}
+} #at_least_one=name|uid|device|group|org|policy|user
 
 // Communication context for AI system interactions including protocols, roles,
 // clients, and session information for MCP and other AI communication systems.
@@ -1915,7 +1915,7 @@ type _ocsf.v1_10_0_dev.object.message_context = record{
   total_tokens: int64 #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=application|service
 
 // The Metadata object describes the metadata associated with the event.
 type _ocsf.v1_10_0_dev.object.metadata = record{
@@ -1974,7 +1974,7 @@ type _ocsf.v1_10_0_dev.object.mitigation = record{
   src_url: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Module object describes the attributes of a module.
 type _ocsf.v1_10_0_dev.object.module = record{
@@ -1986,7 +1986,7 @@ type _ocsf.v1_10_0_dev.object.module = record{
   load_type_id: int64 #recommended #enum=e44e26f5 #sibling=load_type,
   start_address: string #recommended,
   type: string #recommended,
-}
+} #at_least_one=load_type_id|function_name
 
 // The Network Connection Information object describes characteristics of an OSI
 // Transport Layer communication, including TCP and UDP.
@@ -2044,7 +2044,7 @@ type _ocsf.v1_10_0_dev.object.network_endpoint = record{
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|svc_name|instance_uid|interface_uid|interface_name|domain
 
 // The Network Interface object describes the type and associated attributes of
 // a physical or virtual network interface.
@@ -2060,7 +2060,7 @@ type _ocsf.v1_10_0_dev.object.network_interface = record{
   type_id: int64 #recommended #enum=870ae596 #sibling=type,
   uid: string #optional,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=ip|mac|name|hostname|uid
 
 // The network proxy endpoint object describes a proxy server, which acts as an
 // intermediary between a client requesting a resource and the server providing
@@ -2100,7 +2100,7 @@ type _ocsf.v1_10_0_dev.object.network_proxy_nonrecursive = record{
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|svc_name|instance_uid|interface_uid|interface_name|domain
 
 // The network proxy endpoint object describes a proxy server, which acts as an
 // intermediary between a client requesting a resource and the server providing
@@ -2141,7 +2141,7 @@ type _ocsf.v1_10_0_dev.object.network_proxy = record{
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|svc_name|instance_uid|interface_uid|interface_name|domain
 
 // The Network Traffic object describes characteristics of network traffic over
 // a time period. The metrics represent network data transferred between source
@@ -2229,7 +2229,7 @@ type _ocsf.v1_10_0_dev.object.occurrence_details = record{
   record_index_in_array: int64 #optional,
   row_number: int64 #optional,
   start_line: int64 #optional,
-}
+} #at_least_one=cell_name|column_name|column_number|end_line|json_path|page_number|record_index_in_array|row_number|start_line
 
 // The Organization object describes characteristics of an organization or
 // company and its division if any. Additionally, it also describes cloud and
@@ -2241,7 +2241,7 @@ type _ocsf.v1_10_0_dev.object.organization = record{
   ou_uid: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Operating System (OS) object describes characteristics of an OS, such as
 // Linux or Windows.
@@ -2364,7 +2364,7 @@ type _ocsf.v1_10_0_dev.object.parameter = record{
   name: string #optional,
   post_value: string #optional,
   pre_value: string #optional,
-}
+} #at_least_one=name|pre_value|post_value
 
 // The peripheral device object describes the properties of external,
 // connectable, and detachable hardware.
@@ -2379,7 +2379,7 @@ type _ocsf.v1_10_0_dev.object.peripheral_device = record{
   uid_numeric: int64 #optional,
   vendor_id_list: list<string> #recommended,
   vendor_name: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Permission Analysis object describes analysis results of permissions,
 // policies directly associated with an identity (user, role, or service
@@ -2413,7 +2413,7 @@ type _ocsf.v1_10_0_dev.object.policy = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #recommended,
-}
+} #at_least_one=name|type|uid
 
 // The Port Information object describes a port and its associated protocol
 // details.
@@ -2487,7 +2487,7 @@ type _ocsf.v1_10_0_dev.object.process_nonrecursive = record{
   user: _ocsf.v1_10_0_dev.object.user #recommended,
   working_directory: string #optional,
   xattributes: null #variant #must_be_record #optional,
-}
+} #at_least_one=pid|uid|cpid
 
 // The Process object describes a running instance of a launched program.
 type _ocsf.v1_10_0_dev.object.process = record{
@@ -2526,7 +2526,7 @@ type _ocsf.v1_10_0_dev.object.process = record{
   user: _ocsf.v1_10_0_dev.object.user #recommended,
   working_directory: string #optional,
   xattributes: null #variant #must_be_record #optional,
-}
+} #at_least_one=pid|uid|cpid
 
 // The Process Entity object provides critical fields for referencing a process.
 type _ocsf.v1_10_0_dev.object.process_entity = record{
@@ -2539,7 +2539,7 @@ type _ocsf.v1_10_0_dev.object.process_entity = record{
   pid: int64 #recommended,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=cmd_line|name|path|pid|uid|cpid
 
 // The Product object describes characteristics of a software product.
 type _ocsf.v1_10_0_dev.object.product = record{
@@ -2555,7 +2555,7 @@ type _ocsf.v1_10_0_dev.object.product = record{
   url_string: string #optional,
   vendor_name: string #recommended,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Programmatic Credential object describes service-specific credentials
 // used for direct API access and system integration. These credentials are
@@ -2595,7 +2595,7 @@ type _ocsf.v1_10_0_dev.object.query_evidence = record{
   tcp_state_id: int64 #optional,
   user: _ocsf.v1_10_0_dev.object.user #recommended,
   users: list<_ocsf.v1_10_0_dev.object.user> #optional,
-}
+} #just_one=connection_info|file|folder|group|job|kernel|module|network_interfaces|peripheral_device|process|reg_key|reg_value|service|session|startup_item|user
 
 // The query info object holds information related to data access within a
 // datastore. To access, manipulate, delete, or retrieve data from a datastore,
@@ -2609,7 +2609,7 @@ type _ocsf.v1_10_0_dev.object.query_info = record{
   query_time_dt: time #optional #profile=datetime,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Related Event object describes an event or another finding related to a
 // finding. It may or may not be an OCSF event.
@@ -2659,7 +2659,7 @@ type _ocsf.v1_10_0_dev.object.reporter = record{
   org: _ocsf.v1_10_0_dev.object.organization #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=hostname|ip|name|uid
 
 // The Reputation object describes the reputation/risk score of an entity (e.g.
 // device, user, domain).
@@ -2717,7 +2717,7 @@ type _ocsf.v1_10_0_dev.object.resource_details = record{
   user: _ocsf.v1_10_0_dev.object.user #optional,
   version: string #optional,
   zone: string #optional #profile=cloud,
-}
+} #at_least_one=name|uid
 
 // The Response Elements object describes characteristics of an API response.
 type _ocsf.v1_10_0_dev.object.response = record{
@@ -2749,7 +2749,7 @@ type _ocsf.v1_10_0_dev.object.rule = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Subject Alternative name (SAN) object describes a SAN secured by a
 // digital certificate
@@ -2779,7 +2779,7 @@ type _ocsf.v1_10_0_dev.object.scan = record{
   type_id: int64 #required #enum=0cea921b #sibling=type,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The System for Cross-domain Identity Management (SCIM) Configuration object
 // provides a structured set of attributes related to SCIM protocols used for
@@ -2847,7 +2847,7 @@ type _ocsf.v1_10_0_dev.object.sensor_info = record{
   sensor_layer_id: int64 #required #enum=c39a1a96 #sibling=sensor_layer,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The Service object describes characteristics of a service, <code> e.g. AWS
 // EC2. </code>
@@ -2858,7 +2858,7 @@ type _ocsf.v1_10_0_dev.object.service = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Service Privilege Analysis object describes privilege analysis results
 // for a single cloud service or resource namespace. It provides metrics on
@@ -2971,7 +2971,7 @@ type _ocsf.v1_10_0_dev.object.startup_item = record{
   type: string #optional,
   type_id: int64 #recommended #enum=7fbb3a26 #sibling=type,
   win_service: _ocsf.v1_10_0_dev.object.win_service #optional #extension=win,
-}
+} #just_one=driver|job|process|win_service
 
 // The MITRE Sub-technique object describes the ATT&CK® or ATLAS™ Sub-technique
 // ID and/or name associated to an attack.
@@ -2980,7 +2980,7 @@ type _ocsf.v1_10_0_dev.object.sub_technique = record{
   src_url: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The table object represents a table within a structured relational database
 // or datastore, which contains columns and rows of data that are able to be
@@ -2996,7 +2996,7 @@ type _ocsf.v1_10_0_dev.object.table = record{
   size: int64 #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The MITRE Tactic object describes the ATT&CK® or ATLAS™ Tactic ID and/or name
 // that is associated to an attack.
@@ -3005,7 +3005,7 @@ type _ocsf.v1_10_0_dev.object.tactic = record{
   src_url: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // The MITRE Technique object describes the ATT&CK® or ATLAS™ Technique ID
 // and/or name associated to an attack.
@@ -3014,7 +3014,7 @@ type _ocsf.v1_10_0_dev.object.technique = record{
   src_url: string #optional,
   uid: string #recommended,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=name|uid
 
 // Threat actor is responsible for the observed malicious activity.
 type _ocsf.v1_10_0_dev.object.threat_actor = record{
@@ -3034,7 +3034,7 @@ type _ocsf.v1_10_0_dev.object.ticket = record{
   type: string #optional,
   type_id: int64 #optional #enum=8d4a9bff #sibling=type,
   uid: string #recommended,
-}
+} #at_least_one=src_url|uid
 
 // The Time Span object represents different time period durations. If a
 // timespan is fractional, i.e. crosses one period, e.g. a week and 3 days, more
@@ -3057,7 +3057,7 @@ type _ocsf.v1_10_0_dev.object.timespan = record{
   start_time_dt: time #optional #profile=datetime,
   type: string #optional,
   type_id: int64 #recommended #enum=3af13726 #sibling=type,
-}
+} #at_least_one=duration|duration_days|duration_hours|duration_mins|duration_months|duration_secs|duration_weeks|duration_years|end_time|start_time
 
 // The Transport Layer Security (TLS) object describes the negotiated TLS
 // protocol used for secure communications over an establish network connection.
@@ -3147,7 +3147,7 @@ type _ocsf.v1_10_0_dev.object.trait = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   values: list<string> #optional,
-}
+} #at_least_one=name|uid
 
 // The transformation_info object represents the mapping or transformation used.
 type _ocsf.v1_10_0_dev.object.transformation_info = record{
@@ -3159,7 +3159,7 @@ type _ocsf.v1_10_0_dev.object.transformation_info = record{
   uid: string #optional,
   uid_numeric: int64 #optional,
   url_string: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The TSIG (Transaction Signature) object represents a TSIG resource record as
 // defined in RFC 2845. TSIG uses a shared secret key and one-way hash function
@@ -3170,7 +3170,7 @@ type _ocsf.v1_10_0_dev.object.tsig = record{
   error: string #optional,
   error_id: int64 #recommended #enum=db57893a #sibling=error,
   key_name: string #recommended,
-}
+} #at_least_one=algorithm|key_name|error_id
 
 // The Unmanned Aerial System object describes the characteristics, Position
 // Location Information (PLI), and other metadata of Unmanned Aerial Systems
@@ -3193,7 +3193,7 @@ type _ocsf.v1_10_0_dev.object.unmanned_aerial_system = record{
   uid_numeric: int64 #optional,
   uuid: string #recommended,
   vertical_speed: string #optional,
-}
+} #at_least_one=name|serial_number|uid|uid_alt
 
 // The Unmanned System Operating Area object describes details about a precise
 // area of operations for a UAS flight or mission.
@@ -3227,7 +3227,7 @@ type _ocsf.v1_10_0_dev.object.unmanned_system_operating_area = record{
   start_time_dt: time #optional #profile=datetime,
   type: string #optional,
   type_id: int64 #recommended #enum=5a39e6a2 #sibling=type,
-}
+} #at_least_one=city|country|postal_code|region
 
 // The Uniform Resource Locator (URL) object describes the characteristics of a
 // URL.
@@ -3243,7 +3243,7 @@ type _ocsf.v1_10_0_dev.object.url = record{
   scheme: string #recommended,
   subdomain: string #optional,
   url_string: string #recommended,
-}
+} #at_least_one=url_string|path
 
 // The User object describes the characteristics of a user/person or a security
 // principal.
@@ -3269,7 +3269,7 @@ type _ocsf.v1_10_0_dev.object.user_nonrecursive = record{
   uid: string #recommended,
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=account|name|uid
 
 // The User object describes the characteristics of a user/person or a security
 // principal.
@@ -3296,7 +3296,7 @@ type _ocsf.v1_10_0_dev.object.user = record{
   uid: string #recommended,
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
-}
+} #at_least_one=account|name|uid
 
 // The Vendor Attributes object can be used to represent values of attributes
 // populated by the Vendor/Finding Provider. It can help distinguish between the
@@ -3345,7 +3345,7 @@ type _ocsf.v1_10_0_dev.object.vulnerability = record{
   severity: string #optional,
   title: string #optional,
   vendor_name: string #optional,
-}
+} #just_one=advisory|cve|cwe
 
 // The Web Resource object describes characteristics of a web resource that was
 // affected by the activity/event.
@@ -3366,7 +3366,7 @@ type _ocsf.v1_10_0_dev.object.web_resource = record{
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
   url_string: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The resources of a WHOIS record for a given domain. This can include domain
 // names, IP address blocks, autonomous system information, and/or contact and
@@ -3438,7 +3438,7 @@ type _ocsf.v1_10_0_dev.object.win_resource = record{
   uid: string #recommended,
   uid_alt: string #optional,
   uid_numeric: int64 #optional,
-} #extension=win
+} #extension=win #at_least_one=name|uid
 
 // The Windows Service object describes a Windows service.
 type _ocsf.v1_10_0_dev.object.win_service = record{
@@ -3463,7 +3463,7 @@ type _ocsf.v1_10_0_dev.object.win_service = record{
   uid: string #recommended,
   uid_numeric: int64 #optional,
   version: string #recommended,
-} #extension=win
+} #extension=win #at_least_one=cmd_line|service_category_id|service_dependencies|service_error_control_id|service_start_name|service_start_type_id|service_type_id
 
 // Account Change events report when specific user account management tasks are
 // performed, such as a user/role being created or role assigned, changed,
@@ -3675,7 +3675,7 @@ type _ocsf.v1_10_0_dev.airborne_broadcast_activity = record{
   unmanned_system_operating_area: _ocsf.v1_10_0_dev.object.unmanned_system_operating_area #recommended,
   unmanned_system_operator: _ocsf.v1_10_0_dev.object.user #required,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=aircraft|unmanned_aerial_system|unmanned_system_operating_area
 
 // API events describe general CRUD (Create, Read, Update, Delete) API
 // activities, e.g. (AWS Cloudtrail)
@@ -3880,7 +3880,7 @@ type _ocsf.v1_10_0_dev.application_lifecycle = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=3b74cbe6 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=app|application
 
 // The Application Security Posture Finding event is a notification about any
 // bug, defect, deficiency, exploit, vulnerability, weakness or any other issue
@@ -3974,7 +3974,7 @@ type _ocsf.v1_10_0_dev.application_security_posture_finding = record{
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident #enum=372f7978 #sibling=verdict,
   vulnerabilities: list<_ocsf.v1_10_0_dev.object.vulnerability> #recommended,
-}
+} #at_least_one=application|compliance|remediation|vulnerabilities
 
 // Authentication events report authentication session activities, including
 // user attempts to log on or log off, regardless of success, as well as other
@@ -4063,7 +4063,7 @@ type _ocsf.v1_10_0_dev.authentication = record{
   type_uid: int64 #required #enum=12224259 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_10_0_dev.object.user #required,
-}
+} #at_least_one=service|dst_endpoint
 
 // Authorize Session events report privileges, groups or roles assigned to a new
 // user session, usually at login time.
@@ -4137,7 +4137,7 @@ type _ocsf.v1_10_0_dev.authorize_session = record{
   type_uid: int64 #required #enum=e10e3ff4 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_10_0_dev.object.user #required,
-}
+} #at_least_one=privileges|groups|iam_roles
 
 // The base event is a generic and concrete event. It also defines a set of
 // attributes available in most event classes. As a generic event that does not
@@ -4336,7 +4336,7 @@ type _ocsf.v1_10_0_dev.cloud_resources_inventory_info = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=f342f23d #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=cloud|container|database|databucket|idp|resources|table
 
 // Compliance Finding events describe results of evaluations performed against
 // resources, to check compliance with various Industry Frameworks or Security
@@ -4660,7 +4660,7 @@ type _ocsf.v1_10_0_dev.datastore_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=6bb62059 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=database|databucket|table
 
 // A Detection Finding describes detections or alerts generated by security
 // products using correlation engines, detection engines or other
@@ -4974,7 +4974,7 @@ type _ocsf.v1_10_0_dev.dhcp_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=7ce4d99b #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // DNS Activity events report DNS queries and answers as seen on the network.
 type _ocsf.v1_10_0_dev.dns_activity = record{
@@ -5074,7 +5074,7 @@ type _ocsf.v1_10_0_dev.dns_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=12c16f6e #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Drone Flights Activity events report the activity of Unmanned Aerial Systems
 // (UAS), their Operators, and mission-planning and authorization metadata as
@@ -5152,7 +5152,7 @@ type _ocsf.v1_10_0_dev.drone_flights_activity = record{
   unmanned_system_operating_area: _ocsf.v1_10_0_dev.object.unmanned_system_operating_area #recommended,
   unmanned_system_operator: _ocsf.v1_10_0_dev.object.user #required,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=src_endpoint|unmanned_aerial_system|unmanned_system_operator|unmanned_system_operating_area
 
 // Email Activity events report SMTP protocol and email activities including
 // those with embedded URLs and files. See the <code>Email</code> object for
@@ -5498,7 +5498,7 @@ type _ocsf.v1_10_0_dev.event_log_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=d9d223f8 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=file|log_name|log_provider|log_type|log_type_id
 
 // Data collected directly from devices that represents forensic information
 // pulled, queried, or discovered from devices that may indicate malicious
@@ -6003,7 +6003,7 @@ type _ocsf.v1_10_0_dev.ftp_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=6547f128 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Group Management events report lifecycle management of a group, as well as
 // privileges, roles, and resources associated with the group. There are two
@@ -6177,7 +6177,7 @@ type _ocsf.v1_10_0_dev.http_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=1de0a893 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=http_request|http_response
 
 // This finding represents an IAM analysis result, which evaluates IAM policies,
 // access patterns, and IAM configurations for potential security risks. The
@@ -6271,7 +6271,7 @@ type _ocsf.v1_10_0_dev.iam_analysis_finding = record{
   vendor_attributes: _ocsf.v1_10_0_dev.object.vendor_attributes #optional,
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident #enum=372f7978 #sibling=verdict,
-}
+} #at_least_one=access_analysis_result|applications|identity_activity_metrics|permission_analysis_results
 
 // An Incident Finding reports the creation, update, or closure of security
 // incidents as a result of detections and/or analytics. <br><strong>Note:
@@ -6352,7 +6352,7 @@ type _ocsf.v1_10_0_dev.incident_finding = record{
   vendor_attributes: _ocsf.v1_10_0_dev.object.vendor_attributes #optional,
   verdict: string #recommended,
   verdict_id: int64 #recommended #enum=372f7978 #sibling=verdict,
-}
+} #at_least_one=assignee|assignee_group
 
 // Device Inventory Info events report device inventory data that is either
 // logged or proactively collected. For example, when collecting device
@@ -6957,7 +6957,7 @@ type _ocsf.v1_10_0_dev.network_activity = record{
   type_uid: int64 #required #enum=f267029e #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   url: _ocsf.v1_10_0_dev.object.url #recommended,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Network Connection Query events report information about active network
 // connections.
@@ -7112,7 +7112,7 @@ type _ocsf.v1_10_0_dev.network_file_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=682f5e20 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Network Remediation Activity events report on attempts at remediating
 // computer networks. Techniques and Sub-techniques of countermeasures will
@@ -7333,7 +7333,7 @@ type _ocsf.v1_10_0_dev.ntp_activity = record{
   type_uid: int64 #required #enum=1303d2d1 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   version: string #required,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // OSINT Inventory Info events report open source intelligence or threat
 // intelligence inventory data that is either logged or proactively collected.
@@ -7458,7 +7458,7 @@ type _ocsf.v1_10_0_dev.operating_system_patch_state = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=56feba02 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=device.os.sp_name|device.os.sp_ver|device.os.version
 
 // Peripheral Activity events log a system's interactions with external,
 // connectable, and detachable hardware. These events provide visibility into
@@ -7884,7 +7884,7 @@ type _ocsf.v1_10_0_dev.rdp_activity = record{
   type_uid: int64 #required #enum=731a3769 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_10_0_dev.object.user #recommended,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Remediation Activity events report on attempts at remediating a compromised
 // device or computer network.
@@ -8536,7 +8536,7 @@ type _ocsf.v1_10_0_dev.smb_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=95c65549 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Software Inventory Info events report device software inventory data that is
 // either logged or proactively collected. For example, when collecting device
@@ -8691,7 +8691,7 @@ type _ocsf.v1_10_0_dev.ssh_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=d1e36033 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-}
+} #at_least_one=dst_endpoint|src_endpoint
 
 // Startup Item Query events report information about discovered items, e.g.,
 // application components that are generally configured to run automatically.
@@ -8846,7 +8846,7 @@ type _ocsf.v1_10_0_dev.tunnel_activity = record{
   type_uid: int64 #required #enum=e99fee11 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_10_0_dev.object.user #recommended,
-}
+} #at_least_one=connection_info|session|src_endpoint|traffic|tunnel_interface|tunnel_type_id
 
 // User Access Management events report management updates to a user's
 // privileges.

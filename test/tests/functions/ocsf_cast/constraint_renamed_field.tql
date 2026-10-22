@@ -1,0 +1,14 @@
+// OCSF 1.3.0 to 1.9.0 name `log_file` in the Event Log Activity constraint,
+// but the attribute is `file`. Setting only `file` satisfies the constraint.
+from {
+  class_uid: 1008,
+  category_uid: 1,
+  activity_id: 1,
+  type_uid: 100801,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {version: "1.9.0", product: {name: "Windows", vendor_name: "Microsoft"}},
+  device: {type_id: 2, hostname: "ws-1"},
+  file: {name: "Security.evtx", type_id: 1},
+}
+this = ocsf_cast(this)

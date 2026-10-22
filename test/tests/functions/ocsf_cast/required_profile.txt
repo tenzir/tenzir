@@ -1,0 +1,80 @@
+warning: required field `osint` is missing
+  --> tests/functions/ocsf_cast/required_profile.tql:34:8
+   |
+34 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `reg_key` is missing
+  --> tests/functions/ocsf_cast/required_profile.tql:34:8
+   |
+34 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+{
+  class_uid: 4001,
+  category_uid: 4,
+  activity_id: 1,
+  type_uid: 400101,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  src_endpoint: {
+    ip: 192.0.2.1,
+  },
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Zeek",
+    },
+  },
+}
+{
+  class_uid: 4001,
+  category_uid: 4,
+  activity_id: 1,
+  type_uid: 400101,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  src_endpoint: {
+    ip: 192.0.2.1,
+  },
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Zeek",
+    },
+    profiles: [
+      "osint",
+    ],
+  },
+}
+{
+  class_uid: 201001,
+  category_uid: 1,
+  activity_id: 1,
+  type_uid: 20100101,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Sysmon",
+    },
+    extensions: [
+      {
+        name: "win",
+        uid: "2",
+        version: "1.9.0",
+      },
+    ],
+  },
+  actor: {
+    user: {
+      name: "root",
+    },
+  },
+  device: {
+    type_id: 2,
+    hostname: "ws-1",
+  },
+}

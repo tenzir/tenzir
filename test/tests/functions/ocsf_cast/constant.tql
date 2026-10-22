@@ -1,3 +1,13 @@
-let $event = ocsf_cast({class_uid: 4001, metadata: {version: "1.5.0"}, unmapped: {x: 1}}, encode_variants=true)
+let $event = ocsf_cast({
+  class_uid: 4001,
+  category_uid: 4,
+  activity_id: 1,
+  type_uid: 400101,
+  severity_id: 1,
+  time: 2026-01-01,
+  metadata: {version: "1.5.0", product: {name: "Tenzir"}},
+  src_endpoint: {ip: 192.0.2.1},
+  unmapped: {x: 1},
+}, encode_variants=true)
 from {}, {}
 event = ocsf_cast($event, encode_variants=true)

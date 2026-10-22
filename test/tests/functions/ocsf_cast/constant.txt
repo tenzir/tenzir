@@ -1,8 +1,19 @@
 {
   event: {
     class_uid: 4001,
+    category_uid: 4,
+    activity_id: 1,
+    type_uid: 400101,
+    severity_id: 1,
+    time: 2026-01-01T00:00:00Z,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
+    },
+    src_endpoint: {
+      ip: 192.0.2.1,
     },
     unmapped: "{\"x\":1}",
   },
@@ -10,8 +21,19 @@
 {
   event: {
     class_uid: 4001,
+    category_uid: 4,
+    activity_id: 1,
+    type_uid: 400101,
+    severity_id: 1,
+    time: 2026-01-01T00:00:00Z,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
+    },
+    src_endpoint: {
+      ip: 192.0.2.1,
     },
     unmapped: "{\"x\":1}",
   },

@@ -1,0 +1,23 @@
+{
+  class_uid: 1008,
+  category_uid: 1,
+  activity_id: 1,
+  type_uid: 100801,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Windows",
+      vendor_name: "Microsoft",
+    },
+  },
+  device: {
+    type_id: 2,
+    hostname: "ws-1",
+  },
+  file: {
+    name: "Security.evtx",
+    type_id: 1,
+  },
+}

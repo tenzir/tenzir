@@ -1,11 +1,20 @@
 {
   original: {
     class_uid: 4001,
+    category_uid: 4,
+    type_uid: 400101,
+    severity_id: 1,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
     },
     activity_id: 1,
     time: 2026-01-01T00:00:00Z,
+    src_endpoint: {
+      ip: 192.0.2.1,
+    },
     unmapped: {
       nested: [
         1,
@@ -16,11 +25,20 @@
   },
   cast: {
     class_uid: 4001,
+    category_uid: 4,
+    type_uid: 400101,
+    severity_id: 1,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
     },
     activity_id: 1,
     time: 2026-01-01T00:00:00Z,
+    src_endpoint: {
+      ip: 192.0.2.1,
+    },
     unmapped: {
       nested: [
         1,
@@ -31,11 +49,20 @@
   },
   encoded: {
     class_uid: 4001,
+    category_uid: 4,
+    type_uid: 400101,
+    severity_id: 1,
     metadata: {
       version: "1.5.0",
+      product: {
+        name: "Tenzir",
+      },
     },
     activity_id: 1,
     time: 1767225600000,
+    src_endpoint: {
+      ip: 192.0.2.1,
+    },
     unmapped: "{\"nested\":[1,\"two\",null]}",
   },
   filled: null,

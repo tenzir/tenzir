@@ -66,6 +66,11 @@ RECURSIVE_FIELDS: dict[str, dict[str, str]] = {
 MODERN_ATTRIBUTE_FIXUPS: dict[tuple[str, str], dict[str, str]] = {
     ("process", "auid"): {"extension": "linux"},
 }
+# Constraint fields that name a non-existent attribute upstream, mapped to the
+# attribute they mean. OCSF 1.3.0 to 1.9.0 name `log_file` instead of `file`.
+CONSTRAINT_FIXUPS: dict[tuple[str, str], str] = {
+    ("event_log_activity", "log_file"): "file",
+}
 Schema = dict[str, typing.Any]
 TypeMap = dict[str, str]
 
@@ -331,6 +336,14 @@ def _emit_entity(
     attributes = ""
     if extension := entity.get("extension"):
         attributes += f" #extension={extension}"
+    # Constraints such as `at_least_one` and `just_one` list the fields of
+    # which at least or exactly one must be set.
+    for constraint, names in sorted(entity.get("constraints", {}).items()):
+        names = [CONSTRAINT_FIXUPS.get((entity_name, name), name) for name in names]
+        for name in names:
+            if name.split(".")[0] not in entity["attributes"]:
+                log(f"Warning: Constraint of {entity_name} names unknown {name}")
+        attributes += f" #{constraint}={'|'.join(names)}"
     writer.end(f"}}{attributes}")
 
 
