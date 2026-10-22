@@ -576,4 +576,20 @@ auto encode(Result<T, E> answer) -> HttpResponse {
   }
 }
 
+template <std::uint16_t Status>
+auto encode_stream(std::string content_type, HttpBodyStream body)
+  -> HttpResponse {
+  return HttpResponse{Status, std::move(body), std::move(content_type)};
+}
+
+template <std::uint16_t Status, class E>
+auto encode_stream(std::string content_type, Result<HttpBodyStream, E> answer)
+  -> HttpResponse {
+  if (answer.is_err()) {
+    return refused(std::move(answer).unwrap_err());
+  }
+  return encode_stream<Status>(std::move(content_type),
+                               std::move(answer).unwrap());
+}
+
 } // namespace tenzir::api

@@ -29,3 +29,12 @@ TenzirRegisterPlugin(
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
 target_link_libraries(s3 PUBLIC ${AWSSDK_LINK_LIBRARIES})
+
+if (ARROW_VERSION VERSION_GREATER_EQUAL "26.0.0")
+  find_package(ArrowS3 REQUIRED CONFIG)
+  if (BUILD_SHARED_LIBS)
+    target_link_libraries(s3 PUBLIC ArrowS3::arrow_s3_shared)
+  else ()
+    target_link_libraries(s3 PUBLIC ArrowS3::arrow_s3_static)
+  endif ()
+endif ()

@@ -1672,72 +1672,79 @@ auto call(Transport& transport, ReadDeployment request)
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
                            "GET", std::move(path), std::move(body)}))
                           .map_err(as_call_error));
+  auto* buffered_body = try_as<std::string>(response.body);
+  if (not buffered_body) {
+    co_return Err{
+      CallError{RequestError{"transport returned a streaming response where a "
+                             "buffered body was required"}}};
+  }
+  auto& response_body = *buffered_body;
   if (response.status != 200) {
     if (response.status == 500) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "InternalServerError")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "InternalServerError")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_internal_server_error(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 404) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "NotFound")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "NotFound")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_not_found(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 403) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "Unauthorized")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "Unauthorized")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_unauthorized(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 401) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "Unauthenticated")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "Unauthenticated")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_unauthenticated(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 400) {
-      auto tag = api::tag_of(response.body);
+      auto tag = api::tag_of(response_body);
       if (tag == "CredentialConflict") {
         CO_TRY(auto document,
-               api::Document::parse(response.body, "CredentialConflict")
-                 .map_err(as_response_error(response.status, response.body)));
+               api::Document::parse(response_body, "CredentialConflict")
+                 .map_err(as_response_error(response.status, response_body)));
         CO_TRY(auto error,
                parse_credential_conflict(document.root())
-                 .map_err(as_response_error(response.status, response.body)));
+                 .map_err(as_response_error(response.status, response_body)));
         co_return Err{std::move(error)};
       }
       if (tag == "Validation") {
         CO_TRY(auto document,
-               api::Document::parse(response.body, "Validation")
-                 .map_err(as_response_error(response.status, response.body)));
+               api::Document::parse(response_body, "Validation")
+                 .map_err(as_response_error(response.status, response_body)));
         CO_TRY(auto error,
                parse_validation(document.root())
-                 .map_err(as_response_error(response.status, response.body)));
+                 .map_err(as_response_error(response.status, response_body)));
         co_return Err{std::move(error)};
       }
       co_return Err{
         CallError{ResponseError{ResponseError::Reason::decode, response.status,
-                                std::move(response.body)}}};
+                                std::move(response_body)}}};
     }
     co_return Err{
       CallError{ResponseError{ResponseError::Reason::decode, response.status,
-                              std::move(response.body)}}};
+                              std::move(response_body)}}};
   }
-  CO_TRY(auto document, api::Document::parse(response.body, "readDeployment")
+  CO_TRY(auto document, api::Document::parse(response_body, "readDeployment")
                           .map_err(as_parse_error));
   CO_TRY(auto value,
          parse_deployment_info(document.root()).map_err(as_parse_error));
@@ -1756,88 +1763,95 @@ auto call(Transport& transport, PushTelemetry request)
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
                            "POST", std::move(path), std::move(body)}))
                           .map_err(as_call_error));
+  auto* buffered_body = try_as<std::string>(response.body);
+  if (not buffered_body) {
+    co_return Err{
+      CallError{RequestError{"transport returned a streaming response where a "
+                             "buffered body was required"}}};
+  }
+  auto& response_body = *buffered_body;
   if (response.status != 204) {
     if (response.status == 413) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "TooLarge")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "TooLarge")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_too_large(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 500) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "InternalServerError")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "InternalServerError")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_internal_server_error(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 404) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "NotFound")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "NotFound")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_not_found(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 503) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "ServiceUnavailable")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "ServiceUnavailable")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_service_unavailable(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 403) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "Unauthorized")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "Unauthorized")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_unauthorized(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 401) {
       CO_TRY(auto failed,
-             api::Document::parse(response.body, "Unauthenticated")
-               .map_err(as_response_error(response.status, response.body)));
+             api::Document::parse(response_body, "Unauthenticated")
+               .map_err(as_response_error(response.status, response_body)));
       CO_TRY(auto error,
              parse_unauthenticated(failed.root())
-               .map_err(as_response_error(response.status, response.body)));
+               .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
     if (response.status == 400) {
-      auto tag = api::tag_of(response.body);
+      auto tag = api::tag_of(response_body);
       if (tag == "CredentialConflict") {
         CO_TRY(auto document,
-               api::Document::parse(response.body, "CredentialConflict")
-                 .map_err(as_response_error(response.status, response.body)));
+               api::Document::parse(response_body, "CredentialConflict")
+                 .map_err(as_response_error(response.status, response_body)));
         CO_TRY(auto error,
                parse_credential_conflict(document.root())
-                 .map_err(as_response_error(response.status, response.body)));
+                 .map_err(as_response_error(response.status, response_body)));
         co_return Err{std::move(error)};
       }
       if (tag == "Validation") {
         CO_TRY(auto document,
-               api::Document::parse(response.body, "Validation")
-                 .map_err(as_response_error(response.status, response.body)));
+               api::Document::parse(response_body, "Validation")
+                 .map_err(as_response_error(response.status, response_body)));
         CO_TRY(auto error,
                parse_validation(document.root())
-                 .map_err(as_response_error(response.status, response.body)));
+                 .map_err(as_response_error(response.status, response_body)));
         co_return Err{std::move(error)};
       }
       co_return Err{
         CallError{ResponseError{ResponseError::Reason::decode, response.status,
-                                std::move(response.body)}}};
+                                std::move(response_body)}}};
     }
     co_return Err{
       CallError{ResponseError{ResponseError::Reason::decode, response.status,
-                              std::move(response.body)}}};
+                              std::move(response_body)}}};
   }
   co_return {};
 }
