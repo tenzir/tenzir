@@ -1,15 +1,19 @@
-# Tenzir
+# Tenzir Engine
 
-Tenzir is a data pipeline engine for security teams. It collects, parses,
-shapes, enriches, and routes security telemetry with a unified dataflow
-language. The Tenzir Query Language (TQL) is a domain-specific language for
-building modular pipelines that process structured event data.
+This project lives in the Tenzir monorepo. Read the
+[top-level AGENTS.md](../AGENTS.md) first for repo-wide guidance, including
+what to consider when making changes.
 
-### Project structure
+The engine executes pipelines that collect, parse, shape, enrich, and route
+telemetry. The Tenzir Query Language (TQL) describes these pipelines as
+data-flow programs.
+
+## Project structure
 
 - `.agents/` - Agent-facing reference material
 - `.docs/` - Optional local clone of the `tenzir/content` repository
-- `.github/` - GitHub configuration and CI/CD workflows
+- `.github/` - Pull request template, labeler, and dependabot configuration
+  (CI workflows live in the repo root `.github/`)
 - `changelog/` - Changelog entries and release metadata
   - Managed with the `tenzir-ship` framework
   - Reference: https://tenzir.com/docs/reference/ship-framework.md
@@ -45,32 +49,24 @@ building modular pipelines that process structured event data.
 ### Set up the checkout
 
 Use checked-in entry points instead of invoking formatter binaries from `PATH`.
-Tool versions are pinned in `lefthook.yml` or by the Nix formatter environment.
+Tool versions are pinned in the repo root `lefthook.yml` and `flake.nix`.
 
-For non-Nix setups, install local hooks with:
+From the repo root, for non-Nix setups, install local hooks with:
 
 ```sh
+# Non-Nix
 npx --yes lefthook install
-```
-
-For Nix setups, install local hooks from the dev shell with:
-
-```sh
+# Nix, via devshell
 lefthook install
 ```
 
-After installing hooks, Git runs Lefthook's `pre-push` hook automatically. To
-auto-fix local formatting issues, run Lefthook's `fix` hook on the files changed
-by your branch. Pass files explicitly with `--file <path>` when running
-Lefthook outside Git's actual pre-push flow.
-
-Nix setups can also run the repository formatter with
-`nix run .#format -- <path>...`. CI uses this Nix/treefmt path on PR-changed
-files, so use it to reproduce and fix CI style failures.
+Git runs Lefthook's `pre-push` hook automatically. Only re-run hooks manually on
+failure.
 
 ### Configure the build
 
-Configure a build by selecting a CMake prefix:
+Run all remaining commands from `engine/`. Configure a build by selecting a CMake
+preset:
 
 ```sh
 cmake --list-presets
@@ -113,7 +109,8 @@ Build `tenzir` first when testing local changes:
 
 ```sh
 scripts/build.sh
-uvx tenzir-test --root test
+# Or `uvx tenzir-test` when `tenzir-test` is not in $PATH
+tenzir-test --root test
 ```
 
 Common `tenzir-test` options:
@@ -141,7 +138,7 @@ When changing existing behavior or adding user-facing functionality, update
 companion PR against `tenzir/content`.
 
 Skip this process for internal refactorings that do not affect the user-facing
-TQL surface or command line tools.
+behavior.
 
 ## C++ development
 
@@ -151,8 +148,8 @@ deviate from current conventions.
 
 ### Core principle
 
-Tenzir processes data in columns via Apache Arrow. Evaluate expressions per
-series or slice first, then iterate only when row-wise access is necessary.
+Evaluate expressions per series or slice first, then iterate only when row-wise
+access is necessary.
 
 ### Style
 
@@ -164,7 +161,7 @@ directories, including internal helper headers; do not use relative includes.
 
 ### APIs
 
-- [nova.md](nova.md): Columnar arrays, active masks, Arrow import, evaluators, and operator migration
+- [nova.md](nova.md): Columnar data model: arrays, active masks, Arrow import, and evaluators
 - [data-access.md](.agents/references/data-access.md): Reading and iterating columnar data
 - [data-building.md](.agents/references/data-building.md): Constructing series and table slices
 - [data-conversion.md](.agents/references/data-conversion.md): Type-to-type conversion
@@ -224,11 +221,6 @@ Choose the narrowest test that exercises the behavior users rely on:
 - Add an integration test under `test/tests/...` when the behavior is visible
   from TQL, packages, connectors, formats, functions, operators, or command-line
   workflows.
-- For Nova migrations, replace legacy tests in place and retain the existing
-  test layout. Do not keep duplicate legacy suites, add `nova/` or `columnar/`
-  directories, or use execution-mode filename suffixes. Do not add or restore
-  legacy-executor tests, even in response to review feedback. See
-  [the Nova testing conventions](nova.md#tests).
 - Add a C++ unit test under `libtenzir/test/...` or the plugin's `tests/`
   directory when the behavior is an internal algorithm, data structure, parser
   helper, or error path that is hard to drive through TQL.
