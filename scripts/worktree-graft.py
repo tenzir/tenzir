@@ -18,6 +18,9 @@ What it does:
   - Copies populated submodules with their .git directories (avoids network fetches)
   - Copies or fixes CMake build directories and repairs embedded paths
   - Fixes ninja build files (.ninja_log hashes, .ninja_deps paths)
+  - Runs Ninja for builds configured in the engine development shell inside
+    that shell, so the hook also works from the minimal repository root shell;
+    native builds keep the caller's environment
 
 When a repo opts in via `.worktreeinclude`, pair this with
 `wt step copy-ignored` as a separate hook step before running graft.
@@ -34,6 +37,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -864,14 +868,20 @@ def _read_ninja_logical_lines(path: Path) -> list[str]:
     return logical_lines
 
 
-def get_ninja_commands(build_dir: Path) -> dict[str, str]:
-    """Get expanded commands for compile and custom Ninja edges."""
+def get_ninja_commands(
+    build_dir: Path, env: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Get expanded commands for compile and custom Ninja edges.
+
+    `env` is the environment to run Ninja in; `None` inherits the caller's.
+    """
     output_to_command: dict[str, str] = {}
 
     # First gather compile commands from Ninja's compilation database.
     result = subprocess.run(
         ["ninja", "-t", "compdb"],
         cwd=build_dir,
+        env=env,
         capture_output=True,
         text=True,
     )
@@ -1388,16 +1398,27 @@ class BuildTask(Task):
             spinner.complete_task("pch_files")
             return
 
+        # Select Ninja's environment for every build before touching metadata,
+        # so a missing Ninja or a broken engine shell leaves the builds intact.
+        environments = NinjaEnvironments(
+            [
+                ninja_build_dir
+                for build_dir in all_dirs_to_fix
+                for ninja_build_dir in discover_ninja_build_dirs(build_dir)
+            ],
+            target / "engine",
+        )
+
         spinner.start_task("cmake_paths")
         self._fix_cmake_paths(all_dirs_to_fix, src_str, dst_str)
         spinner.complete_task("cmake_paths")
 
         spinner.start_task("ninja_files")
-        self._fix_ninja_files(all_dirs_to_fix, src_str, dst_str)
+        self._fix_ninja_files(all_dirs_to_fix, src_str, dst_str, environments)
         spinner.complete_task("ninja_files")
 
         spinner.start_task("pch_files")
-        self._refresh_precompiled_headers(all_dirs_to_fix)
+        self._refresh_precompiled_headers(all_dirs_to_fix, environments)
         spinner.complete_task("pch_files")
 
     def _symlink_cmake_presets(self, source: Path, target: Path) -> None:
@@ -1427,7 +1448,9 @@ class BuildTask(Task):
                     time.sleep(0.1)
         return copied
 
-    def _refresh_precompiled_headers(self, build_dirs: list[Path]) -> None:
+    def _refresh_precompiled_headers(
+        self, build_dirs: list[Path], environments: NinjaEnvironments
+    ) -> None:
         """Rebuild copied precompiled headers and restore their original mtimes."""
         for build_dir in build_dirs:
             for ninja_build_dir in discover_ninja_build_dirs(build_dir):
@@ -1458,7 +1481,11 @@ class BuildTask(Task):
                             for output, _, _ in backups
                         ],
                     ]
-                    kwargs: dict[str, object] = {"cwd": ninja_build_dir, "check": True}
+                    kwargs: dict[str, object] = {
+                        "cwd": ninja_build_dir,
+                        "env": environments.get(ninja_build_dir),
+                        "check": True,
+                    }
                     if not _is_verbose():
                         kwargs["stdout"] = subprocess.DEVNULL
                         kwargs["stderr"] = subprocess.PIPE
@@ -1499,7 +1526,11 @@ class BuildTask(Task):
                 list(executor.map(fix_file, files))
 
     def _fix_ninja_files(
-        self, build_dirs: list[Path], src_str: str, dst_str: str
+        self,
+        build_dirs: list[Path],
+        src_str: str,
+        dst_str: str,
+        environments: NinjaEnvironments,
     ) -> None:
         """Fix ninja log hashes and deps paths in all build directories."""
         for build_dir in build_dirs:
@@ -1518,7 +1549,9 @@ class BuildTask(Task):
                         dst_str,
                     )
                     commands_future = executor.submit(
-                        get_ninja_commands, ninja_build_dir
+                        get_ninja_commands,
+                        ninja_build_dir,
+                        environments.get(ninja_build_dir),
                     )
                     deps_future.result()
                     output_to_command = commands_future.result()
@@ -1604,6 +1637,125 @@ class TaskRunner:
                     sys.exit(1)
         finally:
             s.stop()
+
+
+# =============================================================================
+# Development environment
+# =============================================================================
+
+NIX_STORE = Path("/nix/store")
+
+
+def configured_make_program(build_dir: Path) -> Path | None:
+    """Return the `CMAKE_MAKE_PROGRAM` a build directory was configured with."""
+    with contextlib.suppress(OSError, UnicodeDecodeError):
+        for line in (build_dir / "CMakeCache.txt").read_text().splitlines():
+            if line.startswith("CMAKE_MAKE_PROGRAM:"):
+                return Path(line.partition("=")[2])
+    return None
+
+
+def is_nix_build(build_dir: Path) -> bool:
+    """Check whether a build directory was configured with a Nix-provided Ninja."""
+    program = configured_make_program(build_dir)
+    return program is not None and program.is_relative_to(NIX_STORE)
+
+
+def needs_engine_shell(build_dir: Path, engine: Path) -> bool:
+    """Check whether running Ninja in a build directory needs the engine shell.
+
+    Graft runs Ninja to read compile commands and to rebuild precompiled
+    headers. Those compiles need the toolchain and dependency flags of the
+    environment that configured the build. For a build configured with a
+    Nix-provided Ninja, that is the engine development shell, which the minimal
+    repository root shell is not. A Ninja on PATH that differs from the
+    configured one means the caller is not in that shell. Native builds keep
+    the caller's environment: the engine shell cannot provide their toolchain,
+    and its compiler and SDK settings could break their compiles.
+    """
+    program = configured_make_program(build_dir)
+    if program is None or not program.is_relative_to(NIX_STORE):
+        return False
+    if shutil.which("nix") is None or not (engine / "flake.nix").is_file():
+        return False
+    ninja = shutil.which("ninja")
+    return ninja is None or Path(ninja).resolve() != program.resolve()
+
+
+def load_engine_shell_environment(engine: Path) -> dict[str, str]:
+    """Capture the environment of the engine development shell.
+
+    Uses the new worktree's shell, the environment that subsequent builds in
+    that worktree use, so rebuilt precompiled headers match them.
+    """
+    _LOGGER.debug(f"Loading the engine development shell from {engine}")
+    with tempfile.TemporaryDirectory(prefix="graft-") as tmp:
+        dump = Path(tmp) / "environment"
+        # The shell hook prints to stdout, so dump the environment to a file.
+        # The hook also resolves source paths relative to the working directory.
+        result = subprocess.run(
+            [
+                "nix",
+                "develop",
+                str(engine),
+                "--command",
+                "sh",
+                "-c",
+                'env -0 > "$1"',
+                "sh",
+                str(dump),
+            ],
+            cwd=engine,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0 or not dump.is_file():
+            details = _stderr_text(result.stderr).strip().splitlines()[-5:]
+            raise RuntimeError(
+                "could not load the engine development shell: " + "\n".join(details)
+            )
+        entries = dump.read_bytes().split(b"\0")
+    environment: dict[str, str] = {}
+    for entry in entries:
+        key, separator, value = entry.decode(errors="surrogateescape").partition("=")
+        if separator:
+            environment[key] = value
+    return environment
+
+
+class NinjaEnvironments:
+    """The environment to run Ninja in for each build directory.
+
+    Builds configured in the engine development shell get that shell's
+    environment, loaded at most once. All other builds inherit the caller's.
+    """
+
+    def __init__(self, ninja_build_dirs: list[Path], engine: Path) -> None:
+        self._shell_dirs = {
+            build_dir
+            for build_dir in ninja_build_dirs
+            if needs_engine_shell(build_dir, engine)
+        }
+        self._shell_environment = (
+            load_engine_shell_environment(engine) if self._shell_dirs else None
+        )
+        if shutil.which("ninja") is not None:
+            return
+        for build_dir in ninja_build_dirs:
+            if build_dir in self._shell_dirs:
+                continue
+            hint = (
+                "run graft inside the engine development shell, e.g., "
+                "`nix develop ./engine --command ...`"
+                if is_nix_build(build_dir)
+                else "install the Ninja that configured this build"
+            )
+            raise RuntimeError(f"`ninja` not found on PATH for {build_dir}; {hint}")
+
+    def get(self, build_dir: Path) -> dict[str, str] | None:
+        """Return the environment for a build; `None` inherits the caller's."""
+        return self._shell_environment if build_dir in self._shell_dirs else None
 
 
 # =============================================================================
