@@ -963,6 +963,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<AcceptHttpArgs, legacy::AcceptHttp, AcceptHttp>{};
+    d.concurrent_output();
     d.positional("endpoint", &AcceptHttpArgs::endpoint);
     auto responses_arg
       = d.named("responses", &AcceptHttpArgs::responses, "record");

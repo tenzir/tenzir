@@ -1,0 +1,32 @@
+{
+  id: 1,
+  xs: [
+    10,
+    11,
+  ],
+  marker: true,
+}
+{
+  id: 2,
+  xs: [
+    20,
+    21,
+  ],
+  marker: true,
+}
+{
+  id: 3,
+  xs: [
+    30,
+    31,
+  ],
+  marker: true,
+}
+{
+  id: 4,
+  xs: [
+    40,
+    41,
+  ],
+  marker: true,
+}

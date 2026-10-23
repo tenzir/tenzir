@@ -220,15 +220,13 @@ public:
 /// entry points (`execute_plan`, `execute_plan_with_io`) create that plumbing
 /// and then call this primitive.
 ///
-/// When `fused` is set, the chain runs with fused channels: each input is fully
-/// processed through the entire chain before the next input is pulled.
+/// Channel kinds are determined during planning and executed unchanged.
 template <class Input, class Output>
 auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
                 Box<Push<OperatorMsg<Output>>> push_downstream,
                 Receiver<FromControl> from_control,
                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                caf::actor_system& sys, DiagHandler& dh, bool fused = false)
-  -> Task<void>;
+                caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
 
 /// Runs a pipeline plan without external control.
 ///

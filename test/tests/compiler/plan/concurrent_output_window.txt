@@ -1,0 +1,11 @@
+● {input}
+│
+● from
+║
+● window
+╎
+● SetIr
+╎
+● to_stdout
+│
+● {output}

@@ -421,6 +421,7 @@ public:
   auto describe() const -> Description override {
     auto d
       = Describer<AcceptTcpArgs, legacy::StreamAccept<TcpAccept>, AcceptTcp>{};
+    d.concurrent_output();
     auto endpoint_arg = d.positional("endpoint", &AcceptTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &AcceptTcpArgs::tls);
     auto max_connections_arg

@@ -1,0 +1,8 @@
+// Concurrent output must not use fused handoffs even at matched parallelism.
+from {id: 1}, {id: 2}
+parallel 2 {
+  group id {
+    summarize id, n=count()
+  }
+  marker = true
+}

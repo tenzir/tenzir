@@ -1,0 +1,11 @@
+● {input}
+│
+● from
+║
+● each
+╎
+● SetIr
+╎
+● to_stdout
+│
+● {output}

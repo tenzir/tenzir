@@ -185,6 +185,7 @@ public:
     auto d
       = Describer<AcceptUnixSocketArgs, legacy::StreamAccept<UnixSocketAccept>,
                   AcceptUnixSocket>{};
+    d.concurrent_output();
     d.positional("path", &AcceptUnixSocketArgs::path);
     auto max_connections_arg
       = d.named("max_connections", &AcceptUnixSocketArgs::max_connections);

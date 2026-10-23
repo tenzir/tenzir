@@ -1,0 +1,8 @@
+// Explicit fusing must not override concurrent-output channel safety.
+from {id: 1}, {id: 2}
+parallel 1, fuse="all" {
+  group id {
+    summarize id, n=count()
+  }
+  marker = true
+}

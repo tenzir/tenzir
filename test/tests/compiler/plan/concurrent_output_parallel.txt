@@ -1,0 +1,11 @@
+● {input}
+│
+● from
+╎
+● group(x2, keyed)
+╎
+● SetIr(x2)
+╎
+● to_stdout
+│
+● {output}

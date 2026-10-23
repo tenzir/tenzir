@@ -1,0 +1,10 @@
+// TNZ-1811: group results can arrive concurrently at the downstream assignment.
+from {id: 1, x: 10}, {id: 2, x: 20}, {id: 3, x: 30}, {id: 4, x: 40},
+     {id: 1, x: 11}, {id: 2, x: 21}, {id: 3, x: 31}, {id: 4, x: 41}
+parallel 2 {
+  group id {
+    summarize id, xs=collect(x)
+  }
+  marker = true
+}
+sort id

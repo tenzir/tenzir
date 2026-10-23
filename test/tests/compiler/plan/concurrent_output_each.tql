@@ -1,0 +1,8 @@
+// Each child source may emit concurrently, even with one parent instance.
+from {x: 1}, {x: 2}
+parallel 1, fuse="all" {
+  each {
+    from $this
+  }
+  marker = true
+}

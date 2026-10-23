@@ -49,7 +49,7 @@ public:
     return {};
   }
 
-  auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior, bool)
+  auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior)
     -> Task<AnySubHandle&> override {
     // Observe each accepted payload reaching its parser. No running parser is
     // needed to test the source lifecycle, so cancel at this boundary.

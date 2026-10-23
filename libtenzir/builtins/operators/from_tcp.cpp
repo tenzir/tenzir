@@ -215,6 +215,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromTcpArgs, legacy::StreamFrom<TcpFrom>, FromTcp>{};
+    d.concurrent_output();
     auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &FromTcpArgs::tls);
     auto pipeline_arg

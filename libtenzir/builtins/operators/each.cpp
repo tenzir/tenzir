@@ -297,6 +297,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<EachArgs, Each, EachNova>{};
+    d.concurrent_output();
     // Every instance owns its child pipelines and completion state. The
     // `parallel` argument therefore remains a per-instance bound, making the
     // pipeline-wide child-pipeline budget `parallel` times the planner degree.

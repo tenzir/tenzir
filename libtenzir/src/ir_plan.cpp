@@ -56,7 +56,10 @@ auto derive_parallelism(const ir::Operator& op,
 auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
                                   const PlannedOperator& down,
                                   element_type_tag type) const -> ChannelKind {
-  if (par_scopes_.back().fuse == parallelism::Fusing::all) {
+  // Fused channels have one sender. Replication and concurrent output within
+  // one instance are independent, so even explicit fusing must respect this.
+  const auto can_fuse = not up.op->concurrent_output();
+  if (can_fuse and par_scopes_.back().fuse == parallelism::Fusing::all) {
     return ChannelKind::fused;
   }
   const auto up_degree = up.nominal_parallelism;
@@ -78,7 +81,8 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
                        and up.parallelism == down.parallelism and not down_keyed
                        and up.op->max_parallelism() > 1
                        and down.op->max_parallelism() > 1;
-  if (matched and par_scopes_.back().fuse == parallelism::Fusing::parallel) {
+  if (can_fuse and matched
+      and par_scopes_.back().fuse == parallelism::Fusing::parallel) {
     return ChannelKind::fused;
   }
   // Every remaining channel between multi-instance operators is one of many:

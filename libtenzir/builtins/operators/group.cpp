@@ -263,6 +263,7 @@ public:
     auto over = d.positional("over", &GroupArgs::over, "expr");
     auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
                            {{"group", &GroupArgs::let}});
+    d.concurrent_output();
     d.parallelizable();
     d.partition_keys([](const GroupArgs& args) -> std::vector<ast::expression> {
       return {args.over};

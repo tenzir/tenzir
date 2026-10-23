@@ -1,0 +1,8 @@
+// Window subpipelines may emit concurrently into the same output port.
+from {x: 1}, {x: 2}
+parallel 1, fuse="all" {
+  window size=1 {
+    summarize total=sum(x)
+  }
+  marker = true
+}

@@ -436,113 +436,6 @@ using ErrorDemotingDiagHandler
 using WarningPromotingDiagHandler
   = DiagTransformHandler<DiagnosticBehavior::WarningToError>;
 
-/// Decorator over any `ExecCtx` that produces fused channels and shares a
-/// single executor across all operators. This gives run-to-completion
-/// semantics per slice: a push blocks until the downstream operator has
-/// finished processing the item and is ready for the next.
-class FusedExecCtx final : public ExecCtx {
-public:
-  explicit FusedExecCtx(ExecCtx& inner) : inner_{inner} {
-  }
-
-  auto make_executor(OpId id, std::string name)
-    -> folly::Executor::KeepAlive<> override {
-    return inner_.make_executor(std::move(id), std::move(name));
-  }
-
-  auto make_io_executor(OpId id, std::string name)
-    -> folly::Executor::KeepAlive<folly::IOExecutor> override {
-    return inner_.make_io_executor(std::move(id), std::move(name));
-  }
-
-  auto metrics_receiver() const -> metrics_receiver_actor override {
-    return inner_.metrics_receiver();
-  }
-
-  auto make_counter(MetricsLabel label, MetricsDirection direction,
-                    MetricsVisibility visibility, MetricsUnit type,
-                    std::string_view connector) -> MetricsCounter override {
-    return inner_.make_counter(label, direction, visibility, type, connector);
-  }
-
-  auto is_hidden() const -> bool override {
-    return inner_.is_hidden();
-  }
-
-  auto has_terminal() const -> bool override {
-    return inner_.has_terminal();
-  }
-
-  auto checkpoint_settings() const
-    -> Option<CheckpointSettings const&> override {
-    return inner_.checkpoint_settings();
-  }
-
-  auto reg() const -> registry const& override {
-    return inner_.reg();
-  }
-
-protected:
-  auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return inner_.make_fused_channel<void>(std::move(id));
-  }
-
-  auto make_events(ChannelId id)
-    -> PushPull<OperatorMsg<table_slice>> override {
-    return inner_.make_fused_channel<table_slice>(std::move(id));
-  }
-
-  auto make_tiny_events(ChannelId id)
-    -> PushPull<OperatorMsg<table_slice>> override {
-    return inner_.make_fused_channel<table_slice>(std::move(id));
-  }
-
-  auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return inner_.make_fused_channel<chunk_ptr>(std::move(id));
-  }
-
-  auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return inner_.make_fused_channel<void>(std::move(id));
-  }
-
-  auto make_fused_events(ChannelId id)
-    -> PushPull<OperatorMsg<table_slice>> override {
-    return inner_.make_fused_channel<table_slice>(std::move(id));
-  }
-
-  auto make_fused_bytes(ChannelId id)
-    -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return inner_.make_fused_channel<chunk_ptr>(std::move(id));
-  }
-
-  auto make_nova_events(ChannelId id)
-    -> PushPull<OperatorMsg<nova::Events>> override {
-    return inner_.make_fused_channel<nova::Events>(std::move(id));
-  }
-
-  auto make_fused_nova_events(ChannelId id)
-    -> PushPull<OperatorMsg<nova::Events>> override {
-    return inner_.make_fused_channel<nova::Events>(std::move(id));
-  }
-
-  auto make_tiny_nova_events(ChannelId id)
-    -> PushPull<OperatorMsg<nova::Events>> override {
-    return inner_.make_fused_channel<nova::Events>(std::move(id));
-  }
-
-  auto make_files(ChannelId id) -> PushPull<OperatorMsg<FileHandle>> override {
-    return inner_.make_fused_channel<FileHandle>(std::move(id));
-  }
-
-  auto make_fused_files(ChannelId id)
-    -> PushPull<OperatorMsg<FileHandle>> override {
-    return inner_.make_fused_channel<FileHandle>(std::move(id));
-  }
-
-private:
-  ExecCtx& inner_;
-};
-
 /// Core execution logic for a single operator.
 ///
 /// This is heavily inspired by "Asynchronous Barrier Snapshotting"[^1]. In the
@@ -898,30 +791,30 @@ private:
     co_return {};
   }
 
-  auto spawn_sub(SubKey key, ir::Plan plan, DiagnosticBehavior diag_behavior,
-                 bool fused) -> Task<AnySubHandle&> override {
+  auto spawn_sub(SubKey key, ir::Plan plan, DiagnosticBehavior diag_behavior)
+    -> Task<AnySubHandle&> override {
     switch (diag_behavior) {
       case DiagnosticBehavior::Unchanged:
-        return spawn_sub_impl(std::move(key), std::move(plan), fused, dh_,
+        return spawn_sub_impl(std::move(key), std::move(plan), dh_,
                               folly::CancellationToken{});
       case DiagnosticBehavior::ErrorToWarning: {
         auto cancel_source = std::make_shared<folly::CancellationSource>();
         auto sub_cancel_token = cancel_source->getToken();
         return spawn_sub_impl(
-          std::move(key), std::move(plan), fused,
+          std::move(key), std::move(plan),
           Arc<DiagHandler>{std::in_place_type<ErrorDemotingDiagHandler>, *dh_,
                            std::move(cancel_source)},
           sub_cancel_token);
       }
       case DiagnosticBehavior::SuppressWarnings:
         return spawn_sub_impl(
-          std::move(key), std::move(plan), fused,
+          std::move(key), std::move(plan),
           Arc<DiagHandler>{std::in_place_type<WarningSuppressingDiagHandler>,
                            *dh_},
           folly::CancellationToken{});
       case DiagnosticBehavior::WarningToError: {
         return spawn_sub_impl(
-          std::move(key), std::move(plan), fused,
+          std::move(key), std::move(plan),
           Arc<DiagHandler>{std::in_place_type<WarningPromotingDiagHandler>,
                            *dh_, nullptr},
           folly::CancellationToken{});
@@ -957,17 +850,10 @@ private:
     return it->second.handle;
   }
 
-  auto
-  spawn_sub_impl(SubKey key, ir::Plan plan, bool fused, Arc<DiagHandler> sub_dh,
-                 folly::CancellationToken sub_cancel_token)
+  auto spawn_sub_impl(SubKey key, ir::Plan plan, Arc<DiagHandler> sub_dh,
+                      folly::CancellationToken sub_cancel_token)
     -> Task<AnySubHandle&> {
-    auto sub_id = id_.sub(next_subpipeline_id_);
-    if (not fused) {
-      // For the parallel operator, which is currently the only user of the
-      // fused execution mode, we want to associate all subpipelines with the
-      // same executor such that all legs contribute to the same metrics.
-      next_subpipeline_id_ += 1;
-    }
+    auto sub_id = id_.sub(next_subpipeline_id_++);
     auto input = plan.input_type();
     auto output = plan.output_type();
     auto input_id = plan.input_id();
@@ -983,10 +869,11 @@ private:
           = exec_ctx_.make_channel<In>(id_.to(sub_id.op(input_id)));
         auto [push_downstream, pull_downstream]
           = exec_ctx_.make_channel<Out>(sub_id.op(output_id).to(id_));
-        auto runner = drive_plan(
-          std::move(plan), std::move(pull_upstream), std::move(push_downstream),
-          std::move(from_control_receiver), std::move(to_control_sender),
-          std::move(sub_id), exec_ctx_, sys_, *sub_dh, fused);
+        auto runner = drive_plan(std::move(plan), std::move(pull_upstream),
+                                 std::move(push_downstream),
+                                 std::move(from_control_receiver),
+                                 std::move(to_control_sender),
+                                 std::move(sub_id), exec_ctx_, sys_, *sub_dh);
         return {
           std::move(runner),
           AnyOpPush{std::move(push_upstream)},
@@ -2313,16 +2200,10 @@ auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
                 Box<Push<OperatorMsg<Output>>> push_downstream,
                 Receiver<FromControl> from_control,
                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                caf::actor_system& sys, DiagHandler& dh, bool fused)
-  -> Task<void> {
+                caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   TENZIR_ASSERT(plan.input_type().is<Input>());
   TENZIR_ASSERT(plan.output_type().is<Output>());
   co_await folly::coro::co_safe_point;
-  // Conditially use a fused ctx (that controls creation of new channels).
-  auto fused_ctx = Option<FusedExecCtx>{};
-  if (fused) {
-    fused_ctx.emplace(exec_ctx);
-  }
   co_await PlanRunner{
     std::move(plan),
     AnyOpPull{std::move(pull_upstream)},
@@ -2330,7 +2211,7 @@ auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
     std::move(from_control),
     std::move(to_control),
     std::move(id),
-    fused_ctx ? static_cast<ExecCtx&>(*fused_ctx) : exec_ctx,
+    exec_ctx,
     sys,
     dh,
   }
@@ -2342,7 +2223,7 @@ drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
            Box<Push<OperatorMsg<table_slice>>> push_downstream,
            Receiver<FromControl> from_control, Sender<ToControl> to_control,
            PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-           DiagHandler& dh, bool fused) -> Task<void>;
+           DiagHandler& dh) -> Task<void>;
 
 namespace {
 

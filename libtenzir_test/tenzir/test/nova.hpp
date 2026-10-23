@@ -50,7 +50,7 @@ public:
   auto actor_system() -> caf::actor_system& override {
     panic("unused");
   }
-  auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior, bool)
+  auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior)
     -> Task<AnySubHandle&> override {
     panic("unused");
   }

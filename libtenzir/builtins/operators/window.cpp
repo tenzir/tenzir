@@ -3196,6 +3196,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WindowArgs>{};
+    d.concurrent_output();
     auto size = d.named_optional("size", &WindowArgs::size, "duration|int");
     auto gap = d.named("gap", &WindowArgs::gap, "duration");
     auto every = d.named("every", &WindowArgs::every, "duration|int");

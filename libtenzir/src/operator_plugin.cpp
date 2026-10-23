@@ -692,6 +692,10 @@ public:
     return ir::Operator::max_parallelism();
   }
 
+  auto concurrent_output() const -> bool override {
+    return desc_->concurrent_output;
+  }
+
   auto partition_keys() const -> std::vector<ast::expression> override {
     if (not desc_->partition_keys) {
       return {};

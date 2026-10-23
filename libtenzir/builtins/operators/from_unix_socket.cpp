@@ -128,6 +128,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<FromUnixSocketArgs, legacy::StreamFrom<UnixSocketFrom>,
                        FromUnixSocket>{};
+    d.concurrent_output();
     d.positional("path", &FromUnixSocketArgs::path);
     auto pipeline_arg = d.pipeline(&FromUnixSocketArgs::user_pipeline,
                                    SubOptimize::from_downstream);

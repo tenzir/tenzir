@@ -474,6 +474,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<SourceArgs, legacy::ZmqSource<Mode>, ZmqSource<Mode>>{};
+    d.concurrent_output();
     auto endpoint_arg = d.positional("endpoint", &SourceArgs::endpoint);
     auto prefix_arg = d.named("prefix", &SourceArgs::prefix, "string");
     auto keep_prefix_arg = d.named("keep_prefix", &SourceArgs::keep_prefix);

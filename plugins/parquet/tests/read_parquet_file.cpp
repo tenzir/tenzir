@@ -383,7 +383,7 @@ public:
     co_return {};
   }
 
-  auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior, bool)
+  auto spawn_sub(SubKey, ir::Plan, DiagnosticBehavior)
     -> Task<AnySubHandle&> override {
     panic("unexpected call");
   }

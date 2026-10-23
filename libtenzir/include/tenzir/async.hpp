@@ -163,12 +163,11 @@ public:
   ///
   /// When the pipeline completes, `finish_sub` is called.
   ///
-  /// When `fused` is true, the subpipeline shares the parent's executor so that
-  /// all legs contribute to the same metrics (used by the `parallel` operator).
+  /// Channel kinds are determined by the plan and are not changed at runtime.
   virtual auto
   spawn_sub(SubKey key, ir::Plan plan,
-            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged,
-            bool fused = false) -> Task<AnySubHandle&>
+            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged)
+    -> Task<AnySubHandle&>
     = 0;
 
   /// Instantiate `pipe` for element type `Input` and spawn it as a
@@ -178,14 +177,14 @@ public:
   template <class Input>
   auto plan_and_spawn_sub(SubKey key, ir::pipeline pipe,
                           DiagnosticBehavior diag_behavior
-                          = DiagnosticBehavior::Unchanged,
-                          bool fused = false) -> Task<Option<AnySubHandle&>> {
+                          = DiagnosticBehavior::Unchanged)
+    -> Task<Option<AnySubHandle&>> {
     auto plan = ir::make_plan(std::move(pipe), tag_v<Input>, *this);
     if (not plan) {
       co_return None{};
     }
     co_return co_await spawn_sub(std::move(key), std::move(*plan),
-                                 diag_behavior, fused);
+                                 diag_behavior);
   }
 
   virtual auto get_sub(SubKeyView key) -> Option<AnySubHandle&> = 0;
@@ -326,7 +325,9 @@ public:
   /// Process the result of a spawned subpipeline in a *thread-safe* way.
   ///
   /// Note that, unlike all other functions in the operator interface, this one
-  /// may be called in parallel while another call is active.
+  /// may be called in parallel while another call is active. Operators that
+  /// forward output from concurrent callbacks must declare `concurrent_output`
+  /// in their description so the planner selects a suitable output channel.
   virtual auto process_sub(SubKeyView key, table_slice slice,
                            Push<Output>& push, OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(key, ctx);

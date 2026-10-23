@@ -248,6 +248,13 @@ public:
     return 1;
   }
 
+  /// Whether one instance may push output from concurrent tasks, for example
+  /// from multiple subpipeline callbacks. Such output requires a channel that
+  /// supports concurrent sends and must not be fused.
+  virtual auto concurrent_output() const -> bool {
+    return false;
+  }
+
   /// Return the expressions that determine how input is partitioned across the
   /// parallel instances of this operator.
   ///

@@ -260,6 +260,7 @@ struct Description {
   std::vector<AnySpawn> spawns;
   Option<MaxParallelism> max_parallelism;
   Option<PartitionKeys> partition_keys;
+  bool concurrent_output = false;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -887,6 +888,13 @@ public:
   /// needed in combination with `OperatorArguments`.
   auto name(std::string name) -> void {
     desc_.name = std::move(name);
+  }
+
+  /// Declare that a single instance may push output concurrently, such as
+  /// from multiple `process_sub` callbacks. This prevents output channel fusing
+  /// independently of whether the operator can be replicated.
+  auto concurrent_output() -> void {
+    desc_.concurrent_output = true;
   }
 
   /// Permit any number of parallel instances.
