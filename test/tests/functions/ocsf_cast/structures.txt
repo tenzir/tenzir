@@ -1,17 +1,51 @@
+warning: required field `activity_id` is missing
+  --> tests/functions/ocsf_cast/structures.tql:16:24
+   |
+16 | cast = events.map(x => ocsf_cast(x))
+   |                        ~~~~~~~~~~~~
+   |
+
+warning: required field `activity_id` is missing
+  --> tests/functions/ocsf_cast/structures.tql:17:27
+   |
+17 | encoded = events.map(x => ocsf_cast(x, encode_variants=true))
+   |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
 {
   events: [
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: null,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       unmapped: {},
-      activity_id: null,
     },
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: 1,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       unmapped: {
         nested: [
@@ -22,8 +56,19 @@
     },
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: 1,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       src_endpoint: {
         ip: 192.0.2.1,
@@ -33,16 +78,37 @@
   cast: [
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: null,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       unmapped: null,
-      activity_id: null,
     },
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: 1,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       unmapped: {
         nested: [
@@ -53,8 +119,19 @@
     },
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: 1,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       src_endpoint: {
         ip: 192.0.2.1,
@@ -64,23 +141,55 @@
   encoded: [
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: null,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       unmapped: null,
-      activity_id: null,
     },
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: 1,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       unmapped: "{\"nested\":[1,\"two\"]}",
     },
     {
       class_uid: 4001,
+      category_uid: 4,
+      activity_id: 1,
+      type_uid: 400101,
+      severity_id: 1,
+      time: 2026-01-01T00:00:00Z,
       metadata: {
         version: "1.5.0",
+        product: {
+          name: "Tenzir",
+        },
+      },
+      dst_endpoint: {
+        ip: 192.0.2.2,
       },
       src_endpoint: {
         ip: 192.0.2.1,

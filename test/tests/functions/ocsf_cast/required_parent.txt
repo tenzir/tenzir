@@ -1,0 +1,98 @@
+warning: required field `user` is missing
+  --> tests/functions/ocsf_cast/required_parent.tql:47:8
+   |
+47 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `evidences[].connection_info.direction_id` is missing
+  --> tests/functions/ocsf_cast/required_parent.tql:47:8
+   |
+47 | this = ocsf_cast(this)
+   |        ~~~~~~~~~~~~~~~
+   |
+{
+  class_uid: 4001,
+  category_uid: 4,
+  activity_id: 6,
+  type_uid: 400106,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Suricata",
+      vendor_name: "OISF",
+    },
+  },
+  src_endpoint: {
+    ip: 192.0.2.1,
+  },
+}
+{
+  class_uid: 4001,
+  category_uid: 4,
+  activity_id: 6,
+  type_uid: 400106,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Suricata",
+      vendor_name: "OISF",
+    },
+  },
+  src_endpoint: {
+    ip: 192.0.2.1,
+  },
+  connection_info: {
+    protocol_name: "tcp",
+    direction_id: 1,
+  },
+}
+{
+  class_uid: 3002,
+  category_uid: 3,
+  activity_id: 1,
+  type_uid: 300201,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "OpenSSH",
+      vendor_name: "OpenBSD",
+    },
+  },
+  service: {
+    name: "sshd",
+  },
+  user: null,
+}
+{
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Suricata",
+      vendor_name: "OISF",
+    },
+  },
+  finding_info: {
+    uid: "1",
+    title: "ET SCAN",
+  },
+  evidences: [
+    {
+      connection_info: {
+        protocol_name: "tcp",
+      },
+    },
+  ],
+}

@@ -1,0 +1,19 @@
+// An event with all required fields and satisfied constraints casts without
+// warnings.
+from {
+  class_uid: 3002,
+  category_uid: 3,
+  activity_id: 1,
+  type_uid: 300201,
+  severity_id: 1,
+  time: 2024-01-01T00:00:00Z,
+  metadata: {
+    version: "1.9.0",
+    product: {name: "OpenSSH", vendor_name: "OpenBSD"},
+    profiles: ["host"],
+  },
+  device: {hostname: "bastion-01", type_id: 0},
+  user: {name: "alice"},
+  service: {name: "sshd"},
+}
+this = ocsf_cast(this)

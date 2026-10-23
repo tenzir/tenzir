@@ -1873,6 +1873,7 @@ struct CastOptions {
   bool encode_variants;
   bool null_fill;
   bool timestamp_to_ms;
+  bool validate;
 };
 
 auto enabled(type const& ty, Group const& group) -> bool {
@@ -1908,7 +1909,92 @@ auto enabled(type const& ty, Group const& group) -> bool {
   return true;
 }
 
-auto cast_record(Array<Record> input, record_type const& schema,
+auto null_rows(Array<Data> const& array) -> storage::BitMap {
+  return match(
+    array,
+    [&](Array<Null> const&) {
+      return storage::BitMap{array.length(), true};
+    },
+    [](UnionArray const& alternatives) {
+      return alternatives.alternative_mask<Null>();
+    },
+    [&]<data_type Tag>(Array<Tag> const&) {
+      return storage::BitMap{array.length(), false};
+    });
+}
+
+auto non_null_rows(Array<Record> const& input, std::string_view path)
+  -> storage::BitMap {
+  auto const none = storage::BitMap{input.length(), false};
+  auto [name, rest] = detail::split_once(path, ".");
+  auto field = input.field(name);
+  if (not field) {
+    return none;
+  }
+  auto set = field->present.and_not(null_rows(field->data));
+  if (rest.empty()) {
+    return set;
+  }
+  return match(
+    field->data,
+    [&](Array<Record> const& records) {
+      return std::move(set) & non_null_rows(records, rest);
+    },
+    [&](UnionArray const& alternatives) {
+      auto records = alternatives.get_alternative<Record>();
+      if (not records) {
+        return none;
+      }
+      return std::move(set) & records->present
+             & non_null_rows(records->data, rest);
+    },
+    [&]<data_type Tag>(Array<Tag> const&) {
+      return none;
+    });
+}
+
+auto check_constraints(Array<Record> const& input, type const& schema,
+                       storage::BitMap const& rows, Group const& group,
+                       location self, diagnostic_handler& dh, value_path path)
+  -> void {
+  auto subject = [&] {
+    return path.root_field()
+             ? fmt::format("`{}`", path)
+             : fmt::format("class {:?}", group.schema.class_name);
+  };
+  auto check = [&](std::string_view constraint, bool exactly_one) {
+    auto names = detail::split(constraint, "|");
+    auto some = storage::BitMap{input.length(), false};
+    auto several = storage::BitMap{input.length(), false};
+    for (auto name : names) {
+      auto set = non_null_rows(input, name);
+      several = std::move(several) | (some & set);
+      some = std::move(some) | std::move(set);
+    }
+    // The deduplicator ignores notes, so the message must differ.
+    if (rows.and_not(some).any()) {
+      diagnostic::warning("{} needs {} of `{}`, but has none", subject(),
+                          exactly_one ? "exactly one" : "at least one",
+                          fmt::join(names, "`, `"))
+        .primary(self)
+        .emit(dh);
+    }
+    if (exactly_one and (rows & several).any()) {
+      diagnostic::warning("{} needs exactly one of `{}`, but has more than one",
+                          subject(), fmt::join(names, "`, `"))
+        .primary(self)
+        .emit(dh);
+    }
+  };
+  if (auto constraint = schema.attribute("at_least_one")) {
+    check(*constraint, false);
+  }
+  if (auto constraint = schema.attribute("just_one")) {
+    check(*constraint, true);
+  }
+}
+
+auto cast_record(Array<Record> input, type const& schema,
                  storage::BitMap const& rows, Group const& group,
                  CastOptions options, location self, diagnostic_handler& dh,
                  value_path path) -> Array<Record>;
@@ -2014,9 +2100,9 @@ auto cast_value(Array<Data> input, type const& schema,
   if (variant) {
     return input;
   }
-  if (auto record = try_as<record_type>(schema)) {
+  if (is<record_type>(schema)) {
     return std::move(input).map_alternative<Record>([&](auto records) {
-      return cast_record(std::move(records.data), *record,
+      return cast_record(std::move(records.data), schema,
                          rows & records.present, group, options, self, dh,
                          path);
     });
@@ -2030,13 +2116,14 @@ auto cast_value(Array<Data> input, type const& schema,
   return input;
 }
 
-auto cast_record(Array<Record> input, record_type const& schema,
+auto cast_record(Array<Record> input, type const& schema,
                  storage::BitMap const& rows, Group const& group,
                  CastOptions options, location self, diagnostic_handler& dh,
                  value_path path) -> Array<Record> {
   if (not rows.any()) {
     return input;
   }
+  auto const& record = as<record_type>(schema);
   input = std::move(input).to_primary();
   auto source = as<storage::RecordStorage>(input.storage());
   auto removed = std::vector<std::string_view>{};
@@ -2044,7 +2131,7 @@ auto cast_record(Array<Record> input, record_type const& schema,
     if (not(rows & (*source).arrays[index].present).any()) {
       continue;
     }
-    auto target = schema.field(name);
+    auto target = record.field(name);
     if (not target) {
       diagnostic::warning("dropping field which does not exist in schema")
         .note("found `{}`", path.field(name))
@@ -2105,11 +2192,26 @@ auto cast_record(Array<Record> input, record_type const& schema,
   input = std::move(input).without_fields(removed, rows);
   auto updates
     = std::vector<std::pair<std::string_view, Array<Record>::MaskedArray>>{};
-  for (auto const& [name, target] : schema.fields()) {
+  for (auto const& [name, target] : record.fields()) {
     if (not enabled(target, group)) {
       continue;
     }
     auto value = input.field(name);
+    if (value) {
+      value->data
+        = cast_value(std::move(value->data), target, rows & value->present,
+                     group, options, self, dh, path.field(name));
+    }
+    // Check after casting, which nulls values that do not fit.
+    if (options.validate and target.attribute("required")) {
+      auto set = value ? value->present.and_not(null_rows(value->data))
+                       : storage::BitMap{input.length(), false};
+      if (rows.and_not(set).any()) {
+        diagnostic::warning("required field `{}` is missing", path.field(name))
+          .primary(self)
+          .emit(dh);
+      }
+    }
     if (not value) {
       if (options.null_fill) {
         updates.emplace_back(name, Array<Record>::MaskedArray{
@@ -2119,9 +2221,6 @@ auto cast_record(Array<Record> input, record_type const& schema,
       }
       continue;
     }
-    value->data
-      = cast_value(std::move(value->data), target, rows & value->present, group,
-                   options, self, dh, path.field(name));
     if (options.null_fill) {
       value->data
         = std::move(value->data).null_where(rows.and_not(value->present));
@@ -2129,17 +2228,20 @@ auto cast_record(Array<Record> input, record_type const& schema,
     }
     updates.emplace_back(name, std::move(*value));
   }
-  if (updates.empty()) {
-    return input;
+  if (not updates.empty()) {
+    input = std::move(input).with_fields(Array<Record>::from_fields(updates));
   }
-  return std::move(input).with_fields(Array<Record>::from_fields(updates));
+  if (options.validate) {
+    check_constraints(input, schema, rows, group, self, dh, path);
+  }
+  return input;
 }
 
 auto cast(Array<Record> input, storage::BitMap& rows, location self,
           diagnostic_handler& dh, CastOptions options) -> Array<Record> {
   for (auto& group : groups(input, rows, self, dh, true)) {
-    input = cast_record(std::move(input), as<record_type>(group.schema.type),
-                        group.rows, group, options, self, dh, {});
+    input = cast_record(std::move(input), group.schema.type, group.rows, group,
+                        options, self, dh, {});
   }
   return input;
 }
@@ -2525,7 +2627,7 @@ public:
     -> Task<void> override {
     input.data = nova_ocsf::cast(
       std::move(input.data), input.mask, args_.operator_location, ctx.dh(),
-      {args_.encode_variants, args_.null_fill, args_.timestamp_to_ms});
+      {args_.encode_variants, args_.null_fill, args_.timestamp_to_ms, false});
     auto names = nova::ArrayBuilder<nova::String>{};
     for (auto row = nova::storage::Index{0}; row < input.length(); ++row) {
       if (not input.mask.get(row)) {
@@ -2628,7 +2730,7 @@ struct OcsfFunction {
       if constexpr (Mode == NovaTransform::cast) {
         return nova_ocsf::cast(
           std::move(records->data), selected, args.call, frame.dh(),
-          {args.encode_variants, args.null_fill, args.timestamp_to_ms});
+          {args.encode_variants, args.null_fill, args.timestamp_to_ms, true});
       } else if constexpr (Mode == NovaTransform::trim) {
         return nova_ocsf::trim(std::move(records->data), selected, args.call,
                                frame.dh(), args.drop_optional,

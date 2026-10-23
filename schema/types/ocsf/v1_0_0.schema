@@ -8,7 +8,7 @@ type _ocsf.v1_0_0.object.account = record{
   type: string #optional,
   type_id: int64 #recommended #enum=833a3443 #sibling=type,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Actor object contains details about the user, role, or process that
 // initiated or performed a specific activity.
@@ -19,7 +19,7 @@ type _ocsf.v1_0_0.object.actor = record{
   process: _ocsf.v1_0_0.object.process #recommended,
   session: _ocsf.v1_0_0.object.session #optional,
   user: _ocsf.v1_0_0.object.user #recommended,
-}
+} #at_least_one=process|user|invoked_by|session
 
 // The Analytic object contains details about the analytic technique used to
 // analyze and derive insights from the data or information that led to the
@@ -239,7 +239,7 @@ type _ocsf.v1_0_0.object.device = record{
   uid_alt: string #optional,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|instance_uid|interface_uid|interface_name
 
 // The Device Hardware Information object contains details and specifications of
 // the physical components that make up a device. This information provides an
@@ -365,7 +365,7 @@ type _ocsf.v1_0_0.object.endpoint = record{
   uid: string #recommended,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|instance_uid|interface_uid|interface_name
 
 // The Enrichment object provides inline enrichment data for specific attributes
 // of interest within an event. It serves as a mechanism to enhance or
@@ -397,7 +397,7 @@ type _ocsf.v1_0_0.object.feature = record{
   name: string #recommended,
   uid: string #recommended,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The File object represents the metadata associated with a file stored in a
 // computer system. It encompasses information about the file itself, including
@@ -482,7 +482,7 @@ type _ocsf.v1_0_0.object.group = record{
   privileges: list<string> #optional,
   type: string #optional,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The HASSH (Honeypot Attention-Grabbing SSH) object contains SSH network
 // fingerprinting values for specific client/server implementations. It provides
@@ -558,7 +558,7 @@ type _ocsf.v1_0_0.object.http_response = record{
 type _ocsf.v1_0_0.object.idp = record{
   name: string #recommended,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Image object provides a description of a specific Virtual Machine (VM) or
 // Container image. Defined by D3FEND <a target='_blank' href='https://d3fend.mi
@@ -661,7 +661,7 @@ type _ocsf.v1_0_0.object.malware = record{
   path: string #recommended,
   provider: string #recommended,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Managed Entity object describes the type and version of an entity, such
 // as a policy or configuration.
@@ -671,7 +671,7 @@ type _ocsf.v1_0_0.object.managed_entity = record{
   type: string #recommended,
   uid: string #recommended,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Metadata object describes the metadata associated with the event. Defined
 // by D3FEND <a target='_blank'
@@ -750,7 +750,7 @@ type _ocsf.v1_0_0.object.network_endpoint = record{
   uid: string #recommended,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|svc_name|instance_uid|interface_uid|interface_name
 
 // The Network Interface object describes the type and associated attributes of
 // a network interface.
@@ -764,7 +764,7 @@ type _ocsf.v1_0_0.object.network_interface = record{
   type: string #optional,
   type_id: int64 #required #enum=870ae596 #sibling=type,
   uid: string #optional,
-}
+} #at_least_one=ip|mac|name|hostname
 
 // The Network Proxy Endpoint describes characteristics of a network proxy.
 // Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
@@ -786,7 +786,7 @@ type _ocsf.v1_0_0.object.network_proxy_nonrecursive = record{
   uid: string #recommended,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|svc_name|instance_uid|interface_uid|interface_name
 
 // The Network Proxy Endpoint describes characteristics of a network proxy.
 // Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
@@ -808,7 +808,7 @@ type _ocsf.v1_0_0.object.network_proxy = record{
   uid: string #recommended,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
-}
+} #at_least_one=ip|uid|name|hostname|svc_name|instance_uid|interface_uid|interface_name
 
 // The Network Traffic object describes characteristics of network traffic.
 // Network traffic refers to data moving across a network at a given point of
@@ -846,7 +846,7 @@ type _ocsf.v1_0_0.object.organization = record{
   ou_name: string #recommended,
   ou_uid: string #optional,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Operating System (OS) object describes characteristics of an OS, such as
 // Linux or Windows. Defined by D3FEND <a target='_blank' href='https://d3fend.m
@@ -887,7 +887,7 @@ type _ocsf.v1_0_0.object.policy = record{
   name: string #recommended,
   uid: string #recommended,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Process object describes a running instance of a launched program.
 // Defined by D3FEND <a target='_blank'
@@ -917,7 +917,7 @@ type _ocsf.v1_0_0.object.process_nonrecursive = record{
   uid: string #recommended,
   user: _ocsf.v1_0_0.object.user #recommended,
   xattributes: null #variant #must_be_record #optional,
-}
+} #at_least_one=pid|uid
 
 // The Process object describes a running instance of a launched program.
 // Defined by D3FEND <a target='_blank'
@@ -948,7 +948,7 @@ type _ocsf.v1_0_0.object.process = record{
   uid: string #recommended,
   user: _ocsf.v1_0_0.object.user #recommended,
   xattributes: null #variant #must_be_record #optional,
-}
+} #at_least_one=pid|uid
 
 // The Product object describes characteristics of a software product.
 type _ocsf.v1_0_0.object.product = record{
@@ -960,7 +960,7 @@ type _ocsf.v1_0_0.object.product = record{
   url_string: string #optional,
   vendor_name: string #required,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Related Event object describes an event related to a finding or detection
 // as identified by the security product.
@@ -1007,7 +1007,7 @@ type _ocsf.v1_0_0.object.resource_details = record{
   type: string #optional,
   uid: string #optional,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Response Elements object describes characteristics of an API response.
 type _ocsf.v1_0_0.object.response = record{
@@ -1036,7 +1036,7 @@ type _ocsf.v1_0_0.object.rule = record{
   type: string #optional,
   uid: string #recommended,
   version: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Subject Alternative name (SAN) object describes a SAN secured by a
 // digital certificate
@@ -1052,7 +1052,7 @@ type _ocsf.v1_0_0.object.service = record{
   name: string #recommended,
   uid: string #recommended,
   version: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Session object describes details about an authenticated session. e.g.
 // Session Creation Time, Session Issuer. Defined by D3FEND <a target='_blank'
@@ -1076,7 +1076,7 @@ type _ocsf.v1_0_0.object.session = record{
 type _ocsf.v1_0_0.object.tactic = record{
   name: string #recommended,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Technique object describes the technique related to an attack, as defined
 // by <a target='_blank'
@@ -1085,7 +1085,7 @@ type _ocsf.v1_0_0.object.tactic = record{
 type _ocsf.v1_0_0.object.technique = record{
   name: string #recommended,
   uid: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The Transport Layer Security (TLS) object describes the negotiated TLS
 // protocol used for secure communications over an establish network connection.
@@ -1130,7 +1130,7 @@ type _ocsf.v1_0_0.object.url = record{
   scheme: string #recommended,
   subdomain: string #optional,
   url_string: string #recommended,
-}
+} #at_least_one=url_string|path
 
 // The User object describes the characteristics of a user/person or a security
 // principal. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.or
@@ -1148,7 +1148,7 @@ type _ocsf.v1_0_0.object.user_nonrecursive = record{
   type_id: int64 #required #enum=43c02ae7 #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
-}
+} #at_least_one=name|uid
 
 // The User object describes the characteristics of a user/person or a security
 // principal. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.or
@@ -1166,7 +1166,7 @@ type _ocsf.v1_0_0.object.user = record{
   type_id: int64 #required #enum=43c02ae7 #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
-}
+} #at_least_one=name|uid
 
 // The Vulnerability Details object describes characteristics of an observed
 // vulnerability.
@@ -1193,7 +1193,7 @@ type _ocsf.v1_0_0.object.web_resource = record{
   type: string #optional,
   uid: string #optional,
   url_string: string #recommended,
-}
+} #at_least_one=name|uid
 
 // The registry key object describes a Windows registry key. Defined by D3FEND
 // <a target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:WindowsReg
@@ -1230,7 +1230,7 @@ type _ocsf.v1_0_0.object.win_resource = record{
   type: string #optional,
   type_id: int64 #required #enum=2d7dd3b9 #sibling=type,
   uid: string #optional,
-} #extension=win
+} #extension=win #at_least_one=name|uid
 
 // Account Change events report when specific user account management tasks are
 // performed, such as a user/role being created, changed, deleted, renamed,
@@ -1407,7 +1407,7 @@ type _ocsf.v1_0_0.authentication = record{
   type_uid: int64 #required #enum=b1ea3bed #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_0_0.object.user #required,
-}
+} #at_least_one=service|dst_endpoint
 
 // Authorize Session events report privileges or groups assigned to a new user
 // session, usually at login time.
@@ -1450,7 +1450,7 @@ type _ocsf.v1_0_0.authorize_session = record{
   type_uid: int64 #required #enum=cd41a4dd #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_0_0.object.user #required,
-}
+} #just_one=privileges|group
 
 // The base event is a generic and concrete event. It also defines a set of
 // attributes available in most event classes. As a generic event that does not
@@ -1950,7 +1950,7 @@ type _ocsf.v1_0_0.group_management = record{
   type_uid: int64 #required #enum=d2e189b1 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_0_0.object.user #recommended,
-}
+} #at_least_one=privileges|user
 
 // HTTP Activity events report HTTP connection and traffic information.
 type _ocsf.v1_0_0.http_activity = record{

@@ -1,14 +1,44 @@
 {
   class_uid: 1001,
+  category_uid: 1,
+  activity_id: 1,
+  type_uid: 100101,
+  severity_id: 1,
+  time: 2026-01-01T00:00:00Z,
   metadata: {
     version: "1.5.0",
+    product: {
+      name: "Tenzir",
+    },
   },
-  activity_id: 1,
+  actor: {
+    user: {
+      name: "root",
+    },
+  },
+  device: {
+    type_id: 0,
+    hostname: "host",
+  },
+  file: {
+    name: "file.txt",
+    type_id: 1,
+  },
 }
 {
   class_uid: 4001,
+  category_uid: 4,
+  activity_id: 2,
+  type_uid: 400102,
+  severity_id: 1,
+  time: 2026-01-01T00:00:00Z,
   metadata: {
     version: "1.6.0",
+    product: {
+      name: "Tenzir",
+    },
   },
-  activity_id: 2,
+  src_endpoint: {
+    ip: 192.0.2.1,
+  },
 }
