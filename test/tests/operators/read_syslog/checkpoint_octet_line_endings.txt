@@ -1,0 +1,132 @@
+{
+  facility: 16,
+  severity: 6,
+  version: 1,
+  timestamp: 2026-02-25T08:14:51Z,
+  hostname: "fwmgt",
+  app_name: "CheckPoint",
+  process_id: "10024",
+  message_id: null,
+  structured_data: {
+    checkpoint_2620: {
+      action: "Accept",
+    },
+  },
+  message: null,
+  raw: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [action:\"Accept\"]\n",
+  parsed: {
+    facility: 16,
+    severity: 6,
+    version: 1,
+    timestamp: 2026-02-25T08:14:51Z,
+    hostname: "fwmgt",
+    app_name: "CheckPoint",
+    process_id: "10024",
+    message_id: null,
+    structured_data: {
+      checkpoint_2620: {
+        action: "Accept",
+      },
+    },
+    message: null,
+  },
+}
+{
+  facility: 16,
+  severity: 6,
+  version: 1,
+  timestamp: 2026-02-25T08:14:51Z,
+  hostname: "fwmgt",
+  app_name: "CheckPoint",
+  process_id: "10024",
+  message_id: null,
+  structured_data: {
+    checkpoint_2620: {
+      action: "Accept",
+    },
+  },
+  message: null,
+  raw: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [action:\"Accept\"]\r\n",
+  parsed: {
+    facility: 16,
+    severity: 6,
+    version: 1,
+    timestamp: 2026-02-25T08:14:51Z,
+    hostname: "fwmgt",
+    app_name: "CheckPoint",
+    process_id: "10024",
+    message_id: null,
+    structured_data: {
+      checkpoint_2620: {
+        action: "Accept",
+      },
+    },
+    message: null,
+  },
+}
+{
+  facility: 16,
+  severity: 6,
+  version: 1,
+  timestamp: 2026-02-25T08:14:51Z,
+  hostname: "fwmgt",
+  app_name: "CheckPoint",
+  process_id: "10024",
+  message_id: null,
+  structured_data: {
+    "Fields@1": {
+      action: "Accept",
+    },
+  },
+  message: null,
+  raw: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [Fields@1 action:\"Accept\"]\n",
+  parsed: {
+    facility: 16,
+    severity: 6,
+    version: 1,
+    timestamp: 2026-02-25T08:14:51Z,
+    hostname: "fwmgt",
+    app_name: "CheckPoint",
+    process_id: "10024",
+    message_id: null,
+    structured_data: {
+      "Fields@1": {
+        action: "Accept",
+      },
+    },
+    message: null,
+  },
+}
+{
+  facility: 16,
+  severity: 6,
+  version: 1,
+  timestamp: 2026-02-25T08:14:51Z,
+  hostname: "fwmgt",
+  app_name: "CheckPoint",
+  process_id: "10024",
+  message_id: null,
+  structured_data: {
+    "Fields@1": {
+      action: "Accept",
+    },
+  },
+  message: null,
+  raw: "<134>1 2026-02-25T08:14:51Z fwmgt CheckPoint 10024 - [Fields@1 action:\"Accept\"]\r\n",
+  parsed: {
+    facility: 16,
+    severity: 6,
+    version: 1,
+    timestamp: 2026-02-25T08:14:51Z,
+    hostname: "fwmgt",
+    app_name: "CheckPoint",
+    process_id: "10024",
+    message_id: null,
+    structured_data: {
+      "Fields@1": {
+        action: "Accept",
+      },
+    },
+    message: null,
+  },
+}

@@ -1,0 +1,6 @@
+from {x: "<45>Some message"}, {
+  x: "<166>Sep 01 2026 16:46:57: %ASA-6-302014: Teardown TCP connection",
+}
+default_result = x.parse_syslog()
+disabled_result = x.parse_syslog(accept_pri_only=false)
+enabled_result = x.parse_syslog(accept_pri_only=true)

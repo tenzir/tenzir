@@ -1,0 +1,9 @@
+from {x: "<0>"}, {x: "<191>last priority"}, {x: "<192>out of range"},
+  {x: "<999>out of range"}, {x: "<1234>too many digits"},
+  {x: "<-1>negative"}, {x: "<+1>signed"}, {x: "<>empty priority"},
+  {x: "< 45>space"}, {x: "<45 >space"}, {x: "<45missing delimiter"},
+  {x: "<045>leading zero"}, {x: "<00>leading zero"},
+  {x: "prefix <45>not at start"}, {x: "Some message"},
+  {x: "<tag>HTML-like text"}, {x: "<45><46>nested prefix stays content"},
+  {x: "<45>app[123]: no timestamp"}
+parsed = x.parse_syslog(accept_pri_only=true)

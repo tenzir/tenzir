@@ -1,0 +1,18 @@
+{
+  facility: 20,
+  severity: 6,
+  timestamp: "Sep 01 2026 16:46:57",
+  hostname: null,
+  app_name: "ASA-6-302014",
+  process_id: null,
+  content: "Teardown TCP connection",
+}
+{
+  facility: 5,
+  severity: 5,
+  timestamp: "Jan 14 05:25:06.737",
+  hostname: "HOSTNAME-123",
+  app_name: "FW-6-SESS_AUDIT_TRAIL",
+  process_id: null,
+  content: "tcp session",
+}

@@ -1,0 +1,6 @@
+{
+  line: "<45>: reminder: Jan 14 05:25:06.737: no Cisco identifier",
+}
+{
+  line: "<45>12:34:56: just a reminder",
+}

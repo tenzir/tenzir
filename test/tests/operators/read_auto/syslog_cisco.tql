@@ -1,0 +1,4 @@
+// Recognize both Cisco header forms instead of falling back to lines.
+from_stdin {
+  read_auto fallback="lines"
+}

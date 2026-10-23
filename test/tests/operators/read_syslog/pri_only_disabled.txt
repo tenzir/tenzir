@@ -1,0 +1,15 @@
+{
+  syslog_message: "<45>Some message",
+}
+{
+  syslog_message: "<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a=1]missing separator",
+}
+{
+  facility: 20,
+  severity: 6,
+  timestamp: "Sep 01 2026 16:46:57",
+  hostname: null,
+  app_name: "ASA-6-302014",
+  process_id: null,
+  content: "Teardown TCP connection",
+}

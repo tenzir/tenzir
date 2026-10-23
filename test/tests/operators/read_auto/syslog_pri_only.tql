@@ -1,0 +1,4 @@
+// PRI-only input cannot select syslog and remains text through the fallback.
+from_stdin {
+  read_auto fallback="lines"
+}

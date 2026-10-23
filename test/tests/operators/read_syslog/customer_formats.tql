@@ -1,0 +1,5 @@
+from_file env("TENZIR_INPUT") {
+  read_syslog raw_message=raw, accept_pri_only=true
+}
+// Exercise the function on the same records, including multiline content.
+parsed = raw.parse_syslog(accept_pri_only=true)

@@ -1,0 +1,5 @@
+// Once syslog is selected, an unrecognized line continues the prior message.
+// fallback="lines" only applies during format detection.
+from_stdin {
+  read_auto fallback="lines"
+}

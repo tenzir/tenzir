@@ -1,0 +1,12 @@
+from {
+  x: "<166>Sep 01 2026 16:46:57: %ASA-6-302014: Teardown TCP connection",
+}, {
+  x: "<45>: HOSTNAME-123: Jan 14 05:25:06.737: %FW-6-SESS_AUDIT_TRAIL: tcp session",
+}, {
+  x: "<45>Some message",
+}
+select l = x.length_chars() + 1, line = x
+write_lines
+split_bytes 1
+read_syslog octet_counting=true, raw_message=raw, accept_pri_only=true
+parsed = raw.parse_syslog(octet_counting=false, accept_pri_only=true)
