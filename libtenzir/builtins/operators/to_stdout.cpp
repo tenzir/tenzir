@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
+#include "tenzir/tql2/resolve.hpp"
 
 #include <tenzir/arc.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -51,6 +52,7 @@ auto make_default_printer(base_ctx ctx, location self)
   auto sessions = session_provider::make(ctx.dh(), ctx.reg());
   TRY(auto pipe, parse_pipeline_with_location_override("write_tql", self,
                                                        sessions.as_session()));
+  TRY(resolve_entities(pipe, ExternPrelude::empty(), ctx));
   auto root = compile_ctx::make_root(ctx);
   return std::move(pipe).compile(root);
 }

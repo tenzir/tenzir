@@ -58,7 +58,9 @@ auto make_replacement_ir(mode which, ast::field_path selector, location self,
   TENZIR_ASSERT(count_field);
   auto summarize_arg
     = ast::assignment{count_field->inner(), self, std::move(count_call)};
-  TENZIR_ASSERT(resolve_entities(summarize_arg.right, provider.as_session()));
+  auto resolved = resolve_entities(summarize_arg.right, ExternPrelude::empty(),
+                                   provider.as_session());
+  TENZIR_ASSERT(resolved);
   auto summarize_inv = invocation_for_plugin(*summarize, self);
   summarize_inv.args.push_back(std::move(selector).unwrap());
   summarize_inv.args.push_back(std::move(summarize_arg));

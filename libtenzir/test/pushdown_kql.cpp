@@ -36,7 +36,7 @@ auto parse(std::string_view source) -> ast::expression {
     FAIL("failed to parse: {}", source);
   }
   REQUIRE(expr);
-  REQUIRE(resolve_entities(*expr, ctx));
+  REQUIRE(resolve_entities(*expr, ExternPrelude::empty(), ctx));
   return std::move(*expr);
 }
 

@@ -374,7 +374,10 @@ auto tenzir::engine_main(int argc, char** argv) -> int try {
         // earlier errors, but that it's impossible to form cyclic references.
         // We do not resolve `let` bindings yet in order to delay their
         // evaluation in cases such as `let $t = now()`.
-        if (not resolve_entities(udo.second.definition, resolve_ctx)) {
+        // Operators from the configuration declare no dependencies.
+        if (not resolve_entities(udo.second.definition,
+                                 ExternPrelude::all_packages_deprecated(),
+                                 resolve_ctx)) {
           std::ranges::move(std::move(resolve_dh).collect(),
                             std::back_inserter(unresolved_diags));
           continue;

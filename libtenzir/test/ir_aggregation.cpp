@@ -40,7 +40,7 @@ auto parse(std::string_view source) -> ast::expression {
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
   REQUIRE(expr);
-  REQUIRE(resolve_entities(*expr, ctx));
+  REQUIRE(resolve_entities(*expr, ExternPrelude::empty(), ctx));
   return std::move(*expr);
 }
 
@@ -201,6 +201,7 @@ auto compile(base_ctx ctx, std::string_view source) -> ir::pipeline {
   auto ast = parse_pipeline_with_location_override(source, location::unknown,
                                                    provider.as_session());
   REQUIRE(ast);
+  REQUIRE(resolve_entities(*ast, ExternPrelude::empty(), ctx));
   auto compiled = std::move(*ast).compile(compile_ctx::make_root(ctx));
   REQUIRE(compiled);
   return std::move(*compiled);

@@ -37,6 +37,7 @@
 #include "tenzir/store.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/tql2/registry.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/compute/api.h>
@@ -695,6 +696,7 @@ auto compile_transform(ast::pipeline ast, diagnostic_handler& dh,
   auto provider = session_provider::make(dh, reg);
   auto ctx = provider.as_session();
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
+  TRY(resolve_entities(ast, ExternPrelude::all_packages_deprecated(), ctx));
   auto root = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(root));
   auto input = events_element_type();

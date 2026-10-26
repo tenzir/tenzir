@@ -25,6 +25,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/unicode.hpp"
 #include "tenzir/variant.hpp"
 
@@ -261,6 +262,8 @@ private:
     auto session = provider.as_session();
     auto ast = tenzir::parse(pipeline, location::unknown, session);
     TENZIR_ASSERT(ast);
+    auto resolved = resolve_entities(*ast, ExternPrelude::empty(), session);
+    TENZIR_ASSERT(resolved);
     auto pipe = std::move(*ast).compile(root);
     TENZIR_ASSERT(pipe);
     if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(
@@ -502,6 +505,8 @@ private:
     auto session = provider.as_session();
     auto ast = tenzir::parse(pipeline, location::unknown, session);
     TENZIR_ASSERT(ast);
+    auto resolved = resolve_entities(*ast, ExternPrelude::empty(), session);
+    TENZIR_ASSERT(resolved);
     auto pipe = std::move(*ast).compile(root);
     TENZIR_ASSERT(pipe);
     if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(

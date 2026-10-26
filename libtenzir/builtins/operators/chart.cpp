@@ -122,7 +122,8 @@ auto find_plugins(call_map const& y, session ctx) -> plugins_map {
     }
     auto wrapped_call
       = ast::function_call{entity, {call}, call.get_location(), false};
-    TENZIR_ASSERT(resolve_entities(wrapped_call, ctx));
+    auto resolved = resolve_entities(wrapped_call, ExternPrelude::empty(), ctx);
+    TENZIR_ASSERT(resolved);
     auto const* ptr
       = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(wrapped_call));
     TENZIR_ASSERT(ptr);
@@ -168,7 +169,9 @@ auto handle_y(call_map& y_out, location& y_loc_out,
             TENZIR_ASSERT(not res); // caught by validate
             auto result
               = ast::function_call{entity, {std::move(expr)}, loc, false};
-            TENZIR_ASSERT(resolve_entities(result, ctx));
+            auto resolved
+              = resolve_entities(result, ExternPrelude::empty(), ctx);
+            TENZIR_ASSERT(resolved);
             y_out[field->name.name] = std::move(result);
             return {};
           }));
@@ -196,7 +199,8 @@ auto handle_y(call_map& y_out, location& y_loc_out,
       }
       auto const loc = y.get_location();
       auto result = ast::function_call{entity, {std::move(y)}, loc, false};
-      TENZIR_ASSERT(resolve_entities(result, ctx));
+      auto resolved = resolve_entities(result, ExternPrelude::empty(), ctx);
+      TENZIR_ASSERT(resolved);
       y_out[yname] = std::move(result);
       return {};
     });
@@ -913,7 +917,8 @@ public:
             &sp.as_session().reg().get(call))) {
         invocation = ast::function_call{
           make_once_entity(), {invocation}, call.get_location(), false};
-        if (not resolve_entities(invocation, sp.as_session())) {
+        if (not resolve_entities(invocation, ExternPrelude::empty(),
+                                 sp.as_session())) {
           co_return;
         }
       }

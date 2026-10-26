@@ -39,7 +39,7 @@ auto eval_expr(std::string_view src, const table_slice& slice) -> multi_series {
   auto expr
     = parse_expression_with_location_override(src, location::unknown, ctx);
   REQUIRE(expr);
-  auto resolved = resolve_entities(*expr, ctx);
+  auto resolved = resolve_entities(*expr, ExternPrelude::empty(), ctx);
   REQUIRE(resolved);
   return eval(*expr, slice, base_ctx{dh, test::builtin_registry()});
 }

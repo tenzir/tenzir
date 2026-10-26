@@ -322,8 +322,10 @@ auto ir::CompileResult::unwrap() && -> pipeline {
 }
 
 auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
-  // TODO: Or do we assume that entities are already resolved?
-  TRY(resolve_entities(*this, ctx));
+  // Only whoever has the code knows what it may name, so it resolves the code
+  // before compiling it.
+  TENZIR_ASSERT(entities_resolved(*this),
+                "a pipeline has to be resolved before it is compiled");
   auto acc = ir::pipeline{};
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
@@ -397,6 +399,12 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // outer references reach the body only through arguments, which
             // we pre-bound above before substitution copied them in.
             auto udo_ctx = ctx.without_env();
+            // A package's body is resolved when the package is added if it
+            // declares what it uses, which leaves nothing to do here. One
+            // that does not is resolved here, against every package, which
+            // is deprecated.
+            TRY(resolve_entities(
+              substituted, ExternPrelude::all_packages_deprecated(), udo_ctx));
             TRY(auto pipe, std::move(substituted).compile(udo_ctx));
             acc.append(std::move(pipe));
             return {};

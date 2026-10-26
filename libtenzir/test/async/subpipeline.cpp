@@ -14,6 +14,7 @@
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
 using namespace tenzir;
@@ -31,6 +32,7 @@ TEST("planning respects concurrent output when selecting channel kinds") {
   auto tokens = tokenize_permissive(source->text);
   auto parsed = parse(tokens, *source, session);
   REQUIRE(parsed);
+  REQUIRE(resolve_entities(*parsed, ExternPrelude::empty(), session));
   auto root = compile_ctx::make_root(base_ctx{dh, reg}, sources);
   auto compiled = std::move(*parsed).compile(root);
   REQUIRE(compiled);

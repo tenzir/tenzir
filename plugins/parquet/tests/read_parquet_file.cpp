@@ -28,6 +28,7 @@
 #include <tenzir/test/registry.hpp>
 #include <tenzir/test/test.hpp>
 #include <tenzir/tql2/parser.hpp>
+#include <tenzir/tql2/resolve.hpp>
 
 #include <arrow/api.h>
 #include <arrow/extension_type.h>
@@ -249,6 +250,7 @@ auto compile(std::string_view text, ir::OptimizeRequest request, base_ctx ctx)
   auto ast = parse_pipeline_with_location_override(text, location::unknown,
                                                    provider.as_session());
   REQUIRE(ast);
+  REQUIRE(resolve_entities(*ast, ExternPrelude::empty(), ctx));
   auto compiled = std::move(*ast).compile(compile_ctx::make_root(ctx));
   REQUIRE(compiled);
   auto instantiated = ir::instantiate(std::move(*compiled), ctx);

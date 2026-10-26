@@ -188,7 +188,8 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   }
   auto guard = begin_registry_update();
   auto next = guard.current()->clone();
-  TRY(add_packages(*next, packages, dh, source_map));
+  TRY(add_packages(*next, packages, dh, source_map,
+                   PackageVisibility::all_deprecated));
   guard.publish(std::shared_ptr<const registry>{std::move(next)});
   return {};
 }
@@ -1888,6 +1889,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg,
                             location override) -> failure_or<ir::pipeline> {
     TRY(auto ast,
         parse_pipeline_with_location_override(definition, override, ctx));
+    TRY(resolve_entities(ast, ExternPrelude::empty(), ctx));
     // Reuse the main compilation root so that `let_id`s are drawn from a single
     // namespace. The implicit pipeline is merged into the user IR and
     // instantiated together with it by `ir::make_plan` below, so its `let`
@@ -2003,6 +2005,8 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
+    TRY(
+      resolve_entities(parsed, ExternPrelude::all_packages_deprecated(), ctx));
     auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
                                 : Option<std::string_view>{};
     auto configured = caf::get_or(content(sys.config()),

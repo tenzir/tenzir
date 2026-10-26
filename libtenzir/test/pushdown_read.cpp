@@ -11,6 +11,7 @@
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/resolve.hpp"
 
 #include <caf/binary_deserializer.hpp>
 
@@ -65,6 +66,7 @@ auto compile_reader(base_ctx ctx) -> ir::pipeline {
   auto ast = parse_pipeline_with_location_override(
     "read_feather", location::unknown, provider.as_session());
   REQUIRE(ast);
+  REQUIRE(resolve_entities(*ast, ExternPrelude::empty(), ctx));
   auto root = compile_ctx::make_root(ctx);
   auto compiled = std::move(*ast).compile(root);
   REQUIRE(compiled);

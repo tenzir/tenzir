@@ -28,6 +28,8 @@
 
 namespace tenzir {
 
+class ExternPrelude;
+
 struct package_source final {
   std::string repository;
   std::string directory;
@@ -254,6 +256,43 @@ struct package_contexts_map
 
 using package_examples_list = std::vector<package_example>;
 
+/// A package that a package uses, as its `dependencies` describe it: by a
+/// requirement on its version, by a git repository, or by a path.
+///
+/// The engine needs only the names, which say what a package may use. Where a
+/// dependency comes from, and which version of it, is for whoever resolves
+/// and fetches packages.
+struct PackageDependency final {
+  /// The versions it accepts, such as `^1.2`.
+  Option<std::string> version;
+  /// The repository it comes from, when that is not the library.
+  Option<std::string> git;
+  /// The revision of `git` it is pinned to.
+  Option<std::string> rev;
+  /// Where it lives relative to the package, for one written alongside it.
+  Option<std::string> path;
+
+  auto to_record() const -> record;
+
+  /// Parses a requirement string, such as `^1.2`, or a record.
+  static auto parse(data_view const& data) -> caf::expected<PackageDependency>;
+
+  friend auto inspect(auto& f, PackageDependency& x) -> bool {
+    return f.object(x)
+      .pretty_name("package_dependency")
+      .fields(f.field("version", x.version), f.field("git", x.git),
+              f.field("rev", x.rev), f.field("path", x.path));
+  }
+};
+
+/// The packages a package uses, by their ids.
+using PackageDependencies = detail::flat_map<std::string, PackageDependency>;
+
+/// The `dependencies` of a `package.yaml`: a record from package ids to what
+/// each one is, or nothing.
+auto parse_package_dependencies(data_view const& data)
+  -> caf::expected<PackageDependencies>;
+
 /// The files of a package by their path relative to its directory, with `/`
 /// separating the components, such as `operators/ingest.tql`.
 using package_files = std::map<std::string, std::string, std::less<>>;
@@ -261,6 +300,11 @@ using package_files = std::map<std::string, std::string, std::less<>>;
 struct package final {
   std::string id;   // required to be non-empty
   std::string name; // required to be non-empty
+  /// The version this package is, such as `1.2.0`.
+  Option<std::string> version;
+  /// The packages this package uses, by their ids. A package sees itself and
+  /// these, and no other.
+  PackageDependencies dependencies;
   Option<std::string> author;
   Option<std::string> description;
   Option<std::string> package_icon;
@@ -304,8 +348,9 @@ struct package final {
 
   friend auto inspect(auto& f, package& x) -> bool {
     return f.object(x).pretty_name("package").fields(
-      f.field("id", x.id), f.field("name", x.name), f.field("author", x.author),
-      f.field("description", x.description),
+      f.field("id", x.id), f.field("name", x.name),
+      f.field("version", x.version), f.field("dependencies", x.dependencies),
+      f.field("author", x.author), f.field("description", x.description),
       f.field("package_icon", x.package_icon),
       f.field("author_icon", x.author_icon),
       f.field("categories", x.categories), f.field("inputs", x.inputs),
@@ -342,14 +387,38 @@ auto build_package_module(const package& pkg, diagnostic_handler& dh,
 
 auto package_module_name(std::string_view package_id) -> std::string;
 
+/// What code that declares `dependencies` may name of the packages: each of
+/// them, by its module name.
+auto extern_prelude(PackageDependencies const& dependencies) -> ExternPrelude;
+
+/// What the code of packages may name of the packages.
+enum class PackageVisibility {
+  /// Each package itself and what it declares.
+  declared,
+  /// Every package. Deprecated: for packages that do not declare what they
+  /// use, whose code is then resolved only where it is used.
+  all_deprecated,
+};
+
+/// Fails unless every package that `dependencies` names is among `packages`,
+/// saying that `user` uses it.
+auto require_dependencies(std::string_view user,
+                          PackageDependencies const& dependencies,
+                          std::span<package const> packages,
+                          diagnostic_handler& dh) -> failure_or<void>;
+
 /// Adds the operators and `let` bindings of `packages` to `reg`, each under its
 /// module in the `packages` root.
 ///
-/// Fails without changing `reg` if a package does not build, or if two
-/// packages have the same module name. Building only parses, so the packages
-/// may refer to each other in any order: names resolve where they are used.
+/// With `PackageVisibility::declared`, each package may name itself and what
+/// it declares, which has to be among `packages`. Packages are resolved here,
+/// after the packages they use, and may not use each other.
+///
+/// Fails without changing `reg` if a package does not build or resolve, if a
+/// dependency is missing, if packages use each other, or if two packages have
+/// the same module name.
 auto add_packages(registry& reg, std::span<package const> packages,
-                  diagnostic_handler& dh, SourceMap* source_map = nullptr)
-  -> failure_or<void>;
+                  diagnostic_handler& dh, SourceMap* source_map,
+                  PackageVisibility visibility) -> failure_or<void>;
 
 } // namespace tenzir

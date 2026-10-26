@@ -1589,7 +1589,8 @@ auto parse_source(std::string_view content, std::string const& origin,
     }
     auto expression = std::move(lowered).unwrap();
     auto provider = session_provider::make(dh, reg);
-    if (not resolve_entities(expression, provider.as_session())) {
+    if (not resolve_entities(expression, ExternPrelude::empty(),
+                             provider.as_session())) {
       fail_document(diagnostic::error("failed to resolve sigma rule").done());
       continue;
     }
@@ -2065,15 +2066,18 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       expression = std::move(result.first);
       artifacts = std::move(result.second);
       auto provider = session_provider::make(dh, reg);
-      resolved = bool{resolve_entities(expression, provider.as_session())};
+      resolved = bool{resolve_entities(expression, ExternPrelude::empty(),
+                                       provider.as_session())};
       for (auto& artifact : artifacts) {
         resolved = resolved
                    and bool{resolve_entities(artifact.expression,
+                                             ExternPrelude::empty(),
                                              provider.as_session())};
         for (auto& group : artifact.groups) {
           for (auto& item : group) {
             resolved = resolved
                        and bool{resolve_entities(item.expression,
+                                                 ExternPrelude::empty(),
                                                  provider.as_session())};
           }
         }
@@ -2582,7 +2586,8 @@ auto build_findings(table_slice const& matched_input,
     if (entry == field_values.end()) {
       auto expression = make_field_expr(field, bindings);
       auto provider = session_provider::make(dh, reg);
-      std::ignore = resolve_entities(expression, provider.as_session());
+      std::ignore = resolve_entities(expression, ExternPrelude::empty(),
+                                     provider.as_session());
       auto values = std::vector<data>{};
       values.reserve(matched_evaluation.rows());
       for (auto series :
@@ -2601,8 +2606,8 @@ auto build_findings(table_slice const& matched_input,
         } else {
           auto path_expression
             = make_private_field_expr(binding->second.evidence_path_column);
-          std::ignore
-            = resolve_entities(path_expression, provider.as_session());
+          std::ignore = resolve_entities(
+            path_expression, ExternPrelude::empty(), provider.as_session());
           for (auto series :
                eval(path_expression, matched_evaluation, base_ctx{dh, reg})
                  .parts()) {
@@ -3247,16 +3252,19 @@ auto plan_rule(SchemaEvaluationPlan& plan, auto const& schema,
     }
     auto [expression, identifiers] = std::move(lowered).unwrap();
     auto provider = session_provider::make(dh, reg);
-    auto resolved = bool{resolve_entities(expression, provider.as_session())};
+    auto resolved = bool{resolve_entities(expression, ExternPrelude::empty(),
+                                          provider.as_session())};
     for (auto& identifier : identifiers) {
       resolved = resolved
                  and bool{resolve_entities(identifier.expression,
+                                           ExternPrelude::empty(),
                                            provider.as_session())};
       for (auto& group : identifier.groups) {
         for (auto& item : group) {
-          resolved = resolved
-                     and bool{resolve_entities(item.expression,
-                                               provider.as_session())};
+          resolved
+            = resolved
+              and bool{resolve_entities(item.expression, ExternPrelude::empty(),
+                                        provider.as_session())};
         }
       }
     }
@@ -3911,7 +3919,8 @@ private:
       full_key,
       [&] {
         auto provider = session_provider::make(ctx.dh, ctx.reg);
-        std::ignore = resolve_entities(expression, provider.as_session());
+        std::ignore = resolve_entities(expression, ExternPrelude::empty(),
+                                       provider.as_session());
         return std::move(expression);
       },
       ctx.instantiate());

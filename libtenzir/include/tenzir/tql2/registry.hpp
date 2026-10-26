@@ -104,6 +104,9 @@ struct module_def {
   auto operator=(const module_def&) -> module_def& = delete;
   auto operator=(module_def&&) noexcept -> module_def& = default;
 
+  /// A deep copy. Copying is explicit, because a module can be large.
+  auto clone() const -> module_def;
+
   std::unordered_map<std::string, entity_set> defs;
 };
 

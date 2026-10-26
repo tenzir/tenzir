@@ -19,6 +19,7 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -387,6 +388,90 @@ auto package_source::parse(const view<record>& data)
   REQUIRED_FIELD(repository)
   REQUIRED_FIELD(directory)
   REQUIRED_FIELD(revision)
+  return result;
+}
+
+namespace {
+
+/// Fails if `value`, which states a version, is a number, as YAML reads an
+/// unquoted `1.2`.
+auto require_quoted_version(data_view const& value) -> caf::expected<void> {
+  if (try_as<double>(&value) or try_as<int64_t>(&value)
+      or try_as<uint64_t>(&value)) {
+    return diagnostic::error("a version must be a string")
+      .hint("quote it: YAML reads an unquoted `1.2` as a number")
+      .to_error();
+  }
+  return {};
+}
+
+} // namespace
+
+auto PackageDependency::parse(data_view const& data)
+  -> caf::expected<PackageDependency> {
+  auto result = PackageDependency{};
+  if (auto const* version = try_as<std::string_view>(&data)) {
+    result.version = std::string{*version};
+    return result;
+  }
+  TRY(require_quoted_version(data));
+  auto const* fields = try_as<view<record>>(&data);
+  if (not fields) {
+    return diagnostic::error("a dependency must be a version requirement or "
+                             "a record")
+      .note("got {}", data)
+      .to_error();
+  }
+  for (auto const& [key, value] : *fields) {
+    if (key == "version") {
+      TRY(require_quoted_version(value));
+    }
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(version);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(git);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(rev);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(path);
+    return diagnostic::error("unknown key `{}` in dependency", key)
+      .note("a dependency takes `version`, `git`, `rev` and `path`")
+      .to_error();
+  }
+  if (result.rev and not result.git) {
+    return diagnostic::error("a dependency with a `rev` needs the `git` "
+                             "repository it is a revision of")
+      .to_error();
+  }
+  return result;
+}
+
+auto parse_package_dependencies(data_view const& data)
+  -> caf::expected<PackageDependencies> {
+  auto result = PackageDependencies{};
+  // An empty `dependencies:` holds a null.
+  if (is<caf::none_t>(data)) {
+    return result;
+  }
+  auto const* dependencies = try_as<view<record>>(&data);
+  if (not dependencies) {
+    return diagnostic::error("dependencies must be a record")
+      .note("got {}", data)
+      .note("invalid package definition")
+      .to_error();
+  }
+  for (auto const& [dependency, spec] : *dependencies) {
+    if (not is_valid_package_identifier(dependency)) {
+      return diagnostic::error("invalid package id `{}` in dependencies",
+                               dependency)
+        .note("invalid package definition")
+        .to_error();
+    }
+    auto parsed = PackageDependency::parse(spec);
+    if (not parsed) {
+      return diagnostic::error(parsed.error())
+        .note("while parsing dependency {}", dependency)
+        .note("invalid package definition")
+        .to_error();
+    }
+    result.emplace(std::string{dependency}, std::move(*parsed));
+  }
   return result;
 }
 
@@ -788,6 +873,14 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(id);
     TRY_ASSIGN_STRING_TO_RESULT(name);
+    if (key == "version") {
+      TRY(require_quoted_version(value));
+    }
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(version);
+    if (key == "dependencies") {
+      TRY(result.dependencies, parse_package_dependencies(value));
+      continue;
+    }
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(package_icon);
@@ -1163,6 +1256,18 @@ auto package_config::to_record() const -> record {
   return result;
 }
 
+auto PackageDependency::to_record() const -> record {
+  auto result = record{};
+  for (auto const& [key, value] :
+       {std::pair{"version", &version}, std::pair{"git", &git},
+        std::pair{"rev", &rev}, std::pair{"path", &path}}) {
+    if (*value) {
+      result[key] = **value;
+    }
+  }
+  return result;
+}
+
 auto package_input::to_record() const -> record {
   auto result = record{
     {"name", name},
@@ -1251,6 +1356,16 @@ auto package::to_record() const -> record {
   record info_record;
   info_record["id"] = id;
   info_record["name"] = name;
+  if (version) {
+    info_record["version"] = *version;
+  }
+  if (not dependencies.empty()) {
+    auto dependencies_record = record{};
+    for (auto const& [dependency, spec] : dependencies) {
+      dependencies_record[dependency] = spec.to_record();
+    }
+    info_record["dependencies"] = std::move(dependencies_record);
+  }
   info_record["author"] = author;
   info_record["description"] = description;
   info_record["author_icon"] = author_icon;
@@ -1728,13 +1843,194 @@ auto build_package_module(const package& pkg, diagnostic_handler& dh,
   return module;
 }
 
-auto add_packages(registry& reg, std::span<package const> packages,
-                  diagnostic_handler& dh, SourceMap* source_map)
+auto extern_prelude(PackageDependencies const& dependencies) -> ExternPrelude {
+  auto result = ExternPrelude::empty();
+  for (auto const& [id, _] : dependencies) {
+    auto module = package_module_name(id);
+    result.add(module, module);
+  }
+  return result;
+}
+
+namespace {
+
+/// Resolves the operator bodies, the defaults of their parameters, and the
+/// `let` bindings in `mod`, letting them name what `prelude` holds.
+auto resolve_package_module(module_def& mod, ExternPrelude const& prelude,
+                            base_ctx ctx) -> failure_or<void> {
+  auto result = failure_or<void>{};
+  for (auto& [name, set] : mod.defs) {
+    if (set.op) {
+      if (auto* udo = try_as<user_defined_operator>(&set.op->inner())) {
+        if (not resolve_entities(udo->definition, prelude, ctx)) {
+          result = failure::promise();
+        }
+        for (auto* params : {&udo->positional_params, &udo->named_params}) {
+          for (auto& param : *params) {
+            if (param.default_value
+                and not resolve_entities(*param.default_value, prelude, ctx)) {
+              result = failure::promise();
+            }
+          }
+        }
+      }
+    }
+    if (set.let_def and not resolve_entities(*set.let_def, prelude, ctx)) {
+      result = failure::promise();
+    }
+    if (set.mod and not resolve_package_module(*set.mod, prelude, ctx)) {
+      result = failure::promise();
+    }
+  }
+  return result;
+}
+
+/// The indices of `packages` in an order where each comes after the packages
+/// it uses, or a failure if some of them use each other.
+auto dependency_order(std::span<package const> packages, diagnostic_handler& dh)
+  -> failure_or<std::vector<size_t>> {
+  auto index = std::unordered_map<std::string, size_t>{};
+  for (auto i = size_t{0}; i < packages.size(); ++i) {
+    index.emplace(packages[i].id, i);
+  }
+  enum class Mark { none, visiting, done };
+  auto marks = std::vector<Mark>(packages.size(), Mark::none);
+  auto order = std::vector<size_t>{};
+  auto path = std::vector<std::string>{};
+  auto visit = [&](this auto const& self, size_t i) -> failure_or<void> {
+    if (marks[i] == Mark::done) {
+      return {};
+    }
+    path.push_back(packages[i].id);
+    if (marks[i] == Mark::visiting) {
+      auto cycle = std::ranges::find(path, packages[i].id);
+      diagnostic::error("packages depend on each other: `{}`",
+                        fmt::join(cycle, path.end(), "` uses `"))
+        .emit(dh);
+      return failure::promise();
+    }
+    marks[i] = Mark::visiting;
+    for (auto const& [dependency, _] : packages[i].dependencies) {
+      auto it = index.find(dependency);
+      if (it != index.end()) {
+        TRY(self(it->second));
+      }
+    }
+    path.pop_back();
+    marks[i] = Mark::done;
+    order.push_back(i);
+    return {};
+  };
+  for (auto i = size_t{0}; i < packages.size(); ++i) {
+    TRY(visit(i));
+  }
+  return order;
+}
+
+/// Resolves the code in `modules`, which `packages` build, letting each
+/// package name itself and what it declares.
+///
+/// A package is resolved after the packages it uses, so that a binding it
+/// takes from one of them is resolved already, against what that package may
+/// name. Every package's names are known first, unresolved, so that a package
+/// may refer to its own operators and bindings in any order.
+auto resolve_declared(std::span<package const> packages,
+                      std::vector<std::unique_ptr<module_def>>& modules,
+                      registry const& reg, diagnostic_handler& dh)
   -> failure_or<void> {
+  auto result = failure_or<void>{};
+  for (auto const& pkg : packages) {
+    if (pkg.dependencies.contains(pkg.id)) {
+      diagnostic::error("package `{}` uses itself", pkg.id).emit(dh);
+      result = failure::promise();
+    }
+    if (not require_dependencies(fmt::format("package `{}`", pkg.id),
+                                 pkg.dependencies, packages, dh)) {
+      result = failure::promise();
+    }
+  }
+  TRY(result);
+  TRY(auto order, dependency_order(packages, dh));
+  auto names = reg.clone();
+  auto publish = [&](module_def const& module) {
+    for (auto const& [name, set] : module.defs) {
+      if (set.mod) {
+        names->replace_module(std::string{entity_pkg_packages}, name,
+                              std::make_unique<module_def>(set.mod->clone()));
+      }
+    }
+  };
+  for (auto const& module : modules) {
+    if (module) {
+      publish(*module);
+    }
+  }
+  // A package that uses one that failed is not resolved, so that only the
+  // failure itself is reported.
+  auto failed = std::unordered_set<std::string>{};
+  for (auto i : order) {
+    auto const& pkg = packages[i];
+    if (std::ranges::any_of(pkg.dependencies, [&](auto const& dependency) {
+          return failed.contains(dependency.first);
+        })) {
+      failed.insert(pkg.id);
+      continue;
+    }
+    if (not modules[i]) {
+      continue;
+    }
+    auto module = package_module_name(pkg.id);
+    auto prelude = extern_prelude(pkg.dependencies);
+    prelude.add(module, module);
+    auto resolved = true;
+    for (auto& [name, set] : modules[i]->defs) {
+      if (set.mod
+          and not resolve_package_module(*set.mod, prelude,
+                                         base_ctx{dh, *names})) {
+        resolved = false;
+      }
+    }
+    if (resolved) {
+      publish(*modules[i]);
+    } else {
+      failed.insert(pkg.id);
+    }
+  }
+  if (not failed.empty()) {
+    return failure::promise();
+  }
+  return {};
+}
+
+} // namespace
+
+auto require_dependencies(std::string_view user,
+                          PackageDependencies const& dependencies,
+                          std::span<package const> packages,
+                          diagnostic_handler& dh) -> failure_or<void> {
+  auto result = failure_or<void>{};
+  for (auto const& [dependency, _] : dependencies) {
+    if (std::ranges::none_of(packages, [&](package const& pkg) {
+          return pkg.id == dependency;
+        })) {
+      diagnostic::error("{} uses `{}`, which is not installed", user,
+                        dependency)
+        .emit(dh);
+      result = failure::promise();
+    }
+  }
+  return result;
+}
+
+auto add_packages(registry& reg, std::span<package const> packages,
+                  diagnostic_handler& dh, SourceMap* source_map,
+                  PackageVisibility visibility) -> failure_or<void> {
   auto had_errors = false;
   auto normalized_to_id = std::unordered_map<std::string, std::string>{};
-  auto modules = std::vector<std::unique_ptr<module_def>>{};
-  for (auto const& pkg : packages) {
+  // The module each package builds, if it has operators or bindings.
+  auto modules = std::vector<std::unique_ptr<module_def>>(packages.size());
+  for (auto i = size_t{0}; i < packages.size(); ++i) {
+    auto const& pkg = packages[i];
     if (pkg.operators.empty() and pkg.lets.empty()) {
       continue;
     }
@@ -1755,13 +2051,19 @@ auto add_packages(registry& reg, std::span<package const> packages,
       continue;
     }
     if (not(*module)->defs.empty()) {
-      modules.push_back(std::move(*module));
+      modules[i] = std::move(*module);
     }
   }
   if (had_errors) {
     return failure::promise();
   }
+  if (visibility == PackageVisibility::declared) {
+    TRY(resolve_declared(packages, modules, reg, dh));
+  }
   for (auto& module : modules) {
+    if (not module) {
+      continue;
+    }
     for (auto& [name, set] : module->defs) {
       if (not set.mod) {
         TENZIR_ASSERT(not set.fn and not set.op);

@@ -19,6 +19,7 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
 #include <fmt/format.h>
@@ -45,6 +46,8 @@ auto fingerprint_of(std::string_view text, registry const& reg
   auto tokens = tokenize_permissive(source->text);
   auto parsed = parse(tokens, *source, ctx);
   REQUIRE(parsed);
+  REQUIRE(
+    resolve_entities(*parsed, ExternPrelude::all_packages_deprecated(), ctx));
   auto root = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()}, sources);
   auto compiled = std::move(*parsed).compile(root);
   REQUIRE(compiled);
@@ -65,7 +68,8 @@ auto with_acme(std::string body, std::string base, std::string op = "double")
   REQUIRE(pkg);
   auto reg = test::builtin_registry().clone();
   auto packages = std::vector<package>{std::move(*pkg)};
-  REQUIRE(add_packages(*reg, packages, dh));
+  REQUIRE(add_packages(*reg, packages, dh, nullptr,
+                       PackageVisibility::all_deprecated));
   return Arc<registry const>::from_non_null(std::move(reg));
 }
 

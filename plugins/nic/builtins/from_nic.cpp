@@ -18,6 +18,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/tql2/parser.hpp>
+#include <tenzir/tql2/resolve.hpp>
 
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Task.h>
@@ -93,6 +94,7 @@ auto make_default_parser_pipeline(diagnostic_handler& dh, registry const& reg,
   auto session = provider.as_session();
   TRY(auto ast,
       parse_pipeline_with_location_override("read_pcap", self, session));
+  TRY(resolve_entities(ast, ExternPrelude::empty(), session));
   auto root = compile_ctx::make_root(base_ctx{session.dh(), session.reg()});
   return std::move(ast).compile(root);
 }

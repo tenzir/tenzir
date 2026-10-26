@@ -70,7 +70,7 @@ auto parse(std::string_view source) -> ast::expression {
   auto expr
     = parse_expression_with_location_override(source, location::unknown, ctx);
   REQUIRE(expr);
-  REQUIRE(resolve_entities(*expr, ctx));
+  REQUIRE(resolve_entities(*expr, ExternPrelude::empty(), ctx));
   return std::move(*expr);
 }
 

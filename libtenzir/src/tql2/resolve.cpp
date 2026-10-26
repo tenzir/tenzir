@@ -51,8 +51,9 @@ auto flatten_deprecated_path(const std::vector<ast::identifier>& path)
 
 class entity_resolver : public ast::visitor<entity_resolver> {
 public:
-  explicit entity_resolver(const registry& reg, diagnostic_handler& diag)
-    : reg_{reg}, diag_{diag} {
+  entity_resolver(const registry& reg, diagnostic_handler& diag,
+                  ExternPrelude const& prelude)
+    : reg_{reg}, diag_{diag}, prelude_{prelude} {
   }
 
   void visit(ast::entity& x) {
@@ -192,22 +193,33 @@ public:
       }
       return false;
     };
-    // Because there currently is no way to bring additional entities into the
-    // scope, we can directly dispatch to the registry.
+    // What the first segment stands for: itself, unless it names a package,
+    // which the prelude maps to the module that holds it.
+    auto first = x.path[0].name;
     auto pkg = std::invoke([&]() -> Option<entity_pkg> {
       // Resolution precedence: cfg (user overrides) -> std (builtins) ->
       // packages (installed)
-      for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
-                       std::string{entity_pkg_packages}}) {
-        auto path = entity_path{pkg, {x.path[0].name}, first_ns};
+      for (auto pkg :
+           {std::string{entity_pkg_cfg}, std::string{entity_pkg_std}}) {
+        auto path = entity_path{pkg, {first}, first_ns};
         if (is<entity_ref>(reg_.try_get(path))) {
           return pkg;
+        }
+      }
+      if (auto module = prelude_.module(first)) {
+        auto path = entity_path{
+          std::string{entity_pkg_packages}, {std::string{*module}}, first_ns};
+        if (is<entity_ref>(reg_.try_get(path))) {
+          first = std::string{*module};
+          return std::string{entity_pkg_packages};
         }
       }
       return None{};
     });
     if (not pkg) {
-      if (relay_deprecated()) {
+      // A package that code may not name is not there for it, so a
+      // deprecated builtin spelling relays even if such a package exists.
+      if (relay_deprecated() or report_undeclared(x.path[0], first_ns)) {
         return;
       }
       report_not_found(x.path, 0, first_ns);
@@ -216,7 +228,8 @@ public:
     // After figuring out which package it belongs to, we try the full path.
     auto segments = std::vector<std::string>{};
     segments.reserve(x.path.size());
-    for (auto& segment : x.path) {
+    segments.push_back(std::move(first));
+    for (auto& segment : x.path | std::views::drop(1)) {
       segments.push_back(segment.name);
     };
     auto path = entity_path{*pkg, std::move(segments), target_ns};
@@ -239,10 +252,22 @@ public:
     if (x.value) {
       return;
     }
-    // The full path is the module segments followed by the binding name.
+    // The full path is the module segments followed by the binding name, the
+    // first segment being the package as the prelude maps it.
+    auto module = prelude_.module(x.path[0].name);
+    if (not module) {
+      if (not report_undeclared(x.path[0], entity_ns::mod)) {
+        diagnostic::error("package `{}` not found", x.path[0].name)
+          .primary(x.path[0])
+          .emit(diag_);
+        result_ = failure::promise();
+      }
+      return;
+    }
     auto segments = std::vector<std::string>{};
     segments.reserve(x.path.size() + 1);
-    for (auto& segment : x.path) {
+    segments.emplace_back(*module);
+    for (auto& segment : x.path | std::views::drop(1)) {
       segments.push_back(segment.name);
     }
     segments.push_back(std::string{x.name_without_dollar()});
@@ -276,7 +301,9 @@ public:
       return;
     }
     // Resolve the binding's expression here, where the full registry is
-    // available, then cache the constant result on the node.
+    // available, then cache the constant result on the node. A package is
+    // resolved before the packages that use it, so a binding of another
+    // package is resolved already, against what that package may name.
     auto expr = def->get();
     visit(expr);
     resolving_.erase(key);
@@ -351,39 +378,127 @@ public:
   }
 
 private:
+  /// Reports `name` as a package that exists but that the prelude does not
+  /// let code name, if it is one.
+  auto report_undeclared(ast::identifier const& name, entity_ns ns) -> bool {
+    if (prelude_.all()) {
+      return false;
+    }
+    auto path = entity_path{std::string{entity_pkg_packages}, {name.name}, ns};
+    if (not is<entity_ref>(reg_.try_get(path))) {
+      return false;
+    }
+    diagnostic::error("package `{}` is not among the dependencies", name.name)
+      .primary(name)
+      .hint("add it to `dependencies` in `package.yaml`")
+      .emit(diag_);
+    result_ = failure::promise();
+    return true;
+  }
+
   enum class context_t { none, op_name, fn_name };
   const registry& reg_;
   diagnostic_handler& diag_;
+  ExternPrelude const& prelude_;
   context_t context_ = context_t::none;
   failure_or<void> result_;
   // Package `let` paths currently being resolved, to detect reference cycles.
   std::unordered_set<std::string> resolving_;
 };
 
+/// Finds whether some entity in what it visits is not resolved yet.
+class ResolutionCheck : public ast::visitor<ResolutionCheck> {
+public:
+  void visit(ast::entity& x) {
+    resolved_ = resolved_ and x.ref.resolved();
+  }
+
+  void visit(ast::pkg_dollar_var& x) {
+    resolved_ = resolved_ and x.value.is_some();
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  auto resolved() const -> bool {
+    return resolved_;
+  }
+
+private:
+  bool resolved_ = true;
+};
+
+template <class T>
+auto resolve(T& x, ExternPrelude const& prelude, registry const& reg,
+             diagnostic_handler& dh) -> failure_or<void> {
+  auto resolver = entity_resolver{reg, dh, prelude};
+  resolver.visit(x);
+  return resolver.get_failure();
+}
+
 } // namespace
 
-auto resolve_entities(ast::pipeline& pipe, session ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx.reg(), ctx.dh()};
-  resolver.visit(pipe);
-  return resolver.get_failure();
+auto ExternPrelude::empty() -> ExternPrelude {
+  auto result = ExternPrelude{};
+  result.modules_.emplace();
+  return result;
 }
 
-auto resolve_entities(ast::pipeline& pipe, base_ctx ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx, ctx};
-  resolver.visit(pipe);
-  return resolver.get_failure();
+auto ExternPrelude::all_packages_deprecated() -> ExternPrelude {
+  return ExternPrelude{};
 }
 
-auto resolve_entities(ast::expression& expr, session ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx.reg(), ctx.dh()};
-  resolver.visit(expr);
-  return resolver.get_failure();
+void ExternPrelude::add(std::string name, std::string module) {
+  TENZIR_ASSERT(modules_, "every package is already in the prelude");
+  modules_->insert_or_assign(std::move(name), std::move(module));
 }
 
-auto resolve_entities(ast::function_call& fc, session ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx.reg(), ctx.dh()};
-  resolver.visit(fc);
-  return resolver.get_failure();
+auto ExternPrelude::module(std::string_view name) const
+  -> Option<std::string_view> {
+  if (not modules_) {
+    return name;
+  }
+  if (auto it = modules_->find(name); it != modules_->end()) {
+    return std::string_view{it->second};
+  }
+  return None{};
+}
+
+auto ExternPrelude::all() const -> bool {
+  return not modules_;
+}
+
+auto resolve_entities(ast::pipeline& pipe, ExternPrelude const& prelude,
+                      base_ctx ctx) -> failure_or<void> {
+  return resolve(pipe, prelude, ctx, ctx);
+}
+
+auto resolve_entities(ast::pipeline& pipe, ExternPrelude const& prelude,
+                      session ctx) -> failure_or<void> {
+  return resolve(pipe, prelude, ctx.reg(), ctx.dh());
+}
+
+auto resolve_entities(ast::expression& expr, ExternPrelude const& prelude,
+                      base_ctx ctx) -> failure_or<void> {
+  return resolve(expr, prelude, ctx, ctx);
+}
+
+auto resolve_entities(ast::expression& expr, ExternPrelude const& prelude,
+                      session ctx) -> failure_or<void> {
+  return resolve(expr, prelude, ctx.reg(), ctx.dh());
+}
+
+auto resolve_entities(ast::function_call& fc, ExternPrelude const& prelude,
+                      session ctx) -> failure_or<void> {
+  return resolve(fc, prelude, ctx.reg(), ctx.dh());
+}
+
+auto entities_resolved(ast::pipeline& pipe) -> bool {
+  auto check = ResolutionCheck{};
+  check.visit(pipe);
+  return check.resolved();
 }
 
 } // namespace tenzir

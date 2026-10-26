@@ -39,7 +39,7 @@ TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
   auto expr = parse_expression_with_location_override(
     "sort(xs, cmp=(l, r) => missing)", location::unknown, ctx);
   REQUIRE(expr);
-  auto resolved = resolve_entities(*expr, ctx);
+  auto resolved = resolve_entities(*expr, ExternPrelude::empty(), ctx);
   REQUIRE(resolved);
   auto row = data{
     record{
@@ -63,7 +63,7 @@ TEST("sort preserves nested list value type metadata") {
   auto expr = parse_expression_with_location_override("sort(r)",
                                                       location::unknown, ctx);
   REQUIRE(expr);
-  auto resolved = resolve_entities(*expr, ctx);
+  auto resolved = resolve_entities(*expr, ExternPrelude::empty(), ctx);
   REQUIRE(resolved);
   auto row = data{
     record{

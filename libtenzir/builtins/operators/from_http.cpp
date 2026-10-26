@@ -39,6 +39,7 @@
 #include <tenzir/startup_argument.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/resolve.hpp>
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
 #include <tenzir/variant.hpp>
@@ -807,6 +808,7 @@ auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
                           OpCtx& ctx) -> failure_or<ir::pipeline> {
   auto ast = ast::pipeline{};
   ast.body.emplace_back(invocation_for_plugin(plugin, loc));
+  TRY(resolve_entities(ast, ExternPrelude::empty(), base_ctx{ctx}));
   auto root = compile_ctx::make_root(ctx);
   return std::move(ast).compile(root);
 }

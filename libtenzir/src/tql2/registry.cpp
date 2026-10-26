@@ -381,28 +381,25 @@ void registry::remove_module(const entity_pkg& package, std::string_view name) {
   }
 }
 
-namespace {
-auto clone_module(const module_def& src) -> std::unique_ptr<module_def> {
-  auto out = std::make_unique<module_def>();
-  for (const auto& [k, v] : src.defs) {
-    entity_set set{};
-    set.fn = v.fn;
-    set.op = v.op;
-    set.let_def = v.let_def;
-    if (v.mod) {
-      set.mod = clone_module(*v.mod);
+auto module_def::clone() const -> module_def {
+  auto result = module_def{};
+  for (auto const& [name, set] : defs) {
+    auto copy = entity_set{};
+    copy.fn = set.fn;
+    copy.op = set.op;
+    copy.let_def = set.let_def;
+    if (set.mod) {
+      copy.mod = std::make_unique<module_def>(set.mod->clone());
     }
-    out->defs.emplace(k, std::move(set));
+    result.defs.emplace(name, std::move(copy));
   }
-  return out;
+  return result;
 }
-} // namespace
 
 auto registry::clone() const -> std::unique_ptr<registry> {
   auto out = std::make_unique<registry>();
   for (const auto& [name, mod] : roots_) {
-    auto cloned = clone_module(mod);
-    out->roots_.emplace(name, std::move(*cloned));
+    out->roots_.emplace(name, mod.clone());
   }
   return out;
 }
