@@ -120,12 +120,12 @@ auto append(duckdb_connection con, int64_t offset, bool query_appender = true)
       }
     }
     duckdb_data_chunk_set_size(chunk, size);
-    require(duckdb_append_data_chunk(appender, chunk) == DuckDBSuccess,
-            duckdb_appender_error(appender));
+    status = duckdb_append_data_chunk(appender, chunk);
+    require(status == DuckDBSuccess, duckdb_appender_error(appender));
   }
   duckdb_destroy_data_chunk(&chunk);
-  require(duckdb_appender_close(appender) == DuckDBSuccess,
-          duckdb_appender_error(appender));
+  status = duckdb_appender_close(appender);
+  require(status == DuckDBSuccess, duckdb_appender_error(appender));
   require(duckdb_appender_destroy(&appender) == DuckDBSuccess,
           "destroy appender");
 }
@@ -139,6 +139,13 @@ auto main(int argc, char** argv) -> int {
   auto client_uri = argc == 4 ? std::string{"quack:127.0.0.1:"} + argv[2] : uri;
   auto server = Database{};
   auto client = Database{};
+  // Match Tenzir's Quack connection settings.
+  query(client.con, "SET threads = 1");
+  if (scalar(client.con, "SELECT count(*) FROM duckdb_optimizers() "
+                         "WHERE name = 'remote_pushdown'")
+      != 0) {
+    query(client.con, "SET disabled_optimizers = 'remote_pushdown'");
+  }
   query(server.con, "CREATE TABLE events (id BIGINT, payload VARCHAR, "
                     "omitted INTEGER DEFAULT 42)");
   query(server.con, "CALL quack_serve('" + uri + "', token = 'spike-only')");
@@ -234,7 +241,8 @@ auto main(int argc, char** argv) -> int {
   if (sql_rollback != 0 or query_rollback != rows or direct_rollback != 2 * rows
       or primed_rollback != 2 * rows) {
     std::fflush(stdout);
-    std::fputs("NOTE: remote rollback is not reliable in this Quack version\n",
+    std::fputs("FAIL: remote rollback did not preserve the expected rows\n",
                stderr);
+    return EXIT_FAILURE;
   }
 }
