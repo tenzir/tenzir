@@ -17,6 +17,23 @@ Telemetry delivery is best effort and does not enable operator profiling.
 
 *By @tobim.*
 
+### Cisco syslog headers and PRI-prefixed text
+
+The `read_syslog` operator and `parse_syslog` function now accept Cisco ASA headers and Cisco headers with a hostname before the timestamp. They also accept text with only a syslog priority prefix when explicitly enabled:
+
+```tql
+from {line: "<166>Sep 01 2026 16:46:57: %ASA-6-302014: message"},
+     {line: "<45>: HOSTNAME-123: Jan 14 05:25:06.737: %FW-6-SESS_AUDIT_TRAIL: message"},
+     {line: "<45>message"}
+this = line.parse_syslog(accept_pri_only=true)
+```
+
+The third record produces `facility: 5`, `severity: 5`, and `content: "message"`, with null header fields. Standard syslog headers take precedence over this fallback. The option defaults to `false`, so malformed headers do not silently become PRI-only records. Use `read_syslog accept_pri_only=true` for streams that intentionally contain this format. Enabling the option also accepts malformed headers with a valid PRI prefix as text, without a parsing warning. Automatic format detection leaves the option disabled and still requires a recognizable header.
+
+The additional Cisco formats use the existing Cisco field mapping: a prefix such as `%ASA-6-302014:` becomes `app_name: "ASA-6-302014"`, and `content` contains the remaining description. Both parsing entry points now support these Cisco formats. The syslog `severity` continues to come from the PRI prefix, even if the embedded Cisco severity differs.
+
+*By @zedoraps.*
+
 ### Cloudflare Workers AI and OpenAI Decisions endpoints for ai_decide
 
 The `ai_decide` operator now works with the decision models that Cloudflare Workers AI and OpenAI host, so you can triage events with a provider you already use instead of running your own System One server. Pass the URL of the model as `endpoint`.
@@ -182,6 +199,13 @@ Tenzir now uses a new data model. It brings:
 
 Read more about it in our [blog](https://tenzir.com/blog).
 
+Some computed values differ between the two data models:
+
+- The `type_id` function and the `schema_id` that `measure` reports return different IDs for the same type.
+- Hash functions such as `hash_sha256` and `hash_xxh3` return different digests for records and lists. Hashes of other values do not change.
+
+If you store such values, for example to deduplicate events or findings, values computed before and after the upgrade no longer match.
+
 To switch back to the old data model, set `tenzir.nova: false` in your `tenzir.yaml` or the environment variable `TENZIR_NOVA=false`. The old data model is deprecated and will be removed in a future release.
 
 *By @IyeOnline.*
@@ -278,6 +302,8 @@ from_duckdb ":memory:",
 
 Use `sheet` to select a worksheet and `header=true` to turn its first row into field names.
 
+New database files use the DuckDB 2.0 storage format and require DuckDB 2.0 or later to open. Existing database files keep their earlier storage format and remain readable by earlier DuckDB versions.
+
 Write events to a remote table, creating it if needed:
 
 ```tql
@@ -286,9 +312,9 @@ to_duckdb "quack:analytics.example.com:443",
   token=secret("duckdb-token"), table="alerts"
 ```
 
-Remote SQL runs on the server. TLS is enabled by default except for loopback hosts. Quack is beta: failed writes can leave partial results.
+Remote SQL runs on the server. TLS is enabled by default except for loopback hosts. Remote Quack connections require a DuckDB 2.0 server; DuckDB 1.x servers are not supported.
 
-*By @mavam.*
+*By @mavam and @zedoraps.*
 
 ### Record conversion to key-value entries
 
@@ -707,6 +733,27 @@ The ordered comparisons `<`, `>`, `<=`, and `>=` remain partial and still evalua
 
 *By @aljazerzen.*
 
+### Faster Microsoft Graph user listings with head and select
+
+The `from_microsoft_graph` operator now applies the `where`, `select`, and `head` operators that follow it while it pages through a resource. It stops paging and polling for delta changes as soon as `head` has enough events, so a quick look at a large tenant no longer downloads every page:
+
+```tql
+from_microsoft_graph "users",
+  auth={
+    tenant_id: "...",
+    client_id: "...",
+    client_secret: secret("graph-client-secret"),
+  }
+select id, displayName, mail
+head 10
+```
+
+When listing `users` in the `v1.0` API, the operator also asks Microsoft Graph for less data. A `head` without a preceding `where` sets the page size with `$top`, up to the maximum of 999. A `select` that only keeps properties from the default set that Graph returns for users, such as `id`, `displayName`, and `mail`, becomes a `$select` that requests only those properties.
+
+Filters always run locally with exact TQL semantics and never become a `$filter`. Your own `odata` options take precedence over the translated ones, and other resources, the `beta` API, and delta queries keep every request unchanged.
+
+*By @mavam.*
+
 ### Filter and time-window pushdown for SentinelOne
 
 You can now query SentinelOne Data Lake entirely in TQL, without writing PowerQuery or passing `query`, `start`, or `end` to `from_sentinelone_data_lake`:
@@ -1056,6 +1103,14 @@ For such lists, the `/serve` endpoints stringify the elements of the served even
 
 *By @aljazerzen.*
 
+### Hostname verification for TLS client connections
+
+Operators that connect to HTTPS servers, such as `from_http`, `to_http`, `to_opensearch`, `to_splunk`, and `to_prometheus`, now enable TLS hostname validation by default: the server certificate must match the hostname or IP address in the URL. Previously, they accepted any certificate issued by a trusted CA, even one issued for a different host. The same applies to TLS connections to HTTPS proxies.
+
+Connections with `tls.skip_peer_verification` set to `true` continue to accept any certificate.
+
+*By @lava.*
+
 ### HTTP retries in strict pipelines
 
 The `from_http` operator now retries transient HTTP and connection failures inside `strict` pipelines without emitting intermediate warnings:
@@ -1134,11 +1189,32 @@ The `read_json` operator no longer fails with `UTF8_ERROR` when an input chunk e
 
 *By @mavam.*
 
+### Reliable output from concurrent subpipelines
+
+Pipelines that emit results from multiple subpipelines no longer intermittently lose events, hang, or fail with an internal error. In particular, adding field assignments after `group` now preserves results from every group. The fix also applies to affected pipelines using `each`, `window`, and stream or ZeroMQ sources.
+
+*By @aljazerzen.*
+
 ### Reliable subscribe metrics for short-lived pipelines
 
 The `subscribe` operator no longer loses its `tenzir.metrics.subscribe` and `tenzir.metrics.subscribe_buffer` events for pipelines that finish within the one-second metrics interval. Previously, such pipelines only emitted their metrics during an asynchronous teardown that could outlive the pipeline's metrics receiver, in which case the metrics were silently dropped.
 
 *By @aljazerzen.*
+
+### Required field and constraint validation in the ocsf_cast function
+
+The `ocsf_cast` function now warns when an event lacks a field that its OCSF class or object marks as required, or when it violates one of the schema's `at_least_one` or `just_one` constraints. Previously, such events passed through silently even though they are not valid OCSF. The `ocsf_cast` operator does not perform these checks.
+
+For example, `this = ocsf_cast(this)` on an Authentication event without a `user` or with a `user` that has none of its identifying fields now reports:
+
+```text
+warning: required field `user` is missing
+warning: `user` needs at least one of `account`, `name`, `uid`, but has none
+```
+
+Required fields inside an optional object only count when that object is present. The new checks only add warnings and never drop events, so existing pipelines keep running. Fix the mapping to populate the reported fields.
+
+*By @zedoraps.*
 
 ### Spurious import errors when stopping pipelines that use `python`
 
