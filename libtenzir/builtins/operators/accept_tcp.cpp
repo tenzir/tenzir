@@ -196,7 +196,7 @@ struct TcpAccept {
         co_return false;
       }
       if (resolved->tls.inner) {
-        auto context = resolved->make_folly_ssl_context(ctx);
+        auto context = resolved->make_folly_ssl_context(ctx, {});
         if (not context) {
           co_return false;
         }

@@ -733,6 +733,8 @@ struct FetchConfig {
   uint32_t max_retry_count = http::default_max_retry_count;
   std::chrono::milliseconds retry_delay = http::default_retry_delay;
   std::shared_ptr<folly::SSLContext> tls_context;
+  // The host that `tls_context` verifies server certificates against.
+  std::string tls_context_host;
 };
 
 auto make_fetch_config(FromHttpArgs const& args) -> FetchConfig {
@@ -1248,7 +1250,9 @@ private:
     response_ = None{};
     pagination_.odata_envelope_seen = false;
     auto parsed_url = proxygen::URL{pagination_.current_url};
-    if (parsed_url.isSecure() and not fetch_config_.tls_context) {
+    if (parsed_url.isSecure()
+        and (not fetch_config_.tls_context
+             or fetch_config_.tls_context_host != parsed_url.getHost())) {
       auto tls_opts
         = tls_options::from_optional(args_.tls, {.is_server = false});
       auto tls = tls_opts.resolve(ctx.actor_system().config(), ctx);
@@ -1256,9 +1260,11 @@ private:
         lifecycle_ = Lifecycle::done;
         co_return;
       }
-      auto result = tls->make_folly_ssl_context(ctx, true);
+      auto result
+        = tls->make_folly_ssl_context(ctx, parsed_url.getHost(), true);
       if (result.is_success()) {
         fetch_config_.tls_context = std::move(*result);
+        fetch_config_.tls_context_host = parsed_url.getHost();
       } else {
         lifecycle_ = Lifecycle::done;
         co_return;
@@ -1644,7 +1650,9 @@ private:
     response_ = None{};
     pagination_.odata_envelope_seen = false;
     auto parsed_url = proxygen::URL{pagination_.current_url};
-    if (parsed_url.isSecure() and not fetch_config_.tls_context) {
+    if (parsed_url.isSecure()
+        and (not fetch_config_.tls_context
+             or fetch_config_.tls_context_host != parsed_url.getHost())) {
       auto tls_opts
         = tls_options::from_optional(args_.tls, {.is_server = false});
       auto tls = tls_opts.resolve(ctx.actor_system().config(), ctx);
@@ -1652,9 +1660,11 @@ private:
         lifecycle_ = Lifecycle::done;
         co_return;
       }
-      auto result = tls->make_folly_ssl_context(ctx, true);
+      auto result
+        = tls->make_folly_ssl_context(ctx, parsed_url.getHost(), true);
       if (result.is_success()) {
         fetch_config_.tls_context = std::move(*result);
+        fetch_config_.tls_context_host = parsed_url.getHost();
       } else {
         lifecycle_ = Lifecycle::done;
         co_return;

@@ -266,7 +266,8 @@ public:
         lifecycle_ = Lifecycle::done;
         co_return;
       }
-      auto ssl_result = tls->make_folly_ssl_context(ctx.dh(), true);
+      auto ssl_result = tls->make_folly_ssl_context(
+        ctx.dh(), proxygen::URL{url_}.getHost(), true);
       if (ssl_result.is_error()) {
         lifecycle_ = Lifecycle::done;
         co_return;
@@ -771,7 +772,8 @@ public:
         lifecycle_ = Lifecycle::done;
         co_return;
       }
-      auto ssl_result = tls->make_folly_ssl_context(ctx.dh(), true);
+      auto ssl_result = tls->make_folly_ssl_context(
+        ctx.dh(), proxygen::URL{url_}.getHost(), true);
       if (ssl_result.is_error()) {
         lifecycle_ = Lifecycle::done;
         co_return;

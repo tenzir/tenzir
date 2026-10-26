@@ -1,0 +1,18 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+      tls: true
+assertions:
+  fixtures:
+    tcp:
+      server_sent_contains: "foo"
+timeout: 60
+---
+
+// The endpoint is an IP address. The server certificate lists it as an IP
+// SAN next to a DNS SAN, which a DNS-only name check would reject.
+from_tcp env("TCP_ENDPOINT"), tls={cacert: env("TCP_CAFILE")} {
+  read_lines
+}
+head 1

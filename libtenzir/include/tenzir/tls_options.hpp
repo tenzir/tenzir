@@ -33,6 +33,12 @@ auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int>;
 auto parse_caf_tls_version(std::string_view version)
   -> caf::expected<caf::net::ssl::tls>;
 
+/// Makes connections created from `ctx` accept only server certificates
+/// issued for `host`, which is a DNS name or an IP address. Has no effect on
+/// connections that skip peer verification.
+auto set_expected_peer_name(folly::SSLContext const& ctx, std::string_view host)
+  -> bool;
+
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
                                      std::string_view service_name = {},
                                      Option<uint64_t> plaintext_port = None{},
@@ -89,8 +95,11 @@ struct TlsConfig {
   /// Returns nullptr if TLS is disabled and not required by the caller,
   /// a configured context on success, or failure on error
   /// (diagnostics emitted via dh).
-  auto make_folly_ssl_context(diagnostic_handler& dh, bool tls_required
-                                                      = false) const
+  /// In client mode, `peer_name` is the host name or IP address that the
+  /// server certificate must be issued for. Servers pass an empty string.
+  auto
+  make_folly_ssl_context(diagnostic_handler& dh, std::string_view peer_name,
+                         bool tls_required = false) const
     -> failure_or<std::shared_ptr<folly::SSLContext>>;
 
   /// Escape hatch for utility code that does not have access to an

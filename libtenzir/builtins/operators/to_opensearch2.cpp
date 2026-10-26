@@ -33,6 +33,7 @@
 #include <boost/url/url.hpp>
 #include <fmt/core.h>
 #include <folly/coro/BoundedQueue.h>
+#include <proxygen/lib/utils/URL.h>
 
 namespace tenzir::plugins::opensearch2 {
 namespace {
@@ -329,7 +330,8 @@ public:
       if (tls.is_error()) {
         co_return;
       }
-      auto ssl_context = tls->make_folly_ssl_context(ctx, true);
+      auto ssl_context
+        = tls->make_folly_ssl_context(ctx, proxygen::URL{url_}.getHost(), true);
       if (ssl_context.is_error()) {
         co_return;
       }

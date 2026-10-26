@@ -22,6 +22,7 @@
 #include <folly/portability/Time.h>
 #include <proxygen/lib/http/coro/HTTPError.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
+#include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
 #include <cctype>
@@ -329,7 +330,8 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
     .on_retry = {},
   };
   if (tls_enabled) {
-    TRY(auto ssl_context, resolved.make_folly_ssl_context(dh, true));
+    TRY(auto ssl_context, resolved.make_folly_ssl_context(
+                            dh, proxygen::URL{url}.getHost(), true));
     config.ssl_context = std::move(ssl_context);
   }
   return config;

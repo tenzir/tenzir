@@ -125,6 +125,9 @@ class HttpServerOptions:
         header_value: str = ""
 
     tls: bool = False
+    # Subject alternative names of the server certificate, e.g., to serve a
+    # certificate that does not match the URL host.
+    tls_san: list[str] | None = None
     proxy: bool = False
     expected_count: int | None = None
     expected: list[ExpectedRequest | dict[str, object]] = dataclasses.field(
@@ -665,6 +668,7 @@ def run() -> Iterator[dict[str, str]]:
         cert_path, key_path, ca_path, cert_and_key_path = generate_self_signed_cert(
             temp_dir,
             common_name="127.0.0.1",
+            **({"san_entries": opts.tls_san} if opts.tls_san is not None else {}),
         )
         tls_env = {
             "HTTP_FIXTURE_TLS_CERTFILE": str(cert_path),

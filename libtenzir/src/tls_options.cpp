@@ -17,6 +17,7 @@
 #include <curl/curl.h>
 #include <folly/io/async/SSLContext.h>
 #include <openssl/ssl.h>
+#include <openssl/x509v3.h>
 
 #include <algorithm>
 #include <array>
@@ -113,6 +114,19 @@ constexpr auto inner(const Option<located<T>>& x) -> Option<T> {
 }
 
 } // namespace
+
+auto set_expected_peer_name(folly::SSLContext const& ctx, std::string_view host)
+  -> bool {
+  // `SSL_new` copies these parameters into every connection of the context.
+  auto* param = SSL_CTX_get0_param(ctx.getSSLCtx());
+  auto name = std::string{host};
+  if (X509_VERIFY_PARAM_set1_ip_asc(param, name.c_str()) == 1) {
+    return true;
+  }
+  X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+  return not name.empty()
+         and X509_VERIFY_PARAM_set1_host(param, name.data(), name.size()) == 1;
+}
 
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
                                      std::string_view service_name,
@@ -674,6 +688,7 @@ auto TlsConfig::apply_to(curl::easy& easy, std::string_view url) const
 }
 
 auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
+                                       std::string_view peer_name,
                                        bool tls_required) const
   -> failure_or<std::shared_ptr<folly::SSLContext>> {
   if (not tls.inner and not tls_required) {
@@ -787,6 +802,12 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
+  }
+  if (not is_server and not skip_verify
+      and not set_expected_peer_name(*ctx, peer_name)) {
+    diagnostic::error("failed to set the expected server name `{}`", peer_name)
+      .emit(dh);
+    return failure::promise();
   }
   return ctx;
 }

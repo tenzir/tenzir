@@ -548,7 +548,7 @@ public:
       co_return;
     }
     if (resolved_tls->tls.inner) {
-      auto context = resolved_tls->make_folly_ssl_context(ctx);
+      auto context = resolved_tls->make_folly_ssl_context(ctx, {});
       if (not context) {
         lifecycle_ = Lifecycle::done;
         co_return;
@@ -1130,7 +1130,7 @@ public:
       co_return;
     }
     if (resolved_tls->tls.inner) {
-      auto context = resolved_tls->make_folly_ssl_context(ctx);
+      auto context = resolved_tls->make_folly_ssl_context(ctx, {});
       if (not context) {
         lifecycle_ = Lifecycle::done;
         co_return;

@@ -16,6 +16,7 @@
 #include "tenzir/ip.hpp"
 #include "tenzir/proxy_settings.hpp"
 #include "tenzir/ref.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include <fmt/format.h>
 #include <folly/ScopeGuard.h>
@@ -25,6 +26,8 @@
 #include <proxygen/lib/http/coro/client/CoroDNSResolver.h>
 #include <proxygen/lib/http/coro/client/HTTPClient.h>
 #include <proxygen/lib/utils/URL.h>
+
+#include <stdexcept>
 
 namespace tenzir {
 
@@ -110,6 +113,12 @@ auto open_http_proxy_session(
   proxy_addr.setPort(proxy->port);
   auto proxy_conn_params
     = proxygen::coro::HTTPClient::getConnParams(proxy_secure, proxy->host);
+  if (proxy_conn_params.sslContext
+      and not set_expected_peer_name(*proxy_conn_params.sslContext,
+                                     proxy->host)) {
+    co_yield folly::coro::co_error(std::runtime_error{
+      fmt::format("invalid TLS server name `{}`", proxy->host)});
+  }
   auto& proxy_session = *co_await proxygen::coro::HTTPCoroConnector::connect(
     &evb, std::move(proxy_addr), connect_timeout, std::move(proxy_conn_params),
     proxygen::coro::HTTPCoroConnector::defaultSessionParams());

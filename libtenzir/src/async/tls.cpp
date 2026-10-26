@@ -16,7 +16,6 @@
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/coro/Transport.h>
 #include <folly/io/coro/TransportCallbackBase.h>
-#include <openssl/x509v3.h>
 
 #include <array>
 #include <span>
@@ -34,33 +33,15 @@ class client_ssl_handshake_callback
   : public folly::coro::TransportCallbackBase,
     public folly::AsyncSSLSocket::HandshakeCB {
 public:
-  explicit client_ssl_handshake_callback(folly::AsyncSSLSocket& socket,
-                                         std::string hostname)
-    : TransportCallbackBase(socket),
-      socket_(socket),
-      hostname_(std::move(hostname)) {
+  // The SSL context verifies the server certificate, including its name (see
+  // `TlsConfig::make_folly_ssl_context`).
+  explicit client_ssl_handshake_callback(folly::AsyncSSLSocket& socket)
+    : TransportCallbackBase(socket), socket_(socket) {
   }
 
 private:
   void cancel() noexcept override {
     socket_.closeNow();
-  }
-
-  auto handshakeVer(folly::AsyncSSLSocket*, bool preverify_ok,
-                    X509_STORE_CTX* ctx) noexcept -> bool override {
-    if (not preverify_ok) {
-      return false;
-    }
-    if (hostname_.empty() or X509_STORE_CTX_get_error_depth(ctx) != 0) {
-      return true;
-    }
-    auto* cert = X509_STORE_CTX_get_current_cert(ctx);
-    if (not cert) {
-      return false;
-    }
-    return X509_check_host(cert, hostname_.c_str(), hostname_.size(), 0,
-                           nullptr)
-           == 1;
   }
 
   void handshakeSuc(folly::AsyncSSLSocket*) noexcept override {
@@ -74,7 +55,6 @@ private:
   }
 
   folly::AsyncSSLSocket& socket_;
-  std::string hostname_;
 };
 
 class server_ssl_handshake_callback
@@ -231,8 +211,8 @@ auto upgrade_transport_to_tls_client(
           evb,
           folly::AsyncTransport::UniquePtr{ssl_socket.release()},
         };
-        auto callback = std::make_shared<client_ssl_handshake_callback>(
-          *ssl_ptr, std::move(hostname));
+        auto callback
+          = std::make_shared<client_ssl_handshake_callback>(*ssl_ptr);
         ssl_ptr->sslConn(callback.get(), tls_handshake_timeout);
         co_return std::pair{std::move(transport), std::move(callback)};
       }));

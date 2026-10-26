@@ -179,7 +179,7 @@ public:
         co_return;
       }
       if (resolved->tls.inner) {
-        auto context = resolved->make_folly_ssl_context(ctx);
+        auto context = resolved->make_folly_ssl_context(ctx, {});
         if (not context) {
           co_await request_stop();
           co_return;
@@ -578,7 +578,7 @@ public:
         co_return;
       }
       if (resolved->tls.inner) {
-        auto context = resolved->make_folly_ssl_context(ctx);
+        auto context = resolved->make_folly_ssl_context(ctx, {});
         if (not context) {
           co_await request_stop();
           co_return;

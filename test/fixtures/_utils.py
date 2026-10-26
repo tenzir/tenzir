@@ -57,7 +57,7 @@ def find_container_runtime() -> str | None:
 def generate_self_signed_cert(
     temp_dir: Path,
     common_name: str = _COMMON_NAME,
-    san_entries: list[str] = ["DNS:localhost"],
+    san_entries: list[str] = ["DNS:localhost", "IP:127.0.0.1"],
 ) -> tuple[Path, Path, Path, Path]:
     """Generate a self-signed certificate for testing.
 

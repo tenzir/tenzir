@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_server:
+      tls: true
+      tls_san: ["DNS:other.example"]
+      expected_count: 1
+timeout: 60
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_URL"),
+        max_retry_count=0,
+        tls={skip_peer_verification: true} {
+  write_ndjson
+}

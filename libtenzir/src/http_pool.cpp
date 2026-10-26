@@ -14,6 +14,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/proxy_settings.hpp>
 #include <tenzir/ref.hpp>
+#include <tenzir/tls_options.hpp>
 
 #include <fmt/format.h>
 #include <folly/coro/Coroutine.h>
@@ -207,6 +208,12 @@ auto make_conn_params(auto const& impl)
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
   auto conn_params
     = proxygen::coro::HTTPClient::getConnParams(secure, impl.url.getHost());
+  if (conn_params.sslContext
+      and not set_expected_peer_name(*conn_params.sslContext,
+                                     impl.url.getHost())) {
+    throw std::runtime_error{
+      fmt::format("invalid TLS server name `{}`", impl.url.getHost())};
+  }
   if (impl.config.ssl_context) {
     conn_params.serverName = impl.url.getHost();
     conn_params.sslContext = impl.config.ssl_context;
@@ -331,6 +338,12 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
     }
     auto proxy_conn_params
       = proxygen::coro::HTTPClient::getConnParams(proxy_secure, proxy->host);
+    if (proxy_conn_params.sslContext
+        and not set_expected_peer_name(*proxy_conn_params.sslContext,
+                                       proxy->host)) {
+      throw std::runtime_error{
+        fmt::format("invalid TLS server name `{}`", proxy->host)};
+    }
     if (impl_->target_form == HttpRequestTargetForm::absolute) {
       impl_->pool = make_session_pool(
         impl_->evb, proxy->host, proxy->port, pool_params, proxy_conn_params,
@@ -674,6 +687,12 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
                         : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
         auto conn_params = proxygen::coro::HTTPClient::getConnParams(
           secure, url_parsed.getHost());
+        if (conn_params.sslContext
+            and not set_expected_peer_name(*conn_params.sslContext,
+                                           url_parsed.getHost())) {
+          throw std::runtime_error{
+            fmt::format("invalid TLS server name `{}`", url_parsed.getHost())};
+        }
         auto sess_params
           = proxygen::coro::HTTPClient::getSessionParams(timeout);
         auto proxy_request = co_await make_http_proxy_request(

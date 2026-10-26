@@ -2318,7 +2318,7 @@ public:
         co_await finish(ctx);
         co_return;
       }
-      auto result = tls->make_folly_ssl_context(ctx);
+      auto result = tls->make_folly_ssl_context(ctx, config.host);
       if (not result) {
         co_await finish(ctx);
         co_return;
