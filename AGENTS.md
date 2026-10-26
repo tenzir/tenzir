@@ -17,6 +17,7 @@ data-flow programs.
 - `changelog/` - Changelog entries and release metadata
   - Managed with the `tenzir-ship` framework
   - Reference: https://tenzir.com/docs/reference/ship-framework.md
+  - Covers only engine changes; deployment changes get no entries
 - `cmake/` - CMake build system modules and utilities
   - Various CMake modules for dependencies
   - TenzirConfig.cmake.in - CMake configuration template
