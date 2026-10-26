@@ -13,12 +13,7 @@
            ref: std::from_file/op
          },
          args: [
-           located {
-             buffer: {
-               chunk: chunk(size=60),
-               table-offset: 12
-             }
-           } @ [1]:10..26 from 0
+           expression constant string "events.feather" @ [1]:10..26 from 0
          ],
          named_args: [
            

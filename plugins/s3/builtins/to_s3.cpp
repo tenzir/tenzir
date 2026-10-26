@@ -12,7 +12,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/proxy_settings.hpp>
-#include <tenzir/secret_resolution.hpp>
 
 #include <arrow/filesystem/s3fs.h>
 #include <arrow/util/uri.h>
@@ -26,7 +25,7 @@ constexpr auto default_request_timeout = 30.0;
 
 struct ToS3Args : ToArrowFsArgs {
   bool anonymous = false;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   location operator_location = location::unknown;
 };
 
@@ -40,17 +39,11 @@ public:
 
 protected:
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<std::string>> override {
-    auto resolved = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("url", args_.url, resolved, ctx.dh()),
-    };
-    CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
+    CO_TRY(auto resolved, co_await args_.url.evaluate_string(ctx, "url"));
     if (not resolved.starts_with("s3://")) {
       resolved = "s3://" + resolved;
     }
-    auto aws_iam
-      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
-    resolved_ = co_await resolve_aws_iam_auth(aws_iam, None{}, ctx);
+    resolved_ = co_await resolve_aws_iam_auth(args_.aws_iam, None{}, ctx);
     if (not resolved_) {
       co_return failure::promise();
     }
@@ -177,9 +170,6 @@ public:
         diagnostic::error("`anonymous` cannot be used with `aws_iam`")
           .primary(*ctx.get_location(anon))
           .emit(ctx);
-      }
-      if (auto iam = ctx.get(aws_iam_arg); iam) {
-        std::ignore = aws_iam_options::from_record(*iam, ctx);
       }
     });
     return d.without_optimize();

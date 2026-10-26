@@ -149,9 +149,16 @@ public:
   /// thread-safe.
   virtual auto dh() -> diagnostic_handler& = 0;
   virtual auto reg() -> const registry& = 0;
+  /// Resolves secrets for the evaluator. Operators take secrets as
+  /// `StartupArgument`s and never call this directly.
   virtual auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>>
     = 0;
+
+  /// Registers a runtime value for diagnostic censorship, without persisting it.
+  virtual auto register_secret(nova::Secret const& value) -> void {
+    TENZIR_UNUSED(value);
+  }
 
   /// Spawn a subpipeline from an already-instantiated `Plan`.
   ///

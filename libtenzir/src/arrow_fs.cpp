@@ -43,6 +43,19 @@
 
 namespace tenzir {
 
+auto parse_uri(std::string url, std::string_view prefix, location source,
+               diagnostic_handler& dh) -> failure_or<arrow::util::Uri> {
+  if (not url.starts_with(prefix)) {
+    url.insert(0, prefix);
+  }
+  auto uri = arrow::util::Uri{};
+  if (not uri.Parse(url).ok()) {
+    diagnostic::error("failed to parse uri").primary(source).emit(dh);
+    return failure::promise();
+  }
+  return uri;
+}
+
 auto split_at_first_slash(std::string_view path)
   -> std::pair<std::string, std::string> {
   auto slash = path.find('/');
@@ -225,7 +238,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
       auto& file_state = *processing_;
       if (not open.istream.ok()) {
         diagnostic::error("failed to open `{}`", file_state.file.path)
-          .primary(base_args_.url)
+          .primary(base_args_.url.get_location())
           .note(open.istream.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
             return is_globbing() ? std::move(x).severity(severity::warning)
@@ -253,7 +266,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
       auto& file_state = *processing_;
       if (not read.result.ok()) {
         diagnostic::error("failed to read from `{}`", file_state.file.path)
-          .primary(base_args_.url)
+          .primary(base_args_.url.get_location())
           .note(read.result.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
             return is_globbing() ? std::move(x).severity(severity::warning)
@@ -288,7 +301,7 @@ auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
       }
       if (not open.handle.ok()) {
         diagnostic::error("failed to open `{}`", processing_->file.path)
-          .primary(base_args_.url)
+          .primary(base_args_.url.get_location())
           .note(open.handle.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
             return is_globbing() ? std::move(x).severity(severity::warning)
@@ -497,7 +510,7 @@ auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
   if (file_mtime != state.file.mtime or resized) {
     diagnostic::warning("file `{}` was modified since last checkpoint",
                         state.file.path)
-      .primary(base_args_.url)
+      .primary(base_args_.url.get_location())
       .emit(ctx);
     if (not file_handles_ and state.file.offset < file_info.size()) {
       // Assume the file was appended to.
@@ -526,7 +539,7 @@ auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
   if (not open_result.ok()) {
     diagnostic::warning("failed to open stream for `{}`: {}", state.file.path,
                         open_result.status().ToStringWithoutContextLines())
-      .primary(base_args_.url)
+      .primary(base_args_.url.get_location())
       .emit(ctx);
     processing_.reset();
     co_return;
@@ -537,7 +550,7 @@ auto FromArrowFsOperator<Output>::restore_processing(OpCtx& ctx) -> Task<void> {
       not advance.ok()) {
     diagnostic::warning("failed to advance restored stream for `{}`: {}",
                         state.file.path, advance.ToStringWithoutContextLines())
-      .primary(base_args_.url)
+      .primary(base_args_.url.get_location())
       .emit(ctx);
     processing_.reset();
     co_return;
@@ -579,7 +592,7 @@ auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
       if (not root_result.ok()) {
         if (is_scan_reporter()) {
           diagnostic::error("failed to scan `{}`", root_path_)
-            .primary(base_args_.url)
+            .primary(base_args_.url.get_location())
             .note(root_result.status().ToStringWithoutContextLines())
             .emit(dh);
         }
@@ -591,7 +604,7 @@ auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
             if (not base_args_.watch) {
               if (is_scan_reporter()) {
                 diagnostic::error("`{}` does not exist", root_path_)
-                  .primary(base_args_.url)
+                  .primary(base_args_.url.get_location())
                   .emit(dh);
               }
               co_return;
@@ -600,7 +613,7 @@ auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
           case arrow::fs::FileType::Unknown:
             if (is_scan_reporter()) {
               diagnostic::error("`{}` is unknown", root_path_)
-                .primary(base_args_.url)
+                .primary(base_args_.url.get_location())
                 .emit(dh);
             }
             co_return;
@@ -612,7 +625,7 @@ auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
             if (not base_args_.watch) {
               if (is_scan_reporter()) {
                 diagnostic::error("`{}` is a file, not a directory", root_path_)
-                  .primary(base_args_.url)
+                  .primary(base_args_.url.get_location())
                   .emit(dh);
               }
               co_return;
@@ -628,7 +641,7 @@ auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
               if (not batch.ok()) {
                 if (is_scan_reporter()) {
                   diagnostic::error("failed to scan `{}`", root_path_)
-                    .primary(base_args_.url)
+                    .primary(base_args_.url.get_location())
                     .note(batch.status().ToStringWithoutContextLines())
                     .emit(dh);
                 }
@@ -920,7 +933,7 @@ auto ToArrowFsOperator<Input>::start(OpCtx& ctx) -> Task<void> {
   // and sanitize placeholders for URI parsing.
   auto tmpl
     = FsUrlTemplate::parse(std::move(*resolved), base_args_.partition_by,
-                           base_args_.url.source, ctx.dh());
+                           base_args_.url.get_location(), ctx.dh());
   if (not tmpl) {
     co_return;
   }
@@ -936,7 +949,8 @@ auto ToArrowFsOperator<Input>::start(OpCtx& ctx) -> Task<void> {
   // `set_path` finalises `has_uuid()` based on the actual path portion and
   // emits any `{uuid}`-placement diagnostics.
   // TODO: Consider using separate types here to differentiate.
-  template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
+  template_.set_path(std::move(fs->path), base_args_.url.get_location(),
+                     ctx.dh());
   if constexpr (std::same_as<Input, nova::Events>) {
     auto fields = template_.partition_fields();
     partition_evaluators_.reserve(fields.size());
@@ -1167,7 +1181,7 @@ auto ToArrowFsOperator<Input>::process_sub(SubKeyView key, chunk_ptr chunk,
     });
   if (not status.ok()) {
     diagnostic::error("failed to write to output stream: {}", status.ToString())
-      .primary(base_args_.url)
+      .primary(base_args_.url.get_location())
       .emit(ctx.dh());
     co_return;
   }
@@ -1268,7 +1282,7 @@ auto ToArrowFsOperator<Input>::prepare_snapshot(OpCtx& ctx) -> Task<void> {
           if (not status.ok()) {
             diagnostic::error("failed to flush output stream: {}",
                               status.ToString())
-              .primary(base_args_.url)
+              .primary(base_args_.url.get_location())
               .emit(ctx.dh());
           }
         }));
@@ -1301,7 +1315,7 @@ auto ToArrowFsOperator<Input>::open_stream(Partition& part,
     if (not dir_status.ok()) {
       diagnostic::error("failed to create directory `{}`: {}", parent,
                         dir_status.ToString())
-        .primary(base_args_.url)
+        .primary(base_args_.url.get_location())
         .emit(dh);
       co_return failure::promise();
     }
@@ -1315,7 +1329,7 @@ auto ToArrowFsOperator<Input>::open_stream(Partition& part,
   if (not result.ok()) {
     diagnostic::error("failed to open output stream `{}`: {}", path,
                       result.status().ToString())
-      .primary(base_args_.url)
+      .primary(base_args_.url.get_location())
       .emit(dh);
     co_return failure::promise();
   }
@@ -1338,7 +1352,7 @@ auto ToArrowFsOperator<Input>::close_stream(Partition& part,
       });
   if (not status.ok()) {
     diagnostic::warning("failed to close output stream: {}", status.ToString())
-      .primary(base_args_.url)
+      .primary(base_args_.url.get_location())
       .emit(dh);
   }
 }

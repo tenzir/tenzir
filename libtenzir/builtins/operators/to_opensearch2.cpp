@@ -38,13 +38,13 @@ namespace tenzir::plugins::opensearch2 {
 namespace {
 
 struct ToOpenSearchArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   ast::expression action;
   Option<ast::expression> index;
   Option<ast::expression> doc;
   Option<ast::expression> id;
-  Option<located<secret>> user;
-  Option<located<secret>> passwd;
+  Option<StartupArgument<nova::Secret>> user;
+  Option<StartupArgument<nova::Secret>> passwd;
   Option<located<data>> tls;
   Option<location> include_nulls;
   located<uint64_t> max_content_length{5'000'000, location::unknown};
@@ -272,23 +272,26 @@ public:
         }
       }
     }
-    auto resolved_url = std::string{};
+    auto url = co_await args_.url.evaluate_string(ctx, "url");
+    if (not url) {
+      co_return;
+    }
+    auto resolved_url = std::move(*url);
     auto user = std::string{};
     auto password = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("url", args_.url, resolved_url, ctx.dh()),
-    };
     if (args_.user) {
-      requests.emplace_back(
-        make_secret_request("user", *args_.user, user, ctx.dh()));
+      auto value = co_await args_.user->evaluate_string(ctx, "user");
+      if (not value) {
+        co_return;
+      }
+      user = std::move(*value);
     }
     if (args_.passwd) {
-      requests.emplace_back(
-        make_secret_request("passwd", *args_.passwd, password, ctx.dh()));
-    }
-    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-        result.is_error()) {
-      co_return;
+      auto value = co_await args_.passwd->evaluate_string(ctx, "passwd");
+      if (not value) {
+        co_return;
+      }
+      password = std::move(*value);
     }
     auto parsed_url = boost::urls::parse_uri_reference(resolved_url);
     if (not parsed_url) {
@@ -301,8 +304,9 @@ public:
       final_url.segments().push_back("_bulk");
     }
     url_ = std::string{final_url.buffer()};
-    auto tls_needed = http::normalize_url_and_tls(
-      args_.tls, url_, args_.url.source, ctx, ctx.actor_system().config());
+    auto tls_needed
+      = http::normalize_url_and_tls(args_.tls, url_, args_.url.get_location(),
+                                    ctx, ctx.actor_system().config());
     if (tls_needed.is_error()) {
       co_return;
     }

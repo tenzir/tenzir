@@ -164,13 +164,15 @@ redact it as `***`, and `materialize_legacy` turns it into the string `***`.
 `Evaluator::make(expr, OpCtx&)` resolves every `secret(name)` call in the
 expression once, before preparation. The name must be a constant string; a
 data-dependent name fails constant evaluation. Each resolved call is replaced
-by an internal `ast::resolved_secret` node, which evaluates to a constant
-`Array<Secret>`. Everywhere the walk does not run, such as constant evaluation,
-the `secret` function plugin rejects the call in its validation.
+by an internal `ast::resolved_constant` node, which evaluates to a constant
+`Array<Secret>`. The `const_eval(expr, OpCtx&)` overload, which evaluates
+`StartupArgument`s, runs the same walk. Everywhere the walk does not run, such
+as `const_eval` with an `InstantiateCtx`, the `secret` function plugin rejects
+the call in its validation.
 
 Functions opt into secrets by taking a `Secret` or `located<Secret>` argument,
 which accepts a resolved secret, or a constant string or blob that it promotes
-to a secret, like operator arguments of type `secret`. There are no implicit
+to a secret, like operator arguments of type `StartupArgument<Secret>`. There are no implicit
 conversions from `Secret` to other types: `+`, format strings, and the
 encoding functions yield a `Secret` whenever an input is one. A format string
 yields a `Secret` for every row with a top-level secret replacement and a

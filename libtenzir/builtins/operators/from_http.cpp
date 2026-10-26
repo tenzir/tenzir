@@ -35,9 +35,8 @@
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/result.hpp>
-#include <tenzir/secret_resolution.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -78,10 +77,10 @@ namespace tenzir::plugins::from_http {
 namespace {
 
 struct FromHttpArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   Option<located<std::string>> method;
-  Option<located<data>> body;
-  Option<located<data>> headers;
+  Option<StartupArgument<nova::Data>> body;
+  Option<StartupArgument<nova::Record>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<ast::field_path> error_field;
@@ -257,39 +256,39 @@ auto make_paginated_request_config(std::vector<http::Header> headers)
   };
 }
 
-auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
-                          std::string& resolved_url,
-                          std::vector<http::Header>& resolved_headers,
-                          Option<data>& resolved_body)
+auto resolve_http_arguments(OpCtx& ctx, FromHttpArgs const& args,
+                            std::string& resolved_url,
+                            std::vector<http::Header>& resolved_headers,
+                            Option<data>& resolved_body)
   -> Task<failure_or<bool>> {
-  resolved_url.clear();
-  auto requests = std::vector<secret_request>{};
-  requests.emplace_back(
-    make_secret_request("url", args.url, resolved_url, ctx.dh()));
-  auto header_requests = http::make_header_secret_requests(
-    args.headers, resolved_headers, ctx.dh());
-  requests.insert(requests.end(),
-                  std::make_move_iterator(header_requests.begin()),
-                  std::make_move_iterator(header_requests.end()));
-  if (args.body) {
-    resolved_body = args.body->inner;
-    auto body_requests
-      = make_secret_request(*resolved_body, args.body->source, ctx.dh());
-    requests.insert(requests.end(),
-                    std::make_move_iterator(body_requests.begin()),
-                    std::make_move_iterator(body_requests.end()));
+  CO_TRY(resolved_url, co_await args.url.evaluate_string(ctx, "url"));
+  resolved_headers.clear();
+  if (args.headers) {
+    CO_TRY(auto headers, co_await args.headers->evaluate(ctx));
+    CO_TRY(resolved_headers,
+           http::make_headers(located{std::move(headers),
+                                      args.headers->get_location()},
+                              ctx.dh()));
   }
-  if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-      result.is_error()) {
-    co_return failure::promise();
+  if (args.body) {
+    CO_TRY(auto body, co_await args.body->evaluate(ctx));
+    if (not is<nova::String>(body) and not is<nova::Blob>(body)
+        and not is<nova::Record>(body)) {
+      diagnostic::error("`body` must be `blob`, `record`, or `string`")
+        .primary(args.body->get_location())
+        .emit(ctx);
+      co_return failure::promise();
+    }
+    CO_TRY(resolved_body, nova::materialize_revealed(
+                            body, "body", args.body->get_location(), ctx.dh()));
   }
   if (resolved_url.empty()) {
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return failure::promise();
   }
-  CO_TRY(auto tls_enabled,
-         http::normalize_url_and_tls(args.tls, resolved_url, args.url.source,
-                                     ctx, ctx.actor_system().config()));
+  CO_TRY(auto tls_enabled, http::normalize_url_and_tls(
+                             args.tls, resolved_url, args.url.get_location(),
+                             ctx, ctx.actor_system().config()));
   co_return tls_enabled;
 }
 
@@ -1011,12 +1010,12 @@ public:
       co_return;
     }
     pagination_.spec = std::move(*paginate);
-    // resolve secrets
+    // evaluate startup arguments
     std::string resolved_url;
     auto resolved_body = Option<data>{};
-    auto secret_resolution = co_await resolve_http_secrets(
+    auto resolution = co_await resolve_http_arguments(
       ctx, args_, resolved_url, resolved_headers_, resolved_body);
-    if (secret_resolution.is_error()) {
+    if (resolution.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
@@ -1395,12 +1394,12 @@ public:
         });
       }
     }
-    // resolve secrets
+    // evaluate startup arguments
     std::string resolved_url;
     auto resolved_body = Option<data>{};
-    auto secret_resolution = co_await resolve_http_secrets(
+    auto resolution = co_await resolve_http_arguments(
       ctx, args_, resolved_url, resolved_headers_, resolved_body);
-    if (secret_resolution.is_error()) {
+    if (resolution.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
@@ -1780,7 +1779,7 @@ public:
     d.positional("url", &FromHttpArgs::url);
     auto method_arg = d.named("method", &FromHttpArgs::method);
     auto body_arg = d.named("body", &FromHttpArgs::body);
-    auto headers_arg = d.named("headers", &FromHttpArgs::headers, "record");
+    d.named("headers", &FromHttpArgs::headers);
     auto tls_validator = tls_options{
       {.is_server = false}}.add_to_describer(d, &FromHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &FromHttpArgs::timeout);
@@ -1834,41 +1833,6 @@ public:
               .hint(R"(`encode` must be `"json"` or `"form"`)")
               .primary(encode->source)
               .emit(ctx);
-          }
-        }
-      }
-      // Validate body type when explicitly provided.
-      if (auto body = ctx.get(body_arg)) {
-        auto is_valid = match(
-          body->inner,
-          [](std::string const&) {
-            return true;
-          },
-          [](blob const&) {
-            return true;
-          },
-          [](record const&) {
-            return true;
-          },
-          [](auto const&) {
-            return false;
-          });
-        if (not is_valid) {
-          diagnostic::error("`body` must be `blob`, `record`, or `string`")
-            .primary(body->source)
-            .emit(ctx);
-        }
-      }
-      // Validate header values.
-      if (auto headers = ctx.get(headers_arg)) {
-        if (auto const* rec = try_as<record>(headers->inner)) {
-          for (auto const& [_, value] : *rec) {
-            if (not is<std::string>(value) and not is<secret>(value)) {
-              diagnostic::error("header values must be `string` or `secret`")
-                .primary(headers->source)
-                .emit(ctx);
-              break;
-            }
           }
         }
       }

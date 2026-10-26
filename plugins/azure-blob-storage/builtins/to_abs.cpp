@@ -9,8 +9,6 @@
 #include <tenzir/arrow_fs.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
-#include <tenzir/secret_resolution.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 
 #include <arrow/filesystem/azurefs.h>
 #include <arrow/util/uri.h>
@@ -21,8 +19,8 @@ namespace tenzir::plugins::abs {
 namespace {
 
 struct ToAzureBlobStorageArgs : ToArrowFsArgs {
-  Option<located<secret>> account_key;
-  Option<located<record>> azure_auth;
+  Option<StartupArgument<nova::Secret>> account_key;
+  Option<StartupArgument<nova::Record>> azure_auth;
 };
 
 template <class Input>
@@ -35,23 +33,16 @@ public:
 
 protected:
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<std::string>> override {
-    auto resolved = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("url", args_.url, resolved, ctx.dh()),
-    };
+    CO_TRY(auto resolved, co_await args_.url.evaluate_string(ctx, "url"));
     if (args_.account_key) {
-      requests.push_back(make_secret_request("account_key", *args_.account_key,
-                                             resolved_account_key_, ctx.dh()));
+      CO_TRY(resolved_account_key_,
+             co_await args_.account_key->evaluate_string(ctx, "account_key"));
     }
-    CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
     if (args_.azure_auth) {
-      CO_TRY(auto options, AzureAuthOptions::from_record(
-                             *args_.azure_auth, ctx.dh(), azure_auth_support));
-      resolved_auth_
-        = co_await resolve_azure_auth(std::move(options), storage_scope, ctx);
-      if (not resolved_auth_) {
-        co_return failure::promise();
-      }
+      CO_TRY(auto options, co_await AzureAuthOptions::from_argument(
+                             *args_.azure_auth, ctx, azure_auth_support));
+      CO_TRY(resolved_auth_,
+             resolve_azure_auth(std::move(options), storage_scope, ctx.dh()));
     }
     co_return std::move(resolved);
   }

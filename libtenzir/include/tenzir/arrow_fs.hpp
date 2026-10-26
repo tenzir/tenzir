@@ -23,7 +23,6 @@
 #include "tenzir/nova/eval_util.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
-#include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <arrow/filesystem/filesystem.h>
@@ -42,9 +41,14 @@
 
 namespace tenzir {
 
+/// Prepends `prefix` to `url` unless it already starts with it, and parses the
+/// result as a URI.
+auto parse_uri(std::string url, std::string_view prefix, location source,
+               diagnostic_handler& dh) -> failure_or<arrow::util::Uri>;
+
 /// Common arguments for Arrow filesystem-based operators.
 struct FromArrowFsArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   Option<located<duration>> watch;
   Option<location> remove;
   Option<ast::lambda_expr> rename;
@@ -59,7 +63,8 @@ struct FromArrowFsArgs {
              and std::invocable<F, DescribeCtx&>
   static auto describe_to(Describer<Args, Impls...>& d, F extra = {})
     -> Argument<Args, located<ir::pipeline>> {
-    d.template positional<located<secret>>("url", &FromArrowFsArgs::url);
+    d.template positional<StartupArgument<nova::Secret>>("url",
+                                                         &FromArrowFsArgs::url);
     auto watch_arg
       = d.template named<located<duration>>("watch", &FromArrowFsArgs::watch);
     auto remove_arg = d.named("remove", &FromArrowFsArgs::remove);
@@ -306,7 +311,7 @@ protected:
   virtual auto move_file(std::string const& source, std::string const& target,
                          diagnostic_handler& dh) const -> Task<arrow::Status>;
 
-  /// Resolves the URL secret and returns the parsed URI.
+  /// Evaluates the URL argument and returns the parsed URI.
   virtual auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>>
     = 0;
 
@@ -389,7 +394,7 @@ struct ToArrowFsArgs {
   static constexpr uint64_t default_max_size = uint64_t{100} * 1024 * 1024;
   static constexpr duration default_timeout = std::chrono::minutes{5};
 
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   Option<located<uint64_t>> max_size;
   Option<located<duration>> timeout;
   located<ir::pipeline> pipe;
@@ -401,7 +406,8 @@ struct ToArrowFsArgs {
     requires std::derived_from<Args, ToArrowFsArgs>
              and std::invocable<F, DescribeCtx&>
   static auto describe_to(Describer<Args, Impls...>& d, F extra = {}) -> void {
-    d.template positional<located<secret>>("url", &ToArrowFsArgs::url);
+    d.template positional<StartupArgument<nova::Secret>>("url",
+                                                         &ToArrowFsArgs::url);
     auto max_size_arg = d.template named<located<uint64_t>>(
       "max_size", &ToArrowFsArgs::max_size);
     auto timeout_arg
@@ -477,7 +483,7 @@ struct ToArrowFsArgs {
 /// Base class for Arrow filesystem-based sink operators.
 ///
 /// Required overrides:
-/// - `resolve_url()`     — resolve the URL secret to a raw string (may
+/// - `resolve_url()`     — evaluate the URL argument to a raw string (may
 ///                         contain `**` and `{uuid}` placeholders).
 /// - `make_filesystem()` — build the Arrow filesystem from the sanitized
 ///                         URL and return it together with the object
@@ -529,7 +535,7 @@ public:
   auto state() -> OperatorState final;
 
 protected:
-  /// Resolves the URL secret and returns the raw, secret-expanded URL string.
+  /// Evaluates the URL argument and returns the raw URL string.
   /// The string may contain template placeholders (e.g. **, {uuid}).
   virtual auto resolve_url(OpCtx& ctx) -> Task<failure_or<std::string>> = 0;
 

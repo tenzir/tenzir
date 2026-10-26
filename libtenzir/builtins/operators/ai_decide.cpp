@@ -14,8 +14,8 @@
 #include <tenzir/data.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/table_slice.hpp>
 
 #include <fmt/format.h>
@@ -41,8 +41,8 @@ constexpr auto single_question_id = std::string_view{"answer"};
 struct DecideArgs {
   Option<located<std::string>> question;
   located<std::string> model;
-  located<secret> endpoint;
-  Option<located<secret>> api_key;
+  StartupArgument<nova::Secret> endpoint;
+  Option<StartupArgument<nova::Secret>> api_key;
   Option<ast::expression> state;
   Option<located<data>> questions;
   Option<located<data>> choices;

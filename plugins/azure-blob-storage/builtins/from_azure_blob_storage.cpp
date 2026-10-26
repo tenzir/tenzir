@@ -13,7 +13,6 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/scope_linked.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/azurefs.h>
@@ -29,8 +28,8 @@ namespace tenzir::plugins::abs {
 namespace {
 
 struct FromAzureBlobStorageArgs : FromArrowFsArgs {
-  Option<located<secret>> account_key;
-  Option<located<record>> azure_auth;
+  Option<StartupArgument<nova::Secret>> account_key;
+  Option<StartupArgument<nova::Record>> azure_auth;
 };
 
 template <class Output>
@@ -43,28 +42,18 @@ public:
 
 protected:
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>> override {
-    auto uri = arrow::util::Uri{};
-    auto account_key = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_uri_request(args_.url, "", uri, ctx.dh()),
-    };
+    CO_TRY(auto url, co_await args_.url.evaluate_string(ctx, "url"));
+    CO_TRY(auto uri,
+           parse_uri(std::move(url), "", args_.url.get_location(), ctx.dh()));
     if (args_.account_key) {
-      requests.push_back(make_secret_request("account_key", *args_.account_key,
-                                             account_key, ctx.dh()));
+      CO_TRY(resolved_account_key_,
+             co_await args_.account_key->evaluate_string(ctx, "account_key"));
     }
-    auto result = co_await ctx.resolve_secrets(std::move(requests));
-    if (result.is_error()) {
-      co_return failure::promise();
-    }
-    resolved_account_key_ = std::move(account_key);
     if (args_.azure_auth) {
-      CO_TRY(auto options, AzureAuthOptions::from_record(
-                             *args_.azure_auth, ctx.dh(), azure_auth_support));
-      resolved_auth_
-        = co_await resolve_azure_auth(std::move(options), storage_scope, ctx);
-      if (not resolved_auth_) {
-        co_return failure::promise();
-      }
+      CO_TRY(auto options, co_await AzureAuthOptions::from_argument(
+                             *args_.azure_auth, ctx, azure_auth_support));
+      CO_TRY(resolved_auth_,
+             resolve_azure_auth(std::move(options), storage_scope, ctx.dh()));
     }
     co_return std::move(uri);
   }

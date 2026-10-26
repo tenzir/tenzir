@@ -10,6 +10,7 @@
 
 #include "tenzir/blob.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/nova/type_system.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
 #include "tenzir/secret_resolution.hpp"
@@ -133,15 +134,9 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            tls_options::options options = {.is_server = false})
   -> failure_or<HttpPoolConfig>;
 
-/// Resolves user-provided HTTP header values that may reference secrets.
-///
-/// Literal string values are copied into `resolved_headers`. Secret values add
-/// placeholder headers and return secret requests that fill those placeholders
-/// before the request executes.
-auto make_header_secret_requests(Option<located<data>> const& headers,
-                                 std::vector<Header>& resolved_headers,
-                                 diagnostic_handler& dh)
-  -> std::vector<secret_request>;
+/// Converts an evaluated header record into headers, revealing secret values.
+auto make_headers(located<nova::Record> const& headers, diagnostic_handler& dh)
+  -> failure_or<std::vector<Header>>;
 
 /// Finds the first header by case-insensitive name.
 auto find(std::span<Header const> headers, std::string_view name)

@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// A constant expression has no input, so a lambda cannot capture a field.
+let $constant = [1].map(x => y)
+from {}

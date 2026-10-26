@@ -13,7 +13,6 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/scope_linked.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/gcsfs.h>
@@ -43,15 +42,9 @@ public:
 
 protected:
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>> override {
-    auto uri = arrow::util::Uri{};
-    auto requests = std::vector<secret_request>{
-      make_uri_request(args_.url, "gs://", uri, ctx.dh()),
-    };
-    auto result = co_await ctx.resolve_secrets(std::move(requests));
-    if (result.is_error()) {
-      co_return failure::promise();
-    }
-    co_return std::move(uri);
+    CO_TRY(auto url, co_await args_.url.evaluate_string(ctx, "url"));
+    co_return parse_uri(std::move(url), "gs://", args_.url.get_location(),
+                        ctx.dh());
   }
 
   auto make_filesystem(arrow::util::Uri const& uri, diagnostic_handler& dh)

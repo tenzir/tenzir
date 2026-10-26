@@ -283,8 +283,11 @@ struct resolved_secret {
 
   /// Only exists inside a prepared Nova evaluator and is never serialized.
   friend auto inspect(auto& f, resolved_secret& x) -> bool {
-    TENZIR_UNUSED(f, x);
-    TENZIR_UNREACHABLE();
+    TENZIR_UNUSED(x);
+    if (auto dbg = as_debug_writer(f)) {
+      return dbg->fmt_value("***");
+    }
+    return false;
   }
 };
 

@@ -59,17 +59,20 @@ constexpr auto hydrolix_token_user = std::string_view{"__api_token__"};
 /// The connection arguments of `from_hydrolix`, which replace the explicit
 /// ones of `from_clickhouse`.
 struct HydrolixConnectionArgs {
-  located<secret> url;
-  located<secret> token;
+  StartupArgument<nova::Secret> url;
+  StartupArgument<nova::Secret> token;
 };
 
 struct FromClickhouseArgs {
-  located<secret> uri = {secret::make_literal(""), location::unknown};
+  Option<StartupArgument<nova::Secret>> uri;
   Option<located<std::string>> table;
-  located<secret> host = {secret::make_literal("localhost"), location::unknown};
+  StartupArgument<nova::Secret> host
+    = StartupArgument<nova::Secret>::constant("localhost");
   Option<located<uint64_t>> port = None{};
-  located<secret> user = {secret::make_literal("default"), location::unknown};
-  located<secret> password = {secret::make_literal(""), location::unknown};
+  StartupArgument<nova::Secret> user
+    = StartupArgument<nova::Secret>::constant("default");
+  StartupArgument<nova::Secret> password
+    = StartupArgument<nova::Secret>::constant("");
   Option<located<std::string>> sql;
   Option<located<data>> tls;
   location operator_location;
@@ -82,8 +85,8 @@ struct FromClickhouseArgs {
 };
 
 struct FromHydrolixArgs {
-  located<secret> url;
-  located<secret> token;
+  StartupArgument<nova::Secret> url;
+  StartupArgument<nova::Secret> token;
   Option<located<std::string>> table;
   Option<located<std::string>> sql;
   Option<located<uint64_t>> port = None{};
@@ -171,15 +174,16 @@ auto resolve_hydrolix_endpoint(HydrolixConnectionArgs const& hydrolix,
                                Option<located<data>> const& tls, OpCtx& ctx)
   -> Task<Option<HydrolixEndpoint>> {
   auto& dh = ctx.dh();
-  auto url = std::string{};
-  auto token = std::string{};
-  auto requests = std::vector<secret_request>{
-    make_secret_request("url", hydrolix.url, url, dh),
-    make_secret_request("token", hydrolix.token, token, dh),
-  };
-  if (not co_await ctx.resolve_secrets(std::move(requests))) {
+  auto evaluated_url = co_await hydrolix.url.evaluate_string(ctx, "url");
+  if (not evaluated_url) {
     co_return None{};
   }
+  auto url = std::move(*evaluated_url);
+  auto evaluated_token = co_await hydrolix.token.evaluate_string(ctx, "token");
+  if (not evaluated_token) {
+    co_return None{};
+  }
+  auto token = std::move(*evaluated_token);
   if (token.empty()) {
     diagnostic::error("`token` must not be empty")
       .primary(hydrolix.token)
@@ -211,11 +215,12 @@ auto resolve_hydrolix_endpoint(HydrolixConnectionArgs const& hydrolix,
   }
   auto effective_tls = tls;
   if (not effective_tls and scheme_tls) {
-    effective_tls = located<data>{data{*scheme_tls}, hydrolix.url.source};
+    effective_tls
+      = located<data>{data{*scheme_tls}, hydrolix.url.get_location()};
   }
-  auto resolved
-    = tls_options::from_optional(effective_tls)
-        .resolve(url, hydrolix.url.source, ctx.actor_system().config(), dh);
+  auto resolved = tls_options::from_optional(effective_tls)
+                    .resolve(url, hydrolix.url.get_location(),
+                             ctx.actor_system().config(), dh);
   if (not resolved) {
     co_return None{};
   }
@@ -753,25 +758,13 @@ private:
       .primary = None{},
       .operator_location = args_.operator_location,
     };
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto has_uri = args_.uri.inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", args_.uri, uri, ctx.dh()));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, client_args.host, ctx.dh()));
-      requests.push_back(
-        make_secret_request("user", args_.user, client_args.user, ctx.dh()));
-      requests.push_back(make_secret_request("password", args_.password,
-                                             client_args.password, ctx.dh()));
-    }
-    auto ok = co_await ctx.resolve_secrets(std::move(requests));
-    if (not ok) {
-      co_return None{};
-    }
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri.source, ctx.dh());
+    if (args_.uri) {
+      auto uri = co_await args_.uri->evaluate_string(ctx, "uri");
+      if (not uri) {
+        co_return None{};
+      }
+      auto parsed
+        = parse_connection_uri(*uri, args_.uri->get_location(), ctx.dh());
       if (not parsed) {
         co_return None{};
       }
@@ -779,6 +772,22 @@ private:
       if (not parsed->has_port()) {
         client_args.port = located<uint64_t>{default_port, location::unknown};
       }
+    } else {
+      auto host = co_await args_.host.evaluate_string(ctx, "host");
+      if (not host) {
+        co_return None{};
+      }
+      client_args.host = std::move(*host);
+      auto user = co_await args_.user.evaluate_string(ctx, "user");
+      if (not user) {
+        co_return None{};
+      }
+      client_args.user = std::move(*user);
+      auto password = co_await args_.password.evaluate_string(ctx, "password");
+      if (not password) {
+        co_return None{};
+      }
+      client_args.password = std::move(*password);
     }
     co_return with_read_compression(client_args.make_options());
   }
@@ -1058,29 +1067,33 @@ private:
     connection.tls = std::move(*tls);
     connection.port = detail::narrow_cast<uint16_t>(
       args_.port ? args_.port->inner : default_port);
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto const has_uri = args_.uri.inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, connection.host, dh));
-      requests.push_back(
-        make_secret_request("user", args_.user, connection.user, dh));
-      requests.push_back(make_secret_request("password", args_.password,
-                                             connection.password, dh));
-    }
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      co_return None{};
-    }
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
+    if (args_.uri) {
+      auto uri = co_await args_.uri->evaluate_string(ctx, "uri");
+      if (not uri) {
+        co_return None{};
+      }
+      auto parsed = parse_connection_uri(*uri, args_.uri->get_location(), dh);
       if (not parsed) {
         co_return None{};
       }
       connection.port = detail::narrow_cast<uint16_t>(default_port);
       connection.apply_uri(*parsed);
+    } else {
+      auto host = co_await args_.host.evaluate_string(ctx, "host");
+      if (not host) {
+        co_return None{};
+      }
+      connection.host = std::move(*host);
+      auto user = co_await args_.user.evaluate_string(ctx, "user");
+      if (not user) {
+        co_return None{};
+      }
+      connection.user = std::move(*user);
+      auto password = co_await args_.password.evaluate_string(ctx, "password");
+      if (not password) {
+        co_return None{};
+      }
+      connection.password = std::move(*password);
     }
     co_return connection;
   }
@@ -1265,7 +1278,7 @@ public:
   auto describe() const -> Description override {
     auto d
       = Describer<FromClickhouseArgs, FromClickhouse, FromClickhouseEvents>{};
-    auto uri_arg = d.named_optional("uri", &FromClickhouseArgs::uri);
+    auto uri_arg = d.named("uri", &FromClickhouseArgs::uri);
     auto table_arg = d.named("table", &FromClickhouseArgs::table);
     auto host_arg = d.named_optional("host", &FromClickhouseArgs::host);
     auto port_arg = d.named("port", &FromClickhouseArgs::port);

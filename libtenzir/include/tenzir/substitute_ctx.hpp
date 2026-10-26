@@ -20,7 +20,7 @@ namespace tenzir {
 /// Context when substituting let bindings with a constant.
 class substitute_ctx {
 public:
-  using env_t = std::unordered_map<let_id, ast::constant>;
+  using env_t = std::unordered_map<let_id, ast::expression>;
 
   /// Construct a new context with the given environment.
   ///
@@ -28,7 +28,7 @@ public:
   substitute_ctx(base_ctx ctx, const env_t* env);
 
   /// Return the constant stored for the given `let`, if already known.
-  auto get(let_id id) const -> Option<ast::constant>;
+  auto get(let_id id) const -> Option<ast::expression>;
 
   /// Return all constants that can be substituted with this context.
   auto env() const -> env_t;

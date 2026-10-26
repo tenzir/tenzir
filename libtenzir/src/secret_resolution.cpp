@@ -42,53 +42,6 @@ auto resolved_secret_value::utf8_view(std::string_view name, location loc,
   return *r;
 }
 
-namespace detail {
-
-auto secret_resolved_setter_callback(resolved_secret_value& out) {
-  return [&out](resolved_secret_value v) -> failure_or<void> {
-    out = std::move(v);
-    return {};
-  };
-}
-
-auto secret_string_setter_callback(std::string name, tenzir::location loc,
-                                   std::string& out, diagnostic_handler& dh)
-  -> secret_request_callback {
-  return [name, loc, &out, &dh](resolved_secret_value v) -> failure_or<void> {
-    TRY(auto str, v.utf8_view(name, loc, dh));
-    out = std::string{str};
-    return {};
-  };
-}
-
-auto secret_string_setter_callback(std::string name, tenzir::location loc,
-                                   located<std::string>& out,
-                                   diagnostic_handler& dh)
-  -> secret_request_callback {
-  return [name, loc, &out, &dh](resolved_secret_value v) -> failure_or<void> {
-    TRY(auto str, v.utf8_view(name, loc, dh));
-    out = located{std::string{str}, loc};
-    return {};
-  };
-}
-
-} // namespace detail
-
-/// A secret request that will invoke `callback` on successful resolution
-secret_request::secret_request(tenzir::secret secret, tenzir::location loc,
-                               resolved_secret_value& out)
-  : secret{std::move(secret)},
-    location{loc},
-    callback{detail::secret_resolved_setter_callback(out)} {
-}
-
-secret_request::secret_request(const located<tenzir::secret>& secret,
-                               resolved_secret_value& out)
-  : secret{std::move(secret.inner)},
-    location{secret.source},
-    callback{detail::secret_resolved_setter_callback(out)} {
-}
-
 auto secret_censor::censor(std::string text) const -> std::string {
   constexpr static auto replacement = std::string_view{"***"};
   auto single_star = false;
@@ -147,78 +100,6 @@ auto secret_censor::censor(diagnostic diag) const -> diagnostic {
     }
   }
   return diag;
-}
-
-auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         std::string& out, diagnostic_handler& dh)
-  -> secret_request {
-  return {s, loc,
-          detail::secret_string_setter_callback(std::move(name), loc, out, dh)};
-}
-
-auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         located<std::string>& out, diagnostic_handler& dh)
-  -> secret_request {
-  return {s, loc,
-          detail::secret_string_setter_callback(std::move(name), loc, out, dh)};
-}
-
-auto make_secret_request(std::string name, const located<secret>& s,
-                         located<std::string>& out, diagnostic_handler& dh)
-  -> secret_request {
-  return secret_request{s, detail::secret_string_setter_callback(
-                             std::move(name), s.source, out, dh)};
-}
-
-auto make_secret_request(std::string name, const located<secret>& s,
-                         std::string& out, diagnostic_handler& dh)
-  -> secret_request {
-  return secret_request{s, detail::secret_string_setter_callback(
-                             std::move(name), s.source, out, dh)};
-}
-
-namespace {
-
-auto visit_secret_values(data& value,
-                         std::function<void(data&)> const& on_secret) -> void {
-  if (auto* s = try_as<secret>(value)) {
-    TENZIR_UNUSED(s);
-    on_secret(value);
-    return;
-  }
-  if (auto* r = try_as<record>(value)) {
-    for (auto& [k, v] : *r) {
-      visit_secret_values(v, on_secret);
-    }
-    return;
-  }
-  if (auto* l = try_as<list>(value)) {
-    for (size_t i = 0; i < l->size(); ++i) {
-      visit_secret_values(l->operator[](i), on_secret);
-    }
-  }
-}
-
-} // namespace
-
-auto make_secret_request(data& value, location loc, diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  auto requests = std::vector<secret_request>{};
-  visit_secret_values(value, [&](data& target) {
-    requests.emplace_back(as<secret>(target), loc,
-                          [&target, loc,
-                           &dh](resolved_secret_value v) -> failure_or<void> {
-                            TRY(auto str, v.utf8_view("value", loc, dh));
-                            target = std::string{str};
-                            return {};
-                          });
-  });
-  return requests;
-}
-
-auto make_secret_request(located<data>& value, diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  return make_secret_request(value.inner, value.source, dh);
 }
 
 namespace {

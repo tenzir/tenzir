@@ -136,7 +136,7 @@ auto credential_options(ResolvedAzureAuth const& auth) -> Options {
 
 } // namespace
 
-auto AzureAuthOptions::from_record(located<record> config,
+auto AzureAuthOptions::from_record(located<nova::Record> config,
                                    diagnostic_handler& dh,
                                    AzureAuthSupport support,
                                    std::string argument_name)
@@ -164,7 +164,7 @@ auto AzureAuthOptions::from_record(located<record> config,
   TRY(assign_secret(config, "scope", opts.scope, dh));
   TRY(assign_secret(config, "authority", opts.authority, dh));
   if (auto it = config.inner.find("web_identity"); it != config.inner.end()) {
-    if (auto* r = try_as<record>(it->second.get_data())) {
+    if (auto* r = try_as<nova::Record>(&it->second)) {
       TRY(opts.web_identity, web_identity_options::from_record(
                                located{std::move(*r), config.source}, dh));
     } else {
@@ -218,72 +218,48 @@ auto AzureAuthOptions::from_record(located<record> config,
   return opts;
 }
 
-auto AzureAuthOptions::make_secret_requests(ResolvedAzureAuth& resolved,
-                                            std::string default_scope,
-                                            diagnostic_handler& dh) const
-  -> std::vector<secret_request> {
-  auto requests = std::vector<secret_request>{};
-  requests.emplace_back(
-    make_secret_request(fmt::format("{}.tenant_id", argument_name), *tenant_id,
-                        loc, resolved.tenant_id, dh));
-  requests.emplace_back(
-    make_secret_request(fmt::format("{}.client_id", argument_name), *client_id,
-                        loc, resolved.client_id, dh));
-  if (client_secret) {
-    requests.emplace_back(
-      make_secret_request(fmt::format("{}.client_secret", argument_name),
-                          *client_secret, loc, resolved.client_secret, dh));
-  }
-  if (web_identity) {
-    resolved.web_identity = resolved_web_identity{};
-    auto web_identity_requests
-      = web_identity->make_secret_requests(*resolved.web_identity, dh);
-    requests.insert(requests.end(),
-                    std::make_move_iterator(web_identity_requests.begin()),
-                    std::make_move_iterator(web_identity_requests.end()));
-  }
-  if (scope) {
-    requests.emplace_back(make_secret_request(
-      fmt::format("{}.scope", argument_name), *scope, loc, resolved.scope, dh));
-  } else {
-    resolved.scope = std::move(default_scope);
-  }
-  if (authority) {
-    requests.emplace_back(
-      make_secret_request(fmt::format("{}.authority", argument_name),
-                          *authority, loc, resolved.authority, dh));
-  } else {
-    resolved.authority = default_authority;
-  }
-  return requests;
+auto AzureAuthOptions::from_argument(StartupArgument<nova::Record> const& config,
+                                     OpCtx& ctx, AzureAuthSupport support,
+                                     std::string argument_name)
+  -> Task<failure_or<AzureAuthOptions>> {
+  CO_TRY(auto record, co_await config.evaluate(ctx));
+  co_return from_record(located{std::move(record), config.get_location()},
+                        ctx.dh(), support, std::move(argument_name));
 }
 
 auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
-                        OpCtx& ctx) -> Task<Option<ResolvedAzureAuth>> {
+                        diagnostic_handler& dh)
+  -> failure_or<ResolvedAzureAuth> {
   auto resolved = ResolvedAzureAuth{};
-  auto requests = options.make_secret_requests(
-    resolved, std::move(default_scope), ctx.dh());
-  if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-      result.is_error()) {
-    co_return None{};
+  auto reveal = [&](Option<nova::Secret> const& secret, std::string_view name) {
+    return reveal_string(secret,
+                         fmt::format("{}.{}", options.argument_name, name),
+                         options.loc, dh);
+  };
+  TRY(resolved.tenant_id, reveal(options.tenant_id, "tenant_id"));
+  TRY(resolved.client_id, reveal(options.client_id, "client_id"));
+  TRY(resolved.client_secret, reveal(options.client_secret, "client_secret"));
+  resolved.scope = std::move(default_scope);
+  if (options.scope) {
+    TRY(resolved.scope, reveal(options.scope, "scope"));
   }
-  auto& dh = ctx.dh();
-  if (not check_resolved("tenant_id", resolved.tenant_id, options, dh)
-      or not check_resolved("client_id", resolved.client_id, options, dh)
-      or not check_resolved("scope", resolved.scope, options, dh)
-      or not check_resolved("authority", resolved.authority, options, dh)) {
-    co_return None{};
+  resolved.authority = default_authority;
+  if (options.authority) {
+    TRY(resolved.authority, reveal(options.authority, "authority"));
   }
-  if (options.client_secret
-      and not check_resolved("client_secret", resolved.client_secret, options,
-                             dh)) {
-    co_return None{};
+  if (options.web_identity) {
+    TRY(resolved.web_identity, options.web_identity->resolve(dh));
+  }
+  TRY(check_resolved("tenant_id", resolved.tenant_id, options, dh));
+  TRY(check_resolved("client_id", resolved.client_id, options, dh));
+  TRY(check_resolved("scope", resolved.scope, options, dh));
+  TRY(check_resolved("authority", resolved.authority, options, dh));
+  if (options.client_secret) {
+    TRY(check_resolved("client_secret", resolved.client_secret, options, dh));
   }
   resolved.authority = normalize_authority(std::move(resolved.authority));
-  if (not validate_authority(resolved.authority, options, dh)) {
-    co_return None{};
-  }
-  co_return resolved;
+  TRY(validate_authority(resolved.authority, options, dh));
+  return resolved;
 }
 
 auto make_azure_token_credential(ResolvedAzureAuth const& auth)

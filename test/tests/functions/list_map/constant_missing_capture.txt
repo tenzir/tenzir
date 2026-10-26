@@ -1,0 +1,6 @@
+error: expected a constant expression
+ --> tests/functions/list_map/constant_missing_capture.tql:6:30
+  |
+6 | let $constant = [1].map(x => y)
+  |                              ^
+  |

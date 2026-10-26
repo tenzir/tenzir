@@ -10,7 +10,7 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/detail/overload.hpp>
-#include <tenzir/secret_resolution.hpp>
+#include <tenzir/nova/argument_conversion.hpp>
 #include <tenzir/try.hpp>
 
 #include <caf/actor_system_config.hpp>
@@ -44,29 +44,21 @@ auto get_plugins_nats_config(record const& global_config) -> record const* {
   return try_as<record>(&nats_it->second);
 }
 
-auto set_opt_secret_value(record const& config, std::string_view key,
-                          secret& out, std::string_view plugin_name)
+auto set_opt_string_value(record const& config, std::string_view key,
+                          std::string& out, std::string_view plugin_name)
   -> caf::error {
   auto it = config.find(std::string{key});
   if (it == config.end()) {
     return caf::none;
   }
-  return match(
-    it->second,
-    [&](std::string const& value) -> caf::error {
-      out = secret::make_literal(value);
-      return caf::none;
-    },
-    [&](secret const& value) -> caf::error {
-      out = value;
-      return caf::none;
-    },
-    [&](auto const&) -> caf::error {
-      return diagnostic::error("`plugins.nats.{}` must be string or secret",
-                               key)
-        .note("while initializing `{}`", plugin_name)
-        .to_error();
-    });
+  auto const* value = try_as<std::string>(&it->second);
+  if (not value) {
+    return diagnostic::error("`plugins.nats.{}` must be a string", key)
+      .note("while initializing `{}`", plugin_name)
+      .to_error();
+  }
+  out = *value;
+  return caf::none;
 }
 
 auto auth_record_keys() -> std::span<const std::string_view> {
@@ -78,8 +70,8 @@ auto auth_record_keys() -> std::span<const std::string_view> {
   return keys;
 }
 
-auto is_string_or_secret(data const& value) -> bool {
-  return is<std::string>(value) or is<secret>(value);
+auto is_string_or_secret(nova::Data const& value) -> bool {
+  return is<nova::String>(value) or is<nova::Secret>(value);
 }
 
 auto check(natsStatus status, diagnostic_builder diag, diagnostic_handler& dh)
@@ -92,7 +84,7 @@ auto check(natsStatus status, diagnostic_builder diag, diagnostic_handler& dh)
 }
 
 auto set_auth_value(auth_config& auth, std::string const& key,
-                    std::string value) -> void {
+                    nova::Secret value) -> void {
   if (key == "user") {
     auth.user = std::move(value);
   } else if (key == "password") {
@@ -110,20 +102,20 @@ auto set_auth_value(auth_config& auth, std::string const& key,
 
 } // namespace
 
-auto default_url() -> secret& {
-  static auto result = secret::make_literal(default_url_value);
+auto default_url() -> std::string& {
+  static auto result = std::string{default_url_value};
   return result;
 }
 
 auto set_default_url_from_global_config(record const& global_config,
                                         std::string_view plugin_name)
   -> caf::error {
-  default_url() = secret::make_literal(default_url_value);
+  default_url() = std::string{default_url_value};
   auto const* config = get_plugins_nats_config(global_config);
   if (not config) {
     return caf::none;
   }
-  return set_opt_secret_value(*config, "url", default_url(), plugin_name);
+  return set_opt_string_value(*config, "url", default_url(), plugin_name);
 }
 
 auto has_url_scheme(std::string_view url) -> bool {
@@ -163,29 +155,22 @@ auto emit_nats_error(diagnostic_builder diag, natsStatus status,
   std::move(diag).note("reason: {}", nats_last_error_string(status)).emit(dh);
 }
 
-auto validate_auth_record(Option<located<data>> const& auth,
+auto validate_auth_record(located<nova::Record> const& auth,
                           diagnostic_handler& dh) -> failure_or<void> {
-  if (not auth) {
-    return {};
-  }
-  auto const* rec = try_as<record>(&auth->inner);
-  if (not rec) {
-    diagnostic::error("`auth` must be a record").primary(auth->source).emit(dh);
-    return failure::promise();
-  }
+  auto const* rec = &auth.inner;
   for (auto const& [key, value] : *rec) {
     auto valid_key
       = std::ranges::find(auth_record_keys(), key) != auth_record_keys().end();
     if (not valid_key) {
       diagnostic::error("unknown key `{}` in `auth` record", key)
-        .primary(auth->source)
+        .primary(auth.source)
         .hint("valid keys are: {}", fmt::join(auth_record_keys(), ", "))
         .emit(dh);
       return failure::promise();
     }
     if (not is_string_or_secret(value)) {
       diagnostic::error("`auth.{}` must be string or secret", key)
-        .primary(auth->source)
+        .primary(auth.source)
         .emit(dh);
       return failure::promise();
     }
@@ -197,7 +182,7 @@ auto validate_auth_record(Option<located<data>> const& auth,
       and (has("user") or has("password") or has("credentials")
            or has("credentials_memory") or has("seed"))) {
     diagnostic::error("`auth.token` cannot be combined with other auth modes")
-      .primary(auth->source)
+      .primary(auth.source)
       .emit(dh);
     return failure::promise();
   }
@@ -206,7 +191,7 @@ auto validate_auth_record(Option<located<data>> const& auth,
            or has("password"))) {
     diagnostic::error(
       "`auth.credentials_memory` cannot be combined with other auth modes")
-      .primary(auth->source)
+      .primary(auth.source)
       .emit(dh);
     return failure::promise();
   }
@@ -214,61 +199,57 @@ auto validate_auth_record(Option<located<data>> const& auth,
       and (has("user") or has("password"))) {
     diagnostic::error(
       "`auth.credentials` cannot be combined with user/password")
-      .primary(auth->source)
+      .primary(auth.source)
       .emit(dh);
     return failure::promise();
   }
   if (has("password") and not has("user")) {
     diagnostic::error("`auth.password` requires `auth.user`")
-      .primary(auth->source)
+      .primary(auth.source)
       .emit(dh);
     return failure::promise();
   }
   if (has("seed") and not has("credentials")) {
     diagnostic::error("`auth.seed` requires `auth.credentials`")
-      .primary(auth->source)
+      .primary(auth.source)
       .emit(dh);
     return failure::promise();
   }
   return {};
 }
 
-auto resolve_connection_config(OpCtx& ctx, Option<located<secret>> const& url,
-                               Option<located<data>> const& auth)
+auto resolve_connection_config(OpCtx& ctx,
+                               Option<StartupArgument<nova::Secret>> const& url,
+                               Option<StartupArgument<nova::Record>> const& auth)
   -> Task<Option<connection_config>> {
   auto result = connection_config{};
-  auto requests = std::vector<secret_request>{};
-  auto const& url_secret = url ? url->inner : default_url();
-  auto const url_loc = url ? url->source : location::unknown;
-  requests.push_back(
-    make_secret_request("url", url_secret, url_loc, result.url, ctx.dh()));
-  if (auth) {
-    if (auto const* auth_record = try_as<record>(&auth->inner)) {
-      for (auto const& [key, value] : *auth_record) {
-        match(
-          value,
-          [&](std::string const& str) {
-            set_auth_value(result.auth, key, str);
-          },
-          [&](secret const& sec) {
-            requests.emplace_back(
-              sec, auth->source,
-              [&result, key, loc = auth->source, &dh = ctx.dh()](
-                resolved_secret_value value) -> failure_or<void> {
-                TRY(auto view, value.utf8_view(key, loc, dh));
-                set_auth_value(result.auth, key, std::string{view});
-                return {};
-              });
-          },
-          [](auto const&) {
-            TENZIR_UNREACHABLE();
-          });
-      }
+  auto const url_loc = url ? url->get_location() : location::unknown;
+  if (url) {
+    auto resolved = co_await url->evaluate_string(ctx, "url");
+    if (not resolved) {
+      co_return None{};
     }
+    result.url = std::move(*resolved);
+  } else {
+    result.url = default_url();
   }
-  if (auto ok = co_await ctx.resolve_secrets(std::move(requests));
-      ok.is_error()) {
-    co_return None{};
+  if (auth) {
+    auto evaluated = co_await auth->evaluate(ctx);
+    if (not evaluated) {
+      co_return None{};
+    }
+    auto located_auth = located{std::move(*evaluated), auth->get_location()};
+    if (not validate_auth_record(located_auth, ctx.dh())) {
+      co_return None{};
+    }
+    for (auto& [key, value] : located_auth.inner) {
+      auto secret = nova::convert_argument<nova::Secret>(
+        std::move(value), located_auth.source, ctx.dh());
+      if (not secret) {
+        co_return None{};
+      }
+      set_auth_value(result.auth, key, std::move(*secret));
+    }
   }
   if (result.url.empty()) {
     diagnostic::error("`url` must not be empty").primary(url_loc).emit(ctx);
@@ -280,30 +261,45 @@ auto resolve_connection_config(OpCtx& ctx, Option<located<secret>> const& url,
 auto apply_auth(natsOptions* options, auth_config const& auth,
                 location auth_location, diagnostic_handler& dh)
   -> failure_or<void> {
-  if (auth.token) {
-    TRY(check(natsOptions_SetToken(options, auth.token->c_str()),
+  auto reveal = [&](Option<nova::Secret> const& value,
+                    std::string_view name) -> failure_or<Option<std::string>> {
+    if (not value) {
+      return Option<std::string>{};
+    }
+    TRY(auto str, nova::reveal_string(*value, name, auth_location, dh));
+    return Option<std::string>{std::move(str)};
+  };
+  TRY(auto token, reveal(auth.token, "auth.token"));
+  TRY(auto user, reveal(auth.user, "auth.user"));
+  TRY(auto password, reveal(auth.password, "auth.password"));
+  TRY(auto credentials_memory,
+      reveal(auth.credentials_memory, "auth.credentials_memory"));
+  TRY(auto credentials, reveal(auth.credentials, "auth.credentials"));
+  TRY(auto seed, reveal(auth.seed, "auth.seed"));
+  if (token) {
+    TRY(check(natsOptions_SetToken(options, token->c_str()),
               diagnostic::error("failed to configure NATS token auth")
                 .primary(auth_location),
               dh));
   }
-  if (auth.user) {
-    auto const* password = auth.password ? auth.password->c_str() : "";
-    TRY(check(natsOptions_SetUserInfo(options, auth.user->c_str(), password),
+  if (user) {
+    auto const* password_str = password ? password->c_str() : "";
+    TRY(check(natsOptions_SetUserInfo(options, user->c_str(), password_str),
               diagnostic::error("failed to configure NATS user/password auth")
                 .primary(auth_location),
               dh));
   }
-  if (auth.credentials_memory) {
+  if (credentials_memory) {
     TRY(check(natsOptions_SetUserCredentialsFromMemory(
-                options, auth.credentials_memory->c_str()),
+                options, credentials_memory->c_str()),
               diagnostic::error("failed to configure NATS credentials")
                 .primary(auth_location),
               dh));
   }
-  if (auth.credentials) {
-    auto const* seed = auth.seed ? auth.seed->c_str() : nullptr;
+  if (credentials) {
+    auto const* seed_str = seed ? seed->c_str() : nullptr;
     TRY(check(natsOptions_SetUserCredentialsFromFiles(
-                options, auth.credentials->c_str(), seed),
+                options, credentials->c_str(), seed_str),
               diagnostic::error("failed to configure NATS credentials files")
                 .primary(auth_location),
               dh));

@@ -19,6 +19,7 @@
 #include "tenzir/let_id.hpp"
 #include "tenzir/operator/optimization.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/startup_argument.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -32,8 +33,11 @@ namespace tenzir {
 
 namespace _::operator_plugin {
 
+// Secrets resolve only at startup, so operators take them as
+// `StartupArgument<nova::Secret>` instead of `located<secret>`.
 using LocatedTypes = detail::tl_concat_t<
-  detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
+  detail::tl_map_t<detail::tl_filter_not_type_t<
+                     detail::tl_filter_not_type_t<data::types, pattern>, secret>,
                    as_located>,
   caf::type_list<located<ir::pipeline>, ast::expression, ast::field_path,
                  ast::lambda_expr, located<data>>>;
@@ -41,14 +45,15 @@ using LocatedTypes = detail::tl_concat_t<
 template <class T>
 concept LocatedType = detail::tl_contains_v<LocatedTypes, T>;
 
-using BareTypes
-  = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
-                     detail::value_type_of>;
+using BareTypes = detail::tl_filter_not_type_t<
+  detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
+                   detail::value_type_of>,
+  secret>;
 
 using ArgTypes = detail::tl_concat_t<LocatedTypes, BareTypes>;
 
 template <class T>
-concept ArgType = detail::tl_contains_v<ArgTypes, T>;
+concept ArgType = detail::tl_contains_v<ArgTypes, T> or is_startup_argument<T>;
 
 template <class T>
 using Setter = std::function<void(Any&, T)>;
@@ -317,8 +322,12 @@ auto make_setter(T Args::* ptr) -> auto {
       return tag_v<T>;
     }
   }))::type;
-  if constexpr (std::same_as<T, Option<location>>
-                or std::same_as<T, Option<location>>) {
+  if constexpr (is_startup_argument<Value>) {
+    return Setter<ast::expression>{[ptr](Any& args, ast::expression value) {
+      (&args.as<Args>())->*ptr = Value{std::move(value)};
+    }};
+  } else if constexpr (std::same_as<T, Option<location>>
+                       or std::same_as<T, Option<location>>) {
     return Setter<located<bool>>{[ptr](Any& args, located<bool> value) {
       if (value.inner) {
         (&args.as<Args>())->*ptr = value.source;
@@ -354,7 +363,11 @@ auto make_setter(T Args::* ptr) -> auto {
 template <class Args, class T>
 auto make_variadic_setter(std::vector<T> Args::* ptr) -> auto {
   using Value = T;
-  if constexpr (argument_parser_bare_type<Value>) {
+  if constexpr (is_startup_argument<Value>) {
+    return Setter<ast::expression>{[ptr](Any& args, ast::expression value) {
+      ((&args.as<Args>())->*ptr).push_back(Value{std::move(value)});
+    }};
+  } else if constexpr (argument_parser_bare_type<Value>) {
     return Setter<located<Value>>{[ptr](Any& args, located<Value> value) {
       ((&args.as<Args>())->*ptr).push_back(std::move(value.inner));
     }};
@@ -488,6 +501,9 @@ public:
       []<class U>(const U& v) -> Option<T> {
         if constexpr (std::same_as<T, U>) {
           return v;
+        } else if constexpr (is_startup_argument<T>
+                             and std::same_as<U, ast::expression>) {
+          return T{v};
         } else {
           return None{};
         }
@@ -625,6 +641,9 @@ private:
       []<class U>(const U& v) -> Option<T> {
         if constexpr (std::same_as<T, U>) {
           return v;
+        } else if constexpr (is_startup_argument<T>
+                             and std::same_as<U, ast::expression>) {
+          return T{v};
         } else {
           return None{};
         }
@@ -844,6 +863,17 @@ private:
 template <class T>
   requires(not concepts::one_of<T, ast::expression, list, located<list>>)
 static constexpr char const* type_default = "";
+
+template <class T>
+static constexpr char const* type_default<StartupArgument<T>> = [] {
+  if constexpr (std::same_as<T, nova::Secret>) {
+    return "string";
+  } else if constexpr (std::same_as<T, nova::Data>) {
+    return "any";
+  } else {
+    return nova::Type<T>::static_name.data();
+  }
+}();
 
 template <class Args, class... Impls>
 class Describer {

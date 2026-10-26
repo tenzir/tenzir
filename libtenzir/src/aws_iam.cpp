@@ -17,7 +17,7 @@
 
 namespace tenzir {
 
-auto aws_iam_options::from_record(located<record> config,
+auto aws_iam_options::from_record(located<nova::Record> config,
                                   diagnostic_handler& dh)
   -> failure_or<aws_iam_options> {
   constexpr auto known = std::array{
@@ -46,7 +46,7 @@ auto aws_iam_options::from_record(located<record> config,
   TRY(assign_secret(config, "session_token", opts.session_token, dh));
   // Parse web_identity as a nested record.
   if (auto it = config.inner.find("web_identity"); it != config.inner.end()) {
-    if (auto* r = try_as<record>(it->second.get_data())) {
+    if (auto* r = try_as<nova::Record>(&it->second)) {
       auto web_identity_config = located{std::move(*r), config.source};
       TRY(opts.web_identity, web_identity_options::from_record(
                                std::move(web_identity_config), dh));
@@ -114,53 +114,6 @@ auto aws_iam_options::from_record(located<record> config,
   return opts;
 }
 
-auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
-                                           diagnostic_handler& dh) const
-  -> std::vector<secret_request> {
-  auto requests = std::vector<secret_request>{};
-  // Resolve all optional fields that may be secrets
-  if (region) {
-    requests.emplace_back(
-      make_secret_request("region", *region, loc, resolved.region, dh));
-  }
-  if (profile) {
-    requests.emplace_back(
-      make_secret_request("profile", *profile, loc, resolved.profile, dh));
-  }
-  if (session_name) {
-    requests.emplace_back(make_secret_request("session_name", *session_name,
-                                              loc, resolved.session_name, dh));
-  }
-  if (access_key_id) {
-    requests.emplace_back(make_secret_request("access_key_id", *access_key_id,
-                                              loc, resolved.access_key_id, dh));
-    requests.emplace_back(make_secret_request("secret_access_key",
-                                              *secret_access_key, loc,
-                                              resolved.secret_access_key, dh));
-    if (session_token) {
-      requests.emplace_back(make_secret_request(
-        "session_token", *session_token, loc, resolved.session_token, dh));
-    }
-  }
-  if (role) {
-    requests.emplace_back(
-      make_secret_request("assume_role", *role, loc, resolved.role, dh));
-    if (external_id) {
-      requests.emplace_back(make_secret_request("external_id", *external_id,
-                                                loc, resolved.external_id, dh));
-    }
-  }
-  if (web_identity) {
-    resolved.web_identity = resolved_web_identity{};
-    auto web_identity_requests
-      = web_identity->make_secret_requests(*resolved.web_identity, dh);
-    requests.insert(requests.end(),
-                    std::make_move_iterator(web_identity_requests.begin()),
-                    std::make_move_iterator(web_identity_requests.end()));
-  }
-  return requests;
-}
-
 namespace {
 
 /// Checks whether the current auth mode requires an explicit AWS region.
@@ -177,8 +130,9 @@ auto check_region_requirement(const Option<aws_iam_options>& aws_iam,
   if (aws_region or aws_iam->region) {
     return {};
   }
+  // Point at the opening brace, as the record often spans many lines.
   diagnostic::error("`aws_region` is required for AWS IAM authentication")
-    .primary(aws_iam->loc)
+    .primary(aws_iam->loc.subloc(0, 1))
     .emit(dh);
   return failure::promise();
 }
@@ -192,47 +146,64 @@ auto resolve_aws_iam_auth(Option<aws_iam_options> aws_iam,
   -> failure_or<ResolvedAwsIamAuth> {
   TRY(check_region_requirement(aws_iam, aws_region, requirement, dh));
   auto result = ResolvedAwsIamAuth{};
-  result.options = std::move(aws_iam);
-  if (result.options) {
-    result.credentials.emplace();
+  if (not aws_iam and not aws_region) {
+    return result;
   }
+  auto& credentials = result.credentials.emplace();
   if (aws_region) {
-    if (not result.credentials) {
-      result.credentials.emplace();
-    }
-    result.credentials->region = aws_region->inner;
+    credentials.region = aws_region->inner;
   }
+  if (aws_iam) {
+    auto const& opts = *aws_iam;
+    auto const loc = opts.loc;
+    if (opts.region) {
+      TRY(credentials.region, reveal_string(opts.region, "region", loc, dh));
+    }
+    TRY(credentials.profile, reveal_string(opts.profile, "profile", loc, dh));
+    TRY(credentials.session_name,
+        reveal_string(opts.session_name, "session_name", loc, dh));
+    if (opts.access_key_id) {
+      TRY(credentials.access_key_id,
+          reveal_string(opts.access_key_id, "access_key_id", loc, dh));
+      TRY(credentials.secret_access_key,
+          reveal_string(opts.secret_access_key, "secret_access_key", loc, dh));
+      TRY(credentials.session_token,
+          reveal_string(opts.session_token, "session_token", loc, dh));
+    }
+    if (opts.role) {
+      TRY(credentials.role, reveal_string(opts.role, "assume_role", loc, dh));
+      TRY(credentials.external_id,
+          reveal_string(opts.external_id, "external_id", loc, dh));
+    }
+    if (opts.web_identity) {
+      TRY(credentials.web_identity, opts.web_identity->resolve(dh));
+    }
+  }
+  result.options = std::move(aws_iam);
   return result;
 }
 
-auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
-                          Option<located<std::string>> aws_region,
-                          diagnostic_handler& dh,
-                          AwsIamRegionRequirement requirement)
-  -> failure_or<ResolvedAwsIamAuth> {
-  auto parsed = Option<aws_iam_options>{};
-  if (aws_iam) {
-    TRY(parsed, aws_iam_options::from_record(std::move(*aws_iam), dh));
-  }
-  return resolve_aws_iam_auth(std::move(parsed), std::move(aws_region), dh,
-                              requirement);
-}
-
-auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
+auto resolve_aws_iam_auth(Option<StartupArgument<nova::Record>> const& aws_iam,
                           Option<located<std::string>> aws_region, OpCtx& ctx,
                           AwsIamRegionRequirement requirement)
   -> Task<Option<ResolvedAwsIamAuth>> {
-  auto auth = resolve_aws_iam_auth(std::move(aws_iam), std::move(aws_region),
+  auto options = Option<aws_iam_options>{};
+  if (aws_iam) {
+    auto config = co_await aws_iam->evaluate(ctx);
+    if (not config) {
+      co_return None{};
+    }
+    auto parsed = aws_iam_options::from_record(
+      located{std::move(*config), aws_iam->get_location()}, ctx.dh());
+    if (not parsed) {
+      co_return None{};
+    }
+    options = std::move(*parsed);
+  }
+  auto auth = resolve_aws_iam_auth(std::move(options), std::move(aws_region),
                                    ctx.dh(), requirement);
   if (not auth) {
     co_return None{};
-  }
-  if (auth->options and auth->credentials) {
-    auto requests
-      = auth->options->make_secret_requests(*auth->credentials, ctx.dh());
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      co_return None{};
-    }
   }
   co_return std::move(*auth);
 }

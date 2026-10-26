@@ -10,12 +10,21 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/fbs/data.hpp"
+#include "tenzir/nova/const_eval.hpp"
+#include "tenzir/nova/materialize.hpp"
+#include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/compute/api_vector.h>
+
+#include <algorithm>
+#include <iterator>
+#include <string_view>
 
 /// TODO:
 /// - Reduce series expansion. For example, `src_ip in [1.2.3.4, 1.2.3.5]`
@@ -77,6 +86,385 @@ auto ensure_unary_lambda(const ast::lambda_expr& lambda) -> void {
     .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
     .throw_();
 }
+
+/// Constant evaluates `expr` with the Nova evaluator.
+auto const_eval_nova(ast::expression const& expr, base_ctx ctx)
+  -> failure_or<data> {
+  TRY(auto value,
+      nova::const_eval(expr, nova::InstantiateCtx{ctx.dh(), ctx.reg()}));
+  return nova::materialize_legacy(value);
+}
+
+/// Whether `call` is a call to the standard library function `name`.
+auto is_std_call(ast::function_call const& call, std::string_view name)
+  -> bool {
+  auto const& ref = call.fn.ref;
+  return ref.pkg() == entity_pkg_std and ref.segments().size() == 1
+         and ref.segments()[0] == name;
+}
+
+/// Whether `value`, a `data` or the value of an `ast::constant`, holds a
+/// secret at any depth.
+template <class T>
+auto contains_secret(T const& value) -> bool {
+  return tenzir::match(
+    value,
+    [](secret const&) {
+      return true;
+    },
+    [](record const& x) {
+      return std::ranges::any_of(x, [](auto const& field) {
+        return contains_secret(field.second);
+      });
+    },
+    [](list const& x) {
+      return std::ranges::any_of(x, [](data const& element) {
+        return contains_secret(element);
+      });
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
+/// Returns `value` with every nested secret replaced by `substitute`.
+auto substitute_secrets(data value, data const& substitute) -> data {
+  return tenzir::match(
+    std::move(value),
+    [&](secret const&) -> data {
+      return substitute;
+    },
+    [&](record x) -> data {
+      for (auto& field : x) {
+        field.second = substitute_secrets(std::move(field.second), substitute);
+      }
+      return x;
+    },
+    [&](list x) -> data {
+      for (auto& element : x) {
+        element = substitute_secrets(std::move(element), substitute);
+      }
+      return x;
+    },
+    [](auto x) -> data {
+      return x;
+    });
+}
+
+/// Finds the sources of unresolved secrets in an expression: calls to `secret`
+/// and constants that hold a secret, such as the value of a `let` binding.
+class secret_source_finder : public ast::visitor<secret_source_finder> {
+public:
+  template <class T>
+  auto visit(T const& x) -> void {
+    if (not found) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+      enter(const_cast<T&>(x));
+    }
+  }
+
+  auto visit(ast::function_call const& x) -> void {
+    if (is_std_call(x, "secret")) {
+      found = true;
+      return;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<ast::function_call&>(x));
+  }
+
+  auto visit(ast::constant const& x) -> void {
+    found = found or contains_secret(x.value);
+  }
+
+  bool found = false;
+};
+
+auto contains_secret_source(ast::expression const& expr) -> bool {
+  auto finder = secret_source_finder{};
+  finder.visit(expr);
+  return finder.found;
+}
+
+/// Constant evaluates an expression that produces unresolved secrets.
+///
+/// A Nova secret holds the resolved plain text, which is only available once
+/// an operator runs. Constants instead carry the secret's name together with
+/// its pending transformations, which this folder builds symbolically. It
+/// supports the operations that the legacy evaluator supported on secrets:
+/// concatenation via `+` and format strings, the `encode_*` and `decode_*`
+/// functions, nesting in records and lists, and field access and indexing.
+/// Everything without a secret goes to Nova.
+class secret_folder {
+public:
+  explicit secret_folder(base_ctx ctx) : ctx_{ctx} {
+  }
+
+  auto fold(ast::expression const& expr) -> failure_or<data> {
+    if (not contains_secret_source(expr)) {
+      return const_eval_nova(expr, ctx_);
+    }
+    return expr.match([&](auto const& x) -> failure_or<data> {
+      return fold_node(x);
+    });
+  }
+
+private:
+  auto fold_node(ast::constant const& x) -> failure_or<data> {
+    return tenzir::match(x.value, [](auto const& value) -> data {
+      return value;
+    });
+  }
+
+  auto fold_node(ast::function_call const& x) -> failure_or<data> {
+    if (is_std_call(x, "secret")) {
+      if (x.args.size() != 1) {
+        diagnostic::error("`secret` expects exactly one string argument")
+          .primary(x)
+          .emit(ctx_);
+        return failure::promise();
+      }
+      TRY(auto name, fold(x.args.front()));
+      auto* name_string = try_as<std::string>(&name);
+      if (not name_string) {
+        diagnostic::error("`secret` expects a string")
+          .primary(x.args.front())
+          .emit(ctx_);
+        return failure::promise();
+      }
+      return secret::make_managed(*name_string);
+    }
+    if (auto operation = transformation_of(x)) {
+      TRY(auto value, fold(x.args.front()));
+      if (auto* s = try_as<secret>(&value)) {
+        return s->with_operation(*operation);
+      }
+    }
+    return unsupported(x);
+  }
+
+  auto fold_node(ast::binary_expr const& x) -> failure_or<data> {
+    if (x.op != ast::binary_op::add) {
+      return unsupported(x);
+    }
+    TRY(auto left, fold(x.left));
+    TRY(auto right, fold(x.right));
+    auto* left_secret = try_as<secret>(&left);
+    auto* right_secret = try_as<secret>(&right);
+    auto* left_string = try_as<std::string>(&left);
+    auto* right_string = try_as<std::string>(&right);
+    if (left_secret and right_secret) {
+      return left_secret->with_appended(*right_secret);
+    }
+    if (left_secret and right_string) {
+      return left_secret->with_appended(*right_string);
+    }
+    if (left_string and right_secret) {
+      return right_secret->with_prepended(*left_string);
+    }
+    diagnostic::error("binary operator `+` not implemented for `{}` and `{}`",
+                      type_kind_of_data(left), type_kind_of_data(right))
+      .primary(x)
+      .emit(ctx_);
+    return failure::promise();
+  }
+
+  auto fold_node(ast::format_expr const& x) -> failure_or<data> {
+    // Consecutive segments without secrets form a format expression of their
+    // own, so that Nova formats their replacements.
+    auto result = variant<std::string, secret>{};
+    auto pending = std::vector<ast::format_expr::segment>{};
+    auto append = [&](data value) {
+      if (auto* str = try_as<std::string>(&value)) {
+        if (auto* result_str = try_as<std::string>(&result)) {
+          result_str->append(*str);
+        } else {
+          result = as<secret>(result).with_appended(*str);
+        }
+        return;
+      }
+      auto& value_secret = as<secret>(value);
+      if (auto* result_str = try_as<std::string>(&result)) {
+        result
+          = result_str->empty()
+              ? std::move(value_secret)
+              : secret::make_literal(*result_str).with_appended(value_secret);
+      } else {
+        result = as<secret>(result).with_appended(value_secret);
+      }
+    };
+    auto flush = [&]() -> failure_or<void> {
+      if (pending.empty()) {
+        return {};
+      }
+      auto group = ast::expression{
+        ast::format_expr{std::exchange(pending, {}), x.get_location()}};
+      TRY(auto value, const_eval_nova(group, ctx_));
+      TENZIR_ASSERT(is<std::string>(value));
+      append(std::move(value));
+      return {};
+    };
+    for (auto const& segment : x.segments) {
+      auto const* replacement = try_as<ast::format_expr::replacement>(segment);
+      if (not replacement or not contains_secret_source(replacement->expr)) {
+        pending.push_back(segment);
+        continue;
+      }
+      TRY(auto value, fold(replacement->expr));
+      if (not is<secret>(value)) {
+        // Like the legacy evaluator, stringify other values, which prints
+        // their nested secrets as `"***"`.
+        pending.emplace_back(ast::format_expr::replacement{
+          ast::constant::make(located{
+            substitute_secrets(std::move(value), std::string{"***"}),
+            replacement->expr.get_location(),
+          }),
+        });
+        continue;
+      }
+      TRY(flush());
+      append(std::move(value));
+    }
+    TRY(flush());
+    return tenzir::match(std::move(result), [](auto x) -> data {
+      return x;
+    });
+  }
+
+  auto fold_node(ast::record const& x) -> failure_or<data> {
+    // Like at runtime, a later item overwrites an earlier field of the same
+    // name.
+    auto result = record{};
+    for (auto const& item : x.items) {
+      if (auto const* field = try_as<ast::record::field>(item)) {
+        TRY(auto value, fold(field->expr));
+        result[field->name.name] = std::move(value);
+        continue;
+      }
+      auto const& spread = as<ast::spread>(item);
+      TRY(auto value, fold(spread.expr));
+      if (auto* fields = try_as<record>(&value)) {
+        for (auto& [name, field] : *fields) {
+          result[name] = std::move(field);
+        }
+      } else if (not is<caf::none_t>(value)) {
+        diagnostic::warning("expected `record`").primary(spread.expr).emit(ctx_);
+      }
+    }
+    return result;
+  }
+
+  auto fold_node(ast::list const& x) -> failure_or<data> {
+    auto result = list{};
+    for (auto const& item : x.items) {
+      if (auto const* expr = try_as<ast::expression>(item)) {
+        TRY(auto value, fold(*expr));
+        result.push_back(std::move(value));
+        continue;
+      }
+      auto const& spread = as<ast::spread>(item);
+      TRY(auto value, fold(spread.expr));
+      if (auto* elements = try_as<list>(&value)) {
+        std::ranges::move(*elements, std::back_inserter(result));
+      } else if (not is<caf::none_t>(value)) {
+        diagnostic::warning("expected `list`").primary(spread.expr).emit(ctx_);
+      }
+    }
+    return result;
+  }
+
+  auto fold_node(ast::field_access const& x) -> failure_or<data> {
+    TRY(auto subject, fold(x.left));
+    if (auto* fields = try_as<record>(&subject)) {
+      if (auto it = fields->find(x.name.name); it != fields->end()) {
+        return std::move(it->second);
+      }
+    }
+    auto miss = x;
+    miss.left = without_secrets(std::move(subject), x.left);
+    return fold_miss(x, ast::expression{std::move(miss)});
+  }
+
+  auto fold_node(ast::index_expr const& x) -> failure_or<data> {
+    TRY(auto subject, fold(x.expr));
+    TRY(auto index, fold(x.index));
+    if (contains_secret(index)) {
+      return unsupported(x.index);
+    }
+    if (auto* fields = try_as<record>(&subject)) {
+      if (auto* name = try_as<std::string>(&index)) {
+        if (auto it = fields->find(*name); it != fields->end()) {
+          return std::move(it->second);
+        }
+      }
+    } else if (auto* elements = try_as<list>(&subject)) {
+      if (auto* position = try_as<int64_t>(&index)) {
+        // Negative indices count from the end, like at runtime.
+        auto const size = detail::narrow<int64_t>(elements->size());
+        auto const resolved = *position < 0 ? size + *position : *position;
+        if (resolved >= 0 and resolved < size) {
+          return std::move((*elements)[detail::narrow<size_t>(resolved)]);
+        }
+      }
+    }
+    auto miss = x;
+    miss.expr = without_secrets(std::move(subject), x.expr);
+    miss.index
+      = ast::constant::make(located{std::move(index), x.index.get_location()});
+    return fold_miss(x, ast::expression{std::move(miss)});
+  }
+
+  auto fold_node(auto const& x) -> failure_or<data> {
+    return unsupported(x);
+  }
+
+  /// A constant for the value of `source` with its secrets replaced by `null`.
+  static auto without_secrets(data value, ast::expression const& source)
+    -> ast::expression {
+    return ast::constant::make(located{
+      substitute_secrets(std::move(value), data{}), source.get_location()});
+  }
+
+  /// Evaluates a field access or index `miss` that did not find a value, so
+  /// that Nova emits the same warnings as at runtime. The secrets in its
+  /// subject are replaced by `null`, as they cannot be part of the result.
+  auto fold_miss(auto const& x, ast::expression const& miss)
+    -> failure_or<data> {
+    TRY(auto value, const_eval_nova(miss, ctx_));
+    if (not is<caf::none_t>(value)) {
+      // A hit that the folder does not know, which must not yield a value
+      // without its secrets.
+      return unsupported(x);
+    }
+    return value;
+  }
+
+  /// Returns the secret transformation of a call to `encode_*` or `decode_*`
+  /// with a single argument.
+  static auto transformation_of(ast::function_call const& x)
+    -> Option<fbs::data::SecretTransformations> {
+    if (x.args.size() != 1) {
+      return None{};
+    }
+    for (auto operation : fbs::data::EnumValuesSecretTransformations()) {
+      if (is_std_call(x, fbs::data::EnumNameSecretTransformations(operation))) {
+        return operation;
+      }
+    }
+    return None{};
+  }
+
+  auto unsupported(auto const& x) -> failure_or<data> {
+    diagnostic::error("unsupported operation on a secret")
+      .primary(x)
+      .note("constant expressions combine secrets only with `+`, format "
+            "strings, the `encode_*` and `decode_*` functions, field access, "
+            "and indexing")
+      .emit(ctx_);
+    return failure::promise();
+  }
+
+  base_ctx ctx_;
+};
 
 } // namespace
 
@@ -172,11 +560,13 @@ auto const_eval_series(const ast::expression& expr, base_ctx ctx)
 
 auto const_eval(const ast::expression& expr, base_ctx ctx)
   -> failure_or<located<data>> {
-  TRY(auto part, const_eval_series(expr, ctx));
-  return located{materialize(view_at(*part.array, 0)), expr.get_location()};
+  return trace_panic(expr, [&] -> failure_or<located<data>> {
+    TRY(auto value, secret_folder{ctx}.fold(expr));
+    return located{std::move(value), expr.get_location()};
+  });
 }
 
-auto try_const_eval(const ast::expression& expr, session ctx)
+auto try_const_eval(const ast::expression& expr, base_ctx ctx)
   -> Option<located<data>> {
   return trace_panic(expr, [&] -> Option<located<data>> {
     if (not expr.is_deterministic(ctx.reg())) {

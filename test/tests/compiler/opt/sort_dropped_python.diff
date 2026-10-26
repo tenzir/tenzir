@@ -54,12 +54,7 @@
            ref: std::python/op
          },
          args: [
-           located {
-             buffer: {
-               chunk: chunk(size=52),
-               table-offset: 12
-             }
-           } @ [1]:21..27 from 0
+           expression constant string "pass" @ [1]:21..27 from 0
          ],
          named_args: [
            

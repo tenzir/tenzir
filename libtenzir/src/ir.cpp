@@ -16,6 +16,7 @@
 #include "tenzir/ir_if.hpp"
 #include "tenzir/ir_match.hpp"
 #include "tenzir/ir_set.hpp"
+#include "tenzir/nova/const_eval.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/session.hpp"
@@ -498,9 +499,26 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
           .emit(ctx);
         return failure::promise();
       }
-      TRY(auto value, const_eval(let.expr, ctx));
-      auto constant = ast::constant::make(value);
-      auto inserted = env.try_emplace(let.id, std::move(constant)).second;
+      auto value = ast::expression{};
+      // Only the secret lookups wait for operator startup. Everything else is
+      // evaluated once, here, so that every reference inlines the same
+      // deterministic recipe.
+      TRY(auto binding, nova::fold_startup_binding(let.expr, ctx));
+      if (binding.requires_startup) {
+        if (not binding.deterministic) {
+          diagnostic::error(
+            "`let` binding that uses `secret` must be deterministic")
+            .primary(let.expr)
+            .note("non-deterministic functions cannot depend on a secret")
+            .emit(ctx);
+          return failure::promise();
+        }
+        value = std::move(let.expr);
+      } else {
+        TRY(auto constant, const_eval(let.expr, ctx));
+        value = ast::constant::make(std::move(constant));
+      }
+      auto inserted = env.try_emplace(let.id, std::move(value)).second;
       TENZIR_ASSERT(inserted);
     }
     // Update each operator with the produced bindings.

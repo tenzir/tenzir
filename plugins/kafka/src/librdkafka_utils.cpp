@@ -16,7 +16,9 @@
 #include <tenzir/data.hpp>
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/nova/materialize.hpp>
 #include <tenzir/time.hpp>
+#include <tenzir/try.hpp>
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
@@ -615,51 +617,43 @@ auto make_producer_configuration(record const& options,
   return cfg;
 }
 
-auto configure_conf_or_request_secrets(
-  std::shared_ptr<RdKafka::Conf> const& conf, located<record> const& options,
-  diagnostic_handler& dh) -> std::vector<secret_request> {
+auto configure_conf(std::shared_ptr<RdKafka::Conf> const& conf,
+                    located<nova::Record> const& options,
+                    diagnostic_handler& dh) -> failure_or<void> {
   TENZIR_ASSERT(conf);
-  auto requests = std::vector<secret_request>{};
   for (auto const& [key, value] : options.inner) {
+    if (auto const* secret = try_as<nova::Secret>(&value)) {
+      TRY(auto str,
+          nova::reveal_string(*secret, "options." + key, options.source, dh));
+      set_conf_or_emit(*conf, key, str, options.source, dh);
+      continue;
+    }
     match(
-      value,
+      nova::materialize_legacy(value),
       [&](concepts::arithmetic auto const& v) {
         set_conf_or_emit(*conf, key, fmt::to_string(v), options.source, dh);
       },
       [&](std::string const& s) {
         set_conf_or_emit(*conf, key, s, options.source, dh);
       },
-      [&](secret const& s) {
-        requests.emplace_back(
-          s, options.source,
-          [&conf, &dh, key, loc = options.source](
-            resolved_secret_value const& v) -> failure_or<void> {
-            TRY(auto str, v.utf8_view("options." + key, loc, dh));
-            set_conf_or_emit(*conf, key, std::string{str}, loc, dh);
-            return {};
-          });
-      },
       [](auto const&) {
+        // Validated by `evaluate_options()`.
         TENZIR_UNREACHABLE();
       });
   }
-  return requests;
+  return {};
 }
 
-[[nodiscard]] auto
-configure_consumer_or_request_secrets(consumer_configuration& cfg,
-                                      located<record> const& options,
-                                      diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  return configure_conf_or_request_secrets(cfg.conf, options, dh);
+auto configure_consumer(consumer_configuration& cfg,
+                        located<nova::Record> const& options,
+                        diagnostic_handler& dh) -> failure_or<void> {
+  return configure_conf(cfg.conf, options, dh);
 }
 
-[[nodiscard]] auto
-configure_producer_or_request_secrets(producer_configuration& cfg,
-                                      located<record> const& options,
-                                      diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  return configure_conf_or_request_secrets(cfg.conf, options, dh);
+auto configure_producer(producer_configuration& cfg,
+                        located<nova::Record> const& options,
+                        diagnostic_handler& dh) -> failure_or<void> {
+  return configure_conf(cfg.conf, options, dh);
 }
 
 } // namespace tenzir::plugins::kafka

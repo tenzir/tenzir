@@ -1,0 +1,7 @@
+---
+error: true
+---
+// Package `let` bindings cannot look up secrets, because they must be
+// deterministic.
+from {}
+key = secretpkg::$key

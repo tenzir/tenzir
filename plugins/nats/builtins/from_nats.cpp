@@ -58,12 +58,12 @@ constexpr auto shutdown_flush_timeout_ms = int64_t{5_k};
 
 struct FromNatsArgs {
   located<std::string> subject;
-  Option<located<secret>> url;
+  Option<StartupArgument<nova::Secret>> url;
   Option<located<std::string>> durable;
   Option<located<uint64_t>> count;
   Option<ast::field_path> metadata_field;
   Option<located<data>> tls;
-  Option<located<data>> auth;
+  Option<StartupArgument<nova::Record>> auth;
   uint64_t batch_size = default_batch_size;
   uint64_t queue_capacity = default_queue_capacity;
   duration batch_timeout = default_batch_timeout;
@@ -442,10 +442,10 @@ public:
     io_executor_ = ctx.io_executor();
     auto* evb = io_executor_->getEventBase();
     TENZIR_ASSERT(evb);
-    auto options
-      = make_nats_options(*resolved, args_.tls,
-                          args_.url ? args_.url->source : location::unknown,
-                          ctx.dh(), *evb, ctx.actor_system().config());
+    auto options = make_nats_options(
+      *resolved, args_.tls,
+      args_.url ? args_.url->get_location() : location::unknown, ctx.dh(), *evb,
+      ctx.actor_system().config());
     if (not options) {
       done_ = true;
       co_return;
@@ -457,7 +457,7 @@ public:
     });
     if (status != NATS_OK) {
       emit_nats_error(diagnostic::error("failed to connect to NATS server")
-                        .primary(args_.url ? args_.url->source
+                        .primary(args_.url ? args_.url->get_location()
                                            : location::unknown),
                       status, ctx.dh());
       done_ = true;
@@ -1223,10 +1223,10 @@ public:
     session_->io_executor = ctx.io_executor();
     auto* evb = session_->io_executor->getEventBase();
     TENZIR_ASSERT(evb);
-    auto options
-      = make_nats_options(*resolved, args_.tls,
-                          args_.url ? args_.url->source : location::unknown,
-                          ctx.dh(), *evb, ctx.actor_system().config());
+    auto options = make_nats_options(
+      *resolved, args_.tls,
+      args_.url ? args_.url->get_location() : location::unknown, ctx.dh(), *evb,
+      ctx.actor_system().config());
     if (not options) {
       done_ = true;
       co_return;
@@ -1238,7 +1238,7 @@ public:
     });
     if (status != NATS_OK) {
       emit_nats_error(diagnostic::error("failed to connect to NATS server")
-                        .primary(args_.url ? args_.url->source
+                        .primary(args_.url ? args_.url->get_location()
                                            : location::unknown),
                       status, ctx.dh());
       done_ = true;
@@ -1658,13 +1658,13 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<FromNatsArgs, legacy::FromNats, FromNats>{};
     auto subject_arg = d.positional("subject", &FromNatsArgs::subject);
-    auto url_arg = d.named("url", &FromNatsArgs::url);
+    d.named("url", &FromNatsArgs::url);
     d.named("durable", &FromNatsArgs::durable);
     auto count_arg = d.named("count", &FromNatsArgs::count);
     auto metadata_field_arg
       = d.named("metadata_field", &FromNatsArgs::metadata_field);
     auto tls_arg = d.named("tls", &FromNatsArgs::tls, "record");
-    auto auth_arg = d.named("auth", &FromNatsArgs::auth, "record");
+    d.named("auth", &FromNatsArgs::auth, "record");
     auto batch_size_arg
       = d.named_optional("_batch_size", &FromNatsArgs::batch_size);
     auto queue_capacity_arg
@@ -1678,10 +1678,6 @@ public:
         diagnostic::error("`subject` must not be empty")
           .primary(subject.source)
           .emit(ctx);
-      }
-      if (auto url = ctx.get(url_arg);
-          url and not url->inner.is_all_literal()) {
-        // Managed secrets are resolved at runtime.
       }
       if (auto count = ctx.get(count_arg); count) {
         if (count->inner == 0) {
@@ -1738,11 +1734,6 @@ public:
         auto tls
           = tls_options{*tls_val, {.tls_default = true, .is_server = false}};
         if (auto valid = tls.validate(ctx); not valid) {
-          return {};
-        }
-      }
-      if (auto auth_val = ctx.get(auth_arg)) {
-        if (not validate_auth_record(Option<located<data>>{*auth_val}, ctx)) {
           return {};
         }
       }

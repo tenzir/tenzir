@@ -445,12 +445,12 @@ public:
       }
       if (effective_method == "put" and ctx.get(token)) {
         diagnostic::error("`token` is not valid for `method=\"put\"`")
-          .primary(ctx.get(token)->source)
+          .primary(*ctx.get_location(token))
           .emit(ctx);
       }
       if (effective_method != "put" and ctx.get(token) and ctx.get(aws_iam)) {
         diagnostic::error("`token` and `aws_iam` are mutually exclusive")
-          .primary(ctx.get(token)->source)
+          .primary(*ctx.get_location(token))
           .emit(ctx);
       }
       if (auto value = ctx.get(endpoint);

@@ -22,12 +22,7 @@
            },
            {
              index: 2,
-             value: located {
-               buffer: {
-                 chunk: chunk(size=56),
-                 table-offset: 12
-               }
-             } @ [1]:102..113 from 0
+             value: expression constant string "localhost" @ [1]:102..113 from 0
            }
          ]
        },

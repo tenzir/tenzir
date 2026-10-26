@@ -40,7 +40,7 @@ namespace tenzir::plugins::parquet {
 TENZIR_ENUM(decimal_format, string, float_);
 
 struct ReadParquetArgs {
-  Option<located<secret>> encryption_key;
+  Option<StartupArgument<nova::Secret>> encryption_key;
   Option<located<std::string>> decimal_format;
   OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
@@ -306,7 +306,7 @@ protected:
       filters_, remaining_, dh);
   }
 
-  Option<located<secret>> encryption_key_;
+  Option<StartupArgument<nova::Secret>> encryption_key_;
   std::shared_ptr<::parquet::FileDecryptionProperties> decryption_;
   ir::OptimizeFilter filter_;
   Option<uint64_t> remaining_;
@@ -1232,7 +1232,7 @@ public:
   }
 
 private:
-  Option<located<secret>> encryption_key_;
+  Option<StartupArgument<nova::Secret>> encryption_key_;
   std::shared_ptr<::parquet::FileDecryptionProperties> decryption_;
   decimal_format decimal_format_ = decimal_format::string;
   std::vector<chunk_ptr> chunks_;

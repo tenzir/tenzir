@@ -13,7 +13,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/option.hpp>
-#include <tenzir/secret.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/tls_options.hpp>
 
 #include <caf/fwd.hpp>
@@ -92,12 +92,12 @@ using js_msg_meta_data_ptr
   = std::unique_ptr<jsMsgMetaData, js_msg_meta_data_deleter>;
 
 struct auth_config {
-  Option<std::string> user;
-  Option<std::string> password;
-  Option<std::string> token;
-  Option<std::string> credentials;
-  Option<std::string> seed;
-  Option<std::string> credentials_memory;
+  Option<nova::Secret> user;
+  Option<nova::Secret> password;
+  Option<nova::Secret> token;
+  Option<nova::Secret> credentials;
+  Option<nova::Secret> seed;
+  Option<nova::Secret> credentials_memory;
 };
 
 struct connection_config {
@@ -105,7 +105,7 @@ struct connection_config {
   auth_config auth;
 };
 
-auto default_url() -> secret&;
+auto default_url() -> std::string&;
 auto set_default_url_from_global_config(record const& global_config,
                                         std::string_view plugin_name)
   -> caf::error;
@@ -119,10 +119,11 @@ auto nats_last_error_string(natsStatus fallback) -> std::string;
 auto emit_nats_error(diagnostic_builder diag, natsStatus status,
                      diagnostic_handler& dh) -> void;
 
-auto validate_auth_record(Option<located<data>> const& auth,
+auto validate_auth_record(located<nova::Record> const& auth,
                           diagnostic_handler& dh) -> failure_or<void>;
-auto resolve_connection_config(OpCtx& ctx, Option<located<secret>> const& url,
-                               Option<located<data>> const& auth)
+auto resolve_connection_config(OpCtx& ctx,
+                               Option<StartupArgument<nova::Secret>> const& url,
+                               Option<StartupArgument<nova::Record>> const& auth)
   -> Task<Option<connection_config>>;
 auto apply_auth(natsOptions* options, auth_config const& auth,
                 location auth_location, diagnostic_handler& dh)

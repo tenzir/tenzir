@@ -12,8 +12,8 @@
 #include <tenzir/data.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/table_slice.hpp>
 
 #include <fmt/format.h>
@@ -31,11 +31,11 @@ constexpr auto default_endpoint = std::string_view{"http://127.0.0.1:11434/v1"};
 
 struct PromptArgs {
   located<std::string> model;
-  Option<located<secret>> endpoint;
+  Option<StartupArgument<nova::Secret>> endpoint;
   Option<located<std::string>> system;
   Option<ast::expression> data;
   ast::field_path into = ai::default_into("prompt");
-  Option<located<secret>> api_key;
+  Option<StartupArgument<nova::Secret>> api_key;
   Option<located<double>> temperature;
   Option<located<uint64_t>> max_tokens;
   located<duration> timeout{std::chrono::seconds{30}, location::unknown};
@@ -55,11 +55,10 @@ auto connect(PromptArgs const& args, OpCtx& ctx)
   -> Task<Option<Box<ai::openai::ResponsesClient>>> {
   auto endpoint = args.endpoint
                     ? *args.endpoint
-                    : located<secret>{secret::make_literal(default_endpoint),
-                                      args.operator_location};
-  auto connection
-    = co_await ai::connect(std::move(endpoint), args.api_key, "responses",
-                           args.timeout.inner, args.tls, ctx);
+                    : StartupArgument<nova::Secret>::constant(
+                        std::string{default_endpoint}, args.operator_location);
+  auto connection = co_await ai::connect(endpoint, args.api_key, "responses",
+                                         args.timeout.inner, args.tls, ctx);
   if (not connection) {
     co_return None{};
   }

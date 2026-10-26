@@ -34,12 +34,7 @@
            ref: std::to_file/op
          },
          args: [
-           located {
-             buffer: {
-               chunk: chunk(size=56),
-               table-offset: 12
-             }
-           } @ [1]:269..280 from 0
+           expression constant string "/dev/null" @ [1]:269..280 from 0
          ],
          named_args: [
            

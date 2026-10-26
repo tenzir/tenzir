@@ -69,12 +69,12 @@ auto default_message_expression() -> ast::expression {
 }
 
 struct ToAmqpArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   ast::expression message = default_message_expression();
   Option<located<uint64_t>> channel;
   Option<located<std::string>> exchange;
   Option<located<std::string>> routing_key;
-  Option<located<record>> options;
+  Option<StartupArgument<nova::Record>> options;
   bool mandatory = false;
   bool immediate = false;
   record plugin_config;
@@ -91,68 +91,17 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto& dh = ctx.dh();
-    auto config = args_.plugin_config;
-    auto requests = std::vector<secret_request>{};
-    auto resolved_url = std::string{};
-    requests.push_back(make_secret_request("url", args_.url, resolved_url, dh));
-    if (args_.options) {
-      const auto& loc = args_.options->source;
-      for (const auto& [k, v] : args_.options->inner) {
-        match(
-          v,
-          [&](const concepts::arithmetic auto& x) {
-            set_or_fail(config, k, fmt::to_string(x), loc, dh);
-          },
-          [&](const std::string& x) {
-            set_or_fail(config, k, x, loc, dh);
-          },
-          [&](const secret& x) {
-            requests.push_back(secret_request{
-              x, loc,
-              [&config, k = std::string{k}, loc,
-               &dh](const resolved_secret_value& v) -> failure_or<void> {
-                TRY(auto str, v.utf8_view(k, loc, dh));
-                set_or_fail(config, k, std::string{str}, loc, dh);
-                return {};
-              }});
-          },
-          [](const auto&) {
-            TENZIR_UNREACHABLE();
-          });
-      }
-    }
-    auto res = co_await ctx.resolve_secrets(std::move(requests));
-    if (not res) {
+    auto resolved = co_await resolve_config(ctx, args_.url, args_.options,
+                                            args_.plugin_config);
+    if (not resolved) {
       co_return;
     }
-    auto pre_url_config = config;
-    if (auto parsed = parse_url(config, resolved_url)) {
-      config = std::move(*parsed);
-    } else {
-      diagnostic::error("failed to parse AMQP URL")
-        .primary(args_.url.source)
-        .hint("URL must adhere to the following format")
-        .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
-        .emit(dh);
-      co_return;
-    }
-    if (args_.options) {
-      for (const auto& [k, _] : args_.options->inner) {
-        auto pre = pre_url_config.find(k);
-        auto post = config.find(k);
-        if (pre != pre_url_config.end() and post != config.end()
-            and pre->second != post->second) {
-          diagnostic::warning("option `{}` was overridden by the URL", k)
-            .primary(args_.options->source)
-            .emit(dh);
-        }
-      }
-    }
+    auto config = std::move(*resolved);
     auto hb_interval = heartbeat_interval(config);
     auto engine_exp = amqp_engine::make(std::move(config));
     if (not engine_exp) {
       diagnostic::error("failed to construct AMQP engine")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("{}", engine_exp.error())
         .emit(dh);
       co_return;
@@ -163,14 +112,14 @@ public:
     auto setup_ok = co_await spawn_blocking([&]() -> bool {
       if (auto err = engine_->connect(); err.valid()) {
         diagnostic::error("failed to connect to AMQP server")
-          .primary(args_.url.source)
+          .primary(args_.url.get_location())
           .note("{}", err)
           .emit(dh);
         return false;
       }
       if (auto err = engine_->open(channel_); err.valid()) {
         diagnostic::error("failed to open AMQP channel {}", channel_)
-          .primary(args_.url.source)
+          .primary(args_.url.get_location())
           .note("{}", err)
           .emit(dh);
         return false;
@@ -197,7 +146,7 @@ public:
                    bytes_write_counter_, events_write_counter_));
     if (hb_interval > std::chrono::seconds{0}) {
       ctx.spawn_task(heartbeat_loop(engine_, engine_mutex_, hb_interval,
-                                    args_.url.source, dh));
+                                    args_.url.get_location(), dh));
     }
   }
 
@@ -272,7 +221,7 @@ private:
           });
           if (err.valid()) {
             diagnostic::error("failed to publish AMQP message")
-              .primary(args.url.source)
+              .primary(args.url.get_location())
               .note("size: {}", bytes.size())
               .note("channel: {}", opts.channel)
               .note("exchange: {}", opts.exchange)
@@ -393,7 +342,7 @@ public:
     auto engine = amqp_engine::make(std::move(*config));
     if (not engine) {
       diagnostic::error("failed to construct AMQP engine")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("{}", engine.error())
         .emit(ctx);
       done_ = true;
@@ -404,13 +353,13 @@ public:
     auto failure = co_await spawn_blocking([&]() -> Option<diagnostic> {
       if (auto err = engine->connect(); err.valid()) {
         return diagnostic::error("failed to connect to AMQP server")
-          .primary(args_.url.source)
+          .primary(args_.url.get_location())
           .note("{}", err)
           .done();
       }
       if (auto err = engine->open(channel_); err.valid()) {
         return diagnostic::error("failed to open AMQP channel {}", channel_)
-          .primary(args_.url.source)
+          .primary(args_.url.get_location())
           .note("{}", err)
           .done();
       }
@@ -431,8 +380,8 @@ public:
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::events);
     if (hb_interval > std::chrono::seconds{0}) {
-      ctx.spawn_task(
-        heartbeat_loop(*engine_, hb_interval, args_.url.source, ctx.dh()));
+      ctx.spawn_task(heartbeat_loop(*engine_, hb_interval,
+                                    args_.url.get_location(), ctx.dh()));
     }
   }
 
@@ -513,7 +462,7 @@ public:
     if (err.valid()) {
       auto const begin = published == 0 ? size_t{0} : ends[published - 1];
       diagnostic::error("failed to publish AMQP message")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("size: {}", ends[published] - begin)
         .note("channel: {}", opts.channel)
         .note("exchange: {}", opts.exchange)
@@ -603,31 +552,8 @@ public:
     d.named("routing_key", &ToAmqpArgs::routing_key);
     d.named("mandatory", &ToAmqpArgs::mandatory);
     d.named("immediate", &ToAmqpArgs::immediate);
-    auto options_arg = d.named("options", &ToAmqpArgs::options);
+    d.named("options", &ToAmqpArgs::options);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto options = ctx.get(options_arg); options) {
-        for (const auto& [k, v] : options->inner) {
-          auto ok = match(
-            v,
-            [](const concepts::arithmetic auto&) {
-              return true;
-            },
-            [](const concepts::one_of<std::string, secret> auto&) {
-              return true;
-            },
-            [&](const auto&) {
-              diagnostic::error(
-                "expected type `number`, `bool`, `string`, or `secret` "
-                "for option")
-                .primary(options->source)
-                .emit(ctx);
-              return false;
-            });
-          if (not ok) {
-            return {};
-          }
-        }
-      }
       if (auto channel = ctx.get(channel_arg); channel) {
         if (channel->inner > std::numeric_limits<uint16_t>::max()) {
           diagnostic::error("`channel` must fit into 16 bits")

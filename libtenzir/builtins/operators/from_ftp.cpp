@@ -24,7 +24,7 @@ namespace {
 constexpr auto download_buffer_capacity = size_t{16};
 
 struct FromFtpArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   Option<located<data>> tls;
   located<ir::pipeline> parser;
 };
@@ -48,13 +48,11 @@ auto make_tls_options(std::string_view url, Option<located<data>> const& tls)
 auto resolve_url(OpCtx& ctx, FromFtpArgs const& args, std::string& resolved_url)
   -> Task<bool> {
   resolved_url.clear();
-  auto requests = std::vector<secret_request>{};
-  requests.emplace_back(
-    make_secret_request("url", args.url, resolved_url, ctx.dh()));
-  if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-      result.is_error()) {
+  auto value = co_await args.url.evaluate_string(ctx, "url");
+  if (not value) {
     co_return false;
   }
+  resolved_url = std::move(*value);
   if (resolved_url.empty()) {
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return false;
@@ -75,7 +73,8 @@ public:
       co_return;
     }
     auto tls = make_tls_options(resolved_url_, args_.tls);
-    if (auto valid = tls.validate(resolved_url_, args_.url.source, ctx.dh());
+    if (auto valid
+        = tls.validate(resolved_url_, args_.url.get_location(), ctx.dh());
         not valid) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -94,7 +93,7 @@ public:
     auto& easy = session_->easy();
     if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
       diagnostic::error("failed to configure FTP download")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("failed to set curl option `CURLOPT_DEFAULT_PROTOCOL`")
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
@@ -102,7 +101,7 @@ public:
     }
     if (not curl::try_set(easy, CURLOPT_URL, resolved_url_)) {
       diagnostic::error("failed to configure FTP download")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("failed to set curl option `CURLOPT_URL`")
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
@@ -110,7 +109,7 @@ public:
     }
     if (not curl::try_set(easy, CURLOPT_HTTPGET, 1L)) {
       diagnostic::error("failed to configure FTP download")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("failed to set curl option `CURLOPT_HTTPGET`")
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
@@ -118,7 +117,7 @@ public:
     }
     if (auto err = resolved_tls->apply_to(easy, resolved_url_); err.valid()) {
       diagnostic::error("failed to configure FTP download")
-        .primary(args_.url.source)
+        .primary(args_.url.get_location())
         .note("{}", err)
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
@@ -185,7 +184,7 @@ public:
       },
       [&](CurlDownloadFailed failure) -> Task<void> {
         diagnostic::error("FTP download failed")
-          .primary(args_.url.source)
+          .primary(args_.url.get_location())
           .note("curl error: {}", to_string(failure.error))
           .emit(ctx);
         if (auto sub = ctx.get_sub(caf::none)) {
@@ -200,7 +199,7 @@ public:
         if (done.status == CurlTransferStatus::finished and done.response_code
             and (*done.response_code < 200 or *done.response_code > 299)) {
           diagnostic::error("FTP download failed")
-            .primary(args_.url.source)
+            .primary(args_.url.get_location())
             .note("FTP response code: {}", *done.response_code)
             .emit(ctx);
         }

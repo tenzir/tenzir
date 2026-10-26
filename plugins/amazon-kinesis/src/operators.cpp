@@ -441,14 +441,14 @@ auto default_message_expression() -> ast::expression {
   };
 }
 
-auto make_kinesis_http_client(Option<located<std::string>> const& aws_region,
-                              Option<located<record>> const& aws_iam,
-                              Option<located<std::string>> const& endpoint,
-                              OpCtx& ctx)
+auto make_kinesis_http_client(
+  Option<located<std::string>> const& aws_region,
+  Option<StartupArgument<nova::Record>> const& aws_iam,
+  Option<located<std::string>> const& endpoint, OpCtx& ctx)
   -> Task<std::shared_ptr<amazon::SignedHttpClient>> {
   auto auth = co_await resolve_aws_iam_auth(
-    aws_iam ? Option<located<record>>{*aws_iam} : None{},
-    aws_region ? Option<located<std::string>>{*aws_region} : None{}, ctx);
+    aws_iam, aws_region ? Option<located<std::string>>{*aws_region} : None{},
+    ctx);
   if (not auth) {
     co_return nullptr;
   }

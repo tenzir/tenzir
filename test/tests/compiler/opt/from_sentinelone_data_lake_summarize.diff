@@ -18,12 +18,7 @@
          named_args: [
            {
              index: 0,
-             value: located {
-               buffer: {
-                 chunk: chunk(size=48),
-                 table-offset: 12
-               }
-             } @ [1]:209..212 from 0
+             value: expression constant string "t" @ [1]:209..212 from 0
            }
          ]
        },

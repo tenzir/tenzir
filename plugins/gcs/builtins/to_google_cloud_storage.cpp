@@ -9,7 +9,6 @@
 #include <tenzir/arrow_fs.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
-#include <tenzir/secret_resolution.hpp>
 
 #include <arrow/filesystem/gcsfs.h>
 #include <arrow/util/uri.h>
@@ -31,11 +30,7 @@ public:
 
 protected:
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<std::string>> override {
-    auto resolved = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("url", args_.url, resolved, ctx.dh()),
-    };
-    CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
+    CO_TRY(auto resolved, co_await args_.url.evaluate_string(ctx, "url"));
     if (not resolved.starts_with("gs://")) {
       resolved = "gs://" + resolved;
     }

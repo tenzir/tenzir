@@ -14,8 +14,8 @@
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/nova/type_system.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret_resolution.hpp>
 
 #include <caf/expected.hpp>
 #include <librdkafka/rdkafkacpp.h>
@@ -133,18 +133,14 @@ auto make_producer_configuration(record const& options,
                                  diagnostic_handler& dh)
   -> caf::expected<producer_configuration>;
 
-/// Applies plain options and returns secret requests for deferred resolution.
-[[nodiscard]] auto
-configure_consumer_or_request_secrets(consumer_configuration& cfg,
-                                      located<record> const& options,
-                                      diagnostic_handler& dh)
-  -> std::vector<secret_request>;
+/// Applies evaluated user options to the consumer config.
+auto configure_consumer(consumer_configuration& cfg,
+                        located<nova::Record> const& options,
+                        diagnostic_handler& dh) -> failure_or<void>;
 
-/// Applies plain options and returns secret requests for deferred resolution.
-[[nodiscard]] auto
-configure_producer_or_request_secrets(producer_configuration& cfg,
-                                      located<record> const& options,
-                                      diagnostic_handler& dh)
-  -> std::vector<secret_request>;
+/// Applies evaluated user options to the producer config.
+auto configure_producer(producer_configuration& cfg,
+                        located<nova::Record> const& options,
+                        diagnostic_handler& dh) -> failure_or<void>;
 
 } // namespace tenzir::plugins::kafka

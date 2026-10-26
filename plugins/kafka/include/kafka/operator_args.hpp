@@ -16,82 +16,79 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/startup_argument.hpp>
+#include <tenzir/try.hpp>
 
 #include <librdkafka/rdkafkacpp.h>
 
 namespace tenzir::plugins::kafka {
 
 /// Validates that Kafka options map strings to number/string/secret values.
-inline auto validate_options(located<record> const& options,
+inline auto validate_options(located<nova::Record> const& options,
                              diagnostic_handler& dh) -> failure_or<void> {
   for (auto const& [key, value] : options.inner) {
-    auto validate = tenzir::detail::overload{
-      [](concepts::arithmetic auto const&) -> failure_or<void> {
-        return {};
-      },
-      [](std::string const&) -> failure_or<void> {
-        return {};
-      },
-      [](secret const&) -> failure_or<void> {
-        return {};
-      },
-      [](tenzir::pattern const&) -> failure_or<void> {
-        TENZIR_UNREACHABLE();
-      },
-      [&]<typename T>(T const&) -> failure_or<void> {
-        diagnostic::error(
-          "options must be a record `{{ string: number|string }}`")
-          .primary(options.source, "key `{}` is `{}`", key,
-                   type_kind{tag_v<data_to_type_t<T>>})
-          .emit(dh);
-        return failure::promise();
-      },
-    };
-    TRY(match(value, validate));
+    auto valid = match(value, []<class T>(T const&) {
+      return concepts::one_of<T, nova::Bool, nova::Int, nova::UInt, nova::Float,
+                              nova::String, nova::Secret>;
+    });
+    if (not valid) {
+      auto kind = match(value, []<class T>(T const&) {
+        return nova::Type<T>::static_name;
+      });
+      diagnostic::error(
+        "options must be a record `{{ string: number|string }}`")
+        .primary(options.source, "key `{}` is `{}`", key, kind)
+        .emit(dh);
+      return failure::promise();
+    }
   }
   return {};
 }
 
 /// Checks that explicit SASL settings are compatible with AWS IAM auth.
-inline auto check_sasl_mechanism(located<record> const& options,
+inline auto check_sasl_mechanism(located<nova::Record> const& options,
                                  diagnostic_handler& dh) -> failure_or<void> {
-  if (auto it = options.inner.find("sasl.mechanism");
-      it != options.inner.end()) {
-    auto mechanism = try_as<std::string>(it->second);
+  for (auto key : {"sasl.mechanism", "sasl.mechanisms"}) {
+    auto it = options.inner.find(key);
+    if (it == options.inner.end()) {
+      continue;
+    }
+    auto const* mechanism = try_as<nova::String>(&it->second);
     if (not mechanism) {
-      diagnostic::error("option `sasl.mechanism` must be `string`")
+      diagnostic::error("option `{}` must be `string`", key)
         .primary(options)
         .emit(dh);
       return failure::promise();
     }
     if (*mechanism != "OAUTHBEARER") {
-      diagnostic::error("conflicting `sasl.mechanism`: `{}` but `aws_iam` "
+      diagnostic::error("conflicting `{}`: `{}` but `aws_iam` "
                         "requires `OAUTHBEARER`",
-                        *mechanism)
-        .primary(options)
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  if (auto it = options.inner.find("sasl.mechanisms");
-      it != options.inner.end()) {
-    auto mechanisms = try_as<std::string>(it->second);
-    if (not mechanisms) {
-      diagnostic::error("option `sasl.mechanisms` must be `string`")
-        .primary(options)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (*mechanisms != "OAUTHBEARER") {
-      diagnostic::error("conflicting `sasl.mechanisms`: `{}` but `aws_iam` "
-                        "requires `OAUTHBEARER`",
-                        *mechanisms)
+                        key, *mechanism)
         .primary(options)
         .emit(dh);
       return failure::promise();
     }
   }
   return {};
+}
+
+/// Evaluates the `options` argument and validates it. Returns an empty record
+/// if the argument is absent. With `aws_iam`, explicit SASL settings must be
+/// compatible with IAM auth.
+inline auto
+evaluate_options(Option<StartupArgument<nova::Record>> const& options,
+                 bool aws_iam, OpCtx& ctx)
+  -> Task<failure_or<located<nova::Record>>> {
+  if (not options) {
+    co_return located{nova::Record{}, location::unknown};
+  }
+  CO_TRY(auto evaluated, co_await options->evaluate(ctx));
+  auto result = located{std::move(evaluated), options->get_location()};
+  CO_TRY(validate_options(result, ctx.dh()));
+  if (aws_iam) {
+    CO_TRY(check_sasl_mechanism(result, ctx.dh()));
+  }
+  co_return result;
 }
 
 /// Returns a parser for symbolic and absolute Kafka offset expressions.

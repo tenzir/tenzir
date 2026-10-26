@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+let $token = secret("S1_FIXTURE_TOKEN")
+from {}
+to_sentinelone_data_lake "https://example.com", token=$token, _dry_run=true

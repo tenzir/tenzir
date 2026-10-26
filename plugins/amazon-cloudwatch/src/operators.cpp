@@ -18,7 +18,6 @@
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/eval_kernel.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
 
@@ -217,13 +216,12 @@ auto make_cloudwatch_http_client(Args const& args, OpCtx& ctx, location primary,
       .primary(primary)
       .throw_();
   }
-  auto aws_iam = args.aws_iam ? Option<located<record>>{*args.aws_iam} : None{};
   auto aws_region
     = args.aws_region ? Option<located<std::string>>{*args.aws_region} : None{};
   auto auth = Option<ResolvedAwsIamAuth>{};
   if (not token) {
-    auth = co_await resolve_aws_iam_auth(std::move(aws_iam),
-                                         std::move(aws_region), ctx);
+    auth
+      = co_await resolve_aws_iam_auth(args.aws_iam, std::move(aws_region), ctx);
     if (not auth) {
       diagnostic::error("failed to initialize CloudWatch HTTP client")
         .primary(primary)
@@ -1190,14 +1188,12 @@ auto CloudWatchWriter::start(OpCtx& ctx) -> Task<void> {
                        MetricsVisibility::external_, MetricsUnit::events);
   auto token = Option<std::string>{};
   if (args_.token) {
-    auto requests = std::vector<secret_request>{
-      make_secret_request("token", *args_.token, token_, ctx.dh()),
-    };
-    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-        result.is_error()) {
+    auto value = co_await args_.token->evaluate_string(ctx, "token");
+    if (not value) {
       done_ = true;
       co_return;
     }
+    token_ = std::move(*value);
     token = token_;
   }
   auto endpoint = Option<std::string>{};

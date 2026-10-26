@@ -13,6 +13,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/http_pool.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/view3.hpp"
 
@@ -334,33 +335,23 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
   return config;
 }
 
-auto make_header_secret_requests(Option<located<data>> const& headers,
-                                 std::vector<http::Header>& resolved_headers,
-                                 diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  resolved_headers.clear();
-  auto result = std::vector<secret_request>{};
-  if (not headers) {
-    return result;
-  }
-  auto const* rec = try_as<record>(headers->inner);
-  TENZIR_ASSERT(rec);
-  resolved_headers.reserve(rec->size());
-  for (auto const& [header_name, value] : *rec) {
-    match(
-      value,
-      [&](std::string const& literal) {
-        resolved_headers.push_back({header_name, literal});
-      },
-      [&](secret const& sec) {
-        resolved_headers.push_back({header_name, std::string{}});
-        auto& out = resolved_headers.back().value;
-        result.emplace_back(
-          make_secret_request(header_name, sec, headers->source, out, dh));
-      },
-      [](auto const&) {
-        TENZIR_UNREACHABLE();
-      });
+auto make_headers(located<nova::Record> const& headers, diagnostic_handler& dh)
+  -> failure_or<std::vector<Header>> {
+  auto result = std::vector<Header>{};
+  result.reserve(headers.inner.size());
+  for (auto const& [name, value] : headers.inner) {
+    if (auto const* str = try_as<nova::String>(&value)) {
+      result.push_back({name, *str});
+    } else if (auto const* secret = try_as<nova::Secret>(&value)) {
+      TRY(auto revealed,
+          nova::reveal_string(*secret, name, headers.source, dh));
+      result.push_back({name, std::move(revealed)});
+    } else {
+      diagnostic::error("header values must be `string` or `secret`")
+        .primary(headers)
+        .emit(dh);
+      return failure::promise();
+    }
   }
   return result;
 }

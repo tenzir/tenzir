@@ -200,9 +200,9 @@ struct FromKafkaArgs {
   /// Region used for MSK IAM token generation.
   Option<located<std::string>> aws_region;
   /// IAM authentication settings for OAUTHBEARER.
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   /// Raw librdkafka overrides applied to the consumer config.
-  located<record> options;
+  Option<StartupArgument<nova::Record>> options;
   /// Controls output ordering guarantees.
   std::string _optimization = "ordered";
   /// Preferred build-stage batch size override.
@@ -215,8 +215,8 @@ struct FromKafkaArgs {
   duration _batch_timeout = default_batch_timeout;
   /// Initial broker poll wait before adaptive timeout backoff.
   duration _fetch_wait_timeout = default_fetch_wait_timeout;
-  Option<located<secret>> schema_registry;
-  Option<located<data>> schema_registry_headers;
+  Option<StartupArgument<nova::Secret>> schema_registry;
+  Option<StartupArgument<nova::Record>> schema_registry_headers;
   Option<located<data>> schema_registry_tls;
   /// Whether the operator should treat the input as json and produce events
   /// directly
@@ -424,6 +424,49 @@ auto append_avro(data const& value, auto out) -> void {
 /// The librdkafka option that enables static consumer-group membership.
 constexpr auto static_membership_option = std::string_view{"group.instance.id"};
 
+/// Returns whether the `options` expression may set `key`. Expressions whose
+/// keys are only known at startup, e.g., package bindings or spreads, may set
+/// any key.
+auto may_set_option(ast::expression const& expr, std::string_view key) -> bool {
+  return match(
+    *expr.kind,
+    [&](ast::record const& x) {
+      return std::ranges::any_of(x.items, [&](ast::record::item const& item) {
+        return match(
+          item,
+          [&](ast::record::field const& field) {
+            return field.name.name == key;
+          },
+          [](ast::spread const&) {
+            return true;
+          });
+      });
+    },
+    [&](ast::constant const& x) {
+      auto const* rec = try_as<record>(&x.value);
+      return not rec or rec->contains(key);
+    },
+    [](auto const&) {
+      return true;
+    });
+}
+
+/// Evaluates the user-supplied librdkafka options at startup and validates
+/// them.
+auto evaluate_source_options(FromKafkaArgs const& args, bool aws_iam,
+                             OpCtx& ctx)
+  -> Task<failure_or<located<nova::Record>>> {
+  CO_TRY(auto options, co_await evaluate_options(args.options, aws_iam, ctx));
+  if (options.inner.contains("enable.auto.commit")) {
+    diagnostic::error("`enable.auto.commit` must not be specified")
+      .primary(options.source)
+      .note("`enable.auto.commit` is enforced to be `false`")
+      .emit(ctx);
+    co_return failure::promise();
+  }
+  co_return options;
+}
+
 /// Returns whether the operator may run as several replicated instances.
 ///
 /// Replication makes the instances members of one consumer group, which is
@@ -450,7 +493,8 @@ auto can_replicate(FromKafkaArgs const& args) -> bool {
   // Static membership names one specific member of the group. Instances
   // sharing that name are duplicates that the broker fences, so the run
   // cannot make progress.
-  if (args.options.inner.contains(static_membership_option)
+  if ((args.options
+       and may_set_option(args.options->expression(), static_membership_option))
       or source_global_defaults().contains(static_membership_option)) {
     return false;
   }
@@ -661,13 +705,11 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::external_,
       MetricsUnit::events);
-    auto aws_iam
-      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
     auto aws_region = args_.aws_region
                         ? Option<located<std::string>>{*args_.aws_region}
                         : None{};
     auto auth = co_await resolve_aws_iam_auth(
-      std::move(aws_iam), std::move(aws_region), ctx,
+      args_.aws_iam, std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_ = true;
@@ -690,29 +732,40 @@ public:
       auto const* plugin = plugins::find<AvroDecoderPlugin>("avro.decoder");
       if (not plugin) {
         diagnostic::error("Avro decoding requires the avro plugin")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
-      auto url = std::string{};
-      auto headers = std::vector<http::Header>{};
-      auto requests = http::make_header_secret_requests(
-        args_.schema_registry_headers, headers, ctx.dh());
-      requests.push_back(make_secret_request(
-        "schema_registry", *args_.schema_registry, url, ctx.dh()));
-      if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      auto evaluated_url = co_await args_.schema_registry->evaluate_string(
+        ctx, "schema_registry");
+      if (not evaluated_url) {
         co_return;
+      }
+      auto url = std::move(*evaluated_url);
+      auto headers = std::vector<http::Header>{};
+      if (args_.schema_registry_headers) {
+        auto evaluated = co_await args_.schema_registry_headers->evaluate(ctx);
+        if (not evaluated) {
+          co_return;
+        }
+        auto made = http::make_headers(
+          located{std::move(*evaluated),
+                  args_.schema_registry_headers->get_location()},
+          ctx.dh());
+        if (not made) {
+          co_return;
+        }
+        headers = std::move(*made);
       }
       if (url.empty()) {
         diagnostic::error("`schema_registry` must not be empty")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
-      auto config
-        = http::make_http_pool_config(args_.schema_registry_tls, url,
-                                      args_.schema_registry->source, ctx.dh(),
-                                      30s, ctx.actor_system().config());
+      auto config = http::make_http_pool_config(
+        args_.schema_registry_tls, url, args_.schema_registry->get_location(),
+        ctx.dh(), 30s, ctx.actor_system().config());
       if (not config) {
         co_return;
       }
@@ -722,20 +775,20 @@ public:
         parsed.emplace(url);
       } catch (std::invalid_argument const&) {
         diagnostic::error("invalid `schema_registry` URL")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
       if (parsed->host().empty()) {
         diagnostic::error("`schema_registry` URL must contain a host")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
       if (not parsed->query().empty() or not parsed->fragment().empty()) {
         diagnostic::error(
           "`schema_registry` must not contain a query or fragment")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
@@ -749,7 +802,7 @@ public:
           HttpPool::make(ctx.io_executor(), url, std::move(*config)));
       } catch (std::runtime_error const&) {
         diagnostic::error("invalid `schema_registry` URL")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
@@ -842,7 +895,7 @@ public:
     }
     if (args_.schema_registry and frame.fatal_error) {
       diagnostic::error("{}", *frame.fatal_error)
-        .primary(args_.schema_registry->source)
+        .primary(args_.schema_registry->get_location())
         .emit(ctx);
       done_ = true;
       request_pipeline_stop();
@@ -863,7 +916,7 @@ public:
                      .source_consumer->consumer_cfg.assignment_generation->load(
                        std::memory_order_acquire)) {
         diagnostic::error("Kafka assignment changed during Avro batch delivery")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         done_ = true;
         request_pipeline_stop();
@@ -1096,7 +1149,7 @@ public:
         if (dh) {
           diagnostic::error(
             "Kafka assignment changed while committing Avro offsets")
-            .primary(args_.schema_registry->source)
+            .primary(args_.schema_registry->get_location())
             .emit(*dh);
         }
         done_ = true;
@@ -1305,14 +1358,15 @@ private:
       co_return None{};
     }
     auto source_cfg = std::move(*cfg);
-    auto user_options = args_.options;
-    if (auth.options) {
-      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    auto user_options
+      = co_await evaluate_source_options(args_, auth.options.has_value(), ctx);
+    if (not user_options) {
+      co_return None{};
     }
-    if (auto ok
-        = co_await ctx.resolve_secrets(configure_consumer_or_request_secrets(
-          source_cfg, user_options, ctx.dh()));
-        not ok) {
+    if (auth.options) {
+      user_options->inner["sasl.mechanism"] = nova::String{"OAUTHBEARER"};
+    }
+    if (not configure_consumer(source_cfg, *user_options, ctx.dh())) {
       co_return None{};
     }
     TENZIR_ASSERT(source_cfg.conf);
@@ -2404,13 +2458,11 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::external_,
       MetricsUnit::events);
-    auto aws_iam
-      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
     auto aws_region = args_.aws_region
                         ? Option<located<std::string>>{*args_.aws_region}
                         : None{};
     auto auth = co_await resolve_aws_iam_auth(
-      std::move(aws_iam), std::move(aws_region), ctx,
+      args_.aws_iam, std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_ = true;
@@ -2433,29 +2485,40 @@ public:
       auto const* plugin = plugins::find<AvroDecoderPlugin>("avro.decoder");
       if (not plugin) {
         diagnostic::error("Avro decoding requires the avro plugin")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
-      auto url = std::string{};
-      auto headers = std::vector<http::Header>{};
-      auto requests = http::make_header_secret_requests(
-        args_.schema_registry_headers, headers, ctx.dh());
-      requests.push_back(make_secret_request(
-        "schema_registry", *args_.schema_registry, url, ctx.dh()));
-      if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      auto evaluated_url = co_await args_.schema_registry->evaluate_string(
+        ctx, "schema_registry");
+      if (not evaluated_url) {
         co_return;
+      }
+      auto url = std::move(*evaluated_url);
+      auto headers = std::vector<http::Header>{};
+      if (args_.schema_registry_headers) {
+        auto evaluated = co_await args_.schema_registry_headers->evaluate(ctx);
+        if (not evaluated) {
+          co_return;
+        }
+        auto made = http::make_headers(
+          located{std::move(*evaluated),
+                  args_.schema_registry_headers->get_location()},
+          ctx.dh());
+        if (not made) {
+          co_return;
+        }
+        headers = std::move(*made);
       }
       if (url.empty()) {
         diagnostic::error("`schema_registry` must not be empty")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
-      auto config
-        = http::make_http_pool_config(args_.schema_registry_tls, url,
-                                      args_.schema_registry->source, ctx.dh(),
-                                      30s, ctx.actor_system().config());
+      auto config = http::make_http_pool_config(
+        args_.schema_registry_tls, url, args_.schema_registry->get_location(),
+        ctx.dh(), 30s, ctx.actor_system().config());
       if (not config) {
         co_return;
       }
@@ -2465,20 +2528,20 @@ public:
         parsed.emplace(url);
       } catch (std::invalid_argument const&) {
         diagnostic::error("invalid `schema_registry` URL")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
       if (parsed->host().empty()) {
         diagnostic::error("`schema_registry` URL must contain a host")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
       if (not parsed->query().empty() or not parsed->fragment().empty()) {
         diagnostic::error(
           "`schema_registry` must not contain a query or fragment")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
@@ -2492,7 +2555,7 @@ public:
           HttpPool::make(ctx.io_executor(), url, std::move(*config)));
       } catch (std::runtime_error const&) {
         diagnostic::error("invalid `schema_registry` URL")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
@@ -2585,7 +2648,7 @@ public:
     }
     if (args_.schema_registry and frame.fatal_error) {
       diagnostic::error("{}", *frame.fatal_error)
-        .primary(args_.schema_registry->source)
+        .primary(args_.schema_registry->get_location())
         .emit(ctx);
       done_ = true;
       request_pipeline_stop();
@@ -2606,7 +2669,7 @@ public:
                      .source_consumer->consumer_cfg.assignment_generation->load(
                        std::memory_order_acquire)) {
         diagnostic::error("Kafka assignment changed during Avro batch delivery")
-          .primary(args_.schema_registry->source)
+          .primary(args_.schema_registry->get_location())
           .emit(ctx);
         done_ = true;
         request_pipeline_stop();
@@ -2839,7 +2902,7 @@ public:
         if (dh) {
           diagnostic::error(
             "Kafka assignment changed while committing Avro offsets")
-            .primary(args_.schema_registry->source)
+            .primary(args_.schema_registry->get_location())
             .emit(*dh);
         }
         done_ = true;
@@ -3048,14 +3111,15 @@ private:
       co_return None{};
     }
     auto source_cfg = std::move(*cfg);
-    auto user_options = args_.options;
-    if (auth.options) {
-      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    auto user_options
+      = co_await evaluate_source_options(args_, auth.options.has_value(), ctx);
+    if (not user_options) {
+      co_return None{};
     }
-    if (auto ok
-        = co_await ctx.resolve_secrets(configure_consumer_or_request_secrets(
-          source_cfg, user_options, ctx.dh()));
-        not ok) {
+    if (auth.options) {
+      user_options->inner["sasl.mechanism"] = nova::String{"OAUTHBEARER"};
+    }
+    if (not configure_consumer(source_cfg, *user_options, ctx.dh())) {
       co_return None{};
     }
     TENZIR_ASSERT(source_cfg.conf);
@@ -3652,7 +3716,7 @@ private:
             if (not envelope_result) {
               fetched->diagnostics.push_back(skipped_avro_message(
                 message, std::move(envelope_result).unwrap_err(),
-                args_.schema_registry->source));
+                args_.schema_registry->get_location()));
               // Like tombstones, malformed records emit no event but still
               // count towards the limit and advance the committable offset.
               fetched->avro_decoders.emplace_back(None{});
@@ -3907,7 +3971,7 @@ private:
               if (not decoded) {
                 frame.diagnostics.push_back(
                   skipped_avro_message(message, std::move(decoded).unwrap_err(),
-                                       args_.schema_registry->source));
+                                       args_.schema_registry->get_location()));
                 frame.max_offsets[TopicPartition{message.topic(),
                                                  message.partition()}]
                   = message.offset();
@@ -4196,19 +4260,16 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto initial = FromKafkaArgs{};
-    initial.options = located{record{}, location::unknown};
-    auto d = Describer<FromKafkaArgs, FromKafka, FromKafkaEvents>{
-      std::move(initial)};
+    auto d = Describer<FromKafkaArgs, FromKafka, FromKafkaEvents>{};
     d.positional("topic", &FromKafkaArgs::topic);
     d.named("count", &FromKafkaArgs::count);
     auto exit_arg = d.named("exit", &FromKafkaArgs::exit);
     auto offset_arg = d.named("offset", &FromKafkaArgs::offset);
     auto optimization_arg
       = d.named_optional("_optimization", &FromKafkaArgs::_optimization);
-    auto options_arg = d.named_optional("options", &FromKafkaArgs::options);
-    auto aws_region_arg = d.named("aws_region", &FromKafkaArgs::aws_region);
-    auto aws_iam_arg = d.named("aws_iam", &FromKafkaArgs::aws_iam);
+    d.named("options", &FromKafkaArgs::options);
+    d.named("aws_region", &FromKafkaArgs::aws_region);
+    d.named("aws_iam", &FromKafkaArgs::aws_iam);
     auto batch_size_arg
       = d.named_optional("batch_size", &FromKafkaArgs::batch_size);
     auto worker_batch_size_arg = d.named_optional(
@@ -4230,35 +4291,19 @@ public:
     auto json_arg = d.named_optional("_json", &FromKafkaArgs::_json);
     d.named_optional("_raw", &FromKafkaArgs::_raw);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto headers = ctx.get(schema_headers_arg)) {
-        if (auto const* rec = try_as<record>(headers->inner)) {
-          for (auto const& [_, value] : *rec) {
-            if (not is<std::string>(value) and not is<secret>(value)) {
-              diagnostic::error("header values must be `string` or `secret`")
-                .primary(headers->source)
-                .emit(ctx);
-              break;
-            }
-          }
-        } else {
-          diagnostic::error("`schema_registry_headers` must be a record")
-            .primary(headers->source)
-            .emit(ctx);
-        }
-      }
       auto registry = ctx.get(schema_registry_arg);
       if (registry) {
         if (auto json = ctx.get(json_arg); json and *json) {
           diagnostic::error(
             "`schema_registry` and `_json` are mutually exclusive")
-            .primary(registry->source)
+            .primary(registry->get_location())
             .emit(ctx);
         }
       } else {
         if (auto headers = ctx.get(schema_headers_arg)) {
           diagnostic::error(
             "`schema_registry_headers` requires `schema_registry`")
-            .primary(headers->source)
+            .primary(headers->get_location())
             .emit(ctx);
         }
         if (auto tls = ctx.get(schema_tls_arg)) {
@@ -4337,18 +4382,6 @@ public:
           return {};
         }
       }
-      if (auto options = ctx.get(options_arg); options) {
-        if (not validate_options(*options, ctx)) {
-          return {};
-        }
-        if (options->inner.contains("enable.auto.commit")) {
-          diagnostic::error("`enable.auto.commit` must not be specified")
-            .primary(options->source)
-            .note("`enable.auto.commit` is enforced to be `false`")
-            .emit(ctx);
-          return {};
-        }
-      }
       if (auto offset = ctx.get(offset_arg); offset) {
         auto parsed = int64_t{};
         if (not parse_offset_value(*offset, parsed)) {
@@ -4356,24 +4389,6 @@ public:
             .primary(offset->source)
             .note("must be `beginning`, `end`, `stored`, `<offset>`, or "
                   "`-<offset>`")
-            .emit(ctx);
-          return {};
-        }
-      }
-      if (auto iam = ctx.get(aws_iam_arg); iam) {
-        if (auto options = ctx.get(options_arg); options) {
-          if (not check_sasl_mechanism(*options, ctx)) {
-            return {};
-          }
-        }
-        auto aws = aws_iam_options::from_record(*iam, ctx);
-        if (not aws) {
-          return {};
-        }
-        if (not ctx.get(aws_region_arg) and not aws->region) {
-          diagnostic::error(
-            "`aws_region` is required for Kafka MSK authentication")
-            .primary(iam->source.subloc(0, 1))
             .emit(ctx);
           return {};
         }

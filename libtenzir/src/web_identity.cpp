@@ -15,6 +15,7 @@
 #include "tenzir/file.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/nova/materialize.hpp"
 #include "tenzir/transfer.hpp"
 #include "tenzir/try.hpp"
 
@@ -48,85 +49,128 @@ auto is_valid_header_value(std::string_view s) -> bool {
                                                   proxygen::CodecUtil::STRICT);
 }
 
+/// Converts a `string`, `blob`, or `secret` value into a secret.
+auto to_secret(const nova::Data& value) -> Option<nova::Secret> {
+  auto promote = [](auto const& bytes) {
+    auto view = std::as_bytes(std::span{bytes});
+    return nova::Secret{ecc::cleansing_blob{view.begin(), view.end()}};
+  };
+  if (auto const* secret = try_as<nova::Secret>(&value)) {
+    return *secret;
+  }
+  if (auto const* str = try_as<nova::String>(&value)) {
+    return promote(*str);
+  }
+  if (auto const* bytes = try_as<nova::Blob>(&value)) {
+    return promote(*bytes);
+  }
+  return None{};
+}
+
 /// Parses the record of `string` or `secret` values at `key`, such as
 /// `headers` or `query_params`. @param what names one entry in diagnostics.
-/// @param is_header enables HTTP header validation; query parameters need none
-/// because `make_uri()` percent-encodes them.
-auto parse_secret_record(const located<record>& config, std::string_view key,
-                         std::string_view what, bool is_header,
-                         Option<std::vector<std::pair<std::string, secret>>>& x,
-                         diagnostic_handler& dh) -> failure_or<void> {
-  auto it = config.inner.find(key);
+/// @param is_header enables HTTP header name validation. The values are
+/// validated once revealed.
+auto parse_secret_record(
+  const located<nova::Record>& config, std::string_view key,
+  std::string_view what, bool is_header,
+  Option<std::vector<std::pair<std::string, nova::Secret>>>& x,
+  diagnostic_handler& dh) -> failure_or<void> {
+  auto it = config.inner.find(std::string{key});
   if (it == config.inner.end()) {
     return {};
   }
-  auto* r = try_as<record>(it->second.get_data());
+  auto const* r = try_as<nova::Record>(&it->second);
   if (not r) {
     diagnostic::error("`{}` must be a record", key).primary(config).emit(dh);
     return failure::promise();
   }
-  x = std::vector<std::pair<std::string, secret>>{};
-  for (auto& [name, value] : *r) {
+  x = std::vector<std::pair<std::string, nova::Secret>>{};
+  for (auto const& [name, value] : *r) {
     if (is_header and not is_valid_header_name(name)) {
       diagnostic::error("'{}' is not a valid HTTP header name", name)
         .primary(config)
         .emit(dh);
       return failure::promise();
     }
-    if (auto* s = try_as<secret>(value.get_data())) {
-      x->emplace_back(name, std::move(*s));
-    } else if (auto* str = try_as<std::string>(value.get_data())) {
-      if (str->empty()) {
-        diagnostic::error("{} '{}' value must not be empty", what, name)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (is_header and not is_valid_header_value(*str)) {
-        diagnostic::error("header '{}' has an invalid value", name)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      x->emplace_back(name, secret::make_literal(std::move(*str)));
-    } else {
+    auto secret = to_secret(value);
+    if (not secret) {
       diagnostic::error("{} '{}' value must be a `string` or `secret`", what,
                         name)
         .primary(config)
         .emit(dh);
       return failure::promise();
     }
-  }
-  return {};
-}
-
-} // namespace
-
-auto assign_secret(const located<record>& config, std::string_view key,
-                   Option<secret>& x, diagnostic_handler& dh)
-  -> failure_or<void> {
-  if (auto it = config.inner.find(key); it != config.inner.end()) {
-    if (auto* s = try_as<secret>(it->second.get_data())) {
-      x = std::move(*s);
-    } else if (auto* str = try_as<std::string>(it->second.get_data())) {
-      if (str->empty()) {
-        diagnostic::error("'{}' must not be empty", key)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      x = secret::make_literal(std::move(*str));
-    } else {
-      diagnostic::error("'{}' must be a `string` or `secret`", key)
+    if (secret->data.empty()) {
+      diagnostic::error("{} '{}' value must not be empty", what, name)
         .primary(config)
         .emit(dh);
       return failure::promise();
     }
+    x->emplace_back(name, std::move(*secret));
   }
   return {};
 }
 
-auto token_endpoint_options::from_record(located<record> config,
+/// Reveals the entries of a record parsed by `parse_secret_record`.
+auto reveal_record(
+  const Option<std::vector<std::pair<std::string, nova::Secret>>>& entries,
+  std::string_view what, bool is_header, location source,
+  diagnostic_handler& dh)
+  -> failure_or<std::vector<std::pair<std::string, std::string>>> {
+  auto result = std::vector<std::pair<std::string, std::string>>{};
+  if (not entries) {
+    return result;
+  }
+  result.reserve(entries->size());
+  for (auto const& [name, secret] : *entries) {
+    TRY(auto value, nova::reveal_string(
+                      secret, fmt::format("{} '{}'", what, name), source, dh));
+    if (is_header and not is_valid_header_value(value)) {
+      diagnostic::error("header '{}' has an invalid value", name)
+        .primary(source)
+        .emit(dh);
+      return failure::promise();
+    }
+    result.emplace_back(name, std::move(value));
+  }
+  return result;
+}
+
+} // namespace
+
+auto assign_secret(const located<nova::Record>& config, std::string_view key,
+                   Option<nova::Secret>& x, diagnostic_handler& dh)
+  -> failure_or<void> {
+  auto it = config.inner.find(std::string{key});
+  if (it == config.inner.end()) {
+    return {};
+  }
+  auto secret = to_secret(it->second);
+  if (not secret) {
+    diagnostic::error("'{}' must be a `string` or `secret`", key)
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (secret->data.empty()) {
+    diagnostic::error("'{}' must not be empty", key).primary(config).emit(dh);
+    return failure::promise();
+  }
+  x = std::move(*secret);
+  return {};
+}
+
+auto reveal_string(const Option<nova::Secret>& secret, std::string_view name,
+                   location source, diagnostic_handler& dh)
+  -> failure_or<std::string> {
+  if (not secret) {
+    return std::string{};
+  }
+  return nova::reveal_string(*secret, name, source, dh);
+}
+
+auto token_endpoint_options::from_record(located<nova::Record> config,
                                          diagnostic_handler& dh)
   -> failure_or<token_endpoint_options> {
   constexpr auto known = std::array{"url", "headers", "query_params", "path"};
@@ -147,9 +191,9 @@ auto token_endpoint_options::from_record(located<record> config,
   TRY(parse_secret_record(config, "query_params", "query parameter", false,
                           opts.query_params, dh));
   if (auto it = config.inner.find("path"); it != config.inner.end()) {
-    if (is<caf::none_t>(it->second.get_data())) {
+    if (is<nova::Null>(it->second)) {
       opts.path_is_null = true;
-    } else if (auto* str = try_as<std::string>(it->second.get_data())) {
+    } else if (auto* str = try_as<nova::String>(&it->second)) {
       if (str->empty()) {
         diagnostic::error("`path` must not be empty").primary(config).emit(dh);
         return failure::promise();
@@ -171,7 +215,7 @@ auto token_endpoint_options::from_record(located<record> config,
   return opts;
 }
 
-auto web_identity_options::from_record(located<record> config,
+auto web_identity_options::from_record(located<nova::Record> config,
                                        diagnostic_handler& dh)
   -> failure_or<web_identity_options> {
   constexpr auto known = std::array{"token_endpoint", "token_file", "token"};
@@ -188,7 +232,7 @@ auto web_identity_options::from_record(located<record> config,
   auto opts = web_identity_options{};
   opts.loc = config.source;
   if (auto it = config.inner.find("token_endpoint"); it != config.inner.end()) {
-    if (auto* r = try_as<record>(it->second.get_data())) {
+    if (auto* r = try_as<nova::Record>(&it->second)) {
       auto endpoint_config = located{std::move(*r), config.source};
       TRY(opts.token_endpoint,
           token_endpoint_options::from_record(std::move(endpoint_config), dh));
@@ -221,55 +265,31 @@ auto web_identity_options::from_record(located<record> config,
   return opts;
 }
 
-auto web_identity_options::make_secret_requests(resolved_web_identity& resolved,
-                                                diagnostic_handler& dh) const
-  -> std::vector<secret_request> {
-  auto requests = std::vector<secret_request>{};
+auto web_identity_options::resolve(diagnostic_handler& dh) const
+  -> failure_or<resolved_web_identity> {
   if (token_endpoint) {
-    const auto& te = *token_endpoint;
-    auto& rte = resolved.emplace<resolved_token_endpoint>();
-    requests.emplace_back(
-      make_secret_request("token_endpoint.url", *te.url, te.loc, rte.url, dh));
-    if (te.headers) {
-      // The requests reference `rte.headers` elements, so the vector must not
-      // reallocate after the first request is made.
-      rte.headers.reserve(te.headers->size());
-      for (const auto& [key, value] : *te.headers) {
-        rte.headers.emplace_back(key, std::string{});
-        requests.emplace_back(
-          make_secret_request(fmt::format("header '{}'", key), value, te.loc,
-                              rte.headers.back().second, dh));
-      }
-    }
-    if (te.query_params) {
-      // As with the headers above, the requests point into the vector.
-      rte.query_params.reserve(te.query_params->size());
-      for (const auto& [key, value] : *te.query_params) {
-        rte.query_params.emplace_back(key, std::string{});
-        requests.emplace_back(
-          make_secret_request(fmt::format("query parameter '{}'", key), value,
-                              te.loc, rte.query_params.back().second, dh));
-      }
-    }
+    auto const& te = *token_endpoint;
+    auto result = resolved_token_endpoint{};
+    TRY(result.url, reveal_string(te.url, "token_endpoint.url", te.loc, dh));
+    TRY(result.headers, reveal_record(te.headers, "header", true, te.loc, dh));
+    TRY(result.query_params,
+        reveal_record(te.query_params, "query parameter", false, te.loc, dh));
     if (te.path_is_null) {
-      rte.path = None{};
+      result.path = None{};
     } else if (te.path) {
-      rte.path = *te.path;
+      result.path = *te.path;
     } else {
-      rte.path = ".access_token";
+      result.path = ".access_token";
     }
+    return result;
   }
   if (token_file) {
-    auto& file = resolved.emplace<resolved_token_file>();
-    requests.emplace_back(
-      make_secret_request("token_file", *token_file, loc, file.path, dh));
+    TRY(auto path, reveal_string(token_file, "token_file", loc, dh));
+    return resolved_token_file{std::move(path)};
   }
-  if (token) {
-    auto& direct = resolved.emplace<resolved_token>();
-    requests.emplace_back(
-      make_secret_request("token", *token, loc, direct.token, dh));
-  }
-  return requests;
+  TENZIR_ASSERT(token);
+  TRY(auto value, reveal_string(token, "token", loc, dh));
+  return resolved_token{std::move(value)};
 }
 
 namespace {

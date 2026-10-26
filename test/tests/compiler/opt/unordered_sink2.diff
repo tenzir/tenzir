@@ -43,12 +43,7 @@
 -            id: `x` @ [1]:12..13 from 0,
 -            has_question_mark: false
 -          }
-+          located {
-+            buffer: {
-+              chunk: chunk(size=60),
-+              table-offset: 12
-+            }
-+          } @ [1]:36..51 from 0
++          expression constant string "/tmp/out.json" @ [1]:36..51 from 0
          ],
          named_args: [
            
@@ -71,12 +66,7 @@
 -                ref: std::to_file/op
 -              },
 -              args: [
--                located {
--                  buffer: {
--                    chunk: chunk(size=60),
--                    table-offset: 12
--                  }
--                } @ [1]:36..51 from 0
+-                expression constant string "/tmp/out.json" @ [1]:36..51 from 0
 -              ],
 -              named_args: [
 -                

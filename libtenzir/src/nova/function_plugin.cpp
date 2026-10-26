@@ -167,35 +167,10 @@ auto FunctionDescription::usage(std::string_view name) const -> std::string {
 
 auto _::prepare_secret(ast::expression& expr, InstantiateCtx ctx)
   -> failure_or<located<Secret>> {
-  if (auto const* resolved = try_as<ast::resolved_secret>(&expr)) {
-    return located<Secret>{resolved->value, resolved->source};
-  }
   TRY(auto constant, const_eval(expr, ctx));
-  if (auto const* resolved = try_as<Secret>(&constant)) {
-    return located<Secret>{*resolved, expr.get_location()};
-  }
-  // Like operator arguments of type `secret`, plain strings and blobs are
-  // promoted to secrets.
-  auto const promote = [&](std::span<std::byte const> bytes) {
-    return located<Secret>{
-      Secret{ecc::cleansing_blob{bytes.begin(), bytes.end()}},
-      expr.get_location(),
-    };
-  };
-  if (auto const* str = try_as<String>(&constant)) {
-    return promote(std::as_bytes(std::span{*str}));
-  }
-  if (auto const* blob = try_as<Blob>(&constant)) {
-    return promote(std::span{*blob});
-  }
-  auto const actual = match(constant, []<class V>(V const&) {
-    return Type<V>::static_name;
-  });
-  diagnostic::error("expected a secret, string, or blob, but got `{}`", actual)
-    .primary(expr)
-    .hint("use `secret(\"name\")` to read the value from a secret store")
-    .emit(ctx);
-  return failure::promise();
+  TRY(auto value,
+      convert_argument<Secret>(std::move(constant), expr.get_location(), ctx));
+  return located<Secret>{std::move(value), expr.get_location()};
 }
 
 auto _::prepare_data(ast::expression& expr, InstantiateCtx ctx)

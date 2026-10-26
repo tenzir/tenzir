@@ -19,8 +19,8 @@
 #include "tenzir/nova/events.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/secret.hpp"
 #include "tenzir/si_literals.hpp"
+#include "tenzir/startup_argument.hpp"
 #include "tenzir/variant.hpp"
 
 #include <opentelemetry/proto/collector/logs/v1/logs_service.pb.h>
@@ -73,7 +73,7 @@ enum class Transport {
 };
 
 struct AcceptOtlpArgs {
-  located<secret> endpoint;
+  StartupArgument<nova::Secret> endpoint;
   Option<located<std::string>> transport;
   Option<located<list>> signals;
   Option<located<std::string>> schema;

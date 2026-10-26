@@ -46,8 +46,8 @@ public:
     auto d = Describer<FluentBitArgs, FromFluentBit, FromFluentBitEvents>{
       std::move(initial)};
     d.positional("plugin", &FluentBitArgs::plugin);
-    d.named_optional("options", &FluentBitArgs::args);
-    d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
+    d.named("options", &FluentBitArgs::args);
+    d.named("fluent_bit_options", &FluentBitArgs::service_properties);
     d.named_optional("_config", &FluentBitArgs::config);
     auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
     auto msb_validator
@@ -97,8 +97,8 @@ public:
     auto d = Describer<FluentBitArgs, ToFluentBit, ToFluentBitEvents>{
       std::move(initial)};
     d.positional("plugin", &FluentBitArgs::plugin);
-    d.named_optional("options", &FluentBitArgs::args);
-    d.named_optional("fluent_bit_options", &FluentBitArgs::service_properties);
+    d.named("options", &FluentBitArgs::args);
+    d.named("fluent_bit_options", &FluentBitArgs::service_properties);
     d.named_optional("_config", &FluentBitArgs::config);
     auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
     d.validate([tls_arg](DescribeCtx& ctx) -> Empty {

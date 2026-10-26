@@ -13,8 +13,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/secret.hpp"
-#include "tenzir/secret_resolution.hpp"
+#include "tenzir/startup_argument.hpp"
 #include "tenzir/web_identity.hpp"
 
 #include <string>
@@ -46,38 +45,27 @@ struct resolved_aws_credentials {
 /// used across different AWS-related operators (SQS, S3, Kafka MSK, etc.).
 struct aws_iam_options {
   /// AWS region for API requests (optional, SDK uses default resolution).
-  Option<secret> region;
+  Option<nova::Secret> region;
   /// AWS CLI profile name to use for credentials.
-  Option<secret> profile;
+  Option<nova::Secret> profile;
   /// IAM role ARN to assume.
-  Option<secret> role;
+  Option<nova::Secret> role;
   /// Session name for role assumption.
-  Option<secret> session_name;
+  Option<nova::Secret> session_name;
   /// External ID for role assumption.
-  Option<secret> external_id;
+  Option<nova::Secret> external_id;
   /// AWS access key ID.
-  Option<secret> access_key_id;
+  Option<nova::Secret> access_key_id;
   /// AWS secret access key.
-  Option<secret> secret_access_key;
+  Option<nova::Secret> secret_access_key;
   /// AWS session token for temporary credentials.
-  Option<secret> session_token;
+  Option<nova::Secret> session_token;
   /// Web identity configuration for OIDC-based authentication.
   Option<web_identity_options> web_identity;
   /// Source location for diagnostics.
   location loc;
 
-  friend auto inspect(auto& f, aws_iam_options& x) -> bool {
-    return f.object(x).fields(
-      f.field("region", x.region), f.field("profile", x.profile),
-      f.field("role", x.role), f.field("session_name", x.session_name),
-      f.field("external_id", x.external_id),
-      f.field("access_key_id", x.access_key_id),
-      f.field("secret_access_key", x.secret_access_key),
-      f.field("session_token", x.session_token),
-      f.field("web_identity", x.web_identity), f.field("loc", x.loc));
-  }
-
-  /// Parses AWS IAM options from a TQL record.
+  /// Parses AWS IAM options from an evaluated TQL record.
   ///
   /// Recognized keys:
   /// - `region`: AWS region for API requests (optional)
@@ -89,17 +77,8 @@ struct aws_iam_options {
   /// - `session_name`: Session name for role assumption
   /// - `external_id`: External ID for role assumption
   /// - `web_identity`: Web identity configuration for OIDC authentication
-  static auto from_record(located<record> config, diagnostic_handler& dh)
+  static auto from_record(located<nova::Record> config, diagnostic_handler& dh)
     -> failure_or<aws_iam_options>;
-
-  /// Creates secret requests for resolving credentials.
-  ///
-  /// @param resolved Output struct to store resolved credentials
-  /// @param dh Diagnostic handler for errors
-  /// @return Vector of secret requests to pass to resolve_secrets_must_yield
-  auto make_secret_requests(resolved_aws_credentials& resolved,
-                            diagnostic_handler& dh) const
-    -> std::vector<secret_request>;
 
   /// Returns true if explicit credentials are configured.
   auto has_explicit_credentials() const -> bool {
@@ -117,7 +96,7 @@ enum class AwsIamRegionRequirement {
 };
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
-/// Holds parsed IAM options, credential slots, and pending secret requests.
+/// Holds parsed IAM options and the resolved credentials.
 struct ResolvedAwsIamAuth {
   Option<aws_iam_options> options;
   Option<resolved_aws_credentials> credentials;
@@ -126,10 +105,9 @@ struct ResolvedAwsIamAuth {
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Resolves already-parsed AWS IAM options into runtime auth state.
 ///
-/// This function:
-/// 1. validates region requirements,
-/// 2. allocates a credential container when needed,
-/// 3. collects secret requests for later resolution by the caller.
+/// This function validates region requirements and reveals the credentials
+/// from the options and `aws_region`. A region in the options takes
+/// precedence.
 auto resolve_aws_iam_auth(Option<aws_iam_options> aws_iam,
                           Option<located<std::string>> aws_region,
                           diagnostic_handler& dh,
@@ -137,16 +115,9 @@ auto resolve_aws_iam_auth(Option<aws_iam_options> aws_iam,
                           = AwsIamRegionRequirement::optional)
   -> failure_or<ResolvedAwsIamAuth>;
 
-/// Parses optional `aws_iam` input and then resolves runtime auth state.
-auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
-                          Option<located<std::string>> aws_region,
-                          diagnostic_handler& dh,
-                          AwsIamRegionRequirement requirement
-                          = AwsIamRegionRequirement::optional)
-  -> failure_or<ResolvedAwsIamAuth>;
-
-/// Resolves AWS IAM auth and applies secret resolution through `ctx`.
-auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
+/// Evaluates the optional `aws_iam` argument at startup and resolves runtime
+/// auth state from it.
+auto resolve_aws_iam_auth(Option<StartupArgument<nova::Record>> const& aws_iam,
                           Option<located<std::string>> aws_region, OpCtx& ctx,
                           AwsIamRegionRequirement requirement
                           = AwsIamRegionRequirement::optional)

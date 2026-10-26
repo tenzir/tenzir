@@ -11,7 +11,6 @@
 #include <tenzir/file.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
-#include <tenzir/secret_resolution.hpp>
 
 #include <arrow/filesystem/localfs.h>
 
@@ -37,14 +36,7 @@ protected:
   using FromArrowFsOperator<Output>::filesystem;
 
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>> override {
-    auto resolved = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("url", args_.url, resolved, ctx.dh()),
-    };
-    auto result = co_await ctx.resolve_secrets(std::move(requests));
-    if (result.is_error()) {
-      co_return failure::promise();
-    }
+    CO_TRY(auto resolved, co_await args_.url.evaluate_string(ctx, "url"));
     auto expanded = expand_home(std::move(resolved));
     if (not std::filesystem::path{expanded}.is_absolute()) {
       expanded = "./" + expanded;

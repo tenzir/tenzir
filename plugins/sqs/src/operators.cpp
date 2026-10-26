@@ -35,11 +35,10 @@ namespace {
 template <class Args>
 auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   -> Task<std::shared_ptr<AsyncSqsQueue>> {
-  auto aws_iam = args.aws_iam ? Option<located<record>>{*args.aws_iam} : None{};
   auto aws_region
     = args.aws_region ? Option<located<std::string>>{*args.aws_region} : None{};
-  auto auth = co_await resolve_aws_iam_auth(std::move(aws_iam),
-                                            std::move(aws_region), ctx);
+  auto auth
+    = co_await resolve_aws_iam_auth(args.aws_iam, std::move(aws_region), ctx);
   if (not auth) {
     diagnostic::error("failed to initialize SQS queue")
       .primary(args.queue.source)

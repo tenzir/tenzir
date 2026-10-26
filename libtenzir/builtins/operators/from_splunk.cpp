@@ -27,7 +27,7 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/secret_resolution.hpp"
+#include "tenzir/startup_argument.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
@@ -63,7 +63,7 @@ struct FromSplunkArgs {
   located<data> earliest;
   located<data> latest;
   Option<located<data>> options;
-  located<data> headers;
+  StartupArgument<nova::Record> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<located<duration>> connection_timeout;
@@ -176,16 +176,11 @@ auto validate_options(located<data> const& value, diagnostic_handler& dh)
   return {};
 }
 
-auto validate_headers(located<data> const& value, diagnostic_handler& dh)
-  -> failure_or<void> {
-  auto const* headers = try_as<record>(value.inner);
-  if (not headers) {
-    diagnostic::error("`headers` must be a record").primary(value).emit(dh);
-    return failure::promise();
-  }
+auto validate_headers(located<nova::Record> const& value,
+                      diagnostic_handler& dh) -> failure_or<void> {
   auto has_authorization = false;
-  for (auto const& [name, header] : *headers) {
-    if (not is<std::string>(header) and not is<secret>(header)) {
+  for (auto const& [name, header] : value.inner) {
+    if (not is<nova::String>(header) and not is<nova::Secret>(header)) {
       diagnostic::error("header values must be `string` or `secret`")
         .primary(value)
         .emit(dh);
@@ -202,6 +197,14 @@ auto validate_headers(located<data> const& value, diagnostic_handler& dh)
     return failure::promise();
   }
   return {};
+}
+
+auto resolve_headers(StartupArgument<nova::Record> const& arg, OpCtx& ctx)
+  -> Task<failure_or<std::vector<http::Header>>> {
+  CO_TRY(auto value, co_await arg.evaluate(ctx));
+  auto headers = located{std::move(value), arg.get_location()};
+  CO_TRY(validate_headers(headers, ctx.dh()));
+  co_return http::make_headers(headers, ctx.dh());
 }
 
 auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
@@ -539,14 +542,12 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    auto resolved_headers = std::vector<http::Header>{};
-    auto header_requests = http::make_header_secret_requests(
-      Option<located<data>>{args_.headers}, resolved_headers, ctx.dh());
-    if (auto result = co_await ctx.resolve_secrets(std::move(header_requests));
-        result.is_error()) {
+    auto headers = co_await resolve_headers(args_.headers, ctx);
+    if (not headers) {
       done_ = true;
       co_return;
     }
+    auto resolved_headers = std::move(*headers);
     auto url = make_export_url(args_.url.inner);
     auto const request_timeout
       = args_.timeout ? std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -892,14 +893,12 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    auto resolved_headers = std::vector<http::Header>{};
-    auto header_requests = http::make_header_secret_requests(
-      Option<located<data>>{args_.headers}, resolved_headers, ctx.dh());
-    if (auto result = co_await ctx.resolve_secrets(std::move(header_requests));
-        result.is_error()) {
+    auto headers = co_await resolve_headers(args_.headers, ctx);
+    if (not headers) {
       done_ = true;
       co_return;
     }
+    auto resolved_headers = std::move(*headers);
     auto url = make_export_url(args_.url.inner);
     auto const request_timeout
       = args_.timeout ? std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1126,7 +1125,7 @@ public:
       = d.named("earliest", &FromSplunkArgs::earliest, "string|time");
     auto latest = d.named("latest", &FromSplunkArgs::latest, "string|time");
     auto options = d.named("options", &FromSplunkArgs::options, "record");
-    auto headers = d.named("headers", &FromSplunkArgs::headers, "record");
+    d.named("headers", &FromSplunkArgs::headers);
     auto tls = d.named("tls", &FromSplunkArgs::tls, "record");
     auto timeout = d.named("timeout", &FromSplunkArgs::timeout);
     auto connection_timeout
@@ -1153,9 +1152,6 @@ public:
         }
         if (auto value = ctx.get(options)) {
           TRY(validate_options(*value, ctx));
-        }
-        if (auto value = ctx.get(headers)) {
-          TRY(validate_headers(*value, ctx));
         }
         if (auto value = ctx.get(tls)) {
           auto tls_opts = tls_options{*value, {.is_server = false}};

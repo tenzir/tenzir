@@ -13,6 +13,7 @@
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/pipeline_metrics.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <cstddef>
@@ -36,7 +37,7 @@ struct FromSqsArgs {
   Option<located<duration>> poll_time;
   Option<located<duration>> visibility_timeout;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   location operator_location;
 };
 
@@ -44,7 +45,7 @@ struct ToSqsArgs {
   located<std::string> queue;
   ast::expression message;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   location operator_location;
 };
 

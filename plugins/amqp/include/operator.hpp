@@ -20,7 +20,7 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
+#include <tenzir/startup_argument.hpp>
 
 #include <caf/expected.hpp>
 
@@ -577,59 +577,6 @@ private:
   int channel_{0};
 };
 
-/// The arguments for the saver and loader.
-struct connector_args {
-  Option<located<uint16_t>> channel;
-  Option<located<std::string>> routing_key;
-  Option<located<std::string>> exchange;
-  Option<located<record>> options;
-  Option<located<secret>> url;
-  location op;
-
-  friend auto inspect(auto& f, connector_args& x) -> bool {
-    return f.object(x).fields(f.field("channel", x.channel),
-                              f.field("routing_key", x.routing_key),
-                              f.field("exchange", x.exchange),
-                              f.field("options", x.options),
-                              f.field("url", x.url), f.field("op", x.op));
-  }
-};
-
-/// The arguments for the loader.
-struct loader_args : connector_args {
-  Option<located<std::string>> queue;
-  bool passive{false};
-  bool durable{false};
-  bool exclusive{false};
-  bool no_auto_delete{false};
-  bool no_local{false};
-  bool ack{false};
-
-  friend auto inspect(auto& f, loader_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("loader_args")
-      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
-              f.field("queue", x.queue), f.field("passive", x.passive),
-              f.field("durable", x.durable), f.field("exclusive", x.exclusive),
-              f.field("no_auto_delete", x.no_auto_delete),
-              f.field("no_local", x.no_local), f.field("ack", x.ack));
-  }
-};
-
-/// The arguments for the saver.
-struct saver_args : connector_args {
-  bool mandatory{false};
-  bool immediate{false};
-
-  friend auto inspect(auto& f, saver_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("saver_args")
-      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
-              f.field("mandatory", x.mandatory),
-              f.field("immediate", x.immediate));
-  }
-};
-
 auto set_or_fail(record& config, std::string_view key, std::string value,
                  location loc, diagnostic_handler& dh) -> void {
   const auto strings = std::set<std::string_view>{
@@ -651,62 +598,71 @@ auto set_or_fail(record& config, std::string_view key, std::string value,
 /// configuration into the record that `amqp_engine::make()` takes. Values from
 /// the URL take precedence over `options`. Returns `None` after emitting an
 /// error.
-auto resolve_config(OpCtx& ctx, located<secret> const& url,
-                    Option<located<record>> const& options, record config)
-  -> Task<Option<record>> {
+auto resolve_config(OpCtx& ctx, StartupArgument<nova::Secret> const& url,
+                    Option<StartupArgument<nova::Record>> const& options,
+                    record config) -> Task<Option<record>> {
   auto& dh = ctx.dh();
-  auto requests = std::vector<secret_request>{};
-  auto resolved_url = std::string{};
-  requests.push_back(make_secret_request("url", url, resolved_url, dh));
-  if (options) {
-    auto const& loc = options->source;
-    for (auto const& [k, v] : options->inner) {
-      match(
-        v,
-        [&](concepts::arithmetic auto const& x) {
-          set_or_fail(config, k, fmt::to_string(x), loc, dh);
-        },
-        [&](std::string const& x) {
-          set_or_fail(config, k, x, loc, dh);
-        },
-        [&](secret const& x) {
-          requests.push_back(secret_request{
-            x, loc,
-            [&config, k = std::string{k}, loc,
-             &dh](resolved_secret_value const& v) -> failure_or<void> {
-              TRY(auto str, v.utf8_view(k, loc, dh));
-              set_or_fail(config, k, std::string{str}, loc, dh);
-              return {};
-            }});
-        },
-        [](auto const&) {
-          // validated in describe()
-          TENZIR_UNREACHABLE();
-        });
-    }
-  }
-  if (not co_await ctx.resolve_secrets(std::move(requests))) {
+  auto resolved_url = co_await url.evaluate_string(ctx, "url");
+  if (not resolved_url) {
     co_return None{};
   }
-  auto parsed = parse_url(config, resolved_url);
+  auto keys = std::vector<std::string>{};
+  if (options) {
+    auto evaluated = co_await options->evaluate(ctx);
+    if (not evaluated) {
+      co_return None{};
+    }
+    auto loc = options->get_location();
+    for (auto const& [k, v] : *evaluated) {
+      if (auto const* x = try_as<nova::Secret>(&v)) {
+        auto str = nova::reveal_string(*x, k, loc, dh);
+        if (not str) {
+          co_return None{};
+        }
+        set_or_fail(config, k, std::move(*str), loc, dh);
+      } else {
+        auto ok = match(
+          nova::materialize_legacy(v),
+          [&](concepts::arithmetic auto const& x) {
+            set_or_fail(config, k, fmt::to_string(x), loc, dh);
+            return true;
+          },
+          [&](std::string const& x) {
+            set_or_fail(config, k, x, loc, dh);
+            return true;
+          },
+          [&](auto const&) {
+            diagnostic::error(
+              "expected type `number`, `bool`, `string`, or `secret` "
+              "for option")
+              .primary(loc)
+              .emit(dh);
+            return false;
+          });
+        if (not ok) {
+          co_return None{};
+        }
+      }
+      keys.push_back(k);
+    }
+  }
+  auto parsed = parse_url(config, *resolved_url);
   if (not parsed) {
     diagnostic::error("failed to parse AMQP URL")
-      .primary(url.source)
+      .primary(url)
       .hint("URL must adhere to the following format")
       .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
       .emit(dh);
     co_return None{};
   }
-  if (options) {
-    for (auto const& [k, _] : options->inner) {
-      auto pre = config.find(k);
-      auto post = parsed->find(k);
-      if (pre != config.end() and post != parsed->end()
-          and pre->second != post->second) {
-        diagnostic::warning("option `{}` was overridden by the URL", k)
-          .primary(options->source)
-          .emit(dh);
-      }
+  for (auto const& k : keys) {
+    auto pre = config.find(k);
+    auto post = parsed->find(k);
+    if (pre != config.end() and post != parsed->end()
+        and pre->second != post->second) {
+      diagnostic::warning("option `{}` was overridden by the URL", k)
+        .primary(options->get_location())
+        .emit(dh);
     }
   }
   co_return std::move(*parsed);

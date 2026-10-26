@@ -15,8 +15,7 @@
 #include "tenzir/location.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
-#include "tenzir/secret.hpp"
-#include "tenzir/secret_resolution.hpp"
+#include "tenzir/startup_argument.hpp"
 #include "tenzir/web_identity.hpp"
 
 #include <caf/expected.hpp>
@@ -63,26 +62,17 @@ struct AzureAuthSupport {
 /// New operators expose this as a provider-prefixed `azure_auth` record.
 /// Operators that already shipped a bare `auth` record keep it.
 struct AzureAuthOptions {
-  Option<secret> tenant_id;
-  Option<secret> client_id;
-  Option<secret> client_secret;
-  Option<secret> scope;
-  Option<secret> authority;
+  Option<nova::Secret> tenant_id;
+  Option<nova::Secret> client_id;
+  Option<nova::Secret> client_secret;
+  Option<nova::Secret> scope;
+  Option<nova::Secret> authority;
   Option<web_identity_options> web_identity;
   location loc;
-  /// Operator argument name used in diagnostics and secret resolution.
+  /// Operator argument name used in diagnostics.
   std::string argument_name = "auth";
 
-  friend auto inspect(auto& f, AzureAuthOptions& x) -> bool {
-    return f.object(x).fields(
-      f.field("tenant_id", x.tenant_id), f.field("client_id", x.client_id),
-      f.field("client_secret", x.client_secret), f.field("scope", x.scope),
-      f.field("authority", x.authority),
-      f.field("web_identity", x.web_identity), f.field("loc", x.loc),
-      f.field("argument_name", x.argument_name));
-  }
-
-  /// Parses Azure auth options from a TQL record.
+  /// Parses Azure auth options from an evaluated TQL record.
   ///
   /// Recognized keys:
   /// - `tenant_id`: Microsoft Entra tenant ID or domain.
@@ -96,20 +86,21 @@ struct AzureAuthOptions {
   /// Exactly one of `client_secret` and `web_identity` must be present, and
   /// keys the operator does not support per `support` are rejected.
   static auto
-  from_record(located<record> config, diagnostic_handler& dh,
+  from_record(located<nova::Record> config, diagnostic_handler& dh,
               AzureAuthSupport support = {}, std::string argument_name = "auth")
     -> failure_or<AzureAuthOptions>;
 
-  /// Creates secret requests for resolving credentials.
-  auto
-  make_secret_requests(ResolvedAzureAuth& resolved, std::string default_scope,
-                       diagnostic_handler& dh) const
-    -> std::vector<secret_request>;
+  /// Evaluates the auth argument at startup and parses it like `from_record`.
+  static auto from_argument(StartupArgument<nova::Record> const& config,
+                            OpCtx& ctx, AzureAuthSupport support = {},
+                            std::string argument_name = "auth")
+    -> Task<failure_or<AzureAuthOptions>>;
 };
 
-/// Resolves already-parsed Azure auth options through an operator context.
+/// Reveals parsed Azure auth options, applying defaults and validating them.
 auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
-                        OpCtx& ctx) -> Task<Option<ResolvedAzureAuth>>;
+                        diagnostic_handler& dh)
+  -> failure_or<ResolvedAzureAuth>;
 
 /// Builds an Azure SDK token credential from resolved auth options.
 ///

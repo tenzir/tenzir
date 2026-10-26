@@ -75,7 +75,7 @@ constexpr auto health_body
 
 struct AcceptSplunkArgs {
   located<std::string> endpoint{"0.0.0.0:8088", location::unknown};
-  located<secret> hec_token;
+  StartupArgument<nova::Secret> hec_token;
   Option<located<uint64_t>> max_request_size;
   Option<located<uint64_t>> max_connections;
   bool ack = false;
@@ -638,15 +638,12 @@ public:
   auto operator=(AcceptSplunk&&) -> AcceptSplunk& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto token = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("hec_token", args_.hec_token, token, ctx.dh()),
-    };
-    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-        result.is_error()) {
+    auto result = co_await args_.hec_token.evaluate_string(ctx, "hec_token");
+    if (not result) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    auto token = std::move(*result);
     if (token.empty()) {
       diagnostic::error("`hec_token` must not be empty")
         .primary(args_.hec_token)
@@ -1327,15 +1324,12 @@ public:
   auto operator=(AcceptSplunkEvents&&) -> AcceptSplunkEvents& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto token = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("hec_token", args_.hec_token, token, ctx.dh()),
-    };
-    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-        result.is_error()) {
+    auto result = co_await args_.hec_token.evaluate_string(ctx, "hec_token");
+    if (not result) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    auto token = std::move(*result);
     if (token.empty()) {
       diagnostic::error("`hec_token` must not be empty")
         .primary(args_.hec_token)

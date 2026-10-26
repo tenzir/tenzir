@@ -148,9 +148,9 @@ struct ToKafkaArgs {
   ast::expression message = default_message_expression();
   Option<located<std::string>> key;
   Option<located<time>> timestamp;
-  located<record> options;
+  Option<StartupArgument<nova::Record>> options;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
 };
 
 class AsyncKafkaProducer {
@@ -398,13 +398,11 @@ public:
       },
       MetricsDirection::write, MetricsVisibility::external_,
       MetricsUnit::events);
-    auto aws_iam
-      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
     auto aws_region = args_.aws_region
                         ? Option<located<std::string>>{*args_.aws_region}
                         : None{};
     auto auth = co_await resolve_aws_iam_auth(
-      std::move(aws_iam), std::move(aws_region), ctx,
+      args_.aws_iam, std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_.store(true, std::memory_order_release);
@@ -420,13 +418,16 @@ public:
       done_.store(true, std::memory_order_release);
       co_return;
     }
-    auto user_options = args_.options;
-    if (auth->options) {
-      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    auto user_options = co_await evaluate_options(
+      args_.options, auth->options.has_value(), ctx);
+    if (not user_options) {
+      done_.store(true, std::memory_order_release);
+      co_return;
     }
-    if (auto ok = co_await ctx.resolve_secrets(
-          configure_producer_or_request_secrets(*cfg, user_options, ctx.dh()));
-        not ok) {
+    if (auth->options) {
+      user_options->inner["sasl.mechanism"] = nova::String{"OAUTHBEARER"};
+    }
+    if (not configure_producer(*cfg, *user_options, ctx.dh())) {
       done_.store(true, std::memory_order_release);
       co_return;
     }
@@ -514,13 +515,11 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "to_kafka"},
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::events);
-    auto aws_iam
-      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
     auto aws_region = args_.aws_region
                         ? Option<located<std::string>>{*args_.aws_region}
                         : None{};
     auto auth = co_await resolve_aws_iam_auth(
-      std::move(aws_iam), std::move(aws_region), ctx,
+      args_.aws_iam, std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_.store(true, std::memory_order_release);
@@ -534,12 +533,16 @@ public:
       done_.store(true, std::memory_order_release);
       co_return;
     }
-    auto user_options = args_.options;
-    if (auth->options) {
-      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    auto user_options = co_await evaluate_options(
+      args_.options, auth->options.has_value(), ctx);
+    if (not user_options) {
+      done_.store(true, std::memory_order_release);
+      co_return;
     }
-    if (not co_await ctx.resolve_secrets(configure_producer_or_request_secrets(
-          *cfg, user_options, ctx.dh()))) {
+    if (auth->options) {
+      user_options->inner["sasl.mechanism"] = nova::String{"OAUTHBEARER"};
+    }
+    if (not configure_producer(*cfg, *user_options, ctx.dh())) {
       done_.store(true, std::memory_order_release);
       co_return;
     }
@@ -650,42 +653,14 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto initial = ToKafkaArgs{};
-    initial.options = located{record{}, location::unknown};
-    auto d = Describer<ToKafkaArgs, ToKafka, ToKafkaEvents>{std::move(initial)};
+    auto d = Describer<ToKafkaArgs, ToKafka, ToKafkaEvents>{};
     d.positional("topic", &ToKafkaArgs::topic);
     d.named_optional("message", &ToKafkaArgs::message, "blob|string");
     d.named("key", &ToKafkaArgs::key);
     d.named("timestamp", &ToKafkaArgs::timestamp);
-    auto options_arg = d.named_optional("options", &ToKafkaArgs::options);
-    auto aws_region_arg = d.named("aws_region", &ToKafkaArgs::aws_region);
-    auto aws_iam_arg = d.named("aws_iam", &ToKafkaArgs::aws_iam);
-    d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto options = ctx.get(options_arg); options) {
-        if (not validate_options(*options, ctx)) {
-          return {};
-        }
-      }
-      if (auto iam = ctx.get(aws_iam_arg); iam) {
-        if (auto options = ctx.get(options_arg); options) {
-          if (not check_sasl_mechanism(*options, ctx)) {
-            return {};
-          }
-        }
-        auto aws = aws_iam_options::from_record(*iam, ctx);
-        if (not aws) {
-          return {};
-        }
-        if (not ctx.get(aws_region_arg) and not aws->region) {
-          diagnostic::error(
-            "`aws_region` is required for Kafka MSK authentication")
-            .primary(iam->source)
-            .emit(ctx);
-          return {};
-        }
-      }
-      return {};
-    });
+    d.named("options", &ToKafkaArgs::options);
+    d.named("aws_region", &ToKafkaArgs::aws_region);
+    d.named("aws_iam", &ToKafkaArgs::aws_iam);
     // Every instance runs its own producer. Without a key, the partitioner
     // spreads messages over the topic's partitions and Kafka orders them only
     // within a partition, so replicating the operator does not weaken any

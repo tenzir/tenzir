@@ -36,7 +36,6 @@
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -186,7 +185,7 @@ struct python_runtime {
 };
 
 struct PythonArgs {
-  located<secret> code = located{secret{}, location::unknown};
+  StartupArgument<nova::Secret> code;
   Option<located<std::string>> file;
   Option<located<std::string>> requirements;
   location operator_location = location::unknown;
@@ -777,13 +776,11 @@ private:
       co_return detail::strip_leading_indentation(std::string{
         reinterpret_cast<const char*>(code_chunk->data()), code_chunk->size()});
     }
-    auto code = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("code", args_.code, code, ctx.dh())};
-    auto result = co_await ctx.resolve_secrets(std::move(requests));
+    auto result = co_await args_.code.evaluate_string(ctx, "code");
     if (not result) {
       co_return None{};
     }
+    auto code = std::move(*result);
     co_return detail::strip_leading_indentation(std::move(code));
   }
 

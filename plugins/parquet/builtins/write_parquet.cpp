@@ -135,7 +135,7 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
 }
 
 struct WriteParquetArgs {
-  Option<located<secret>> encryption_key;
+  Option<StartupArgument<nova::Secret>> encryption_key;
   Option<located<int64_t>> compression_level;
   Option<located<std::string>> compression_type;
   Option<location> times_in_milliseconds;

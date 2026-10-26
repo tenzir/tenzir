@@ -17,6 +17,7 @@
 #include <tenzir/nova/events.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/result.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <folly/CancellationToken.h>
@@ -55,7 +56,7 @@ struct FromCloudWatchArgs {
   Option<located<bool>> from_start;
   Option<located<bool>> unmask;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   location operator_location;
 };
 
@@ -68,10 +69,10 @@ struct ToCloudWatchArgs {
   Option<located<duration>> batch_timeout;
   Option<located<uint64_t>> batch_size;
   Option<located<uint64_t>> parallel;
-  Option<located<secret>> token;
+  Option<StartupArgument<nova::Secret>> token;
   Option<located<std::string>> endpoint;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   location operator_location;
 };
 

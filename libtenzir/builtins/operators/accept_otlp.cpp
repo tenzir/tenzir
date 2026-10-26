@@ -162,7 +162,7 @@ public:
         }
         auto context = std::move(decode_ctx).unwrap();
         context.warn_duplicate_attribute
-          = [source = args_.endpoint.source,
+          = [source = args_.endpoint.get_location(),
              &ctx](std::string_view key, common::AnyValue const& discarded,
                    common::AnyValue const& kept) {
               warn_about_duplicate_attribute(key, discarded, kept, source, ctx);
@@ -280,7 +280,7 @@ public:
           return call->finished();
         };
         grpc_decode_ctx.warn_duplicate_attribute
-          = [source = args_.endpoint.source,
+          = [source = args_.endpoint.get_location(),
              &ctx](std::string_view key, common::AnyValue const& discarded,
                    common::AnyValue const& kept) {
               warn_about_duplicate_attribute(key, discarded, kept, source, ctx);

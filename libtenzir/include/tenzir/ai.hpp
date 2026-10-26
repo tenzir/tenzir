@@ -22,8 +22,8 @@
 #include <tenzir/nova/events.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
-#include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/time.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -76,7 +76,8 @@ struct Connection {
 /// Resolves the endpoint and the API key, appends `resource` to the endpoint
 /// unless `complete` accepts its path, and creates an HTTP pool. The endpoint
 /// can be a secret, so diagnostics never reveal it.
-auto connect(located<secret> endpoint, Option<located<secret>> api_key,
+auto connect(StartupArgument<nova::Secret> const& endpoint,
+             Option<StartupArgument<nova::Secret>> const& api_key,
              std::string_view resource, duration timeout,
              Option<located<data>> const& tls, OpCtx& ctx,
              CompleteRoute complete = nullptr) -> Task<failure_or<Connection>>;

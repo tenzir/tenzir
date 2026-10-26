@@ -132,12 +132,9 @@ the operator.
 
 ## Secret resolution
 
-Resolve secrets through `OpCtx`:
+Take arguments that may hold secrets as `StartupArgument<T>`, such as
+`StartupArgument<nova::Secret>`, and evaluate them in `start`:
 
 ```cpp
-auto resolved = std::string{};
-auto requests = std::vector<secret_request>{
-  make_secret_request("url", args_.url, resolved, ctx.dh()),
-};
-CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
+auto url = co_await args_.url.evaluate_string(ctx, "url");
 ```

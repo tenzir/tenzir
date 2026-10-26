@@ -23,7 +23,7 @@
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/result.hpp>
-#include <tenzir/secret_resolution.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
@@ -70,9 +70,9 @@ auto scrub_errno(std::string msg) -> std::string {
 }
 
 struct ToHttpArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   Option<located<std::string>> method;
-  Option<located<data>> headers;
+  Option<StartupArgument<nova::Record>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<located<duration>> connection_timeout;
@@ -82,24 +82,6 @@ struct ToHttpArgs {
   located<ir::pipeline> printer;
   location operator_location;
 };
-
-auto resolve_secrets(OpCtx& ctx, ToHttpArgs& args, std::string& resolved_url,
-                     Headers& resolved_headers) -> Task<failure_or<void>> {
-  auto requests = std::vector<secret_request>{};
-  requests.emplace_back(
-    make_secret_request("url", args.url, resolved_url, ctx.dh()));
-  auto header_requests = http::make_header_secret_requests(
-    args.headers, resolved_headers, ctx.dh());
-  requests.insert(requests.end(),
-                  std::make_move_iterator(header_requests.begin()),
-                  std::make_move_iterator(header_requests.end()));
-  CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
-  if (resolved_url.empty()) {
-    diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
-    co_return failure::promise();
-  }
-  co_return {};
-}
 
 // -- streaming HTTP source ---------------------------------------------------
 
@@ -239,13 +221,34 @@ public:
       MetricsDirection::write, MetricsVisibility::external_,
       MetricsUnit::events);
     // setup url, headers & tls
-    if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
-        result.is_error()) {
+    auto url = co_await args_.url.evaluate_string(ctx, "url");
+    if (not url) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto tls_result = http::normalize_url_and_tls(
-      args_.tls, url_, args_.url.source, ctx.dh(), ctx.actor_system().config());
+    url_ = std::move(*url);
+    if (args_.headers) {
+      auto headers = co_await args_.headers->evaluate(ctx);
+      if (not headers) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      auto made = http::make_headers(
+        located{std::move(*headers), args_.headers->get_location()}, ctx.dh());
+      if (not made) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      headers_ = std::move(*made);
+    }
+    if (url_.empty()) {
+      diagnostic::error("`url` must not be empty").primary(args_.url).emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto tls_result
+      = http::normalize_url_and_tls(args_.tls, url_, args_.url.get_location(),
+                                    ctx.dh(), ctx.actor_system().config());
     if (tls_result.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -723,13 +726,34 @@ public:
       MetricsDirection::write, MetricsVisibility::external_,
       MetricsUnit::events);
     // setup url, headers & tls
-    if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
-        result.is_error()) {
+    auto url = co_await args_.url.evaluate_string(ctx, "url");
+    if (not url) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto tls_result = http::normalize_url_and_tls(
-      args_.tls, url_, args_.url.source, ctx.dh(), ctx.actor_system().config());
+    url_ = std::move(*url);
+    if (args_.headers) {
+      auto headers = co_await args_.headers->evaluate(ctx);
+      if (not headers) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      auto made = http::make_headers(
+        located{std::move(*headers), args_.headers->get_location()}, ctx.dh());
+      if (not made) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      headers_ = std::move(*made);
+    }
+    if (url_.empty()) {
+      diagnostic::error("`url` must not be empty").primary(args_.url).emit(ctx);
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    auto tls_result
+      = http::normalize_url_and_tls(args_.tls, url_, args_.url.get_location(),
+                                    ctx.dh(), ctx.actor_system().config());
     if (tls_result.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -1204,7 +1228,7 @@ public:
     auto d = Describer<ToHttpArgs, legacy::ToHttp, ToHttp>{};
     d.positional("url", &ToHttpArgs::url);
     auto method_arg = d.named("method", &ToHttpArgs::method);
-    auto headers_arg = d.named("headers", &ToHttpArgs::headers, "record");
+    d.named("headers", &ToHttpArgs::headers);
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &ToHttpArgs::timeout);
@@ -1258,23 +1282,6 @@ public:
           diagnostic::error("`retry_delay` must be a non-negative duration")
             .primary(retry_delay->source)
             .emit(ctx);
-        }
-      }
-      if (auto headers = ctx.get(headers_arg)) {
-        auto const* rec = try_as<record>(&headers->inner);
-        if (not rec) {
-          diagnostic::error("`headers` must be a record")
-            .primary(headers->source)
-            .emit(ctx);
-        } else {
-          for (auto const& [_, value] : *rec) {
-            if (not is<std::string>(value) and not is<secret>(value)) {
-              diagnostic::error("header values must be `string` or `secret`")
-                .primary(headers->source)
-                .emit(ctx);
-              break;
-            }
-          }
         }
       }
       return {};

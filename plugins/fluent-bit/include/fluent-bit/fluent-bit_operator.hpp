@@ -37,6 +37,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/startup_argument.hpp>
 
 #include <arrow/record_batch.h>
 #include <folly/CancellationToken.h>
@@ -240,7 +241,10 @@ inline auto to_flb_time(const msgpack_object& object) -> Option<time> {
 
 namespace {
 
-auto tls_to_fluentbit(const TlsConfig& ssl, record& properties,
+/// A map of key-value pairs of Fluent Bit plugin configuration options.
+using property_map = std::map<std::string, std::string>;
+
+auto tls_to_fluentbit(const TlsConfig& ssl, property_map& properties,
                       diagnostic_handler& dh) -> failure_or<void> {
   const auto set = [&](std::string key, std::string tenzir_option_name,
                        std::string value, location loc) -> failure_or<void> {
@@ -274,53 +278,40 @@ auto tls_to_fluentbit(const TlsConfig& ssl, record& properties,
   return {};
 }
 
-/// A map of key-value pairs of Fluent Bit plugin configuration options.
-using property_map = std::map<std::string, std::string>;
-
-inline void to_property_map_or_request(const located<tenzir::record>& rec,
-                                       property_map& map,
-                                       std::vector<secret_request>& requests,
-                                       diagnostic_handler& dh) {
+inline auto to_property_map(const located<nova::Record>& rec, property_map& map,
+                            diagnostic_handler& dh) -> failure_or<void> {
   for (const auto& [key, value] : rec.inner) {
     // Avoid double quotes around strings.
-    if (const auto* str = try_as<std::string>(&value)) {
+    if (const auto* str = try_as<nova::String>(&value)) {
       const auto [it, inserted] = map.try_emplace(key, *str);
       TENZIR_ASSERT(inserted);
       continue;
     }
-    if (const auto* s = try_as<secret>(value)) {
-      requests.emplace_back(*s, rec.source,
-                            [key, loc = rec.source, &dh, &map](
-                              resolved_secret_value v) -> failure_or<void> {
-                              TRY(auto str, v.utf8_view(key, loc, dh));
-                              const auto [it, inserted]
-                                = map.try_emplace(key, std::string{str});
-                              TENZIR_ASSERT(inserted);
-                              return {};
-                            });
+    if (const auto* s = try_as<nova::Secret>(&value)) {
+      TRY(auto str, nova::reveal_string(*s, key, rec.source, dh));
+      const auto [it, inserted] = map.try_emplace(key, std::move(str));
+      TENZIR_ASSERT(inserted);
       continue;
     }
-    const auto [it, inserted] = map.try_emplace(key, fmt::format("{}", value));
+    const auto [it, inserted] = map.try_emplace(
+      key, fmt::format("{}", nova::materialize_legacy(value)));
     TENZIR_ASSERT(inserted);
   }
+  return {};
 }
 
 /// The arguments passed to the operator.
 struct operator_args {
   located<std::string> plugin;                  ///< Fluent Bit plugin name.
   std::chrono::milliseconds poll_interval{250}; ///< Engine poll interval.
-  located<record> service_properties;           ///< The global service options.
   tls_options ssl{tls_options::options{.tls_default = false}};
-  located<record> args; ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
       .fields(f.field("plugin", x.plugin),
-              f.field("poll_interval", x.poll_interval),
-              f.field("service_properties", x.service_properties),
-              f.field("ssl", x.ssl), f.field("args", x.args));
+              f.field("poll_interval", x.poll_interval), f.field("ssl", x.ssl));
   }
 };
 
@@ -982,9 +973,9 @@ constexpr auto snapshot_stop_wait = std::chrono::seconds{5};
 
 struct FluentBitArgs {
   located<std::string> plugin;
-  located<record> service_properties = located{record{}, location::unknown};
+  Option<StartupArgument<nova::Record>> service_properties;
   Option<located<data>> tls;
-  located<record> args = located{record{}, location::unknown};
+  Option<StartupArgument<nova::Record>> args;
   multi_series_builder::options builder_options;
   OptimizationArgs<opt::Order> optimization;
   record config;
@@ -1013,31 +1004,34 @@ struct SourceBridgeLifetime {
   }
 };
 
-auto make_operator_args(FluentBitArgs args, OpCtx& ctx)
-  -> failure_or<operator_args> {
+/// Evaluates the Fluent Bit properties at startup and merges the TLS options
+/// into the plugin properties.
+auto make_operator_args(FluentBitArgs const& args,
+                        property_map& fluent_bit_args,
+                        property_map& plugin_args, OpCtx& ctx)
+  -> Task<failure_or<operator_args>> {
   auto result = operator_args{};
-  result.plugin = std::move(args.plugin);
-  result.service_properties = std::move(args.service_properties);
-  result.args = std::move(args.args);
+  result.plugin = args.plugin;
   result.ssl = args.tls ? tls_options{*args.tls, {.tls_default = false}}
                         : tls_options{tls_options::options{
                             .tls_default = false,
                           }};
-  TRY(auto resolved, result.ssl.resolve(ctx.actor_system().config(), ctx.dh()));
-  TRY(tls_to_fluentbit(resolved, result.args.inner, ctx.dh()));
-  return result;
-}
-
-auto collect_fluent_bit_properties(operator_args const& args,
-                                   property_map& fluent_bit_args,
-                                   property_map& plugin_args,
-                                   diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  auto requests = std::vector<secret_request>{};
-  to_property_map_or_request(args.service_properties, fluent_bit_args, requests,
-                             dh);
-  to_property_map_or_request(args.args, plugin_args, requests, dh);
-  return requests;
+  CO_TRY(auto resolved,
+         result.ssl.resolve(ctx.actor_system().config(), ctx.dh()));
+  if (args.service_properties) {
+    CO_TRY(auto properties, co_await args.service_properties->evaluate(ctx));
+    CO_TRY(to_property_map(located{std::move(properties),
+                                   args.service_properties->get_location()},
+                           fluent_bit_args, ctx.dh()));
+  }
+  if (args.args) {
+    CO_TRY(auto properties, co_await args.args->evaluate(ctx));
+    CO_TRY(
+      to_property_map(located{std::move(properties), args.args->get_location()},
+                      plugin_args, ctx.dh()));
+  }
+  CO_TRY(tls_to_fluentbit(resolved, plugin_args, ctx.dh()));
+  co_return result;
 }
 
 /// Hands `message` to `sender`, retrying until it was accepted or `give_up`
@@ -1128,18 +1122,14 @@ public:
     auto [sender, receiver]
       = channel<FluentBitSourceTaskResult>(source_channel_capacity);
     events_ = std::move(receiver);
-    auto operator_args = make_operator_args(args_, ctx);
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    auto operator_args
+      = co_await make_operator_args(args_, fluent_bit_args, plugin_args, ctx);
     if (not operator_args) {
       co_return;
     }
     auto args = std::move(operator_args).unwrap();
-    auto fluent_bit_args = property_map{};
-    auto plugin_args = property_map{};
-    auto requests = collect_fluent_bit_properties(args, fluent_bit_args,
-                                                  plugin_args, ctx.dh());
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      co_return;
-    }
     auto stop_requested = stop_requested_;
     auto bridge_alive = bridge_lifetime_.alive;
     ctx.spawn_task([sender, this]() mutable -> Task<void> {
@@ -1291,18 +1281,13 @@ public:
       },
       MetricsDirection::write, MetricsVisibility::external_,
       MetricsUnit::events);
-    auto operator_args = make_operator_args(args_, ctx);
+    auto operator_args
+      = co_await make_operator_args(args_, fluent_bit_args_, plugin_args_, ctx);
     if (not operator_args) {
       done_ = true;
       co_return;
     }
     auto runtime_args = std::move(operator_args).unwrap();
-    auto requests = collect_fluent_bit_properties(
-      runtime_args, fluent_bit_args_, plugin_args_, ctx.dh());
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      done_ = true;
-      co_return;
-    }
     engine_ = engine::make_sink(runtime_args, args_.config, fluent_bit_args_,
                                 plugin_args_, ctx.dh());
     if (not engine_) {
@@ -1419,18 +1404,14 @@ public:
       co_return;
     }
     builder_ = std::move(builder).unwrap();
-    auto operator_args = make_operator_args(args_, ctx);
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    auto operator_args
+      = co_await make_operator_args(args_, fluent_bit_args, plugin_args, ctx);
     if (not operator_args) {
       co_return;
     }
     auto args = std::move(operator_args).unwrap();
-    auto fluent_bit_args = property_map{};
-    auto plugin_args = property_map{};
-    auto requests = collect_fluent_bit_properties(args, fluent_bit_args,
-                                                  plugin_args, ctx.dh());
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      co_return;
-    }
     auto [sender, receiver]
       = channel<FluentBitSourceTaskResult>(source_channel_capacity);
     events_ = std::move(receiver);
@@ -1580,20 +1561,15 @@ public:
       },
       MetricsDirection::write, MetricsVisibility::external_,
       MetricsUnit::events);
-    auto operator_args = make_operator_args(args_, ctx);
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    auto operator_args
+      = co_await make_operator_args(args_, fluent_bit_args, plugin_args, ctx);
     if (not operator_args) {
       done_ = true;
       co_return;
     }
     auto runtime_args = std::move(operator_args).unwrap();
-    auto fluent_bit_args = property_map{};
-    auto plugin_args = property_map{};
-    auto requests = collect_fluent_bit_properties(runtime_args, fluent_bit_args,
-                                                  plugin_args, ctx.dh());
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      done_ = true;
-      co_return;
-    }
     engine_ = engine::make_sink(runtime_args, args_.config, fluent_bit_args,
                                 plugin_args, ctx.dh());
     if (not engine_) {

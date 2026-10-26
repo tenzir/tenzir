@@ -1,0 +1,7 @@
+error: package binding `secretpkg::$key` is not a constant
+ --> <packages/secretpkg/constants.tql>:1:12
+  |
+1 | let $key = secret("key")
+  |            ^^^^^^^^^^^^^
+  |
+  = note: package `let` bindings must be deterministic

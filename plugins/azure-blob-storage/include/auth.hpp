@@ -11,8 +11,6 @@
 #include <tenzir/azure_auth.hpp>
 #include <tenzir/operator_plugin.hpp>
 
-#include <tuple>
-
 namespace tenzir::plugins::abs {
 
 /// The blob operators hand the credential to the Azure SDK, which requests the
@@ -34,9 +32,6 @@ auto check_azure_auth_args(DescribeCtx& ctx, AccountKeyArg account_key_arg,
       .primary(*azure_auth_loc)
       .primary(*account_key_loc)
       .emit(ctx);
-  }
-  if (auto auth = ctx.get(azure_auth_arg); auth) {
-    std::ignore = AzureAuthOptions::from_record(*auth, ctx, azure_auth_support);
   }
 }
 

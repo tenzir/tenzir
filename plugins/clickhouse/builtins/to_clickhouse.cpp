@@ -70,11 +70,14 @@ auto clickhouse_openssl_error_diagnostic(std::string_view message, location loc,
 }
 
 struct ToClickhouseArgs {
-  located<secret> uri = {secret::make_literal(""), location::unknown};
-  located<secret> host = {secret::make_literal("localhost"), location::unknown};
+  Option<StartupArgument<nova::Secret>> uri;
+  StartupArgument<nova::Secret> host
+    = StartupArgument<nova::Secret>::constant("localhost");
   Option<located<uint64_t>> port = None{};
-  located<secret> user = {secret::make_literal("default"), location::unknown};
-  located<secret> password = {secret::make_literal(""), location::unknown};
+  StartupArgument<nova::Secret> user
+    = StartupArgument<nova::Secret>::constant("default");
+  StartupArgument<nova::Secret> password
+    = StartupArgument<nova::Secret>::constant("");
   ast::expression table = {};
   located<std::string> mode
     = {std::string{to_string(clickhouse::mode::append)}, location::unknown};
@@ -94,6 +97,21 @@ struct ToClickhouseArgs {
   // columns. Unset when `kind` is null.
   ast::expression low_cardinality = {};
 };
+
+/// Evaluates the connection arguments. Returns the URI if the user passed one,
+/// and otherwise assigns `host`, `user`, and `password`.
+auto evaluate_connection(ToClickhouseArgs const& args, std::string& host,
+                         std::string& user, std::string& password, OpCtx& ctx)
+  -> Task<failure_or<Option<std::string>>> {
+  if (args.uri) {
+    CO_TRY(auto uri, co_await args.uri->evaluate_string(ctx, "uri"));
+    co_return uri;
+  }
+  CO_TRY(host, co_await args.host.evaluate_string(ctx, "host"));
+  CO_TRY(user, co_await args.user.evaluate_string(ctx, "user"));
+  CO_TRY(password, co_await args.password.evaluate_string(ctx, "password"));
+  co_return None{};
+}
 
 class ToClickhouse final : public Operator<table_slice, void> {
 public:
@@ -380,11 +398,11 @@ public:
     auto const default_port
       = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
     auto client_args = easy_client::arguments{
-      .host = "", // resolved as secret below.
+      .host = "", // evaluated below.
       .port = args_.port ? *args_.port
                          : located<uint64_t>{default_port, location::unknown},
-      .user = "default", // resolved as secret below.
-      .password = "",    // resolved as secret below.
+      .user = "default", // evaluated below.
+      .password = "",    // evaluated below.
       .default_database = None{},
       .set_client_default_database = false,
       .ssl = std::move(*ssl),
@@ -395,21 +413,9 @@ public:
       .low_cardinality = std::move(low_cardinality_columns),
       .operator_location = args_.operator_location,
     };
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto has_uri = args_.uri.inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, client_args.host, dh));
-      requests.push_back(
-        make_secret_request("user", args_.user, client_args.user, dh));
-      requests.push_back(make_secret_request("password", args_.password,
-                                             client_args.password, dh));
-    }
-    auto ok = co_await ctx.resolve_secrets(std::move(requests));
-    if (not ok) {
+    auto uri = co_await evaluate_connection(
+      args_, client_args.host, client_args.user, client_args.password, ctx);
+    if (not uri) {
       state_->done.store(true, std::memory_order_release);
       co_return;
     }
@@ -421,8 +427,8 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "to_clickhouse"},
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::events);
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
+    if (*uri) {
+      auto parsed = parse_connection_uri(**uri, args_.uri->get_location(), dh);
       if (not parsed) {
         state_->done.store(true, std::memory_order_release);
         co_return;
@@ -709,25 +715,14 @@ public:
       = tls_enabled_ ? clickhouse_tls_port : clickhouse_plaintext_port;
     connection.port = detail::narrow_cast<uint16_t>(
       args_.port ? args_.port->inner : default_port);
-    auto uri = std::string{};
-    auto requests = std::vector<secret_request>{};
-    auto const has_uri = args_.uri.inner != secret::make_literal("");
-    if (has_uri) {
-      requests.push_back(make_secret_request("uri", args_.uri, uri, dh));
-    } else {
-      requests.push_back(
-        make_secret_request("host", args_.host, connection.host, dh));
-      requests.push_back(
-        make_secret_request("user", args_.user, connection.user, dh));
-      requests.push_back(make_secret_request("password", args_.password,
-                                             connection.password, dh));
-    }
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+    auto uri = co_await evaluate_connection(
+      args_, connection.host, connection.user, connection.password, ctx);
+    if (not uri) {
       done_ = true;
       co_return;
     }
-    if (has_uri) {
-      auto parsed = parse_connection_uri(uri, args_.uri.source, dh);
+    if (*uri) {
+      auto parsed = parse_connection_uri(**uri, args_.uri->get_location(), dh);
       if (not parsed) {
         done_ = true;
         co_return;
@@ -1347,7 +1342,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToClickhouseArgs, ToClickhouse, ToClickhouseEvents>{};
-    auto uri_arg = d.named_optional("uri", &ToClickhouseArgs::uri);
+    auto uri_arg = d.named("uri", &ToClickhouseArgs::uri);
     auto host_arg = d.named_optional("host", &ToClickhouseArgs::host);
     auto port_arg = d.named("port", &ToClickhouseArgs::port);
     auto user_arg = d.named_optional("user", &ToClickhouseArgs::user);

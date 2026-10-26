@@ -1,0 +1,3 @@
+id: secretpkg
+name: Secret Package
+description: A package whose constants.tql binding looks up a secret.

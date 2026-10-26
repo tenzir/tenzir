@@ -13,6 +13,7 @@
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/nova/argument_conversion.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval_ctx.hpp"
@@ -56,7 +57,7 @@ struct ConstantArgument {
 /// lambdas as a `LambdaArgument`.
 template <class T>
 concept ArgType
-  = (tenzir::_::operator_plugin::ArgType<T>
+  = (tenzir::_::operator_plugin::ArgType<T> and not is_startup_argument<T>
      and not concepts::one_of<T, ast::expression, ast::lambda_expr,
                               located<ir::pipeline>, data, located<data>>)
     or concepts::one_of<T, Data, ConstantArgument, Secret, located<Secret>>;
@@ -254,33 +255,9 @@ template <class T>
 auto prepare_constant(ast::expression& expr, InstantiateCtx ctx)
   -> failure_or<located<T>> {
   TRY(auto constant, const_eval(expr, ctx));
-  if constexpr (std::same_as<T, Data>) {
-    return located<T>{std::move(constant), expr.get_location()};
-  } else {
-    if constexpr (std::same_as<T, std::uint64_t>) {
-      if (auto const* signed_value = try_as<std::int64_t>(&constant)) {
-        if (*signed_value < 0) {
-          diagnostic::error("expected positive integer, got `{}`",
-                            *signed_value)
-            .primary(expr.get_location())
-            .emit(ctx);
-          return failure::promise();
-        }
-        return located<T>{static_cast<T>(*signed_value), expr.get_location()};
-      }
-    }
-    if (auto const* value = try_as<T>(&constant)) {
-      return located<T>{*value, expr.get_location()};
-    }
-    auto const actual = match(constant, []<class V>(V const&) {
-      return Type<V>::static_name;
-    });
-    diagnostic::error("expected argument of type `{}`, but got `{}`",
-                      default_type_name<T>(), actual)
-      .primary(expr.get_location())
-      .emit(ctx);
-    return failure::promise();
-  }
+  TRY(auto value,
+      convert_argument<T>(std::move(constant), expr.get_location(), ctx));
+  return located<T>{std::move(value), expr.get_location()};
 }
 
 /// Evaluates a constant expression and returns its Nova Data value.

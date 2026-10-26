@@ -22,7 +22,7 @@ namespace tenzir::plugins::secret {
 namespace {
 
 struct AssertSecretArgs {
-  located<class secret> secret;
+  StartupArgument<nova::Secret> secret;
   located<data> expected;
 };
 
@@ -34,16 +34,11 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    // Resolve the secret using the new async API
-    auto result = resolved_secret_value{};
-    auto requests = std::vector<secret_request>{};
-    requests.emplace_back(secret_, result);
-    auto res = co_await ctx.resolve_secrets(std::move(requests));
-    if (not res) {
+    auto result = co_await secret_.evaluate(ctx);
+    if (not result) {
       co_return;
     }
-    // Compare secret to expected value
-    const auto s = result.blob();
+    auto const s = nova::SecretView{*result};
     auto e = std::span<const std::byte>{};
     if (const auto* b = try_as<blob>(expected_.inner)) {
       e = std::span{*b};
@@ -55,7 +50,7 @@ public:
     }
     if (not std::ranges::equal(s, e)) {
       diagnostic::error("secret does not match expected value")
-        .primary(secret_, "['{}']", fmt::join(s, "', '"))
+        .primary(secret_)
         .primary(expected_, "['{}']", fmt::join(e, "', '"))
         .emit(ctx.dh());
     }
@@ -72,7 +67,7 @@ public:
   }
 
 private:
-  located<class secret> secret_;
+  StartupArgument<nova::Secret> secret_;
   located<data> expected_;
 };
 

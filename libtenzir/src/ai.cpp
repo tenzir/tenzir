@@ -13,7 +13,6 @@
 #include <tenzir/concept/printable/tenzir/json_printer_options.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/nova_json_printer.hpp>
-#include <tenzir/secret_resolution.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/view3.hpp>
@@ -117,28 +116,25 @@ auto make_endpoint_url(std::string endpoint, std::string_view resource,
   return std::string{url.buffer()};
 }
 
-auto connect(located<secret> endpoint, Option<located<secret>> api_key,
+auto connect(StartupArgument<nova::Secret> const& endpoint,
+             Option<StartupArgument<nova::Secret>> const& api_key,
              std::string_view resource, duration timeout,
              Option<located<data>> const& tls, OpCtx& ctx,
              CompleteRoute complete) -> Task<failure_or<Connection>> {
-  auto resolved_endpoint = std::string{};
+  CO_TRY(auto resolved_endpoint,
+         co_await endpoint.evaluate_string(ctx, "endpoint"));
   auto resolved_api_key = std::string{};
-  auto requests = std::vector<secret_request>{};
-  requests.push_back(
-    make_secret_request("endpoint", endpoint, resolved_endpoint, ctx.dh()));
   if (api_key) {
-    requests.push_back(
-      make_secret_request("api_key", *api_key, resolved_api_key, ctx.dh()));
+    CO_TRY(resolved_api_key, co_await api_key->evaluate_string(ctx, "api_key"));
   }
-  CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
   if (resolved_endpoint.empty()) {
     diagnostic::error("`endpoint` must not be empty")
-      .primary(endpoint.source)
+      .primary(endpoint.get_location())
       .emit(ctx);
     co_return failure::promise();
   }
   auto config = http::make_http_pool_config(
-    tls, resolved_endpoint, endpoint.source, ctx.dh(),
+    tls, resolved_endpoint, endpoint.get_location(), ctx.dh(),
     std::chrono::duration_cast<std::chrono::milliseconds>(timeout),
     ctx.actor_system().config());
   if (config.is_error()) {
@@ -148,7 +144,7 @@ auto connect(located<secret> endpoint, Option<located<secret>> api_key,
     = make_endpoint_url(std::move(resolved_endpoint), resource, complete);
   if (url.is_err()) {
     diagnostic::error("{}", std::move(url).unwrap_err())
-      .primary(endpoint.source)
+      .primary(endpoint.get_location())
       .emit(ctx);
     co_return failure::promise();
   }
@@ -157,7 +153,7 @@ auto connect(located<secret> endpoint, Option<located<secret>> api_key,
     path = std::string{parsed->path()};
   }
   CO_TRY(auto pool, make_pool(ctx, std::move(url).unwrap(), std::move(*config),
-                              endpoint.source));
+                              endpoint.get_location()));
   auto headers = std::vector<http::Header>{};
   if (not resolved_api_key.empty()) {
     headers.push_back(

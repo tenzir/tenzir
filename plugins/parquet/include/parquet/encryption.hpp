@@ -5,14 +5,15 @@
 #pragma once
 
 #include <tenzir/async.hpp>
-#include <tenzir/secret.hpp>
+#include <tenzir/startup_argument.hpp>
 
 #include <arrow/util/secure_string.h>
 
 namespace tenzir::plugins::parquet {
 
 /// Prepares a raw AES key without retaining ordinary string copies.
-auto prepare_encryption_key(located<secret> const& encryption_key, OpCtx& ctx)
+auto prepare_encryption_key(StartupArgument<nova::Secret> const& encryption_key,
+                            OpCtx& ctx)
   -> Task<failure_or<arrow::util::SecureString>>;
 
 } // namespace tenzir::plugins::parquet

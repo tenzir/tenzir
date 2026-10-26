@@ -19,6 +19,7 @@
 #include <tenzir/nova/events.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/result.hpp>
+#include <tenzir/startup_argument.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <folly/coro/BoundedQueue.h>
@@ -48,7 +49,7 @@ struct FromAmazonKinesisArgs {
   Option<located<uint64_t>> records_per_call;
   Option<located<duration>> poll_idle;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   Option<located<std::string>> endpoint;
   location operator_location;
 };
@@ -61,17 +62,17 @@ struct ToAmazonKinesisArgs {
   Option<located<duration>> batch_timeout;
   Option<located<uint64_t>> parallel;
   Option<located<std::string>> aws_region;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Record>> aws_iam;
   Option<located<std::string>> endpoint;
   location operator_location;
 };
 
 auto default_message_expression() -> ast::expression;
 
-auto make_kinesis_http_client(Option<located<std::string>> const& aws_region,
-                              Option<located<record>> const& aws_iam,
-                              Option<located<std::string>> const& endpoint,
-                              OpCtx& ctx)
+auto make_kinesis_http_client(
+  Option<located<std::string>> const& aws_region,
+  Option<StartupArgument<nova::Record>> const& aws_iam,
+  Option<located<std::string>> const& endpoint, OpCtx& ctx)
   -> Task<std::shared_ptr<amazon::SignedHttpClient>>;
 
 /// A record read from a Kinesis shard.
@@ -227,7 +228,7 @@ private:
   location message_location_;
   Option<location> partition_key_location_;
   Option<located<std::string>> aws_region_;
-  Option<located<record>> aws_iam_;
+  Option<StartupArgument<nova::Record>> aws_iam_;
   Option<located<std::string>> endpoint_;
   std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<PendingRecord> batch_;

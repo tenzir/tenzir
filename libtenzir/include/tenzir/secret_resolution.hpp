@@ -21,7 +21,6 @@
 
 namespace tenzir {
 
-/// @relates `operator_control_plane::resolve_secrets_must_yield`
 class resolved_secret_value {
 public:
   resolved_secret_value() = default;
@@ -67,7 +66,6 @@ private:
 };
 
 /// A utility that censors any occurrence of a secret in a string.
-/// @relates make_secret_request
 struct secret_censor {
 public:
   auto censor(std::string text) const -> std::string;
@@ -94,7 +92,8 @@ public:
 using secret_request_callback
   = std::function<failure_or<void>(resolved_secret_value value)>;
 
-/// @relates `operator_control_plane::resolve_secrets`
+/// A request to resolve a secret, issued only by the evaluator through
+/// `OpCtx::resolve_secrets`.
 struct secret_request {
   /// The secret to resolve
   class secret secret;
@@ -108,85 +107,7 @@ struct secret_request {
                  secret_request_callback callback)
     : secret{std::move(secret)}, location{loc}, callback{std::move(callback)} {
   }
-
-  /// A secret request that will invoke `callback` on successful resolution
-  secret_request(const located<tenzir::secret>& secret,
-                 secret_request_callback callback)
-    : secret{secret.inner},
-      location{secret.source},
-      callback{std::move(callback)} {
-  }
-
-  /// A secret request that will directly set `out` on successful resolution
-  secret_request(tenzir::secret secret, tenzir::location loc,
-                 resolved_secret_value& out);
-
-  /// A secret request that will directly set `out` on successful resolution
-  secret_request(const located<tenzir::secret>& secret,
-                 resolved_secret_value& out);
 };
-
-namespace detail {
-/// Creates a secret_request_callback that sets `out`, if the secret is a valid
-/// UTF-8 string and raises an error otherwise.
-/// @relates operator_control_plane::resolve_secrets_must_yield
-/// @relates resolved_secret_value::utf8_view
-auto secret_string_setter_callback(std::string name, tenzir::location loc,
-                                   std::string& out, diagnostic_handler& dh)
-  -> secret_request_callback;
-
-/// Creates a secret_request_callback that sets `out`, if the secret is a valid
-/// UTF-8 string and raises an error otherwise.
-/// @relates operator_control_plane::resolve_secrets_must_yield
-/// @relates resolved_secret_value::utf8_view
-auto secret_string_setter_callback(std::string name, tenzir::location loc,
-                                   located<std::string>& out,
-                                   diagnostic_handler& dh)
-  -> secret_request_callback;
-} // namespace detail
-
-/// Creates a secret request that will set `out`, if the secret is a valid
-/// UTF-8 string and raises an error otherwise.
-/// @relates operator_control_plane::resolve_secrets_must_yield
-/// @relates resolved_secret_value::utf8_view
-auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         std::string& out, diagnostic_handler& dh)
-  -> secret_request;
-
-/// Creates a secret request that will set `out`, if the secret is a valid
-/// UTF-8 string and raises an error otherwise.
-/// @relates operator_control_plane::resolve_secrets_must_yield
-/// @relates resolved_secret_value::utf8_view
-
-auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         located<std::string>& out, diagnostic_handler& dh)
-  -> secret_request;
-
-/// Creates a secret request that will set `out`, if the secret is a valid
-/// UTF-8 string and raises an error otherwise.
-/// @relates operator_control_plane::resolve_secrets_must_yield
-/// @relates resolved_secret_value::utf8_view
-auto make_secret_request(std::string name, const located<secret>& s,
-                         located<std::string>& out, diagnostic_handler& dh)
-  -> secret_request;
-
-/// Creates a secret request that will set `out`, if the secret is a valid
-/// UTF-8 string and raises an error otherwise.
-/// @relates operator_control_plane::resolve_secrets_must_yield
-/// @relates resolved_secret_value::utf8_view
-auto make_secret_request(std::string name, const located<secret>& s,
-                         std::string& out, diagnostic_handler& dh)
-  -> secret_request;
-
-/// Creates secret requests for every secret nested inside `value` and writes
-/// resolved UTF-8 string values back into the nested data tree in place.
-auto make_secret_request(data& value, location loc, diagnostic_handler& dh)
-  -> std::vector<secret_request>;
-
-/// Creates secret requests for every secret nested inside `value` and writes
-/// resolved UTF-8 string values back into the nested data tree in place.
-auto make_secret_request(located<data>& value, diagnostic_handler& dh)
-  -> std::vector<secret_request>;
 
 struct located_resolved_secret {
   location loc;

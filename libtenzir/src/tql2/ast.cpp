@@ -942,7 +942,10 @@ public:
   void visit(ast::expression& x) {
     if (auto* var = try_as<ast::dollar_var>(x)) {
       if (auto value = ctx_.get(var->let)) {
-        x = ast::constant{std::move(value->value), var->get_location()};
+        if (auto* constant = try_as<ast::constant>(&*value)) {
+          constant->source = var->get_location();
+        }
+        x = std::move(*value);
       } else {
         result_ = ast::substitute_result::some_remaining;
       }

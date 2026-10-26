@@ -14,7 +14,6 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http_server.hpp"
-#include "tenzir/secret_resolution.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/try.hpp"
 
@@ -190,14 +189,12 @@ auto OtlpGrpcServer::start(AcceptOtlpArgs const& args, Arc<MessageQueue> queue,
                            Arc<Semaphore> active_requests_limit, OpCtx& ctx)
   -> Task<Option<Box<OtlpGrpcServer>>> {
   auto const& cfg = ctx.actor_system().config();
-  auto endpoint = std::string{};
-  auto requests = std::vector<secret_request>{
-    make_secret_request("endpoint", args.endpoint, endpoint, ctx.dh())};
-  if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
+  auto endpoint = co_await args.endpoint.evaluate_string(ctx, "endpoint");
+  if (not endpoint) {
     co_return None{};
   }
-  auto parsed
-    = http_server::parse_endpoint(endpoint, args.endpoint.source, ctx.dh());
+  auto parsed = http_server::parse_endpoint(
+    *endpoint, args.endpoint.get_location(), ctx.dh());
   if (not parsed) {
     co_return None{};
   }
@@ -239,7 +236,7 @@ auto OtlpGrpcServer::start(AcceptOtlpArgs const& args, Arc<MessageQueue> queue,
     [queue = std::move(queue),
      active_requests_limit = std::move(active_requests_limit),
      address = std::move(address), tls = std::move(*tls),
-     endpoint_location = args.endpoint.source, max_message_size,
+     endpoint_location = args.endpoint.get_location(), max_message_size,
      resource_quota_size, accept_logs, accept_metrics,
      accept_traces]() mutable -> Result<StartedGrpcServer, diagnostic> {
       TRY(auto credentials,

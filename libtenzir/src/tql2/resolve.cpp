@@ -297,8 +297,7 @@ public:
     }
     // Non-value bindings (a lambda, `_`, a spread, an assignment) are not
     // rejected here: like pipeline `let` bindings, they reach const-eval, which
-    // merely warns and yields `null`. Stricter structural checking is deferred
-    // to a later change.
+    // rejects them.
     auto value = const_eval(expr, base_ctx{diag_, reg_});
     if (not value) {
       result_ = failure::promise();

@@ -657,6 +657,10 @@ private:
     return exec_ctx_.checkpoint_settings();
   }
 
+  auto register_secret(nova::Secret const& value) -> void override {
+    censor_.add(value.data);
+  }
+
   auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>> override {
     // All secrets that must be resolved by the node/platform.

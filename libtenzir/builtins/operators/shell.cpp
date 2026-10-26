@@ -16,7 +16,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -34,7 +33,7 @@ using namespace tenzir::binary_byte_literals;
 constexpr auto block_size = 16_KiB;
 
 struct ShellArgs {
-  located<secret> command = located{secret{}, location::unknown};
+  StartupArgument<nova::Secret> command;
 };
 
 struct OutputChunk {
@@ -79,13 +78,11 @@ auto enqueue_message(TransformMessageQueue& queue, Message message)
 
 auto resolve_command(ShellArgs const& args, OpCtx& ctx)
   -> Task<Option<std::string>> {
-  auto command = std::string{};
-  auto requests = std::vector<secret_request>{
-    make_secret_request("command", args.command, command, ctx.dh())};
-  auto result = co_await ctx.resolve_secrets(std::move(requests));
+  auto result = co_await args.command.evaluate_string(ctx, "command");
   if (not result) {
     co_return None{};
   }
+  auto command = std::move(*result);
   co_return command;
 }
 

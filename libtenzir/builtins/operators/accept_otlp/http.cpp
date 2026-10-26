@@ -11,7 +11,6 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/secret_resolution.hpp"
 #include "tenzir/tls_options.hpp"
 
 #include <folly/io/IOBuf.h>
@@ -237,14 +236,12 @@ auto start_http_server(AcceptOtlpArgs const& args, Arc<MessageQueue> queue,
                        Arc<Semaphore> active_requests_limit, OpCtx& ctx)
   -> Task<Option<Box<http_server::Server>>> {
   auto const& cfg = ctx.actor_system().config();
-  auto endpoint = std::string{};
-  auto requests = std::vector<secret_request>{
-    make_secret_request("endpoint", args.endpoint, endpoint, ctx.dh())};
-  if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
+  auto endpoint = co_await args.endpoint.evaluate_string(ctx, "endpoint");
+  if (not endpoint) {
     co_return None{};
   }
-  auto config = http_server::make_config(endpoint, args.endpoint.source,
-                                         args.tls, cfg, ctx.dh());
+  auto config = http_server::make_config(
+    *endpoint, args.endpoint.get_location(), args.tls, cfg, ctx.dh());
   if (not config) {
     co_return None{};
   }

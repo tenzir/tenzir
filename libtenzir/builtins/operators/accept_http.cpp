@@ -26,7 +26,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
-#include "tenzir/secret_resolution.hpp"
+#include "tenzir/startup_argument.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/variant.hpp"
 
@@ -50,7 +50,7 @@ namespace tenzir::plugins::accept_http {
 namespace {
 
 struct AcceptHttpArgs {
-  located<secret> endpoint;
+  StartupArgument<nova::Secret> endpoint;
   Option<located<data>> responses;
   Option<located<uint64_t>> max_request_size;
   Option<located<uint64_t>> max_connections;
@@ -600,16 +600,15 @@ private:
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto resolved_endpoint = std::string{};
-    auto requests = std::vector<secret_request>{make_secret_request(
-      "endpoint", args_.endpoint, resolved_endpoint, ctx.dh())};
-    if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
+    auto resolved_endpoint
+      = co_await args_.endpoint.evaluate_string(ctx, "endpoint");
+    if (not resolved_endpoint) {
       co_return None{};
     }
     auto config
-      = http_server::make_config(resolved_endpoint, args_.endpoint.source,
-                                 args_.tls, ctx.actor_system().config(),
-                                 ctx.dh());
+      = http_server::make_config(*resolved_endpoint,
+                                 args_.endpoint.get_location(), args_.tls,
+                                 ctx.actor_system().config(), ctx.dh());
     if (not config) {
       co_return None{};
     }
@@ -930,16 +929,15 @@ private:
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto resolved_endpoint = std::string{};
-    auto requests = std::vector<secret_request>{make_secret_request(
-      "endpoint", args_.endpoint, resolved_endpoint, ctx.dh())};
-    if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
+    auto resolved_endpoint
+      = co_await args_.endpoint.evaluate_string(ctx, "endpoint");
+    if (not resolved_endpoint) {
       co_return None{};
     }
     auto config
-      = http_server::make_config(resolved_endpoint, args_.endpoint.source,
-                                 args_.tls, ctx.actor_system().config(),
-                                 ctx.dh());
+      = http_server::make_config(*resolved_endpoint,
+                                 args_.endpoint.get_location(), args_.tls,
+                                 ctx.actor_system().config(), ctx.dh());
     if (not config) {
       co_return None{};
     }

@@ -110,17 +110,18 @@ struct ToIcebergArgs {
   /// endpoints (catalog, warehouse, S3), so the generic name would not say
   /// which one it is, and the Iceberg ecosystem universally configures "a
   /// catalog". `table` and `mode` follow the contract.
-  located<secret> catalog = {secret::make_literal(""), location::unknown};
+  StartupArgument<nova::Secret> catalog
+    = StartupArgument<nova::Secret>::constant("");
   Option<located<std::string>> mode;
-  Option<located<secret>> warehouse;
-  Option<located<secret>> table_location;
-  Option<located<record>> aws_iam;
+  Option<StartupArgument<nova::Secret>> warehouse;
+  Option<StartupArgument<nova::Secret>> table_location;
+  Option<StartupArgument<nova::Record>> aws_iam;
   Option<located<std::string>> catalog_aws_service;
-  Option<located<secret>> s3_endpoint;
+  Option<StartupArgument<nova::Secret>> s3_endpoint;
   Option<located<bool>> s3_path_style;
-  Option<located<secret>> token;
+  Option<StartupArgument<nova::Secret>> token;
   Option<located<bool>> gcp_auth;
-  Option<located<secret>> gcp_service_account_key;
+  Option<StartupArgument<nova::Secret>> gcp_service_account_key;
   Option<located<std::string>> gcp_project;
   Option<ast::expression> partition_by;
   Option<located<uint64_t>> max_size;
@@ -469,36 +470,33 @@ public:
     auto warehouse = std::string{};
     auto s3_endpoint = std::string{};
     auto token = std::string{};
-    auto requests = std::vector<secret_request>{
-      make_secret_request("catalog", args_.catalog, config.uri, dh),
+    auto reveal = [&](Option<StartupArgument<nova::Secret>> const& arg,
+                      std::string_view name, std::string& out) -> Task<bool> {
+      if (not arg) {
+        co_return true;
+      }
+      auto value = co_await arg->evaluate_string(ctx, name);
+      if (not value) {
+        co_return false;
+      }
+      out = std::move(*value);
+      co_return true;
     };
-    if (args_.warehouse) {
-      requests.push_back(
-        make_secret_request("warehouse", *args_.warehouse, warehouse, dh));
-    }
-    if (args_.table_location) {
-      requests.push_back(make_secret_request("location", *args_.table_location,
-                                             table_location_, dh));
-    }
-    if (args_.s3_endpoint) {
-      requests.push_back(make_secret_request("s3_endpoint", *args_.s3_endpoint,
-                                             s3_endpoint, dh));
-    }
-    if (args_.token) {
-      requests.push_back(make_secret_request("token", *args_.token, token, dh));
-    }
-    if (args_.gcp_service_account_key) {
-      requests.push_back(make_secret_request("gcp_service_account_key",
-                                             *args_.gcp_service_account_key,
-                                             config.gcp_credentials_json, dh));
-    }
-    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+    auto catalog_uri = co_await args_.catalog.evaluate_string(ctx, "catalog");
+    if (not catalog_uri
+        or not co_await reveal(args_.warehouse, "warehouse", warehouse)
+        or not co_await reveal(args_.table_location, "location",
+                               table_location_)
+        or not co_await reveal(args_.s3_endpoint, "s3_endpoint", s3_endpoint)
+        or not co_await reveal(args_.token, "token", token)
+        or not co_await reveal(args_.gcp_service_account_key,
+                               "gcp_service_account_key",
+                               config.gcp_credentials_json)) {
       done_ = true;
       co_return;
     }
-    auto aws_iam
-      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
-    auto auth = co_await resolve_aws_iam_auth(aws_iam, None{}, ctx);
+    config.uri = std::move(*catalog_uri);
+    auto auth = co_await resolve_aws_iam_auth(args_.aws_iam, None{}, ctx);
     if (not auth) {
       done_ = true;
       co_return;
@@ -542,7 +540,7 @@ public:
         return ensure_aws_sdk_initialized();
       });
       if (not initialized) {
-        auto const source = args_.aws_iam ? args_.aws_iam->source
+        auto const source = args_.aws_iam ? args_.aws_iam->get_location()
                                           : args_.catalog_aws_service->source;
         diagnostic::error("failed to initialize AWS authentication: {}",
                           initialized.error().message)
@@ -583,7 +581,7 @@ public:
           return make_aws_credentials_provider(credentials, region);
         });
       if (not provider) {
-        auto const source = args_.aws_iam ? args_.aws_iam->source
+        auto const source = args_.aws_iam ? args_.aws_iam->get_location()
                                           : args_.catalog_aws_service->source;
         diagnostic::error(provider.error()).primary(source).emit(dh);
         done_ = true;
@@ -631,7 +629,7 @@ public:
     if (not catalog) {
       diagnostic::error("failed to open Iceberg catalog: {}",
                         catalog.error().message)
-        .primary(args_.catalog.source)
+        .primary(args_.catalog.get_location())
         .emit(dh);
       done_ = true;
       co_return;

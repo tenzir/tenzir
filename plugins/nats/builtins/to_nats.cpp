@@ -69,9 +69,9 @@ struct ToNatsArgs {
   located<std::string> subject;
   ast::expression message = default_message_expression();
   Option<ast::expression> headers;
-  Option<located<secret>> url;
+  Option<StartupArgument<nova::Secret>> url;
   Option<located<data>> tls;
-  Option<located<data>> auth;
+  Option<StartupArgument<nova::Record>> auth;
   uint64_t max_pending = default_max_pending;
   location op;
 };
@@ -224,10 +224,10 @@ public:
     io_executor_ = ctx.io_executor();
     auto* evb = io_executor_->getEventBase();
     TENZIR_ASSERT(evb);
-    auto options
-      = make_nats_options(*resolved, args_.tls,
-                          args_.url ? args_.url->source : location::unknown,
-                          ctx.dh(), *evb, ctx.actor_system().config());
+    auto options = make_nats_options(
+      *resolved, args_.tls,
+      args_.url ? args_.url->get_location() : location::unknown, ctx.dh(), *evb,
+      ctx.actor_system().config());
     if (not options) {
       done_ = true;
       co_return;
@@ -239,7 +239,7 @@ public:
     });
     if (status != NATS_OK) {
       emit_nats_error(diagnostic::error("failed to connect to NATS server")
-                        .primary(args_.url ? args_.url->source
+                        .primary(args_.url ? args_.url->get_location()
                                            : location::unknown),
                       status, ctx.dh());
       done_ = true;
@@ -732,10 +732,10 @@ public:
     publisher_->io_executor = ctx.io_executor();
     auto* evb = publisher_->io_executor->getEventBase();
     TENZIR_ASSERT(evb);
-    auto options
-      = make_nats_options(*resolved, args_.tls,
-                          args_.url ? args_.url->source : location::unknown,
-                          ctx.dh(), *evb, ctx.actor_system().config());
+    auto options = make_nats_options(
+      *resolved, args_.tls,
+      args_.url ? args_.url->get_location() : location::unknown, ctx.dh(), *evb,
+      ctx.actor_system().config());
     if (not options) {
       done_ = true;
       co_return;
@@ -747,7 +747,7 @@ public:
     });
     if (status != NATS_OK) {
       emit_nats_error(diagnostic::error("failed to connect to NATS server")
-                        .primary(args_.url ? args_.url->source
+                        .primary(args_.url ? args_.url->get_location()
                                            : location::unknown),
                       status, ctx.dh());
       done_ = true;
@@ -946,9 +946,9 @@ public:
     auto subject_arg = d.positional("subject", &ToNatsArgs::subject);
     d.named_optional("message", &ToNatsArgs::message, "blob|string");
     d.named("headers", &ToNatsArgs::headers, "record");
-    auto url_arg = d.named("url", &ToNatsArgs::url);
+    d.named("url", &ToNatsArgs::url);
     auto tls_arg = d.named("tls", &ToNatsArgs::tls, "record");
-    auto auth_arg = d.named("auth", &ToNatsArgs::auth, "record");
+    d.named("auth", &ToNatsArgs::auth, "record");
     auto max_pending_arg
       = d.named_optional("_max_pending", &ToNatsArgs::max_pending);
     d.operator_location(&ToNatsArgs::op);
@@ -958,10 +958,6 @@ public:
         diagnostic::error("`subject` must not be empty")
           .primary(subject.source)
           .emit(ctx);
-      }
-      if (auto url = ctx.get(url_arg);
-          url and not url->inner.is_all_literal()) {
-        // Managed secrets are resolved at runtime.
       }
       if (auto max_pending = ctx.get(max_pending_arg); max_pending) {
         if (*max_pending == 0) {
@@ -982,11 +978,6 @@ public:
         auto tls
           = tls_options{*tls_val, {.tls_default = true, .is_server = false}};
         if (auto valid = tls.validate(ctx); not valid) {
-          return {};
-        }
-      }
-      if (auto auth_val = ctx.get(auth_arg)) {
-        if (not validate_auth_record(Option<located<data>>{*auth_val}, ctx)) {
           return {};
         }
       }

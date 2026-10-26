@@ -24,7 +24,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
-#include <tenzir/secret_resolution.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/to_string.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -71,7 +70,7 @@ constexpr auto prometheus_stale_marker_bits = uint64_t{0x7ff0000000000002};
 using Headers = std::vector<http::Header>;
 
 struct ToPrometheusArgs {
-  located<secret> url;
+  StartupArgument<nova::Secret> url;
   located<std::string> protobuf_message{
     std::string{default_protobuf_message},
     location::unknown,
@@ -112,7 +111,7 @@ struct ToPrometheusArgs {
     ast::identifier{"start_timestamp", location::unknown},
     true,
   };
-  Option<located<data>> headers;
+  Option<StartupArgument<nova::Record>> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<located<duration>> connection_timeout;
@@ -683,24 +682,36 @@ auto snappy_compress(std::string body, diagnostic_handler& dh, location loc)
   return output;
 }
 
-/// Resolves the endpoint URL and user headers. Header secrets are resolved into
-/// the same vector that later gets copied for each request before protocol
-/// headers are overwritten.
-auto resolve_secrets(OpCtx& ctx, ToPrometheusArgs& args,
-                     std::string& resolved_url, Headers& resolved_headers)
+/// Evaluates the endpoint URL and user headers. Header values are resolved
+/// into the same vector that later gets copied for each request before
+/// protocol headers are overwritten.
+auto resolve_endpoint(OpCtx& ctx, ToPrometheusArgs const& args,
+                      std::string& resolved_url, Headers& resolved_headers)
   -> Task<failure_or<void>> {
-  auto requests = std::vector<secret_request>{};
-  requests.emplace_back(
-    make_secret_request("url", args.url, resolved_url, ctx.dh()));
-  auto header_requests = http::make_header_secret_requests(
-    args.headers, resolved_headers, ctx.dh());
-  requests.insert(requests.end(),
-                  std::make_move_iterator(header_requests.begin()),
-                  std::make_move_iterator(header_requests.end()));
-  CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
+  CO_TRY(resolved_url, co_await args.url.evaluate_string(ctx, "url"));
   if (resolved_url.empty()) {
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return failure::promise();
+  }
+  if (args.headers) {
+    CO_TRY(auto headers, co_await args.headers->evaluate(ctx));
+    auto reserved = false;
+    for (auto const& [name, _] : headers) {
+      if (is_reserved_header(name)) {
+        diagnostic::error("reserved remote-write header `{}`", name)
+          .primary(args.headers->get_location())
+          .note("this header is set by `to_prometheus`")
+          .emit(ctx);
+        reserved = true;
+      }
+    }
+    if (reserved) {
+      co_return failure::promise();
+    }
+    CO_TRY(resolved_headers,
+           http::make_headers(located{std::move(headers),
+                                      args.headers->get_location()},
+                              ctx.dh()));
   }
   co_return {};
 }
@@ -770,14 +781,15 @@ public:
     if (args_.protobuf_message.inner == v2_protobuf_message) {
       protocol_ = Protocol::v2;
     }
-    if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
+    if (auto result = co_await resolve_endpoint(ctx, args_, url_, headers_);
         result.is_error()) {
       done_ = true;
       co_return;
     }
     auto config
-      = http::make_http_pool_config(args_.tls, url_, args_.url.source, ctx.dh(),
-                                    get_timeout(), ctx.actor_system().config());
+      = http::make_http_pool_config(args_.tls, url_, args_.url.get_location(),
+                                    ctx.dh(), get_timeout(),
+                                    ctx.actor_system().config());
     if (config.is_success()) {
       config->connection_timeout = get_connection_timeout();
       config->max_retry_count = get_max_retry_count();
@@ -1316,7 +1328,7 @@ public:
     d.named_optional("family", &ToPrometheusArgs::family, "string");
     d.named_optional("start_timestamp", &ToPrometheusArgs::start_timestamp,
                      "time");
-    auto headers = d.named("headers", &ToPrometheusArgs::headers, "record");
+    d.named("headers", &ToPrometheusArgs::headers, "record");
     auto tls_validator = tls_options{
       {.is_server = false}}.add_to_describer(d, &ToPrometheusArgs::tls);
     auto timeout = d.named("timeout", &ToPrometheusArgs::timeout);
@@ -1389,29 +1401,6 @@ public:
         diagnostic::error("`max_uncompressed_bytes` must be positive")
           .primary(value->source)
           .emit(ctx);
-      }
-      if (auto value = ctx.get(headers)) {
-        auto const* rec = try_as<record>(&value->inner);
-        if (not rec) {
-          diagnostic::error("`headers` must be a record")
-            .primary(value->source)
-            .emit(ctx);
-        } else {
-          for (auto const& [name, header_value] : *rec) {
-            if (is_reserved_header(name)) {
-              diagnostic::error("reserved remote-write header `{}`", name)
-                .primary(value->source)
-                .note("this header is set by `to_prometheus`")
-                .emit(ctx);
-            }
-            if (not is<std::string>(header_value)
-                and not is<secret>(header_value)) {
-              diagnostic::error("header values must be `string` or `secret`")
-                .primary(value->source)
-                .emit(ctx);
-            }
-          }
-        }
       }
       return {};
     });

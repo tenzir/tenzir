@@ -34,12 +34,15 @@ auto const_eval_series(const ast::expression& expr, base_ctx ctx)
   -> failure_or<series>;
 
 /// Constant evaluates an expression, even if it is non-deterministic.
+///
+/// Uses the Nova evaluator. Unresolved secrets, which Nova cannot represent,
+/// are built symbolically.
 auto const_eval(const ast::expression& expr, base_ctx ctx)
   -> failure_or<located<data>>;
 
 /// Tries to evaluate a determistic expression to a constant value. Emits
 /// diagnostics only if the evaluation succeeded.
-auto try_const_eval(const ast::expression& expr, session ctx)
+auto try_const_eval(const ast::expression& expr, base_ctx ctx)
   -> Option<located<data>>;
 
 auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,

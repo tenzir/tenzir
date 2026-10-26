@@ -14,8 +14,6 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/location.hpp>
-#include <tenzir/secret.hpp>
-#include <tenzir/secret_resolution.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/error.hpp>
