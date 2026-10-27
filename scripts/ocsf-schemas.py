@@ -57,10 +57,12 @@ BASIC_TYPES = {
 # process.parent_process.parent_process.
 RECURSIVE_FIELDS: dict[str, dict[str, str]] = {
     # entity name -> (field name -> recursive target entity)
+    "finding_info": {"related_events": "related_event"},
     "ldap_person": {"manager": "user"},
     "process": {"parent_process": "process"},
     "network_proxy": {"proxy_endpoint": "network_proxy"},
     "analytic": {"related_analytics": "analytic"},
+    "related_event": {"finding_info": "finding_info"},
     "user": {"ldap_person": "ldap_person"},
 }
 MODERN_ATTRIBUTE_FIXUPS: dict[tuple[str, str], dict[str, str]] = {
