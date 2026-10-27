@@ -964,15 +964,6 @@ type _ocsf.v1_0_0.object.product = record{
 
 // The Related Event object describes an event related to a finding or detection
 // as identified by the security product.
-type _ocsf.v1_0_0.object.related_event_nonrecursive = record{
-  product_uid: string #optional,
-  type: string #optional,
-  type_uid: int64 #recommended,
-  uid: string #required,
-}
-
-// The Related Event object describes an event related to a finding or detection
-// as identified by the security product.
 type _ocsf.v1_0_0.object.related_event = record{
   product_uid: string #optional,
   type: string #optional,

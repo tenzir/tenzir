@@ -1,0 +1,17 @@
+from {
+  class_uid: 2004,
+  metadata: {version: "1.10.0-dev"},
+  finding_info: {
+    uid: "outer",
+    related_events: [
+      {
+        uid: "inner",
+        finding_info: {
+          uid: "inner",
+          title: "Related finding",
+        },
+      },
+    ],
+  },
+}
+ocsf_cast

@@ -50,19 +50,31 @@ BASIC_TYPES = {
     "timestamp_t": "time #epochtime",
 }
 
+
+class RecursiveField(typing.NamedTuple):
+    target: str
+    from_version: str
+
+
 # The schema defines some recursive types which cannot be represented
 # faithfully. We generate nonrecursive type variants (with suffix
 # "_nonrecursive") that omit these fields, allowing one level of recursion.
 # For example, process.parent_process.pid works, but not
 # process.parent_process.parent_process.
-RECURSIVE_FIELDS: dict[str, dict[str, str]] = {
+# The related_event variant instead retains finding_info and redirects it to
+# finding_info_nonrecursive, whose related_events field is omitted.
+RECURSIVE_FIELDS: dict[str, dict[str, str | RecursiveField]] = {
     # entity name -> (field name -> recursive target entity)
-    "finding_info": {"related_events": "related_event"},
+    "finding_info": {
+        "related_events": RecursiveField("related_event", from_version="1.10.0-dev"),
+    },
     "ldap_person": {"manager": "user"},
     "process": {"parent_process": "process"},
     "network_proxy": {"proxy_endpoint": "network_proxy"},
     "analytic": {"related_analytics": "analytic"},
-    "related_event": {"finding_info": "finding_info"},
+    "related_event": {
+        "finding_info": RecursiveField("finding_info", from_version="1.10.0-dev"),
+    },
     "user": {"ldap_person": "ldap_person"},
 }
 MODERN_ATTRIBUTE_FIXUPS: dict[tuple[str, str], dict[str, str]] = {
@@ -214,6 +226,21 @@ def mangle_version(version: str) -> str:
     return re.sub("[^0-9a-zA-Z_]", "", version)
 
 
+def recursive_fields_for(schema: Schema, entity_name: str) -> dict[str, str]:
+    def version_key(version: str):
+        release, _, suffix = version.partition("-")
+        return tuple(int(part) for part in release.split(".")), not suffix, suffix
+
+    result = {}
+    for field, target in RECURSIVE_FIELDS.get(entity_name, {}).items():
+        if isinstance(target, RecursiveField):
+            if version_key(schema["version"]) < version_key(target.from_version):
+                continue
+            target = target.target
+        result[field] = target
+    return result
+
+
 def class_prefix(schema: Schema) -> str:
     return OCSF_PREFIX + "." + mangle_version(schema["version"])
 
@@ -281,7 +308,7 @@ def _emit_entity(
     prefix = object_prefix(schema) if objects else class_prefix(schema)
     types = schema["types"]
     full_name = f"{prefix}.{entity_name}{type_suffix}"
-    recursive_fields = RECURSIVE_FIELDS.get(entity_name, {})
+    recursive_fields = recursive_fields_for(schema, entity_name)
     skip_fields = set(skip_fields)
 
     writer.begin(f"type {full_name} = record{{")
@@ -368,7 +395,10 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             # Not needed because this is special-case to print JSON.
             continue
 
-        recursive_fields = RECURSIVE_FIELDS.get(entity_name, {})
+        recursive_fields = recursive_fields_for(schema, entity_name)
+        # Preserve the first nested finding by truncating finding_info only
+        # inside related_event_nonrecursive, leaving related_event unchanged.
+        truncate_in_variant = entity_name == "related_event"
 
         # Emit nonrecursive variant first if this entity has recursive fields
         if recursive_fields:
@@ -384,8 +414,8 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                 entity_name,
                 objects,
                 type_suffix="_nonrecursive",
-                skip_fields=recursive_fields.keys(),
-                resolve_recursive_fields=False,
+                skip_fields=() if truncate_in_variant else recursive_fields.keys(),
+                resolve_recursive_fields=truncate_in_variant,
             )
 
         # Emit main type
@@ -402,7 +432,7 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             objects,
             type_suffix="",
             skip_fields=[],
-            resolve_recursive_fields=True,
+            resolve_recursive_fields=not truncate_in_variant,
         )
 
 
