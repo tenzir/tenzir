@@ -1,0 +1,3 @@
+from {time: 2026-01-01T00:00:02Z,
+  dst_endpoint: {ip: null, port: null}, raw_data: "null children"}
+to_iceberg "appendns.full_schema", catalog=env("ICEBERG_REST_URI"), mode="append"

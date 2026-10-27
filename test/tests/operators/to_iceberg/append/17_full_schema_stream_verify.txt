@@ -1,0 +1,88 @@
+{
+  rows: 1,
+  columns: [
+    [
+      "time",
+      "class_uid",
+      "src_endpoint",
+      "dst_endpoint",
+      "device",
+      "raw_data",
+    ],
+  ],
+  first: 2026-01-01T00:00:00Z,
+  class_uids: [
+    4001,
+  ],
+  src_nulls: 0,
+  dst_nulls: 0,
+  device_nulls: 0,
+  dst_ip_nulls: 0,
+  dst_ports: [
+    80,
+  ],
+}
+{
+  rows: 1,
+  columns: [
+    [
+      "time",
+      "class_uid",
+      "src_endpoint",
+      "dst_endpoint",
+      "device",
+      "raw_data",
+    ],
+  ],
+  first: 2026-01-01T00:00:01Z,
+  class_uids: [],
+  src_nulls: 1,
+  dst_nulls: 1,
+  device_nulls: 1,
+  dst_ip_nulls: 1,
+  dst_ports: [],
+}
+{
+  rows: 1,
+  columns: [
+    [
+      "time",
+      "class_uid",
+      "src_endpoint",
+      "dst_endpoint",
+      "device",
+      "raw_data",
+    ],
+  ],
+  first: 2026-01-01T00:00:02Z,
+  class_uids: [],
+  src_nulls: 1,
+  dst_nulls: 0,
+  device_nulls: 1,
+  dst_ip_nulls: 1,
+  dst_ports: [],
+}
+{
+  rows: 129,
+  columns: [
+    [
+      "time",
+      "class_uid",
+      "src_endpoint",
+      "dst_endpoint",
+      "device",
+      "raw_data",
+    ],
+  ],
+  first: 2026-01-01T00:01:00Z,
+  class_uids: [
+    4003,
+  ],
+  src_nulls: 129,
+  dst_nulls: 128,
+  device_nulls: 129,
+  dst_ip_nulls: 128,
+  dst_ports: [
+    53,
+  ],
+}

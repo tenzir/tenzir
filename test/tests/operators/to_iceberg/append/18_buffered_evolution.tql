@@ -1,0 +1,7 @@
+// Additions must retain the earlier buffered batches, including nested values.
+from {id: 1, src: {ip: "192.0.2.1"}},
+  {id: 2, src: {ip: "192.0.2.2", port: 443}},
+  {id: 3, actor: {name: "alice"}}
+batch 1
+to_iceberg "appendns.buffered_evolution", catalog=env("ICEBERG_REST_URI"),
+  max_size=536870912, timeout=1h

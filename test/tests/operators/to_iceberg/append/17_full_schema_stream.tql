@@ -1,0 +1,14 @@
+// The first batch opens a streaming writer below the flushed-byte limit.
+// The last row populates previously null columns and must share that file.
+from {time: 2026-01-01T00:01:00Z,
+  raw_data: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+repeat 129
+enumerate seq
+if seq == 128 {
+  class_uid = 4003
+  dst_endpoint = {ip: "192.0.2.3", port: 53}
+}
+drop seq
+batch 128
+to_iceberg "appendns.full_schema", catalog=env("ICEBERG_REST_URI"),
+  mode="append", max_size=4096, timeout=1h

@@ -1,0 +1,11 @@
+// Cover missing structs, null children, and the streaming append together.
+// One summary per physical file checks schema completeness and file count.
+from_file f"{env("ICEBERG_WAREHOUSE_DIR")}/appendns/full_schema/data/**/*.parquet" {
+  read_parquet
+  summarize rows=count(), columns=distinct(this.keys()), first=min(time),
+    class_uids=distinct(class_uid), src_nulls=sum((src_endpoint == null).int()),
+    dst_nulls=sum((dst_endpoint == null).int()), device_nulls=sum((device == null).int()),
+    dst_ip_nulls=sum((dst_endpoint.ip? == null).int()),
+    dst_ports=distinct(dst_endpoint.port?)
+}
+sort first

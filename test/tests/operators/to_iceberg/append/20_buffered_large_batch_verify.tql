@@ -1,0 +1,6 @@
+from_file f"{env("ICEBERG_WAREHOUSE_DIR")}/appendns/buffered_large_batch/data/**/*.parquet" {
+  read_parquet
+  summarize rows=count(), columns=distinct(this.keys()),
+    id_nulls=sum((id == null).int()), added_nulls=sum((added == null).int()),
+    ids=distinct(id), additions=distinct(added)
+}

@@ -1,7 +1,4 @@
-// A batch with values in a previously omitted column must not stream into
-// the open pruned file: the tiny `max_size` graduates the first 128-row
-// batch to a streaming writer whose file omits `payload_b`, and the final
-// event then forces a rotation into a file that carries the column.
+// A value in a previously null column can use the existing file writer.
 from {
   kind: "a",
   payload_a: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

@@ -4,6 +4,7 @@
 // later arrive as null or empty while staying present in the input.
 // Every shape keeps its row: null-typed columns null-fill, empty lists
 // stay empty lists, and struct fields that are all null land as nulls.
+// The following TQL test reads physical Parquet rows without Iceberg projection.
 from {k: 1, msg: "base"},
      {k: 2, msg: "labels add", labels: ["a", "b"]},
      {k: 3, msg: "labels null", labels: null},
