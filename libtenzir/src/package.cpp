@@ -2031,9 +2031,8 @@ auto add_packages(registry& reg, std::span<package const> packages,
   auto modules = std::vector<std::unique_ptr<module_def>>(packages.size());
   for (auto i = size_t{0}; i < packages.size(); ++i) {
     auto const& pkg = packages[i];
-    if (pkg.operators.empty() and pkg.lets.empty()) {
-      continue;
-    }
+    // Also for a package without operators or bindings: whoever names it
+    // would get the module of the other one.
     auto normalized = package_module_name(pkg.id);
     auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
     if (not inserted and norm_it->second != pkg.id) {
@@ -2043,6 +2042,9 @@ auto add_packages(registry& reg, std::span<package const> packages,
                         pkg.id, norm_it->second, normalized)
         .emit(dh);
       had_errors = true;
+      continue;
+    }
+    if (pkg.operators.empty() and pkg.lets.empty()) {
       continue;
     }
     auto module = build_package_module(pkg, dh, reg, source_map);
