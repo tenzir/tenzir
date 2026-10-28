@@ -1901,6 +1901,15 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
     co_return HttpResponse{
       405, R"({"error":"method not allowed","allow":["POST","GET"]})"};
   }
+  if (api::match_path("/pipelines/inventory/live", request.path, parameters)) {
+    if (request.method == "GET") {
+      auto decoded = StreamPipelines{};
+      co_return api::encode_stream<200>(
+        "text/event-stream", co_await handler.handle(std::move(decoded)));
+    }
+    co_return HttpResponse{405,
+                           R"({"error":"method not allowed","allow":["GET"]})"};
+  }
   if (api::match_path("/pipelines/:pipelineId/start", request.path,
                       parameters)) {
     if (request.method == "POST") {

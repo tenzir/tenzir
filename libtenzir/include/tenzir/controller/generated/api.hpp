@@ -1489,6 +1489,15 @@ public:
   ListPipelines() = default;
 };
 
+/// `GET /pipelines/inventory/live`
+/// Streams the complete pipeline inventory immediately and after each durable
+/// change. Each snapshot replaces the previous inventory. Reconnect to receive
+/// the current inventory.
+class StreamPipelines {
+public:
+  StreamPipelines() = default;
+};
+
 /// `POST /pipelines/:pipelineId/start`
 /// Starts another run of a persisted pipeline. Starting a pipeline that is
 /// already running is a no-op, so a retry is safe. The deployment compiles the
@@ -1567,6 +1576,8 @@ public:
     = 0;
 
   virtual auto handle(ListPipelines) -> Task<std::vector<PipelineStatus>> = 0;
+
+  virtual auto handle(StreamPipelines) -> Task<HttpBodyStream> = 0;
 
   virtual auto handle(StartPipeline request)
     -> Task<Result<void, StartPipelineFailure>>
