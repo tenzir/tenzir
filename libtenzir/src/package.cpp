@@ -20,6 +20,7 @@
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/tql2/tokens.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -44,7 +45,15 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
   constexpr auto package_identifier_head = parsers::alpha | '_';
   constexpr auto package_identifier
     = package_identifier_head >> *package_identifier_tail;
-  return package_identifier(value);
+  if (not package_identifier(value)) {
+    return false;
+  }
+  // Code calls a package by its module name, so the tokenizer has to read
+  // that as one identifier, rather than as a keyword such as `if` or `_`.
+  auto module = package_module_name(value);
+  auto tokens = tokenize_permissive(module);
+  return tokens.size() == 1 and tokens.front().kind == token_kind::identifier
+         and tokens.front().end == module.size();
 }
 
 auto should_ignore_package_key(std::string_view section, std::string_view key)
@@ -899,7 +908,8 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   REQUIRED_FIELD(name)
   if (not is_valid_package_identifier(result.id)) {
     return diagnostic::error("invalid package id `{}` (must match "
-                             "[A-Za-z_][A-Za-z0-9_-]*)",
+                             "[A-Za-z_][A-Za-z0-9_-]* and not be a TQL "
+                             "keyword)",
                              result.id)
       .to_error();
   }
@@ -1117,7 +1127,8 @@ auto package::load(package_files const& files, std::string_view origin,
       diagnostic::error("invalid package id `{}` derived from directory name",
                         default_id)
         .note("directory {}", origin)
-        .note("package ids must match [A-Za-z_][A-Za-z0-9_-]*")
+        .note("package ids must match [A-Za-z_][A-Za-z0-9_-]* and not be a "
+              "TQL keyword")
         .emit(dh);
       return failure::promise();
     }
