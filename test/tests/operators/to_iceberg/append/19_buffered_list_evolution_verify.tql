@@ -1,0 +1,6 @@
+// One summary per file checks both coalescing and physical null-filled rows.
+from_file f"{env("ICEBERG_WAREHOUSE_DIR")}/appendns/buffered_list_evolution/data/**/*.parquet" {
+  read_parquet
+  sort id
+  summarize rows=count(), events=collect(this)
+}

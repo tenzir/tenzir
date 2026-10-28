@@ -1,0 +1,17 @@
+{
+  rows: 8194,
+  columns: [
+    [
+      "id",
+      "added",
+    ],
+  ],
+  id_nulls: 0,
+  added_nulls: 8193,
+  ids: [
+    1,
+  ],
+  additions: [
+    42,
+  ],
+}

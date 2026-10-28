@@ -42,6 +42,8 @@
 #include <arrow/util/byte_size.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <iceberg/data/data_writer.h>
+#include <iceberg/partition_spec.h>
+#include <iceberg/schema.h>
 #include <iceberg/table.h>
 
 #include <algorithm>
@@ -417,10 +419,6 @@ public:
     int64_t buffered_bytes = 0;
     /// The streaming writer, once the partition graduates.
     std::shared_ptr<ice::DataWriter> writer;
-    /// Top-level columns the open data file omits because every row seen
-    /// at graduation held null; empty while buffering or when the file
-    /// carries the full table schema.
-    std::vector<bool> omitted;
     /// The partition tuple, for opening the data file at graduation or
     /// close.
     ice::PartitionValues partition;
@@ -805,15 +803,32 @@ public:
     if (not batch) {
       co_return;
     }
-    auto groups = co_await spawn_blocking(
-      [table = table_, partitioning = partitioning_, batch = *batch]() mutable {
-        return split_by_partition(*table, *partitioning, std::move(batch));
-      });
+    auto const batch_schema = target_iceberg_schema_;
+    auto const batch_spec = target_spec_;
+    auto groups = co_await spawn_blocking([spec = target_spec_,
+                                           partitioning = partitioning_,
+                                           batch = *batch]() mutable {
+      return split_by_partition(*spec, *partitioning, std::move(batch));
+    });
     if (not groups) {
       fail(groups.error(), "failed to compute partition values", ctx);
       co_return;
     }
     for (auto const& group : *groups) {
+      // A preceding group's commit can refresh the target. Keep field IDs
+      // and partition tuples meaningful for groups projected before it.
+      if (batch_spec->spec_id() != target_spec_->spec_id()
+          or (batch_schema->schema_id() != target_iceberg_schema_->schema_id()
+              and not can_extend_buffered_schema(*batch_schema,
+                                                 *target_iceberg_schema_))) {
+        diagnostic::error("Iceberg table layout changed incompatibly while "
+                          "writing an input batch")
+          .primary(args_.operator_location)
+          .hint("restart the pipeline against the updated table layout")
+          .emit(ctx.dh());
+        done_ = true;
+        co_return;
+      }
       co_await write_partition(group, *batch, ctx);
       if (done_) {
         co_return;
@@ -966,6 +981,18 @@ private:
     if (target_schema_ and not schema->Equals(*target_schema_)) {
       evolved_schemas_.clear();
     }
+    auto iceberg_schema = translate(table->schema());
+    if (not iceberg_schema) {
+      fail(iceberg_schema.error(), "failed to read table schema", ctx);
+      return;
+    }
+    auto spec = translate(table->spec());
+    if (not spec) {
+      fail(spec.error(), "failed to read table partition spec", ctx);
+      return;
+    }
+    target_iceberg_schema_ = std::move(*iceberg_schema);
+    target_spec_ = std::move(*spec);
     table_ = std::move(table);
     partitioning_ = std::make_shared<std::vector<BoundPartitionField> const>(
       std::move(*partitioning));
@@ -999,15 +1026,51 @@ private:
     }
   }
 
-  /// Makes `table` the write target mid-run. When its write layout differs
-  /// from the current one, a supplied `partition_by` is re-checked against
-  /// the adopted spec: a concurrent change of the table's default spec must
-  /// not silently override the user's requested partitioning when the same
-  /// divergence at startup is a hard error.
+  /// Adopts refreshed metadata. Buffered batches can survive nullable
+  /// additions under the same partition spec; align them once when writing.
+  /// Streaming files already have a fixed schema and must close first.
   auto adopt_table(std::shared_ptr<ice::Table> table, OpCtx& ctx)
     -> Task<void> {
+    auto next = translate(table->schema());
+    if (not next) {
+      fail(next.error(), "failed to read table schema", ctx);
+      co_return;
+    }
     auto const layout_changed
-      = not table_ or not same_write_layout(*table_, *table);
+      = not target_iceberg_schema_
+        or target_iceberg_schema_->schema_id() != (*next)->schema_id()
+        or target_spec_->spec_id() != table->metadata()->default_spec_id;
+    if (layout_changed and target_iceberg_schema_) {
+      auto const keep_buffered
+        = target_spec_->spec_id() == table->metadata()->default_spec_id
+          and can_extend_buffered_schema(*target_iceberg_schema_, **next);
+      auto next_type = std::shared_ptr<arrow::DataType>{};
+      if (keep_buffered) {
+        auto schema = import_table_schema(*table, ctx);
+        if (not schema) {
+          co_return;
+        }
+        next_type = arrow::struct_(schema->fields());
+      }
+      auto close = std::vector<std::string>{};
+      for (auto const& [key, partition] : partitions_) {
+        auto const fits
+          = keep_buffered
+            and std::ranges::all_of(partition.buffered, [&](auto const& piece) {
+                  return projection::fits_alignment_budget(*piece, *next_type,
+                                                           stream_threshold);
+                });
+        if (partition.writer or not fits) {
+          close.push_back(key);
+        }
+      }
+      for (auto const& key : close) {
+        co_await close_partition(key, ctx);
+        if (done_) {
+          co_return;
+        }
+      }
+    }
     set_table(std::move(table), ctx);
     if (done_ or not layout_changed) {
       co_return;
@@ -1112,13 +1175,6 @@ private:
           TENZIR_DEBUG("to_iceberg: evolved schema of table `{}` for input "
                        "schema `{}` (attempt {})",
                        args_.table_id.inner, fingerprint, attempt);
-          // The projection target changes: open data files stay valid under
-          // the old schema, but must not receive new-schema batches. Close
-          // them, then adopt the evolved schema from the update response.
-          co_await close_all(ctx);
-          if (done_) {
-            co_return;
-          }
           co_await adopt_table(std::move(**evolved), ctx);
           if (done_) {
             co_return;
@@ -1137,18 +1193,12 @@ private:
           // the table handle refreshing its metadata. Adopt the table's
           // current schema when it differs, or projection would silently
           // drop those fields from this writer's rows.
-          auto schema = import_table_schema(*current, ctx);
-          if (done_) {
-            co_return;
-          }
-          if (not schema->Equals(*target_schema_)) {
+          auto const& metadata = current->metadata();
+          if (metadata->current_schema_id != target_iceberg_schema_->schema_id()
+              or metadata->default_spec_id != target_spec_->spec_id()) {
             TENZIR_DEBUG("to_iceberg: adopting concurrently evolved schema "
                          "of table `{}` for input schema `{}` (attempt {})",
                          args_.table_id.inner, fingerprint, attempt);
-            co_await close_all(ctx);
-            if (done_) {
-              co_return;
-            }
             co_await adopt_table(std::move(current), ctx);
             if (done_) {
               co_return;
@@ -1548,61 +1598,32 @@ private:
     return check(arrow::StructArray::Make(arrays, target_schema_->fields()));
   }
 
-  /// Flags the top-level columns that hold only nulls in every given
-  /// batch. Wide tables make this worthwhile: Parquet encodes
-  /// definition levels for every column of every row group, so a table
-  /// column the input never uses still costs per-row work — omitting it
-  /// from the data file removes that cost, and readers restore it as
-  /// nulls through the same field-id projection that serves files written
-  /// before a schema evolution.
-  static auto
-  all_null_columns(std::span<std::shared_ptr<arrow::Array> const> pieces)
-    -> std::vector<bool> {
-    auto mask = std::vector<bool>{};
-    for (auto const& piece : pieces) {
-      auto const& array = as<arrow::StructArray>(*piece);
-      mask.resize(detail::narrow_cast<size_t>(array.num_fields()), true);
-      for (auto&& [flag, child] : std::views::zip(mask, array.fields())) {
-        if (flag) {
-          flag = child->null_count() == child->length();
-        }
-      }
-    }
-    return mask;
-  }
-
-  /// Whether a projected batch holds only nulls in every column the open
-  /// data file omits.
-  static auto
-  covered(std::vector<bool> const& omitted, arrow::Array const& batch) -> bool {
-    auto const& array = as<arrow::StructArray>(batch);
-    for (auto const& [omit, child] : std::views::zip(omitted, array.fields())) {
-      if (omit and child->null_count() != child->length()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /// Drops the omitted columns from a projected batch, matching it to the
-  /// data file's pruned schema.
-  static auto drop_omitted(std::shared_ptr<arrow::Array> const& piece,
-                           std::vector<bool> const& omitted)
+  /// Aligns one buffered batch after compatible catalog additions. Field
+  /// identity was checked at adoption; the arrays retain their original
+  /// shape until a file actually needs them.
+  auto align_buffered(std::shared_ptr<arrow::Array> piece, OpCtx& ctx)
     -> std::shared_ptr<arrow::Array> {
-    if (not std::ranges::contains(omitted, true)) {
+    auto const target = arrow::struct_(target_schema_->fields());
+    if (piece->type()->Equals(*target)) {
       return piece;
     }
-    auto const& array = as<arrow::StructArray>(*piece);
-    auto children = arrow::ArrayVector{};
-    auto fields = arrow::FieldVector{};
-    for (auto const& [omit, child, field] : std::views::zip(
-           omitted, array.fields(), array.struct_type()->fields())) {
-      if (not omit) {
-        children.push_back(child);
-        fields.push_back(field);
-      }
+    // A commit can adopt newer metadata between partition groups of one
+    // input batch. Such a group was not buffered during the adoption check.
+    if (not projection::fits_alignment_budget(*piece, *target,
+                                              stream_threshold)) {
+      diagnostic::error("cannot safely align buffered Iceberg data within "
+                        "the {}-byte allocation budget",
+                        stream_threshold)
+        .primary(args_.operator_location)
+        .hint("restart the pipeline against the updated table schema")
+        .emit(ctx.dh());
+      done_ = true;
+      return nullptr;
     }
-    return check(arrow::StructArray::Make(children, fields));
+    auto batch = check(arrow::RecordBatch::FromStructArray(
+      std::static_pointer_cast<arrow::StructArray>(piece)));
+    auto projected = project(*batch, ctx);
+    return projected ? std::move(*projected) : nullptr;
   }
 
   /// Buffers one partition group of a projected batch, graduating the
@@ -1620,22 +1641,6 @@ private:
       sub = check(arrow::compute::Take(sub, indices)).make_array();
     }
     auto it = partitions_.find(group.key);
-    if (it != partitions_.end() and it->second.writer
-        and not covered(it->second.omitted, *sub)) {
-      // The open data file omits columns this batch has values for; close
-      // it so that the next file's schema covers them again.
-      co_await close_partition(group.key, ctx);
-      if (done_) {
-        co_return;
-      }
-      if (not checkpointing_) {
-        co_await commit_staged(pending_files_, ctx);
-        if (done_) {
-          co_return;
-        }
-      }
-      it = partitions_.find(group.key);
-    }
     if (it == partitions_.end()) {
       it = partitions_
              .try_emplace(group.key,
@@ -1643,7 +1648,6 @@ private:
                             .buffered = {},
                             .buffered_bytes = 0,
                             .writer = {},
-                            .omitted = {},
                             .partition = group.partition,
                             .path = group.path,
                             .bytes = 0,
@@ -1700,36 +1704,55 @@ private:
   auto stream_into(OpenPartition& partition,
                    std::vector<std::shared_ptr<arrow::Array>> pieces,
                    OpCtx& ctx) -> Task<void> {
-    auto written = co_await spawn_blocking(
-      [writer = partition.writer, omitted = partition.omitted,
-       pieces = std::move(pieces)]() mutable -> Result<int64_t> {
-        for (auto const& piece : pieces) {
-          auto c_array = ArrowArray{};
-          if (auto status
-              = arrow::ExportArray(*drop_omitted(piece, omitted), &c_array);
-              not status.ok()) {
-            return std::unexpected{Error{
-              Error::Kind::permanent,
-              fmt::format("failed to export batch: {}", status.ToString()),
-            }};
-          }
-          TRY(translate(writer->Write(&c_array)));
+    auto const target = arrow::struct_(target_schema_->fields());
+    for (auto& piece : pieces) {
+      // Never retain the expanded form of all old batches: adding many
+      // columns can multiply their size. Also split large old batches so
+      // projection scratch does not grow with all of their rows at once.
+      // Diagnostics stay on the operator coroutine.
+      auto const realign = not piece->type()->Equals(*target);
+      auto const rows = piece->length();
+      auto const chunk_rows = realign ? projection::alignment_batch_rows : rows;
+      for (auto offset = int64_t{0}; offset < rows;
+           offset += std::min(chunk_rows, rows - offset)) {
+        auto chunk
+          = realign ? piece->Slice(offset, std::min(chunk_rows, rows - offset))
+                    : std::move(piece);
+        auto aligned
+          = realign ? align_buffered(std::move(chunk), ctx) : std::move(chunk);
+        if (not aligned) {
+          co_return;
         }
-        return translate(writer->Length());
-      });
-    if (not written) {
-      fail(written.error(), "failed to write data file", ctx);
-      co_return;
+        auto written = co_await spawn_blocking(
+          [writer = partition.writer,
+           piece = std::move(aligned)]() mutable -> Result<int64_t> {
+            auto c_array = ArrowArray{};
+            if (auto status = arrow::ExportArray(*piece, &c_array);
+                not status.ok()) {
+              return std::unexpected{Error{
+                Error::Kind::permanent,
+                fmt::format("failed to export batch: {}", status.ToString()),
+              }};
+            }
+            TRY(translate(writer->Write(&c_array)));
+            return translate(writer->Length());
+          });
+        if (not written) {
+          fail(written.error(), "failed to write data file", ctx);
+          co_return;
+        }
+        // `Length()` reports the flushed stream position only; bytes buffered
+        // in the writer's open row group surface here after the next flush, and
+        // the remainder lands via the closed file's actual size in
+        // `close_partition`. Rotation on `max_size` therefore triggers on
+        // flushed bytes, and files can overshoot by up to one row group.
+        if (*written > partition.bytes) {
+          bytes_counter_.add(*written - partition.bytes);
+        }
+        partition.bytes = *written;
+      }
+      piece.reset();
     }
-    // `Length()` reports the flushed stream position only; bytes buffered
-    // in the writer's open row group surface here after the next flush, and
-    // the remainder lands via the closed file's actual size in
-    // `close_partition`. Rotation on `max_size` therefore triggers on
-    // flushed bytes, and files can overshoot by up to one row group.
-    if (*written > partition.bytes) {
-      bytes_counter_.add(*written - partition.bytes);
-    }
-    partition.bytes = *written;
   }
 
   /// Opens the partition's data file and streams the buffered batches into
@@ -1760,12 +1783,10 @@ private:
       }
     }
     auto opened = co_await spawn_blocking(
-      [table = table_, partition = partition.partition,
-       omitted = all_null_columns(partition.buffered)]() mutable
-        -> Result<
-          std::pair<std::shared_ptr<ice::DataWriter>, std::vector<bool>>> {
-        TRY(auto writer, new_file_writer(*table, partition, omitted));
-        return std::pair{std::move(writer), std::move(omitted)};
+      [table = table_, schema = target_iceberg_schema_, spec = target_spec_,
+       partition = partition.partition]() mutable {
+        return new_file_writer(*table, std::move(schema), std::move(spec),
+                               partition);
       });
     if (not opened) {
       fail(opened.error(), "failed to open data file writer", ctx);
@@ -1774,8 +1795,7 @@ private:
     TENZIR_DEBUG("to_iceberg: partition graduates to a streaming writer at {} "
                  "buffered bytes",
                  partition.buffered_bytes);
-    partition.writer = std::move(opened->first);
-    partition.omitted = std::move(opened->second);
+    partition.writer = std::move(*opened);
     streaming_count_ += 1;
     total_buffered_ -= partition.buffered_bytes;
     partition.buffered_bytes = 0;
@@ -1859,26 +1879,24 @@ private:
       // The one-shot writer never outlives this call, so it does not count
       // against the streaming cap.
       total_buffered_ -= partition.buffered_bytes;
-      closed = co_await spawn_blocking(
-        [table = table_, tuple = partition.partition,
-         pieces = std::move(partition.buffered)]() mutable
-          -> Result<std::shared_ptr<ice::DataFile>> {
-          auto omitted = all_null_columns(pieces);
-          TRY(auto writer, new_file_writer(*table, tuple, omitted));
-          for (auto const& piece : pieces) {
-            auto c_array = ArrowArray{};
-            if (auto status
-                = arrow::ExportArray(*drop_omitted(piece, omitted), &c_array);
-                not status.ok()) {
-              return std::unexpected{Error{
-                Error::Kind::permanent,
-                fmt::format("failed to export batch: {}", status.ToString()),
-              }};
-            }
-            TRY(translate(writer->Write(&c_array)));
-          }
-          return finish_data_file(*writer);
+      auto opened = co_await spawn_blocking(
+        [table = table_, schema = target_iceberg_schema_, spec = target_spec_,
+         tuple = partition.partition]() mutable {
+          return new_file_writer(*table, std::move(schema), std::move(spec),
+                                 tuple);
         });
+      if (not opened) {
+        fail(opened.error(), "failed to open data file writer", ctx);
+        co_return;
+      }
+      partition.writer = std::move(*opened);
+      co_await stream_into(partition, std::move(partition.buffered), ctx);
+      if (done_) {
+        co_return;
+      }
+      closed = co_await spawn_blocking([writer = partition.writer]() mutable {
+        return finish_data_file(*writer);
+      });
     }
     auto& file = *closed;
     if (not file) {
@@ -1890,9 +1908,8 @@ private:
       fail(serialized.error(), "failed to persist data file handle", ctx);
       co_return;
     }
-    // For streaming writers this adds the delta that `Length()` had not
-    // flushed yet (final row group and footer); for one-shot writers
-    // `partition.bytes` is zero and this adds the whole file.
+    // Add the delta that `Length()` had not flushed yet (final row group
+    // and footer).
     if (serialized->file_size > partition.bytes) {
       bytes_counter_.add(serialized->file_size - partition.bytes);
     }
@@ -2077,16 +2094,6 @@ private:
         TENZIR_DEBUG("to_iceberg: committed {} data files ({} bytes) as seq "
                      "{} of writer `{}` on attempt {}",
                      staged_count, bytes, tag.sequence, tag.writer_id, attempt);
-        auto const layout_changed = not same_write_layout(*table_, **result);
-        if (layout_changed) {
-          TENZIR_DEBUG("to_iceberg: table write layout changed after commit; "
-                       "closing {} open partitions",
-                       partitions_.size());
-          co_await close_all(ctx);
-          if (done_) {
-            co_return;
-          }
-        }
         staged.erase(staged.begin(), staged.begin() + staged_count);
         commit_seq_ += 1;
         co_await adopt_table(std::move(*result), ctx);
@@ -2177,16 +2184,6 @@ private:
             co_return;
           }
           landed = *referenced;
-        }
-        auto const layout_changed = not same_write_layout(*table_, **reloaded);
-        if (layout_changed) {
-          TENZIR_DEBUG("to_iceberg: table write layout changed while "
-                       "reloading; closing {} open partitions",
-                       partitions_.size());
-          co_await close_all(ctx);
-          if (done_) {
-            co_return;
-          }
         }
         if (landed) {
           TENZIR_DEBUG("to_iceberg: commit seq {} had already landed; "
@@ -2285,6 +2282,10 @@ private:
   /// view across table adoptions.
   std::shared_ptr<std::vector<BoundPartitionField> const> partitioning_;
   std::shared_ptr<arrow::Schema> target_schema_;
+  /// Immutable identity of the latest adopted layout,
+  /// independent of refreshes inside the catalog's table handle.
+  std::shared_ptr<ice::Schema> target_iceberg_schema_;
+  std::shared_ptr<ice::PartitionSpec> target_spec_;
   /// The parsed `partition_by` argument; empty when not partitioning.
   std::vector<PartitionField> partition_fields_;
   /// Open partitions, keyed by `PartitionGroup::key`.

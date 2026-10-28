@@ -1,0 +1,34 @@
+{
+  rows: 1,
+  elements: 1,
+  item_fields: [
+    129,
+  ],
+  first_ids: [
+    2,
+  ],
+  last_ids: [
+    2,
+  ],
+  first_added: [
+    0,
+  ],
+  last_added: [
+    127,
+  ],
+}
+{
+  rows: 1,
+  elements: 65536,
+  item_fields: [
+    1,
+  ],
+  first_ids: [
+    1,
+  ],
+  last_ids: [
+    1,
+  ],
+  first_added: [],
+  last_added: [],
+}

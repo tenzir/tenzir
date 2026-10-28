@@ -1,0 +1,9 @@
+// Over-budget alignment preserves both files under their respective schemas.
+from_file f"{env("ICEBERG_WAREHOUSE_DIR")}/appendns/buffered_nested_budget/data/**/*.parquet" {
+  read_parquet
+  summarize rows=count(), elements=sum(items.length()),
+    item_fields=distinct(items[0].keys().length()),
+    first_ids=collect(items[0].id), last_ids=collect(items[-1].id),
+    first_added=collect(items[0].f0?), last_added=collect(items[0].f127?)
+}
+sort elements

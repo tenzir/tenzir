@@ -100,10 +100,12 @@ auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
 auto table_arrow_schema(ice::Table const& table)
   -> Result<std::shared_ptr<arrow::Schema>>;
 
-/// Whether both tables use the same current schema and default partition
-/// spec. Open file writers remain valid across metadata refreshes only when
-/// this holds.
-auto same_write_layout(ice::Table const& lhs, ice::Table const& rhs) -> bool;
+/// Whether buffered batches can be aligned by name with `next` without
+/// changing the meaning of their fields. Allows nullable additions and
+/// reordering, preserving existing field IDs, names, types, and nullability.
+/// Added fields with defaults require closing the previous files instead.
+auto can_extend_buffered_schema(ice::Schema const& previous,
+                                ice::Schema const& next) -> bool;
 
 /// Adds columns for fields of `schema` that the table does not have yet,
 /// recursing into nested records and lists of records (a metadata-only
@@ -167,24 +169,21 @@ struct PartitionGroup {
 /// by evaluating the bound partition fields. Returns exactly one group,
 /// covering all rows, for unpartitioned tables. The batch's Arrow type must
 /// be the one `table_arrow_schema` derives for the table schema.
-auto split_by_partition(ice::Table const& table,
+auto split_by_partition(ice::PartitionSpec const& spec,
                         std::span<BoundPartitionField const> bound,
                         std::shared_ptr<arrow::StructArray> batch)
   -> Result<std::vector<PartitionGroup>>;
 
 /// Opens a writer for a new data file of the given partition in the
-/// table's data location. `omit` flags top-level columns (by position in
-/// the table schema) that hold only nulls in every batch the caller will
-/// write; the data file leaves them out entirely, and readers restore
-/// them as nulls through the same field-id projection that serves files
-/// written before a schema evolution. Columns that must stay in the file
-/// (required fields, partition-spec sources) are cleared from `omit`, so
-/// on return it flags exactly the columns the caller must drop from
-/// every batch fed to the writer. An empty `omit` writes the full
-/// schema.
+/// table's data location. Every file carries the full table schema so
+/// heterogeneous batches can share a writer and readers can project nested
+/// fields even when their parent struct is null throughout the file.
+/// The adopted schema and spec are explicit: catalog transactions can refresh
+/// the table handle in place before older buffered rows finish writing.
 auto new_file_writer(ice::Table const& table,
-                     ice::PartitionValues const& partition,
-                     std::vector<bool>& omit)
+                     std::shared_ptr<ice::Schema> schema,
+                     std::shared_ptr<ice::PartitionSpec> spec,
+                     ice::PartitionValues const& partition)
   -> Result<std::shared_ptr<ice::DataWriter>>;
 
 /// Flushes and closes the file, returning the handle to commit.

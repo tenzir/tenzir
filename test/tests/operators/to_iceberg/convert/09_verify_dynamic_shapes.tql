@@ -1,0 +1,6 @@
+// Read physical rows independently of PyIceberg's list-of-struct projection.
+from_file f"{env("ICEBERG_WAREHOUSE_DIR")}/convertns/shapes/data/**/*.parquet" {
+  read_parquet
+  sort k
+  summarize rows=count(), events=collect(this)
+}

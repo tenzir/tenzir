@@ -3,5 +3,3 @@ widened rows: 1
 1128 a aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 rows with null payload_b: 193
 files with columns: ['id', 'kind', 'payload_a', 'payload_b', 'ts']
-files with columns: ['id', 'kind', 'payload_a', 'ts']
-files with columns: ['id', 'kind', 'payload_b', 'ts']

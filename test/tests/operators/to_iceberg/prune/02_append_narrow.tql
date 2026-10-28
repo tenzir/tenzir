@@ -1,5 +1,4 @@
-// Append events that never touch `payload_b`; the data file omits the
-// column instead of encoding 64 nulls.
+// A narrow append keeps the current table schema in its data file.
 from {id: 2, kind: "a", payload_a: "narrow", ts: 2026-01-01T00:00:02Z}
 repeat 64
 enumerate seq

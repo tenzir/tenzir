@@ -1,0 +1,28 @@
+{
+  rows: 3,
+  events: [
+    {
+      id: 1,
+      src: {
+        ip: "192.0.2.1",
+        port: null,
+      },
+      actor: null,
+    },
+    {
+      id: 2,
+      src: {
+        ip: "192.0.2.2",
+        port: 443,
+      },
+      actor: null,
+    },
+    {
+      id: 3,
+      src: null,
+      actor: {
+        name: "alice",
+      },
+    },
+  ],
+}

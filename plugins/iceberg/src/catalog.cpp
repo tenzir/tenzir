@@ -1291,11 +1291,55 @@ auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
                         std::move(sort_order), options.location, properties));
 }
 
-auto same_write_layout(ice::Table const& lhs, ice::Table const& rhs) -> bool {
-  auto const& lhs_metadata = lhs.metadata();
-  auto const& rhs_metadata = rhs.metadata();
-  return lhs_metadata->current_schema_id == rhs_metadata->current_schema_id
-         and lhs_metadata->default_spec_id == rhs_metadata->default_spec_id;
+namespace {
+
+auto can_extend_fields(std::span<ice::SchemaField const> previous,
+                       std::span<ice::SchemaField const> next) -> bool {
+  auto next_by_id = std::unordered_map<int32_t, ice::SchemaField const*>{};
+  next_by_id.reserve(next.size());
+  for (auto const& field : next) {
+    next_by_id.emplace(field.field_id(), &field);
+  }
+  auto previous_ids = std::unordered_set<int32_t>{};
+  previous_ids.reserve(previous.size());
+  for (auto const& field : previous) {
+    previous_ids.insert(field.field_id());
+    auto const found = next_by_id.find(field.field_id());
+    if (found == next_by_id.end()) {
+      return false;
+    }
+    auto const* replacement = found->second;
+    if (replacement->name() != field.name()
+        or replacement->optional() != field.optional()
+        or replacement->type()->type_id() != field.type()->type_id()) {
+      return false;
+    }
+    if (field.type()->is_nested()) {
+      auto const& before = static_cast<ice::NestedType const&>(*field.type());
+      auto const& after
+        = static_cast<ice::NestedType const&>(*replacement->type());
+      if (not can_extend_fields(before.fields(), after.fields())) {
+        return false;
+      }
+    } else if (*field.type() != *replacement->type()) {
+      return false;
+    }
+  }
+  for (auto const& field : next) {
+    if (not previous_ids.contains(field.field_id())
+        and (not field.optional() or field.initial_default()
+             or field.write_default())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+} // namespace
+
+auto can_extend_buffered_schema(ice::Schema const& previous,
+                                ice::Schema const& next) -> bool {
+  return can_extend_fields(previous.fields(), next.fields());
 }
 
 auto table_arrow_schema(ice::Table const& table)
@@ -1442,7 +1486,7 @@ auto append_partition_key(ice::Literal const& literal, std::string& key)
 
 } // namespace
 
-auto split_by_partition(ice::Table const& table,
+auto split_by_partition(ice::PartitionSpec const& spec,
                         std::span<BoundPartitionField const> bound,
                         std::shared_ptr<arrow::StructArray> batch)
   -> Result<std::vector<PartitionGroup>> {
@@ -1457,7 +1501,6 @@ auto split_by_partition(ice::Table const& table,
     });
     return groups;
   }
-  TRY(auto spec, translate(table.spec()));
   auto columns = std::vector<PartitionColumn>{};
   columns.reserve(bound.size());
   for (auto const& field : bound) {
@@ -1491,7 +1534,7 @@ auto split_by_partition(ice::Table const& table,
     auto [it, inserted] = group_by_key.try_emplace(key, groups.size());
     if (inserted) {
       TRY(auto path,
-          translate(spec->PartitionPath(ice::PartitionValues{values})));
+          translate(spec.PartitionPath(ice::PartitionValues{values})));
       groups.push_back(PartitionGroup{
         .key = key,
         .path = std::move(path),
@@ -1510,61 +1553,11 @@ auto split_by_partition(ice::Table const& table,
   return groups;
 }
 
-namespace {
-
-/// Whether the field or any nested descendant carries one of the ids.
-/// Partition-spec sources may sit inside nested structs, so pruning must
-/// keep the whole top-level ancestor of a source column.
-auto subtree_contains(ice::SchemaField const& field,
-                      std::unordered_set<int32_t> const& ids) -> bool {
-  if (ids.contains(field.field_id())) {
-    return true;
-  }
-  if (field.type()->is_nested()) {
-    auto const& nested = static_cast<ice::NestedType const&>(*field.type());
-    for (auto const& child : nested.fields()) {
-      if (subtree_contains(child, ids)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-} // namespace
-
 auto new_file_writer(ice::Table const& table,
-                     ice::PartitionValues const& partition,
-                     std::vector<bool>& omit)
+                     std::shared_ptr<ice::Schema> schema,
+                     std::shared_ptr<ice::PartitionSpec> spec,
+                     ice::PartitionValues const& partition)
   -> Result<std::shared_ptr<ice::DataWriter>> {
-  TRY(auto schema, translate(table.schema()));
-  TRY(auto spec, translate(table.spec()));
-  auto file_schema = schema;
-  if (std::ranges::contains(omit, true)) {
-    auto const fields = schema->fields();
-    TENZIR_ASSERT(omit.size() == fields.size());
-    auto sources = std::unordered_set<int32_t>{};
-    for (auto const& field : spec->fields()) {
-      sources.insert(field.source_id());
-    }
-    auto kept = std::vector<ice::SchemaField>{};
-    kept.reserve(fields.size());
-    for (auto i = size_t{0}; i < fields.size(); ++i) {
-      if (omit[i] and fields[i].optional()
-          and not subtree_contains(fields[i], sources)) {
-        continue;
-      }
-      omit[i] = false;
-      kept.push_back(fields[i]);
-    }
-    if (kept.empty()) {
-      // A Parquet file cannot have zero columns; keep the full schema.
-      std::ranges::fill(omit, false);
-    } else if (std::ranges::contains(omit, true)) {
-      file_schema
-        = std::make_shared<ice::Schema>(std::move(kept), schema->schema_id());
-    }
-  }
   TRY(auto location_provider, translate(table.location_provider()));
   auto values = partition;
   auto filename = fmt::format("{}.parquet", uuid::random());
@@ -1593,7 +1586,7 @@ auto new_file_writer(ice::Table const& table,
   }
   TRY(auto writer, translate(ice::DataWriter::Make(ice::DataWriterOptions{
                      .path = std::move(path),
-                     .schema = std::move(file_schema),
+                     .schema = std::move(schema),
                      .spec = std::move(spec),
                      .partition = std::move(values),
                      .format = ice::FileFormatType::kParquet,

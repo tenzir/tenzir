@@ -1,0 +1,27 @@
+{
+  rows: 3,
+  events: [
+    {
+      id: 1,
+      endpoints: [
+        {
+          ip: "192.0.2.1",
+          port: null,
+        },
+      ],
+    },
+    {
+      id: 2,
+      endpoints: [
+        {
+          ip: "192.0.2.2",
+          port: 443,
+        },
+      ],
+    },
+    {
+      id: 3,
+      endpoints: null,
+    },
+  ],
+}
