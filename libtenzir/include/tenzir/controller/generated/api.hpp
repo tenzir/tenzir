@@ -1003,11 +1003,13 @@ namespace tenzir {
 class Liveness {
 public:
   Liveness(std::string status, double uptime_ms,
-           Option<std::int64_t> generation, Option<std::string> digest)
+           Option<std::int64_t> generation, Option<std::string> digest,
+           Option<bool> suspended)
     : status{std::move(status)},
       uptime_ms{uptime_ms},
       generation{std::move(generation)},
-      digest{std::move(digest)} {
+      digest{std::move(digest)},
+      suspended{std::move(suspended)} {
   }
 
   std::string status;
@@ -1016,13 +1018,15 @@ public:
   Option<std::int64_t> generation;
   /// `digest`, may be absent, may be null.
   Option<std::string> digest;
+  /// `suspended`, may be absent.
+  Option<bool> suspended;
 
   friend auto operator==(Liveness const&, Liveness const&) -> bool = default;
 
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, Liveness const& value) -> void {
     hash_append(h, value.status, value.uptime_ms, value.generation,
-                value.digest);
+                value.digest, value.suspended);
   }
 };
 
@@ -1367,6 +1371,16 @@ public:
   std::string message;
 };
 
+class Suspended {
+public:
+  explicit Suspended(std::string message) : message{std::move(message)} {
+  }
+
+  static constexpr auto status = std::uint16_t{409};
+
+  std::string message;
+};
+
 /// Everything calling adds, whatever the endpoint declares.
 ///
 /// The API describes itself as if it were a direct call. Calling it adds
@@ -1501,7 +1515,8 @@ public:
 /// `POST /pipelines/:pipelineId/start`
 /// Starts another run of a persisted pipeline. Starting a pipeline that is
 /// already running is a no-op, so a retry is safe. The deployment compiles the
-/// persisted definition again before it starts the run.
+/// persisted definition again before it starts the run. While the deployment is
+/// suspended, the run starts once it resumes.
 class StartPipeline {
 public:
   explicit StartPipeline(PipelinePath path) : path{std::move(path)} {
@@ -1548,7 +1563,7 @@ public:
 /// /deployments/:deploymentId/adhoc-pipelines/:adhocPipelineId/events`, and
 /// streams the events in its body for as long as the ad-hoc pipeline lasts. A
 /// start of an ad-hoc pipeline that is already live is a no-op, so a retry is
-/// safe.
+/// safe. Refused while the deployment is suspended.
 class StartAdhocPipeline {
 public:
   explicit StartAdhocPipeline(AdhocPipelineDefinition payload)
@@ -1558,7 +1573,28 @@ public:
   AdhocPipelineDefinition payload;
 };
 
-using StartAdhocPipelineFailure = variant<InvalidPipeline, Busy>;
+using StartAdhocPipelineFailure = variant<InvalidPipeline, Busy, Suspended>;
+
+/// `PUT /suspension`
+/// Suspends the deployment: it runs nothing until it is resumed, not after a
+/// restart or another instance taking over either. Its pipelines keep the
+/// states they have, and a configuration, a start or a stop changes them as
+/// ever; what is running then runs again once it resumes. Ad-hoc pipelines end.
+/// Answers once the suspension is durable; runs may still be draining.
+/// Suspending a suspended deployment is a no-op, so a retry is safe.
+class Suspend {
+public:
+  Suspend() = default;
+};
+
+/// `DELETE /suspension`
+/// Resumes the deployment: it runs its pipelines that are running again, as
+/// after a restart. Resuming a deployment that is not suspended is a no-op, so
+/// a retry is safe.
+class Resume {
+public:
+  Resume() = default;
+};
 
 /// What the platform asks of a running deployment
 class DeploymentApi {
@@ -1592,6 +1628,10 @@ public:
   virtual auto handle(StartAdhocPipeline request)
     -> Task<Result<void, StartAdhocPipelineFailure>>
     = 0;
+
+  virtual auto handle(Suspend) -> Task<void> = 0;
+
+  virtual auto handle(Resume) -> Task<void> = 0;
 };
 
 auto dispatch(DeploymentApi& handler, HttpRequest request)
