@@ -83,6 +83,8 @@ auto parse_pipeline_exists(simdjson::dom::element value)
 auto parse_pipeline_not_found(simdjson::dom::element value)
   -> Result<PipelineNotFound, ParseError>;
 auto parse_busy(simdjson::dom::element value) -> Result<Busy, ParseError>;
+auto parse_suspended(simdjson::dom::element value)
+  -> Result<Suspended, ParseError>;
 auto write_json(InternalServerError const& value, std::string& out) -> void;
 auto write_json(NotFound const& value, std::string& out) -> void;
 auto write_json(Unauthorized const& value, std::string& out) -> void;
@@ -97,6 +99,7 @@ auto write_json(InvalidPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineExists const& value, std::string& out) -> void;
 auto write_json(PipelineNotFound const& value, std::string& out) -> void;
 auto write_json(Busy const& value, std::string& out) -> void;
+auto write_json(Suspended const& value, std::string& out) -> void;
 
 // ── Failures ────────────────────────────────────────────────────────────────
 
@@ -426,6 +429,30 @@ auto parse_busy(simdjson::dom::element value) -> Result<Busy, ParseError> {
 auto write_json(Busy const& value, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"Busy\"";
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += '}';
+}
+
+auto parse_suspended(simdjson::dom::element value)
+  -> Result<Suspended, ParseError> {
+  TRY(auto object, api::object_of(value, "Suspended"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "Suspended"));
+  TRY(auto tag, api::string_of(tag_raw, "Suspended"));
+  if (tag != "Suspended") {
+    return Err{ParseError{"Suspended", "expected `_tag` 'Suspended'"}};
+  }
+
+  TRY(auto message_raw, api::field(object, "message", "Suspended"));
+  TRY(auto message, api::string_of(message_raw, "Suspended.message"));
+
+  return Suspended{std::move(message)};
+}
+
+auto write_json(Suspended const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"Suspended\"";
   out += ",\"message\":";
   api::write_string(value.message, out);
   out += '}';
@@ -1115,8 +1142,15 @@ auto parse_liveness(simdjson::dom::element value)
     digest = std::move(digest_present);
   }
 
+  auto suspended = Option<bool>{None{}};
+  if (auto suspended_raw = api::optional_field(object, "suspended")) {
+    TRY(auto suspended_present,
+        api::bool_of(*suspended_raw, "Liveness.suspended"));
+    suspended = std::move(suspended_present);
+  }
+
   return Liveness{std::move(status), uptime_ms, std::move(generation),
-                  std::move(digest)};
+                  std::move(digest), std::move(suspended)};
 }
 
 auto parse_identified_pipeline(simdjson::dom::element value)
@@ -1585,21 +1619,40 @@ auto write_json(Batch const& value, std::string& out) -> void {
 
 auto write_json(Liveness const& value, std::string& out) -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"status\":";
   api::write_string(value.status, out);
-  out += ",\"uptime_ms\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"uptime_ms\":";
   fmt::format_to(std::back_inserter(out), "{}", value.uptime_ms);
-  out += ",\"generation\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"generation\":";
   if (value.generation) {
     fmt::format_to(std::back_inserter(out), "{}", *value.generation);
   } else {
     out += "null";
   }
-  out += ",\"digest\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"digest\":";
   if (value.digest) {
     api::write_string(*value.digest, out);
   } else {
     out += "null";
+  }
+  if (value.suspended) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"suspended\":";
+    if (value.suspended) {
+      out += *value.suspended ? "true" : "false";
+    } else {
+      out += "null";
+    }
   }
   out += '}';
 }
@@ -1973,6 +2026,20 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
     }
     co_return HttpResponse{
       405, R"({"error":"method not allowed","allow":["POST"]})"};
+  }
+  if (api::match_path("/suspension", request.path, parameters)) {
+    if (request.method == "PUT") {
+      auto decoded = Suspend{};
+      co_await handler.handle(std::move(decoded));
+      co_return api::encode<204>();
+    }
+    if (request.method == "DELETE") {
+      auto decoded = Resume{};
+      co_await handler.handle(std::move(decoded));
+      co_return api::encode<204>();
+    }
+    co_return HttpResponse{
+      405, R"({"error":"method not allowed","allow":["PUT","DELETE"]})"};
   }
   co_return HttpResponse{404, R"({"error":"no such route"})"};
 }
