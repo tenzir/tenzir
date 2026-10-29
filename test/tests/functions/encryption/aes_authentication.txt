@@ -23,10 +23,10 @@ warning: failed to decrypt: authentication failed
   = note: the key or the associated data does not match, or the ciphertext was modified
 
 warning: failed to decrypt: authentication failed
-  --> tests/functions/encryption/aes_authentication.tql:10:29
+  --> tests/functions/encryption/aes_authentication.tql:12:28
    |
-10 | tampered = decrypt_aes_gcm((c.encode_hex().slice(end=-2) + "00").decode_hex(), key=$key, aad="a")
-   |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+12 | tampered = decrypt_aes_gcm(tampered.decode_hex(), key=$key, aad="a")
+   |                            ~~~~~~~~~~~~~~~~~~~~~
    |
    = note: the key or the associated data does not match, or the ciphertext was modified
 {
