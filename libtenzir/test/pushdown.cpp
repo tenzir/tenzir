@@ -568,3 +568,79 @@ TEST("sql renderer lets dialects spell columns") {
                           "COLLATE \"binary\" = 'a') AND \"r\".\"i\" COLLATE "
                           "\"binary\" > 1)"});
 }
+
+TEST("dynamic columns describe every referenced field path") {
+  auto filter = ir::OptimizeFilter{};
+  filter.push_back(parse("a == 1 and b.c.starts_with(\"x\")"));
+  filter.push_back(parse("d in [1, 2] or e.trim() == \"y\""));
+  auto columns = dynamic_columns(filter);
+  for (auto path :
+       std::vector<std::vector<std::string>>{{"a"}, {"b", "c"}, {"d"}, {"e"}}) {
+    auto column = columns.find(path);
+    REQUIRE(column);
+    CHECK(is<DynamicType>(column->type));
+    CHECK(column->nullable);
+  }
+  // A path is addressable only as a whole.
+  CHECK(not columns.find({"b"}));
+}
+
+namespace {
+
+/// Spells `x == <int>` as `x=<int>` and vetoes every other atom.
+class TestPrefilterRenderer final : public PrefilterRenderer {
+protected:
+  auto render_atom(Expr const& expr) const -> Option<std::string> override {
+    auto const* binary = try_as<Binary>(expr);
+    if (not binary or binary->op != BinaryOp::eq) {
+      return None{};
+    }
+    auto const* left = try_as<Column>(*binary->left);
+    auto const* right = try_as<Literal>(*binary->right);
+    auto const* value = right ? try_as<int64_t>(right->value) : nullptr;
+    if (not left or not value) {
+      return None{};
+    }
+    return fmt::format("{}={}", left->path.front(), *value);
+  }
+
+  auto render_junction(Junction junction,
+                       std::span<std::string const> operands) const
+    -> std::string override {
+    auto keyword = junction == Junction::conjunction ? " & " : " | ";
+    return fmt::format("[{}]", fmt::join(operands, keyword));
+  }
+};
+
+auto eq(std::string name, int64_t value) -> Expr {
+  return Binary{BinaryOp::eq, column(std::move(name)), lit(value)};
+}
+
+} // namespace
+
+TEST("prefilter renderers compose junctions as supersets") {
+  auto renderer = TestPrefilterRenderer{};
+  auto vetoed = Expr{eq("v", 1)};
+  as<Binary>(vetoed).op = BinaryOp::lt;
+  // Prefilters are never exact.
+  CHECK(not renderer.render(eq("a", 1)));
+  CHECK_EQUAL(renderer.render_prefilter(eq("a", 1)), std::string{"a=1"});
+  // A conjunction drops the operands that do not render.
+  CHECK_EQUAL(renderer.render_prefilter(And{{eq("a", 1), vetoed, eq("b", 2)}}),
+              std::string{"[a=1 & b=2]"});
+  CHECK_EQUAL(renderer.render_prefilter(And{{vetoed, eq("b", 2)}}),
+              std::string{"[b=2]"});
+  CHECK(not renderer.render_prefilter(And{{vetoed, vetoed}}));
+  // A disjunction requires every operand.
+  CHECK_EQUAL(renderer.render_prefilter(Or{{eq("a", 1), eq("b", 2)}}),
+              std::string{"[a=1 | b=2]"});
+  CHECK(not renderer.render_prefilter(Or{{eq("a", 1), vetoed}}));
+  CHECK_EQUAL(
+    renderer.render_prefilter(Or{{And{{eq("a", 1), vetoed}}, eq("b", 2)}}),
+    std::string{"[[a=1] | b=2]"});
+  // Negation, conditionals, and arithmetic never render.
+  CHECK(not renderer.render_prefilter(Not{eq("a", 1)}));
+  CHECK(not renderer.render_prefilter(
+    Conditional{eq("a", 1), lit(true), lit(false)}));
+  CHECK(not renderer.render_prefilter(sub(column("a"), lit(int64_t{1}))));
+}

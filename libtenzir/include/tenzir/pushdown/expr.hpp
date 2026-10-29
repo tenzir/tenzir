@@ -23,10 +23,10 @@
 /// Translation turns a TQL predicate into an `Expr` that keeps and drops the
 /// same rows, except where an operation says that it approximates TQL, such as
 /// `Operation::fold_case`, and a source's renderer spells it in the target's
-/// query language. The IR names
-/// what to compute, never how to spell it: `WHERE x > 1`, `| where x > 1`, and
-/// `Table.SelectRows(t, each [x] > 1)` are all renderings of `Binary{gt,
-/// Column{x}, Literal{1}}`.
+/// query language. The IR names what to compute, never how to spell it:
+/// `WHERE x > 1` in SQL, `| where x > 1` in KQL or SPL, and
+/// `| filter ((x) > (1))` in SentinelOne's PowerQuery are all renderings of
+/// `Binary{gt, Column{x}, Literal{1}}`.
 ///
 /// An `Expr` evaluates with SQL's three-valued logic. Comparisons, arithmetic,
 /// `In`, `Between`, and operations yield `NULL` when an operand is `NULL`;

@@ -62,6 +62,55 @@ auto is_arithmetic(BinaryOp op) -> bool {
 
 } // namespace
 
+auto PrefilterRenderer::render(Expr const&) const -> Option<std::string> {
+  return None{};
+}
+
+auto PrefilterRenderer::render_prefilter(Expr const& expr) const
+  -> Option<std::string> {
+  return match(
+    expr,
+    [&](And const& x) -> Option<std::string> {
+      // Dropping a conjunct only widens a superset.
+      auto parts = std::vector<std::string>{};
+      for (auto const& operand : x.operands) {
+        if (auto part = render_prefilter(operand)) {
+          parts.push_back(std::move(*part));
+        }
+      }
+      if (parts.empty()) {
+        return None{};
+      }
+      return render_junction(Junction::conjunction, parts);
+    },
+    [&](Or const& x) -> Option<std::string> {
+      auto parts = std::vector<std::string>{};
+      for (auto const& operand : x.operands) {
+        TRY(auto part, render_prefilter(operand));
+        parts.push_back(std::move(part));
+      }
+      if (parts.empty()) {
+        return None{};
+      }
+      return render_junction(Junction::disjunction, parts);
+    },
+    [](Not const&) -> Option<std::string> {
+      return None{};
+    },
+    [](Conditional const&) -> Option<std::string> {
+      return None{};
+    },
+    [&](Binary const& x) -> Option<std::string> {
+      if (is_arithmetic(x.op)) {
+        return None{};
+      }
+      return render_atom(expr);
+    },
+    [&](auto const&) -> Option<std::string> {
+      return render_atom(expr);
+    });
+}
+
 auto SqlRenderer::render(Expr const& expr) const -> Option<std::string> {
   TRY(auto result, render_fragment(expr));
   return wrap(result, Slot::logical);

@@ -24,16 +24,76 @@ namespace tenzir::pushdown {
 /// if both agree. A target without an address type, for example, vetoes every
 /// `IpValue`, and predicates on addresses stay local.
 ///
-/// SQL dialects derive from `SqlRenderer`. Targets that are not SQL, such as
-/// Power Query or KQL, derive from `Renderer` directly and apply their own
-/// grouping rules.
+/// A renderer spells an expression with one of two fidelities, and callers
+/// pick the one that matches what the expression promises:
+/// - `render` spells an exact translation, such as one from
+///   `translate_predicate`, which keeps and drops the same rows as TQL. The
+///   target must keep and drop exactly the rows that the IR does, so a caller
+///   may stop evaluating the predicate locally.
+/// - `render_prefilter` spells a prefilter, such as one from
+///   `translate_prefilter`. The target only needs to keep every row that the
+///   IR keeps, so a renderer may widen the expression, for example by dropping
+///   a conjunct that it cannot spell. The caller keeps evaluating the
+///   predicate locally.
+///
+/// SQL dialects derive from `SqlRenderer`. Targets that only spell prefilters,
+/// such as KQL or SentinelOne's PowerQuery, derive from `PrefilterRenderer`.
 class Renderer {
 public:
   virtual ~Renderer() = default;
 
-  /// Renders `expr`, or returns `None` if the target cannot spell some part of
-  /// it.
+  /// Renders `expr` exactly, or returns `None` if the target cannot spell some
+  /// part of it with the same semantics.
   virtual auto render(Expr const& expr) const -> Option<std::string> = 0;
+
+  /// Renders `expr` as a predicate that holds at least wherever `expr` holds,
+  /// or returns `None` if there is no such spelling other than `true`.
+  /// Defaults to `render`, since an exact spelling is also a superset.
+  virtual auto render_prefilter(Expr const& expr) const -> Option<std::string> {
+    return render(expr);
+  }
+};
+
+/// The part of rendering that targets share which only spell prefilters.
+///
+/// Such a target sees untyped values, as with a `DynamicType` column, so none
+/// of its spellings keeps exactly the rows of the IR, and `render` vetoes
+/// everything. `render_prefilter` composes the spellings of the atoms that a
+/// dialect provides so that the result stays a superset:
+/// - `And` drops the operands that do not render, since a conjunction with
+///   fewer operands holds wherever the original holds. It vetoes only if no
+///   operand renders.
+/// - `Or` requires every operand, since dropping one would lose its rows.
+/// - `Not` vetoes, since negating a superset yields a subset.
+/// - `Conditional` and arithmetic veto, since a prefilter never contains them
+///   as a predicate.
+///
+/// Every other expression is an atom, which `render_atom` spells.
+class PrefilterRenderer : public Renderer {
+public:
+  /// Vetoes everything. A dialect that can spell some expressions exactly,
+  /// such as those over typed columns, overrides this.
+  auto render(Expr const& expr) const -> Option<std::string> override;
+
+  auto render_prefilter(Expr const& expr) const -> Option<std::string> final;
+
+protected:
+  /// The keyword of a junction.
+  enum class Junction {
+    conjunction,
+    disjunction,
+  };
+
+  /// Spells an atom as a superset, or vetoes it: a literal, a column, a call,
+  /// a comparison, `In`, `Between`, `IsNull`, or a `StringMatch`.
+  virtual auto render_atom(Expr const& expr) const -> Option<std::string> = 0;
+
+  /// Spells a junction of at least one rendered operand, including any
+  /// grouping that the result needs to compose with other text.
+  virtual auto render_junction(Junction junction,
+                               std::span<std::string const> operands) const
+    -> std::string
+    = 0;
 };
 
 /// The part of rendering that SQL dialects share.

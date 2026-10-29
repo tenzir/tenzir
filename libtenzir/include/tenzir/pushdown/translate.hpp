@@ -155,4 +155,13 @@ struct FilterSplit {
 auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
                   Renderer const& renderer, registry const& reg) -> FilterSplit;
 
+/// Describes every field path that `filter` references as a nullable
+/// `DynamicType` column.
+///
+/// Sources whose output has no static schema, such as those that run a user's
+/// KQL or SPL query, know neither the columns nor their types before the
+/// query runs. This model admits prefilters only, so that every predicate
+/// also stays local.
+auto dynamic_columns(ir::OptimizeFilter const& filter) -> ColumnModel;
+
 } // namespace tenzir::pushdown

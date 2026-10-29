@@ -30,7 +30,7 @@ namespace {
 
 /// The most text that the planner appends to a query. Predicates that do not
 /// fit stay local, which only costs reduction, never correctness.
-constexpr auto max_appendix = size_t{16'384};
+constexpr auto appendix_budget = size_t{16'384};
 
 /// The largest row count that the planner spells in a `take` stage. KQL
 /// integer literals are `long`, and both Defender and Log Analytics accept
@@ -594,31 +594,6 @@ auto render_not_null(IsNull const& x) -> Option<std::string> {
                      subject, strictly_null_types);
 }
 
-/// Collects the referenced fields as dynamic columns, since the output of a
-/// KQL query has no static schema.
-class ColumnCollector final : public ast::visitor<ColumnCollector> {
-public:
-  template <class T>
-  auto visit(T& x) -> void {
-    enter(x);
-  }
-
-  auto visit(ast::expression& expr) -> void {
-    if (auto path = ast::field_path::try_from(expr);
-        path and not path->path().empty()) {
-      auto segments = std::vector<std::string>{};
-      for (auto const& segment : path->path()) {
-        segments.push_back(segment.id.name);
-      }
-      columns.add(std::move(segments), {DynamicType{}, true});
-      return;
-    }
-    enter(expr);
-  }
-
-  ColumnModel columns;
-};
-
 /// Returns the length of the line break at `i` in `text`, or zero if there is
 /// none. Like Kusto's own lexer (`TextFacts.IsLineBreakStart`), KQL ends a line
 /// at CR, LF, U+2028 LINE SEPARATOR, and U+2029 PARAGRAPH SEPARATOR, so each of
@@ -637,36 +612,9 @@ auto line_break_length(std::string_view text, size_t i) -> size_t {
   return 0;
 }
 
-/// Spells the `project` stage that keeps the top-level fields of `paths`, or
-/// returns `None` if one of them has no spelling. A field that the query does
-/// not return becomes `null`, where `project` would fail the query.
-auto project_stage(ir::OptimizeProjection const& paths) -> Option<std::string> {
-  auto names = std::vector<std::string>{};
-  for (auto const& path : paths) {
-    if (path.path().empty()) {
-      return None{};
-    }
-    auto name = path.path().front().id.name;
-    if (std::ranges::contains(names, name)) {
-      continue;
-    }
-    names.push_back(std::move(name));
-  }
-  if (names.empty()) {
-    return None{};
-  }
-  auto columns = std::vector<std::string>{};
-  for (auto const& name : names) {
-    TRY(auto quoted, quote_string(name, '\''));
-    columns.push_back(
-      fmt::format("[{}] = column_ifexists({}, dynamic(null))", quoted, quoted));
-  }
-  return fmt::format("\n| project {}", fmt::join(columns, ", "));
-}
-
 } // namespace
 
-auto KqlRenderer::render(Expr const& expr) const -> Option<std::string> {
+auto KqlRenderer::render_atom(Expr const& expr) const -> Option<std::string> {
   return match(
     expr,
     [](Literal const& x) -> Option<std::string> {
@@ -693,35 +641,20 @@ auto KqlRenderer::render(Expr const& expr) const -> Option<std::string> {
     [](Between const& x) -> Option<std::string> {
       return render_ip_between(x);
     },
-    [&](And const& x) -> Option<std::string> {
-      // Dropping a conjunct only widens a superset.
-      auto parts = std::vector<std::string>{};
-      for (auto const& operand : x.operands) {
-        if (auto part = render(operand)) {
-          parts.push_back(std::move(*part));
-        }
-      }
-      if (parts.empty()) {
-        return None{};
-      }
-      if (parts.size() == 1) {
-        return std::move(parts.front());
-      }
-      return fmt::format("({})", fmt::join(parts, " and "));
-    },
-    [&](Or const& x) -> Option<std::string> {
-      auto parts = std::vector<std::string>{};
-      for (auto const& operand : x.operands) {
-        TRY(auto part, render(operand));
-        parts.push_back(std::move(part));
-      }
-      return fmt::format("({})", fmt::join(parts, " or "));
-    },
     [](auto const&) -> Option<std::string> {
-      // `Not` would turn a superset into a subset. Columns, arithmetic,
-      // and `Conditional` never come from a dynamic prefilter.
+      // Columns never come from a dynamic prefilter as a predicate.
       return None{};
     });
+}
+
+auto KqlRenderer::render_junction(Junction junction,
+                                  std::span<std::string const> operands) const
+  -> std::string {
+  if (operands.size() == 1) {
+    return operands.front();
+  }
+  auto keyword = junction == Junction::conjunction ? " and " : " or ";
+  return fmt::format("({})", fmt::join(operands, keyword));
 }
 
 auto kql_accepts_trailing_stages(std::string_view query) -> bool {
@@ -837,66 +770,63 @@ auto kql_accepts_trailing_stages(std::string_view query) -> bool {
   return *last != ';' and *last != '|';
 }
 
+namespace {
+
+/// The trailing stages of KQL: `where`, `project`, and `take`.
+class KqlDialect final : public PipeDialect {
+public:
+  auto accepts_trailing_stages(std::string_view query) const -> bool override {
+    return kql_accepts_trailing_stages(query);
+  }
+
+  auto renderer() const -> Renderer const& override {
+    return renderer_;
+  }
+
+  auto filter_stage(std::span<std::string const> predicates) const
+    -> std::string override {
+    return fmt::format("\n| where {}", fmt::join(predicates, " and "));
+  }
+
+  /// A field that the query does not return becomes `null`, where `project`
+  /// would fail the query.
+  auto project_stage(std::span<std::string const> names) const
+    -> Option<std::string> override {
+    auto columns = std::vector<std::string>{};
+    for (auto const& name : names) {
+      TRY(auto quoted, quote_string(name, '\''));
+      columns.push_back(fmt::format("[{}] = column_ifexists({}, dynamic(null))",
+                                    quoted, quoted));
+    }
+    return fmt::format("\n| project {}", fmt::join(columns, ", "));
+  }
+
+  /// Larger limits than a `long` can spell are enforced locally only.
+  auto limit_stage(uint64_t n) const -> Option<std::string> override {
+    if (n > max_take) {
+      return None{};
+    }
+    return fmt::format("\n| take {}", n);
+  }
+
+  auto max_appendix() const -> size_t override {
+    return appendix_budget;
+  }
+
+private:
+  KqlRenderer renderer_;
+};
+
+} // namespace
+
 auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
                     Option<ir::OptimizeProjection> const& projection,
                     Option<uint64_t> limit, Option<uint64_t> result_cap,
                     registry const& reg) -> KqlPlan {
   TENZIR_ASSERT(not result_cap
                 or (*result_cap > 0 and *result_cap <= max_take));
-  auto result = KqlPlan{.query = std::string{query}};
-  if (not kql_accepts_trailing_stages(query)) {
-    return result;
-  }
-  auto appendix = std::string{};
-  // Filter first, so that the prefilters see every column of the query.
-  auto collector = ColumnCollector{};
-  for (auto expr : filter) {
-    collector.visit(expr);
-  }
-  auto split = split_filter(filter, collector.columns, KqlRenderer{}, reg);
-  auto where = std::string{};
-  for (auto const& predicate : split.pushed) {
-    auto addition = where.empty() ? fmt::format("\n| where {}", predicate)
-                                  : fmt::format(" and {}", predicate);
-    if (where.size() + addition.size() > max_appendix) {
-      // Keep this prefilter local only and consider smaller later ones.
-      continue;
-    }
-    where += addition;
-  }
-  if (not where.empty()) {
-    // A service with a silent cap returns only the first rows of a large
-    // result. A filter before that cap would reveal later rows, so the query
-    // must reach the filter with the cap applied. `take` keeps the first rows
-    // of a sorted result, as the cap does, and arbitrary rows of an unsorted
-    // one, which the cap may return as well.
-    if (result_cap) {
-      appendix += fmt::format("\n| take {}", *result_cap);
-    }
-    appendix += where;
-    result.filtered = true;
-  }
-  // Project after filtering, retaining every field that the local filter
-  // reads, since all of it runs on the projected rows.
-  auto retained = projection;
-  for (auto const& expr : filter) {
-    ir::add_refs_to_projection(retained, expr);
-  }
-  if (retained) {
-    if (auto stage = project_stage(*retained);
-        stage and appendix.size() + stage->size() <= max_appendix) {
-      appendix += *stage;
-      result.projected = true;
-    }
-  }
-  // Every predicate stays local, so a limit is only safe without one. Larger
-  // limits than a `long` can spell are enforced locally only.
-  if (filter.empty() and limit and *limit > 0 and *limit <= max_take) {
-    appendix += fmt::format("\n| take {}", *limit);
-    result.limited = true;
-  }
-  result.query += appendix;
-  return result;
+  return plan_trailing_stages(KqlDialect{}, query, filter, projection, limit,
+                              result_cap, reg);
 }
 
 } // namespace tenzir::pushdown

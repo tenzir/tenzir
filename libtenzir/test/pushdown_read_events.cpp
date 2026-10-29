@@ -229,3 +229,32 @@ TEST("projection does not modify shared input") {
               (std::vector<std::string>{"a", "b", "e"}));
   CHECK(input.data.field("e"));
 }
+
+TEST("local hints filter, limit, and project events") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh, test::builtin_registry());
+  auto session = provider.as_session();
+  auto expr = parse_expression_with_location_override(
+    "id >= 3", location::unknown, session);
+  REQUIRE(expr);
+  auto evaluator
+    = tenzir::test::make_evaluator(std::move(*expr), dh, session.reg());
+  REQUIRE(evaluator);
+  auto filters = std::vector<nova::Evaluator>{};
+  filters.push_back(std::move(*evaluator));
+  auto hints = pushdown::LocalHints<nova::Events>{uint64_t{2}};
+  hints.set_filters(std::move(filters));
+  hints.set_projection(ir::OptimizeProjection{});
+  auto ctx = base_ctx{dh, test::builtin_registry()};
+  // Rows 3 and 4 are active and match; the limit admits both.
+  auto first = hints.apply(events(), ctx);
+  CHECK_EQUAL(first.active_count(), 2);
+  CHECK(first.mask.get(3));
+  CHECK(first.mask.get(4));
+  // The empty projection drops every field but keeps the rows.
+  CHECK(field_names(first.data.get(3)).empty());
+  CHECK_EQUAL(hints.remaining(), Option<uint64_t>{0});
+  CHECK(hints.exhausted());
+  CHECK_EQUAL(hints.apply(events(), ctx).active_count(), 0);
+  CHECK(dh.empty());
+}

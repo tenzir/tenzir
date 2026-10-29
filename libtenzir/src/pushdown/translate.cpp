@@ -1904,25 +1904,71 @@ auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
     adapt_to_columns(expr, columns, reg);
     collect_conjuncts(std::move(expr), conjuncts);
   }
-  // A translation is pushed only if the renderer can spell it.
-  auto render = [&](Option<Expr> const& expr) -> Option<std::string> {
+  // A translation is pushed only if the renderer can spell it with the
+  // fidelity that the translation promises. Only an exact rendering lets the
+  // conjunct leave the local filter.
+  auto render_exact = [&](Option<Expr> const& expr) -> Option<std::string> {
     if (not expr) {
       return None{};
     }
     return renderer.render(*expr);
   };
+  auto render_prefilter = [&](Option<Expr> const& expr) -> Option<std::string> {
+    if (not expr) {
+      return None{};
+    }
+    return renderer.render_prefilter(*expr);
+  };
   auto result = FilterSplit{};
   for (auto& expr : conjuncts) {
-    if (auto pushed = render(translate_predicate(expr, columns, reg))) {
+    if (auto pushed = render_exact(translate_predicate(expr, columns, reg))) {
       result.pushed.push_back(std::move(*pushed));
       continue;
     }
-    if (auto pushed = render(translate_prefilter(expr, columns, reg))) {
+    if (auto pushed
+        = render_prefilter(translate_prefilter(expr, columns, reg))) {
       result.pushed.push_back(std::move(*pushed));
     }
     result.remaining.push_back(std::move(expr));
   }
   return result;
+}
+
+namespace {
+
+/// Collects every referenced field path as a nullable `DynamicType` column.
+class DynamicColumnCollector final
+  : public ast::visitor<DynamicColumnCollector> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::expression& expr) -> void {
+    if (auto path = ast::field_path::try_from(expr);
+        path and not path->path().empty()) {
+      auto segments = std::vector<std::string>{};
+      for (auto const& segment : path->path()) {
+        segments.push_back(segment.id.name);
+      }
+      columns.add(std::move(segments), {DynamicType{}, true});
+      return;
+    }
+    enter(expr);
+  }
+
+  ColumnModel columns;
+};
+
+} // namespace
+
+auto dynamic_columns(ir::OptimizeFilter const& filter) -> ColumnModel {
+  auto collector = DynamicColumnCollector{};
+  for (auto expr : filter) {
+    collector.visit(expr);
+  }
+  return std::move(collector.columns);
 }
 
 } // namespace tenzir::pushdown

@@ -10,6 +10,7 @@
 
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pushdown/pipe.hpp"
 #include "tenzir/pushdown/renderer.hpp"
 
 #include <cstdint>
@@ -73,9 +74,14 @@ namespace tenzir::pushdown {
 /// expressions, non-ASCII case-insensitive needles, IP ordering, native IPv6
 /// subnets overlapping ::/80, timestamp list membership, arithmetic, and
 /// `== null`.
-class KqlRenderer final : public Renderer {
-public:
-  auto render(Expr const& expr) const -> Option<std::string> override;
+///
+class KqlRenderer final : public PrefilterRenderer {
+protected:
+  auto render_atom(Expr const& expr) const -> Option<std::string> override;
+
+  auto render_junction(Junction junction,
+                       std::span<std::string const> operands) const
+    -> std::string override;
 };
 
 /// Returns whether a stage appended to `query` on a new line applies to the
@@ -89,21 +95,11 @@ public:
 auto kql_accepts_trailing_stages(std::string_view query) -> bool;
 
 /// The query that a KQL source sends.
-struct KqlPlan {
-  /// The user's query, unchanged, followed by the appended stages.
-  std::string query;
-  /// Whether a `where` stage with prefilters, preceded by a `take` stage with
-  /// any result cap, was appended.
-  bool filtered = false;
-  /// Whether a `project` stage was appended.
-  bool projected = false;
-  /// Whether a `take` stage was appended.
-  bool limited = false;
-};
+using KqlPlan = PipePlan;
 
 /// Appends optimizer hints to a user's KQL `query` as trailing stages, in the
 /// order `where`, `project`, and `take`, so that they apply to the rows that
-/// `query` returns.
+/// `query` returns. See `plan_trailing_stages`.
 ///
 /// The `where` stage holds the prefilters of `filter` that render. The source
 /// must still evaluate all of `filter` locally.
@@ -117,14 +113,13 @@ struct KqlPlan {
 /// result or still fails. The `project` stage and the `take` stage of a limit
 /// need no cap: they keep the rows that `query` returns, or a prefix.
 ///
-/// The
-/// `project` stage keeps the columns that `projection` and `filter` reference,
-/// and the `take` stage is appended only for an empty `filter`, since every
-/// predicate stays local and would otherwise run after the limit, and only for
-/// a limit between 1 and 2^63 - 1. The source must enforce `limit` locally in
-/// any case. The planner never changes the request window: without parsing the
-/// query, no predicate on its output provably refers to the time that the
-/// window selects.
+/// The `project` stage keeps the columns that `projection` and `filter`
+/// reference, and the `take` stage is appended only for an empty `filter`,
+/// since every predicate stays local and would otherwise run after the limit,
+/// and only for a limit between 1 and 2^63 - 1. The source must enforce `limit`
+/// locally in any case. The planner never changes the request window: without
+/// parsing the query, no predicate on its output provably refers to the time
+/// that the window selects.
 ///
 /// Returns `query` unchanged if `kql_accepts_trailing_stages` rejects it.
 auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
