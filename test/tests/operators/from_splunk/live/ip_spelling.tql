@@ -1,0 +1,12 @@
+// Address equality matches every spelling of the address, since Splunk's
+// CIDR matching parses the values. bob's address uses an expanded spelling.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"index=main source="tenzir-docs-auth" | eval src_ip=if(user="bob", "0:0:0:0:0:ffff:c633:6418", src_ip)"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where src_ip == 198.51.100.24
+select _time, user, src_ip
