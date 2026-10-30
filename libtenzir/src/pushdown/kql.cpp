@@ -649,7 +649,7 @@ auto KqlRenderer::render_atom(Expr const& expr) const -> Option<std::string> {
 
 auto KqlRenderer::render_junction(Junction junction,
                                   std::span<std::string const> operands) const
-  -> std::string {
+  -> Option<std::string> {
   if (operands.size() == 1) {
     return operands.front();
   }

@@ -115,9 +115,12 @@ auto translate_predicate(ast::expression const& expr,
 /// must satisfy `DynamicType`'s no-under-matching contract. Negation, `!=` a
 /// value, `== null`, computations, and column-to-column comparisons stay local;
 /// `x != null` is the null-rejecting exception. Integers are bounded to ±2^53.
+/// With `options.negations`, `x != literal`, `not (x == literal)`, and
+/// `not (x in [literals])` on a `DynamicType` column translate as well, into
+/// the shapes that `PrefilterOptions` describes.
 auto translate_prefilter(ast::expression const& expr,
-                         ColumnModel const& columns, registry const& reg)
-  -> Option<Expr>;
+                         ColumnModel const& columns, registry const& reg,
+                         PrefilterOptions options = {}) -> Option<Expr>;
 
 /// The value of a field, as the target computes it.
 struct FieldValue {

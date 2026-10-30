@@ -74,7 +74,7 @@ protected:
 
   auto render_junction(Junction junction,
                        std::span<std::string const> operands) const
-    -> std::string override {
+    -> Option<std::string> override {
     auto keyword = junction == Junction::conjunction ? " & " : " / ";
     return fmt::format("({})", fmt::join(operands, keyword));
   }

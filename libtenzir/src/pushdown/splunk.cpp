@@ -8,8 +8,11 @@
 
 #include "tenzir/pushdown/splunk.hpp"
 
+#include "tenzir/data_builder.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/ip.hpp"
+#include "tenzir/subnet.hpp"
 #include "tenzir/try.hpp"
 
 #include <fmt/format.h>
@@ -353,6 +356,168 @@ auto render_not_null(IsNull const& x) -> Option<std::string> {
   return fmt::format("{}=*", field);
 }
 
+/// The last address of `network`.
+auto last_address(subnet const& network) -> ip {
+  auto all_ones = std::array<uint8_t, 16>{};
+  all_ones.fill(0xff);
+  auto host_mask = ip{all_ones};
+  auto net_mask = ip{all_ones};
+  net_mask.mask(network.length());
+  host_mask ^= net_mask;
+  auto last = network.network();
+  last |= host_mask;
+  return last;
+}
+
+/// The CIDR terms that match an address. Splunk's CIDR matching parses the
+/// values of a field, so a single-host network matches every spelling of an
+/// address, such as `2001:0db8::0:1` for `2001:db8::1`, while a plain value
+/// matches only the same text. An IPv4 address also needs its IPv4-mapped
+/// IPv6 network, since Splunk matches IPv4 networks only against IPv4 values.
+auto address_values(ip const& address) -> Option<std::vector<std::string>> {
+  auto canonical = fmt::to_string(address);
+  if (address.is_v4()) {
+    TRY(auto value, quote_value(fmt::format("{}/32", canonical)));
+    TRY(auto mapped, quote_value(fmt::format("::ffff:{}/128", canonical)));
+    return std::vector{std::move(value), std::move(mapped)};
+  }
+  TRY(auto value, quote_value(fmt::format("{}/128", canonical)));
+  return std::vector{std::move(value)};
+}
+
+/// The network whose addresses are exactly `[lo, hi]`, or `None`.
+auto network_of(ip const& lo, ip const& hi) -> Option<subnet> {
+  for (auto length = 0; length <= 128; ++length) {
+    auto network = subnet{lo, static_cast<uint8_t>(length)};
+    if (network.network() == lo and last_address(network) == hi) {
+      return network;
+    }
+  }
+  return None{};
+}
+
+/// The spellings of a network that Splunk matches with CIDR matching. A
+/// network that covers IPv4-mapped addresses only in part, or IPv4 and IPv6
+/// addresses alike, has none: Splunk matches an IPv4 network only against
+/// IPv4 addresses, and an IPv6 network only against IPv6 addresses.
+auto network_values(subnet const& network) -> Option<std::vector<std::string>> {
+  auto first = network.network();
+  if (first.is_v4()) {
+    if (network.length() < 96) {
+      return None{};
+    }
+    // `subnet` spells an IPv4-mapped network in IPv4 notation.
+    auto v4 = fmt::to_string(network);
+    TRY(auto value, quote_value(v4));
+    TRY(auto mapped,
+        quote_value(fmt::format("::ffff:{}/{}", first, network.length())));
+    return std::vector{std::move(value), std::move(mapped)};
+  }
+  auto mapped = subnet{ip::v4(uint32_t{0}), 96};
+  if (network.contains(mapped.network())) {
+    return None{};
+  }
+  TRY(auto value, quote_value(fmt::to_string(network)));
+  return std::vector{std::move(value)};
+}
+
+/// Spells the condition on `ip(field)` that a parsed-address prefilter
+/// holds: equality with an address, membership in a list of addresses, or
+/// membership in a network.
+auto render_parsed_ip(Expr const& field_expr, Expr const& parsed,
+                      Expr const& condition) -> Option<std::string> {
+  TRY(auto field, render_value_field(field_expr));
+  auto is_subject = [&](Expr const& x) {
+    auto const* call = try_as<Call>(x);
+    auto const* column = try_as<Column>(field_expr);
+    if (not call or call->op != Operation::parse_ip or call->args.size() != 1
+        or not column) {
+      return false;
+    }
+    auto const* arg = try_as<Column>(call->args.front());
+    return arg and arg->path == column->path;
+  };
+  TENZIR_ASSERT(is_subject(parsed));
+  auto address = [](Expr const& x) -> Option<ip> {
+    auto const* literal = try_as<Literal>(x);
+    auto const* value = literal ? try_as<IpValue>(literal->value) : nullptr;
+    if (not value) {
+      return None{};
+    }
+    return value->address;
+  };
+  auto values = std::vector<std::string>{};
+  if (auto const* x = try_as<Binary>(condition)) {
+    if (x->op != BinaryOp::eq or not is_subject(*x->left)) {
+      return None{};
+    }
+    TRY(auto value, address(*x->right));
+    TRY(values, address_values(value));
+  } else if (auto const* x = try_as<In>(condition)) {
+    if (not is_subject(*x->expr) or x->list.empty()) {
+      return None{};
+    }
+    for (auto const& element : x->list) {
+      TRY(auto value, address(element));
+      TRY(auto spellings, address_values(value));
+      std::ranges::move(spellings, std::back_inserter(values));
+    }
+  } else if (auto const* x = try_as<Between>(condition)) {
+    if (not is_subject(*x->expr)) {
+      return None{};
+    }
+    TRY(auto lo, address(*x->lo));
+    TRY(auto hi, address(*x->hi));
+    TRY(auto network, network_of(lo, hi));
+    TRY(values, network_values(network));
+  } else {
+    return None{};
+  }
+  if (values.size() == 1) {
+    return fmt::format("{}={}", field, values.front());
+  }
+  auto terms = std::vector<std::string>{};
+  for (auto& value : values) {
+    terms.push_back(fmt::format("{}={}", field, value));
+  }
+  return fmt::format("({})", fmt::join(terms, " OR "));
+}
+
+/// Marks a rendered predicate as an expression of a `where` stage rather
+/// than as a term of the `search` command. Rendered text never contains
+/// control characters otherwise.
+constexpr auto where_marker = std::string_view{"\x1f"};
+
+/// Returns the expression of a predicate that `where_marker` marks.
+auto where_expression(std::string_view predicate) -> Option<std::string_view> {
+  if (not predicate.starts_with(where_marker)) {
+    return None{};
+  }
+  return predicate.substr(where_marker.size());
+}
+
+/// Spells a field name for `eval`, quoting it in single quotes unless it is a
+/// plain identifier.
+auto eval_field(std::string_view name) -> Option<std::string> {
+  if (name.empty() or has_control(name)
+      or name.find_first_of("'\\") != std::string_view::npos) {
+    return None{};
+  }
+  auto plain = (std::isalpha(static_cast<unsigned char>(name.front()))
+                or name.front() == '_')
+               and std::ranges::all_of(name,
+                                       [](char c) {
+                                         return std::isalnum(
+                                                  static_cast<unsigned char>(c))
+                                                or c == '_';
+                                       })
+               and not is_keyword(name);
+  if (plain) {
+    return std::string{name};
+  }
+  return fmt::format("'{}'", name);
+}
+
 /// Commands whose effects a `head` stage could cut short.
 auto has_side_effects(std::string_view command) -> bool {
   constexpr auto commands = std::array<std::string_view, 14>{
@@ -365,14 +530,14 @@ auto has_side_effects(std::string_view command) -> bool {
   });
 }
 
-/// The trailing stages of SPL: `search`, `fields`, and `head`.
+/// The trailing stages of SPL: `search`, `where`, `fields`, and `head`.
 ///
 /// For a search that Tenzir generates, which ends in its base `search`
 /// command, the prefilters extend that command instead.
 class SplDialect final : public PipeDialect {
 public:
-  SplDialect(bool extend_base, bool push_time)
-    : renderer_{push_time}, extend_base_{extend_base} {
+  SplDialect(bool extend_base, SplRenderer::Settings settings)
+    : renderer_{settings}, extend_base_{extend_base} {
   }
 
   auto accepts_trailing_stages(std::string_view query) const -> bool override {
@@ -383,12 +548,28 @@ public:
     return renderer_;
   }
 
+  /// Terms of the `search` command extend the base search or follow in a
+  /// `search` stage, and expressions follow in a `where` stage.
   auto filter_stage(std::span<std::string const> predicates) const
     -> std::string override {
-    if (extend_base_) {
-      return fmt::format(" {}", fmt::join(predicates, " "));
+    auto terms = std::vector<std::string_view>{};
+    auto expressions = std::vector<std::string>{};
+    for (auto const& predicate : predicates) {
+      if (auto expression = where_expression(predicate)) {
+        expressions.push_back(fmt::format("({})", *expression));
+      } else {
+        terms.push_back(predicate);
+      }
     }
-    return fmt::format("\n| search {}", fmt::join(predicates, " "));
+    auto result = std::string{};
+    if (not terms.empty()) {
+      result += extend_base_ ? " " : "\n| search ";
+      result += fmt::to_string(fmt::join(terms, " "));
+    }
+    if (not expressions.empty()) {
+      result += fmt::format("\n| where {}", fmt::join(expressions, " AND "));
+    }
+    return result;
   }
 
   /// `fields` keeps Splunk's internal fields, such as `_raw` and `_time`, and
@@ -459,7 +640,120 @@ auto skip_space_and_comments(std::string_view search) -> size_t {
 
 } // namespace
 
-SplRenderer::SplRenderer(bool push_time) : push_time_{push_time} {
+SplRenderer::SplRenderer(Settings settings) : settings_{settings} {
+}
+
+auto SplRenderer::prefilter_options() const -> PrefilterOptions {
+  return {.negations = true};
+}
+
+auto SplRenderer::render_composite(Expr const& expr) const
+  -> Option<std::string> {
+  // Both negations and parsed addresses keep a null explicitly:
+  // `Or{IsNull{subject}, condition}`.
+  auto const* x = try_as<Or>(expr);
+  if (not x or x->operands.size() != 2) {
+    return None{};
+  }
+  auto const* null_check = try_as<IsNull>(x->operands[0]);
+  if (not null_check or null_check->negated) {
+    return None{};
+  }
+  auto const& subject = *null_check->expr;
+  auto const& condition = x->operands[1];
+  if (auto const* call = try_as<Call>(subject)) {
+    if (call->op != Operation::parse_ip or call->args.size() != 1) {
+      return None{};
+    }
+    // Splunk matches addresses and networks by their text, so the null of
+    // a string that does not parse as an address needs no spelling: TQL
+    // never matches such a string either.
+    return render_parsed_ip(call->args.front(), subject, condition);
+  }
+  return render_negation(subject, condition);
+}
+
+auto SplRenderer::render_negated_value(Literal const& literal) const
+  -> Option<std::string> {
+  return match(
+    literal.value,
+    [&](std::string const& x) -> Option<std::string> {
+      // With inference, a Splunk value spelled like the literal becomes
+      // another type, which differs from the string in TQL, so negating the
+      // match would drop it.
+      if (settings_.inference) {
+        if (auto inferred = detail::data_builder::best_effort_parser(x);
+            inferred and not is<std::string>(*inferred)) {
+          return None{};
+        }
+      }
+      // Quotes and backslashes, whose escaping in `eval` we have not
+      // verified, stay local.
+      if (has_control(x) or x.find_first_of("\"\\") != std::string::npos) {
+        return None{};
+      }
+      return fmt::format("\"{}\"", x);
+    },
+    [&](bool x) -> Option<std::string> {
+      // Without inference, the string `"true"` differs from the boolean.
+      if (not settings_.inference) {
+        return None{};
+      }
+      return x ? "\"true\"" : "\"false\"";
+    },
+    [&](auto const&) -> Option<std::string> {
+      // Without inference, the string `"5"` differs from the number.
+      if (not settings_.inference) {
+        return None{};
+      }
+      return render_number(literal);
+    });
+}
+
+auto SplRenderer::render_negation(Expr const& subject,
+                                  Expr const& negated) const
+  -> Option<std::string> {
+  // Validates the field like every other term, but spells it for `eval`.
+  TRY(render_value_field(subject));
+  auto const& column = as<Column>(subject);
+  TRY(auto field, eval_field(column.path.front()));
+  auto values = std::vector<std::string>{};
+  if (auto const* x = try_as<Binary>(negated)) {
+    auto const* left = try_as<Column>(*x->left);
+    auto const* literal = try_as<Literal>(*x->right);
+    if (x->op != BinaryOp::neq or not left or left->path != column.path
+        or not literal) {
+      return None{};
+    }
+    TRY(auto value, render_negated_value(*literal));
+    values.push_back(std::move(value));
+  } else {
+    auto const* y = try_as<Not>(negated);
+    auto const* set = y ? try_as<In>(*y->expr) : nullptr;
+    auto const* left = set ? try_as<Column>(*set->expr) : nullptr;
+    if (not left or left->path != column.path or set->list.empty()) {
+      return None{};
+    }
+    for (auto const& element : set->list) {
+      auto const* literal = try_as<Literal>(element);
+      if (not literal) {
+        return None{};
+      }
+      TRY(auto value, render_negated_value(*literal));
+      values.push_back(std::move(value));
+    }
+  }
+  // The `search` command drops an event if any value of a multivalue field
+  // matches, while TQL keeps the list, which differs from every scalar. An
+  // `eval` expression keeps fields with several values and tests the others
+  // exactly. `if` keeps values that do not compare, such as `"abc"` against
+  // `5`, as TQL does.
+  auto equalities = std::vector<std::string>{};
+  for (auto const& value : values) {
+    equalities.push_back(fmt::format("{}=={}", field, value));
+  }
+  return fmt::format("{}isnull({}) OR mvcount({})>1 OR if({}, false(), true())",
+                     where_marker, field, field, fmt::join(equalities, " OR "));
 }
 
 auto SplRenderer::render_atom(Expr const& expr) const -> Option<std::string> {
@@ -467,7 +761,7 @@ auto SplRenderer::render_atom(Expr const& expr) const -> Option<std::string> {
     expr,
     [&](Binary const& x) -> Option<std::string> {
       auto const* literal = try_as<Literal>(*x.right);
-      if (not push_time_ and literal and is<time>(literal->value)) {
+      if (not settings_.push_time and literal and is<time>(literal->value)) {
         return None{};
       }
       return render_comparison(x);
@@ -491,12 +785,38 @@ auto SplRenderer::render_atom(Expr const& expr) const -> Option<std::string> {
 
 auto SplRenderer::render_junction(Junction junction,
                                   std::span<std::string const> operands) const
-  -> std::string {
-  if (operands.size() == 1) {
-    return operands.front();
+  -> Option<std::string> {
+  // Operands are terms of the `search` command or, with `where_marker`,
+  // expressions of a `where` stage, which do not mix.
+  auto terms = std::vector<std::string>{};
+  auto expressions = std::vector<std::string>{};
+  for (auto const& operand : operands) {
+    if (auto expression = where_expression(operand)) {
+      expressions.push_back(fmt::format("({})", *expression));
+    } else {
+      terms.push_back(operand);
+    }
   }
-  auto keyword = junction == Junction::conjunction ? " AND " : " OR ";
-  return fmt::format("({})", fmt::join(operands, keyword));
+  if (junction == Junction::conjunction) {
+    // Dropping the expressions of a conjunction only widens it.
+    if (not terms.empty()) {
+      if (terms.size() == 1) {
+        return terms.front();
+      }
+      return fmt::format("({})", fmt::join(terms, " AND "));
+    }
+    return fmt::format("{}{}", where_marker, fmt::join(expressions, " AND "));
+  }
+  if (not terms.empty() and not expressions.empty()) {
+    return None{};
+  }
+  if (not expressions.empty()) {
+    return fmt::format("{}{}", where_marker, fmt::join(expressions, " OR "));
+  }
+  if (terms.size() == 1) {
+    return terms.front();
+  }
+  return fmt::format("({})", fmt::join(terms, " OR "));
 }
 
 auto spl_search_command(std::string_view search) -> std::string {
@@ -604,7 +924,8 @@ auto spl_stages(std::string_view search) -> SplStages {
 
 auto plan_spl_search(std::string_view search, ir::OptimizeFilter const& filter,
                      Option<ir::OptimizeProjection> const& projection,
-                     Option<uint64_t> limit, registry const& reg) -> PipePlan {
+                     Option<uint64_t> limit, bool inference,
+                     registry const& reg) -> PipePlan {
   auto stages = spl_stages(search);
   if (not stages.accepted) {
     return PipePlan{.query = std::string{search}};
@@ -612,9 +933,12 @@ auto plan_spl_search(std::string_view search, ir::OptimizeFilter const& filter,
   // A search that mentions `_time` may assign it, for example with
   // `eval _time=strftime(_time, ...)`, after which a comparison with epoch
   // seconds no longer holds.
-  auto push_time = not search.contains("_time");
+  auto settings = SplRenderer::Settings{
+    .push_time = not search.contains("_time"),
+    .inference = inference,
+  };
   return with_all_fields(plan_trailing_stages(
-    SplDialect{false, push_time}, search, filter, projection,
+    SplDialect{false, settings}, search, filter, projection,
     stages.limitable ? limit : None{}, None{}, reg));
 }
 
@@ -638,11 +962,14 @@ auto spl_index_search(std::span<std::string const> indexes)
 auto plan_spl_indexes(std::span<std::string const> indexes,
                       ir::OptimizeFilter const& filter,
                       Option<ir::OptimizeProjection> const& projection,
-                      Option<uint64_t> limit, registry const& reg)
-  -> Option<PipePlan> {
+                      Option<uint64_t> limit, bool inference,
+                      registry const& reg) -> Option<PipePlan> {
   TRY(auto search, spl_index_search(indexes));
-  return with_all_fields(plan_trailing_stages(
-    SplDialect{true, true}, search, filter, projection, limit, None{}, reg));
+  auto settings
+    = SplRenderer::Settings{.push_time = true, .inference = inference};
+  return with_all_fields(plan_trailing_stages(SplDialect{true, settings},
+                                              search, filter, projection, limit,
+                                              None{}, reg));
 }
 
 } // namespace tenzir::pushdown

@@ -43,7 +43,8 @@
 /// different semantics writes the SPL directly.
 namespace tenzir::pushdown {
 
-/// Spells IR prefilters as terms of the SPL `search` command.
+/// Spells IR prefilters as terms of the SPL `search` command, and negations as
+/// expressions of a `where` stage.
 ///
 /// Supported shapes:
 /// - `==`, `<`, `<=`, `>`, `>=` between a top-level field and a number,
@@ -54,26 +55,53 @@ namespace tenzir::pushdown {
 /// - `starts_with`, `ends_with`, substring membership, and their
 ///   case-insensitive forms with ASCII needles, as wildcard patterns,
 /// - `!= null` of a field,
+/// - `!=`, `not ==`, and `not in` with literals, as expressions of a trailing
+///   `where` stage, such as
+///   `isnull(f) OR mvcount(f)>1 OR if(f=="v", false(), true())`, which keep
+///   events without the field and with several values, as TQL does. The
+///   `search` command cannot: `NOT f="v"` drops an event if any value of `f`
+///   matches,
+/// - IP equality and subnet membership, also with `ip()`, as the canonical
+///   spelling of the address or network, and for IPv4 also its IPv4-mapped
+///   IPv6 spelling,
 /// - `and` and `or` of these, where `and` drops operands that do not render.
 ///
-/// Everything else stays local, notably negation, `!=` a value, nested field
-/// paths, ordering on strings, regular expressions, IP addresses, and
+/// Everything else stays local, notably negation of other predicates, nested
+/// field paths, ordering on strings and IP addresses, regular expressions, and
 /// timestamps of fields other than `_time`.
 class SplRenderer final : public PrefilterRenderer {
 public:
-  /// With `push_time` unset, comparisons with timestamps stay local, for a
-  /// search whose `_time` may not hold epoch seconds.
-  explicit SplRenderer(bool push_time = true);
+  struct Settings {
+    /// Whether `_time` holds epoch seconds, so that comparisons of `_time`
+    /// with timestamps can go into the search.
+    bool push_time = true;
+    /// Whether the source infers numbers, booleans, and other types from
+    /// Splunk's strings. Negations depend on it: without inference, `"5"`
+    /// stays a string, which TQL considers different from the number `5`.
+    bool inference = true;
+  };
+
+  explicit SplRenderer(Settings settings);
+
+  auto prefilter_options() const -> PrefilterOptions override;
 
 protected:
   auto render_atom(Expr const& expr) const -> Option<std::string> override;
 
+  auto render_composite(Expr const& expr) const -> Option<std::string> override;
+
   auto render_junction(Junction junction,
                        std::span<std::string const> operands) const
-    -> std::string override;
+    -> Option<std::string> override;
 
 private:
-  bool push_time_ = true;
+  auto render_negation(Expr const& subject, Expr const& negated) const
+    -> Option<std::string>;
+
+  auto render_negated_value(Literal const& literal) const
+    -> Option<std::string>;
+
+  Settings settings_;
 };
 
 /// What appending stages to an SPL search allows.
@@ -102,8 +130,8 @@ auto spl_search_command(std::string_view search) -> std::string;
 auto spl_stages(std::string_view search) -> SplStages;
 
 /// Appends optimizer hints to a user's SPL `search` as trailing stages, in the
-/// order `search`, `fields`, and `head`, so that they apply to the results of
-/// `search`. See `plan_trailing_stages`.
+/// order `search`, `where`, `fields`, and `head`, so that they apply to the
+/// results of `search`. See `plan_trailing_stages`.
 ///
 /// Splunk's export endpoint returns only the fields that a search references,
 /// besides a few default fields. Without a projection, the planner therefore
@@ -112,7 +140,8 @@ auto spl_stages(std::string_view search) -> SplStages;
 ///
 /// If `search` mentions `_time`, comparisons of `_time` with timestamps stay
 /// local, since the search may assign `_time` a value other than epoch
-/// seconds.
+/// seconds. `inference` states whether the source infers types from Splunk's
+/// strings, as `SplRenderer::Settings` describes.
 ///
 /// The `head` stage is appended only for an empty `filter` and only if
 /// `spl_stages` allows it. The source must enforce `limit` locally in any case.
@@ -120,7 +149,8 @@ auto spl_stages(std::string_view search) -> SplStages;
 /// Returns `search` unchanged if `spl_stages` rejects it.
 auto plan_spl_search(std::string_view search, ir::OptimizeFilter const& filter,
                      Option<ir::OptimizeProjection> const& projection,
-                     Option<uint64_t> limit, registry const& reg) -> PipePlan;
+                     Option<uint64_t> limit, bool inference,
+                     registry const& reg) -> PipePlan;
 
 /// Spells the search for the events of `indexes`, which must not be empty, or
 /// returns `None` if an index name has no spelling.
@@ -136,7 +166,7 @@ auto spl_index_search(std::span<std::string const> indexes)
 auto plan_spl_indexes(std::span<std::string const> indexes,
                       ir::OptimizeFilter const& filter,
                       Option<ir::OptimizeProjection> const& projection,
-                      Option<uint64_t> limit, registry const& reg)
-  -> Option<PipePlan>;
+                      Option<uint64_t> limit, bool inference,
+                      registry const& reg) -> Option<PipePlan>;
 
 } // namespace tenzir::pushdown

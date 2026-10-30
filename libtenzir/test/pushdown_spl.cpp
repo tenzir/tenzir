@@ -57,13 +57,13 @@ auto paths(std::vector<std::string_view> sources) -> ir::OptimizeProjection {
 
 auto plan(std::string_view search, std::vector<std::string_view> predicates,
           Option<std::vector<std::string_view>> projection = None{},
-          Option<uint64_t> limit = None{}) -> PipePlan {
+          Option<uint64_t> limit = None{}, bool inference = true) -> PipePlan {
   auto projected = Option<ir::OptimizeProjection>{};
   if (projection) {
     projected = paths(*projection);
   }
   return plan_spl_search(search, filters(predicates), projected, limit,
-                         test::builtin_registry());
+                         inference, test::builtin_registry());
 }
 
 /// The `search` stage for a single predicate, or the empty string if nothing
@@ -107,8 +107,7 @@ TEST("spl renders string and boolean equality") {
   // Ordering on strings stays local.
   CHECK_EQUAL(search(R"(user < "b")"), "");
   // `!=` must keep missing fields, which `search` cannot prove.
-  CHECK_EQUAL(search(R"(user != "alice")"), "");
-  CHECK_EQUAL(search("n != 5"), "");
+  // `!=` goes into a `where` stage; see the negation test.
 }
 
 TEST("spl quotes field names that are not identifiers") {
@@ -157,10 +156,11 @@ TEST("spl renders _time comparisons in whole seconds") {
 TEST("spl renders junctions") {
   CHECK_EQUAL(search(R"(n > 6 or user == "bob")"), R"((n>6 OR user="bob"))");
   // `and` drops operands that do not render.
-  CHECK_EQUAL(search(R"((n > 6 or user == "bob") and (n > 1 and user != "x"))"),
-              R"((n>6 OR user="bob") n>1)");
+  CHECK_EQUAL(
+    search(R"((n > 6 or user == "bob") and (n > 1 and user.match_regex("x")))"),
+    R"((n>6 OR user="bob") n>1)");
   // `or` needs every operand.
-  CHECK_EQUAL(search(R"(n > 6 or user != "bob")"), "");
+  CHECK_EQUAL(search(R"(n > 6 or user.match_regex("^b"))"), "");
   CHECK_EQUAL(search("not (n > 6)"), "");
 }
 
@@ -250,7 +250,7 @@ TEST("spl generates searches for indexes") {
       projected = paths(*projection);
     }
     auto planned = plan_spl_indexes(indexes, filters(predicates), projected,
-                                    limit, test::builtin_registry());
+                                    limit, true, test::builtin_registry());
     REQUIRE(planned);
     return planned->query;
   };
@@ -301,8 +301,147 @@ TEST("spl keeps _time comparisons local after searches that mention _time") {
   auto indexes = std::vector<std::string>{"main"};
   auto generated
     = plan_spl_indexes(indexes, filters({"_time >= 2025-01-01T00:01:00Z"}),
-                       None{}, None{}, test::builtin_registry());
+                       None{}, None{}, true, test::builtin_registry());
   REQUIRE(generated);
   CHECK_EQUAL(generated->query,
               "search index=\"main\" _time>=1735689660\n| fields *");
+}
+
+/// The appended stages for a single predicate, without `fields *`.
+auto stages(std::string_view predicate, bool inference = true) -> std::string {
+  auto planned = plan("S", {predicate}, None{}, None{}, inference);
+  constexpr auto suffix = std::string_view{"\n| fields *"};
+  REQUIRE(planned.query.starts_with("S"));
+  REQUIRE(planned.query.ends_with(suffix));
+  return planned.query.substr(1, planned.query.size() - 1 - suffix.size());
+}
+
+/// The `where` expression of a negation of `field` with `values`.
+auto negated_where(std::string_view field, std::vector<std::string_view> values)
+  -> std::string {
+  auto equalities = std::vector<std::string>{};
+  for (auto value : values) {
+    equalities.push_back(fmt::format("{}=={}", field, value));
+  }
+  return fmt::format("(isnull({0}) OR mvcount({0})>1 OR if({1}, false(), "
+                     "true()))",
+                     field, fmt::join(equalities, " OR "));
+}
+
+auto where(std::string_view expression) -> std::string {
+  return fmt::format("\n| where {}", expression);
+}
+
+TEST("spl renders negations that keep missing and multivalue fields") {
+  CHECK_EQUAL(stages(R"(user != "alice")"),
+              where(negated_where("user", {R"("alice")"})));
+  CHECK_EQUAL(stages(R"("alice" != user)"),
+              where(negated_where("user", {R"("alice")"})));
+  CHECK_EQUAL(stages(R"(not (user == "alice"))"),
+              where(negated_where("user", {R"("alice")"})));
+  CHECK_EQUAL(stages(R"(not (user in ["alice", "bob"]))"),
+              where(negated_where("user", {R"("alice")", R"("bob")"})));
+  CHECK_EQUAL(stages("n != 5"), where(negated_where("n", {"5"})));
+  CHECK_EQUAL(stages("not (n in [5, 7])"),
+              where(negated_where("n", {"5", "7"})));
+  CHECK_EQUAL(stages("flag != true"),
+              where(negated_where("flag", {R"("true")"})));
+  CHECK_EQUAL(stages(R"(this["tags{}"] != "x")"),
+              where(negated_where("'tags{}'", {R"("x")"})));
+  CHECK_EQUAL(stages(R"(this["OR"] != "x")"),
+              where(negated_where("'OR'", {R"("x")"})));
+  // `eval` compares exactly, so wildcards, empty strings, and whitespace work.
+  CHECK_EQUAL(stages(R"(x != "a*b")"), where(negated_where("x", {R"("a*b")"})));
+  CHECK_EQUAL(stages(R"(x != "")"), where(negated_where("x", {R"("")"})));
+  CHECK_EQUAL(stages(R"(x != " a")"), where(negated_where("x", {R"(" a")"})));
+  // Negations combine with `search` terms in separate stages.
+  CHECK_EQUAL(stages(R"(user != "alice" and n > 6)"),
+              "\n| search n>6" + where(negated_where("user", {R"("alice")"})));
+  CHECK_EQUAL(plan("S", {R"(user != "alice")", "n != 5"}).query,
+              "S"
+                + where(negated_where("user", {R"("alice")"}) + " AND "
+                        + negated_where("n", {"5"}))
+                + "\n| fields *");
+  // A disjunction cannot mix stages, and a conjunction drops expressions.
+  CHECK_EQUAL(stages(R"(user != "alice" or n > 6)"), "");
+  CHECK_EQUAL(stages(R"(user != "alice" or n != 5)"),
+              where("(" + negated_where("user", {R"("alice")"}) + " OR "
+                    + negated_where("n", {"5"}) + ")"));
+  CHECK_EQUAL(stages(R"((user != "alice" and n > 6) or n > 9)"),
+              "\n| search (n>6 OR n>9)");
+  // A string that inference turns into another type differs from the value
+  // that TQL sees, which negating the match would drop.
+  for (auto value : {"5", "-1.5", "true", "false", "192.0.2.1", "10.0.0.0/8",
+                     "5m", "2025-01-01T00:00:00Z", "now", "inf", "nan"}) {
+    CHECK_EQUAL(stages(fmt::format(R"(x != "{}")", value)), "");
+  }
+  // Escaping of quotes and backslashes in `eval` is not verified.
+  for (auto value : {R"(a\"b)", R"(a\\b)"}) {
+    CHECK_EQUAL(stages(fmt::format(R"(x != "{}")", value)), "");
+  }
+  // Other negations, `_time`, search modifiers, and nested paths stay local.
+  CHECK_EQUAL(stages("not (n > 6)"), "");
+  CHECK_EQUAL(stages(R"(not user.starts_with("a"))"), "");
+  CHECK_EQUAL(stages(R"(_time != "x")"), "");
+  CHECK_EQUAL(stages(R"(earliest != "x")"), "");
+  CHECK_EQUAL(stages("_time != 2025-01-01"), "");
+  CHECK_EQUAL(stages(R"(obj.k != "x")"), "");
+  CHECK_EQUAL(stages(R"(this["it's"] != "x")"), "");
+  // Presence checks are unchanged.
+  CHECK_EQUAL(stages("action != null"), "\n| search action=*");
+  // The numeric boundary of exact doubles stays local, also in lists.
+  CHECK_EQUAL(stages("n != 9007199254740992"), "");
+  CHECK_EQUAL(stages("n != -9007199254740992"), "");
+  CHECK_EQUAL(stages("not (n in [1, 9007199254740992])"), "");
+  CHECK_EQUAL(stages("not (n in [-9007199254740992])"), "");
+  CHECK_EQUAL(stages("not (n in [uint(9007199254740992)])"), "");
+  // Nova keeps mixed lists as they are, so `true in [1, true]` holds and the
+  // negation matches each literal by its own kind.
+  CHECK_EQUAL(stages("not (x in [1, true])"),
+              where(negated_where("x", {"1", R"("true")"})));
+  CHECK_EQUAL(stages("not (n in [9007199254740991])"),
+              where(negated_where("n", {"9007199254740991"})));
+}
+
+TEST("spl negates only strings without type inference") {
+  // Without inference, `"5"` stays a string, which differs from `5`.
+  CHECK_EQUAL(stages("n != 5", false), "");
+  CHECK_EQUAL(stages("flag != true", false), "");
+  CHECK_EQUAL(stages(R"(x != "5")", false),
+              where(negated_where("x", {R"("5")"})));
+  // Positive comparisons are unaffected.
+  CHECK_EQUAL(stages("n > 6", false), "\n| search n>6");
+}
+
+TEST("spl appends negations after the base search of indexes") {
+  auto indexes = std::vector<std::string>{"main"};
+  auto planned
+    = plan_spl_indexes(indexes, filters({R"(user != "alice")", "n > 6"}),
+                       None{}, None{}, true, test::builtin_registry());
+  REQUIRE(planned);
+  CHECK_EQUAL(planned->query, "search index=\"main\" n>6"
+                                + where(negated_where("user", {R"("alice")"}))
+                                + "\n| fields *");
+}
+
+TEST("spl renders addresses and networks") {
+  // Single-host networks match every spelling of an address.
+  CHECK_EQUAL(search("src == 192.0.2.10"),
+              R"((src="192.0.2.10/32" OR src="::ffff:192.0.2.10/128"))");
+  CHECK_EQUAL(search("src.ip() == 192.0.2.10"),
+              R"((src="192.0.2.10/32" OR src="::ffff:192.0.2.10/128"))");
+  CHECK_EQUAL(search("src == 2001:db8::1"), R"(src="2001:db8::1/128")");
+  CHECK_EQUAL(search("src in 192.0.2.0/24"),
+              R"((src="192.0.2.0/24" OR src="::ffff:192.0.2.0/120"))");
+  CHECK_EQUAL(search("src in 2001:db8::/32"), R"(src="2001:db8::/32")");
+  CHECK_EQUAL(search("src in [192.0.2.10, 2001:db8::1]"),
+              R"((src="192.0.2.10/32" OR src="::ffff:192.0.2.10/128" OR )"
+              R"(src="2001:db8::1/128"))");
+  // Splunk matches IPv4 networks only against IPv4 addresses and IPv6 ones
+  // only against IPv6 addresses, so networks spanning both stay local.
+  CHECK_EQUAL(search("src in ::/0"), "");
+  CHECK_EQUAL(search("src in ::/64"), "");
+  // Ordering and negation of addresses stay local.
+  CHECK_EQUAL(search("src < 192.0.2.10"), "");
+  CHECK_EQUAL(search("src != 192.0.2.10"), "");
 }

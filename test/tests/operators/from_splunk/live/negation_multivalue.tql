@@ -1,0 +1,13 @@
+// Negations keep multivalue fields, which TQL sees as lists that differ from
+// every string. `search` would drop alice's events because one value matches.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"index=main source="tenzir-docs-auth" | eval tags=if(user="alice", split("a,b", ","), "a")"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where tags != "a"
+select _time, user, tags
+sort _time

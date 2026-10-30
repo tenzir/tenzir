@@ -374,14 +374,14 @@ auto plan_search(FromSplunkArgs const& args, registry const& reg)
   if (args.search) {
     return pushdown::plan_spl_search(
              pushdown::spl_search_command(args.search->inner), hints.filter,
-             hints.projection, hints.limit, reg)
+             hints.projection, hints.limit, not args.raw, reg)
       .query;
   }
   TENZIR_ASSERT(args.index);
   auto names = index_names(args.index->inner);
   TENZIR_ASSERT(names);
   auto plan = pushdown::plan_spl_indexes(*names, hints.filter, hints.projection,
-                                         hints.limit, reg);
+                                         hints.limit, not args.raw, reg);
   TENZIR_ASSERT(plan);
   return std::move(plan->query);
 }

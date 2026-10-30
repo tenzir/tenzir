@@ -1531,13 +1531,74 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns,
 
 // -- Prefilters ---------------------------------------------------------------
 
+/// Translates a negated equality or membership of a dynamic column with
+/// literals, for renderers that opt in with `PrefilterOptions::negations`.
+///
+/// TQL's `x != "a"` and `not (x in ["a", "b"])` hold for a missing `x`, so the
+/// result keeps it explicitly: `Or{IsNull{x}, Binary{neq, x, "a"}}` and
+/// `Or{IsNull{x}, Not{In{x, ["a", "b"]}}}`. A renderer that opts in spells
+/// these shapes such that they keep every row where the value differs from
+/// every literal under its own comparison, and vetoes every other negation.
+auto translate_dynamic_negation(Scalar column, ast::expression const& value,
+                                bool membership, registry const& reg)
+  -> Option<Expr> {
+  // A negation drops the values that the target compares equal, so every
+  // literal must compare exactly. At the exact-double boundary an adjacent
+  // integer can round onto the literal in a target that compares in `double`.
+  auto negatable = [](ast::constant const& literal) {
+    if (is<caf::none_t>(literal.value) or is<time>(literal.value)
+        or not dynamic_literal_fits(literal)) {
+      return false;
+    }
+    return match(
+      literal.value,
+      [](int64_t x) {
+        constexpr auto bound = int64_t{1} << 53;
+        return x != bound and x != -bound;
+      },
+      [](uint64_t x) {
+        return x != uint64_t{1} << 53;
+      },
+      [](auto const&) {
+        return true;
+      });
+  };
+  auto subject = column.expr;
+  if (membership) {
+    auto const* list = try_as<ast::list>(value);
+    if (not list) {
+      return None{};
+    }
+    for (auto const& item : list->items) {
+      auto const* item_expr = try_as<ast::expression>(item);
+      auto literal = item_expr ? as_literal(*item_expr, reg) : None{};
+      if (not literal or not negatable(*literal)) {
+        return None{};
+      }
+    }
+    TRY(auto set, translate_in_list(column, *list, reg));
+    if (not is<In>(set)) {
+      return None{};
+    }
+    return disjunction(is_null(std::move(subject)), Not{std::move(set)});
+  }
+  TRY(auto literal, as_literal(value, reg));
+  if (not negatable(literal)) {
+    return None{};
+  }
+  return disjunction(is_null(std::move(subject)),
+                     compare(std::move(column.expr), ast::binary_op::neq,
+                             to_literal(literal), true));
+}
+
 /// Dynamic fields contribute only null-rejecting atoms. Negation, inequality
 /// against a value, null equality, pairwise comparisons, and computations
-/// cannot establish the required implication. `and` and `or` compose these
-/// atoms in translate_prefilter, but `not` deliberately does not.
+/// cannot establish the required implication, except for the negations that a
+/// renderer opts into with `options`. `and` and `or` compose these atoms in
+/// translate_prefilter, but `not` deliberately does not.
 auto translate_dynamic_atom(ast::expression const& expr,
-                            ColumnModel const& columns, registry const& reg)
-  -> Option<Expr> {
+                            ColumnModel const& columns, registry const& reg,
+                            PrefilterOptions options) -> Option<Expr> {
   auto dynamic_column = [&](ast::expression const& x) -> Option<Scalar> {
     auto column = resolve_column(x, columns);
     if (not column or not is<DynamicType>(column->type)) {
@@ -1553,9 +1614,42 @@ auto translate_dynamic_atom(ast::expression const& expr,
   if (auto const* fn = try_as<ast::function_call>(expr)) {
     return translate_predicate_function(*fn, columns, reg, true);
   }
+  if (auto const* negation = try_as<ast::unary_expr>(expr);
+      negation and negation->op == ast::unary_op::not_ and options.negations) {
+    auto const* inner = try_as<ast::binary_expr>(negation->expr);
+    if (not inner
+        or (inner->op != ast::binary_op::eq
+            and inner->op != ast::binary_op::in)) {
+      return None{};
+    }
+    auto membership = inner->op == ast::binary_op::in;
+    if (auto column = dynamic_column(inner->left)) {
+      return translate_dynamic_negation(std::move(*column), inner->right,
+                                        membership, reg);
+    }
+    if (membership) {
+      return None{};
+    }
+    TRY(auto column, dynamic_column(inner->right));
+    return translate_dynamic_negation(std::move(column), inner->left, false,
+                                      reg);
+  }
   auto const* x = try_as<ast::binary_expr>(expr);
   if (not x) {
     return None{};
+  }
+  if (x->op == ast::binary_op::neq and options.negations) {
+    // `x != null` stays a presence check below.
+    auto column = dynamic_column(x->left);
+    auto const* value = &x->right;
+    if (not column) {
+      column = dynamic_column(x->right);
+      value = &x->left;
+    }
+    auto literal = column ? as_literal(*value, reg) : None{};
+    if (literal and not is<caf::none_t>(literal->value)) {
+      return translate_dynamic_negation(std::move(*column), *value, false, reg);
+    }
   }
   // Simple lower/upper mapping is not full case folding. For ASCII needles
   // it agrees on ASCII subjects; the string prefilter keeps every other
@@ -1831,14 +1925,14 @@ auto translate_predicate(ast::expression const& expr,
 }
 
 auto translate_prefilter(ast::expression const& expr,
-                         ColumnModel const& columns, registry const& reg)
-  -> Option<Expr> {
+                         ColumnModel const& columns, registry const& reg,
+                         PrefilterOptions options) -> Option<Expr> {
   // An exact translation is the tightest prefilter. It may use the positive
   // form, since a prefilter drops rows on `false` and `null` alike.
   if (auto exact = translate_predicate(expr, columns, true, reg)) {
     return exact;
   }
-  if (auto dynamic = translate_dynamic_atom(expr, columns, reg)) {
+  if (auto dynamic = translate_dynamic_atom(expr, columns, reg, options)) {
     return dynamic;
   }
   auto const* binary = try_as<ast::binary_expr>(expr);
@@ -1849,19 +1943,19 @@ auto translate_prefilter(ast::expression const& expr,
     case ast::binary_op::and_: {
       // A conjunction is `true` only where every conjunct is, so any subset
       // of their prefilters is a prefilter.
-      auto left = translate_prefilter(binary->left, columns, reg);
-      auto right = translate_prefilter(binary->right, columns, reg);
+      auto left = translate_prefilter(binary->left, columns, reg, options);
+      auto right = translate_prefilter(binary->right, columns, reg, options);
       if (left and right) {
         return conjunction(std::move(*left), std::move(*right));
       }
       return left ? std::move(left) : std::move(right);
     }
     case ast::binary_op::or_: {
-      auto left = translate_prefilter(binary->left, columns, reg);
+      auto left = translate_prefilter(binary->left, columns, reg, options);
       if (not left) {
         return None{};
       }
-      auto right = translate_prefilter(binary->right, columns, reg);
+      auto right = translate_prefilter(binary->right, columns, reg, options);
       if (not right) {
         return None{};
       }
@@ -1925,8 +2019,8 @@ auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
       result.pushed.push_back(std::move(*pushed));
       continue;
     }
-    if (auto pushed
-        = render_prefilter(translate_prefilter(expr, columns, reg))) {
+    if (auto pushed = render_prefilter(translate_prefilter(
+          expr, columns, reg, renderer.prefilter_options()))) {
       result.pushed.push_back(std::move(*pushed));
     }
     result.remaining.push_back(std::move(expr));

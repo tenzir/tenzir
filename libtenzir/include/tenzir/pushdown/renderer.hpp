@@ -17,6 +17,18 @@
 
 namespace tenzir::pushdown {
 
+/// The prefilters of `DynamicType` columns that a renderer supports beyond the
+/// default ones, so that translation emits them only for targets that spell
+/// them correctly.
+struct PrefilterOptions {
+  /// Negated equalities and memberships with literals, which translate into
+  /// `Or{IsNull{x}, Binary{neq, x, literal}}` and
+  /// `Or{IsNull{x}, Not{In{x, literals}}}`. A target that compares values as
+  /// text, for example, must not opt in, since `"5"` may decode to the number
+  /// `5`, which TQL considers different from the string `"5"`.
+  bool negations = false;
+};
+
 /// Spells IR expressions in a target's query language.
 ///
 /// Translation decides whether a predicate has an exact counterpart in the IR,
@@ -41,6 +53,12 @@ namespace tenzir::pushdown {
 class Renderer {
 public:
   virtual ~Renderer() = default;
+
+  /// The translations that the renderer's prefilters support beyond the
+  /// default ones.
+  virtual auto prefilter_options() const -> PrefilterOptions {
+    return {};
+  }
 
   /// Renders `expr` exactly, or returns `None` if the target cannot spell some
   /// part of it with the same semantics.
@@ -78,6 +96,14 @@ public:
   auto render_prefilter(Expr const& expr) const -> Option<std::string> final;
 
 protected:
+  /// Spells `expr` as a whole, before the rules above apply, or returns `None`
+  /// to apply them. A dialect overrides this for shapes that it spells in one
+  /// term, such as the negations of `PrefilterOptions`. Any spelling must be a
+  /// superset.
+  virtual auto render_composite(Expr const&) const -> Option<std::string> {
+    return None{};
+  }
+
   /// The keyword of a junction.
   enum class Junction {
     conjunction,
@@ -89,10 +115,11 @@ protected:
   virtual auto render_atom(Expr const& expr) const -> Option<std::string> = 0;
 
   /// Spells a junction of at least one rendered operand, including any
-  /// grouping that the result needs to compose with other text.
+  /// grouping that the result needs to compose with other text, or vetoes it,
+  /// for example when the operands use spellings that do not compose.
   virtual auto render_junction(Junction junction,
                                std::span<std::string const> operands) const
-    -> std::string
+    -> Option<std::string>
     = 0;
 };
 

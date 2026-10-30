@@ -68,6 +68,9 @@ auto PrefilterRenderer::render(Expr const&) const -> Option<std::string> {
 
 auto PrefilterRenderer::render_prefilter(Expr const& expr) const
   -> Option<std::string> {
+  if (auto composite = render_composite(expr)) {
+    return composite;
+  }
   return match(
     expr,
     [&](And const& x) -> Option<std::string> {

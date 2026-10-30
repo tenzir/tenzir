@@ -81,7 +81,7 @@ protected:
 
   auto render_junction(Junction junction,
                        std::span<std::string const> operands) const
-    -> std::string override;
+    -> Option<std::string> override;
 };
 
 /// Returns whether a stage appended to `query` on a new line applies to the
