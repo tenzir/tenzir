@@ -5,3 +5,4 @@ error: Splunk search failed: The lookup table does not exist.
    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: search: | inputlookup "missing lookup.csv"
+           | fields *

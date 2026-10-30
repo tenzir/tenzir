@@ -4,7 +4,7 @@ fixtures:
     expected:
     - method: POST
       path: /services/search/v2/jobs/export
-      body: search=fixture&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false&namespace=search&index_earliest=-20m&index_latest=-10m&now=1784016000&max_time=60&enable_lookups=false&rf=host&search_mode=normal
+      body: search=search%20fixture%0A%7C%20fields%20%2A&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false&namespace=search&index_earliest=-20m&index_latest=-10m&now=1784016000&max_time=60&enable_lookups=false&rf=host&search_mode=normal
       header_name: Authorization
       header_value: Splunk test-token
 ---

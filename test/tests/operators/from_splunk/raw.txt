@@ -1,0 +1,32 @@
+{
+  user: "alice",
+  n: "5",
+  n_type: "string",
+  flag_type: "string",
+  src_ip_type: "string",
+  time_type: "string",
+}
+{
+  user: "Alice",
+  n: "50",
+  n_type: "string",
+  flag_type: "string",
+  src_ip_type: "string",
+  time_type: "string",
+}
+{
+  user: "bob",
+  n: "-1.5",
+  n_type: "string",
+  flag_type: "null",
+  src_ip_type: "string",
+  time_type: "string",
+}
+{
+  user: "carol",
+  n: "007",
+  n_type: "string",
+  flag_type: "null",
+  src_ip_type: "null",
+  time_type: "string",
+}

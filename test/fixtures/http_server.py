@@ -111,6 +111,23 @@ _SPLUNK_COMPATIBILITY = (
 )
 
 
+# Splunk renders every field value as a string, and multivalue fields as lists.
+# The route ignores the search, so tests see which rows the operator keeps.
+_SPLUNK_STRINGS = (
+    b'{"preview":false,"result":{"_time":"2025-01-01T00:00:00.000+00:00",'
+    b'"user":"alice","action":"login","n":"5","flag":"true",'
+    b'"src_ip":"192.0.2.10","tags":["a","b"]}}\n'
+    b'{"preview":false,"result":{"_time":"2025-01-01T00:01:00.000+00:00",'
+    b'"user":"Alice","action":"LOGIN","n":"50","flag":"false",'
+    b'"src_ip":"2001:db8::1","tags":"c"}}\n'
+    b'{"preview":false,"result":{"_time":"2025-01-01T00:02:00.000+00:00",'
+    b'"user":"bob","action":"logout","n":"-1.5",'
+    b'"src_ip":"198.51.100.24"}}\n'
+    b'{"preview":false,"lastrow":true,"result":{"_time":'
+    b'"2025-01-01T00:03:00.000+00:00","user":"carol","n":"007","s":"abc"}}\n'
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class HttpServerOptions:
     @dataclasses.dataclass(frozen=True)
@@ -515,6 +532,9 @@ def _make_handler(
                 return
             if path == "/splunk/decoding" + _SPLUNK_EXPORT:
                 self._reply(_SPLUNK_COMPATIBILITY)
+                return
+            if path == "/splunk/strings" + _SPLUNK_EXPORT:
+                self._reply(_SPLUNK_STRINGS)
                 return
             if path == "/splunk/fragmented-documents" + _SPLUNK_EXPORT:
                 # Split inside JSON escapes, numeric tokens, keys, and CRLF.

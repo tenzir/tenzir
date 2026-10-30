@@ -1,0 +1,12 @@
+{
+  _time: 2025-01-01T00:00:00Z,
+  user: "alice",
+  length: 5,
+  success: true,
+}
+{
+  _time: 2025-01-01T00:02:00Z,
+  user: "alice",
+  length: 5,
+  success: true,
+}

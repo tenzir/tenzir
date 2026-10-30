@@ -1,0 +1,25 @@
+{
+  _time: 2025-01-01T00:00:00Z,
+  user: "alice",
+  action: "login",
+  n: 5,
+  flag: true,
+  src_ip: 192.0.2.10,
+  tags: [
+    "a",
+    "b",
+  ],
+}
+{
+  _time: 2025-01-01T00:02:00Z,
+  user: "bob",
+  action: "logout",
+  n: -1.5,
+  src_ip: 198.51.100.24,
+}
+{
+  _time: 2025-01-01T00:03:00Z,
+  user: "carol",
+  n: 7,
+  s: "abc",
+}

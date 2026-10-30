@@ -1,0 +1,23 @@
+{
+  fields: [
+    "_bkt",
+    "_cd",
+    "_indextime",
+    "_raw",
+    "_serial",
+    "_si",
+    "_sourcetype",
+    "_time",
+    "action",
+    "host",
+    "index",
+    "linecount",
+    "outcome",
+    "punct",
+    "source",
+    "sourcetype",
+    "splunk_server",
+    "src_ip",
+    "user",
+  ],
+}

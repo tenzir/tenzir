@@ -4,7 +4,7 @@ fixtures:
       expected:
         - method: POST
           path: /splunk/error-message/services/search/v2/jobs/export
-          body: search=%7C%20inputlookup%20%22missing%20lookup.csv%22&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+          body: search=%7C%20inputlookup%20%22missing%20lookup.csv%22%0A%7C%20fields%20%2A&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
 error: true
 ---
 

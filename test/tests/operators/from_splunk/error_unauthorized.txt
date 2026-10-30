@@ -4,4 +4,5 @@ error: Splunk rejected the search: ERROR: Unauthorized
 7 |   search="fixture",
   |          ^^^^^^^^^
   |
-  = note: search: fixture
+  = note: search: search fixture
+          | fields *

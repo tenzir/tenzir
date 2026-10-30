@@ -5,3 +5,4 @@ error: Splunk search failed: The search could not be parsed.
    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: search: | rest /services/missing
+           | fields *

@@ -42,7 +42,7 @@ try:
         stderr_ready()
         line = process.stderr.readline()
         assert line, "stream ended before the initial warning"
-        if b"= note: search: fixture" in line:
+        if b"= note: search: search fixture" in line:
             break
     with urllib.request.urlopen(url + "/start", timeout=10):
         pass

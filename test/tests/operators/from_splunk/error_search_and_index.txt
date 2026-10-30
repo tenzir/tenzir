@@ -1,0 +1,9 @@
+error: `search` and `index` are mutually exclusive
+ --> tests/operators/from_splunk/error_search_and_index.tql:6:10
+  |
+6 |   search="index=main", index="main",
+  |          ^^^^^^^^^^^^
+  ⋮
+6 |   search="index=main", index="main",
+  |                              ^^^^^^
+  |
