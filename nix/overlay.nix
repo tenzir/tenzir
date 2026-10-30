@@ -112,6 +112,26 @@ bunOverlay
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
     aws-sdk-cpp = prevPkgs.aws-sdk-cpp.override { curl = finalPkgs.curl-ws; };
   };
+  # NSS 3.131.1 distrusts the eMudhra roots whose intermediate CA keys leaked.
+  # Only what ships with Tenzir uses it, because overriding `cacert` itself
+  # rebuilds the static toolchain. Drop this once the nixpkgs pin includes it.
+  cacert-tenzir =
+    (prevPkgs.cacert.override {
+      # The Comodo root cross-signed the leaked intermediates. NSS trusts it
+      # only for email, and NixOS blocks it in security.pki, which the image
+      # never sees.
+      blacklist = [ "Comodo AAA Services root" ];
+    }).overrideAttrs
+      (orig: {
+        version = "3.131.1";
+        src = finalPkgs.fetchurl {
+          urls = [
+            "https://hg-edge.mozilla.org/projects/nss/raw-file/NSS_3_131_1_RTM/lib/ckfw/builtins/certdata.txt"
+            "https://raw.githubusercontent.com/nss-dev/nss/refs/tags/NSS_3_131_1_RTM/lib/ckfw/builtins/certdata.txt"
+          ];
+          hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
+        };
+      });
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
   duckdb = callFunction ./overrides/duckdb.nix { inherit (prevPkgs) duckdb; };
@@ -128,7 +148,21 @@ bunOverlay
         hash = "sha256-XCLv7PvE19WQ1n9mBxvJroCqR0XQEQvgd4Uw4IZ1Ge0=";
       })
     ];
+    # gRPC falls back to its own vendored root store, which goes stale between
+    # releases. Point it at the system bundle instead.
+    postInstall = (orig.postInstall or "") + ''
+      ln -sf ${finalPkgs.cacert-tenzir}/etc/ssl/certs/ca-bundle.crt $out/share/grpc/roots.pem
+    '';
   });
+  # libtls defaults to the bundle it was built with, and the vendored copy ships
+  # alongside it and would otherwise go stale.
+  libressl =
+    (prevPkgs.libressl_4_3.override { cacert = finalPkgs.cacert-tenzir; }).overrideAttrs
+      (orig: {
+        postInstall = (orig.postInstall or "") + ''
+          ln -sf ${finalPkgs.cacert-tenzir}/etc/ssl/certs/ca-bundle.crt $out/etc/ssl/cert.pem
+        '';
+      });
   rdkafka = prevPkgs.rdkafka.override { curl = finalPkgs.curl-ws; };
   libcpr = prevPkgs.libcpr.override { curl = finalPkgs.curl-ws; };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
