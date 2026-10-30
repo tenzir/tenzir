@@ -104,6 +104,7 @@ rec {
           tenzirPythonPkgs
           toImageFn
           ;
+        cacert = linkPkgs.cacert-tenzir;
         stdenv = tenzirCcacheStdenv;
         caf = linkPkgs.caf.override {
           stdenv = tenzirStdenv;

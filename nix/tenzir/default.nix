@@ -117,6 +117,7 @@ let
 
       toImage = pkgsBuildHost.callPackage toImageFn {
         inherit isStatic;
+        cacert = pkgsBuildHost.cacert-tenzir;
         # Match the bundled wheels, including for cross-built images.
         python3 = pkgsBuildHost.python313;
       };
