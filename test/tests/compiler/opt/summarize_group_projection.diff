@@ -154,7 +154,8 @@
                    emit_every: 1
                  }
                }
-             ]
+             ],
+             definition_location: [1]:19..56 from 0
            } @ [1]:15..58 from 0,
            let_ids: {
              "0": 1
@@ -187,5 +188,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..58 from 0
  }

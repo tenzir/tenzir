@@ -129,9 +129,11 @@
 -              
 -            ]
 -          }
--        ]
+-        ],
+-        definition_location: [1]:21..48 from 0
 -      },
 -      loc: [1]:7..16 from 0
      }
-   ]
+   ],
+   definition_location: [1]:0..50 from 0
  }

@@ -96,7 +96,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:164..170 from 0
        },
        alternative: {
          lets: [
@@ -136,7 +137,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:182..188 from 0
        }
      },
 -    where_ir {
@@ -178,5 +180,6 @@
 -      ]
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:126..203 from 0
  }

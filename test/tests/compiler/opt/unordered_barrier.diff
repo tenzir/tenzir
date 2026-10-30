@@ -62,7 +62,28 @@
 -              
 -            ],
 -            order: "ordered"
--          },
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "unordered"
++    },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: root_field {
++            id: `foo` @ [1]:34..37 from 0,
++            has_question_mark: false
+           },
 -          where_ir {
 -            op: {
 -              path: [
@@ -85,29 +106,6 @@
 -              
 -            ]
 -          }
-+        named_args: [
-+          
-         ]
-       },
--      loc: [1]:7..16 from 0
-+      filter: [
-+        
-+      ],
-+      order: "unordered"
-+    },
-+    where_ir {
-+      op: {
-+        path: [
-+          
-+        ],
-+        ref: unresolved
-+      },
-+      args: [
-+        Incomplete binary_expr {
-+          left: root_field {
-+            id: `foo` @ [1]:34..37 from 0,
-+            has_question_mark: false
-+          },
 +          op: "eq",
 +          right: constant int64 42 @ [1]:41..43 from 0,
 +          location: [1]:34..43 from 0
@@ -128,15 +126,18 @@
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        definition_location: [1]:21..43 from 0
 +        named_args: [
 +          
 +        ]
-+      },
+       },
+-      loc: [1]:7..16 from 0
 +      filter: [
 +        
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..45 from 0
  }

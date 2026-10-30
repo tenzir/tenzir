@@ -76,7 +76,8 @@
 -              order: "ordered"
 +              order: "unordered"
              }
-           ]
+           ],
+           definition_location: [1]:20..33 from 0
          } @ [1]:16..35 from 0,
          let_ids: {
            
@@ -131,5 +132,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..46 from 0
  }

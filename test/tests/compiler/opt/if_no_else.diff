@@ -77,7 +77,8 @@
 -            order: "ordered"
 +            order: "unordered"
            }
-         ]
+         ],
+         definition_location: [1]:16..41 from 0
        }
      },
      GenericIr {
@@ -101,5 +102,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..51 from 0
  }

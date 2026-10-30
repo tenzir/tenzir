@@ -306,7 +306,8 @@
 +              }
              }
 -          }
-+          ]
++          ],
++          definition_location: [0]:0..0 from 0
 +        }
 +      }
 +    },
@@ -358,5 +359,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:180..303 from 0
  }

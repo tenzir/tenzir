@@ -4,7 +4,7 @@
 ║
 ● group
 ╎
-● SetIr
+● set
 ╎
 ● to_stdout
 │

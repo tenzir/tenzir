@@ -60,7 +60,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:21..27 from 0
        }
      },
      GenericIr {
@@ -105,5 +106,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..36 from 0
  }

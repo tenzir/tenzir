@@ -67,15 +67,6 @@
 -              fn: {
 -                path: [
 -                  `count` @ [1]:164..167 from 0
--                ],
--                ref: std::count/fn
--              },
--              args: [
--                
--              ],
--              method: false,
--              location: [1]:164..167 from 0
--            }
 +            output: [
 +              "src_ip"
 +            ],
@@ -88,22 +79,8 @@
 +              "count"
 +            ],
 +            function: "count"
-           }
-         ],
--        groups: [
--          {
--            expr: {
--              expr: root_field {
--                id: `src_ip` @ [1]:168..174 from 0,
--                has_question_mark: false
--              },
--              has_this: false,
--              path: [
--                {
--                  id: `src_ip` @ [1]:168..174 from 0,
--                  has_question_mark: false
--                }
--              ]
++          }
++        ],
 +        schema_name: "tenzir.summarize",
 +        fallback: {
 +          lets: [
@@ -142,7 +119,14 @@
 +                      location: [1]:164..167 from 0
 +                    }
 +                  }
-+                ],
+                 ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:164..167 from 0
 +                groups: [
 +                  {
 +                    expr: {
@@ -172,6 +156,23 @@
              }
 -          }
 -        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:168..174 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:168..174 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
 -        indices: [
 -          -1,
 -          0
@@ -180,7 +181,8 @@
 -        mode: "reset",
 -        output: "summary",
 -        emit_every: 1
-+          ]
++          ],
++          definition_location: [0]:0..0 from 0
 +        }
        }
      },
@@ -220,15 +222,15 @@
          },
          args: [
            located 5 @ [1]:180..181 from 0
-         ],
-         named_args: [
-           
-         ]
-       },
-       filter: [
-         
-       ],
-       order: "ordered"
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
 +    },
 +    GenericIr {
 +      desc: "to_stdout",
@@ -241,15 +243,16 @@
 +        },
 +        args: [
 +          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
-+      order: "ordered"
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:120..181 from 0
  }
