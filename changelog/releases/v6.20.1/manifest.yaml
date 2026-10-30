@@ -1,0 +1,9 @@
+created: 2026-10-30
+title: Leaked CA keys no longer trusted
+intro: >-
+  This release stops trusting certificates from eMudhra intermediate certificate authorities
+  whose private keys leaked. It also makes to_iceberg write fewer small data files
+  and lets SentinelOne evaluate more of a filter's conditions on its side.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.20.0
