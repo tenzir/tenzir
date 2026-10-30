@@ -1,0 +1,9 @@
+created: 2026-10-30
+title: Distrust leaked eMudhra CA keys
+intro: >-
+  This release removes trust in eMudhra intermediate certificate authorities whose
+  private keys leaked. The container image now ships the NSS 3.131.1 root store, which
+  gRPC and LibreSSL also use.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.18.1
