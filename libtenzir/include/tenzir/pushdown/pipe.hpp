@@ -11,11 +11,11 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/renderer.hpp"
+#include "tenzir/pushdown/translate.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -120,14 +120,5 @@ auto select_within_budget(
   std::span<std::string const> predicates, size_t budget,
   std::function<auto(std::span<std::string const>)->size_t> const& size)
   -> std::vector<std::string>;
-
-/// Returns the limit that a source may push into its query, or `None`.
-///
-/// A limit counts the rows after the whole filter chain, so it may only be
-/// pushed if no predicate stays local, which for a prefilter source means only
-/// for an empty `filter`. A limit of zero, or one beyond `max`, is not pushed.
-auto pushable_limit(ir::OptimizeFilter const& filter, Option<uint64_t> limit,
-                    uint64_t max = std::numeric_limits<uint64_t>::max())
-  -> Option<uint64_t>;
 
 } // namespace tenzir::pushdown

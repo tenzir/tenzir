@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/aggregate-ok/services/search/v2/jobs/export
+      body: search=search%20index%3Dmain%20%7C%20outputlookup%20users.csv%0A%7C%20fields%20user%2C%20action%2C%20n&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+// If Splunk's result might differ from `summarize`, the operator would send the
+// search again, which would repeat `outputlookup`. The summary therefore stays
+// in Tenzir.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/aggregate-ok",
+  search="search index=main | outputlookup users.csv", earliest="-15m",
+  latest="-5m", headers={Authorization: "Splunk test-token"}, tls=false
+summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)
+sort user.string()

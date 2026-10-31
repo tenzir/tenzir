@@ -1,0 +1,8 @@
+{
+  user: "Alice",
+  n: 50,
+}
+{
+  user: "carol",
+  n: 7,
+}

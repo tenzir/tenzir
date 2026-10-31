@@ -212,3 +212,12 @@ TEST("limits are pushable only without a filter") {
   CHECK(not pushable_limit(empty, uint64_t{6}, 5));
   CHECK(not pushable_limit(filters({"a == 1"}), uint64_t{5}));
 }
+
+TEST("limits are pushable within the range that a target spells") {
+  auto empty = ir::OptimizeFilter{};
+  // A SQL target spells a limit of zero.
+  CHECK_EQUAL(pushable_limit(empty, uint64_t{0}, 5, 0), Option<uint64_t>{0});
+  CHECK_EQUAL(pushable_limit(empty, uint64_t{5}, 5, 0), Option<uint64_t>{5});
+  CHECK(not pushable_limit(empty, uint64_t{2}, 5, 3));
+  CHECK(not pushable_limit(filters({"a == 1"}), uint64_t{0}, 5, 0));
+}

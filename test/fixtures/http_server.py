@@ -37,6 +37,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import re
 import shutil
 import socket
 import ssl
@@ -49,7 +50,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Iterator
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import fixture
 from tenzir_test.fixtures import current_options
@@ -128,6 +129,41 @@ _SPLUNK_STRINGS = (
 )
 
 
+# The results of the `stats` stages that `from_splunk` appends for
+# `summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)`,
+# by route. The routes answer other searches with `_SPLUNK_STRINGS`, so that
+# tests see whether the operator aggregated these results locally.
+_SPLUNK_AGGREGATE_ROWS = (
+    b'{"preview":false,"result":{"tenzir_aggregate_0":"valice",'
+    b'"tenzir_count":"2","tenzir_aggregate_2":"1","tenzir_aggregate_3":"5",'
+    b'"tenzir_check_3":"0","tenzir_aggregate_4":"7","tenzir_check_4":"0"}}\n'
+    b'{"preview":false,"result":{"tenzir_aggregate_0":"v192.0.2.1",'
+    b'"tenzir_count":"1","tenzir_aggregate_2":"0","tenzir_check_3":"0",'
+    b'"tenzir_check_4":"0"}}\n'
+    b'{"preview":false,"result":{"tenzir_aggregate_0":"n",'
+    b'"tenzir_count":"1","tenzir_aggregate_2":"1","tenzir_aggregate_3":"-3",'
+    b'"tenzir_check_3":"0","tenzir_aggregate_4":"-3","tenzir_check_4":"0"}}\n'
+)
+_SPLUNK_AGGREGATES = {
+    "ok": _SPLUNK_AGGREGATE_ROWS
+    + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"3"}}\n',
+    # Splunk keeps `5` and `005` apart, while type inference merges them.
+    "merged": (
+        b'{"result":{"tenzir_aggregate_0":"v5","tenzir_count":"1",'
+        b'"tenzir_aggregate_2":"1","tenzir_check_3":"0","tenzir_check_4":"0"}}\n'
+        b'{"result":{"tenzir_aggregate_0":"v005","tenzir_count":"1",'
+        b'"tenzir_aggregate_2":"1","tenzir_check_3":"0","tenzir_check_4":"0"}}\n'
+        b'{"lastrow":true,"result":{"tenzir_groups":"2"}}\n'
+    ),
+    # A warning may tell that results are missing.
+    "warning": _SPLUNK_AGGREGATE_ROWS
+    + b'{"messages":[{"type":"WARN","text":"results may be incomplete"}]}\n'
+    + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"3"}}\n',
+    # Splunk answers a search that fails in `eval` with an empty response.
+    "incomplete": b"",
+}
+
+
 @dataclasses.dataclass(frozen=True)
 class HttpServerOptions:
     @dataclasses.dataclass(frozen=True)
@@ -138,6 +174,9 @@ class HttpServerOptions:
         query: str = ""
         body: str = ""
         body_alt: str = ""
+        # A regular expression that the whole body must match, for bodies with
+        # parts that vary between runs.
+        body_pattern: str = ""
         header_name: str = ""
         header_value: str = ""
 
@@ -172,6 +211,7 @@ def _normalize_expected_request(
         query=str(value.get("query", "")),
         body=str(value.get("body", "")),
         body_alt=str(value.get("body_alt", "")),
+        body_pattern=str(value.get("body_pattern", "")),
         header_name=str(value.get("header_name", "")),
         header_value=str(value.get("header_value", "")),
     )
@@ -201,6 +241,8 @@ def _make_handler(
     retry_503_backoff_second_gap_at = [0.0]
     splunk_warnings_ready = threading.Event()
     splunk_warnings_finished = threading.Event()
+    # The `now` of the first search of each `/splunk/aggregate-*` route.
+    splunk_aggregate_now: dict[str, str] = {}
 
     class RecordingEchoHandler(BaseHTTPRequestHandler):
         def _validate_request(self, path: str, body: bytes) -> None:
@@ -243,6 +285,13 @@ def _make_handler(
                         f"{expected_request.body_alt!r}, "
                         f"got {body_text!r}"
                     )
+            if expected_request.body_pattern and not re.fullmatch(
+                expected_request.body_pattern, body_text
+            ):
+                errors.append(
+                    "expected request body to match "
+                    f"{expected_request.body_pattern!r}, got {body_text!r}"
+                )
             if expected_request.header_name:
                 header = self.headers.get(expected_request.header_name, "")
                 if header != expected_request.header_value:
@@ -535,6 +584,22 @@ def _make_handler(
                 return
             if path == "/splunk/strings" + _SPLUNK_EXPORT:
                 self._reply(_SPLUNK_STRINGS)
+                return
+            if path.startswith("/splunk/aggregate-") and path.endswith(_SPLUNK_EXPORT):
+                variant = path[len("/splunk/aggregate-") : -len(_SPLUNK_EXPORT)]
+                form = parse_qs(body.decode("utf-8", errors="replace"))
+                search = form.get("search", [""])[0]
+                # A search that may run twice resolves relative times against
+                # the same `now` both times.
+                now = form.get("now", [""])[0]
+                if now:
+                    first = splunk_aggregate_now.setdefault(variant, now)
+                    if now != first:
+                        errors.append(f"expected `now` {first}, got {now}")
+                if variant in _SPLUNK_AGGREGATES and "\n| stats " in search:
+                    self._reply(_SPLUNK_AGGREGATES[variant])
+                else:
+                    self._reply(_SPLUNK_STRINGS)
                 return
             if path == "/splunk/fragmented-documents" + _SPLUNK_EXPORT:
                 # Split inside JSON escapes, numeric tokens, keys, and CRLF.

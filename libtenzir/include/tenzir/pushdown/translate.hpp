@@ -15,6 +15,8 @@
 #include "tenzir/pushdown/renderer.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <cstdint>
+#include <limits>
 #include <span>
 #include <string>
 #include <vector>
@@ -157,6 +159,18 @@ struct FilterSplit {
 /// prefilter in addition to staying local.
 auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
                   Renderer const& renderer, registry const& reg) -> FilterSplit;
+
+/// Returns the limit that a source may push into its query, or `None`.
+///
+/// A limit counts the rows after the whole filter chain, so it may only be
+/// pushed if no predicate stays `local`. For a prefilter source, every
+/// predicate stays local, so only an empty filter qualifies. A limit below
+/// `min` or above `max`, the range that the target can spell, is not pushed.
+/// The default `min` of one suits piped languages, where a limit of zero may
+/// mean no limit.
+auto pushable_limit(ir::OptimizeFilter const& local, Option<uint64_t> limit,
+                    uint64_t max = std::numeric_limits<uint64_t>::max(),
+                    uint64_t min = 1) -> Option<uint64_t>;
 
 /// Describes every field path that `filter` references as a nullable
 /// `DynamicType` column.

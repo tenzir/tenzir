@@ -193,6 +193,82 @@ TEST("spl keeps searches with side effects complete") {
   }
 }
 
+TEST("spl keeps predicates local after fieldformat") {
+  // Results show the formatted values, but `search` compares the original
+  // ones, so a prefilter could drop results that the predicate keeps. The
+  // projection and the limit still apply.
+  for (auto search : {
+         "search index=main | fieldformat n=n*2",
+         "search index=main | FIELDFORMAT n=n*2",
+         "search index=main | `my_macro`",
+       }) {
+    auto stages = spl_stages(search);
+    CHECK(stages.accepted);
+    CHECK(stages.formatted);
+    CHECK_EQUAL(
+      plan(search, {"n > 10"}, std::vector<std::string_view>{"n"}).query,
+      fmt::format("{}\n| fields n", search));
+    // Negations would compare the original values in a `where` stage, and
+    // address terms in the `search` stage.
+    CHECK_EQUAL(plan(search,
+                     {R"(user != "root")", "not (n in [1, 2])",
+                      "src == 10.0.0.1", "src in 10.0.0.0/8"},
+                     std::vector<std::string_view>{"user"})
+                  .query,
+                fmt::format("{}\n| fields user, n, src", search));
+  }
+  // The same predicates go into the search without `fieldformat`.
+  CHECK_EQUAL(
+    plan("search index=main", {R"(user != "root")", "src in 10.0.0.0/8"},
+         std::vector<std::string_view>{"user"})
+      .query,
+    "search index=main\n| search (src=\"10.0.0.0/8\" OR "
+    "src=\"::ffff:10.0.0.0/104\")\n| where (isnull(user) OR mvcount(user)>1 OR "
+    "if(user==\"root\", false(), true()))\n| fields user, src");
+  CHECK_EQUAL(
+    plan("search index=main | fieldformat n=n*2", {}, None{}, 10).query,
+    "search index=main | fieldformat n=n*2\n| fields *\n| head 10");
+  CHECK(not spl_stages("search index=main | eval n=n*2").formatted);
+}
+
+TEST("spl tells whether the results keep a field") {
+  for (auto search : {
+         "search index=main",
+         "| makeresults",
+         "search index=main | eval x=1 | fields + x | where x > 0",
+         // Splunk returns results whose fields `eval` set to `null()` as
+         // empty objects.
+         "| makeresults | eval _time=null()",
+         "search index=main | fields x | eval _raw=null(), _time=null()",
+         "| makeresults count=2 annotate=t splunk_server=local | fields x",
+         "| makeresults COUNT=2 splunk_server_group=* | fields x",
+         R"(| makeresults splunk_server="format=csv" | fields x)",
+         "| makeresults | eval format=1, data=2 | fields x",
+       }) {
+    CHECK(spl_stages(search).keeps_fields);
+  }
+  for (auto search : {
+         "| makeresults | fields - _time",
+         "| makeresults | FIELDS -_time",
+         // Results with only the fields that `data` lists, but no `_time`.
+         "| makeresults format=csv data=\"x\n1\" | fields y",
+         "| makeresults FORMAT=csv DATA=\"x\n1\"",
+         "| makeresults \"format\"=csv \"data\"=\"x\n1\"",
+         // Options that the lexer does not tell apart from these: Splunk
+         // ignores the first two, and `format=json` keeps `_time`.
+         "| makeresults count=1 format = csv data = \"x\n1\"",
+         "| makeresults 'format'=csv 'data'=\"x\n1\"",
+         "| makeresults format=json data=\"[{}]\"",
+         "search index=main | table x",
+         "search index=main | rename _raw as __raw",
+         "search index=main | chart count by x",
+         "| rest /services/server/info",
+         "search index=main | `my_macro`",
+       }) {
+    CHECK(not spl_stages(search).keeps_fields);
+  }
+}
+
 TEST("spl lexes searches before appending stages") {
   for (auto search : {
          "search index=main",
@@ -387,6 +463,15 @@ TEST("spl renders negations that keep missing and multivalue fields") {
   CHECK_EQUAL(stages("_time != 2025-01-01"), "");
   CHECK_EQUAL(stages(R"(obj.k != "x")"), "");
   CHECK_EQUAL(stages(R"(this["it's"] != "x")"), "");
+  // Names that `eval` cannot read stay local: `|` and brackets fail the
+  // search, and a backslash or `::` reads another field.
+  for (auto name : {"a|b", "a[b]", "a]b", R"(a\\b)", "tag::x", " a", "a "}) {
+    CHECK_EQUAL(stages(fmt::format(R"(this["{}"] != "x")", name)), "");
+  }
+  CHECK_EQUAL(stages(R"(this["a b"] != "x")"),
+              where(negated_where("'a b'", {R"("x")"})));
+  CHECK_EQUAL(stages(R"(this["a-b.c/d@e"] != "x")"),
+              where(negated_where("'a-b.c/d@e'", {R"("x")"})));
   // Presence checks are unchanged.
   CHECK_EQUAL(stages("action != null"), "\n| search action=*");
   // The numeric boundary of exact doubles stays local, also in lists.

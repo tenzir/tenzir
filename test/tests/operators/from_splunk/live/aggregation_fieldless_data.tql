@@ -1,0 +1,12 @@
+// With `format` and `data`, `makeresults` creates results without `_time`, and
+// `fields` removes all of their fields. Splunk returns no results, which
+// `stats` would count, so the summary stays in Tenzir.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search="| makeresults format=csv data=\"x\n1\n2\" | fields y",
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+summarize events=count()

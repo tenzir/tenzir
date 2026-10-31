@@ -13,6 +13,7 @@
 #include <tenzir/option.hpp>
 #include <tenzir/pushdown/column_model.hpp>
 #include <tenzir/pushdown/renderer.hpp>
+#include <tenzir/pushdown/sql.hpp>
 
 #include <cstdint>
 #include <span>
@@ -145,13 +146,7 @@ private:
 };
 
 /// How one read of a table splits the work between MySQL and the operator.
-struct TablePlan {
-  /// The columns to select, or `*`.
-  std::string selection = "*";
-  /// Predicates that MySQL evaluates, to be joined with `AND`.
-  std::vector<std::string> pushed;
-  /// Predicates that the operator evaluates, in order.
-  ir::OptimizeFilter local;
+struct TablePlan : pushdown::TablePlan {
   /// The columns of the table, or none if the plan did not need them.
   std::vector<TableColumn> columns;
 };

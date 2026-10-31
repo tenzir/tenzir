@@ -1,0 +1,10 @@
+// Without group keys, the summary of no results has one event.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=3 | where i > 5"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+summarize events=count(), present=count(k), lo=min(n)

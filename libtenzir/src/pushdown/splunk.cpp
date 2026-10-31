@@ -9,9 +9,15 @@
 #include "tenzir/pushdown/splunk.hpp"
 
 #include "tenzir/data_builder.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/hash/hash.hpp"
 #include "tenzir/ip.hpp"
+#include "tenzir/nova/event_builder.hpp"
+#include "tenzir/nova/union_array.hpp"
+#include "tenzir/pushdown/aggregation.hpp"
+#include "tenzir/ref.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/try.hpp"
 
@@ -25,6 +31,8 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace tenzir::pushdown {
@@ -496,11 +504,25 @@ auto where_expression(std::string_view predicate) -> Option<std::string_view> {
   return predicate.substr(where_marker.size());
 }
 
+/// Whether `eval` reads the field `name` when it is quoted in single quotes.
+/// Live probes found that other characters fail the search, such as `|` and
+/// `[`, or silently read another field, such as `\\` and `::`.
+auto is_eval_name(std::string_view name) -> bool {
+  if (name.empty() or name.front() == ' ' or name.back() == ' ') {
+    return false;
+  }
+  return std::ranges::all_of(name, [](char c) {
+    auto byte = static_cast<unsigned char>(c);
+    return byte >= 0x80 or (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
+           or (c >= '0' and c <= '9')
+           or std::string_view{"_-.{}@/ "}.contains(c);
+  });
+}
+
 /// Spells a field name for `eval`, quoting it in single quotes unless it is a
-/// plain identifier.
+/// plain identifier, or returns `None` if `eval` cannot read it.
 auto eval_field(std::string_view name) -> Option<std::string> {
-  if (name.empty() or has_control(name)
-      or name.find_first_of("'\\") != std::string_view::npos) {
+  if (not is_eval_name(name)) {
     return None{};
   }
   auto plain = (std::isalpha(static_cast<unsigned char>(name.front()))
@@ -524,6 +546,42 @@ auto has_side_effects(std::string_view command) -> bool {
     "collect",       "delete",    "dbxoutput",    "map",        "mcollect",
     "meventcollect", "outputcsv", "outputlookup", "outputtext", "run",
     "script",        "sendalert", "sendemail",    "tscollect",
+  };
+  return std::ranges::any_of(commands, [&](std::string_view x) {
+    return detail::ascii_icase_equal(command, x);
+  });
+}
+
+/// Options of `makeresults` that keep `_time` in its results. Others, such as
+/// `format=csv` with `data`, create results with only the fields that `data`
+/// lists, which `fields` may then remove.
+auto keeps_time(std::string_view option) -> bool {
+  constexpr auto options = std::array<std::string_view, 4>{
+    "annotate",
+    "count",
+    "splunk_server",
+    "splunk_server_group",
+  };
+  return std::ranges::any_of(options, [&](std::string_view x) {
+    return detail::ascii_icase_equal(option, x);
+  });
+}
+
+/// Commands that keep the fields of the results and add no result without
+/// fields. `fields` keeps fields only without `-`, since it keeps internal
+/// fields such as `_time` otherwise. A field stays in the results also if
+/// `eval` assigns it `null()` in every result, which Splunk then returns as
+/// empty objects.
+auto keeps_fields(std::string_view command) -> bool {
+  constexpr auto commands = std::array<std::string_view, 36>{
+    "accum",       "addinfo", "autoregress", "bin",      "bucket",
+    "convert",     "dedup",   "delta",       "eval",     "eventstats",
+    "extract",     "fields",  "filldown",    "fillnull", "head",
+    "iplocation",  "kv",      "lookup",      "makemv",   "mvcombine",
+    "mvexpand",    "nomv",    "rangemap",    "regex",    "replace",
+    "reverse",     "rex",     "search",      "sort",     "spath",
+    "streamstats", "strcat",  "tail",        "uniq",     "where",
+    "xmlkv",
   };
   return std::ranges::any_of(commands, [&](std::string_view x) {
     return detail::ascii_icase_equal(command, x);
@@ -617,6 +675,147 @@ auto with_all_fields(PipePlan plan) -> PipePlan {
   return plan;
 }
 
+/// The column of `stats` that holds output column `index` of an aggregation.
+/// Splunk leaves fields whose names start with `__` out of its results, so the
+/// column cannot be `aggregation_column(index)`.
+auto spl_aggregate_name(size_t index) -> std::string {
+  return fmt::format("tenzir_aggregate_{}", index);
+}
+
+/// The column of `stats` that is `1` for a group in which the input of the
+/// `min` or `max` in output column `index` has a value other than an integer
+/// that the stages compare.
+auto spl_check_name(size_t index) -> std::string {
+  return fmt::format("tenzir_check_{}", index);
+}
+
+/// The column of `stats` that counts the results of a group. Every `count()`
+/// reads it: `stats` computes a function only once per input, and keeps only
+/// the last of the names that it gives a repeated function.
+constexpr auto spl_count_name = std::string_view{"tenzir_count"};
+
+/// The column of the last row, which counts the groups.
+constexpr auto spl_groups_name = std::string_view{"tenzir_groups"};
+
+/// The values that `min` and `max` compare, as an `eval` string: integers that
+/// `from_splunk` infers as `int64`, also with leading zeros, and that Splunk
+/// compares exactly, since their magnitude stays below 2^53.
+constexpr auto spl_integer_pattern = std::string_view{R"("^-?[0-9]{1,15}$")"};
+
+/// Spells the input field of an aggregation for `eval`, in single quotes, or
+/// returns `None` if `eval` might read another field, as `is_eval_name`
+/// describes. A name that starts with `_` is an internal field, such as
+/// `_time`, whose value `eval` sees differently from the results, and the
+/// stages write fields that start with `tenzir_`.
+auto eval_input(std::vector<std::string> const& path) -> Option<std::string> {
+  if (path.size() != 1) {
+    return None{};
+  }
+  auto const& name = path.front();
+  if (name.starts_with('_') or name.starts_with("tenzir_")
+      or not is_eval_name(name)) {
+    return None{};
+  }
+  return fmt::format("'{}'", name);
+}
+
+/// Parses a count that Splunk renders as decimal digits.
+auto parse_count(std::string_view text) -> Option<int64_t> {
+  auto result = int64_t{};
+  if (text.empty() or text.front() == '-') {
+    return None{};
+  }
+  auto [end, error] = std::from_chars(text.begin(), text.end(), result);
+  if (error != std::errc{} or end != text.end()) {
+    return None{};
+  }
+  return result;
+}
+
+/// Parses the `min` or `max` of integers that match `spl_integer_pattern`,
+/// which Splunk renders as such an integer again, such as `-0` or `7`.
+auto parse_integer(std::string_view text) -> Option<int64_t> {
+  auto result = int64_t{};
+  auto digits = text.starts_with('-') ? text.substr(1) : text;
+  if (digits.empty() or digits.size() > 15
+      or not std::ranges::all_of(digits, [](char c) {
+           return c >= '0' and c <= '9';
+         })) {
+    return None{};
+  }
+  auto [end, error] = std::from_chars(text.begin(), text.end(), result);
+  if (error != std::errc{} or end != text.end()) {
+    return None{};
+  }
+  return result;
+}
+
+/// Whether type inference turns `text` into a time relative to the current
+/// time, such as `now` or `5 min ago`. Every result of a search infers such a
+/// time anew, so `summarize` groups each result apart, where Splunk groups
+/// the text once.
+auto is_relative_time(std::string_view text) -> bool {
+  if (not text.starts_with("now") and not text.starts_with("in")
+      and not text.ends_with("ago")) {
+    return false;
+  }
+  auto parsed = detail::data_builder::best_effort_parser(text);
+  return parsed and is<time>(*parsed);
+}
+
+/// A group key of one output row, as views into the decoded events.
+using KeyView = std::vector<nova::RowView<nova::Data>>;
+
+/// Checks that no two decoded group keys group together in `summarize`.
+/// Splunk groups the keys by their text, so all results of a group share a
+/// key, but type inference can turn different text into equivalent values,
+/// such as `5` and `5.0`, which `summarize` then groups together.
+auto check_distinct_keys(std::span<nova::Events const> batches,
+                         ir::OptimizeAggregation const& aggregation)
+  -> Result<void, std::string> {
+  auto keys = std::vector<size_t>{};
+  for (auto i = size_t{0}; i < aggregation.columns.size(); ++i) {
+    if (not aggregation.columns[i].function) {
+      keys.push_back(i);
+    }
+  }
+  if (keys.empty()) {
+    return {};
+  }
+  // The views in `seen` borrow from these columns, which must outlive them.
+  auto columns_per_batch = std::vector<std::vector<nova::Array<nova::Data>>>{};
+  columns_per_batch.reserve(batches.size());
+  auto seen = std::unordered_map<uint64_t, std::vector<KeyView>>{};
+  for (auto const& batch : batches) {
+    auto& columns = columns_per_batch.emplace_back();
+    for (auto index : keys) {
+      auto field = batch.data.field(aggregation_column(index));
+      TENZIR_ASSERT(field);
+      TENZIR_ASSERT(field->present.true_count() == batch.data.length());
+      columns.push_back(std::move(field->data));
+    }
+    for (auto row = nova::storage::Index{0}; row < batch.length(); ++row) {
+      auto key = KeyView{};
+      auto hash = uint64_t{0};
+      for (auto const& column : columns) {
+        auto value = column.get(row);
+        hash = tenzir::hash(hash, static_cast<uint64_t>(nova::hash(value)));
+        key.push_back(value);
+      }
+      auto& candidates = seen[hash];
+      for (auto const& other : candidates) {
+        if (std::ranges::equal(key, other, [](auto const& x, auto const& y) {
+              return nova::equivalent(x, y);
+            })) {
+          return Err{std::string{"type inference merges two groups"}};
+        }
+      }
+      candidates.push_back(std::move(key));
+    }
+  }
+  return {};
+}
+
 /// The position after the whitespace and comments that `search` starts with.
 auto skip_space_and_comments(std::string_view search) -> size_t {
   auto i = size_t{0};
@@ -649,6 +848,9 @@ auto SplRenderer::prefilter_options() const -> PrefilterOptions {
 
 auto SplRenderer::render_composite(Expr const& expr) const
   -> Option<std::string> {
+  if (settings_.formatted) {
+    return None{};
+  }
   // Both negations and parsed addresses keep a null explicitly:
   // `Or{IsNull{subject}, condition}`.
   auto const* x = try_as<Or>(expr);
@@ -757,6 +959,9 @@ auto SplRenderer::render_negation(Expr const& subject,
 }
 
 auto SplRenderer::render_atom(Expr const& expr) const -> Option<std::string> {
+  if (settings_.formatted) {
+    return None{};
+  }
   return match(
     expr,
     [&](Binary const& x) -> Option<std::string> {
@@ -838,6 +1043,13 @@ auto spl_stages(std::string_view search) -> SplStages {
   auto result = SplStages{};
   auto side_effects = false;
   auto macro = false;
+  auto formatted = false;
+  auto removes_fields = false;
+  // Whether the search started, and whether its first command is known.
+  auto started = false;
+  auto first_seen = false;
+  // Whether the lexer is in the arguments of a leading `makeresults`.
+  auto in_makeresults = false;
   auto depth = size_t{0};
   // The last character outside of comments that is not whitespace.
   auto last = '\0';
@@ -846,6 +1058,17 @@ auto spl_stages(std::string_view search) -> SplStages {
   auto i = size_t{0};
   auto is_space = [](char c) {
     return std::isspace(static_cast<unsigned char>(c)) != 0;
+  };
+  auto is_word = [](char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) != 0 or c == '_';
+  };
+  // Whether `=` follows position `end`, so that the token before it names an
+  // option, such as `count` in `count=3`.
+  auto names_option = [&](size_t end) {
+    while (end < search.size() and is_space(search[end])) {
+      ++end;
+    }
+    return end < search.size() and search[end] == '=';
   };
   while (i < search.size()) {
     auto c = search[i];
@@ -861,16 +1084,50 @@ auto spl_stages(std::string_view search) -> SplStages {
       ++i;
       continue;
     }
+    if (not started) {
+      started = true;
+      // A search that does not start with `|` starts with `search`, which
+      // returns events.
+      first_seen = c != '|';
+    }
     if (at_command) {
       auto end = i;
-      while (end < search.size()
-             and (std::isalnum(static_cast<unsigned char>(search[end]))
-                  or search[end] == '_')) {
+      while (end < search.size() and is_word(search[end])) {
         ++end;
       }
-      side_effects
-        = side_effects or has_side_effects(search.substr(i, end - i));
+      auto command = search.substr(i, end - i);
+      side_effects = side_effects or has_side_effects(command);
+      formatted
+        = formatted or detail::ascii_icase_equal(command, "fieldformat");
+      if (depth == 0 and not first_seen) {
+        // The events of `search` have internal fields, such as `_cd`, and the
+        // results of `makeresults` have `_time`, which other generating
+        // commands do not guarantee. `fields` without `-` keeps them.
+        first_seen = true;
+        in_makeresults = detail::ascii_icase_equal(command, "makeresults");
+        removes_fields = removes_fields
+                         or not(detail::ascii_icase_equal(command, "search")
+                                or in_makeresults);
+      } else {
+        auto next = end;
+        while (next < search.size() and is_space(search[next])) {
+          ++next;
+        }
+        auto removes = detail::ascii_icase_equal(command, "fields")
+                         ? next < search.size() and search[next] == '-'
+                         : not keeps_fields(command);
+        removes_fields = removes_fields or removes;
+      }
       at_command = false;
+    } else if (in_makeresults and is_word(c)
+               and (i == 0 or not is_word(search[i - 1]))) {
+      auto end = i;
+      while (end < search.size() and is_word(search[end])) {
+        ++end;
+      }
+      removes_fields
+        = removes_fields
+          or (names_option(end) and not keeps_time(search.substr(i, end - i)));
     }
     last = c;
     switch (c) {
@@ -884,6 +1141,9 @@ auto spl_stages(std::string_view search) -> SplStages {
           return result;
         }
         ++i;
+        // Splunk also reads quoted options of `makeresults`, such as
+        // `"format"=csv`.
+        removes_fields = removes_fields or (in_makeresults and names_option(i));
         continue;
       }
       case '\'':
@@ -895,6 +1155,7 @@ auto spl_stages(std::string_view search) -> SplStages {
         }
         macro = macro or c == '`';
         i = end + 1;
+        removes_fields = removes_fields or (in_makeresults and names_option(i));
         continue;
       }
       case '[':
@@ -908,6 +1169,7 @@ auto spl_stages(std::string_view search) -> SplStages {
         break;
       case '|':
         at_command = true;
+        in_makeresults = in_makeresults and depth != 0;
         break;
       default:
         break;
@@ -919,6 +1181,8 @@ auto spl_stages(std::string_view search) -> SplStages {
   }
   result.accepted = true;
   result.limitable = not side_effects and not macro;
+  result.formatted = formatted or macro;
+  result.keeps_fields = not removes_fields and not macro;
   return result;
 }
 
@@ -936,6 +1200,7 @@ auto plan_spl_search(std::string_view search, ir::OptimizeFilter const& filter,
   auto settings = SplRenderer::Settings{
     .push_time = not search.contains("_time"),
     .inference = inference,
+    .formatted = stages.formatted,
   };
   return with_all_fields(plan_trailing_stages(
     SplDialect{false, settings}, search, filter, projection,
@@ -970,6 +1235,274 @@ auto plan_spl_indexes(std::span<std::string const> indexes,
   return with_all_fields(plan_trailing_stages(SplDialect{true, settings},
                                               search, filter, projection, limit,
                                               None{}, reg));
+}
+
+auto plan_spl_aggregation(std::string_view search,
+                          ir::OptimizeAggregation const& aggregation, bool raw)
+  -> Option<std::string> {
+  // The source sends the search again without the stages if their result
+  // might differ from `summarize`, which would repeat a side effect.
+  auto stages = spl_stages(search);
+  if (not stages.accepted or not stages.limitable or stages.formatted
+      or not stages.keeps_fields) {
+    return None{};
+  }
+  TRY(auto plan, classify(aggregation));
+  auto evals = std::vector<std::string>{};
+  // The count of results gives `stats` a function also for a summary of
+  // group keys only.
+  auto functions
+    = std::vector<std::string>{fmt::format("count as {}", spl_count_name)};
+  auto keys = std::vector<std::string>{};
+  for (auto i = size_t{0}; i < plan.columns.size(); ++i) {
+    auto name = spl_aggregate_name(i);
+    // Adds `min(input)` or `max(input)` over the integers of `input`.
+    auto extremum
+      = [&](std::string_view function, std::vector<std::string> const& input) {
+          // With `raw`, `summarize` sees strings, which `min` and `max` reject.
+          auto field = eval_input(input);
+          if (raw or not field) {
+            return false;
+          }
+          auto integer = fmt::format("mvcount({0})==1 AND match({0}, {1})",
+                                     *field, spl_integer_pattern);
+          auto check = spl_check_name(i);
+          evals.push_back(fmt::format("{}=if({}, tonumber({}), null())", name,
+                                      integer, *field));
+          evals.push_back(fmt::format("{}=if(isnull({}) OR ({}), 0, 1)", check,
+                                      *field, integer));
+          functions.push_back(fmt::format("{1}({0}) as {0}", name, function));
+          functions.push_back(fmt::format("max({0}) as {0}", check));
+          return true;
+        };
+    auto added = match(
+      plan.columns[i].kind,
+      [&](AggregationPlan::Key const& key) {
+        auto field = eval_input(key.input);
+        if (not field) {
+          return false;
+        }
+        evals.push_back(
+          fmt::format(R"({0}=case(isnull({1}), "n", mvcount({1})!=1, "m", )"
+                      R"(match({1}, "\x00"), "z", true(), "v" . {1}))",
+                      name, *field));
+        keys.push_back(std::move(name));
+        return true;
+      },
+      [&](AggregationPlan::Count const& count) {
+        if (not count.input) {
+          return true;
+        }
+        auto field = eval_input(*count.input);
+        if (not field) {
+          return false;
+        }
+        evals.push_back(
+          fmt::format("{}=if(isnull({}), null(), 1)", name, *field));
+        functions.push_back(fmt::format("count({0}) as {0}", name));
+        return true;
+      },
+      [&](AggregationPlan::Min const& min) {
+        return extremum("min", min.input);
+      },
+      [&](AggregationPlan::Max const& max) {
+        return extremum("max", max.input);
+      });
+    if (not added) {
+      return None{};
+    }
+  }
+  auto result = std::string{search};
+  if (not evals.empty()) {
+    result += fmt::format("\n| eval {}", fmt::join(evals, ", "));
+  }
+  result += fmt::format("\n| stats {}", fmt::join(functions, ", "));
+  if (not keys.empty()) {
+    result += fmt::format(" by {}", fmt::join(keys, ", "));
+  }
+  result += fmt::format("\n| appendpipe [stats count as {}]", spl_groups_name);
+  return result;
+}
+
+auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
+                            ir::OptimizeAggregation const& aggregation,
+                            bool raw, diagnostic_handler& dh)
+  -> Result<std::vector<nova::Events>, std::string> {
+  auto plan = classify(aggregation);
+  TENZIR_ASSERT(plan);
+  auto const& columns = plan->columns;
+  // The cells of a row: the value of each column, the check of each `min` and
+  // `max`, and the count of results.
+  auto values = std::vector<Option<std::string_view>>(columns.size());
+  auto checks = std::vector<Option<std::string_view>>(columns.size());
+  auto results = Option<std::string_view>{};
+  auto cells = std::unordered_map<std::string, Ref<Option<std::string_view>>>{};
+  cells.emplace(spl_count_name, results);
+  for (auto i = size_t{0}; i < columns.size(); ++i) {
+    match(
+      columns[i].kind,
+      [&](AggregationPlan::Key const&) {
+        cells.emplace(spl_aggregate_name(i), values[i]);
+      },
+      [&](AggregationPlan::Count const& count) {
+        if (count.input) {
+          cells.emplace(spl_aggregate_name(i), values[i]);
+        }
+      },
+      [&](auto const&) {
+        cells.emplace(spl_aggregate_name(i), values[i]);
+        cells.emplace(spl_check_name(i), checks[i]);
+      });
+  }
+  auto const grouped = std::ranges::any_of(columns, [](auto const& column) {
+    return is<AggregationPlan::Key>(column.kind);
+  });
+  auto settings = nova::EventBuilder::Settings{};
+  // Infer the types of the keys as for the results of a search.
+  settings.raw = raw;
+  settings.infer_numbers = true;
+  auto builder = nova::EventBuilder::make(std::move(settings), dh);
+  if (not builder) {
+    return Err{std::string{"failed to initialize the decoder"}};
+  }
+  // Writes the cells of a group to the next event.
+  auto decode_group = [&]() -> Result<void, std::string> {
+    auto count = results ? parse_count(*results) : None{};
+    if (not count) {
+      return Err{std::string{"a count is not a non-negative integer"}};
+    }
+    if (*count == 0 and grouped) {
+      return Err{std::string{"a group contains no results"}};
+    }
+    auto event = builder->event();
+    for (auto i = size_t{0}; i < columns.size(); ++i) {
+      auto value = values[i];
+      auto output = aggregation_column(i);
+      auto decoded = match(
+        columns[i].kind,
+        [&](AggregationPlan::Key const&) -> Result<void, std::string> {
+          if (value == "n") {
+            event.field(output).null();
+            return {};
+          }
+          if (value and value->starts_with('v')) {
+            auto text = value->substr(1);
+            if (not raw and is_relative_time(text)) {
+              return Err{std::string{"a group key is a relative time"}};
+            }
+            event.field(output).data_unparsed(text);
+            return {};
+          }
+          if (value == "m") {
+            return Err{std::string{"a group key has several values"}};
+          }
+          if (value == "z") {
+            return Err{std::string{"a group key contains a NUL character"}};
+          }
+          return Err{std::string{"a group key is invalid"}};
+        },
+        [&](AggregationPlan::Count const& x) -> Result<void, std::string> {
+          if (not x.input) {
+            event.field(output).data(*count);
+            return {};
+          }
+          auto present = value ? parse_count(*value) : None{};
+          if (not present) {
+            return Err{std::string{"a count is not a non-negative integer"}};
+          }
+          event.field(output).data(*present);
+          return {};
+        },
+        [&](auto const&) -> Result<void, std::string> {
+          // `min` or `max`, which hold only if every value of the input is
+          // an integer that the stages compare. Every result has a check, so
+          // only a group without results has none, which `stats` returns
+          // without group keys.
+          if (checks[i] != "0" and not(not checks[i] and *count == 0)) {
+            return Err{std::string{"a group has a value for `min` or `max` "
+                                   "other than an integer"}};
+          }
+          if (not value) {
+            event.field(output).null();
+            return {};
+          }
+          auto integer = parse_integer(*value);
+          if (not integer) {
+            return Err{std::string{"a result of `min` or `max` is invalid"}};
+          }
+          event.field(output).data(*integer);
+          return {};
+        });
+      TRY(decoded);
+    }
+    return {};
+  };
+  auto batches = std::vector<nova::Events>{};
+  auto groups = int64_t{0};
+  auto expected_groups = Option<int64_t>{};
+  for (auto const& array : rows) {
+    for (auto index = nova::storage::Index{0}; index < array.length();
+         ++index) {
+      if (expected_groups) {
+        return Err{std::string{"a row follows the count of groups"}};
+      }
+      std::ranges::fill(values, None{});
+      std::ranges::fill(checks, None{});
+      results = None{};
+      auto fields = size_t{0};
+      for (auto const& [name, value] : array.get(index)) {
+        ++fields;
+        auto const* text = try_as<nova::RowView<nova::String>>(value);
+        if (not text) {
+          return Err{std::string{"a field is not a single string"}};
+        }
+        if (name == spl_groups_name) {
+          expected_groups = parse_count(**text);
+          if (not expected_groups) {
+            return Err{std::string{"the count of groups is invalid"}};
+          }
+          continue;
+        }
+        auto cell = cells.find(std::string{name});
+        if (cell == cells.end()) {
+          return Err{fmt::format("unexpected field `{}`", name)};
+        }
+        *cell->second = **text;
+      }
+      if (expected_groups) {
+        if (fields != 1) {
+          return Err{std::string{"the count of groups has other fields"}};
+        }
+        continue;
+      }
+      ++groups;
+      TRY(decode_group());
+      if (std::cmp_greater_equal(builder->length(),
+                                 defaults::import::table_slice_size)) {
+        batches.push_back(builder->finish());
+      }
+    }
+  }
+  // Splunk answers a search that fails in `eval` with an empty response.
+  if (not expected_groups) {
+    return Err{std::string{"the result misses the count of groups"}};
+  }
+  if (groups != *expected_groups) {
+    return Err{
+      fmt::format("received {} of {} groups", groups, *expected_groups)};
+  }
+  // Without group keys, `stats` returns a single row, also for no results.
+  if (not grouped and groups != 1) {
+    return Err{std::string{"expected a single row"}};
+  }
+  if (builder->length() > 0) {
+    batches.push_back(builder->finish());
+  }
+  TRY(check_distinct_keys(batches, aggregation));
+  for (auto& batch : batches) {
+    batch = nest_aggregation(std::move(batch), aggregation, dh);
+  }
+  return batches;
 }
 
 } // namespace tenzir::pushdown

@@ -1,0 +1,12 @@
+{
+  k: "a",
+  events: 1,
+}
+{
+  k: "a\u0000b",
+  events: 1,
+}
+{
+  k: "a\u0000c",
+  events: 1,
+}

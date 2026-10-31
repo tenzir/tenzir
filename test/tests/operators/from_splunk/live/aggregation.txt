@@ -1,0 +1,12 @@
+{
+  source: "tenzir-docs-auth",
+  user: "alice",
+  events: 2,
+  outcomes: 2,
+}
+{
+  source: "tenzir-docs-auth",
+  user: "bob",
+  events: 1,
+  outcomes: 1,
+}

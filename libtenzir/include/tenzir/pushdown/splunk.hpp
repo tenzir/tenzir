@@ -8,15 +8,19 @@
 
 #pragma once
 
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/pipe.hpp"
 #include "tenzir/pushdown/renderer.hpp"
+#include "tenzir/result.hpp"
 
 #include <cstdint>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 /// Pushdown into a user's Splunk search in the Search Processing Language
 /// (SPL), as run by `from_splunk`.
@@ -79,6 +83,10 @@ public:
     /// Splunk's strings. Negations depend on it: without inference, `"5"`
     /// stays a string, which TQL considers different from the number `5`.
     bool inference = true;
+    /// Whether the search formats the values of its results, as with
+    /// `fieldformat`. The results then show other values than those that a
+    /// `search` or `where` stage compares, so every predicate stays local.
+    bool formatted = false;
   };
 
   explicit SplRenderer(Settings settings);
@@ -115,6 +123,26 @@ struct SplStages {
   /// none. This does not keep the search running once the pipeline ends, for
   /// example after a downstream `head`: closing the request may end it too.
   bool limitable = false;
+  /// Whether the search formats the values of its results with `fieldformat`,
+  /// or has a macro, which may hide it. The results then show the formatted
+  /// values, but a stage after the search, such as `search`, `where`, or
+  /// `stats`, sees the original ones.
+  bool formatted = false;
+  /// Whether the results of the search keep a field, which Splunk's export
+  /// endpoint needs to return results at all. It returns none if the results
+  /// have no fields, while a `stats` stage still counts them. A result
+  /// without values among results with fields comes back as an empty object,
+  /// also if `eval` assigned `null()` to all of its fields.
+  ///
+  /// This holds if the search starts with `search`, whose events have
+  /// internal fields such as `_cd`, or with `makeresults` with no options but
+  /// `count`, `annotate`, `splunk_server`, and `splunk_server_group`, whose
+  /// results have `_time`, unlike those of `format` and `data`. It must then
+  /// continue only with commands that keep these fields, such as `eval`,
+  /// `rex`, `where`, `lookup`, or `fields` without `-`, but not `fields -`,
+  /// `table`, `rename`, which may hide fields, or a transforming command. A
+  /// macro may hide any command.
+  bool keeps_fields = false;
 };
 
 /// Prepends the `search` command to a search that starts with neither a
@@ -168,5 +196,61 @@ auto plan_spl_indexes(std::span<std::string const> indexes,
                       Option<ir::OptimizeProjection> const& projection,
                       Option<uint64_t> limit, bool inference,
                       registry const& reg) -> Option<PipePlan>;
+
+/// Appends stages to the SPL `search` that compute `aggregation` with `stats`,
+/// so that Splunk returns one row per group instead of the results of
+/// `search`. `raw` tells whether `from_splunk` keeps the values of these
+/// results as strings.
+///
+/// Returns `None` if `spl_stages` rejects `search` or finds that it may have
+/// side effects, which a second search without the stages would repeat, that
+/// it formats values, or that its results may lose all fields, or if
+/// Splunk cannot compute a column as `summarize` computes it from the results
+/// that `from_splunk` emits. Splunk computes these columns:
+///
+/// - Group keys on top-level fields. An `eval` stage spells the key of a
+///   result as `n` for a missing field, as `m` for several values, as `z` for
+///   a value with a NUL character, at which `stats` would cut the value off,
+///   and as `v` and the value otherwise. Unlike a field of `stats ... by`,
+///   the key then keeps the results without the field, and a result with
+///   several values joins a group of its own rather than one per value.
+/// - `count()`, which every group computes once, since `stats` computes a
+///   repeated function only once and names it after its last alias.
+/// - `count(x)` as the number of results with the field `x`, where `stats`
+///   would count its values.
+/// - `min(x)` and `max(x)` without `raw`, over values that are integers of up
+///   to 15 digits, which `from_splunk` infers as `int64` and Splunk compares
+///   exactly as numbers. The stages compare only these values, and check per
+///   group that `x` has no other values.
+///
+/// The names of fields that the stages read must be plain enough for `eval`
+/// to read them as written. Names that start with `_` or `tenzir_` are
+/// rejected, which includes Splunk's internal fields, such as `_time`, and the
+/// fields that the stages write.
+///
+/// Since Splunk answers a search whose `eval` fails with an empty response, a
+/// last row counts the groups, which `decode_spl_aggregation` requires.
+auto plan_spl_aggregation(std::string_view search,
+                          ir::OptimizeAggregation const& aggregation, bool raw)
+  -> Option<std::string>;
+
+/// Builds the output events of `aggregation` from the result `rows` of the
+/// search from `plan_spl_aggregation`, whose values must be strings. `raw`
+/// disables type inference of the group keys, as for the results of a search.
+///
+/// Fails if the result may differ from what `summarize` computes from the
+/// results of the search, in which case the source aggregates them locally.
+/// In particular, it fails if:
+///
+/// - The last row does not count the other rows. The search then failed.
+/// - A group key has several values, which `summarize` groups as a list, or
+///   contains a NUL character.
+/// - Type inference makes two group keys equal, such as `5` and `005`, which
+///   Splunk groups apart.
+/// - A group has a value for `min` or `max` that is not such an integer.
+auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
+                            ir::OptimizeAggregation const& aggregation,
+                            bool raw, diagnostic_handler& dh)
+  -> Result<std::vector<nova::Events>, std::string>;
 
 } // namespace tenzir::pushdown

@@ -1990,6 +1990,14 @@ auto translate_field(std::span<std::string const> path,
   return FieldValue{.expr = std::move(value), .column = column};
 }
 
+auto pushable_limit(ir::OptimizeFilter const& local, Option<uint64_t> limit,
+                    uint64_t max, uint64_t min) -> Option<uint64_t> {
+  if (not local.empty() or not limit or *limit < min or *limit > max) {
+    return None{};
+  }
+  return limit;
+}
+
 auto split_filter(ir::OptimizeFilter filter, ColumnModel const& columns,
                   Renderer const& renderer, registry const& reg)
   -> FilterSplit {

@@ -11,13 +11,12 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/pushdown/aggregation.hpp>
-#include <tenzir/pushdown/read.hpp>
+#include <tenzir/pushdown/sql.hpp>
 #include <tenzir/pushdown/translate.hpp>
 #include <tenzir/try.hpp>
 #include <tenzir/unicode.hpp>
 
 #include <fmt/format.h>
-#include <fmt/ranges.h>
 
 #include <algorithm>
 #include <array>
@@ -37,34 +36,72 @@ auto lowercase(std::string_view text) -> std::string {
   return result;
 }
 
-/// Builds the column list for a read, selecting the columns that downstream
-/// and the remaining predicates need, in table order.
-auto select_columns(std::span<TableColumn const> columns,
-                    Option<ir::OptimizeProjection> const& projection,
-                    ir::OptimizeFilter const& local) -> std::string {
-  auto wanted = pushdown::read_projection(projection, local);
-  if (not wanted) {
-    return "*";
+/// Spells the parts of a `SELECT` that SQL dialects disagree on in MySQL SQL.
+class MysqlQueryDialect final : public pushdown::SqlQueryDialect {
+public:
+  auto quote_identifier(std::string_view name) const -> std::string override {
+    return mysql::quote_identifier(name);
   }
-  // MySQL resolves column names regardless of case but labels a result
-  // column as the query spells it. Only the exact name of a column keeps the
-  // field that `SELECT *` would produce; downstream handles the rest.
-  auto selected = std::vector<std::string>{};
-  for (auto const& column : columns) {
-    if (column.visible and std::ranges::contains(*wanted, column.name)) {
-      selected.push_back(quote_identifier(column.name));
+};
+
+/// Spells aggregations over a table in MySQL SQL.
+class MysqlAggregateDialect final : public pushdown::SqlAggregateDialect {
+public:
+  explicit MysqlAggregateDialect(std::span<TableColumn const> columns)
+    : columns_{columns}, renderer_{columns} {
+  }
+
+private:
+  auto alias_collides(std::string_view alias) const -> bool override {
+    // MySQL compares column names case-insensitively.
+    return std::ranges::any_of(columns_, [&](TableColumn const& column) {
+      return detail::ascii_icase_equal(column.name, alias);
+    });
+  }
+
+  auto render_value(pushdown::Expr const& expr) const
+    -> Option<std::string> override {
+    return renderer_.render(expr);
+  }
+
+  auto
+  render_key(std::span<std::string const> path,
+             pushdown::FieldValue const& field, std::string const& value) const
+    -> Option<std::string> override {
+    auto const& type = field.column.type;
+    if (is<pushdown::StringType>(type)) {
+      // The query groups by the binary string, which may arrive as a blob,
+      // and selects the text as stored.
+      TENZIR_ASSERT(path.size() == 1);
+      return fmt::format("ANY_VALUE({})",
+                         mysql::quote_identifier(path.front()));
     }
-  }
-  if (selected.empty()) {
-    // Downstream needs no fields, but it still needs the rows.
-    auto first = std::ranges::find(columns, true, &TableColumn::visible);
-    if (first == columns.end()) {
-      return "*";
+    if (is<pushdown::IntType>(type)) {
+      return value;
     }
-    selected.push_back(quote_identifier(first->name));
+    return None{};
   }
-  return fmt::to_string(fmt::join(selected, ", "));
-}
+
+  auto render_count(Option<std::string> const& value) const
+    -> std::string override {
+    return fmt::format("CAST(COUNT({}) AS SIGNED)",
+                       value ? *value : std::string{"*"});
+  }
+
+  auto render_extremum(pushdown::Extremum extremum,
+                       pushdown::FieldValue const& field,
+                       std::string const& value) const
+    -> Option<std::string> override {
+    if (not is<pushdown::IntType>(field.column.type)) {
+      return None{};
+    }
+    return fmt::format(
+      "{}({})", extremum == pushdown::Extremum::min ? "MIN" : "MAX", value);
+  }
+
+  std::span<TableColumn const> columns_;
+  MysqlRenderer renderer_;
+};
 
 } // namespace
 
@@ -285,36 +322,21 @@ auto make_table_plan(std::span<TableColumn const> columns,
                      ir::OptimizeFilter filter,
                      Option<ir::OptimizeProjection> const& projection,
                      registry const& reg) -> TablePlan {
-  if (columns.empty()) {
-    // Without columns, nothing translates, and `SELECT *` reads the table
-    // as it is, or fails as it would without any hints.
-    return TablePlan{.selection = "*",
-                     .pushed = {},
-                     .local = std::move(filter),
-                     .columns = {}};
+  auto table = std::vector<pushdown::SqlColumn>{};
+  for (auto const& column : columns) {
+    table.push_back({.name = column.name, .visible = column.visible});
   }
-  auto split = pushdown::split_filter(
-    std::move(filter), make_column_model(columns), MysqlRenderer{columns}, reg);
-  auto selection = select_columns(columns, projection, split.remaining);
   return TablePlan{
-    .selection = std::move(selection),
-    .pushed = std::move(split.pushed),
-    .local = std::move(split.remaining),
-    .columns = {columns.begin(), columns.end()},
+    pushdown::make_table_plan(table, make_column_model(columns),
+                              MysqlRenderer{columns}, MysqlQueryDialect{},
+                              std::move(filter), projection, reg),
+    {columns.begin(), columns.end()},
   };
 }
 
 auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
   -> bool {
-  return std::ranges::all_of(
-    aggregation.columns, [](ir::OptimizeAggregation::Column const& column) {
-      if (not column.function) {
-        return true;
-      }
-      auto const& function = *column.function;
-      return function == "count"
-             or ((function == "min" or function == "max") and column.input);
-    });
+  return pushdown::supports_count_min_max(aggregation);
 }
 
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
@@ -322,85 +344,23 @@ auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
                           std::string_view table,
                           std::span<std::string const> where)
   -> Option<std::string> {
-  if (aggregation.columns.empty() or columns.empty()
-      or not supports_aggregate_functions(aggregation)) {
+  if (columns.empty()) {
     return None{};
   }
-  auto const model = make_column_model(columns);
-  auto const renderer = MysqlRenderer{columns};
-  auto selection = std::vector<std::string>{};
-  auto groups = std::vector<std::string>{};
-  for (auto i = size_t{0}; i < aggregation.columns.size(); ++i) {
-    auto const& column = aggregation.columns[i];
-    // An alias that names a column could change what the query reads.
-    // MySQL compares column names case-insensitively.
-    auto alias = pushdown::aggregation_column(i);
-    if (std::ranges::any_of(columns, [&](TableColumn const& column) {
-          return detail::ascii_icase_equal(column.name, alias);
-        })) {
-      return None{};
-    }
-    auto input = Option<pushdown::FieldValue>{};
-    auto sql = Option<std::string>{};
-    if (column.input) {
-      TRY(input, pushdown::translate_field(*column.input, model));
-      TRY(sql, renderer.render(input->expr));
-    }
-    auto value = std::string{};
-    if (not column.function) {
-      TENZIR_ASSERT(input);
-      auto const& type = input->column.type;
-      if (is<pushdown::StringType>(type)) {
-        TENZIR_ASSERT(column.input->size() == 1);
-        value = fmt::format("ANY_VALUE({})",
-                            quote_identifier(column.input->front()));
-      } else if (is<pushdown::IntType>(type)) {
-        value = *sql;
-      } else {
-        return None{};
-      }
-      groups.push_back(std::move(*sql));
-    } else if (*column.function == "count") {
-      value = fmt::format("CAST(COUNT({}) AS SIGNED)",
-                          sql ? *sql : std::string{"*"});
-    } else {
-      TENZIR_ASSERT(input);
-      if (not is<pushdown::IntType>(input->column.type)) {
-        return None{};
-      }
-      value = fmt::format("{}({})", *column.function == "min" ? "MIN" : "MAX",
-                          *sql);
-    }
-    selection.push_back(
-      fmt::format("{} AS {}", value, quote_identifier(alias)));
-  }
-  auto query = fmt::format("SELECT {} FROM {}", fmt::join(selection, ", "),
-                           quote_identifier(table));
-  if (not where.empty()) {
-    fmt::format_to(std::back_inserter(query), " WHERE {}",
-                   fmt::join(where, " AND "));
-  }
-  if (not groups.empty()) {
-    fmt::format_to(std::back_inserter(query), " GROUP BY {}",
-                   fmt::join(groups, ", "));
-  }
-  return query;
+  TRY(auto plan, pushdown::classify(aggregation));
+  TRY(auto select,
+      pushdown::make_aggregate_select(
+        plan, make_column_model(columns), MysqlQueryDialect{},
+        MysqlAggregateDialect{columns}, quote_identifier(table), where));
+  return pushdown::render_select(select, MysqlQueryDialect{});
 }
 
 auto make_table_query(TablePlan const& plan, std::string_view table,
                       Option<uint64_t> limit) -> std::string {
-  auto result
-    = fmt::format("SELECT {} FROM {}", plan.selection, quote_identifier(table));
-  if (not plan.pushed.empty()) {
-    fmt::format_to(std::back_inserter(result), " WHERE {}",
-                   fmt::join(plan.pushed, " AND "));
-  }
-  // The limit counts events after the whole filter chain, so it can only go
-  // into the query if the chain did.
-  if (limit and plan.local.empty()) {
-    fmt::format_to(std::back_inserter(result), " LIMIT {}", *limit);
-  }
-  return result;
+  auto const dialect = MysqlQueryDialect{};
+  return pushdown::render_select(
+    pushdown::make_table_select(plan, quote_identifier(table), limit, dialect),
+    dialect);
 }
 
 } // namespace tenzir::plugins::mysql

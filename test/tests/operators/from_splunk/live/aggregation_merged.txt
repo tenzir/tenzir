@@ -1,0 +1,19 @@
+warning: event does not have field
+  --> tests/operators/from_splunk/live/aggregation_merged.tql:11:11
+   |
+11 | summarize k, events=count()
+   |           ~
+   |
+   = hint: append `?` to suppress this warning
+{
+  k: 5,
+  events: 4,
+}
+{
+  k: "five",
+  events: 1,
+}
+{
+  k: null,
+  events: 1,
+}

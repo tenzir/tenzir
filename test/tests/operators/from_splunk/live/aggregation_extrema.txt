@@ -1,0 +1,23 @@
+warning: expected `int`, `uint`, `float`, `duration`, or `time`, got `string`
+  --> tests/operators/from_splunk/live/aggregation_extrema.tql:11:21
+   |
+11 | summarize g, lo=min(n), hi=max(n)
+   |                     ~
+   |
+
+warning: expected `int`, `uint`, `float`, `duration`, or `time`, got `string`
+  --> tests/operators/from_splunk/live/aggregation_extrema.tql:11:32
+   |
+11 | summarize g, lo=min(n), hi=max(n)
+   |                                ~
+   |
+{
+  g: "a",
+  lo: null,
+  hi: null,
+}
+{
+  g: "b",
+  lo: null,
+  hi: null,
+}

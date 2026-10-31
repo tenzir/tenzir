@@ -53,14 +53,6 @@ auto select_within_budget(
   return result;
 }
 
-auto pushable_limit(ir::OptimizeFilter const& filter, Option<uint64_t> limit,
-                    uint64_t max) -> Option<uint64_t> {
-  if (not filter.empty() or not limit or *limit == 0 or *limit > max) {
-    return None{};
-  }
-  return limit;
-}
-
 auto plan_trailing_stages(PipeDialect const& dialect, std::string_view query,
                           ir::OptimizeFilter const& filter,
                           Option<ir::OptimizeProjection> const& projection,

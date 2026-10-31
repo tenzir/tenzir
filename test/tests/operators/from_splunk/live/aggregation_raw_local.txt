@@ -1,0 +1,20 @@
+{
+  k: "005",
+  events: 1,
+}
+{
+  k: "5",
+  events: 2,
+}
+{
+  k: "5.0",
+  events: 1,
+}
+{
+  k: "five",
+  events: 1,
+}
+{
+  k: null,
+  events: 1,
+}
