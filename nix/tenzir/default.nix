@@ -146,26 +146,35 @@ let
           pname = "tenzir";
           src = tenzir-source;
 
-          postUnpack = ''
-            ${pkgsBuildHost.file}/bin/file /bin/sh
-            # Private plugins are added separately through withPlugins. Remove
-            # their bundled copies before CMake expands plugins/*, also avoiding
-            # duplicate registration when static builds add extra-plugins/.
-            for plugin in ${lib.escapeShellArgs privatePluginNames}; do
-              rm -rf "source/plugins/$plugin"
-            done
-            mkdir -p source/extra-plugins
-            for plug in ${lib.concatStringsSep " " extraPlugins}; do
-              cp -R $plug source/extra-plugins/$(basename $plug)
-            done
-            chmod -R u+w source/extra-plugins
-          ''
-          # The engine adds `../deployment` when it exists, so the sibling has
-          # to land next to the unpacked source rather than inside it.
-          + lib.optionalString (deployment-source != null) ''
-            cp -R ${deployment-source} deployment
-            chmod -R u+w deployment
-          '';
+          postUnpack =
+            # The engine adds `../deployment` when it exists, so the sibling has
+            # to land next to the unpacked source rather than inside it.
+            lib.optionalString (deployment-source != null) ''
+              cp -R ${deployment-source} deployment
+              chmod -R u+w deployment
+              # Hashed before the private plugins move out below, over the
+              # sources as they are tracked, which is what CI tags the image
+              # with and the platform finds in its history. A function of the
+              # sources alone, so it changes only what they already change.
+              tenzirSourceTag=$(
+                PATH=${lib.getBin pkgsBuildBuild.gitMinimal}/bin:$PATH \
+                  sh source/scripts/source-tag.sh files source deployment
+              )
+            ''
+            + ''
+              ${pkgsBuildHost.file}/bin/file /bin/sh
+              # Private plugins are added separately through withPlugins. Remove
+              # their bundled copies before CMake expands plugins/*, also avoiding
+              # duplicate registration when static builds add extra-plugins/.
+              for plugin in ${lib.escapeShellArgs privatePluginNames}; do
+                rm -rf "source/plugins/$plugin"
+              done
+              mkdir -p source/extra-plugins
+              for plug in ${lib.concatStringsSep " " extraPlugins}; do
+                cp -R $plug source/extra-plugins/$(basename $plug)
+              done
+              chmod -R u+w source/extra-plugins
+            '';
 
           outputs = [ "out" ] ++ (if isStatic then [ "package" ] else [ "dev" ]);
 
@@ -265,6 +274,9 @@ let
           preConfigure = ''
             version_build_metadata="$(basename $out | cut -d'-' -f 1)"
             cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=$version_build_metadata")
+            if [ -n "''${tenzirSourceTag-}" ]; then
+              cmakeFlagsArray+=("-DTENZIR_SOURCE_TAG=$tenzirSourceTag")
+            fi
           '';
 
           hardeningDisable =

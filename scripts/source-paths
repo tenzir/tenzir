@@ -1,0 +1,21 @@
+# The inputs of the engine build, relative to `engine/`: what the Nix build
+# unpacks (nix/package.nix) and what the source tag hashes (source-tag.sh),
+# together with all of `deployment/`. The Nix expressions and the lock count
+# too, since a build that only bumps a dependency or changes a flag differs.
+# One path per line.
+cmake
+libtenzir
+libtenzir_test
+plugins
+schema
+scripts
+tenzir
+CMakeLists.txt
+LICENSE
+README.md
+VERSIONING.md
+tenzir.yaml.example
+version.json
+nix
+flake.nix
+flake.lock

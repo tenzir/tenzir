@@ -59,22 +59,15 @@ rec {
   ];
   integration-test-tree = lib.fileset.difference ../test excluded-integration-tests;
 
-  tenzir-tree = lib.fileset.unions [
-    ../cmake
-    ../libtenzir
-    ../libtenzir_test
-    ../plugins
-    ../schema
-    ../scripts
-    ../tenzir
-    ../VERSIONING.md
-    ../CMakeLists.txt
-    ../LICENSE
-    ../README.md
-    ../VERSIONING.md
-    ../tenzir.yaml.example
-    ../version.json
-  ];
+  # The paths `scripts/source-tag.sh` hashes too, so that the source tag is over
+  # exactly what the build unpacks.
+  tenzir-tree = lib.fileset.unions (
+    map (path: ../. + "/${path}") (
+      lib.filter (line: line != "" && !lib.hasPrefix "#" line) (
+        lib.splitString "\n" (builtins.readFile ../scripts/source-paths)
+      )
+    )
+  );
   tenzir-source = lib.fileset.toSource {
     root = ./..;
     fileset = tenzir-tree;
