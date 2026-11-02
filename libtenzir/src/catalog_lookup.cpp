@@ -691,6 +691,7 @@ auto catalog_lookup_worker(
       if (not snapshot.synopses) {
         return catalog_lookup_result{};
       }
+      TENZIR_TRACEPOINT(catalog_lookup_begin, snapshot.synopses->size());
       auto result
         = self->state().engine.lookup(std::move(expr), *snapshot.synopses);
       if (not result) {

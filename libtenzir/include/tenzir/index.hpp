@@ -120,6 +120,11 @@ struct index_state {
 
   std::unordered_map<uuid, unpersisted_partition_info> unpersisted = {};
 
+  /// Partitions whose persistence is still in flight, for tracing.
+  /// `unpersisted` also keeps retired partitions while a reader holds
+  /// them, so its size overstates the write backlog.
+  size_t persisting = 0;
+
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 

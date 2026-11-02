@@ -13,6 +13,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
+#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/retention_policy.hpp"
 #include "tenzir/series_builder.hpp"
@@ -182,7 +183,20 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
     [this, builder = std::move(builder),
-     actor_metrics_builder = detail::make_actor_metrics_builder()]() mutable {
+     actor_metrics_builder = detail::make_actor_metrics_builder(),
+     deadline = self->clock().now()]() mutable {
+      // How late this tick runs against its scheduled deadline, in
+      // microseconds, and how many messages wait in the mailbox. The loop
+      // keeps fixed deadlines, so lag does not reset after a stall: each
+      // catch-up tick reports its own lateness. Lag means the actor could
+      // not get to its mailbox; a growing mailbox means it cannot keep up.
+      const auto tick = self->clock().now();
+      TENZIR_TRACEPOINT(
+        importer_tick,
+        std::chrono::duration_cast<std::chrono::microseconds>(
+          tick - std::exchange(deadline, deadline + defaults::metrics_interval))
+          .count(),
+        self->mailbox().size());
       handle_slice(detail::generate_actor_metrics(actor_metrics_builder, self));
       const auto now = time::clock::now();
       for (const auto& [schema, count] : schema_counters) {

@@ -28,6 +28,7 @@
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/index.hpp"
@@ -161,6 +162,8 @@ void index_state::handle_slice(table_slice x) {
                                         [](auto& entry) {
                                           return entry.second.events;
                                         });
+    TENZIR_TRACEPOINT(index_pressure, buffered_events,
+                      active_partitions.size());
     TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events due to "
                    "{}/{} buffered events",
                    *self, max->first, max->second.events, partition_capacity,
@@ -232,6 +235,9 @@ void index_state::decommission_active_partition(
   // Persist active partition asynchronously.
   const auto part_path = paths.partition(id);
   const auto synopsis_path = paths.synopsis(id);
+  ++persisting;
+  TENZIR_TRACEPOINT(index_persist_begin, fmt::to_string(id).c_str(),
+                    persisting);
   TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
   self->mail(atom::persist_v, part_path, synopsis_path)
@@ -253,6 +259,9 @@ void index_state::decommission_active_partition(
               TENZIR_TRACE("{} inserted partition {} {} to the catalog", *self,
                            schema, id);
               retire_partition(id, caf::exit_reason::normal);
+              --persisting;
+              TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(id).c_str(),
+                                false, persisting);
               if (completion) {
                 completion(caf::none);
               }
@@ -264,6 +273,9 @@ void index_state::decommission_active_partition(
                            "queries: {}",
                            *self, schema, id, err);
               retire_partition(id, err);
+              --persisting;
+              TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(id).c_str(),
+                                true, persisting);
               if (completion) {
                 completion(err);
               }
@@ -275,6 +287,9 @@ void index_state::decommission_active_partition(
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
         retire_partition(id, err);
+        --persisting;
+        TENZIR_TRACEPOINT(index_persist_end, fmt::to_string(id).c_str(), true,
+                          persisting);
         if (completion) {
           completion(err);
         }
@@ -441,8 +456,15 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().active_partition_timeout = active_partition_timeout;
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
-    [self, actor_metrics_builder
-           = detail::make_actor_metrics_builder()]() mutable {
+    [self, actor_metrics_builder = detail::make_actor_metrics_builder(),
+     deadline = self->clock().now()]() mutable {
+      const auto tick = self->clock().now();
+      TENZIR_TRACEPOINT(
+        index_tick,
+        std::chrono::duration_cast<std::chrono::microseconds>(
+          tick - std::exchange(deadline, deadline + defaults::metrics_interval))
+          .count(),
+        self->mailbox().size());
       const auto importer
         = self->system().registry().get<importer_actor>("tenzir.importer");
       // There exists a very unlikely scenario where the importer was not

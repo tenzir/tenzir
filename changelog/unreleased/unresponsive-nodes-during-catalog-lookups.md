@@ -16,3 +16,15 @@ importer now run on dedicated threads, named `tnz.lookup-<n>` and
 
 The log message that reports how long a catalog lookup took is emitted at the
 verbose level again.
+
+To diagnose remaining stalls on a running node, the storage engine now exposes
+USDT probes for `bpftrace` or `perf`. Once per second, the importer, index, and
+catalog each report how late their periodic work ran and how many messages wait
+in their mailbox, which shows which component is overloaded:
+
+```sh
+bpftrace -e 'usdt:/path/to/libtenzir.so:tenzir:importer_tick { printf("lag %d us, mailbox %d\n", arg0, arg1); }'
+```
+
+Further probes mark catalog lookups, leases, merges, partition deletions, rebuild
+runs and batches, partition transforms, and index persistence.

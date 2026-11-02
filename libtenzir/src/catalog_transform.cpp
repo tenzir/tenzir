@@ -42,6 +42,7 @@
 #include "tenzir/catalog.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
@@ -261,6 +262,8 @@ void catalog_state::transform(
                                    .input_partitions = input_partitions,
                                    .origin = origin,
                                  });
+  TENZIR_TRACEPOINT(transform_start, progress->id.c_str(),
+                    input_partitions.size(), active_transformations.size());
   arm_maintenance_wakeup(time::clock::now());
   auto transformer = self->spawn(
     partition_transformer, std::string{store_actor_plugin->name()},
@@ -305,6 +308,10 @@ void catalog_state::transform(
        progress](caf::expected<partition_apply_result>&& result) mutable {
         progress->set_phase(PartitionTransformPhase::done);
         active_transformations.erase(transformation_id);
+        TENZIR_TRACEPOINT(transform_done, progress->id.c_str(),
+                          result ? result->input_partitions.size() : 0,
+                          result ? result->output_partitions.size() : 0,
+                          not result, active_transformations.size());
         if (not *commit_at_restart) {
           // The marker stays if a deferred erasure still needs it as a
           // tombstone.

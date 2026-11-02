@@ -8,6 +8,7 @@
 
 #include <tenzir/catalog.hpp>
 #include <tenzir/detail/flat_map.hpp>
+#include <tenzir/detail/tracepoint.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/export_bridge.hpp>
 #include <tenzir/expression.hpp>
@@ -23,6 +24,8 @@
 #include <caf/actor_registry.hpp>
 #include <caf/event_based_actor.hpp>
 
+#include <functional>
+#include <numeric>
 #include <queue>
 
 namespace tenzir {
@@ -343,6 +346,15 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
                  "expression {}",
                  query_context.id, self->state().expr);
     auto on_candidates = [self, query_context](catalog_lookup_result& result) {
+      const auto num_candidates
+        = std::transform_reduce(result.candidate_infos.begin(),
+                                result.candidate_infos.end(), size_t{0},
+                                std::plus<>{}, [](const auto& entry) {
+                                  return entry.second.partition_infos.size();
+                                });
+      TENZIR_TRACEPOINT(export_candidates,
+                        fmt::to_string(query_context.id).c_str(),
+                        num_candidates);
       self->state().checked_candidates = true;
       auto max_import_time = time::min();
       for (auto& [type, info] : result.candidate_infos) {
