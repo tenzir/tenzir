@@ -1078,6 +1078,7 @@ namespace tenzir {
 
 enum class PipelineState {
   running,
+  stopping,
   finished,
   failed,
   stopped,
@@ -1872,9 +1873,11 @@ using CreatePipelineFailure = variant<InvalidPipeline, PipelineExists>;
 
 /// `GET /pipelines`
 /// Every pipeline the deployment knows, each under the id it runs under, with
-/// where its execution stands, sorted by id. What `createPipeline` and
-/// `updateConfiguration` have persisted and started, read back: the platform
-/// can compare this against what it meant to send and see what became of it.
+/// where its execution actually stands, sorted by id: a pipeline whose run is
+/// still draining after a stop is `stopping`, not `stopped`. What
+/// `createPipeline` and `updateConfiguration` have persisted and started, read
+/// back: the platform can compare this against what it meant to send and see
+/// what became of it.
 class ListPipelines {
 public:
   ListPipelines() = default;
@@ -1938,9 +1941,10 @@ public:
 using StartPipelineFailure = variant<InvalidPipeline, PipelineNotFound>;
 
 /// `POST /pipelines/:pipelineId/stop`
-/// Gracefully stops a running pipeline and remembers the stopped state. A
-/// pipeline that is not running keeps its outcome, so a stop after a failure
-/// does not erase the reason. Safe to retry either way.
+/// Gracefully stops a running pipeline and remembers the stopped state, without
+/// waiting for its run to drain: until it has, `listPipelines` shows the
+/// pipeline as `stopping`. A pipeline that is not running keeps its outcome, so
+/// a stop after a failure does not erase the reason. Safe to retry either way.
 class StopPipeline {
 public:
   explicit StopPipeline(PipelinePath path) : path{std::move(path)} {

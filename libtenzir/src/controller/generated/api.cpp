@@ -1233,6 +1233,8 @@ auto to_string(PipelineState value) -> std::string_view {
   switch (value) {
     case PipelineState::running:
       return "running";
+    case PipelineState::stopping:
+      return "stopping";
     case PipelineState::finished:
       return "finished";
     case PipelineState::failed:
@@ -1249,6 +1251,9 @@ auto parse_pipeline_state(simdjson::dom::element value)
   if (raw == "running") {
     return PipelineState::running;
   }
+  if (raw == "stopping") {
+    return PipelineState::stopping;
+  }
   if (raw == "finished") {
     return PipelineState::finished;
   }
@@ -1258,9 +1263,10 @@ auto parse_pipeline_state(simdjson::dom::element value)
   if (raw == "stopped") {
     return PipelineState::stopped;
   }
-  return Err{ParseError{
-    "PipelineState",
-    fmt::format("`{}` is not one of running, finished, failed, stopped", raw)}};
+  return Err{ParseError{"PipelineState",
+                        fmt::format("`{}` is not one of running, stopping, "
+                                    "finished, failed, stopped",
+                                    raw)}};
 }
 
 auto parse_pipeline_status(simdjson::dom::element value)
