@@ -21,13 +21,13 @@ namespace tenzir {
 
 namespace {
 
-auto run_secret_cache_cleanup() -> Task<void> {
+auto run_secret_cache_cleanup(SharedMutex<SecretCache>& state) -> Task<void> {
   auto timekeeper = folly::ThreadWheelTimekeeper{};
   while (true) {
     co_await folly::coro::co_safe_point;
     auto wait = duration{};
     {
-      auto cache = co_await SecretCache::instance().unique_lock();
+      auto cache = co_await state.unique_lock();
       wait = cache->cleanup();
     }
     co_await folly::coro::sleep(
@@ -39,26 +39,31 @@ auto run_secret_cache_cleanup() -> Task<void> {
 
 folly::CancellationSource SecretCache::cancel_source{};
 
-auto SecretCache::lookup(std::string_view key) const
+auto SecretCache::lookup(std::string_view key, time now) const
   -> Option<ecc::cleansing_blob> {
   auto it = data_.find(key);
   if (it == data_.end()) {
     return None{};
   }
   auto& [value, last_used] = it->second;
-  auto const now = time::clock::now();
-  if (now - last_used.load(std::memory_order_relaxed) < SecretCache::ttl) {
-    last_used = time::clock::now();
+  if (now - last_used.load(std::memory_order_relaxed) < lifetime_) {
+    if (refresh_on_read_) {
+      last_used.store(now, std::memory_order_relaxed);
+    }
     return value;
   }
   return None{};
 }
 
-auto SecretCache::insert(std::string key, ecc::cleansing_blob value) -> void {
-  auto const now = time::clock::now();
+auto SecretCache::insert(std::string key, ecc::cleansing_blob value, time now)
+  -> void {
+  if (background_cleanup_) {
+    start_cleanup();
+  } else {
+    std::ignore = cleanup(now);
+  }
   const auto [it, inserted]
     = data_.try_emplace(std::move(key), std::move(value), now);
-  start_cleanup();
   if (inserted) {
     return;
   }
@@ -67,19 +72,18 @@ auto SecretCache::insert(std::string key, ecc::cleansing_blob value) -> void {
   entry.last_used = now;
 }
 
-auto SecretCache::cleanup() -> duration {
-  auto const now = time::clock::now();
-  auto const cutoff = now - ttl;
-  auto wait = duration{ttl};
+auto SecretCache::cleanup(time now) -> duration {
+  auto const cutoff = now - lifetime_;
+  auto wait = duration{lifetime_};
   for (auto it = data_.begin(); it != data_.end();) {
     const auto& [_, entry] = *it;
     auto last_used = entry.last_used.load(std::memory_order_relaxed);
-    if (last_used < cutoff) {
+    if (last_used <= cutoff) {
       it = data_.erase(it);
       continue;
     }
     auto const age = (now - last_used);
-    auto const entry_wait = ttl - age;
+    auto const entry_wait = lifetime_ - age;
     if (entry_wait < wait) {
       wait = entry_wait;
     }
@@ -88,8 +92,22 @@ auto SecretCache::cleanup() -> duration {
   return wait;
 }
 
+auto SecretCache::clear() -> void {
+  data_.clear();
+  ++generation_;
+}
+
+auto SecretStore::run_cache_cleanup() -> Task<void> {
+  co_await run_secret_cache_cleanup(*cache_);
+}
+
+auto SecretStore::clear_cache() -> Task<void> {
+  auto cache = co_await cache_->unique_lock();
+  cache->clear();
+}
+
 auto SecretCache::instance() -> SharedMutex<SecretCache>& {
-  static auto instance = SharedMutex<SecretCache>{};
+  static auto instance = SharedMutex<SecretCache>{std::in_place, true};
   return instance;
 }
 
@@ -99,7 +117,7 @@ auto SecretCache::start_cleanup() -> void {
     folly::coro::co_withCancellation(
       cancel_source.getToken(),
       folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                   run_secret_cache_cleanup()))
+                                   run_secret_cache_cleanup(instance())))
       .start([](auto&& result) {
         if (result.template hasException<folly::OperationCancelled>()) {
           return;

@@ -813,19 +813,9 @@ auto node(node_actor::stateful_pointer<node_state> self,
     },
     [self](atom::resolve, std::string name,
            std::string public_key) -> caf::result<secret_resolution_result> {
-      const auto& cfg = content(self->system().config());
-      const auto key = fmt::format("tenzir.secrets.{}", name);
-      const auto* value = caf::get_if(&cfg, key);
-      if (value) {
-        auto value_string = caf::get_as<std::string>(*value);
-        if (not value_string) {
-          return secret_resolution_error{"config secret is not a string"};
-        }
-        auto encrypted = ecc::encrypt(*value_string, public_key);
-        if (not encrypted) {
-          return encrypted.error();
-        }
-        return encrypted_secret_value{*encrypted};
+      if (auto local = resolve_config_secret(content(self->system().config()),
+                                             name, public_key)) {
+        return std::move(*local);
       }
       auto store
         = self->system().registry().get<secret_store_actor>("tenzir.platform");

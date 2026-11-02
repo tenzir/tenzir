@@ -1000,6 +1000,134 @@ struct std::hash<tenzir::Batch> {
 
 namespace tenzir {
 
+/// What a pipeline passes to `secret()` to read the value
+/// Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
+class SecretName {
+public:
+  static auto make(std::string value) -> Result<SecretName, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto operator==(SecretName const&, SecretName const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, SecretName const& value) -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit SecretName(std::string value) : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<SecretName> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::SecretName> {
+  auto operator()(tenzir::SecretName const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class ResolveSecretPath {
+public:
+  ResolveSecretPath(DeploymentId deployment_id, SecretName name)
+    : deployment_id{std::move(deployment_id)}, name{std::move(name)} {
+  }
+
+  DeploymentId deployment_id;
+  SecretName name;
+
+  friend auto operator==(ResolveSecretPath const&, ResolveSecretPath const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ResolveSecretPath const& value)
+    -> void {
+    hash_append(h, value.deployment_id, value.name);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ResolveSecretPath> {
+  auto operator()(tenzir::ResolveSecretPath const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class SecretResolution {
+public:
+  explicit SecretResolution(std::string transport_key)
+    : transport_key{std::move(transport_key)} {
+  }
+
+  std::string transport_key;
+
+  friend auto operator==(SecretResolution const&, SecretResolution const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, SecretResolution const& value)
+    -> void {
+    hash_append(h, value.transport_key);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::SecretResolution> {
+  auto operator()(tenzir::SecretResolution const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class ResolvedSecret {
+public:
+  explicit ResolvedSecret(std::string value) : value{std::move(value)} {
+  }
+
+  std::string value;
+
+  friend auto operator==(ResolvedSecret const&, ResolvedSecret const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ResolvedSecret const& value)
+    -> void {
+    hash_append(h, value.value);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ResolvedSecret> {
+  auto operator()(tenzir::ResolvedSecret const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 class Liveness {
 public:
   Liveness(std::string status, double uptime_ms,
@@ -1815,6 +1943,29 @@ using PushTelemetryError
 auto call(Transport& transport, PushTelemetry request)
   -> Task<Result<void, variant<PushTelemetryError, CallError>>>;
 
+// ── Secrets (deployment → platform) ─────────────────────────────────────────
+
+/// `POST /api/deployments/:deploymentId/secrets/:name`
+/// Resolves a secret the deployment can read. The value comes back as base58
+/// ECIES to `transportKey`, a secp256k1 public key the deployment made for this
+/// request alone
+class ResolveSecret {
+public:
+  ResolveSecret(ResolveSecretPath path, SecretResolution payload)
+    : path{std::move(path)}, payload{std::move(payload)} {
+  }
+
+  ResolveSecretPath path;
+  SecretResolution payload;
+};
+
+using ResolveSecretError
+  = variant<InternalServerError, NotFound, Unauthorized, Unauthenticated,
+            CredentialConflict, Validation>;
+
+auto call(Transport& transport, ResolveSecret request)
+  -> Task<Result<ResolvedSecret, variant<ResolveSecretError, CallError>>>;
+
 // ── Deployment (platform → deployment) ──────────────────────────────────────
 
 /// `GET /health`
@@ -2116,6 +2267,14 @@ auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
 auto parse_deployment_sample(simdjson::dom::element value)
   -> Result<DeploymentSample, ParseError>;
 auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError>;
+auto parse_secret_name(simdjson::dom::element value)
+  -> Result<SecretName, ParseError>;
+auto parse_resolve_secret_path(simdjson::dom::element value)
+  -> Result<ResolveSecretPath, ParseError>;
+auto parse_secret_resolution(simdjson::dom::element value)
+  -> Result<SecretResolution, ParseError>;
+auto parse_resolved_secret(simdjson::dom::element value)
+  -> Result<ResolvedSecret, ParseError>;
 auto parse_liveness(simdjson::dom::element value)
   -> Result<Liveness, ParseError>;
 auto parse_identified_pipeline(simdjson::dom::element value)
@@ -2184,6 +2343,10 @@ auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
   -> void;
 auto write_json(DeploymentSample const& value, std::string& out) -> void;
 auto write_json(Batch const& value, std::string& out) -> void;
+auto write_json(SecretName const& value, std::string& out) -> void;
+auto write_json(ResolveSecretPath const& value, std::string& out) -> void;
+auto write_json(SecretResolution const& value, std::string& out) -> void;
+auto write_json(ResolvedSecret const& value, std::string& out) -> void;
 auto write_json(Liveness const& value, std::string& out) -> void;
 auto write_json(IdentifiedPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineState const& value, std::string& out) -> void;

@@ -12,10 +12,33 @@
 #include "tenzir/detail/base58.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/hex_encode.hpp"
+#include "tenzir/secret_store.hpp"
 
 #include <arrow/util/utf8.h>
+#include <fmt/format.h>
 
 namespace tenzir {
+
+auto resolve_config_secret(caf::settings const& config, std::string_view name,
+                           std::string const& public_key)
+  -> Option<secret_resolution_result> {
+  auto const* value
+    = caf::get_if(&config, fmt::format("tenzir.secrets.{}", name));
+  if (not value) {
+    return None{};
+  }
+  auto value_string = caf::get_as<std::string>(*value);
+  if (not value_string) {
+    return secret_resolution_result{
+      secret_resolution_error{"config secret is not a string"}};
+  }
+  auto encrypted = ecc::encrypt(*value_string, public_key);
+  if (not encrypted) {
+    return secret_resolution_result{secret_resolution_error{encrypted.error()}};
+  }
+  return secret_resolution_result{
+    encrypted_secret_value{std::move(*encrypted)}};
+}
 
 auto resolved_secret_value::utf8_view() const -> Option<std::string_view> {
   const auto valid_utf8 = arrow::util::ValidateUTF8(
