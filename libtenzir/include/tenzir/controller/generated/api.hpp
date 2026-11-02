@@ -1000,6 +1000,215 @@ struct std::hash<tenzir::Batch> {
 
 namespace tenzir {
 
+/// The name pipelines refer to an ingest endpoint by, unique in its
+/// organization: lowercase letters, digits, and single dashes Values must match
+/// `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
+class IngestEndpointName {
+public:
+  static auto make(std::string value) -> Result<IngestEndpointName, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto operator==(IngestEndpointName const&, IngestEndpointName const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, IngestEndpointName const& value)
+    -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit IngestEndpointName(std::string value) : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<IngestEndpointName> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::IngestEndpointName> {
+  auto operator()(tenzir::IngestEndpointName const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class AttachIngestEndpointPath {
+public:
+  AttachIngestEndpointPath(DeploymentId deployment_id, IngestEndpointName name)
+    : deployment_id{std::move(deployment_id)}, name{std::move(name)} {
+  }
+
+  DeploymentId deployment_id;
+  IngestEndpointName name;
+
+  friend auto
+  operator==(AttachIngestEndpointPath const&, AttachIngestEndpointPath const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, AttachIngestEndpointPath const& value) -> void {
+    hash_append(h, value.deployment_id, value.name);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::AttachIngestEndpointPath> {
+  auto operator()(tenzir::AttachIngestEndpointPath const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// A consumer group that readers of an endpoint share, so that each event
+/// reaches only one of them Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
+class IngestEndpointGroupName {
+public:
+  static auto make(std::string value)
+    -> Result<IngestEndpointGroupName, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto
+  operator==(IngestEndpointGroupName const&, IngestEndpointGroupName const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, IngestEndpointGroupName const& value) -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit IngestEndpointGroupName(std::string value)
+    : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<IngestEndpointGroupName> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::IngestEndpointGroupName> {
+  auto operator()(tenzir::IngestEndpointGroupName const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class AttachIngestEndpointQuery {
+public:
+  explicit AttachIngestEndpointQuery(Option<IngestEndpointGroupName> group)
+    : group{std::move(group)} {
+  }
+
+  /// `group`, may be absent.
+  Option<IngestEndpointGroupName> group;
+
+  friend auto
+  operator==(AttachIngestEndpointQuery const&, AttachIngestEndpointQuery const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, AttachIngestEndpointQuery const& value)
+    -> void {
+    hash_append(h, value.group);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::AttachIngestEndpointQuery> {
+  auto operator()(tenzir::AttachIngestEndpointQuery const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// Where a pipeline reads the events of an endpoint, and the Kafka credentials
+/// that may read that topic in the endpoint's consumer groups and nothing else
+class IngestEndpointAttachment {
+public:
+  IngestEndpointAttachment(std::vector<std::string> brokers,
+                           std::string security_protocol,
+                           std::string sasl_mechanism, std::string topic,
+                           std::string group, std::string group_prefix,
+                           std::string username, std::string password)
+    : brokers{std::move(brokers)},
+      security_protocol{std::move(security_protocol)},
+      sasl_mechanism{std::move(sasl_mechanism)},
+      topic{std::move(topic)},
+      group{std::move(group)},
+      group_prefix{std::move(group_prefix)},
+      username{std::move(username)},
+      password{std::move(password)} {
+  }
+
+  std::vector<std::string> brokers;
+  std::string security_protocol;
+  std::string sasl_mechanism;
+  std::string topic;
+  std::string group;
+  std::string group_prefix;
+  std::string username;
+  std::string password;
+
+  friend auto
+  operator==(IngestEndpointAttachment const&, IngestEndpointAttachment const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, IngestEndpointAttachment const& value) -> void {
+    hash_append(h, value.brokers, value.security_protocol, value.sasl_mechanism,
+                value.topic, value.group, value.group_prefix, value.username,
+                value.password);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::IngestEndpointAttachment> {
+  auto operator()(tenzir::IngestEndpointAttachment const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// What a pipeline passes to `secret()` to read the value
 /// Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
 class SecretName {
@@ -1943,6 +2152,34 @@ using PushTelemetryError
 auto call(Transport& transport, PushTelemetry request)
   -> Task<Result<void, variant<PushTelemetryError, CallError>>>;
 
+// ── IngestEndpoints (deployment → platform) ─────────────────────────────────
+
+/// `POST /api/deployments/:deploymentId/ingest-endpoints/:name/attach`
+/// Answers where the deployment that sends it reads the events of an ingest
+/// endpoint of its organization that it may read, with Kafka credentials of its
+/// own that may read only that topic in the endpoint's consumer groups.
+/// Attaching again replaces only this deployment's password. Without `group`,
+/// the deployment reads in a group of its own and sees every event; deployments
+/// that name the same group share it, and each event reaches one of them.
+class AttachIngestEndpoint {
+public:
+  AttachIngestEndpoint(AttachIngestEndpointPath path,
+                       AttachIngestEndpointQuery query)
+    : path{std::move(path)}, query{std::move(query)} {
+  }
+
+  AttachIngestEndpointPath path;
+  AttachIngestEndpointQuery query;
+};
+
+using AttachIngestEndpointError
+  = variant<InternalServerError, NotFound, ServiceUnavailable, Unauthorized,
+            Unauthenticated, CredentialConflict, Validation>;
+
+auto call(Transport& transport, AttachIngestEndpoint request)
+  -> Task<Result<IngestEndpointAttachment,
+                 variant<AttachIngestEndpointError, CallError>>>;
+
 // ── Secrets (deployment → platform) ─────────────────────────────────────────
 
 /// `POST /api/deployments/:deploymentId/secrets/:name`
@@ -2267,6 +2504,16 @@ auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
 auto parse_deployment_sample(simdjson::dom::element value)
   -> Result<DeploymentSample, ParseError>;
 auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError>;
+auto parse_ingest_endpoint_name(simdjson::dom::element value)
+  -> Result<IngestEndpointName, ParseError>;
+auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
+  -> Result<AttachIngestEndpointPath, ParseError>;
+auto parse_ingest_endpoint_group_name(simdjson::dom::element value)
+  -> Result<IngestEndpointGroupName, ParseError>;
+auto parse_attach_ingest_endpoint_query(simdjson::dom::element value)
+  -> Result<AttachIngestEndpointQuery, ParseError>;
+auto parse_ingest_endpoint_attachment(simdjson::dom::element value)
+  -> Result<IngestEndpointAttachment, ParseError>;
 auto parse_secret_name(simdjson::dom::element value)
   -> Result<SecretName, ParseError>;
 auto parse_resolve_secret_path(simdjson::dom::element value)
@@ -2343,6 +2590,14 @@ auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
   -> void;
 auto write_json(DeploymentSample const& value, std::string& out) -> void;
 auto write_json(Batch const& value, std::string& out) -> void;
+auto write_json(IngestEndpointName const& value, std::string& out) -> void;
+auto write_json(AttachIngestEndpointPath const& value, std::string& out)
+  -> void;
+auto write_json(IngestEndpointGroupName const& value, std::string& out) -> void;
+auto write_json(AttachIngestEndpointQuery const& value, std::string& out)
+  -> void;
+auto write_json(IngestEndpointAttachment const& value, std::string& out)
+  -> void;
 auto write_json(SecretName const& value, std::string& out) -> void;
 auto write_json(ResolveSecretPath const& value, std::string& out) -> void;
 auto write_json(SecretResolution const& value, std::string& out) -> void;

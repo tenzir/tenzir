@@ -7,7 +7,6 @@
 #include <tenzir/controller/generated/api.hpp>
 #include <tenzir/controller/http_transport.hpp>
 #include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/detail/string.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/platform_profiler.hpp>
 #include <tenzir/time.hpp>
@@ -20,8 +19,6 @@
 
 #include <algorithm>
 #include <exception>
-#include <filesystem>
-#include <fstream>
 #include <map>
 #include <sstream>
 #include <utility>
@@ -183,24 +180,8 @@ public:
         co_return {};
       }
       auto key = co_await folly::coro::detachOnCancel(
-        spawn_blocking([path = connection.key_file]() -> Option<std::string> {
-          auto error = std::error_code{};
-          if (not std::filesystem::is_regular_file(path, error) or error) {
-            return {};
-          }
-          auto file = std::ifstream{path, std::ios::binary};
-          auto contents = std::string(4097, '\0');
-          file.read(contents.data(), contents.size());
-          contents.resize(file.gcount());
-          if (file.bad() or contents.size() > 4096) {
-            return {};
-          }
-          auto value = std::string{detail::trim(contents)};
-          if (value.empty()
-              or value.find_first_of("\r\n") != std::string::npos) {
-            return {};
-          }
-          return value;
+        spawn_blocking([path = connection.key_file] {
+          return read_deployment_key(path);
         }));
       if (not key) {
         TENZIR_WARN("platform telemetry key file is unavailable or invalid");

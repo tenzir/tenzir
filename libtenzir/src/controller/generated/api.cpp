@@ -1176,7 +1176,145 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
                std::move(runs),      std::move(deployment)};
 }
 
+auto IngestEndpointName::make(std::string value)
+  -> Result<IngestEndpointName, ParseError> {
+  if (value.size() > 40) {
+    return Err{
+      ParseError{"IngestEndpointName", "must be at most 40 characters long"}};
+  }
+  if (value.size() < 3) {
+    return Err{
+      ParseError{"IngestEndpointName", "must be at least 3 characters long"}};
+  }
+  if (value.size() > 21) {
+    return Err{
+      ParseError{"IngestEndpointName", "must be at most 21 characters long"}};
+  }
+  static auto const pattern = std::regex{R"(^[a-z0-9]+(?:-[a-z0-9]+)*$)"};
+  if (not std::regex_match(value, pattern)) {
+    return Err{
+      ParseError{"IngestEndpointName",
+                 fmt::format("`{}` does not match the pattern", value)}};
+  }
+  return IngestEndpointName{std::move(value)};
+}
+
+auto parse_ingest_endpoint_name(simdjson::dom::element value)
+  -> Result<IngestEndpointName, ParseError> {
+  TRY(auto raw, api::string_of(value, "IngestEndpointName"));
+  return IngestEndpointName::make(std::move(raw));
+}
+
+auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
+  -> Result<AttachIngestEndpointPath, ParseError> {
+  TRY(auto object, api::object_of(value, "AttachIngestEndpointPath"));
+
+  TRY(auto deployment_id_raw,
+      api::field(object, "deploymentId", "AttachIngestEndpointPath"));
+  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+
+  TRY(auto name_raw, api::field(object, "name", "AttachIngestEndpointPath"));
+  TRY(auto name, parse_ingest_endpoint_name(name_raw));
+
+  return AttachIngestEndpointPath{std::move(deployment_id), std::move(name)};
+}
+
+auto IngestEndpointGroupName::make(std::string value)
+  -> Result<IngestEndpointGroupName, ParseError> {
+  if (value.size() > 100) {
+    return Err{ParseError{"IngestEndpointGroupName",
+                          "must be at most 100 characters long"}};
+  }
+  static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  if (not std::regex_match(value, pattern)) {
+    return Err{
+      ParseError{"IngestEndpointGroupName",
+                 fmt::format("`{}` does not match the pattern", value)}};
+  }
+  return IngestEndpointGroupName{std::move(value)};
+}
+
+auto parse_ingest_endpoint_group_name(simdjson::dom::element value)
+  -> Result<IngestEndpointGroupName, ParseError> {
+  TRY(auto raw, api::string_of(value, "IngestEndpointGroupName"));
+  return IngestEndpointGroupName::make(std::move(raw));
+}
+
+auto parse_attach_ingest_endpoint_query(simdjson::dom::element value)
+  -> Result<AttachIngestEndpointQuery, ParseError> {
+  TRY(auto object, api::object_of(value, "AttachIngestEndpointQuery"));
+
+  auto group = Option<IngestEndpointGroupName>{None{}};
+  if (auto group_raw = api::optional_field(object, "group")) {
+    TRY(auto group_present, parse_ingest_endpoint_group_name(*group_raw));
+    group = std::move(group_present);
+  }
+
+  return AttachIngestEndpointQuery{std::move(group)};
+}
+
+auto parse_ingest_endpoint_attachment(simdjson::dom::element value)
+  -> Result<IngestEndpointAttachment, ParseError> {
+  TRY(auto object, api::object_of(value, "IngestEndpointAttachment"));
+
+  TRY(auto brokers_raw,
+      api::field(object, "brokers", "IngestEndpointAttachment"));
+  auto brokers = std::vector<std::string>{};
+  auto brokers_array = simdjson::dom::array{};
+  if (brokers_raw.get_array().get(brokers_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"IngestEndpointAttachment.brokers", "expected an array"}};
+  }
+  for (auto brokers_item : brokers_array) {
+    TRY(auto brokers_decoded,
+        api::string_of(brokers_item, "IngestEndpointAttachment.brokers"));
+    brokers.push_back(std::move(brokers_decoded));
+  }
+
+  TRY(auto security_protocol_raw,
+      api::field(object, "securityProtocol", "IngestEndpointAttachment"));
+  TRY(auto security_protocol,
+      api::string_of(security_protocol_raw,
+                     "IngestEndpointAttachment.securityProtocol"));
+
+  TRY(auto sasl_mechanism_raw,
+      api::field(object, "saslMechanism", "IngestEndpointAttachment"));
+  TRY(auto sasl_mechanism,
+      api::string_of(sasl_mechanism_raw,
+                     "IngestEndpointAttachment.saslMechanism"));
+
+  TRY(auto topic_raw, api::field(object, "topic", "IngestEndpointAttachment"));
+  TRY(auto topic, api::string_of(topic_raw, "IngestEndpointAttachment.topic"));
+
+  TRY(auto group_raw, api::field(object, "group", "IngestEndpointAttachment"));
+  TRY(auto group, api::string_of(group_raw, "IngestEndpointAttachment.group"));
+
+  TRY(auto group_prefix_raw,
+      api::field(object, "groupPrefix", "IngestEndpointAttachment"));
+  TRY(auto group_prefix,
+      api::string_of(group_prefix_raw, "IngestEndpointAttachment.groupPrefix"));
+
+  TRY(auto username_raw,
+      api::field(object, "username", "IngestEndpointAttachment"));
+  TRY(auto username,
+      api::string_of(username_raw, "IngestEndpointAttachment.username"));
+
+  TRY(auto password_raw,
+      api::field(object, "password", "IngestEndpointAttachment"));
+  TRY(auto password,
+      api::string_of(password_raw, "IngestEndpointAttachment.password"));
+
+  return IngestEndpointAttachment{
+    std::move(brokers),        std::move(security_protocol),
+    std::move(sasl_mechanism), std::move(topic),
+    std::move(group),          std::move(group_prefix),
+    std::move(username),       std::move(password)};
+}
+
 auto SecretName::make(std::string value) -> Result<SecretName, ParseError> {
+  if (value.size() > 255) {
+    return Err{ParseError{"SecretName", "must be at most 255 characters long"}};
+  }
   static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
   if (not std::regex_match(value, pattern)) {
     return Err{ParseError{
@@ -2111,6 +2249,73 @@ auto write_json(Batch const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(IngestEndpointName const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(AttachIngestEndpointPath const& value, std::string& out)
+  -> void {
+  out += '{';
+  out += "\"deploymentId\":";
+  write_json(value.deployment_id, out);
+  out += ",\"name\":";
+  write_json(value.name, out);
+  out += '}';
+}
+
+auto write_json(IngestEndpointGroupName const& value, std::string& out)
+  -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(AttachIngestEndpointQuery const& value, std::string& out)
+  -> void {
+  out += '{';
+  auto field_separator = "";
+  if (value.group) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"group\":";
+    if (value.group) {
+      write_json(*value.group, out);
+    } else {
+      out += "null";
+    }
+  }
+  out += '}';
+}
+
+auto write_json(IngestEndpointAttachment const& value, std::string& out)
+  -> void {
+  out += '{';
+  out += "\"brokers\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.brokers) {
+      out += separator0;
+      separator0 = ",";
+      api::write_string(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"securityProtocol\":";
+  api::write_string(value.security_protocol, out);
+  out += ",\"saslMechanism\":";
+  api::write_string(value.sasl_mechanism, out);
+  out += ",\"topic\":";
+  api::write_string(value.topic, out);
+  out += ",\"group\":";
+  api::write_string(value.group, out);
+  out += ",\"groupPrefix\":";
+  api::write_string(value.group_prefix, out);
+  out += ",\"username\":";
+  api::write_string(value.username, out);
+  out += ",\"password\":";
+  api::write_string(value.password, out);
+  out += '}';
+}
+
 auto write_json(SecretName const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
@@ -2663,6 +2868,114 @@ auto call(Transport& transport, PushTelemetry request)
                               std::move(response_body)}}};
   }
   co_return {};
+}
+
+// ── IngestEndpoints ─────────────────────────────────────────────────────────
+
+auto call(Transport& transport, AttachIngestEndpoint request)
+  -> Task<Result<IngestEndpointAttachment,
+                 variant<AttachIngestEndpointError, CallError>>> {
+  auto path
+    = fmt::format("/api/deployments/{}/ingest-endpoints/{}/attach",
+                  api::encode_segment(request.path.deployment_id.to_string()),
+                  api::encode_segment(request.path.name.to_string()));
+  if (request.query.group) {
+    path += path.contains('?') ? '&' : '?';
+    path += "group=";
+    path += api::encode_segment((*request.query.group).to_string());
+  }
+  auto body = std::string{};
+  CO_TRY(auto response, (co_await transport.request(HttpRequest{
+                           "POST", std::move(path), std::move(body)}))
+                          .map_err(as_call_error));
+  auto* buffered_body = try_as<std::string>(response.body);
+  if (not buffered_body) {
+    co_return Err{
+      CallError{RequestError{"transport returned a streaming response where a "
+                             "buffered body was required"}}};
+  }
+  auto& response_body = *buffered_body;
+  if (response.status != 200) {
+    if (response.status == 500) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "InternalServerError")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_internal_server_error(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 404) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "NotFound")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_not_found(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 503) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "ServiceUnavailable")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_service_unavailable(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 403) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "Unauthorized")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_unauthorized(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 401) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "Unauthenticated")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_unauthenticated(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 400) {
+      auto tag = api::tag_of(response_body);
+      if (tag == "CredentialConflict") {
+        CO_TRY(auto document,
+               api::Document::parse(response_body, "CredentialConflict")
+                 .map_err(as_response_error(response.status, response_body)));
+        CO_TRY(auto error,
+               parse_credential_conflict(document.root())
+                 .map_err(as_response_error(response.status, response_body)));
+        co_return Err{std::move(error)};
+      }
+      if (tag == "Validation") {
+        CO_TRY(auto document,
+               api::Document::parse(response_body, "Validation")
+                 .map_err(as_response_error(response.status, response_body)));
+        CO_TRY(auto error,
+               parse_validation(document.root())
+                 .map_err(as_response_error(response.status, response_body)));
+        co_return Err{std::move(error)};
+      }
+      co_return Err{
+        CallError{ResponseError{ResponseError::Reason::decode, response.status,
+                                std::move(response_body)}}};
+    }
+    co_return Err{
+      CallError{ResponseError{ResponseError::Reason::decode, response.status,
+                              std::move(response_body)}}};
+  }
+  CO_TRY(auto document,
+         api::Document::parse(response_body, "attachIngestEndpoint")
+           .map_err(as_parse_error));
+  CO_TRY(
+    auto value,
+    parse_ingest_endpoint_attachment(document.root()).map_err(as_parse_error));
+  co_return value;
 }
 
 // ── Secrets ─────────────────────────────────────────────────────────────────
