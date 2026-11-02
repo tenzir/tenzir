@@ -20,7 +20,7 @@ let
       (src + "/package.json")
       (src + "/patches")
       (src + "/services/shared")
-      (src + "/tools/platform-cli/main.ts")
+      (src + "/tools/platform-cli")
     ];
   };
   nodeModules = callPackage ./bun-node-modules.nix { } {
