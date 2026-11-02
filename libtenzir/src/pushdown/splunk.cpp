@@ -276,31 +276,9 @@ auto render_comparison(Binary const& x) -> Option<std::string> {
   return fmt::format("{}={}", field, value);
 }
 
-/// Whether TQL's `in` finds a value of another kind than `literal` equal to
-/// it: unlike `==`, it compares booleans with numbers as `0` and `1`, so that
-/// `false in [0]` and `1 in [true]` hold.
-auto matches_across_kinds(Literal const& literal) -> bool {
-  return match(
-    literal.value,
-    [](bool) {
-      return true;
-    },
-    [](int64_t x) {
-      return x == 0 or x == 1;
-    },
-    [](uint64_t x) {
-      return x == 0 or x == 1;
-    },
-    [](double x) {
-      return x == 0.0 or x == 1.0;
-    },
-    [](auto const&) {
-      return false;
-    });
-}
-
 /// Spells `field in [literals]` with `IN`, which holds where `field=value`
-/// holds for some element.
+/// holds for some element. Each element compares by its own kind, as in TQL,
+/// also in a list that mixes kinds.
 auto render_in(In const& x) -> Option<std::string> {
   if (x.list.empty()) {
     return None{};
@@ -309,9 +287,7 @@ auto render_in(In const& x) -> Option<std::string> {
   auto values = std::vector<std::string>{};
   for (auto const& element : x.list) {
     auto const* literal = try_as<Literal>(element);
-    // `field=value` compares by the kind of the literal, which would drop
-    // the values of the other kind that TQL finds.
-    if (not literal or matches_across_kinds(*literal)) {
+    if (not literal) {
       return None{};
     }
     TRY(auto value, render_value(*literal));
@@ -816,6 +792,9 @@ auto eval_operator(BinaryOp op) -> Option<std::string_view> {
 ///   type inference may turn into a number, such as `5.0`, `+5`, `1e3`, or
 ///   `inf`, compare differently in Splunk, so their comparison is uncertain.
 ///   Every other value, such as `abc` or `-`, compares with no number in TQL.
+/// - A membership holds where the test of one of its literals holds. TQL
+///   compares each element of a list by its own type, so a list may mix
+///   strings, booleans, and numbers.
 /// - `mvcount(f)==1` keeps fields with several values from comparing equal,
 ///   which `eval` does if any value matches, while TQL compares a list unequal
 ///   to every literal.
@@ -889,7 +868,7 @@ private:
   /// A spelling of whether the single value of a field relates to a literal.
   struct Test {
     std::string text;
-    /// Whether the literals are numbers, so that the test holds only for
+    /// Whether some literals are numbers, which the test matches only with
     /// integers of up to 15 digits.
     bool numeric = false;
   };
@@ -924,13 +903,15 @@ private:
   }
 
   /// Spells whether the single value of `field` relates to one of `literals`
-  /// by `op`.
+  /// by `op`. Each literal compares by its own type, as in TQL, so that a
+  /// list may mix numbers, strings, and booleans.
   auto render_test(std::string const& field, BinaryOp op,
                    std::span<Literal const* const> literals) -> Option<Test> {
     TRY(auto symbol, eval_operator(op));
-    auto tests = std::vector<std::string>{};
-    auto numbers = size_t{0};
+    auto numbers = std::vector<std::string>{};
+    auto others = std::vector<std::string>{};
     for (auto const* literal : literals) {
+      auto numeric = false;
       auto test = match(
         literal->value,
         [&](std::string const& x) -> Option<std::string> {
@@ -962,27 +943,35 @@ private:
             return None{};
           }
           TRY(auto number, exact_number(*literal));
-          ++numbers;
+          numeric = true;
           return fmt::format("tonumber({}){}{}", field, symbol, number);
         });
       if (not test) {
         return None{};
       }
-      tests.push_back(std::move(*test));
+      (numeric ? numbers : others).push_back(std::move(*test));
     }
-    if (tests.empty() or (numbers != 0 and numbers != tests.size())) {
-      return None{};
-    }
-    auto result = tests.size() == 1
-                    ? std::move(tests.front())
-                    : fmt::format("({})", fmt::join(tests, " OR "));
-    if (numbers == 0) {
-      return Test{.text = std::move(result)};
+    auto any = [](std::vector<std::string>& tests) {
+      return tests.size() == 1 ? std::move(tests.front())
+                               : fmt::format("({})", fmt::join(tests, " OR "));
+    };
+    if (numbers.empty()) {
+      if (others.empty()) {
+        return None{};
+      }
+      return Test{.text = any(others)};
     }
     compares_numbers_ = true;
+    auto integers = fmt::format("match({}, {}) AND {}", field,
+                                spl_integer_pattern, any(numbers));
+    if (others.empty()) {
+      return Test{.text = std::move(integers), .numeric = true};
+    }
+    // The integer pattern guards only the comparisons with numbers, while the
+    // strings and booleans keep their own tests.
+    others.insert(others.begin(), fmt::format("({})", integers));
     return Test{
-      .text
-      = fmt::format("match({}, {}) AND {}", field, spl_integer_pattern, result),
+      .text = fmt::format("({})", fmt::join(others, " OR ")),
       .numeric = true,
     };
   }

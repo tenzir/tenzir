@@ -29,6 +29,8 @@
 #include <functional>
 #include <limits>
 #include <pthread.h>
+#include <span>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1113,6 +1115,44 @@ TEST("binary in kernel matches list elements across numeric types") {
   CHECK_EQUAL(*values->get(1), true);  // 3 matches the uint 3
   CHECK_EQUAL(*values->get(2), false); // -1 is not UINT64_MAX
   CHECK_EQUAL(*values->get(3), false); // 9 matches nothing
+}
+
+TEST("binary in kernel compares blobs and secrets as == does") {
+  // A blob and a secret are views of bytes that C++ can compare, but `==`
+  // relates neither to the other and is `null` for every comparison with a
+  // secret, as its value is unknown until the pipeline resolves it.
+  auto const* bytes = reinterpret_cast<std::byte const*>("abc");
+  auto builder = ArrayBuilder<Record>{};
+  {
+    auto r = builder.record();
+    r.field("blob").data(BlobView{std::span{bytes, 3}});
+    r.field("secret").data(SecretView{bytes, 3});
+    r.field("secrets").list().data(SecretView{bytes, 3});
+    auto blobs = r.field("blobs").list();
+    blobs.data(BlobView{std::span{bytes, 3}});
+    auto mixed = r.field("mixed").list();
+    mixed.data(SecretView{bytes, 3});
+    mixed.data(BlobView{std::span{bytes, 3}});
+  }
+  auto events = make_events(builder.finish());
+  auto reg = tenzir::registry{};
+  auto check = [&](std::string lhs, std::string rhs, tenzir::data expected,
+                   size_t warnings) {
+    auto dh = tenzir::collecting_diagnostic_handler{};
+    auto result = eval(compare_expr(root_field(std::move(lhs)),
+                                    tenzir::ast::binary_op::in,
+                                    root_field(std::move(rhs))),
+                       events, all_rows(events), dh, reg);
+    CHECK_EQUAL(materialize_legacy(result.get(0)), expected);
+    CHECK_EQUAL(std::move(dh).collect().size(), warnings);
+  };
+  check("blob", "blobs", tenzir::data{true}, 0);
+  // A secret element is `null` unless another element matches.
+  check("blob", "secrets", tenzir::data{}, 1);
+  check("blob", "mixed", tenzir::data{true}, 0);
+  // A secret on the left compares with no element.
+  check("secret", "blobs", tenzir::data{}, 1);
+  check("secret", "secrets", tenzir::data{}, 1);
 }
 
 namespace {

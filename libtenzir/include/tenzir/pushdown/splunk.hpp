@@ -57,9 +57,8 @@ namespace tenzir::pushdown {
 /// - `==` between a top-level field and a string or a boolean,
 /// - comparisons of `_time` with a timestamp, in whole epoch seconds rounded
 ///   outwards,
-/// - `in` of a field in a list of string or number literals, but not with
-///   `0` or `1`, since TQL's `in` also finds `false` in `[0]` and `true` in
-///   `[1]`,
+/// - `in` of a field in a list of string, number, or boolean literals, which
+///   compares each element by its own kind, as TQL does,
 /// - `starts_with`, `ends_with`, substring membership, and their
 ///   case-insensitive forms with ASCII needles, as wildcard patterns,
 /// - `!= null` of a field,
@@ -248,6 +247,8 @@ struct SplAggregation {
 ///   digits are the only values that Splunk and TQL compare alike.
 /// - The negations of `SplRenderer`, with the same literals, which keep a
 ///   missing field and a field with several values.
+/// - Lists of `in` with these literals, also of several types, which TQL
+///   compares each by its own type.
 /// - `== null` and `!= null`, as `isnull(f)` and `isnotnull(f)`.
 /// - `and` and `or` of these.
 ///

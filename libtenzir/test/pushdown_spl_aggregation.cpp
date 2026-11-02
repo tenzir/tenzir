@@ -581,6 +581,11 @@ TEST("exact filters go into a where stage before the aggregation") {
   CHECK_EQUAL(where("flag"), R"((mvcount('flag')==1 AND 'flag'=="true"))");
   CHECK_EQUAL(where("flag == false"),
               R"((mvcount('flag')==1 AND 'flag'=="false"))");
+  CHECK_EQUAL(where("flag in [true]"),
+              R"((mvcount('flag')==1 AND 'flag'=="true"))");
+  // A list may mix types, since TQL compares each element by its own type.
+  CHECK_EQUAL(where(R"(x in ["alice", false])"),
+              R"((mvcount('x')==1 AND ('x'=="alice" OR 'x'=="false")))");
   // Null checks.
   CHECK_EQUAL(where("action == null"), "isnull('action')");
   CHECK_EQUAL(where("action != null"), "isnotnull('action')");
@@ -597,6 +602,9 @@ TEST("exact filters go into a where stage before the aggregation") {
   CHECK_EQUAL(where("flag != true"),
               R"((isnull('flag') OR mvcount('flag')>1 OR )"
               R"(if('flag'=="true", false(), true())))");
+  CHECK_EQUAL(where(R"(not (x in [false, "alice"]))"),
+              R"((isnull('x') OR mvcount('x')>1 OR )"
+              R"(if(('x'=="false" OR 'x'=="alice"), false(), true())))");
   // Junctions, and several filters, which all apply.
   CHECK_EQUAL(where(R"(user == "alice" or action == null)"),
               R"(((mvcount('user')==1 AND 'user'=="alice") OR )"
@@ -647,6 +655,9 @@ TEST("exact filters check their comparisons of numbers") {
               positive("tonumber('n')==-999999999999999"));
   CHECK_EQUAL(filtered({"n in [5, 7]"}),
               positive("(tonumber('n')==5 OR tonumber('n')==7)"));
+  // A boolean matches no number, so that `0` and `1` need no exception.
+  CHECK_EQUAL(filtered({"n in [0, 1]"}),
+              positive("(tonumber('n')==0 OR tonumber('n')==1)"));
   auto negative = [&](std::string_view test) {
     return stages(
       fmt::format("(isnull('n') OR mvcount('n')>1 OR if({} AND {}, false(), "
@@ -659,6 +670,23 @@ TEST("exact filters check their comparisons of numbers") {
   CHECK_EQUAL(filtered({"n != 5"}), negative("tonumber('n')==5"));
   CHECK_EQUAL(filtered({"not (n in [5, 7])"}),
               negative("(tonumber('n')==5 OR tonumber('n')==7)"));
+  CHECK_EQUAL(filtered({"not (n in [1, 5])"}),
+              negative("(tonumber('n')==1 OR tonumber('n')==5)"));
+  // In a list of several types, only the numbers need integers, and the
+  // other literals keep their own tests.
+  auto const mixed = fmt::format(
+    R"((({} AND tonumber('n')==1) OR 'n'=="a" OR 'n'=="true"))", integer);
+  CHECK_EQUAL(
+    filtered({R"(n in [1, "a", true])"}),
+    stages(fmt::format("(mvcount('n')==1 AND (({}) OR {}))", mixed, uncertain),
+           fmt::format("(mvcount('n')==1 AND {})", mixed)));
+  CHECK_EQUAL(filtered({R"(not (n in [1, "a", true]))"}),
+              stages(fmt::format("(isnull('n') OR mvcount('n')>1 OR if({}, "
+                                 "false(), true()))",
+                                 mixed),
+                     fmt::format("(isnull('n') OR mvcount('n')>1 OR if(({}) "
+                                 "OR {}, false(), true()))",
+                                 mixed, uncertain)));
   // Other predicates are the same in both bounds.
   CHECK_EQUAL(filtered({R"(user == "alice" or n > 6)"}),
               stages(fmt::format("((mvcount('user')==1 AND 'user'==\"alice\") "
@@ -691,13 +719,10 @@ TEST("filters without an exact spelling keep the aggregation local") {
          "n > 1.2345678901234567",
          "n == 1000000000000000",
          "n == 9007199254740993",
-         // Lists of several types, whose later elements TQL never matches.
-         R"(n in [1, "a"])",
-         R"(not (n in [1, "a"]))",
-         // Lists in which TQL's `in` finds booleans and numbers alike.
-         "n in [0, 5]",
-         "not (n in [1, 5])",
-         "flag in [true]",
+         // Lists with a literal that has no exact spelling.
+         R"(n in [1, "5"])",
+         "n in [1, 1000000000000000]",
+         "n in [1, null]",
          // Negations of other predicates.
          "not (n > 5)",
          "not flag",

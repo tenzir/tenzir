@@ -1,0 +1,15 @@
+// Splunk evaluates memberships with booleans, with `0` and `1`, and with
+// lists of several types as Tenzir does, so that it computes the summary.
+// Each result holds a probe in at most one of `v`, `n`, and `m`, and `zzz`
+// in the others, so that a single membership decides whether it passes.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=26 | streamstats count as i | eval v=case(i==1, "true", i==2, "false", i==3, "True", i==4, "TRUE", i==5, "1", i==6, "0", i==7, mvappend("true", "false"), i==8, "", true(), "zzz"), n=case(i==9, "0", i==10, "1", i==11, "-0", i==12, "001", i==13, "true", i==14, "false", i==15, "2", i==16, mvappend("0", "1"), true(), "zzz"), m=case(i==17, "1", i==18, "a", i==19, "A", i==20, "false", i==21, "False", i==22, "true", i==23, "0", i==24, "01", i==25, mvappend("a", "b"), true(), "zzz")"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where v in [true] or n in [0, 1] or m in [1, "a", false]
+summarize i
+sort i

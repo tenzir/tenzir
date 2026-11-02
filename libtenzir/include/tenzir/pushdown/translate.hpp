@@ -138,10 +138,9 @@ auto translate_prefilter(ast::expression const& expr,
 ///   number, or a time, and `<`, `<=`, `>`, and `>=` with a number or a time.
 ///   A value of another type, such as a list, compares unequal and unordered.
 ///   A bare field holds as `Binary{eq, Column, true}`.
-/// - `In{Column, literals}`, with literals of a single type. Unlike `==`,
-///   TQL's `in` compares a boolean with a number as `0` or `1`, so lists of
-///   booleans and lists with a number equal to `0` or `1` have no
-///   translation.
+/// - `In{Column, literals}`, which holds where TQL's `==` holds for some
+///   literal. The literals may differ in type, since TQL compares each
+///   element of a list by its own type.
 /// - `IsNull{Column}` for `== null`, and its negation for `!= null`.
 /// - With `options.negations`, the negations that `PrefilterOptions`
 ///   describes, with the literals of a membership as above.

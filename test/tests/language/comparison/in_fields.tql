@@ -1,0 +1,19 @@
+// `in` compares field values like `==`, in filters, negations, and with
+// list-valued fields: a `bool` matches no number, while numbers compare by
+// value across their types.
+from {x: false, l: [0, 5]},
+  {x: true, l: [1, "a"]},
+  {x: 0, l: [false]},
+  {x: 1, l: [true, 1.0]},
+  {x: 1.0, l: [true]},
+  {x: 5, l: [5.0]},
+  {x: "a", l: [1, "a"]},
+  {x: null, l: [0, null]}
+select x,
+  in_ints = x in [0, 5],
+  in_true = x in [true],
+  not_in_ints = not (x in [0, 5]),
+  not_in_true = x not in [true],
+  mixed = x in [1, "a"],
+  in_field = x in l,
+  not_in_field = not (x in l)

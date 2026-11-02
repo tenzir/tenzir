@@ -1031,17 +1031,18 @@ auto translate_comparison(ast::binary_expr const& expr,
 
 // -- Membership ---------------------------------------------------------------
 
-/// Translates `scalar in [literals]`.
+/// Translates `scalar in [literals]`, which holds in TQL where `scalar == x`
+/// holds for some element `x`.
 ///
-/// A TQL list has a single element type, fixed by its first element; a later
-/// element of another type becomes `null` and never matches, even between
-/// `int64` and `double` or `int64` and `uint64`. A target would match it, so
-/// such lists stay local. So does a list with a `null`, which makes TQL and
-/// the IR disagree for `null` rows. For the text-like and temporal types, an
-/// element that no stored value can equal is dropped; when none remains, the
-/// membership is `false` for every row, `null` included, as in TQL.
-/// Dynamic columns use this only as a prefilter: mixed literals may over-match
-/// but cannot under-match, even if the local evaluator drops clashing types.
+/// TQL compares each element by its own type. For a typed column, a list of
+/// several types stays local, even between `int64` and `double` or `int64`
+/// and `uint64`: a target may convert the elements of a set to a common type
+/// before it compares them, which the renderers do not account for. So does
+/// a list with a `null`, which makes TQL and the IR disagree for `null` rows.
+/// For the text-like and temporal types, an element that no stored value can
+/// equal is dropped; when none remains, the membership is `false` for every
+/// row, `null` included, as in TQL. For a dynamic column, the elements keep
+/// their types, and a renderer compares each by its own type.
 auto translate_in_list(Scalar const& scalar, ast::list const& list,
                        registry const& reg) -> Option<Expr> {
   if (list.items.empty()) {
@@ -1507,8 +1508,9 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns,
     return;
   }
   if (auto* list = try_as<ast::list>(expr.right)) {
-    // TQL fixes the list's element type from its first element, so only a
-    // list of addresses has a textual counterpart.
+    // Only a list of addresses becomes text. In a list that mixes addresses
+    // with other values, TQL compares each element by its own type, and the
+    // list stays as written.
     auto addresses = std::vector<ip>{};
     for (auto const& item : list->items) {
       auto const* item_expr = try_as<ast::expression>(item);
@@ -1773,57 +1775,6 @@ auto translate_dynamic_atom(ast::expression const& expr,
   return compare(std::move(column->expr), op, to_literal(*literal), true);
 }
 
-/// Returns whether the elements of `list` are literals of one type. Nova keeps
-/// the elements of a list of several types, while the legacy evaluator turns
-/// those of another type than the first into `null`, which never matches.
-auto has_uniform_type(ast::list const& list, registry const& reg) -> bool {
-  auto element_type = Option<size_t>{};
-  for (auto const& item : list.items) {
-    auto const* item_expr = try_as<ast::expression>(item);
-    auto literal = item_expr ? as_literal(*item_expr, reg) : None{};
-    if (not literal) {
-      return false;
-    }
-    auto type = variant_traits<ast::constant::kind>::index(literal->value);
-    if (element_type and *element_type != type) {
-      return false;
-    }
-    element_type = type;
-  }
-  return true;
-}
-
-/// Returns whether TQL's `in` may find a boolean value in `list` or a number
-/// value in a list of booleans. Unlike `==`, it compares a boolean with a
-/// number as `0` or `1`, so that `false in [0, 5]` and `1.0 in [true]` hold. A
-/// target that compares a dynamic field by its type does not.
-auto may_match_boolean(ast::list const& list, registry const& reg) -> bool {
-  return std::ranges::any_of(list.items, [&](auto const& item) {
-    auto const* item_expr = try_as<ast::expression>(item);
-    auto literal = item_expr ? as_literal(*item_expr, reg) : None{};
-    if (not literal) {
-      return true;
-    }
-    return match(
-      literal->value,
-      [](bool) {
-        return true;
-      },
-      [](int64_t x) {
-        return x == 0 or x == 1;
-      },
-      [](uint64_t x) {
-        return x == 0 or x == 1;
-      },
-      [](double x) {
-        return x == 0.0 or x == 1.0;
-      },
-      [](auto const&) {
-        return false;
-      });
-  });
-}
-
 /// Translates an atom of `translate_dynamic_predicate`: a comparison or
 /// membership of a dynamic column with literals, a null check, a bare
 /// column, or, with `options.negations`, a negated equality or membership.
@@ -1853,12 +1804,7 @@ auto translate_dynamic_comparison(ast::expression const& expr,
       return None{};
     }
     if (inner->op == ast::binary_op::in) {
-      auto const* list = try_as<ast::list>(inner->right);
       TRY(auto column, dynamic_column(inner->left));
-      if (not list or not has_uniform_type(*list, reg)
-          or may_match_boolean(*list, reg)) {
-        return None{};
-      }
       return translate_dynamic_negation(std::move(column), inner->right, true,
                                         reg);
     }
@@ -1880,8 +1826,7 @@ auto translate_dynamic_comparison(ast::expression const& expr,
   if (x->op == ast::binary_op::in) {
     auto const* list = try_as<ast::list>(x->right);
     TRY(auto column, dynamic_column(x->left));
-    if (not list or not has_uniform_type(*list, reg)
-        or may_match_boolean(*list, reg)) {
+    if (not list) {
       return None{};
     }
     TRY(auto set, translate_in_list(column, *list, reg));

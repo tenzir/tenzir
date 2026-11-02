@@ -128,11 +128,13 @@ TEST("spl renders membership") {
   CHECK_EQUAL(search(R"(user in ["alice", "bob"])"),
               R"(user IN ("alice", "bob"))");
   CHECK_EQUAL(search("n in [5, 7]"), "n IN (5, 7)");
-  // TQL's `in` finds `false` in `[0, 5]` and `1` in `[true]`, unlike `==`
-  // and `IN`.
-  CHECK_EQUAL(search("n in [0, 5]"), "");
-  CHECK_EQUAL(search("n in [5, 1.0]"), "");
-  CHECK_EQUAL(search("flag in [true]"), "");
+  // Like `==` and `IN`, TQL's `in` compares each element by its own kind, so
+  // that `false` is not in `[0, 5]`, and `1` is not in `[true]`.
+  CHECK_EQUAL(search("n in [0, 5]"), "n IN (0, 5)");
+  CHECK_EQUAL(search("n in [5, 1.0]"), "n IN (5, 1)");
+  CHECK_EQUAL(search("flag in [true]"), "flag IN (true)");
+  CHECK_EQUAL(search("flag in [false, 0]"), "flag IN (false, 0)");
+  CHECK_EQUAL(search(R"(x in [1, "a", true])"), R"(x IN (1, "a", true))");
   CHECK_EQUAL(search("flag == true"), "flag=true");
   CHECK_EQUAL(search("n == 0"), "n=0");
 }
@@ -487,8 +489,8 @@ TEST("spl renders negations that keep missing and multivalue fields") {
   CHECK_EQUAL(stages("not (n in [1, 9007199254740992])"), "");
   CHECK_EQUAL(stages("not (n in [-9007199254740992])"), "");
   CHECK_EQUAL(stages("not (n in [uint(9007199254740992)])"), "");
-  // Nova keeps mixed lists as they are, so `true in [1, true]` holds and the
-  // negation matches each literal by its own kind.
+  // TQL compares each element of a list by its own kind, as the negation
+  // does.
   CHECK_EQUAL(stages("not (x in [1, true])"),
               where(negated_where("x", {"1", R"("true")"})));
   CHECK_EQUAL(stages("not (n in [9007199254740991])"),
