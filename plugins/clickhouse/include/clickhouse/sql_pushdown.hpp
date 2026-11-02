@@ -18,6 +18,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/column_model.hpp"
 #include "tenzir/pushdown/renderer.hpp"
+#include "tenzir/pushdown/sql.hpp"
 
 #include <span>
 #include <string>
@@ -266,6 +267,19 @@ auto make_select_query(std::string_view table, SqlSchema const* schema,
                        Option<ir::OptimizeProjection> const& projection,
                        std::span<const std::string> where,
                        Option<uint64_t> limit) -> std::string;
+
+/// Plans a read of a table with `schema`: pushes the predicates of `filter`
+/// that ClickHouse evaluates exactly like TQL, rendered for `target`, and
+/// selects the columns that `projection` names, as `make_select_query` does.
+auto make_table_plan(SqlSchema const& schema, SqlTarget target,
+                     ir::OptimizeFilter filter,
+                     Option<ir::OptimizeProjection> const& projection,
+                     registry const& reg) -> pushdown::TablePlan;
+
+/// Renders the `SELECT` that reads `table` according to `plan`, with `LIMIT
+/// limit` if every predicate was pushed.
+auto make_table_query(pushdown::TablePlan const& plan, std::string_view table,
+                      Option<uint64_t> limit) -> std::string;
 
 /// Whether `make_aggregate_query` supports every function of `aggregation`.
 /// Whether it supports their inputs depends on the table's schema.

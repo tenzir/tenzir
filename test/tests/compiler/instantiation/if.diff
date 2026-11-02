@@ -88,7 +88,8 @@
                
              ]
            }
-         ]
+         ],
+         definition_location: [1]:40..88 from 0
        },
        alternative: {
          lets: [
@@ -138,8 +139,10 @@
                
              ]
            }
-         ]
+         ],
+         definition_location: [1]:100..148 from 0
        }
      }
-   ]
+   ],
+   definition_location: [1]:0..148 from 0
  }

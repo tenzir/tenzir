@@ -4,7 +4,7 @@ fixtures:
       expected:
         - method: POST
           path: /splunk/fatal-message/services/search/v2/jobs/export
-          body: search=%7C%20rest%20%2Fservices%2Fmissing&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+          body: search=%7C%20rest%20%2Fservices%2Fmissing%0A%7C%20fields%20%2A&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
 error: true
 ---
 

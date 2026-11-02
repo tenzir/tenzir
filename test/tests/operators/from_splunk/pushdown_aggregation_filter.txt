@@ -1,0 +1,21 @@
+warning: event does not have field
+  --> tests/operators/from_splunk/pushdown_aggregation_filter.tql:16:47
+   |
+16 | summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)
+   |                                               ~~~~~~
+   |
+   = hint: append `?` to suppress this warning
+{
+  user: "Alice",
+  events: 1,
+  actions: 1,
+  lo: 50,
+  hi: 50,
+}
+{
+  user: "carol",
+  events: 1,
+  actions: 0,
+  lo: 7,
+  hi: 7,
+}

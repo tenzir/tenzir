@@ -293,7 +293,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:164..169 from 0
        },
        alternative: {
          lets: [
@@ -316,7 +317,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:181..186 from 0
        }
      },
 -    where_ir {
@@ -364,7 +366,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:212..217 from 0
        }
      },
 -    where_ir {
@@ -440,7 +443,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:263..268 from 0
            },
            wildcard: false
          },
@@ -480,7 +484,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:283..288 from 0
            },
            wildcard: false
          },
@@ -527,7 +532,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:311..316 from 0
            },
            wildcard: false
          },
@@ -574,7 +580,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:337..342 from 0
            },
            wildcard: false
          },
@@ -592,7 +599,8 @@
              ],
              operators: [
                
-             ]
+             ],
+             definition_location: [0]:0..0 from 0
            },
            wildcard: true
          }
@@ -674,7 +682,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:399..406 from 0
            },
            wildcard: false
          },
@@ -725,7 +734,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:425..432 from 0
            },
            wildcard: false
          },
@@ -755,7 +765,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:444..451 from 0
            },
            wildcard: true
          }
@@ -827,7 +838,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:499..506 from 0
        },
        alternative: {
          lets: [
@@ -850,25 +862,15 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:518..523 from 0
        }
      },
 -    where_ir {
 -      op: {
 -        path: [
 -          `where` @ [1]:526..531 from 0
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:538..538 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-         ],
+-        ],
 -        ref: std::where/op
 -      },
 -      args: [
@@ -881,6 +883,18 @@
 -          right: constant int64 1 @ [1]:537..538 from 0,
 -          location: [1]:532..538 from 0
 -        }
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:538..538 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
 +        named_args: [
 +          
 +        ]
@@ -893,5 +907,6 @@
 -      ]
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:143..538 from 0
  }

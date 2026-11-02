@@ -4,7 +4,7 @@ fixtures:
       expected:
         - method: POST
           path: /splunk/warning-message/services/search/v2/jobs/export
-          body: search=search%20index%3Dmain&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+          body: search=search%20index%3Dmain%0A%7C%20fields%20%2A&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
 ---
 
 from_splunk env("HTTP_FIXTURE_SPLUNK_WARNING_MESSAGE_URL"),

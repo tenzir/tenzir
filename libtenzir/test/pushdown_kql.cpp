@@ -8,6 +8,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pushdown/kql.hpp"
+#include "tenzir/pushdown/translate.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
@@ -199,7 +200,7 @@ TEST("kql widens timestamp comparisons around decoded instants") {
   // Rounding in microseconds must not overflow the nanosecond time range.
   auto renderer = KqlRenderer{};
   for (auto instant : {time::min(), time::max()}) {
-    CHECK(renderer.render(Binary{
+    CHECK(renderer.render_prefilter(Binary{
       .op = BinaryOp::eq,
       .left = Box<Expr>{Expr{Column{{"x"}}}},
       .right = Box<Expr>{Expr{Literal{instant}}},
@@ -549,4 +550,18 @@ TEST("kql plans leave unfit queries unchanged") {
        }) {
     CHECK(kql_accepts_trailing_stages(query));
   }
+}
+
+TEST("kql renders prefilters only, which keep their conjuncts local") {
+  // With a typed column, the predicate has an exact translation. KQL may only
+  // spell it as a superset, so the predicate must stay local.
+  auto columns = ColumnModel{};
+  columns.add({"x"}, {StringType{}, true});
+  auto split = split_filter(filters({"x == \"a\""}), columns, KqlRenderer{},
+                            test::builtin_registry());
+  CHECK_EQUAL(split.remaining.size(), size_t{1});
+  auto exact = translate_predicate(parse("x == \"a\""), columns,
+                                   test::builtin_registry());
+  REQUIRE(exact);
+  CHECK(not KqlRenderer{}.render(*exact));
 }

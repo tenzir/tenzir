@@ -1,0 +1,20 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/aggregate-merged/services/search/v2/jobs/export
+      body_pattern: search=search%20index%3Dmain%0A%7C%20eval%20tenzir_aggregate_0%3Dcase%28isnull%28%27user%27%29%2C%20%22n%22%2C%20mvcount%28%27user%27%29%21%3D1%2C%20%22m%22%2C%20match%28%27user%27%2C%20%22%5Cx00%22%29%2C%20%22z%22%2C%20true%28%29%2C%20%22v%22%20\.%20%27user%27%29%2C%20tenzir_aggregate_2%3Dif%28isnull%28%27action%27%29%2C%20null%28%29%2C%201%29%2C%20tenzir_aggregate_3%3Dif%28mvcount%28%27n%27%29%3D%3D1%20AND%20match%28%27n%27%2C%20%22%5E\-%3F%5B0\-9%5D%7B1%2C15%7D%24%22%29%2C%20tonumber%28%27n%27%29%2C%20null%28%29%29%2C%20tenzir_check_3%3Dif%28isnull%28%27n%27%29%20OR%20%28mvcount%28%27n%27%29%3D%3D1%20AND%20match%28%27n%27%2C%20%22%5E\-%3F%5B0\-9%5D%7B1%2C15%7D%24%22%29%29%2C%200%2C%201%29%2C%20tenzir_aggregate_4%3Dif%28mvcount%28%27n%27%29%3D%3D1%20AND%20match%28%27n%27%2C%20%22%5E\-%3F%5B0\-9%5D%7B1%2C15%7D%24%22%29%2C%20tonumber%28%27n%27%29%2C%20null%28%29%29%2C%20tenzir_check_4%3Dif%28isnull%28%27n%27%29%20OR%20%28mvcount%28%27n%27%29%3D%3D1%20AND%20match%28%27n%27%2C%20%22%5E\-%3F%5B0\-9%5D%7B1%2C15%7D%24%22%29%29%2C%200%2C%201%29%0A%7C%20stats%20count%20as%20tenzir_count%2C%20count%28tenzir_aggregate_2%29%20as%20tenzir_aggregate_2%2C%20min%28tenzir_aggregate_3%29%20as%20tenzir_aggregate_3%2C%20max%28tenzir_check_3%29%20as%20tenzir_check_3%2C%20max%28tenzir_aggregate_4%29%20as%20tenzir_aggregate_4%2C%20max%28tenzir_check_4%29%20as%20tenzir_check_4%20by%20tenzir_aggregate_0%0A%7C%20appendpipe%20%5Bstats%20count%20as%20tenzir_groups%5D\&earliest_time=\-15m\&latest_time=\-5m\&now=[0-9]+\&output_mode=json\&preview=false
+    - method: POST
+      path: /splunk/aggregate-merged/services/search/v2/jobs/export
+      body_pattern: search=search%20index%3Dmain%0A%7C%20fields%20user%2C%20action%2C%20n\&earliest_time=\-15m\&latest_time=\-5m\&now=[0-9]+\&output_mode=json\&preview=false
+---
+
+// Splunk groups `5` and `005` apart, which type inference merges. The operator
+// then sends the search without the `stats` stages and summarizes the events
+// in Tenzir.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/aggregate-merged",
+  search="search index=main", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)
+sort user.string()

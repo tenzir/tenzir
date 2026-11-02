@@ -77,9 +77,18 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
 
 /// Run a closed pipeline plan that was compiled against `reg`, which the run
 /// keeps alive.
+/// Finishes the optional observer on return or exception, including failure
+/// and cancellation. Accepted tap batches remain available until drained to
+/// EOF. The caller keeps the observer alive until the returned task is
+/// destroyed. When supplied, sources must remain alive until the task starts,
+/// when they are copied into the observer. Discarding an unstarted task leaves
+/// inspection unstarted as well.
 auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
-              Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
+              Notify* graceful_stop = nullptr,
+              Option<Ref<PipelineObserver>> observer = None{},
+              Option<Ref<SourceMap const>> sources = None{})
+  -> Task<failure_or<void>>;
 
 /// Run a `T -> T` chain with caller-provided IO, where `T` is either
 /// `table_slice` or `nova::Events`.

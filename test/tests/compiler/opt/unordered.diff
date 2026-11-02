@@ -61,7 +61,8 @@
 -              
 -            ]
 -          }
--        ]
+-        ],
+-        definition_location: [1]:21..36 from 0
 -      },
 -      loc: [1]:7..16 from 0
 +      order: "unordered"
@@ -87,5 +88,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..48 from 0
  }

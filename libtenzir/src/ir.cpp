@@ -327,6 +327,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   TENZIR_ASSERT(entities_resolved(*this),
                 "a pipeline has to be resolved before it is compiled");
   auto acc = ir::pipeline{};
+  acc.definition_location = get_location();
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
     auto result = match(
@@ -560,6 +561,7 @@ auto ir::pipeline::infer_type(element_type_tag input, base_ctx ctx) const
 auto ir::pipeline::optimize(OptimizeRequest req,
                             const OptimizeCtx& octx) && -> OptimizeResult {
   auto replacement = pipeline{std::move(lets), {}};
+  replacement.definition_location = definition_location;
   for (auto& op : std::ranges::reverse_view(operators)) {
     // An operator that runs across multiple parallel instances has its output
     // reordered by the gather that follows it, so its consumer cannot rely on

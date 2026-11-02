@@ -92,7 +92,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:20..30 from 0
        },
        alternative: {
          lets: [
@@ -115,7 +116,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:42..53 from 0
        }
      },
      SetIr {
@@ -166,5 +168,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..66 from 0
  }

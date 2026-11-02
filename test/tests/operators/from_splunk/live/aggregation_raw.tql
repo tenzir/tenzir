@@ -1,0 +1,12 @@
+// With `raw=true`, the keys stay text, so Splunk groups them as Tenzir does.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=6 | streamstats count as i | eval k=case(i<=2, "5", i==3, "005", i==4, "5.0", i==5, "five")"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true},
+  raw=true
+summarize k, events=count()
+sort k

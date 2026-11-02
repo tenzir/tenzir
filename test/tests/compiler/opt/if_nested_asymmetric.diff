@@ -89,7 +89,8 @@
 -            ]
 -          }
 +          
-         ]
+         ],
+         definition_location: [1]:21..33 from 0
        },
        alternative: {
          lets: [
@@ -154,7 +155,8 @@
 -                  order: "ordered"
 +                  order: "unordered"
                  }
-               ]
+               ],
+               definition_location: [1]:55..80 from 0
              },
              alternative: {
                lets: [
@@ -183,10 +185,12 @@
 -                  order: "ordered"
 +                  order: "unordered"
                  }
-               ]
+               ],
+               definition_location: [1]:92..96 from 0
              }
            }
-         ]
+         ],
+         definition_location: [1]:41..96 from 0
        }
      },
      GenericIr {
@@ -210,5 +214,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..106 from 0
  }

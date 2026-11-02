@@ -1,0 +1,16 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3D%22main%22%20action%3D%22login%22%20n%3E1%0A%7C%20fields%20n%2C%20user%2C%20action&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+// With `index`, Tenzir writes the search, and prefilters extend its base
+// `search` command.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index="main", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where action == "login" and n > 1
+select user, n

@@ -317,7 +317,8 @@
 +                emit_every: 1
 +              }
 +            }
-+          ]
++          ],
++          definition_location: [0]:0..0 from 0
 +        }
 +      }
 +    },
@@ -352,5 +353,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:118..239 from 0
  }

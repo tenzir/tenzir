@@ -1,0 +1,7 @@
+error: either `search` or `index` is required
+ --> tests/operators/from_splunk/error_missing_search.tql:5:1
+  |
+5 | from_splunk "https://splunk.example.com:8089",
+  | ^^^^^^^^^^^
+  |
+  = hint: use `index` to read events, or `search` to run SPL

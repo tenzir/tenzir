@@ -1,0 +1,13 @@
+{
+  k: [
+    "a",
+    "b",
+  ],
+  events: 1,
+  present: 1,
+}
+{
+  k: "a",
+  events: 3,
+  present: 3,
+}

@@ -1,0 +1,14 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%20IN%20%28%22main%22%2C%20%22web_%2A%22%29%0A%7C%20fields%20user%0A%7C%20head%201&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index=["main", "web_*"], earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+head 1
+select user

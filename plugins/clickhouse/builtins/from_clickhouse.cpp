@@ -481,24 +481,17 @@ struct PreparedQuery {
 
 /// Pushes as much of `plan`'s hints into a `SELECT` from its table as
 /// `schema` allows.
-auto make_table_query(QueryPlan& plan, SqlSchema const& schema,
-                      Option<ir::OptimizeProjection> const& projection,
-                      registry const& reg) -> PreparedQuery {
-  auto split
-    = pushdown::split_filter(std::move(plan.optimization.filter),
-                             schema.model(),
-                             ClickHouseRenderer{plan.target, &schema}, reg);
-  // The limit counts events after the whole filter chain, so it can only go
-  // into the query if the chain did.
-  auto limit = Option<uint64_t>{};
-  if (split.remaining.empty()) {
-    limit = plan.optimization.limit;
-  }
+auto prepare_table_query(QueryPlan& plan, SqlSchema const& schema,
+                         Option<ir::OptimizeProjection> const& projection,
+                         registry const& reg) -> PreparedQuery {
+  auto table_plan = make_table_plan(
+    schema, plan.target, std::move(plan.optimization.filter), projection, reg);
+  auto text
+    = make_table_query(table_plan, *plan.table, plan.optimization.limit);
   return {
-    .text
-    = make_select_query(*plan.table, &schema, projection, split.pushed, limit),
-    .local_filter = std::move(split.remaining),
-    .has_pushed_filter = not split.pushed.empty(),
+    .text = std::move(text),
+    .local_filter = std::move(table_plan.local),
+    .has_pushed_filter = not table_plan.pushed.empty(),
   };
 }
 
@@ -521,7 +514,7 @@ auto prepare_query(::clickhouse::Client& client, QueryPlan& plan,
     };
   }
   auto schema = fetch_schema(client, *plan.table);
-  return make_table_query(plan, schema, plan.optimization.projection, reg);
+  return prepare_table_query(plan, schema, plan.optimization.projection, reg);
 }
 
 /// Like `prepare_query`, but always describes a table to find out whether it
@@ -583,7 +576,7 @@ auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
   // catch-all, so the query of a catch-all table selects every column.
   auto projection = catch_all ? Option<ir::OptimizeProjection>{}
                               : plan.optimization.projection;
-  auto prepared = make_table_query(plan, schema, projection, reg);
+  auto prepared = prepare_table_query(plan, schema, projection, reg);
   prepared.catch_all = std::move(catch_all);
   return prepared;
 }

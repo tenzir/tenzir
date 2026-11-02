@@ -1156,6 +1156,361 @@ struct std::hash<tenzir::PipelinePath> {
 
 namespace tenzir {
 
+/// A UUID
+/// Values must match
+/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+class Uuid {
+public:
+  static auto make(std::string value) -> Result<Uuid, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto operator==(Uuid const&, Uuid const&) -> bool = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, Uuid const& value) -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit Uuid(std::string value) : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<Uuid> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::Uuid> {
+  auto operator()(tenzir::Uuid const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class SourceLocation {
+public:
+  SourceLocation(std::int64_t begin, std::int64_t end,
+                 std::int64_t source_index, std::int64_t callsite_index)
+    : begin{std::move(begin)},
+      end{std::move(end)},
+      source_index{std::move(source_index)},
+      callsite_index{std::move(callsite_index)} {
+  }
+
+  std::int64_t begin;
+  std::int64_t end;
+  std::int64_t source_index;
+  std::int64_t callsite_index;
+
+  friend auto operator==(SourceLocation const&, SourceLocation const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, SourceLocation const& value)
+    -> void {
+    hash_append(h, value.begin, value.end, value.source_index,
+                value.callsite_index);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::SourceLocation> {
+  auto operator()(tenzir::SourceLocation const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class InspectionOperator {
+public:
+  InspectionOperator(std::string id, std::string name,
+                     Option<SourceLocation> source)
+    : id{std::move(id)}, name{std::move(name)}, source{std::move(source)} {
+  }
+
+  std::string id;
+  std::string name;
+  /// `source`, may be null.
+  Option<SourceLocation> source;
+
+  friend auto operator==(InspectionOperator const&, InspectionOperator const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, InspectionOperator const& value)
+    -> void {
+    hash_append(h, value.id, value.name, value.source);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::InspectionOperator> {
+  auto operator()(tenzir::InspectionOperator const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+enum class ChannelDataType {
+  events,
+  bytes,
+  file,
+  none,
+};
+
+auto to_string(ChannelDataType value) -> std::string_view;
+
+enum class InspectionChannelKind {
+  regular,
+  fused,
+  tiny,
+};
+
+auto to_string(InspectionChannelKind value) -> std::string_view;
+
+class InspectionChannel {
+public:
+  InspectionChannel(Option<std::int64_t> from, std::int64_t from_port,
+                    Option<std::int64_t> to, ChannelDataType type,
+                    InspectionChannelKind kind)
+    : from{std::move(from)},
+      from_port{std::move(from_port)},
+      to{std::move(to)},
+      type{std::move(type)},
+      kind{std::move(kind)} {
+  }
+
+  /// `from`, may be null.
+  Option<std::int64_t> from;
+  std::int64_t from_port;
+  /// `to`, may be null.
+  Option<std::int64_t> to;
+  ChannelDataType type;
+  InspectionChannelKind kind;
+
+  friend auto operator==(InspectionChannel const&, InspectionChannel const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, InspectionChannel const& value)
+    -> void {
+    hash_append(h, value.from, value.from_port, value.to, value.type,
+                value.kind);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::InspectionChannel> {
+  auto operator()(tenzir::InspectionChannel const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// One runtime graph shared by matching nested instances. Channel indices are
+/// edge identifiers within its exact path; paths are scoped to an execution
+class ApiPipelineGraph {
+public:
+  ApiPipelineGraph(std::vector<std::int64_t> path,
+                   Option<std::vector<std::int64_t>> parent,
+                   Option<std::int64_t> parent_operator,
+                   std::vector<InspectionOperator> operators,
+                   std::vector<InspectionChannel> channels)
+    : path{std::move(path)},
+      parent{std::move(parent)},
+      parent_operator{std::move(parent_operator)},
+      operators{std::move(operators)},
+      channels{std::move(channels)} {
+  }
+
+  std::vector<std::int64_t> path;
+  /// `parent`, may be null.
+  Option<std::vector<std::int64_t>> parent;
+  /// `parentOperator`, may be null.
+  Option<std::int64_t> parent_operator;
+  std::vector<InspectionOperator> operators;
+  std::vector<InspectionChannel> channels;
+
+  friend auto operator==(ApiPipelineGraph const&, ApiPipelineGraph const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ApiPipelineGraph const& value)
+    -> void {
+    hash_append(h, value.path, value.parent, value.parent_operator,
+                value.operators, value.channels);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ApiPipelineGraph> {
+  auto operator()(tenzir::ApiPipelineGraph const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+enum class ApiExecutionOutcome {
+  completed,
+  failed,
+  cancelled,
+};
+
+auto to_string(ApiExecutionOutcome value) -> std::string_view;
+
+class SourceFile {
+public:
+  SourceFile(std::int64_t id, std::string origin, std::string text)
+    : id{std::move(id)}, origin{std::move(origin)}, text{std::move(text)} {
+  }
+
+  std::int64_t id;
+  std::string origin;
+  std::string text;
+
+  friend auto operator==(SourceFile const&, SourceFile const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, SourceFile const& value) -> void {
+    hash_append(h, value.id, value.origin, value.text);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::SourceFile> {
+  auto operator()(tenzir::SourceFile const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// A snapshot of the optimized runtime graph. Discovery starts with live plans
+/// when inspection attaches and includes later nested plans with bounded
+/// retention. Snapshots do not report which nested instances are currently
+/// active. Execution is null only when the run ended before the root plan started
+class ExecutionGraphSnapshot {
+public:
+  ExecutionGraphSnapshot(std::int64_t run, Uuid process_instance_id,
+                         Option<std::string> execution_id,
+                         std::vector<ApiPipelineGraph> graphs,
+                         Option<ApiExecutionOutcome> end,
+                         std::vector<SourceFile> sources,
+                         std::vector<SourceLocation> call_sites)
+    : run{std::move(run)},
+      process_instance_id{std::move(process_instance_id)},
+      execution_id{std::move(execution_id)},
+      graphs{std::move(graphs)},
+      end{std::move(end)},
+      sources{std::move(sources)},
+      call_sites{std::move(call_sites)} {
+  }
+
+  std::int64_t run;
+  Uuid process_instance_id;
+  /// `executionId`, may be null.
+  Option<std::string> execution_id;
+  std::vector<ApiPipelineGraph> graphs;
+  /// `end`, may be null.
+  Option<ApiExecutionOutcome> end;
+  std::vector<SourceFile> sources;
+  std::vector<SourceLocation> call_sites;
+
+  friend auto
+  operator==(ExecutionGraphSnapshot const&, ExecutionGraphSnapshot const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ExecutionGraphSnapshot const& value)
+    -> void {
+    hash_append(h, value.run, value.process_instance_id, value.execution_id,
+                value.graphs, value.end, value.sources, value.call_sites);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ExecutionGraphSnapshot> {
+  auto operator()(tenzir::ExecutionGraphSnapshot const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// An event tap with a positive event limit; defaults to 100 events
+class ChannelTapRequest {
+public:
+  ChannelTapRequest(Uuid process_instance_id, std::string execution_id,
+                    std::vector<std::int64_t> path, std::int64_t channel_index,
+                    Option<std::int64_t> limit)
+    : process_instance_id{std::move(process_instance_id)},
+      execution_id{std::move(execution_id)},
+      path{std::move(path)},
+      channel_index{std::move(channel_index)},
+      limit{std::move(limit)} {
+  }
+
+  Uuid process_instance_id;
+  std::string execution_id;
+  std::vector<std::int64_t> path;
+  std::int64_t channel_index;
+  /// `limit`, may be absent.
+  Option<std::int64_t> limit;
+
+  friend auto operator==(ChannelTapRequest const&, ChannelTapRequest const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ChannelTapRequest const& value)
+    -> void {
+    hash_append(h, value.process_instance_id, value.execution_id, value.path,
+                value.channel_index, value.limit);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ChannelTapRequest> {
+  auto operator()(tenzir::ChannelTapRequest const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// The id the platform gave an ad-hoc pipeline when it started it
 /// Values must match
 /// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
@@ -1351,6 +1706,28 @@ public:
   std::string message;
 };
 
+class ExecutionUnavailable {
+public:
+  explicit ExecutionUnavailable(std::string message)
+    : message{std::move(message)} {
+  }
+
+  static constexpr auto status = std::uint16_t{404};
+
+  std::string message;
+};
+
+class ChannelTapRejected {
+public:
+  explicit ChannelTapRejected(std::string message)
+    : message{std::move(message)} {
+  }
+
+  static constexpr auto status = std::uint16_t{400};
+
+  std::string message;
+};
+
 class PipelineNotFound {
 public:
   explicit PipelineNotFound(std::string message) : message{std::move(message)} {
@@ -1512,6 +1889,39 @@ public:
   StreamPipelines() = default;
 };
 
+/// `GET /pipelines/:pipelineId/graph`
+/// Streams typed SSE graph snapshots from one managed execution: initial state,
+/// coalesced changes, then a final snapshot with end set and EOF. Disconnecting
+/// releases inspection without stopping the pipeline. The stream never follows
+/// a replacement execution. A pipeline with no live execution is refused. The
+/// request never starts a pipeline.
+class StreamPipelineGraph {
+public:
+  explicit StreamPipelineGraph(PipelinePath path) : path{std::move(path)} {
+  }
+
+  PipelinePath path;
+};
+
+/// `POST /pipelines/:pipelineId/events`
+/// Subscribes to one event channel in an exact execution. The response is typed
+/// SSE event batches followed by an end message, up to limit events (100 by
+/// default). Slow readers may miss batches. Disconnecting detaches the tap
+/// without stopping the pipeline. The subscription never follows a replacement
+/// execution.
+class StreamPipelineEvents {
+public:
+  StreamPipelineEvents(PipelinePath path, ChannelTapRequest payload)
+    : path{std::move(path)}, payload{std::move(payload)} {
+  }
+
+  PipelinePath path;
+  ChannelTapRequest payload;
+};
+
+using StreamPipelineEventsFailure
+  = variant<ExecutionUnavailable, ChannelTapRejected>;
+
 /// `POST /pipelines/:pipelineId/start`
 /// Starts another run of a persisted pipeline. Starting a pipeline that is
 /// already running is a no-op, so a retry is safe. The deployment compiles the
@@ -1615,6 +2025,14 @@ public:
 
   virtual auto handle(StreamPipelines) -> Task<HttpBodyStream> = 0;
 
+  virtual auto handle(StreamPipelineGraph request)
+    -> Task<Result<HttpBodyStream, ExecutionUnavailable>>
+    = 0;
+
+  virtual auto handle(StreamPipelineEvents request)
+    -> Task<Result<HttpBodyStream, StreamPipelineEventsFailure>>
+    = 0;
+
   virtual auto handle(StartPipeline request)
     -> Task<Result<void, StartPipelineFailure>>
     = 0;
@@ -1704,6 +2122,27 @@ auto parse_pipeline_status(simdjson::dom::element value)
   -> Result<PipelineStatus, ParseError>;
 auto parse_pipeline_path(simdjson::dom::element value)
   -> Result<PipelinePath, ParseError>;
+auto parse_uuid(simdjson::dom::element value) -> Result<Uuid, ParseError>;
+auto parse_source_location(simdjson::dom::element value)
+  -> Result<SourceLocation, ParseError>;
+auto parse_inspection_operator(simdjson::dom::element value)
+  -> Result<InspectionOperator, ParseError>;
+auto parse_channel_data_type(simdjson::dom::element value)
+  -> Result<ChannelDataType, ParseError>;
+auto parse_inspection_channel_kind(simdjson::dom::element value)
+  -> Result<InspectionChannelKind, ParseError>;
+auto parse_inspection_channel(simdjson::dom::element value)
+  -> Result<InspectionChannel, ParseError>;
+auto parse_api_pipeline_graph(simdjson::dom::element value)
+  -> Result<ApiPipelineGraph, ParseError>;
+auto parse_api_execution_outcome(simdjson::dom::element value)
+  -> Result<ApiExecutionOutcome, ParseError>;
+auto parse_source_file(simdjson::dom::element value)
+  -> Result<SourceFile, ParseError>;
+auto parse_execution_graph_snapshot(simdjson::dom::element value)
+  -> Result<ExecutionGraphSnapshot, ParseError>;
+auto parse_channel_tap_request(simdjson::dom::element value)
+  -> Result<ChannelTapRequest, ParseError>;
 auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
@@ -1746,6 +2185,17 @@ auto write_json(IdentifiedPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineState const& value, std::string& out) -> void;
 auto write_json(PipelineStatus const& value, std::string& out) -> void;
 auto write_json(PipelinePath const& value, std::string& out) -> void;
+auto write_json(Uuid const& value, std::string& out) -> void;
+auto write_json(SourceLocation const& value, std::string& out) -> void;
+auto write_json(InspectionOperator const& value, std::string& out) -> void;
+auto write_json(ChannelDataType const& value, std::string& out) -> void;
+auto write_json(InspectionChannelKind const& value, std::string& out) -> void;
+auto write_json(InspectionChannel const& value, std::string& out) -> void;
+auto write_json(ApiPipelineGraph const& value, std::string& out) -> void;
+auto write_json(ApiExecutionOutcome const& value, std::string& out) -> void;
+auto write_json(SourceFile const& value, std::string& out) -> void;
+auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void;
+auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;
 

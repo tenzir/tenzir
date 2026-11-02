@@ -1,0 +1,13 @@
+// Negations and networks go into the search. `NOT user=CASE("alice")` keeps
+// events without `user`, and the network matches the address text.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where source == "tenzir-docs-auth" and user != "alice"
+where src_ip in 198.51.100.0/24 and outcome != "success"
+select _time, user, src_ip, outcome

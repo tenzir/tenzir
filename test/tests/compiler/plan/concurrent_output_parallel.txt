@@ -4,7 +4,7 @@
 ╎
 ● group(x2, keyed)
 ╎
-● SetIr(x2)
+● set(x2)
 ╎
 ● to_stdout
 │

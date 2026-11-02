@@ -1,0 +1,11 @@
+warning: event does not have field
+  --> tests/operators/from_splunk/index.tql:15:7
+   |
+15 | where action == "login" and n > 1
+   |       ~~~~~~
+   |
+   = hint: append `?` to suppress this warning
+{
+  user: "alice",
+  n: 5,
+}

@@ -778,6 +778,29 @@ TEST("select query rendering") {
               std::string{"SELECT * FROM tbl LIMIT 3"});
 }
 
+TEST("table plans push the limit only without local predicates") {
+  auto schema = make_schema();
+  auto projection = ir::OptimizeProjection{};
+  projection.push_back(*ast::field_path::try_from(parse("y")));
+  auto filter = ir::OptimizeFilter{};
+  filter.push_back(parse("x > 0"));
+  auto plan = make_table_plan(schema, SqlTarget::clickhouse, filter, projection,
+                              test::builtin_registry());
+  CHECK_EQUAL(plan.selection, std::string{"`y`"});
+  CHECK(plan.local.empty());
+  CHECK_EQUAL(make_table_query(plan, "tbl", 0),
+              std::string{"SELECT `y` FROM tbl WHERE `x` > 0 LIMIT 0"});
+  CHECK_EQUAL(make_table_query(plan, "tbl", 18446744073709551615u),
+              std::string{"SELECT `y` FROM tbl WHERE `x` > 0 LIMIT "
+                          "18446744073709551615"});
+  filter.push_back(parse("y.to_upper() == \"F\""));
+  plan = make_table_plan(schema, SqlTarget::clickhouse, filter, projection,
+                         test::builtin_registry());
+  CHECK_EQUAL(plan.local.size(), size_t{1});
+  CHECK_EQUAL(make_table_query(plan, "tbl", 5),
+              std::string{"SELECT `y` FROM tbl WHERE `x` > 0"});
+}
+
 TEST("nested projections") {
   auto schema = SqlSchema{};
   schema.add_column("id", "UInt64");

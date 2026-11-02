@@ -1,0 +1,14 @@
+// A limit keeps the summary in Tenzir, which computes the same events from the
+// results of the search as Splunk. `?` only silences warnings about missing
+// fields.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=12 | streamstats count as i | eval k=case(i<=3, "alice", i==4, "Alice", i==5, "", i==6, " 5", i==7, "5", i==8, "True", i==9, "null", i==10, "192.0.2.1", i==11, "1s"), n=case(i==1, "007", i==2, "-0", i==3, "12", i==4, "-15", i==6, "3", i==12, "999999999999999"), c=if(i%2==1, "x", null())"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+head 1000000000
+summarize k=k?, events=count(), c=count(c?), lo=min(n?), hi=max(n?)
+sort k

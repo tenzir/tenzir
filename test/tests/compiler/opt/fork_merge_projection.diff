@@ -81,7 +81,8 @@
                ],
                order: "ordered"
              }
-           ]
+           ],
+           definition_location: [1]:22..32 from 0
          },
          {
            lets: [
@@ -104,7 +105,8 @@
                ],
                order: "ordered"
              }
-           ]
+           ],
+           definition_location: [1]:40..51 from 0
          }
        ]
      },
@@ -156,5 +158,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..64 from 0
  }

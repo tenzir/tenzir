@@ -534,7 +534,9 @@ public:
   Runner(AnyOperator op, JobId job, std::vector<AnyOpPull> pull_upstream,
          std::vector<OutputPort> push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-         OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+         OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh,
+         Option<Ref<PlanRegistration>> plan_registration,
+         size_t planned_operator)
     : op_{std::move(op)},
       job_{job},
       pull_upstream_{std::move(pull_upstream)},
@@ -543,6 +545,8 @@ public:
       to_control_{std::move(to_control)},
       id_{std::move(id)},
       exec_ctx_{exec_ctx},
+      plan_registration_{std::move(plan_registration)},
+      planned_operator_{planned_operator},
       dh_{Arc<DiagHandler>::from_non_null(
         std::make_shared<CensoringDiagHandler>(dh, censor_))},
       sys_{sys},
@@ -854,14 +858,35 @@ private:
     return it->second.handle;
   }
 
-  auto spawn_sub_impl(SubKey key, ir::Plan plan, Arc<DiagHandler> sub_dh,
+  auto spawn_sub_impl(SubKey key, ir::Plan planned, Arc<DiagHandler> sub_dh,
                       folly::CancellationToken sub_cancel_token)
     -> Task<AnySubHandle&> {
+    auto plan = Arc<ir::Plan const>{std::move(planned)};
     auto sub_id = id_.sub(next_subpipeline_id_++);
-    auto input = plan.input_type();
-    auto output = plan.output_type();
-    auto input_id = plan.input_id();
-    auto output_id = plan.output_id();
+    auto input = plan->input_type();
+    auto output = plan->output_type();
+    auto input_id = plan->input_id();
+    auto output_id = plan->output_id();
+    auto registration = Option<Box<PlanRegistration>>{};
+    auto input_tap = Option<Ref<ChannelTap const>>{};
+    auto output_tap = Option<Ref<ChannelTap const>>{};
+    if (auto observer = exec_ctx_.inspection()) {
+      registration = (*observer)->register_plan(plan, plan_registration_,
+                                                planned_operator_);
+      for (auto i = size_t{0}; i < plan->channels.size(); ++i) {
+        auto const& edge = plan->channels[i];
+        if (not edge.type.is<table_slice>()
+            and not edge.type.is<nova::Events>()) {
+          continue;
+        }
+        if (edge.from == ir::Port::input) {
+          input_tap = (*registration)->tap(i);
+        }
+        if (edge.to == ir::Port::output) {
+          output_tap = (*registration)->tap(i);
+        }
+      }
+    }
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
@@ -869,15 +894,18 @@ private:
       std::tie(input, output),
       [&]<class In, class Out>(
         tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
-        auto [push_upstream, pull_upstream]
-          = exec_ctx_.make_channel<In>(id_.to(sub_id.op(input_id)));
-        auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(sub_id.op(output_id).to(id_));
+        auto [push_upstream, pull_upstream] = exec_ctx_.make_channel<In>(
+          id_.to(sub_id.op(input_id)), std::move(input_tap));
+        auto [push_downstream, pull_downstream] = exec_ctx_.make_channel<Out>(
+          sub_id.op(output_id).to(id_), std::move(output_tap));
         auto runner = drive_plan(std::move(plan), std::move(pull_upstream),
                                  std::move(push_downstream),
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender),
-                                 std::move(sub_id), exec_ctx_, sys_, *sub_dh);
+                                 std::move(sub_id), exec_ctx_, sys_, *sub_dh,
+                                 registration.map([](auto& owned) {
+                                   return Ref{*owned};
+                                 }));
         return {
           std::move(runner),
           AnyOpPush{std::move(push_upstream)},
@@ -905,7 +933,10 @@ private:
     }
     // TODO: Where do we put this?
     TENZIR_ASSERT(operator_scope_);
+    // The output pull can still drain after the child driver ends. Capture its
+    // registration to keep it attached through the last receive on that bridge.
     operator_scope_->spawn([this, key = std::move(sub_key),
+                            registration = std::move(registration),
                             runner = std::move(runner),
                             pull_sub = std::move(pull_sub),
                             to_parent = std::move(to_parent),
@@ -1759,6 +1790,8 @@ private:
   Sender<ToControl> to_control_;
   OpId id_;
   ExecCtx& exec_ctx_;
+  Option<Ref<PlanRegistration>> plan_registration_;
+  size_t planned_operator_;
   secret_censor censor_;
   Arc<DiagHandler> dh_;
   caf::actor_system& sys_;
@@ -1817,7 +1850,9 @@ auto run_operator(AnyOperator op, JobId job, std::vector<AnyOpPull> pulls,
                   std::vector<OutputPort> ports,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, OpId id, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+                  caf::actor_system& sys, DiagHandler& dh,
+                  Option<Ref<PlanRegistration>> plan_registration,
+                  size_t planned_operator) -> Task<void> {
   co_await folly::coro::co_safe_point;
   auto runner = Runner{
     std::move(op),
@@ -1830,6 +1865,8 @@ auto run_operator(AnyOperator op, JobId job, std::vector<AnyOpPull> pulls,
     exec_ctx,
     sys,
     dh,
+    std::move(plan_registration),
+    planned_operator,
   };
   auto result
     = co_await catch_cancellation(std::move(runner).run_to_completion());
@@ -1843,11 +1880,13 @@ auto run_operator(AnyOperator op, JobId job, std::vector<AnyOpPull> pulls,
 
 class PlanRunner {
 public:
-  PlanRunner(ir::Plan plan, AnyOpPull pull_upstream, AnyOpPush push_downstream,
-             Receiver<FromControl> from_control, Sender<ToControl> to_control,
-             PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-             DiagHandler& dh)
+  PlanRunner(Arc<ir::Plan const> plan, AnyOpPull pull_upstream,
+             AnyOpPush push_downstream, Receiver<FromControl> from_control,
+             Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+             caf::actor_system& sys, DiagHandler& dh,
+             Option<Ref<PlanRegistration>> registration)
     : plan_{std::move(plan)},
+      registration_{std::move(registration)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
@@ -1887,33 +1926,41 @@ private:
   }
 
   auto op_id(size_t planned) const -> OpId {
-    TENZIR_ASSERT(planned < plan_.operators.size());
-    return id_.op(plan_.operators[planned].id);
+    TENZIR_ASSERT(planned < plan_->operators.size());
+    return id_.op(plan_->operators[planned].id);
   }
 
   /// Create one physical channel for an edge, following the kind that the
   /// planner assigned: fused edges use fused channels, tiny edges use profiled
   /// tiny event channels so that their per-exchange stats collate, and all
   /// others use plain channels.
-  auto make_channel(const ir::Channel& c) -> std::pair<AnyOpPush, AnyOpPull> {
+  auto make_channel(size_t edge) -> std::pair<AnyOpPush, AnyOpPull> {
+    auto const& c = plan_->channels[edge];
     auto cid = (c.from == ir::Port::input)  ? ChannelId::first(op_id(c.to))
                : (c.to == ir::Port::output) ? ChannelId::last(op_id(c.from))
                                             : op_id(c.from).to(op_id(c.to));
     return match(
       c.type, [&]<class T>(tag<T>) -> std::pair<AnyOpPush, AnyOpPull> {
+        auto tap = Option<Ref<ChannelTap const>>{};
+        if constexpr (std::same_as<T, table_slice>
+                      or std::same_as<T, nova::Events>) {
+          if (registration_) {
+            tap = (*registration_)->tap(edge);
+          }
+        }
         auto pp = [&] {
           switch (c.kind) {
             case ir::ChannelKind::fused:
-              return exec_ctx_.make_fused_channel<T>(cid);
+              return exec_ctx_.make_fused_channel<T>(cid, tap);
             case ir::ChannelKind::tiny:
               if constexpr (std::same_as<T, table_slice>
                             or std::same_as<T, nova::Events>) {
-                return exec_ctx_.make_tiny_channel<T>(cid);
+                return exec_ctx_.make_tiny_channel<T>(cid, tap);
               } else {
                 panic("only event channels can be tiny");
               }
             case ir::ChannelKind::regular:
-              return exec_ctx_.make_channel<T>(cid);
+              return exec_ctx_.make_channel<T>(cid, tap);
           }
           TENZIR_UNREACHABLE();
         }();
@@ -1924,19 +1971,20 @@ private:
   /// Wire an internal channel (both ends are real operators), expanding it
   /// into the per-instance physical channels. The downstream runner gathers
   /// the lanes routed to it; the upstream port scatters/shuffles/forwards.
-  auto wire_internal(const ir::Channel& c,
+  auto wire_internal(size_t edge,
                      const std::vector<std::vector<size_t>>& instances_of,
                      std::vector<std::vector<AnyOpPull>>& inputs,
                      std::vector<std::vector<OutputPort>>& out_ports) -> void {
+    auto const& c = plan_->channels[edge];
     const auto& from = instances_of[c.from];
     const auto& to = instances_of[c.to];
     const auto n = from.size();
     const auto m = to.size();
     TENZIR_ASSERT(n > 0 and m > 0);
-    const auto& down = plan_.operators[c.to];
+    const auto& down = plan_->operators[c.to];
     const auto keyed = down.keyed();
     auto connect = [&](size_t i, size_t j) {
-      auto [push, pull] = make_channel(c);
+      auto [push, pull] = make_channel(edge);
       ensure_port(out_ports[from[i]], c.from_port,
                   keyed ? down.partition_keys : None{});
       out_ports[from[i]][c.from_port].lanes.push_back(std::move(push));
@@ -1964,9 +2012,9 @@ private:
     // Expand each planned operator into `parallelism` runtime instances. All
     // instances of one planned operator share that operator's `OpId`.
     auto instances_of
-      = std::vector<std::vector<size_t>>(plan_.operators.size());
-    for (auto p = size_t{0}; p < plan_.operators.size(); ++p) {
-      auto& planned = plan_.operators[p];
+      = std::vector<std::vector<size_t>>(plan_->operators.size());
+    for (auto p = size_t{0}; p < plan_->operators.size(); ++p) {
+      auto& planned = plan_->operators[p];
       TENZIR_ASSERT(planned.parallelism >= 1);
       for (auto k = size_t{0}; k < planned.parallelism; ++k) {
         instances_of[p].push_back(operators_.size());
@@ -1980,7 +2028,8 @@ private:
     auto inputs = std::vector<std::vector<AnyOpPull>>(operators_.size());
     auto out_ports = std::vector<std::vector<OutputPort>>(operators_.size());
     TENZIR_ASSERT(not operators_.empty());
-    for (auto& c : plan_.channels) {
+    for (auto edge = size_t{0}; edge < plan_->channels.size(); ++edge) {
+      auto const& c = plan_->channels[edge];
       if (c.from == ir::Port::input) {
         TENZIR_ASSERT(c.to != ir::Port::output);
         const auto& to = instances_of[c.to];
@@ -1993,7 +2042,7 @@ private:
         out_ports[from[0]][c.from_port].lanes.push_back(
           std::move(push_downstream_));
       } else {
-        wire_internal(c, instances_of, inputs, out_ports);
+        wire_internal(edge, instances_of, inputs, out_ports);
       }
     }
     // finalize port internal state and validate
@@ -2031,11 +2080,11 @@ private:
       std::move(to_control_receiver),
     });
     auto executor = exec_ctx_.make_executor(op_id, name);
-    auto task
-      = run_operator(std::move(operators_[index]), job_id,
-                     std::move(input_pulls), std::move(ports),
-                     std::move(from_control_receiver),
-                     std::move(to_control_sender), op_id, exec_ctx_, sys_, dh_);
+    auto task = run_operator(std::move(operators_[index]), job_id,
+                             std::move(input_pulls), std::move(ports),
+                             std::move(from_control_receiver),
+                             std::move(to_control_sender), op_id, exec_ctx_,
+                             sys_, dh_, registration_, instance_of_[index]);
     driver_.add([task = std::move(task), index,
                  executor = std::move(
                    executor)] mutable -> Task<std::pair<size_t, Terminated>> {
@@ -2130,9 +2179,9 @@ private:
                   // Operators that emit `no_more_input` (head/slice/taste) run
                   // single-instance, so we stop the upstream branch
                   // immediately — no per-instance aggregation needed.
-                  TENZIR_ASSERT(p >= plan_.operators.size()
-                                or plan_.operators[p].parallelism == 1);
-                  const auto upstream = plan_.upstream_branch(p);
+                  TENZIR_ASSERT(p >= plan_->operators.size()
+                                or plan_->operators[p].parallelism == 1);
+                  const auto upstream = plan_->upstream_branch(p);
                   for (auto f = size_t{0}; f < operators_.size(); ++f) {
                     if (instance_of_[f] < upstream.operators.size()
                         and upstream.operators[instance_of_[f]]
@@ -2161,12 +2210,13 @@ private:
     TENZIR_ASSERT(ready_for_shutdown == operators_.size());
   }
 
-  ir::Plan plan_;
+  Arc<ir::Plan const> plan_;
+  Option<Ref<PlanRegistration>> registration_;
   std::vector<AnyOperator> operators_;
   std::vector<JobId> job_ids_;
 
   /// Maps a flat instance index in `operators_` to its planned operator index
-  /// in `plan_.operators` (and thus its shared `OpId`).
+  /// in `plan_->operators` (and thus its shared `OpId`).
   std::vector<size_t> instance_of_;
   AnyOpPull pull_upstream_;
   AnyOpPush push_downstream_;
@@ -2200,14 +2250,24 @@ private:
 };
 
 template <class Input, class Output>
-auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
+auto drive_plan(Arc<ir::Plan const> plan,
+                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                 Box<Push<OperatorMsg<Output>>> push_downstream,
                 Receiver<FromControl> from_control,
                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
-  TENZIR_ASSERT(plan.input_type().is<Input>());
-  TENZIR_ASSERT(plan.output_type().is<Output>());
+                caf::actor_system& sys, DiagHandler& dh,
+                Option<Ref<PlanRegistration>> registration) -> Task<void> {
+  TENZIR_ASSERT(plan->input_type().is<Input>());
+  TENZIR_ASSERT(plan->output_type().is<Output>());
+  TENZIR_ASSERT(not registration or &(*registration)->plan() == &*plan);
   co_await folly::coro::co_safe_point;
+  auto owned = Option<Box<PlanRegistration>>{};
+  if (not registration) {
+    if (auto observer = exec_ctx.inspection()) {
+      owned = (*observer)->register_plan(plan);
+      registration = Ref{**owned};
+    }
+  }
   co_await PlanRunner{
     std::move(plan),
     AnyOpPull{std::move(pull_upstream)},
@@ -2218,16 +2278,19 @@ auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
     exec_ctx,
     sys,
     dh,
+    std::move(registration),
   }
     .run_to_completion();
 }
 
 template auto
-drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+drive_plan(Arc<ir::Plan const> plan,
+           Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
            Box<Push<OperatorMsg<table_slice>>> push_downstream,
            Receiver<FromControl> from_control, Sender<ToControl> to_control,
            PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-           DiagHandler& dh) -> Task<void>;
+           DiagHandler& dh, Option<Ref<PlanRegistration>> registration)
+  -> Task<void>;
 
 namespace {
 
@@ -2242,8 +2305,13 @@ auto new_pipe_id() -> PipeId {
 struct GracefulStopRequested {};
 
 auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
-                  DiagHandler& dh, Notify* graceful_stop) -> Task<void> {
+                  DiagHandler& dh, Notify* graceful_stop)
+  -> Task<PlanCompletion> {
+  auto completion = PlanCompletion::completed;
   auto id = new_pipe_id();
+  if (auto observer = exec_ctx.inspection()) {
+    (*observer)->start(id);
+  }
   auto [push_input, pull_input]
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(plan.input_id())));
   auto [push_output, pull_output]
@@ -2260,8 +2328,8 @@ auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
     LOGV("creating pipeline queue scope");
     co_await driver.activate([&] -> Task<void> {
       driver.add([&] -> Task<Terminated> {
-        co_await drive_plan(std::move(plan), std::move(pull_input),
-                            std::move(push_output),
+        co_await drive_plan(Arc<ir::Plan const>{std::move(plan)},
+                            std::move(pull_input), std::move(push_output),
                             std::move(from_control_receiver),
                             std::move(to_control_sender), id, exec_ctx, sys,
                             dh);
@@ -2309,6 +2377,7 @@ auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
               co_return;
             }
             LOGI("execute_plan got graceful stop request");
+            completion = PlanCompletion::stopped;
             if (from_control_sender) {
               co_await from_control_sender->send(GracefulStop{});
             }
@@ -2357,15 +2426,16 @@ auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
     });
   }());
   if (result.is_ok()) {
-    co_return;
+    co_return completion;
   }
   auto exception = std::move(result).unwrap_err();
   if (exception.is_compatible_with<panic_exception>()) {
     dh.emit(to_diagnostic(*exception.get_exception<panic_exception>()));
-    co_return;
+    co_return completion;
   }
   diagnostic::error("uncaught exception in pipeline: {}", exception.what())
     .emit(dh);
+  co_return completion;
 }
 
 template <class T>
@@ -2401,9 +2471,10 @@ auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
        from_ctl_recv = std::move(from_ctl_recv),
        to_ctl_send = std::move(to_ctl_send), id, &exec_ctx, &sys,
        &dh]() mutable -> Task<void> {
-        co_await drive_plan(std::move(plan), std::move(pull_input),
-                            std::move(push_output), std::move(from_ctl_recv),
-                            std::move(to_ctl_send), id, exec_ctx, sys, dh);
+        co_await drive_plan(Arc<ir::Plan const>{std::move(plan)},
+                            std::move(pull_input), std::move(push_output),
+                            std::move(from_ctl_recv), std::move(to_ctl_send),
+                            id, exec_ctx, sys, dh);
       }));
     // Feeder. Drops `push_input` on exit, closing the input channel. Honors
     // `feed_cancel` so we exit promptly if the chain stops reading upstream.

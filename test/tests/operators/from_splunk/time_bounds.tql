@@ -4,7 +4,7 @@ fixtures:
       expected:
         - method: POST
           path: /services/search/v2/jobs/export
-          body: search=fixture&earliest_time=2026-07-14T08%3A00%3A00Z&latest_time=2026-07-14T09%3A00%3A00Z&output_mode=json&preview=false
+          body: search=search%20fixture%0A%7C%20fields%20%2A&earliest_time=2026-07-14T08%3A00%3A00Z&latest_time=2026-07-14T09%3A00%3A00Z&output_mode=json&preview=false
 ---
 
 let $start = 2026-07-14T08:00:00Z

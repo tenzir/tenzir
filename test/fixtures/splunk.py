@@ -173,7 +173,11 @@ def _stop_splunk(container: ManagedContainer) -> None:
             container.container_id[:12],
             (result.stderr or result.stdout or "").strip() or "no output",
         )
-    result = run_command([container.runtime.binary, "rm", "-f", container.container_id])
+    # `-v` also removes the anonymous volumes that the image declares, which
+    # would otherwise accumulate with every run.
+    result = run_command(
+        [container.runtime.binary, "rm", "-f", "-v", container.container_id]
+    )
     if result.returncode != 0:
         logger.warning(
             "Failed to remove Splunk container %s: %s",

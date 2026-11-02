@@ -29,7 +29,69 @@ public:
   bool full_schema = false;
 };
 
+class RequiredFieldCollector final
+  : public ast::visitor<RequiredFieldCollector> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::assignment& x) -> void {
+    // The left side of a named argument is a label, not a field.
+    visit(x.right);
+  }
+
+  auto visit(ast::index_expr& x) -> void {
+    // A runtime index may select any field below its container.
+    if (not is<ast::constant>(x.index)) {
+      if (auto base = ast::field_path::try_from(x.expr)) {
+        add(std::move(*base), true);
+      } else {
+        visit(x.expr);
+      }
+      visit(x.index);
+      return;
+    }
+    enter(x);
+  }
+
+  auto visit(ast::expression& expr) -> void {
+    if (auto path = ast::field_path::try_from(expr)) {
+      add(std::move(*path), false);
+      return;
+    }
+    enter(expr);
+  }
+
+  std::vector<RequiredField> fields;
+
+private:
+  auto add(ast::field_path path, bool subtree) -> void {
+    auto name = [](ast::field_path::segment const& segment) {
+      return std::string_view{segment.id.name};
+    };
+    auto same = [&](RequiredField const& field) {
+      return field.subtree == subtree
+             and std::ranges::equal(field.path.path(), path.path(), {}, name,
+                                    name);
+    };
+    if (std::ranges::any_of(fields, same)) {
+      return;
+    }
+    fields.push_back({std::move(path), subtree});
+  }
+};
+
 } // namespace
+
+auto required_fields(ast::expression const& expr)
+  -> std::vector<RequiredField> {
+  auto collector = RequiredFieldCollector{};
+  auto copy = expr;
+  collector.visit(copy);
+  return std::move(collector.fields);
+}
 
 auto read_projection(Option<ir::OptimizeProjection> projection,
                      ir::OptimizeFilter const& filter)
@@ -161,5 +223,74 @@ auto project(nova::Events events, ir::OptimizeProjection const& projection)
   events.data = std::move(data);
   return events;
 }
+
+template <class Output>
+LocalHints<Output>::LocalHints(Option<uint64_t> limit) : remaining_{limit} {
+}
+
+template <class Output>
+auto LocalHints<Output>::prepare(ir::OptimizeFilter filter, OpCtx& ctx)
+  -> Task<bool> {
+  if constexpr (std::same_as<Output, table_slice>) {
+    TENZIR_UNUSED(ctx);
+    set_filters(std::move(filter));
+    co_return true;
+  } else {
+    auto filters = Filters{};
+    for (auto& expr : filter) {
+      auto evaluator = co_await nova::Evaluator::make(std::move(expr), ctx);
+      if (not evaluator) {
+        co_return false;
+      }
+      filters.push_back(std::move(*evaluator));
+    }
+    set_filters(std::move(filters));
+    co_return true;
+  }
+}
+
+template <class Output>
+auto LocalHints<Output>::set_filters(Filters filters) -> void {
+  filters_ = std::move(filters);
+}
+
+template <class Output>
+auto LocalHints<Output>::set_projection(
+  Option<ir::OptimizeProjection> projection) -> void
+  requires std::same_as<Output, nova::Events>
+{
+  projection_ = std::move(projection);
+}
+
+template <class Output>
+auto LocalHints<Output>::apply(Output output, base_ctx ctx) -> Output {
+  output = apply_read(std::move(output), filters_, remaining_, ctx);
+  if constexpr (std::same_as<Output, nova::Events>) {
+    // Project last: the filters may reference fields that the projection
+    // drops.
+    if (projection_ and output.mask.any()) {
+      output = project(std::move(output), *projection_);
+    }
+  }
+  return output;
+}
+
+template <class Output>
+auto LocalHints<Output>::remaining() const -> Option<uint64_t> {
+  return remaining_;
+}
+
+template <class Output>
+auto LocalHints<Output>::exhausted() const -> bool {
+  return remaining_ == uint64_t{0};
+}
+
+template <class Output>
+auto LocalHints<Output>::snapshot(Serde& serde) -> void {
+  serde("remaining", remaining_);
+}
+
+template class LocalHints<table_slice>;
+template class LocalHints<nova::Events>;
 
 } // namespace tenzir::pushdown

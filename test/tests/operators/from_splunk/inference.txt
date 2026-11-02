@@ -1,0 +1,39 @@
+{
+  user: "alice",
+  n: 5,
+  n_type: "int",
+  flag_type: "bool",
+  src_ip_type: "ip",
+  time_type: "time",
+  tags: [
+    "a",
+    "b",
+  ],
+}
+{
+  user: "Alice",
+  n: 50,
+  n_type: "int",
+  flag_type: "bool",
+  src_ip_type: "ip",
+  time_type: "time",
+  tags: "c",
+}
+{
+  user: "bob",
+  n: -1.5,
+  n_type: "float",
+  flag_type: "null",
+  src_ip_type: "ip",
+  time_type: "time",
+  tags: null,
+}
+{
+  user: "carol",
+  n: 7,
+  n_type: "int",
+  flag_type: "null",
+  src_ip_type: "null",
+  time_type: "time",
+  tags: null,
+}

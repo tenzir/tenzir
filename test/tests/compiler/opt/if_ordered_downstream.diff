@@ -55,7 +55,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:16..20 from 0
        },
        alternative: {
          lets: [
@@ -83,7 +84,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:32..36 from 0
        }
      },
      GenericIr {
@@ -128,7 +130,8 @@
                  ],
                  order: "ordered"
                }
-             ]
+             ],
+             definition_location: [1]:53..62 from 0
            } @ [1]:49..64 from 0,
            let_ids: {
              
@@ -140,5 +143,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..64 from 0
  }

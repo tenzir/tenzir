@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3Dmain%0A%7C%20where%20%28isnull%28tags%29%20OR%20mvcount%28tags%29%3E1%20OR%20if%28tags%3D%3D%22a%22%2C%20false%28%29%2C%20true%28%29%29%29%20AND%20%28isnull%28tags%29%20OR%20mvcount%28tags%29%3E1%20OR%20if%28tags%3D%3D%22c%22%2C%20false%28%29%2C%20true%28%29%29%29%0A%7C%20fields%20tags%2C%20user&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+// A list differs from every string, so TQL keeps the multivalue `tags` of
+// alice. The `where` stage keeps fields with several values for the same
+// reason, while `search` would drop them on any matching value.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  search="index=main", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where tags? != "a" and not (tags? in ["c"])
+select user, tags=tags?

@@ -1040,6 +1040,18 @@ auto ir::SetIr::name() const -> std::string {
   return "SetIr";
 }
 
+auto ir::SetIr::display_name() const -> std::string {
+  return "set";
+}
+
+auto ir::SetIr::main_location() const -> location {
+  auto result = location{};
+  for (auto const& assignment : assignments_) {
+    result = result.combine(assignment.get_location());
+  }
+  return result;
+}
+
 auto ir::SetIr::copy() const -> Box<ir::Operator> {
   return SetIr{*this};
 }

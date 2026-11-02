@@ -1,0 +1,7 @@
+{
+  _time: 2025-01-01T00:01:00Z,
+  user: "bob",
+  action: "login",
+  src_ip: 198.51.100.24,
+  outcome: "failure",
+}

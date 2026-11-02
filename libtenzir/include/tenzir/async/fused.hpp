@@ -9,10 +9,12 @@
 #pragma once
 
 #include "tenzir/arc.hpp"
+#include "tenzir/async/channel_tap.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/semaphore.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/ref.hpp"
 
 namespace tenzir {
 
@@ -72,7 +74,9 @@ private:
 template <class T>
 class FusedReceiver {
 public:
-  explicit FusedReceiver(Arc<FusedState<T>> state) : state_{std::move(state)} {
+  explicit FusedReceiver(Arc<FusedState<T>> state,
+                         Option<Ref<ChannelTap const>> tap = None{})
+    : state_{std::move(state)}, tap_{std::move(tap)} {
   }
 
   /// The destructor does not notify the sender. While we could acknowledge the
@@ -104,12 +108,16 @@ public:
     state_->item = None{};
     // Make sure we send the ack the next time we receive.
     ack_next_ = true;
+    if (tap_) {
+      capture_channel(**tap_, result);
+    }
     co_return result;
   }
 
 private:
   Arc<FusedState<T>> state_;
   bool ack_next_ = false;
+  Option<Ref<ChannelTap const>> tap_;
 };
 
 template <class T>
@@ -169,11 +177,12 @@ struct FusedSenderReceiver {
 /// communicates over fused channels, then A will block until B receives again,
 /// but since B will block until C receives again, A effectively waits for C.
 template <class T>
-auto fused_channel() -> FusedSenderReceiver<T> {
+auto fused_channel(Option<Ref<ChannelTap const>> tap = None{})
+  -> FusedSenderReceiver<T> {
   auto state = Arc<FusedState<T>>{std::in_place};
   return {
     FusedSender<T>{state},
-    FusedReceiver<T>{std::move(state)},
+    FusedReceiver<T>{std::move(state), std::move(tap)},
   };
 }
 

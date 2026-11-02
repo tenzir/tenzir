@@ -17,7 +17,9 @@
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/pushdown/aggregation.hpp"
+#include "tenzir/pushdown/sql.hpp"
 #include "tenzir/pushdown/translate.hpp"
+#include "tenzir/ref.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/try.hpp"
 
@@ -993,81 +995,93 @@ auto SqlSchema::render_projection(
 
 auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
   -> bool {
-  return std::ranges::all_of(
-    aggregation.columns, [](ir::OptimizeAggregation::Column const& column) {
-      if (not column.function) {
-        return true;
-      }
-      auto const& function = *column.function;
-      return function == "count"
-             or ((function == "min" or function == "max") and column.input);
-    });
+  return pushdown::supports_count_min_max(aggregation);
 }
+
+namespace {
+
+/// Spells the parts of a `SELECT` that SQL dialects disagree on in ClickHouse
+/// SQL.
+class ClickHouseQueryDialect final : public pushdown::SqlQueryDialect {
+public:
+  auto quote_identifier(std::string_view name) const -> std::string override {
+    return quote_sql_identifier(name);
+  }
+};
+
+/// Spells aggregations over a table in ClickHouse SQL.
+class ClickHouseAggregateDialect final : public pushdown::SqlAggregateDialect {
+public:
+  ClickHouseAggregateDialect(SqlSchema const& schema, SqlTarget target)
+    : schema_{schema}, renderer_{target} {
+  }
+
+private:
+  auto alias_collides(std::string_view alias) const -> bool override {
+    // ClickHouse resolves a name to an alias before a column.
+    return std::ranges::contains(schema_->columns(), alias);
+  }
+
+  auto render_value(pushdown::Expr const& expr) const
+    -> Option<std::string> override {
+    return renderer_.render(expr);
+  }
+
+  auto
+  render_key(std::span<std::string const> path,
+             pushdown::FieldValue const& field, std::string const& value) const
+    -> Option<std::string> override {
+    TENZIR_UNUSED(path);
+    if (is<pushdown::FloatType>(field.column.type)) {
+      return None{};
+    }
+    return value;
+  }
+
+  auto render_count(Option<std::string> const& value) const
+    -> std::string override {
+    return fmt::format("toInt64(count({}))", value ? *value : std::string{});
+  }
+
+  auto render_extremum(pushdown::Extremum extremum,
+                       pushdown::FieldValue const& field,
+                       std::string const& value) const
+    -> Option<std::string> override {
+    auto const& type = field.column.type;
+    if (not(is<pushdown::IntType>(type) or is<pushdown::TimeType>(type))) {
+      return None{};
+    }
+    return fmt::format("{}OrNull({})",
+                       extremum == pushdown::Extremum::min ? "min" : "max",
+                       value);
+  }
+
+  Ref<SqlSchema const> schema_;
+  ClickHouseRenderer renderer_;
+};
+
+} // namespace
 
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
                           SqlSchema const& schema, std::string_view table,
                           std::span<const std::string> where, SqlTarget target)
   -> Option<std::string> {
-  if (aggregation.columns.empty()
-      or not supports_aggregate_functions(aggregation)) {
-    return None{};
-  }
-  auto const renderer = ClickHouseRenderer{target};
-  auto selection = std::vector<std::string>{};
-  auto groups = std::vector<std::string>{};
-  for (auto i = size_t{0}; i < aggregation.columns.size(); ++i) {
-    auto const& column = aggregation.columns[i];
-    auto alias = pushdown::aggregation_column(i);
-    // ClickHouse resolves a name to an alias before a column, so an alias
-    // that names a column would change what the query reads.
-    if (std::ranges::contains(schema.columns(), alias)) {
-      return None{};
-    }
-    auto input = Option<pushdown::FieldValue>{};
-    auto sql = Option<std::string>{};
-    if (column.input) {
-      TRY(input, pushdown::translate_field(*column.input, schema.model()));
-      TRY(sql, renderer.render(input->expr));
-    }
-    auto value = std::string{};
-    if (not column.function) {
-      TENZIR_ASSERT(input);
-      if (is<pushdown::FloatType>(input->column.type)) {
-        return None{};
-      }
-      groups.push_back(*sql);
-      value = std::move(*sql);
-    } else if (*column.function == "count") {
-      value = fmt::format("toInt64(count({}))", sql ? *sql : std::string{});
-    } else {
-      TENZIR_ASSERT(input);
-      if (not(is<pushdown::IntType>(input->column.type)
-              or is<pushdown::TimeType>(input->column.type))) {
-        return None{};
-      }
-      value = fmt::format("{}OrNull({})", *column.function, *sql);
-    }
-    selection.push_back(
-      fmt::format("{} AS {}", value, quote_sql_identifier(alias)));
-  }
-  auto query
-    = fmt::format("SELECT {} FROM {}", fmt::join(selection, ", "), table);
-  if (not where.empty()) {
-    fmt::format_to(std::back_inserter(query), " WHERE {}",
-                   fmt::join(where, " AND "));
-  }
-  if (not groups.empty()) {
-    fmt::format_to(std::back_inserter(query), " GROUP BY {}",
-                   fmt::join(groups, ", "));
-  }
-  return query;
+  TRY(auto plan, pushdown::classify(aggregation));
+  TRY(auto select,
+      pushdown::make_aggregate_select(
+        plan, schema.model(), ClickHouseQueryDialect{},
+        ClickHouseAggregateDialect{schema, target}, std::string{table}, where));
+  return pushdown::render_select(select, ClickHouseQueryDialect{});
 }
 
-auto make_select_query(std::string_view table, SqlSchema const* schema,
-                       Option<ir::OptimizeProjection> const& projection,
-                       std::span<const std::string> where,
-                       Option<uint64_t> limit) -> std::string {
-  auto columns = std::string{"*"};
+namespace {
+
+/// Selects the top-level columns of `schema` that `projection` names, narrowed
+/// to the requested tuple elements, or `*`.
+auto select_columns(SqlSchema const* schema,
+                    Option<ir::OptimizeProjection> const& projection)
+  -> std::string {
+  auto result = std::string{"*"};
   if (schema and projection) {
     // The nested paths requested below each top-level column, relative to it.
     auto wanted
@@ -1101,18 +1115,48 @@ auto make_select_query(std::string_view table, SqlSchema const* schema,
       }
     }
     if (not names_generated and not selected.empty()) {
-      columns = fmt::format("{}", fmt::join(selected, ", "));
+      result = fmt::format("{}", fmt::join(selected, ", "));
     }
   }
-  auto query = fmt::format("SELECT {} FROM {}", columns, table);
-  if (not where.empty()) {
-    fmt::format_to(std::back_inserter(query), " WHERE {}",
-                   fmt::join(where, " AND "));
-  }
-  if (limit) {
-    fmt::format_to(std::back_inserter(query), " LIMIT {}", *limit);
-  }
-  return query;
+  return result;
+}
+
+} // namespace
+
+auto make_select_query(std::string_view table, SqlSchema const* schema,
+                       Option<ir::OptimizeProjection> const& projection,
+                       std::span<const std::string> where,
+                       Option<uint64_t> limit) -> std::string {
+  return pushdown::render_select(
+    pushdown::SqlSelect{
+      .selection = select_columns(schema, projection),
+      .from = std::string{table},
+      .where = {where.begin(), where.end()},
+      .group_by = {},
+      .limit = limit,
+    },
+    ClickHouseQueryDialect{});
+}
+
+auto make_table_plan(SqlSchema const& schema, SqlTarget target,
+                     ir::OptimizeFilter filter,
+                     Option<ir::OptimizeProjection> const& projection,
+                     registry const& reg) -> pushdown::TablePlan {
+  auto split = pushdown::split_filter(std::move(filter), schema.model(),
+                                      ClickHouseRenderer{target, &schema}, reg);
+  return pushdown::TablePlan{
+    .selection = select_columns(&schema, projection),
+    .pushed = std::move(split.pushed),
+    .local = std::move(split.remaining),
+  };
+}
+
+auto make_table_query(pushdown::TablePlan const& plan, std::string_view table,
+                      Option<uint64_t> limit) -> std::string {
+  auto const dialect = ClickHouseQueryDialect{};
+  return pushdown::render_select(
+    pushdown::make_table_select(plan, std::string{table}, limit, dialect),
+    dialect);
 }
 
 auto quote_sql_identifier(std::string_view name) -> std::string {

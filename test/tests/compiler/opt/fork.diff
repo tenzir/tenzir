@@ -54,7 +54,8 @@
              ],
              order: "ordered"
            }
-         ]
+         ],
+         definition_location: [1]:54..61 from 0
        }
      },
      where_ir {
@@ -103,5 +104,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:40..83 from 0
  }

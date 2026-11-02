@@ -1,0 +1,11 @@
+---
+fixtures: [http_server]
+---
+
+// Splunk returns strings. The operator infers numbers, booleans, IP addresses,
+// and timestamps from them.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  search="fixture", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+select user, n, n_type=type_kind(n), flag_type=type_kind(flag?),
+  src_ip_type=type_kind(src_ip?), time_type=type_kind(_time), tags=tags?

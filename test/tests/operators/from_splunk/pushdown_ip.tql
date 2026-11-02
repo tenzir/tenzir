@@ -1,0 +1,16 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3Dmain%0A%7C%20search%20%28%28src_ip%3D%22192.0.2.0%2F24%22%20OR%20src_ip%3D%22%3A%3Affff%3A192.0.2.0%2F120%22%29%20OR%20src_ip%3D%222001%3Adb8%3A%3A1%2F128%22%29%0A%7C%20fields%20src_ip%2C%20user&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+// Addresses and networks go into the search by their text. An IPv4 network
+// also matches its IPv4-mapped IPv6 spelling.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  search="index=main", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where src_ip in 192.0.2.0/24 or src_ip == 2001:db8::1
+select user, src_ip

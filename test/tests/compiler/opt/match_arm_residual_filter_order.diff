@@ -147,7 +147,8 @@
 -                ]
 -              }
 +              
-             ]
+             ],
+             definition_location: [1]:238..263 from 0
            },
            wildcard: false
          },
@@ -186,7 +187,8 @@
 -                order: "ordered"
 -              }
 +              
-             ]
+             ],
+             definition_location: [1]:275..279 from 0
            },
            wildcard: true
          }
@@ -235,5 +237,6 @@
        ],
        order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:212..303 from 0
  }

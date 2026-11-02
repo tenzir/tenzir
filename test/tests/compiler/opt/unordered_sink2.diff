@@ -114,11 +114,13 @@
 -                      ],
 -                      order: "ordered"
 -                    }
-+                  named_args: [
-+                    
-                   ]
+-                  ],
+-                  definition_location: [1]:58..70 from 0
 -                } @ [1]:52..74 from 0,
 -                let_ids: {
++                  named_args: [
++                    
++                  ]
 +                },
 +                filter: [
                    
@@ -129,14 +131,15 @@
 -            },
 -            filter: [
 -              
--            ],
+             ],
 -            order: "ordered"
-+            ]
++            definition_location: [1]:58..70 from 0
 +          } @ [1]:52..74 from 0,
 +          let_ids: {
 +            
            }
--        ]
+-        ],
+-        definition_location: [1]:28..74 from 0
 +        }
        },
 -      loc: [1]:14..23 from 0
@@ -145,5 +148,6 @@
 +      ],
 +      order: "ordered"
      }
-   ]
+   ],
+   definition_location: [1]:0..76 from 0
  }

@@ -80,6 +80,10 @@ auto parse_invalid_pipeline(simdjson::dom::element value)
   -> Result<InvalidPipeline, ParseError>;
 auto parse_pipeline_exists(simdjson::dom::element value)
   -> Result<PipelineExists, ParseError>;
+auto parse_execution_unavailable(simdjson::dom::element value)
+  -> Result<ExecutionUnavailable, ParseError>;
+auto parse_channel_tap_rejected(simdjson::dom::element value)
+  -> Result<ChannelTapRejected, ParseError>;
 auto parse_pipeline_not_found(simdjson::dom::element value)
   -> Result<PipelineNotFound, ParseError>;
 auto parse_busy(simdjson::dom::element value) -> Result<Busy, ParseError>;
@@ -97,6 +101,8 @@ auto write_json(InvalidConfiguration const& value, std::string& out) -> void;
 auto write_json(ConfigurationConflict const& value, std::string& out) -> void;
 auto write_json(InvalidPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineExists const& value, std::string& out) -> void;
+auto write_json(ExecutionUnavailable const& value, std::string& out) -> void;
+auto write_json(ChannelTapRejected const& value, std::string& out) -> void;
 auto write_json(PipelineNotFound const& value, std::string& out) -> void;
 auto write_json(Busy const& value, std::string& out) -> void;
 auto write_json(Suspended const& value, std::string& out) -> void;
@@ -381,6 +387,57 @@ auto parse_pipeline_exists(simdjson::dom::element value)
 auto write_json(PipelineExists const& value, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"PipelineExists\"";
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += '}';
+}
+
+auto parse_execution_unavailable(simdjson::dom::element value)
+  -> Result<ExecutionUnavailable, ParseError> {
+  TRY(auto object, api::object_of(value, "ExecutionUnavailable"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "ExecutionUnavailable"));
+  TRY(auto tag, api::string_of(tag_raw, "ExecutionUnavailable"));
+  if (tag != "ExecutionUnavailable") {
+    return Err{ParseError{"ExecutionUnavailable",
+                          "expected `_tag` 'ExecutionUnavailable'"}};
+  }
+
+  TRY(auto message_raw, api::field(object, "message", "ExecutionUnavailable"));
+  TRY(auto message,
+      api::string_of(message_raw, "ExecutionUnavailable.message"));
+
+  return ExecutionUnavailable{std::move(message)};
+}
+
+auto write_json(ExecutionUnavailable const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"ExecutionUnavailable\"";
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += '}';
+}
+
+auto parse_channel_tap_rejected(simdjson::dom::element value)
+  -> Result<ChannelTapRejected, ParseError> {
+  TRY(auto object, api::object_of(value, "ChannelTapRejected"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "ChannelTapRejected"));
+  TRY(auto tag, api::string_of(tag_raw, "ChannelTapRejected"));
+  if (tag != "ChannelTapRejected") {
+    return Err{
+      ParseError{"ChannelTapRejected", "expected `_tag` 'ChannelTapRejected'"}};
+  }
+
+  TRY(auto message_raw, api::field(object, "message", "ChannelTapRejected"));
+  TRY(auto message, api::string_of(message_raw, "ChannelTapRejected.message"));
+
+  return ChannelTapRejected{std::move(message)};
+}
+
+auto write_json(ChannelTapRejected const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"ChannelTapRejected\"";
   out += ",\"message\":";
   api::write_string(value.message, out);
   out += '}';
@@ -1248,6 +1305,385 @@ auto parse_pipeline_path(simdjson::dom::element value)
   return PipelinePath{std::move(pipeline_id)};
 }
 
+auto Uuid::make(std::string value) -> Result<Uuid, ParseError> {
+  static auto const pattern = std::regex{
+    R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  if (not std::regex_match(value, pattern)) {
+    return Err{ParseError{"Uuid", fmt::format("`{}` does not match the pattern",
+                                              value)}};
+  }
+  return Uuid{std::move(value)};
+}
+
+auto parse_uuid(simdjson::dom::element value) -> Result<Uuid, ParseError> {
+  TRY(auto raw, api::string_of(value, "Uuid"));
+  return Uuid::make(std::move(raw));
+}
+
+auto parse_source_location(simdjson::dom::element value)
+  -> Result<SourceLocation, ParseError> {
+  TRY(auto object, api::object_of(value, "SourceLocation"));
+
+  TRY(auto begin_raw, api::field(object, "begin", "SourceLocation"));
+  TRY(auto begin, api::int64_of(begin_raw, "SourceLocation.begin"));
+
+  TRY(auto end_raw, api::field(object, "end", "SourceLocation"));
+  TRY(auto end, api::int64_of(end_raw, "SourceLocation.end"));
+
+  TRY(auto source_index_raw,
+      api::field(object, "sourceIndex", "SourceLocation"));
+  TRY(auto source_index,
+      api::int64_of(source_index_raw, "SourceLocation.sourceIndex"));
+
+  TRY(auto callsite_index_raw,
+      api::field(object, "callsiteIndex", "SourceLocation"));
+  TRY(auto callsite_index,
+      api::int64_of(callsite_index_raw, "SourceLocation.callsiteIndex"));
+
+  return SourceLocation{std::move(begin), std::move(end),
+                        std::move(source_index), std::move(callsite_index)};
+}
+
+auto parse_inspection_operator(simdjson::dom::element value)
+  -> Result<InspectionOperator, ParseError> {
+  TRY(auto object, api::object_of(value, "InspectionOperator"));
+
+  TRY(auto id_raw, api::field(object, "id", "InspectionOperator"));
+  TRY(auto id, api::string_of(id_raw, "InspectionOperator.id"));
+
+  TRY(auto name_raw, api::field(object, "name", "InspectionOperator"));
+  TRY(auto name, api::string_of(name_raw, "InspectionOperator.name"));
+
+  TRY(auto source_raw, api::field(object, "source", "InspectionOperator"));
+  auto source = Option<SourceLocation>{None{}};
+  if (not api::is_null(source_raw)) {
+    TRY(auto source_value, parse_source_location(source_raw));
+    source = std::move(source_value);
+  }
+
+  return InspectionOperator{std::move(id), std::move(name), std::move(source)};
+}
+
+auto to_string(ChannelDataType value) -> std::string_view {
+  switch (value) {
+    case ChannelDataType::events:
+      return "events";
+    case ChannelDataType::bytes:
+      return "bytes";
+    case ChannelDataType::file:
+      return "file";
+    case ChannelDataType::none:
+      return "none";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto parse_channel_data_type(simdjson::dom::element value)
+  -> Result<ChannelDataType, ParseError> {
+  TRY(auto raw, api::string_of(value, "ChannelDataType"));
+  if (raw == "events") {
+    return ChannelDataType::events;
+  }
+  if (raw == "bytes") {
+    return ChannelDataType::bytes;
+  }
+  if (raw == "file") {
+    return ChannelDataType::file;
+  }
+  if (raw == "none") {
+    return ChannelDataType::none;
+  }
+  return Err{ParseError{
+    "ChannelDataType",
+    fmt::format("`{}` is not one of events, bytes, file, none", raw)}};
+}
+
+auto to_string(InspectionChannelKind value) -> std::string_view {
+  switch (value) {
+    case InspectionChannelKind::regular:
+      return "regular";
+    case InspectionChannelKind::fused:
+      return "fused";
+    case InspectionChannelKind::tiny:
+      return "tiny";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto parse_inspection_channel_kind(simdjson::dom::element value)
+  -> Result<InspectionChannelKind, ParseError> {
+  TRY(auto raw, api::string_of(value, "InspectionChannelKind"));
+  if (raw == "regular") {
+    return InspectionChannelKind::regular;
+  }
+  if (raw == "fused") {
+    return InspectionChannelKind::fused;
+  }
+  if (raw == "tiny") {
+    return InspectionChannelKind::tiny;
+  }
+  return Err{
+    ParseError{"InspectionChannelKind",
+               fmt::format("`{}` is not one of regular, fused, tiny", raw)}};
+}
+
+auto parse_inspection_channel(simdjson::dom::element value)
+  -> Result<InspectionChannel, ParseError> {
+  TRY(auto object, api::object_of(value, "InspectionChannel"));
+
+  TRY(auto from_raw, api::field(object, "from", "InspectionChannel"));
+  auto from = Option<std::int64_t>{None{}};
+  if (not api::is_null(from_raw)) {
+    TRY(auto from_value, api::int64_of(from_raw, "InspectionChannel.from"));
+    from = std::move(from_value);
+  }
+
+  TRY(auto from_port_raw, api::field(object, "fromPort", "InspectionChannel"));
+  TRY(auto from_port,
+      api::int64_of(from_port_raw, "InspectionChannel.fromPort"));
+
+  TRY(auto to_raw, api::field(object, "to", "InspectionChannel"));
+  auto to = Option<std::int64_t>{None{}};
+  if (not api::is_null(to_raw)) {
+    TRY(auto to_value, api::int64_of(to_raw, "InspectionChannel.to"));
+    to = std::move(to_value);
+  }
+
+  TRY(auto type_raw, api::field(object, "type", "InspectionChannel"));
+  TRY(auto type, parse_channel_data_type(type_raw));
+
+  TRY(auto kind_raw, api::field(object, "kind", "InspectionChannel"));
+  TRY(auto kind, parse_inspection_channel_kind(kind_raw));
+
+  return InspectionChannel{std::move(from), std::move(from_port), std::move(to),
+                           std::move(type), std::move(kind)};
+}
+
+auto parse_api_pipeline_graph(simdjson::dom::element value)
+  -> Result<ApiPipelineGraph, ParseError> {
+  TRY(auto object, api::object_of(value, "ApiPipelineGraph"));
+
+  TRY(auto path_raw, api::field(object, "path", "ApiPipelineGraph"));
+  auto path = std::vector<std::int64_t>{};
+  auto path_array = simdjson::dom::array{};
+  if (path_raw.get_array().get(path_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ApiPipelineGraph.path", "expected an array"}};
+  }
+  for (auto path_item : path_array) {
+    TRY(auto path_decoded, api::int64_of(path_item, "ApiPipelineGraph.path"));
+    path.push_back(std::move(path_decoded));
+  }
+
+  TRY(auto parent_raw, api::field(object, "parent", "ApiPipelineGraph"));
+  auto parent = Option<std::vector<std::int64_t>>{None{}};
+  if (not api::is_null(parent_raw)) {
+    auto parent_value = std::vector<std::int64_t>{};
+    auto parent_value_array = simdjson::dom::array{};
+    if (parent_raw.get_array().get(parent_value_array) != simdjson::SUCCESS) {
+      return Err{ParseError{"ApiPipelineGraph.parent", "expected an array"}};
+    }
+    for (auto parent_value_item : parent_value_array) {
+      TRY(auto parent_value_decoded,
+          api::int64_of(parent_value_item, "ApiPipelineGraph.parent"));
+      parent_value.push_back(std::move(parent_value_decoded));
+    }
+    parent = std::move(parent_value);
+  }
+
+  TRY(auto parent_operator_raw,
+      api::field(object, "parentOperator", "ApiPipelineGraph"));
+  auto parent_operator = Option<std::int64_t>{None{}};
+  if (not api::is_null(parent_operator_raw)) {
+    TRY(auto parent_operator_value,
+        api::int64_of(parent_operator_raw, "ApiPipelineGraph.parentOperator"));
+    parent_operator = std::move(parent_operator_value);
+  }
+
+  TRY(auto operators_raw, api::field(object, "operators", "ApiPipelineGraph"));
+  auto operators = std::vector<InspectionOperator>{};
+  auto operators_array = simdjson::dom::array{};
+  if (operators_raw.get_array().get(operators_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ApiPipelineGraph.operators", "expected an array"}};
+  }
+  for (auto operators_item : operators_array) {
+    TRY(auto operators_decoded, parse_inspection_operator(operators_item));
+    operators.push_back(std::move(operators_decoded));
+  }
+
+  TRY(auto channels_raw, api::field(object, "channels", "ApiPipelineGraph"));
+  auto channels = std::vector<InspectionChannel>{};
+  auto channels_array = simdjson::dom::array{};
+  if (channels_raw.get_array().get(channels_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ApiPipelineGraph.channels", "expected an array"}};
+  }
+  for (auto channels_item : channels_array) {
+    TRY(auto channels_decoded, parse_inspection_channel(channels_item));
+    channels.push_back(std::move(channels_decoded));
+  }
+
+  return ApiPipelineGraph{std::move(path), std::move(parent),
+                          std::move(parent_operator), std::move(operators),
+                          std::move(channels)};
+}
+
+auto to_string(ApiExecutionOutcome value) -> std::string_view {
+  switch (value) {
+    case ApiExecutionOutcome::completed:
+      return "completed";
+    case ApiExecutionOutcome::failed:
+      return "failed";
+    case ApiExecutionOutcome::cancelled:
+      return "cancelled";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto parse_api_execution_outcome(simdjson::dom::element value)
+  -> Result<ApiExecutionOutcome, ParseError> {
+  TRY(auto raw, api::string_of(value, "ApiExecutionOutcome"));
+  if (raw == "completed") {
+    return ApiExecutionOutcome::completed;
+  }
+  if (raw == "failed") {
+    return ApiExecutionOutcome::failed;
+  }
+  if (raw == "cancelled") {
+    return ApiExecutionOutcome::cancelled;
+  }
+  return Err{ParseError{
+    "ApiExecutionOutcome",
+    fmt::format("`{}` is not one of completed, failed, cancelled", raw)}};
+}
+
+auto parse_source_file(simdjson::dom::element value)
+  -> Result<SourceFile, ParseError> {
+  TRY(auto object, api::object_of(value, "SourceFile"));
+
+  TRY(auto id_raw, api::field(object, "id", "SourceFile"));
+  TRY(auto id, api::int64_of(id_raw, "SourceFile.id"));
+
+  TRY(auto origin_raw, api::field(object, "origin", "SourceFile"));
+  TRY(auto origin, api::string_of(origin_raw, "SourceFile.origin"));
+
+  TRY(auto text_raw, api::field(object, "text", "SourceFile"));
+  TRY(auto text, api::string_of(text_raw, "SourceFile.text"));
+
+  return SourceFile{std::move(id), std::move(origin), std::move(text)};
+}
+
+auto parse_execution_graph_snapshot(simdjson::dom::element value)
+  -> Result<ExecutionGraphSnapshot, ParseError> {
+  TRY(auto object, api::object_of(value, "ExecutionGraphSnapshot"));
+
+  TRY(auto run_raw, api::field(object, "run", "ExecutionGraphSnapshot"));
+  TRY(auto run, api::int64_of(run_raw, "ExecutionGraphSnapshot.run"));
+
+  TRY(auto process_instance_id_raw,
+      api::field(object, "processInstanceId", "ExecutionGraphSnapshot"));
+  TRY(auto process_instance_id, parse_uuid(process_instance_id_raw));
+
+  TRY(auto execution_id_raw,
+      api::field(object, "executionId", "ExecutionGraphSnapshot"));
+  auto execution_id = Option<std::string>{None{}};
+  if (not api::is_null(execution_id_raw)) {
+    TRY(auto execution_id_value,
+        api::string_of(execution_id_raw, "ExecutionGraphSnapshot.executionId"));
+    execution_id = std::move(execution_id_value);
+  }
+
+  TRY(auto graphs_raw, api::field(object, "graphs", "ExecutionGraphSnapshot"));
+  auto graphs = std::vector<ApiPipelineGraph>{};
+  auto graphs_array = simdjson::dom::array{};
+  if (graphs_raw.get_array().get(graphs_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"ExecutionGraphSnapshot.graphs", "expected an array"}};
+  }
+  for (auto graphs_item : graphs_array) {
+    TRY(auto graphs_decoded, parse_api_pipeline_graph(graphs_item));
+    graphs.push_back(std::move(graphs_decoded));
+  }
+
+  TRY(auto end_raw, api::field(object, "end", "ExecutionGraphSnapshot"));
+  auto end = Option<ApiExecutionOutcome>{None{}};
+  if (not api::is_null(end_raw)) {
+    TRY(auto end_value, parse_api_execution_outcome(end_raw));
+    end = std::move(end_value);
+  }
+
+  TRY(auto sources_raw,
+      api::field(object, "sources", "ExecutionGraphSnapshot"));
+  auto sources = std::vector<SourceFile>{};
+  auto sources_array = simdjson::dom::array{};
+  if (sources_raw.get_array().get(sources_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"ExecutionGraphSnapshot.sources", "expected an array"}};
+  }
+  for (auto sources_item : sources_array) {
+    TRY(auto sources_decoded, parse_source_file(sources_item));
+    sources.push_back(std::move(sources_decoded));
+  }
+
+  TRY(auto call_sites_raw,
+      api::field(object, "callSites", "ExecutionGraphSnapshot"));
+  auto call_sites = std::vector<SourceLocation>{};
+  auto call_sites_array = simdjson::dom::array{};
+  if (call_sites_raw.get_array().get(call_sites_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"ExecutionGraphSnapshot.callSites", "expected an array"}};
+  }
+  for (auto call_sites_item : call_sites_array) {
+    TRY(auto call_sites_decoded, parse_source_location(call_sites_item));
+    call_sites.push_back(std::move(call_sites_decoded));
+  }
+
+  return ExecutionGraphSnapshot{
+    std::move(run),          std::move(process_instance_id),
+    std::move(execution_id), std::move(graphs),
+    std::move(end),          std::move(sources),
+    std::move(call_sites)};
+}
+
+auto parse_channel_tap_request(simdjson::dom::element value)
+  -> Result<ChannelTapRequest, ParseError> {
+  TRY(auto object, api::object_of(value, "ChannelTapRequest"));
+
+  TRY(auto process_instance_id_raw,
+      api::field(object, "processInstanceId", "ChannelTapRequest"));
+  TRY(auto process_instance_id, parse_uuid(process_instance_id_raw));
+
+  TRY(auto execution_id_raw,
+      api::field(object, "executionId", "ChannelTapRequest"));
+  TRY(auto execution_id,
+      api::string_of(execution_id_raw, "ChannelTapRequest.executionId"));
+
+  TRY(auto path_raw, api::field(object, "path", "ChannelTapRequest"));
+  auto path = std::vector<std::int64_t>{};
+  auto path_array = simdjson::dom::array{};
+  if (path_raw.get_array().get(path_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ChannelTapRequest.path", "expected an array"}};
+  }
+  for (auto path_item : path_array) {
+    TRY(auto path_decoded, api::int64_of(path_item, "ChannelTapRequest.path"));
+    path.push_back(std::move(path_decoded));
+  }
+
+  TRY(auto channel_index_raw,
+      api::field(object, "channelIndex", "ChannelTapRequest"));
+  TRY(auto channel_index,
+      api::int64_of(channel_index_raw, "ChannelTapRequest.channelIndex"));
+
+  auto limit = Option<std::int64_t>{None{}};
+  if (auto limit_raw = api::optional_field(object, "limit")) {
+    TRY(auto limit_present,
+        api::int64_of(*limit_raw, "ChannelTapRequest.limit"));
+    limit = std::move(limit_present);
+  }
+
+  return ChannelTapRequest{std::move(process_instance_id),
+                           std::move(execution_id), std::move(path),
+                           std::move(channel_index), std::move(limit)};
+}
+
 auto AdhocPipelineId::make(std::string value)
   -> Result<AdhocPipelineId, ParseError> {
   static auto const pattern = std::regex{
@@ -1700,6 +2136,238 @@ auto write_json(PipelinePath const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(Uuid const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(SourceLocation const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"begin\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.begin);
+  out += ",\"end\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.end);
+  out += ",\"sourceIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.source_index);
+  out += ",\"callsiteIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.callsite_index);
+  out += '}';
+}
+
+auto write_json(InspectionOperator const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"id\":";
+  api::write_string(value.id, out);
+  out += ",\"name\":";
+  api::write_string(value.name, out);
+  out += ",\"source\":";
+  if (value.source) {
+    write_json(*value.source, out);
+  } else {
+    out += "null";
+  }
+  out += '}';
+}
+
+auto write_json(ChannelDataType const& value, std::string& out) -> void {
+  api::write_string(to_string(value), out);
+}
+
+auto write_json(InspectionChannelKind const& value, std::string& out) -> void {
+  api::write_string(to_string(value), out);
+}
+
+auto write_json(InspectionChannel const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"from\":";
+  if (value.from) {
+    fmt::format_to(std::back_inserter(out), "{}", *value.from);
+  } else {
+    out += "null";
+  }
+  out += ",\"fromPort\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.from_port);
+  out += ",\"to\":";
+  if (value.to) {
+    fmt::format_to(std::back_inserter(out), "{}", *value.to);
+  } else {
+    out += "null";
+  }
+  out += ",\"type\":";
+  write_json(value.type, out);
+  out += ",\"kind\":";
+  write_json(value.kind, out);
+  out += '}';
+}
+
+auto write_json(ApiPipelineGraph const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"path\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.path) {
+      out += separator0;
+      separator0 = ",";
+      fmt::format_to(std::back_inserter(out), "{}", element0);
+    }
+    out += ']';
+  }
+  out += ",\"parent\":";
+  if (value.parent) {
+    {
+      out += '[';
+      auto separator0 = "";
+      for (auto const& element0 : *value.parent) {
+        out += separator0;
+        separator0 = ",";
+        fmt::format_to(std::back_inserter(out), "{}", element0);
+      }
+      out += ']';
+    }
+  } else {
+    out += "null";
+  }
+  out += ",\"parentOperator\":";
+  if (value.parent_operator) {
+    fmt::format_to(std::back_inserter(out), "{}", *value.parent_operator);
+  } else {
+    out += "null";
+  }
+  out += ",\"operators\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.operators) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"channels\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.channels) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += '}';
+}
+
+auto write_json(ApiExecutionOutcome const& value, std::string& out) -> void {
+  api::write_string(to_string(value), out);
+}
+
+auto write_json(SourceFile const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"id\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.id);
+  out += ",\"origin\":";
+  api::write_string(value.origin, out);
+  out += ",\"text\":";
+  api::write_string(value.text, out);
+  out += '}';
+}
+
+auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"run\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.run);
+  out += ",\"processInstanceId\":";
+  write_json(value.process_instance_id, out);
+  out += ",\"executionId\":";
+  if (value.execution_id) {
+    api::write_string(*value.execution_id, out);
+  } else {
+    out += "null";
+  }
+  out += ",\"graphs\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.graphs) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"end\":";
+  if (value.end) {
+    write_json(*value.end, out);
+  } else {
+    out += "null";
+  }
+  out += ",\"sources\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.sources) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"callSites\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.call_sites) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += '}';
+}
+
+auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
+  out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"processInstanceId\":";
+  write_json(value.process_instance_id, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"executionId\":";
+  api::write_string(value.execution_id, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"path\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.path) {
+      out += separator0;
+      separator0 = ",";
+      fmt::format_to(std::back_inserter(out), "{}", element0);
+    }
+    out += ']';
+  }
+  out += field_separator;
+  field_separator = ",";
+  out += "\"channelIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.channel_index);
+  if (value.limit) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"limit\":";
+    if (value.limit) {
+      fmt::format_to(std::back_inserter(out), "{}", *value.limit);
+    } else {
+      out += "null";
+    }
+  }
+  out += '}';
+}
+
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
@@ -1962,6 +2630,50 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
     }
     co_return HttpResponse{405,
                            R"({"error":"method not allowed","allow":["GET"]})"};
+  }
+  if (api::match_path("/pipelines/:pipelineId/graph", request.path,
+                      parameters)) {
+    if (request.method == "GET") {
+      auto pipeline_id = PipelineId::make(std::move(parameters[0]));
+      if (pipeline_id.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(pipeline_id).unwrap_err());
+      }
+      auto path = PipelinePath{std::move(pipeline_id).unwrap()};
+      auto decoded = StreamPipelineGraph{std::move(path)};
+      co_return api::encode_stream<200>(
+        "text/event-stream", co_await handler.handle(std::move(decoded)));
+    }
+    co_return HttpResponse{405,
+                           R"({"error":"method not allowed","allow":["GET"]})"};
+  }
+  if (api::match_path("/pipelines/:pipelineId/events", request.path,
+                      parameters)) {
+    if (request.method == "POST") {
+      auto pipeline_id = PipelineId::make(std::move(parameters[0]));
+      if (pipeline_id.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(pipeline_id).unwrap_err());
+      }
+      auto path = PipelinePath{std::move(pipeline_id).unwrap()};
+      auto parsed = api::Document::parse(request.body, "streamPipelineEvents");
+      if (parsed.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(parsed).unwrap_err());
+      }
+      auto document = std::move(parsed).unwrap();
+      auto payload = parse_channel_tap_request(document.root());
+      if (payload.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(payload).unwrap_err());
+      }
+      auto decoded
+        = StreamPipelineEvents{std::move(path), std::move(payload).unwrap()};
+      co_return api::encode_stream<200>(
+        "text/event-stream", co_await handler.handle(std::move(decoded)));
+    }
+    co_return HttpResponse{
+      405, R"({"error":"method not allowed","allow":["POST"]})"};
   }
   if (api::match_path("/pipelines/:pipelineId/start", request.path,
                       parameters)) {

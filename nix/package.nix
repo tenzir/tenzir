@@ -106,6 +106,7 @@ rec {
           tenzirPythonPkgs
           toImageFn
           ;
+        cacert = linkPkgs.cacert-tenzir;
         stdenv = tenzirCcacheStdenv;
         caf = linkPkgs.caf.override {
           stdenv = tenzirStdenv;
@@ -153,6 +154,12 @@ rec {
     if pkgs.stdenv.hostPlatform.isLinux then
       pkgs.callPackage ./tenzir/check.nix {
         inherit tenzir-integration-test-deps tenzirPythonPkgs;
+        # CI selects tests through `--impure`; pure evaluation reads "".
+        testSelection =
+          let
+            selection = builtins.getEnv "TENZIR_TEST_SELECTION";
+          in
+          if selection == "" then null else lib.filter (path: path != "") (lib.splitString "\n" selection);
         src = lib.fileset.toSource {
           root = ../.;
           fileset = lib.fileset.unions [

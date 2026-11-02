@@ -2,7 +2,7 @@
 │
 ● version
 ╎
-● SetIr(x6)
+● set(x6)
 ╎
 ● write_ndjson
 │

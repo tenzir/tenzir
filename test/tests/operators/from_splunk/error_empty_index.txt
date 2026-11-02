@@ -1,0 +1,6 @@
+error: `index` must be a non-empty index name or a non-empty list of them
+ --> tests/operators/from_splunk/error_empty_index.tql:6:9
+  |
+6 |   index=[],
+  |         ^^
+  |

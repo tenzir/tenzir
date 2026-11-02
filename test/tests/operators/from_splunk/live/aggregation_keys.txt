@@ -1,0 +1,70 @@
+{
+  k: 5,
+  events: 1,
+  c: 1,
+  lo: null,
+  hi: null,
+}
+{
+  k: 1s,
+  events: 1,
+  c: 1,
+  lo: null,
+  hi: null,
+}
+{
+  k: "",
+  events: 1,
+  c: 1,
+  lo: null,
+  hi: null,
+}
+{
+  k: " 5",
+  events: 1,
+  c: 0,
+  lo: 3,
+  hi: 3,
+}
+{
+  k: "Alice",
+  events: 1,
+  c: 0,
+  lo: -15,
+  hi: -15,
+}
+{
+  k: "True",
+  events: 1,
+  c: 0,
+  lo: null,
+  hi: null,
+}
+{
+  k: "alice",
+  events: 3,
+  c: 2,
+  lo: 0,
+  hi: 12,
+}
+{
+  k: "null",
+  events: 1,
+  c: 1,
+  lo: null,
+  hi: null,
+}
+{
+  k: 192.0.2.1,
+  events: 1,
+  c: 0,
+  lo: null,
+  hi: null,
+}
+{
+  k: null,
+  events: 1,
+  c: 0,
+  lo: 999999999999999,
+  hi: 999999999999999,
+}

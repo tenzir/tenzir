@@ -1,0 +1,18 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/aggregate-ok/services/search/v2/jobs/export
+      body: search=%7C%20makeresults%20format%3Dcsv%20data%3D%22x%0A1%22%20%7C%20fields%20user%0A%7C%20fields%20user%2C%20action%2C%20n&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+// With `format` and `data`, `makeresults` creates results without `_time`,
+// which `fields` may remove with every other field. Splunk then returns no
+// results, which `stats` would still count, so the summary stays in Tenzir.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/aggregate-ok",
+  search="| makeresults format=csv data=\"x\n1\" | fields user",
+  earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)
+sort user.string()

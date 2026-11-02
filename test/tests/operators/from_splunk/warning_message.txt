@@ -5,6 +5,7 @@ warning: Splunk search returned WARN: Some search peers did not return results.
    |          ~~~~~~~~~~~~~~~~~~~
    |
    = note: search: search index=main
+           | fields *
 {
   _time: 2026-07-14T14:54:45Z,
   _raw: "raw-one",

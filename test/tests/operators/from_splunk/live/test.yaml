@@ -1,3 +1,5 @@
+# One Splunk instance for all tests: each instance takes minutes to start.
+suite: from-splunk-live
 fixtures:
   - splunk:
       seed_auth_events: true

@@ -61,6 +61,10 @@ public:
     return "fork_merge_ir";
   }
 
+  auto main_location() const -> location override {
+    return args_.keyword;
+  }
+
   auto copy() const -> Box<ir::Operator> override {
     return ForkMergeIr{args_};
   }

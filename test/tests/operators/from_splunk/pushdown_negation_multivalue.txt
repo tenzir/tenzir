@@ -1,0 +1,15 @@
+{
+  user: "alice",
+  tags: [
+    "a",
+    "b",
+  ],
+}
+{
+  user: "bob",
+  tags: null,
+}
+{
+  user: "carol",
+  tags: null,
+}

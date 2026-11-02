@@ -13,8 +13,8 @@ warning: `type_of` is deprecated
     net: 192.0.2.0/24,
     time: 2026-07-14T14:54:45Z,
     duration: 5s,
-    bool_string: "true",
-    number_string: "42",
+    bool_string: true,
+    number_string: 42,
     signed: -1,
     unsigned: 18446744073709551615,
     real: 1.25,
@@ -50,11 +50,11 @@ warning: `type_of` is deprecated
     },
     {
       name: "bool_string",
-      kind: "string",
+      kind: "bool",
     },
     {
       name: "number_string",
-      kind: "string",
+      kind: "int64",
     },
     {
       name: "signed",

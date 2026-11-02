@@ -5,6 +5,8 @@
   tenzirPythonPkgs,
   tenzir-integration-test-deps,
   pkgsBuildBuild,
+  # Test paths relative to the engine directory, or null for every test.
+  testSelection ? null,
 }:
 # The untested tenzir edition build.
 unchecked:
@@ -26,13 +28,7 @@ stdenvNoCC.mkDerivation {
 
       template = path: ''
         if [ -d "${path}/test/tests" ]; then
-          echo "running ${path} integration tests"
-          tenzir-test \
-            --root "${src}/test" \
-            --summary \
-            --report-json - \
-            -j $NIX_BUILD_CORES \
-            "${path}/test"
+          run_suite "${path}/test"
         fi
       '';
     in
@@ -44,6 +40,29 @@ stdenvNoCC.mkDerivation {
       export TENZIR_BINARY="${lib.getBin unchecked}/bin/tenzir run"
       export TENZIR_NODE_BINARY=${lib.getBin unchecked}/bin/tenzir-node
       export TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL=1
+      run_suite() {
+        local targets=("$1")
+      ${lib.optionalString (testSelection != null) ''
+        # A selected path can name a test that the sandbox excludes.
+        targets=()
+        for selected in ${lib.escapeShellArgs testSelection}; do
+          case "$selected" in
+            "''${1#./}"/*) [ -e "$selected" ] && targets+=("$selected") ;;
+          esac
+        done
+        if [ ''${#targets[@]} -eq 0 ]; then
+          echo "skipping $1: no selected tests"
+          return
+        fi
+      ''}
+        echo "running $1 integration tests"
+        tenzir-test \
+          --root "${src}/test" \
+          --summary \
+          --report-json - \
+          -j $NIX_BUILD_CORES \
+          "''${targets[@]}"
+      }
       mkdir -p cache data state tmp
       export XDG_CACHE_HOME=$PWD/cache
       export XDG_DATA_HOME=$PWD/data
