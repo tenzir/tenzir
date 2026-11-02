@@ -124,6 +124,36 @@ auto translate_prefilter(ast::expression const& expr,
                          ColumnModel const& columns, registry const& reg,
                          PrefilterOptions options = {}) -> Option<Expr>;
 
+/// Translates `expr` on `DynamicType` columns into an IR predicate that keeps
+/// and drops the same rows as TQL on the values that the source decodes, or
+/// returns `None` if some part of it has no such translation.
+///
+/// A target with untyped fields does not hold these values, so only a
+/// renderer that knows how the source decodes the target's fields can spell
+/// the result exactly, and it must veto every atom whose spelling would keep
+/// or drop another row. Unlike a prefilter, the result never widens `expr`.
+/// It consists of:
+/// - `Binary{op, Column, Literal}`, which holds where TQL's comparison of the
+///   decoded value with the literal holds: `==` with a string, a boolean, a
+///   number, or a time, and `<`, `<=`, `>`, and `>=` with a number or a time.
+///   A value of another type, such as a list, compares unequal and unordered.
+///   A bare field holds as `Binary{eq, Column, true}`.
+/// - `In{Column, literals}`, with literals of a single type. Unlike `==`,
+///   TQL's `in` compares a boolean with a number as `0` or `1`, so lists of
+///   booleans and lists with a number equal to `0` or `1` have no
+///   translation.
+/// - `IsNull{Column}` for `== null`, and its negation for `!= null`.
+/// - With `options.negations`, the negations that `PrefilterOptions`
+///   describes, with the literals of a membership as above.
+/// - `And` and `Or` of these.
+///
+/// Integers are bounded to ±2^53, as for prefilters. Like
+/// `translate_predicate`, the result is fit to filter by, but not to negate.
+auto translate_dynamic_predicate(ast::expression const& expr,
+                                 ColumnModel const& columns,
+                                 registry const& reg,
+                                 PrefilterOptions options = {}) -> Option<Expr>;
+
 /// The value of a field, as the target computes it.
 struct FieldValue {
   /// An expression whose value is the value that TQL sees for the field,

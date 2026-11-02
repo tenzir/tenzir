@@ -11,7 +11,11 @@
 #include "tenzir/nova/json_parser.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/pushdown/splunk.hpp"
+#include "tenzir/session.hpp"
+#include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/resolve.hpp"
 
 #include <fmt/format.h>
 
@@ -49,10 +53,71 @@ auto make(std::vector<Column> columns) -> ir::OptimizeAggregation {
   };
 }
 
+/// The search that computes `aggregation` after `search`, without a filter.
+auto aggregate(std::string_view search,
+               ir::OptimizeAggregation const& aggregation, bool raw = false)
+  -> Option<std::string> {
+  TRY(auto result, plan_spl_aggregation(search, {}, None{}, aggregation, raw,
+                                        test::builtin_registry()));
+  CHECK(not result.checked);
+  return std::move(result.search);
+}
+
+auto parse(std::string_view source) -> ast::expression {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh, test::builtin_registry());
+  auto ctx = provider.as_session();
+  auto expr
+    = parse_expression_with_location_override(source, location::unknown, ctx);
+  if (not expr) {
+    FAIL("failed to parse: {}", source);
+  }
+  REQUIRE(expr);
+  REQUIRE(resolve_entities(*expr, ExternPrelude::empty(), ctx));
+  return std::move(*expr);
+}
+
+/// The stages that `plan_spl_aggregation` appends to the search `S` for
+/// `summarize n=count()` after the filters `predicates`.
+auto filtered(std::vector<std::string_view> predicates, bool raw = false)
+  -> Option<std::string> {
+  auto filter = ir::OptimizeFilter{};
+  for (auto predicate : predicates) {
+    filter.push_back(parse(predicate));
+  }
+  auto planned
+    = plan_spl_aggregation("S", filter, None{}, make({call({"n"}, "count")}),
+                           raw, test::builtin_registry());
+  if (not planned) {
+    return None{};
+  }
+  // The search computes the check exactly if its filter stages assign it.
+  CHECK_EQUAL(planned->checked,
+              planned->search.contains("tenzir_filter_check"));
+  auto result = Option<std::string>{std::move(planned->search)};
+  constexpr auto suffix
+    = std::string_view{"\n| stats count as tenzir_count\n"
+                       "| appendpipe [stats count as tenzir_groups]"};
+  REQUIRE(result->starts_with("S\n"));
+  if (result->ends_with(suffix)) {
+    return result->substr(2, result->size() - 2 - suffix.size());
+  }
+  return result->substr(2);
+}
+
+/// The `where` stage for a single predicate, which compares no numbers.
+auto where(std::string_view predicate, bool raw = false)
+  -> Option<std::string> {
+  TRY(auto result, filtered({predicate}, raw));
+  constexpr auto prefix = std::string_view{"| where "};
+  REQUIRE(result.starts_with(prefix));
+  return result.substr(prefix.size());
+}
+
 /// The stages that `plan_spl_aggregation` appends to the search `S`.
 auto stages(ir::OptimizeAggregation const& aggregation, bool raw = false)
   -> Option<std::string> {
-  auto result = plan_spl_aggregation("S", aggregation, raw);
+  auto result = aggregate("S", aggregation, raw);
   if (not result) {
     return None{};
   }
@@ -79,20 +144,21 @@ auto parse_rows(std::vector<std::string_view> objects)
 }
 
 auto decode(std::vector<std::string_view> objects,
-            ir::OptimizeAggregation const& aggregation, bool raw = false)
+            ir::OptimizeAggregation const& aggregation, bool raw = false,
+            bool checked = false)
   -> Result<std::vector<nova::Events>, std::string> {
   auto dh = collecting_diagnostic_handler{};
   auto rows = parse_rows(std::move(objects));
-  auto result = decode_spl_aggregation(rows, aggregation, raw, dh);
+  auto result = decode_spl_aggregation(rows, aggregation, raw, checked, dh);
   CHECK(std::move(dh).collect().empty());
   return result;
 }
 
 /// The output events of a successful decoding, one string per event.
 auto events(std::vector<std::string_view> objects,
-            ir::OptimizeAggregation const& aggregation, bool raw = false)
-  -> std::vector<std::string> {
-  auto decoded = decode(std::move(objects), aggregation, raw);
+            ir::OptimizeAggregation const& aggregation, bool raw = false,
+            bool checked = false) -> std::vector<std::string> {
+  auto decoded = decode(std::move(objects), aggregation, raw, checked);
   if (decoded.is_err()) {
     FAIL("unexpected error: {}", decoded.unwrap_err());
   }
@@ -110,9 +176,9 @@ auto events(std::vector<std::string_view> objects,
 
 /// The reason why decoding fails.
 auto error(std::vector<std::string_view> objects,
-           ir::OptimizeAggregation const& aggregation, bool raw = false)
-  -> std::string {
-  auto decoded = decode(std::move(objects), aggregation, raw);
+           ir::OptimizeAggregation const& aggregation, bool raw = false,
+           bool checked = false) -> std::string {
+  auto decoded = decode(std::move(objects), aggregation, raw, checked);
   REQUIRE(decoded.is_err());
   return decoded.unwrap_err();
 }
@@ -196,22 +262,20 @@ TEST("aggregations that Splunk computes differently stay local") {
   CHECK(not stages(make({key({" a"})})));
   CHECK(not stages(make({key({""})})));
   // Searches that do not take more stages.
-  CHECK(not plan_spl_aggregation("search \"unterminated",
-                                 make({call({"n"}, "count")}), false));
-  CHECK(not plan_spl_aggregation("search x |", make({call({"n"}, "count")}),
-                                 false));
+  CHECK(not aggregate("search \"unterminated", make({call({"n"}, "count")}),
+                      false));
+  CHECK(not aggregate("search x |", make({call({"n"}, "count")}), false));
   // Searches with side effects, which a second search would repeat.
-  CHECK(not plan_spl_aggregation("search x | outputlookup users.csv",
-                                 make({call({"n"}, "count")}), false));
-  CHECK(not plan_spl_aggregation("search x | collect index=summary",
-                                 make({call({"n"}, "count")}), false));
-  CHECK(not plan_spl_aggregation("search `macro`", make({call({"n"}, "count")}),
-                                 false));
+  CHECK(not aggregate("search x | outputlookup users.csv",
+                      make({call({"n"}, "count")}), false));
+  CHECK(not aggregate("search x | collect index=summary",
+                      make({call({"n"}, "count")}), false));
+  CHECK(not aggregate("search `macro`", make({call({"n"}, "count")}), false));
   // Searches whose results show formatted values, which `stats` does not see.
-  CHECK(not plan_spl_aggregation("search x | fieldformat n=n*2",
-                                 make({call({"n"}, "count")}), false));
-  CHECK(not plan_spl_aggregation("search x | FieldFormat n=n*2",
-                                 make({call({"n"}, "count")}), false));
+  CHECK(not aggregate("search x | fieldformat n=n*2",
+                      make({call({"n"}, "count")}), false));
+  CHECK(not aggregate("search x | FieldFormat n=n*2",
+                      make({call({"n"}, "count")}), false));
   // Searches whose results may lack fields, which Splunk does not return, but
   // `stats` counts.
   for (auto search : {
@@ -228,8 +292,7 @@ TEST("aggregations that Splunk computes differently stay local") {
          "search [| inputlookup users.csv | fields user] | eval y=1",
          "search x | custom_command",
        }) {
-    CHECK(
-      not plan_spl_aggregation(search, make({call({"n"}, "count")}), false));
+    CHECK(not aggregate(search, make({call({"n"}, "count")}), false));
   }
   // Searches that start with events or `makeresults` and keep their fields.
   // Splunk returns results whose fields `eval` set to `null()` as empty
@@ -245,8 +308,27 @@ TEST("aggregations that Splunk computes differently stay local") {
          "| search index=main | dedup user | sort - _time | head 10",
          "search [search index=other | fields user] | eval x=1",
        }) {
-    CHECK(plan_spl_aggregation(search, make({call({"n"}, "count")}), false));
+    CHECK(aggregate(search, make({call({"n"}, "count")}), false));
   }
+}
+
+TEST("sources decide on aggregations without a registry") {
+  // `can_plan_spl_aggregation` checks everything but the filter, whose
+  // translation needs a registry.
+  CHECK(can_plan_spl_aggregation("search index=main", by_user(), false));
+  CHECK(can_plan_spl_aggregation("search index=main", by_user(), true));
+  CHECK(not can_plan_spl_aggregation("search x | outputlookup users.csv",
+                                     by_user(), false));
+  CHECK(not can_plan_spl_aggregation("search x | fieldformat n=n*2", by_user(),
+                                     false));
+  CHECK(
+    not can_plan_spl_aggregation("| inputlookup users.csv", by_user(), false));
+  CHECK(not can_plan_spl_aggregation(
+    "search index=main", make({call({"lo"}, "min", Path{"n"})}), true));
+  CHECK(not can_plan_spl_aggregation("search index=main",
+                                     make({key({"_time"})}), false));
+  CHECK(not can_plan_spl_aggregation(
+    "search index=main", make({call({"s"}, "sum", Path{"n"})}), false));
 }
 
 TEST("aggregation results become the output of the summary") {
@@ -481,4 +563,271 @@ TEST("aggregation results that might differ from TQL are rejected") {
                      R"({"tenzir_groups":"1"})"},
                     by_user()),
               "unexpected field `x`");
+}
+
+TEST("exact filters go into a where stage before the aggregation") {
+  // Strings that type inference keeps as strings compare byte by byte, and a
+  // field with several values equals no literal.
+  CHECK_EQUAL(where(R"(user == "alice")"),
+              R"((mvcount('user')==1 AND 'user'=="alice"))");
+  CHECK_EQUAL(where(R"("alice" == user)"),
+              R"((mvcount('user')==1 AND 'user'=="alice"))");
+  CHECK_EQUAL(where(R"(user == "")"), R"((mvcount('user')==1 AND 'user'==""))");
+  CHECK_EQUAL(where(R"(user == "a\"b\\c*")"),
+              R"((mvcount('user')==1 AND 'user'=="a\"b\\c*"))");
+  CHECK_EQUAL(where(R"(user in ["alice", "bob"])"),
+              R"((mvcount('user')==1 AND ('user'=="alice" OR 'user'=="bob")))");
+  // Booleans are the values `true` and `false`.
+  CHECK_EQUAL(where("flag"), R"((mvcount('flag')==1 AND 'flag'=="true"))");
+  CHECK_EQUAL(where("flag == false"),
+              R"((mvcount('flag')==1 AND 'flag'=="false"))");
+  // Null checks.
+  CHECK_EQUAL(where("action == null"), "isnull('action')");
+  CHECK_EQUAL(where("action != null"), "isnotnull('action')");
+  // Negations keep missing fields and fields with several values.
+  CHECK_EQUAL(where(R"(user != "alice")"),
+              R"((isnull('user') OR mvcount('user')>1 OR )"
+              R"(if('user'=="alice", false(), true())))");
+  CHECK_EQUAL(where(R"(not (user == "alice"))"),
+              R"((isnull('user') OR mvcount('user')>1 OR )"
+              R"(if('user'=="alice", false(), true())))");
+  CHECK_EQUAL(where(R"(not (user in ["alice", "bob"]))"),
+              R"((isnull('user') OR mvcount('user')>1 OR )"
+              R"(if(('user'=="alice" OR 'user'=="bob"), false(), true())))");
+  CHECK_EQUAL(where("flag != true"),
+              R"((isnull('flag') OR mvcount('flag')>1 OR )"
+              R"(if('flag'=="true", false(), true())))");
+  // Junctions, and several filters, which all apply.
+  CHECK_EQUAL(where(R"(user == "alice" or action == null)"),
+              R"(((mvcount('user')==1 AND 'user'=="alice") OR )"
+              R"(isnull('action')))");
+  CHECK_EQUAL(filtered({R"(sourcetype == "linux_secure")",
+                        R"(action != "logout" and user != null)"}),
+              R"(| where (mvcount('sourcetype')==1 AND )"
+              R"('sourcetype'=="linux_secure") AND ((isnull('action') OR )"
+              R"(mvcount('action')>1 OR if('action'=="logout", false(), )"
+              R"(true())) AND isnotnull('user')))");
+  // Names that are not identifiers go into single quotes.
+  CHECK_EQUAL(where(R"(this["a b.c"] == "x")"),
+              R"((mvcount('a b.c')==1 AND 'a b.c'=="x"))");
+  // With `raw`, every string stays a string.
+  CHECK_EQUAL(where(R"(user == "5")", true),
+              R"((mvcount('user')==1 AND 'user'=="5"))");
+  CHECK_EQUAL(where(R"(user != "true")", true),
+              R"((isnull('user') OR mvcount('user')>1 OR )"
+              R"(if('user'=="true", false(), true())))");
+}
+
+TEST("exact filters check their comparisons of numbers") {
+  constexpr auto integer = std::string_view{R"(match('n', "^-?[0-9]{1,15}$"))"};
+  auto const uncertain = fmt::format(
+    R"((NOT {} AND match('n', "[0-9]|[iI][nN][fF]|[nN][aA][nN]")))", integer);
+  // The `where` stage keeps the results that pass with any outcome of the
+  // uncertain comparisons, and the check flags those that do not pass without
+  // them.
+  auto stages = [](std::string_view upper, std::string_view lower) {
+    return fmt::format("| where {}\n| eval tenzir_filter_check=if({}, 0, 1)\n"
+                       "| stats count as tenzir_count, "
+                       "max(tenzir_filter_check) "
+                       "as tenzir_filter_check\n"
+                       "| appendpipe [stats count as tenzir_groups]",
+                       upper, lower);
+  };
+  auto positive = [&](std::string_view test) {
+    return stages(fmt::format("(mvcount('n')==1 AND (({} AND {}) OR {}))",
+                              integer, test, uncertain),
+                  fmt::format("(mvcount('n')==1 AND {} AND {})", integer,
+                              test));
+  };
+  CHECK_EQUAL(filtered({"n > 6"}), positive("tonumber('n')>6"));
+  CHECK_EQUAL(filtered({"6 < n"}), positive("tonumber('n')>6"));
+  CHECK_EQUAL(filtered({"n <= -1.5"}), positive("tonumber('n')<=-1.5"));
+  CHECK_EQUAL(filtered({"n > 0.0001"}), positive("tonumber('n')>0.0001"));
+  CHECK_EQUAL(filtered({"n == -999999999999999"}),
+              positive("tonumber('n')==-999999999999999"));
+  CHECK_EQUAL(filtered({"n in [5, 7]"}),
+              positive("(tonumber('n')==5 OR tonumber('n')==7)"));
+  auto negative = [&](std::string_view test) {
+    return stages(
+      fmt::format("(isnull('n') OR mvcount('n')>1 OR if({} AND {}, false(), "
+                  "true()))",
+                  integer, test),
+      fmt::format("(isnull('n') OR mvcount('n')>1 OR if(({} AND {}) OR {}, "
+                  "false(), true()))",
+                  integer, test, uncertain));
+  };
+  CHECK_EQUAL(filtered({"n != 5"}), negative("tonumber('n')==5"));
+  CHECK_EQUAL(filtered({"not (n in [5, 7])"}),
+              negative("(tonumber('n')==5 OR tonumber('n')==7)"));
+  // Other predicates are the same in both bounds.
+  CHECK_EQUAL(filtered({R"(user == "alice" or n > 6)"}),
+              stages(fmt::format("((mvcount('user')==1 AND 'user'==\"alice\") "
+                                 "OR (mvcount('n')==1 AND (({} AND "
+                                 "tonumber('n')>6) OR {})))",
+                                 integer, uncertain),
+                     fmt::format("((mvcount('user')==1 AND 'user'==\"alice\") "
+                                 "OR (mvcount('n')==1 AND {} AND "
+                                 "tonumber('n')>6))",
+                                 integer)));
+}
+
+TEST("filters without an exact spelling keep the aggregation local") {
+  for (auto predicate : {
+         // Strings that type inference turns into other types.
+         R"(user == "5")",
+         R"(user == "true")",
+         R"(user == "192.0.2.1")",
+         R"(user == "now")",
+         R"(user != "5")",
+         R"(user in ["alice", "5"])",
+         // Control characters.
+         "user == \"a\\nb\"",
+         // Ordering on strings and booleans.
+         R"(user < "b")",
+         "flag > false",
+         // Numbers that `search` would read with an exponent, or with more
+         // than 15 significant digits.
+         "n > 0.0000001",
+         "n > 1.2345678901234567",
+         "n == 1000000000000000",
+         "n == 9007199254740993",
+         // Lists of several types, whose later elements TQL never matches.
+         R"(n in [1, "a"])",
+         R"(not (n in [1, "a"]))",
+         // Lists in which TQL's `in` finds booleans and numbers alike.
+         "n in [0, 5]",
+         "not (n in [1, 5])",
+         "flag in [true]",
+         // Negations of other predicates.
+         "not (n > 5)",
+         "not flag",
+         R"(not (user.starts_with("a")))",
+         // Other predicates.
+         R"(user.starts_with("a"))",
+         R"(user.match_regex("^a"))",
+         R"(user.to_lower() == "alice")",
+         R"("lic" in user)",
+         "src == 192.0.2.1",
+         "src.ip() in 10.0.0.0/8",
+         "_time > 2025-01-01",
+         "t > 2025-01-01",
+         "n + 1 > 5",
+         "n > m",
+         // Fields that `eval` reads differently, nested fields, and fields
+         // that the stages write.
+         R"(_raw == "x")",
+         R"(this["a|b"] == "x")",
+         R"(a.b == "x")",
+         R"(tenzir_x == "x")",
+       }) {
+    CHECK(not filtered({predicate}));
+    // A single predicate without a spelling keeps all of them local.
+    CHECK(not filtered({R"(user == "alice")", predicate}));
+  }
+  // Without inference, a string differs from every number and boolean.
+  CHECK(not filtered({"n > 5"}, true));
+  CHECK(not filtered({"n != 5"}, true));
+  CHECK(not filtered({"flag"}, true));
+  CHECK(not filtered({"flag == true"}, true));
+}
+
+TEST("the fallback keeps every result that may pass the filters") {
+  auto fallback = [](std::vector<std::string_view> predicates,
+                     Option<std::vector<std::string_view>> fields = None{},
+                     bool raw = false) -> Option<std::string> {
+    auto filter = ir::OptimizeFilter{};
+    for (auto predicate : predicates) {
+      filter.push_back(parse(predicate));
+    }
+    auto projection = Option<ir::OptimizeProjection>{};
+    if (fields) {
+      projection.emplace();
+      for (auto field : *fields) {
+        auto path = ast::field_path::try_from(parse(field));
+        REQUIRE(path);
+        projection->push_back(std::move(*path));
+      }
+    }
+    TRY(auto result, plan_spl_aggregation("S", filter, projection,
+                                          make({call({"n"}, "count")}), raw,
+                                          test::builtin_registry()));
+    return std::move(result.fallback);
+  };
+  // Without filters, the search only keeps the fields that the summary reads.
+  CHECK_EQUAL(fallback({}, std::vector<std::string_view>{"user"}),
+              "S\n| fields user");
+  CHECK_EQUAL(fallback({}), "S\n| fields *");
+  // The `where` stage of the summary replaces the prefilters. It keeps the
+  // values whose comparison with a number is uncertain, such as `1e999`,
+  // which type inference reads as infinity, but for which Splunk's `search`
+  // command finds `n>6` false. The fields that the filters read remain.
+  constexpr auto integer = std::string_view{R"(match('n', "^-?[0-9]{1,15}$"))"};
+  CHECK_EQUAL(fallback({"n > 6"}, std::vector<std::string_view>{"user"}),
+              fmt::format("S\n| where (mvcount('n')==1 AND (({0} AND "
+                          "tonumber('n')>6) OR "
+                          "(NOT {0} AND match('n', "
+                          "\"[0-9]|[iI][nN][fF]|[nN][aA][nN]\"))))\n"
+                          "| fields user, n",
+                          integer));
+  CHECK_EQUAL(fallback({R"(user == "alice")", "action != null"}),
+              "S\n| where (mvcount('user')==1 AND 'user'==\"alice\") AND "
+              "isnotnull('action')\n| fields *");
+  CHECK_EQUAL(fallback({R"(user != "5")"}, None{}, true),
+              "S\n| where (isnull('user') OR mvcount('user')>1 OR "
+              "if('user'==\"5\", false(), true()))\n| fields *");
+  // Filters without an exact spelling never reach a pushed summary.
+  CHECK(not fallback({R"(user.starts_with("a"))"}));
+  // Both searches share the `where` stage, after which the search checks the
+  // comparisons of numbers.
+  auto planned = plan_spl_aggregation("S", {parse("n > 6")}, None{},
+                                      make({call({"n"}, "count")}), false,
+                                      test::builtin_registry());
+  REQUIRE(planned);
+  CHECK(planned->checked);
+  auto where
+    = planned->fallback.substr(0, planned->fallback.find("\n| fields"));
+  CHECK(planned->search.starts_with(
+    fmt::format("{}\n| eval tenzir_filter_check=", where)));
+}
+
+TEST("a filter check decides whether the aggregation holds") {
+  auto const aggregation = make({call({"n"}, "count")});
+  constexpr auto raw = false;
+  constexpr auto checked = true;
+  CHECK_EQUAL(events({R"({"tenzir_count":"3","tenzir_filter_check":"0"})",
+                      R"({"tenzir_groups":"1"})"},
+                     aggregation, raw, checked),
+              std::vector<std::string>{"<n: 3>"});
+  // Without results, `stats` computes no check.
+  CHECK_EQUAL(events({R"({"tenzir_count":"0"})", R"({"tenzir_groups":"1"})"},
+                     aggregation, raw, checked),
+              std::vector<std::string>{"<n: 0>"});
+  CHECK_EQUAL(error({R"({"tenzir_count":"3","tenzir_filter_check":"1"})",
+                     R"({"tenzir_groups":"1"})"},
+                    aggregation, raw, checked),
+              "a filter compares a number with a value other than an integer");
+  CHECK_EQUAL(error({R"({"tenzir_aggregate_0":"valice","tenzir_count":"1",)"
+                     R"("tenzir_aggregate_2":"1","tenzir_filter_check":"0"})",
+                     R"({"tenzir_aggregate_0":"vbob","tenzir_count":"1",)"
+                     R"("tenzir_aggregate_2":"1","tenzir_filter_check":"1"})",
+                     R"({"tenzir_groups":"2"})"},
+                    by_user(), raw, checked),
+              "a filter compares a number with a value other than an integer");
+  // A search that computes the check must deliver it for every group with
+  // results.
+  CHECK_EQUAL(error({R"({"tenzir_count":"3"})", R"({"tenzir_groups":"1"})"},
+                    aggregation, raw, checked),
+              "a group misses the check of the filter");
+  CHECK_EQUAL(error({R"({"tenzir_aggregate_0":"valice","tenzir_count":"1",)"
+                     R"("tenzir_aggregate_2":"1","tenzir_filter_check":"0"})",
+                     R"({"tenzir_aggregate_0":"vbob","tenzir_count":"1",)"
+                     R"("tenzir_aggregate_2":"1"})",
+                     R"({"tenzir_groups":"2"})"},
+                    by_user(), raw, checked),
+              "a group misses the check of the filter");
+  // A search without the check has no such field.
+  CHECK_EQUAL(error({R"({"tenzir_count":"3","tenzir_filter_check":"0"})",
+                     R"({"tenzir_groups":"1"})"},
+                    aggregation),
+              "unexpected field `tenzir_filter_check`");
 }

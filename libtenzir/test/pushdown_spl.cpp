@@ -128,6 +128,13 @@ TEST("spl renders membership") {
   CHECK_EQUAL(search(R"(user in ["alice", "bob"])"),
               R"(user IN ("alice", "bob"))");
   CHECK_EQUAL(search("n in [5, 7]"), "n IN (5, 7)");
+  // TQL's `in` finds `false` in `[0, 5]` and `1` in `[true]`, unlike `==`
+  // and `IN`.
+  CHECK_EQUAL(search("n in [0, 5]"), "");
+  CHECK_EQUAL(search("n in [5, 1.0]"), "");
+  CHECK_EQUAL(search("flag in [true]"), "");
+  CHECK_EQUAL(search("flag == true"), "flag=true");
+  CHECK_EQUAL(search("n == 0"), "n=0");
 }
 
 TEST("spl renders string relations as wildcard patterns") {

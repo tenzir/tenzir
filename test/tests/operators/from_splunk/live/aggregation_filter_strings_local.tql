@@ -1,0 +1,17 @@
+// A limit before the filters keeps them and the summary of
+// `aggregation_filter_strings` in Tenzir, which computes the same events from
+// the unfiltered results of the search. `?` only silences warnings about
+// missing fields.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=14 | streamstats count as i | eval s=case(i==1, "alice", i==2, "Alice", i==3, " alice", i==4, "alice ", i==5, "", i==6, "a\"b", i==7, "a*b", i==8, "café", i==9, mvappend("alice", "bob"), i==10, "5", i==11, "true", i==12, "True", i==13, "null"), k=if(i%2==0, "even", "odd")"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+head 1000000000
+where s? in ["alice", "", "a\"b", "a*b", "café", "null"] or s? == true or s? == null
+where s? != "null"
+summarize k, events=count(), values=count(s?)
+sort k

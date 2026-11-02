@@ -1,0 +1,13 @@
+// Splunk compares integers of up to 15 digits as Tenzir does, also with
+// leading zeros and a negative zero, so that it computes the summary.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=10 | streamstats count as i | eval n=case(i==1, "7", i==2, "007", i==3, "-0", i==4, "12", i==5, "-5", i==6, "0012", i==7, "-999999999999999", i==9, "999999999999999"), k=if(i%2==0, "even", "odd")"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where n >= 0 and n != 12 or n == null
+summarize k, events=count(), lo=min(n), hi=max(n)
+sort k

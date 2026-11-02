@@ -161,6 +161,13 @@ _SPLUNK_AGGREGATES = {
     + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"3"}}\n',
     # Splunk answers a search that fails in `eval` with an empty response.
     "incomplete": b"",
+    # A filter compares a number with a value other than an integer, which
+    # Splunk and Tenzir may compare differently.
+    "flagged": (
+        b'{"preview":false,"result":{"tenzir_aggregate_0":"vcarol",'
+        b'"tenzir_count":"1","tenzir_filter_check":"1"}}\n'
+        b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"1"}}\n'
+    ),
 }
 
 

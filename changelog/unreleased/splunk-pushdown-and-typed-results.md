@@ -33,11 +33,13 @@ summarize src_ip, attempts=count()
   `head` go into the search, including negations and IP address filters.
   Splunk compares some values differently, so these filters only preselect
   the events, and Tenzir still applies the complete filter.
-- **Summaries:** a `summarize` that directly follows the operator, also through
-  `top` and `rare`, runs in Splunk with `stats` for group keys, `count()`,
-  `count(field)`, and `min` and `max` of integers. Whenever Splunk's result
-  could differ from what `summarize` computes, Tenzir summarizes the events
-  itself instead.
+- **Summaries:** a `summarize` after the operator, also through `top` and
+  `rare`, runs in Splunk with `stats` for group keys, `count()`,
+  `count(field)`, and `min` and `max` of integers. Filters before it go along
+  if Splunk can evaluate them exactly as Tenzir does, such as equality with
+  strings, negations, `null` checks, and comparisons of integers, as in the
+  example above. Whenever Splunk's result could differ from what `summarize`
+  computes, Tenzir summarizes the events itself instead.
 
 Searches with `fieldformat`, macros, or commands with side effects such as
 `outputlookup` keep the respective work in Tenzir. The reference page on SPL

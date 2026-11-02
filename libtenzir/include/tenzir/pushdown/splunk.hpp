@@ -27,9 +27,11 @@
 ///
 /// Splunk returns every field value as a string, and `from_splunk` infers
 /// numbers, booleans, IP addresses, and timestamps from these strings. Every
-/// column is therefore a `DynamicType`, translation yields prefilters only, and
-/// the source evaluates every predicate locally. The pushed SPL only needs to
-/// keep a superset of the rows that a predicate keeps.
+/// column is therefore a `DynamicType`, translation yields prefilters, and the
+/// source evaluates every predicate locally. The pushed SPL only needs to keep
+/// a superset of the rows that a predicate keeps. Only a summary that Splunk
+/// computes needs exact spellings of the filters before it, which
+/// `plan_spl_aggregation` describes.
 ///
 /// Prefilters use the `search` command, whose comparisons suit supersets:
 /// - `field=value` matches case-insensitively, so it keeps every value that
@@ -55,7 +57,9 @@ namespace tenzir::pushdown {
 /// - `==` between a top-level field and a string or a boolean,
 /// - comparisons of `_time` with a timestamp, in whole epoch seconds rounded
 ///   outwards,
-/// - `in` of a field in a list of string, number, or boolean literals,
+/// - `in` of a field in a list of string or number literals, but not with
+///   `0` or `1`, since TQL's `in` also finds `false` in `[0]` and `true` in
+///   `[1]`,
 /// - `starts_with`, `ends_with`, substring membership, and their
 ///   case-insensitive forms with ASCII needles, as wildcard patterns,
 /// - `!= null` of a field,
@@ -197,16 +201,68 @@ auto plan_spl_indexes(std::span<std::string const> indexes,
                       Option<uint64_t> limit, bool inference,
                       registry const& reg) -> Option<PipePlan>;
 
-/// Appends stages to the SPL `search` that compute `aggregation` with `stats`,
-/// so that Splunk returns one row per group instead of the results of
-/// `search`. `raw` tells whether `from_splunk` keeps the values of these
-/// results as strings.
+/// The searches with which `from_splunk` computes an aggregation in Splunk.
+struct SplAggregation {
+  /// The search that computes the aggregation with `stats`.
+  std::string search;
+  /// The search whose results the source aggregates locally if the result of
+  /// `search` might differ from `summarize`. It has the `where` stage of
+  /// `search`, which keeps every result that may pass the filter, including
+  /// those for which a comparison of a number is uncertain, which may have
+  /// caused the fallback. The prefilters of `plan_spl_search` may drop them,
+  /// since Splunk's `search` command parses numbers differently, such as
+  /// `1e999`, which type inference reads as infinity. A `fields` stage keeps
+  /// the fields that the projection and the filter read, or all fields
+  /// without a projection. The source must still evaluate the filter on the
+  /// results.
+  std::string fallback;
+  /// Whether `search` computes `tenzir_filter_check` for every group with
+  /// results, which `decode_spl_aggregation` then requires.
+  bool checked = false;
+};
+
+/// Spells the searches that compute `aggregation` with `stats` over the
+/// results of the SPL `search` that pass `filter`, so that Splunk returns one
+/// row per group instead of these results. `projection` names the fields that
+/// the pipeline reads, as for `plan_spl_search`. `raw` tells whether
+/// `from_splunk` keeps the values of the results as strings.
 ///
 /// Returns `None` if `spl_stages` rejects `search` or finds that it may have
 /// side effects, which a second search without the stages would repeat, that
-/// it formats values, or that its results may lose all fields, or if
-/// Splunk cannot compute a column as `summarize` computes it from the results
-/// that `from_splunk` emits. Splunk computes these columns:
+/// it formats values, or that its results may lose all fields, if a predicate
+/// of `filter` has no exact spelling, or if Splunk cannot compute a column as
+/// `summarize` computes it from the results that `from_splunk` emits.
+///
+/// The filter becomes a `where` stage before the aggregation, which keeps
+/// exactly the results that TQL keeps after type inference, rather than a
+/// prefilter. These predicates on top-level fields have such a spelling:
+///
+/// - `==` and `in` with strings that type inference keeps as strings, or
+///   with `raw` any strings, as `(mvcount(f)==1 AND f=="v")`. A field with
+///   several values, which TQL reads as a list, equals no literal.
+/// - Without `raw`, `==` with `true` or `false`, and a bare field, as
+///   `f=="true"`.
+/// - Without `raw`, `==`, `<`, `<=`, `>`, `>=`, and `in` with integers and
+///   with numbers of up to 15 significant digits, as
+///   `match(f, "^-?[0-9]{1,15}$") AND tonumber(f)>5`. Integers of up to 15
+///   digits are the only values that Splunk and TQL compare alike.
+/// - The negations of `SplRenderer`, with the same literals, which keep a
+///   missing field and a field with several values.
+/// - `== null` and `!= null`, as `isnull(f)` and `isnotnull(f)`.
+/// - `and` and `or` of these.
+///
+/// The names of the fields must satisfy the same rules as those of the
+/// aggregation, which rules out `_time`. A comparison with a number is
+/// uncertain for a value that type inference may turn into a number other
+/// than such an integer, such as `5.0` or `inf`. If the filter compares
+/// numbers, the `where` stage also keeps the results that pass the filter only
+/// with an uncertain comparison, and an `eval` stage assigns
+/// `tenzir_filter_check` to every result that it keeps: `1` if it passes the
+/// filter only that way, and `0` otherwise. `stats` computes the maximum of
+/// the check, which `decode_spl_aggregation` requires to be `0`, and
+/// `SplAggregation::checked` holds.
+///
+/// Splunk computes these columns:
 ///
 /// - Group keys on top-level fields. An `eval` stage spells the key of a
 ///   result as `n` for a missing field, as `m` for several values, as `z` for
@@ -231,18 +287,33 @@ auto plan_spl_indexes(std::span<std::string const> indexes,
 /// Since Splunk answers a search whose `eval` fails with an empty response, a
 /// last row counts the groups, which `decode_spl_aggregation` requires.
 auto plan_spl_aggregation(std::string_view search,
-                          ir::OptimizeAggregation const& aggregation, bool raw)
-  -> Option<std::string>;
+                          ir::OptimizeFilter const& filter,
+                          Option<ir::OptimizeProjection> const& projection,
+                          ir::OptimizeAggregation const& aggregation, bool raw,
+                          registry const& reg) -> Option<SplAggregation>;
+
+/// Returns whether `plan_spl_aggregation` returns searches for `search`,
+/// `aggregation`, and `raw` without a filter. Unlike that function, it needs
+/// no registry, so that a source can decide at plan time whether it takes
+/// over an aggregation and translate its filters at runtime, where a filter
+/// without an exact spelling makes it aggregate locally.
+auto can_plan_spl_aggregation(std::string_view search,
+                              ir::OptimizeAggregation const& aggregation,
+                              bool raw) -> bool;
 
 /// Builds the output events of `aggregation` from the result `rows` of the
 /// search from `plan_spl_aggregation`, whose values must be strings. `raw`
-/// disables type inference of the group keys, as for the results of a search.
+/// disables type inference of the group keys, as for the results of a search,
+/// and `checked` is `SplAggregation::checked`.
 ///
 /// Fails if the result may differ from what `summarize` computes from the
 /// results of the search, in which case the source aggregates them locally.
 /// In particular, it fails if:
 ///
 /// - The last row does not count the other rows. The search then failed.
+/// - A group has a result that passes the filter only with an uncertain
+///   comparison of a number, or, if `checked`, a group with results lacks the
+///   check of the filter.
 /// - A group key has several values, which `summarize` groups as a list, or
 ///   contains a NUL character.
 /// - Type inference makes two group keys equal, such as `5` and `005`, which
@@ -250,7 +321,7 @@ auto plan_spl_aggregation(std::string_view search,
 /// - A group has a value for `min` or `max` that is not such an integer.
 auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
                             ir::OptimizeAggregation const& aggregation,
-                            bool raw, diagnostic_handler& dh)
+                            bool raw, bool checked, diagnostic_handler& dh)
   -> Result<std::vector<nova::Events>, std::string>;
 
 } // namespace tenzir::pushdown
