@@ -310,3 +310,323 @@ TEST("aggregations stay local where the dialect or the columns veto") {
   CHECK(not aggregate({column(AggregationPlan::Count{Path{"missing"}}, "c")}));
   CHECK(not aggregate({count}, {"i", "n"}));
 }
+
+namespace {
+
+/// Spells plans in a minimal dialect with exclusions, one function, and times.
+class PlanDialect final : public SqlQueryDialect {
+public:
+  explicit PlanDialect(LimitClause clause = LimitClause::limit)
+    : clause_{clause} {
+  }
+
+  auto quote_identifier(std::string_view name) const -> std::string override {
+    return quote(name);
+  }
+
+  auto limit_clause() const -> LimitClause override {
+    return clause_;
+  }
+
+  auto bind_field(std::span<std::string const> path) const
+    -> Option<std::string> override {
+    auto result = quote(path.front());
+    for (auto const& segment : path.subspan(1)) {
+      result = fmt::format("{}.{}", result, quote(segment));
+    }
+    return result;
+  }
+
+  auto render_time(tenzir::time value) const -> Option<std::string> override {
+    return fmt::format("TIMESTAMP '{}'", value);
+  }
+
+  auto
+  render_call(std::string_view name, std::span<std::string const> args) const
+    -> Option<std::string> override {
+    if (name == "starts_with" and args.size() == 2) {
+      return fmt::format("starts_with({}, {})", args[0], args[1]);
+    }
+    return None{};
+  }
+
+  auto render_exclude(std::span<std::string const> columns) const
+    -> Option<std::string> override {
+    auto quoted = std::vector<std::string>{};
+    for (auto const& column : columns) {
+      quoted.push_back(quote(column));
+    }
+    return fmt::format("* EXCLUDE ({})", fmt::join(quoted, ", "));
+  }
+
+private:
+  LimitClause clause_;
+};
+
+using Path = std::vector<std::string>;
+
+auto filter(std::string_view predicate) -> ir::QueryStage {
+  return {ir::QueryStage::Filter{parse(predicate)}};
+}
+
+auto select(std::vector<std::pair<Path, Path>> fields) -> ir::QueryStage {
+  auto result = ir::QueryStage::Select{};
+  for (auto& [output, input] : fields) {
+    result.fields.push_back({.output = output, .input = input});
+  }
+  return {std::move(result)};
+}
+
+auto drop(std::vector<Path> fields) -> ir::QueryStage {
+  return {ir::QueryStage::Drop{std::move(fields)}};
+}
+
+auto aggregate(std::vector<ir::AggregateColumn> columns) -> ir::QueryStage {
+  return {ir::QueryStage::Aggregate{.columns = std::move(columns),
+                                    .schema_name = "tenzir.summarize"}};
+}
+
+auto sort(std::vector<std::string_view> keys) -> ir::QueryStage {
+  auto result = ir::QueryStage::Sort{.keys = {}, .bound = None{}};
+  for (auto key : keys) {
+    auto descending = key.starts_with('-');
+    if (descending) {
+      key.remove_prefix(1);
+    }
+    result.keys.push_back(
+      {.field = {std::string{key}}, .descending = descending});
+  }
+  return {std::move(result)};
+}
+
+auto limit(uint64_t count) -> ir::QueryStage {
+  return {ir::QueryStage::Limit{count}};
+}
+
+/// Renders `plan` over the table `t`.
+auto plan(std::vector<ir::QueryStage> stages,
+          PlanDialect const& dialect = PlanDialect{}) -> Option<SqlPlan> {
+  return render_plan(SqlRelation{.from = "\"t\"", .fields = None{}}, stages,
+                     dialect);
+}
+
+auto sql(std::vector<ir::QueryStage> stages, PlanDialect const& dialect
+                                             = PlanDialect{}) -> std::string {
+  auto result = plan(std::move(stages), dialect);
+  REQUIRE(result);
+  return render_select(result->select, dialect);
+}
+
+auto layout(SqlLayout const& layout) -> std::string {
+  auto fields = std::vector<std::string>{};
+  if (layout.fields) {
+    for (auto const& [field, column] : *layout.fields) {
+      fields.push_back(fmt::format("{}={}", fmt::join(field, "."), column));
+    }
+  }
+  return fmt::format("fields={} hidden=[{}] schema={}",
+                     layout.fields
+                       ? fmt::format("[{}]", fmt::join(fields, ", "))
+                       : std::string{"*"},
+                     fmt::join(layout.hidden, ", "),
+                     layout.schema_name.value_or("-"));
+}
+
+} // namespace
+
+TEST("plans join stages into one select where SQL's order allows it") {
+  CHECK_EQUAL(sql({filter("x > 1 and y.z == \"a\""), filter("w != null"),
+                   sort({"-x", "y"}), limit(5)}),
+              std::string{"SELECT * FROM \"t\" WHERE ((\"x\" > 1) AND "
+                          "(\"y\".\"z\" = 'a')) AND (\"w\" IS NOT NULL) ORDER "
+                          "BY \"x\" DESC, \"y\" ASC LIMIT 5"});
+  // A filter after a sort joins the same select, before the order.
+  CHECK_EQUAL(sql({sort({"x"}), filter("x > 1"), limit(5)}),
+              std::string{"SELECT * FROM \"t\" WHERE (\"x\" > 1) ORDER BY "
+                          "\"x\" ASC LIMIT 5"});
+  // A later sort breaks its ties by the earlier one, and limits combine.
+  CHECK_EQUAL(sql({sort({"x"}), sort({"-y"}), limit(5), limit(3)}),
+              std::string{"SELECT * FROM \"t\" ORDER BY \"y\" DESC, \"x\" ASC "
+                          "LIMIT 3"});
+  // Calls and literals that the dialect spells.
+  CHECK_EQUAL(sql({filter("x.starts_with(\"a\") or t > 2024-01-01")}),
+              std::string{
+                "SELECT * FROM \"t\" WHERE (starts_with(\"x\", 'a') "
+                "OR (\"t\" > TIMESTAMP '2024-01-01 00:00:00.000000000'))"});
+}
+
+TEST("plans select, rename, and drop fields") {
+  auto selected = plan(
+    {filter("a > 1"), select({{{"x"}, {"a"}}, {{"y", "z"}, {"b", "c"}}})});
+  REQUIRE(selected);
+  CHECK_EQUAL(render_select(selected->select, PlanDialect{}),
+              std::string{
+                "SELECT \"a\" AS \"__tenzir_column_0\", \"b\".\"c\" AS "
+                "\"__tenzir_column_1\" FROM \"t\" WHERE (\"a\" > 1)"});
+  CHECK_EQUAL(layout(selected->layout),
+              std::string{"fields=[x=__tenzir_column_0, y.z=__tenzir_column_1] "
+                          "hidden=[] schema=-"});
+  // A filter after a selection reads its output fields.
+  CHECK_EQUAL(sql({select({{{"x"}, {"a"}}}), filter("x > 1")}),
+              std::string{
+                "SELECT * FROM (SELECT \"a\" AS \"__tenzir_column_0\" FROM "
+                "\"t\") AS \"__tenzir_level_1\" WHERE (\"__tenzir_column_0\" > "
+                "1)"});
+  CHECK(not plan({select({{{"x"}, {"a"}}}), filter("a > 1")}));
+  // An empty selection keeps the rows.
+  auto empty = plan({select({})});
+  REQUIRE(empty);
+  CHECK_EQUAL(render_select(empty->select, PlanDialect{}),
+              std::string{"SELECT 1 AS \"__tenzir_row_0\" FROM \"t\""});
+  CHECK_EQUAL(layout(empty->layout),
+              std::string{"fields=[] hidden=[__tenzir_row_0] schema=-"});
+  // Dropping from a table excludes columns, and dropping from a selection
+  // keeps the other fields.
+  CHECK_EQUAL(sql({filter("a > 1"), drop({{"b"}, {"c"}})}),
+              std::string{"SELECT * EXCLUDE (\"b\", \"c\") FROM \"t\" WHERE "
+                          "(\"a\" > 1)"});
+  CHECK_EQUAL(sql({select({{{"x"}, {"a"}}, {{"y"}, {"b"}}}), drop({{"y"}})}),
+              std::string{
+                "SELECT \"__tenzir_column_0\" FROM (SELECT \"a\" AS "
+                "\"__tenzir_column_0\", \"b\" AS \"__tenzir_column_1\" FROM "
+                "\"t\") AS \"__tenzir_level_2\""});
+  // Dropping an excluded column again does nothing, also with other columns
+  // or behind a derived table.
+  CHECK_EQUAL(sql({drop({{"b"}}), drop({{"b"}})}),
+              std::string{"SELECT * EXCLUDE (\"b\") FROM \"t\""});
+  CHECK_EQUAL(sql({drop({{"b"}}), filter("c > 1"), drop({{"b"}, {"c"}})}),
+              std::string{"SELECT * EXCLUDE (\"c\") FROM (SELECT * EXCLUDE "
+                          "(\"b\") FROM \"t\") AS \"__tenzir_level_0\" WHERE "
+                          "(\"c\" > 1)"});
+  // Later stages cannot read a column that a drop excluded, also behind a
+  // derived table.
+  CHECK(not plan({drop({{"b"}}), filter("b > 1")}));
+  CHECK(not plan({drop({{"b"}}), limit(5), filter("b > 1")}));
+  CHECK(not plan({drop({{"b"}}), sort({"b"})}));
+  CHECK(not plan({drop({{"b"}}), select({{{"x"}, {"b"}}})}));
+  CHECK_EQUAL(sql({drop({{"b"}}), limit(5), filter("c > 1")}),
+              std::string{"SELECT * FROM (SELECT * EXCLUDE (\"b\") FROM \"t\" "
+                          "LIMIT 5) AS \"__tenzir_level_0\" WHERE (\"c\" > "
+                          "1)"});
+  // Nested fields of a table, and parts of a selected record, do not drop.
+  CHECK(not plan({drop({{"a", "b"}})}));
+  CHECK(not plan({select({{{"x"}, {"a"}}}), drop({{"x", "y"}})}));
+  // A record that loses its last field stays as an empty record, which no
+  // layout expresses, so that drop stays in the pipeline.
+  CHECK(not plan({select({{{"a", "b"}, {"x"}}}), drop({{"a", "b"}})}));
+  CHECK(not plan({select({{{"a", "b"}, {"x"}}, {{"a", "c"}, {"y"}}}),
+                  drop({{"a", "b"}, {"a", "c"}})}));
+  auto partial = plan(
+    {select({{{"a", "b"}, {"x"}}, {{"a", "c"}, {"y"}}}), drop({{"a", "b"}})});
+  REQUIRE(partial);
+  CHECK_EQUAL(layout(partial->layout),
+              std::string{"fields=[a.c=__tenzir_column_1] hidden=[] schema=-"});
+  // Dropping a whole record leaves no empty record behind.
+  auto whole
+    = plan({select({{{"a", "b"}, {"x"}}, {{"y"}, {"y"}}}), drop({{"a"}})});
+  REQUIRE(whole);
+  CHECK_EQUAL(layout(whole->layout),
+              std::string{"fields=[y=__tenzir_column_1] hidden=[] schema=-"});
+}
+
+TEST("plans aggregate and filter, sort, and limit the groups") {
+  auto summary = plan(
+    {filter("v > 0"),
+     aggregate({{.output = {"k"}, .function = None{}, .input = Path{"key"}},
+                {.output = {"n"}, .function = "count", .input = None{}},
+                {.output = {"m"}, .function = "max", .input = Path{"v"}}}),
+     filter("n >= 10"), sort({"-n", "k"}), limit(20)});
+  REQUIRE(summary);
+  CHECK_EQUAL(render_select(summary->select, PlanDialect{}),
+              std::string{
+                "SELECT * FROM (SELECT \"key\" AS \"__tenzir_column_0\", "
+                "COUNT(*) AS \"__tenzir_column_1\", MAX(\"v\") AS "
+                "\"__tenzir_column_2\" FROM \"t\" WHERE (\"v\" > 0) GROUP BY "
+                "\"key\") AS \"__tenzir_level_3\" WHERE (\"__tenzir_column_1\" "
+                ">= 10) ORDER BY \"__tenzir_column_1\" DESC, "
+                "\"__tenzir_column_0\" ASC LIMIT 20"});
+  CHECK_EQUAL(layout(summary->layout),
+              std::string{"fields=[k=__tenzir_column_0, n=__tenzir_column_1, "
+                          "m=__tenzir_column_2] hidden=[] "
+                          "schema=tenzir.summarize"});
+  // An aggregation ignores the order of its input, unless a limit chose rows
+  // by it.
+  CHECK_EQUAL(
+    sql({sort({"v"}),
+         aggregate({{.output = {"n"}, .function = "count", .input = None{}}})}),
+    std::string{"SELECT COUNT(*) AS \"__tenzir_column_0\" FROM "
+                "\"t\""});
+  CHECK_EQUAL(
+    sql({sort({"v"}), limit(5),
+         aggregate({{.output = {"n"}, .function = "count", .input = None{}}})}),
+    std::string{"SELECT COUNT(*) AS \"__tenzir_column_1\" FROM (SELECT * FROM "
+                "\"t\" ORDER BY \"v\" ASC LIMIT 5) AS \"__tenzir_level_0\""});
+  // A summary without columns yields exactly one empty event, which a
+  // hidden count without groups spells, also for empty input.
+  auto bare = plan({aggregate(std::vector<ir::AggregateColumn>{})});
+  REQUIRE(bare);
+  CHECK_EQUAL(render_select(bare->select, PlanDialect{}),
+              std::string{"SELECT COUNT(*) AS \"__tenzir_row_0\" FROM \"t\""});
+  CHECK_EQUAL(layout(bare->layout),
+              std::string{"fields=[] hidden=[__tenzir_row_0] "
+                          "schema=tenzir.summarize"});
+  // Functions that the dialect does not spell veto the aggregation.
+  CHECK(not plan(
+    {aggregate({{.output = {"s"}, .function = "sum", .input = Path{"v"}}})}));
+}
+
+TEST("plans keep the order of a sort across derived tables") {
+  // A filter after a limit needs a derived table, which keeps the sort key in
+  // a hidden column, so that the outer query orders by it again.
+  auto ordered = plan({sort({"-x"}), limit(5), filter("y > 1")});
+  REQUIRE(ordered);
+  CHECK_EQUAL(render_select(ordered->select, PlanDialect{}),
+              std::string{
+                "SELECT * FROM (SELECT *, \"x\" AS \"__tenzir_order_0\" FROM "
+                "\"t\" ORDER BY \"x\" DESC LIMIT 5) AS \"__tenzir_level_1\" "
+                "WHERE (\"y\" > 1) ORDER BY \"__tenzir_order_0\" DESC"});
+  CHECK_EQUAL(layout(ordered->layout),
+              std::string{"fields=* hidden=[__tenzir_order_0] schema=-"});
+  // The derived table of a selection keeps a sort key that it does not
+  // select, and the order survives without a limit, too.
+  CHECK_EQUAL(sql({sort({"x"}), select({{{"y"}, {"y"}}}), filter("y > 1")}),
+              std::string{
+                "SELECT * FROM (SELECT \"y\" AS \"__tenzir_column_0\", \"x\" "
+                "AS \"__tenzir_order_1\" FROM \"t\") AS \"__tenzir_level_2\" "
+                "WHERE (\"__tenzir_column_0\" > 1) ORDER BY "
+                "\"__tenzir_order_1\" ASC"});
+  // A level that only passes its input through keeps the fields of the
+  // selection before it when its order needs a derived table.
+  auto selected
+    = plan({select({{{"x"}, {"a"}}}), sort({"x"}), limit(5), filter("x > 1")});
+  REQUIRE(selected);
+  CHECK_EQUAL(render_select(selected->select, PlanDialect{}),
+              std::string{
+                "SELECT * FROM (SELECT *, \"__tenzir_column_0\" AS "
+                "\"__tenzir_order_2\" FROM (SELECT \"a\" AS "
+                "\"__tenzir_column_0\" FROM \"t\") AS \"__tenzir_level_1\" "
+                "ORDER BY \"__tenzir_column_0\" ASC LIMIT 5) AS "
+                "\"__tenzir_level_3\" WHERE (\"__tenzir_column_0\" > 1) ORDER "
+                "BY \"__tenzir_order_2\" ASC"});
+  CHECK_EQUAL(layout(selected->layout),
+              std::string{"fields=[x=__tenzir_column_0] "
+                          "hidden=[__tenzir_order_2] schema=-"});
+  // A later sort takes precedence over an earlier one by the same key, which
+  // the query names only once.
+  CHECK_EQUAL(sql({sort({"x", "y"}), sort({"-x", "-x"}), limit(5)},
+                  PlanDialect{LimitClause::top}),
+              std::string{"SELECT TOP (5) * FROM \"t\" ORDER BY \"x\" DESC, "
+                          "\"y\" ASC"});
+  // A sort after a limit sorts the rows that the limit keeps.
+  CHECK_EQUAL(sql({limit(5), sort({"x"})}),
+              std::string{"SELECT * FROM (SELECT * FROM \"t\" LIMIT 5) AS "
+                          "\"__tenzir_level_0\" ORDER BY \"x\" ASC"});
+  // `TOP` spells the limit of each level.
+  CHECK_EQUAL(sql({sort({"-x"}), limit(5), filter("y > 1")},
+                  PlanDialect{LimitClause::top}),
+              std::string{
+                "SELECT * FROM (SELECT TOP (5) *, \"x\" AS "
+                "\"__tenzir_order_0\" FROM \"t\" ORDER BY \"x\" DESC) "
+                "AS \"__tenzir_level_1\" WHERE (\"y\" > 1) ORDER BY "
+                "\"__tenzir_order_0\" DESC"});
+}

@@ -208,7 +208,7 @@
 +                descending: true
 +              }
 +            ],
-+            bounded: true
++            bound: 5
 +          },
 +          Limit {
 +            count: 5

@@ -48,13 +48,21 @@ struct Aggregation {
   Option<ir::OptimizeAggregation> aggregation;
 };
 
+struct Plan {
+  /// The stages that the operator took over from the operators after it, in
+  /// the order in which they apply, or `None` if it took over none. The
+  /// operator must compute every stage, with the semantics of its target.
+  /// See `Describer::query_plan` for when the optimizer sets this.
+  Option<ir::QueryPlan> plan;
+};
+
 } // namespace opt
 
 template <class T>
 concept OptimizationInput
   = std::same_as<T, opt::Order> or std::same_as<T, opt::Filter>
     or std::same_as<T, opt::Limit> or std::same_as<T, opt::Projection>
-    or std::same_as<T, opt::Aggregation>;
+    or std::same_as<T, opt::Aggregation> or std::same_as<T, opt::Plan>;
 
 /// Selected runtime inputs, not user arguments or optimizer rewrite policy.
 /// Inheritance provides ordinary named access only to selected fields.

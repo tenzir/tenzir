@@ -260,10 +260,15 @@ struct Description {
   Option<std::function<auto(DescribeCtx&, ir::OptimizeAggregation)
                          ->Option<ir::OptimizeAggregation>>>
     rewrite_aggregation;
-  /// Describes the operator as a stage that may follow an aggregation. Set by
-  /// `Describer::aggregation_stage`.
-  Option<std::function<auto(DescribeCtx&)->Option<ir::AggregationStage>>>
-    aggregation_stage;
+  /// Takes over the stages behind the operator. Set by
+  /// `Describer::query_plan`.
+  Option<std::function<auto(const Any&, const ir::QueryChain&)->ir::Absorption>>
+    accepts_plan;
+  /// Sets the stages that the operator took over. Set by binding `opt::Plan`.
+  Option<Setter<Option<ir::QueryPlan>>> set_plan;
+  /// Describes the operator as a stage that a source before it may take
+  /// over. Set by `Describer::query_stage`.
+  Option<std::function<auto(DescribeCtx&)->Option<ir::QueryStage>>> query_stage;
   // FIXME: Document.
   Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -712,10 +717,11 @@ public:
   ///
   /// `consumed` holds the parts of the optimization request that the operator
   /// took over from downstream, which the description maps onto `Args`.
-  /// `aggregation` is the aggregation that the operator took over, if any.
+  /// `aggregation` is the aggregation that the operator took over, if any,
+  /// and `plan` the stages that it took over, if any.
   auto materialize(const Description& desc, ir::OptimizeRequest consumed = {},
-                   Option<ir::OptimizeAggregation> aggregation = None{}) const
-    -> Any;
+                   Option<ir::OptimizeAggregation> aggregation = None{},
+                   Option<ir::QueryPlan> plan = None{}) const -> Any;
 
   /// Returns whether `materialize` can run, which requires every argument
   /// that the operator does not receive as an expression to be resolved. This
@@ -1410,6 +1416,12 @@ public:
         (args.as<Args>().*ptr).order = value;
       };
     }
+    if constexpr (Bundle::template contains<opt::Plan>) {
+      TENZIR_ASSERT(not desc_.set_plan);
+      desc_.set_plan = [ptr](Any& args, Option<ir::QueryPlan> value) {
+        (args.as<Args>().*ptr).plan = std::move(value);
+      };
+    }
     if constexpr (Bundle::template contains<opt::Filter>) {
       TENZIR_ASSERT(not desc_.set_filter);
       desc_.set_filter = [ptr](Any& args, ir::OptimizeFilter value) {
@@ -1488,17 +1500,38 @@ public:
     desc_.rewrite_aggregation = std::move(rewrite);
   }
 
-  /// Describes the operator as a stage that may follow an aggregation, as in
-  /// `ir::Operator::aggregation_stage`, whose contract the callback must meet.
+  /// Lets the operator take over a prefix of the stages behind it, as in
+  /// `ir::Operator::absorb`, if `accepts` returns it for the operator's
+  /// arguments and the chain. Requires binding `opt::Plan`.
+  ///
+  /// The callback decides from the arguments and the syntax of the stages
+  /// alone. The operator must compute every stage that it accepts, with the
+  /// semantics of its target, and receives them in `opt::Plan::plan`. The
+  /// optimizer does not call it while the operator has unresolved arguments,
+  /// and the operator is a barrier for later optimization passes once it took
+  /// over a stage. Diagnostics of the callback are discarded.
+  template <class F>
+    requires concepts::invokable_r<ir::Absorption, F&, const Args&,
+                                   const ir::QueryChain&>
+  auto query_plan(F accepts) -> void {
+    TENZIR_ASSERT(not desc_.accepts_plan);
+    desc_.accepts_plan
+      = [accepts = std::move(accepts)](const Any& args,
+                                       const ir::QueryChain& chain) mutable {
+          return accepts(args.as<Args>(), chain);
+        };
+  }
+
+  /// Describes the operator as a stage that a source before it may take over,
+  /// as in `ir::Operator::query_stage`, whose contract the callback must meet.
   /// The optimizer does not call it while the operator has absorbed a filter,
   /// a limit, or an aggregation, or has unresolved arguments. Diagnostics of
   /// the callback are discarded, so it declines by returning `None`.
   template <class F>
-    requires concepts::invokable_r<Option<ir::AggregationStage>, F&,
-                                   DescribeCtx&>
-  auto aggregation_stage(F describe) -> void {
-    TENZIR_ASSERT(not desc_.aggregation_stage);
-    desc_.aggregation_stage = std::move(describe);
+    requires concepts::invokable_r<Option<ir::QueryStage>, F&, DescribeCtx&>
+  auto query_stage(F describe) -> void {
+    TENZIR_ASSERT(not desc_.query_stage);
+    desc_.query_stage = std::move(describe);
   }
 
   /// Overrides the default optimization behavior.

@@ -1499,6 +1499,61 @@ auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation,
                                  });
 }
 
+namespace {
+
+/// Returns the segments of a plain field path without `?`, or `None`.
+auto plain_path(ast::expression const& expr)
+  -> Option<std::vector<std::string>> {
+  TRY(auto path, ast::field_path::try_from(expr));
+  auto result = std::vector<std::string>{};
+  for (auto const& segment : path.path()) {
+    if (segment.has_question_mark) {
+      return None{};
+    }
+    result.push_back(segment.id.name);
+  }
+  return result;
+}
+
+} // namespace
+
+auto ir::SetIr::query_stage(OptimizeCtx const& octx) const
+  -> Option<QueryStage> {
+  TENZIR_UNUSED(octx);
+  // `select` assigns an empty record to `this` first. Every later assignment
+  // reads the input before the operator, so it copies an input field.
+  if (assignments_.empty()) {
+    return None{};
+  }
+  auto const& first = assignments_.front();
+  auto const* target = try_as<ast::this_>(first.left);
+  auto const* record = try_as<ast::record>(first.right);
+  if (not target or not record or not record->items.empty()) {
+    return None{};
+  }
+  auto select = QueryStage::Select{};
+  for (auto const& assignment : std::span{assignments_}.subspan(1)) {
+    TRY(auto output, plain_path(assignment.left));
+    TRY(auto input, plain_path(assignment.right));
+    if (output.empty() or input.empty()) {
+      return None{};
+    }
+    // An output inside another one would merge into it or overwrite it.
+    for (auto const& field : select.fields) {
+      auto const n = std::min(field.output.size(), output.size());
+      if (std::ranges::equal(std::span{field.output}.first(n),
+                             std::span{output}.first(n))) {
+        return None{};
+      }
+    }
+    select.fields.push_back({
+      .output = std::move(output),
+      .input = std::move(input),
+    });
+  }
+  return QueryStage{std::move(select)};
+}
+
 auto ir::SetIr::infer_type(element_type_tag input, base_ctx ctx) const
   -> failure_or<element_type_tag> {
   if (input.is<table_slice>()) {

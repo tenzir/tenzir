@@ -177,6 +177,23 @@ public:
       }
       return {};
     });
+    d.query_stage([=](DescribeCtx& ctx) -> Option<ir::QueryStage> {
+      auto stage = ir::QueryStage::Drop{};
+      for (auto& field : ctx.get_all(fields)) {
+        if (not field or field->path().empty()) {
+          return None{};
+        }
+        auto path = std::vector<std::string>{};
+        for (auto const& segment : field->path()) {
+          if (segment.has_question_mark) {
+            return None{};
+          }
+          path.push_back(segment.id.name);
+        }
+        stage.fields.push_back(std::move(path));
+      }
+      return ir::QueryStage{std::move(stage)};
+    });
     // An aggregation that reads no dropped field computes the same result
     // before the `drop`.
     d.rewrite_aggregation(
