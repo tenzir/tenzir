@@ -708,8 +708,9 @@ EventBuilder::Record::Record(
     return;
   }
   // Reserve the fields of the schema so that they come first and in order.
-  // Those that the record does not write read as null. Writing null instead
-  // would turn every later write of the field into an overwrite.
+  // Those that the record does not write become null when it is finished.
+  // Writing null right away would turn every later write of the field into an
+  // overwrite.
   for (auto field : as<record_type>(seed_).fields()) {
     inner_->reserve_field(field.name);
   }

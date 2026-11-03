@@ -33,8 +33,8 @@ public:
     friend class ArrayBuilder;
     friend class EventBuilder;
     explicit RecordBuilder(ArrayBuilder* parent);
-    /// Adds `name` to the open row without a value, which reads as null unless
-    /// the row writes the field later. Fixes the field's position in the row.
+    /// Adds `name` to the open row and fixes its position there. If the row
+    /// does not write the field, it becomes null when the row is finished.
     auto reserve_field(std::string_view name) -> void;
     /// Returns the slot for `name` in the open row. If the row already holds
     /// a value for the field, removes it and stores it in `previous`.

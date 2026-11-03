@@ -43,6 +43,9 @@ struct ArrayBuilder<Record>::Storage {
   /// The ID of the open row. IDs increase with every opened row and are never
   /// reused, unlike row indices after `take_last`.
   uint64_t row_id = 0;
+  /// The fields that the open row reserved. Those that the row does not write
+  /// become null when it is finished.
+  storage::Vector<storage::Index> reserved_fields;
   bool row_open = false;
 };
 
@@ -73,13 +76,9 @@ auto ArrayBuilder<Record>::RecordBuilder::field(std::string_view name)
 auto ArrayBuilder<Record>::RecordBuilder::reserve_field(std::string_view name)
   -> void {
   auto& storage = *parent_->storage_;
-  const auto field_index = join_row(name);
-  auto& builder = storage.field_builders[static_cast<std::size_t>(field_index)];
-  // Pad the field only up to the open row, which stays without a value.
-  if (const auto missing = storage.shape_index_builder.size() - builder.size();
-      missing > 0) {
-    builder.skip_n(missing);
-  }
+  // The value is written when the row is finished, and only if the row did not
+  // write one by then. See `finish_last_row`.
+  storage.reserved_fields.push_back(join_row(name));
 }
 
 auto ArrayBuilder<Record>::RecordBuilder::take_field(std::string_view name,
@@ -175,6 +174,21 @@ auto ArrayBuilder<Record>::finish_last_row() -> void {
   if (not storage.row_open) {
     return;
   }
+  // Reserved fields that the row did not write hold an explicit null, which
+  // consumers treat differently from a field without a value. Writing the null
+  // only now keeps the row's own writes from replacing it.
+  const auto rows = storage.shape_index_builder.size();
+  for (const auto index : storage.reserved_fields) {
+    auto& builder = storage.field_builders[static_cast<std::size_t>(index)];
+    if (builder.size() > rows) {
+      continue;
+    }
+    if (const auto missing = rows - builder.size(); missing > 0) {
+      builder.skip_n(missing);
+    }
+    builder.value().null();
+  }
+  storage.reserved_fields.clear();
   auto shape_index = storage.previous_shape;
   if (shape_index < 0
       or storage.current_row_indices != storage.previous_row_indices) {

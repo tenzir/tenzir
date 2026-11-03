@@ -1,0 +1,6 @@
+// Schema fields that the input lacks are null, so `drop_null_fields` removes
+// them, also inside nested schema records.
+from_stdin {
+  read_json schema="suricata.dns"
+}
+drop_null_fields

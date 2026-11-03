@@ -1,0 +1,2 @@
+{"src_ip":"10.0.0.1","dns":{"rrname":"example.com"}}
+{"event_type":"dns"}
