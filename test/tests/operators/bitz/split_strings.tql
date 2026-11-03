@@ -1,0 +1,14 @@
+// Splitting a constant shares string bytes across rows. Matching separators
+// leave gaps between pieces. Both layouts must survive serialization.
+from {s: "one,two"}
+repeat 2
+batch 2
+missing = s.split("missing")
+missing_regex = s.split_regex("missing")
+constant = "one,two".split("missing")
+constant_regex = "one,two".split_regex("missing")
+matched = s.split(",")
+matched_regex = s.split_regex(",")
+write_bitz
+read_bitz
+deduplicate
