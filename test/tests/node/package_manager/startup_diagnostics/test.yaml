@@ -1,0 +1,5 @@
+suite:
+  name: package-startup-diagnostics
+  mode: sequential
+fixtures: [node]
+timeout: 30
