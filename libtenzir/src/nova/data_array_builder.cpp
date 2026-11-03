@@ -57,11 +57,13 @@ auto UnionArrayBuilder::skip_n(storage::Index count) -> void {
 }
 
 auto UnionArrayBuilder::pop_skipped(storage::Index count) -> void {
-  for (auto i = storage::Index{0}; i < count; ++i) {
-    TENZIR_ASSERT_GT(alternative_index_builder_.size(), 0);
-    TENZIR_ASSERT_EQ(alternative_index_builder_.back(), -1);
-    alternative_index_builder_.pop_back();
+  const auto size = alternative_index_builder_.size();
+  TENZIR_ASSERT_LEQ(count, size);
+  for (auto i = size - count; i < size; ++i) {
+    TENZIR_ASSERT_EQ_EXPENSIVE(alternative_index_builder_[i], -1);
   }
+  // The alternatives drop the rows when they are next aligned.
+  alternative_index_builder_.truncate(size - count);
 }
 
 auto UnionArrayBuilder::length() const -> storage::Index {
@@ -74,10 +76,16 @@ auto UnionArrayBuilder::take_last() -> Data {
   TENZIR_ASSERT_LEQ(0, alternative);
   alternative_index_builder_.pop_back();
   return match(builders_[static_cast<std::size_t>(alternative)],
-               [](auto& builder) {
-                 auto result = builder.take_last();
-                 builder.pop_trailing_absent();
-                 return result;
+               [&](auto& builder) {
+                 // The value of the removed row sits at index `length()` of
+                 // the alternative. Rows beyond it are absent: they padded
+                 // values of other alternatives that are gone, for example
+                 // when taking rows of alternating types one after another.
+                 // The absent rows in front of the value stay until the next
+                 // alignment.
+                 TENZIR_ASSERT_GT(builder.size(), length());
+                 builder.pop_absent(builder.size() - (length() + 1));
+                 return builder.take_last();
                });
 }
 
@@ -86,7 +94,7 @@ auto UnionArrayBuilder::finish() -> UnionArray {
   fields.reserve(builders_.size());
   for (auto& builder : builders_) {
     match(builder, [&](auto& value) {
-      catch_up(value);
+      align(value);
       auto field = value.finish();
       fields.push_back(UnionArray::MaskedArray{
         .data = ErasedArray{std::move(field.data)},
