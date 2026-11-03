@@ -1,0 +1,13 @@
+// The source filters the groups, sorts them with a tie breaker, and keeps the
+// first ones, all in its query.
+from_microsoft_sql table="hits",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where sev >= 1
+summarize src, events=count()
+where events >= 2
+sort -events, src
+head 4

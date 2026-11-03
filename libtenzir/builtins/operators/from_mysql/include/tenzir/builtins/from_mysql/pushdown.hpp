@@ -160,8 +160,10 @@ auto make_table_plan(std::span<TableColumn const> columns,
                      Option<ir::OptimizeProjection> const& projection,
                      registry const& reg) -> TablePlan;
 
-/// Whether `make_aggregate_query` supports every function of `aggregation`.
-/// Whether it supports their inputs depends on the table's columns.
+/// Whether `make_aggregate_query` supports every function of `aggregation`,
+/// and every stage after it, as `pushdown::supports_post_aggregate_stages`
+/// decides. Whether it supports the inputs of the functions depends on the
+/// table's columns.
 auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
   -> bool;
 
@@ -184,6 +186,10 @@ auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
 ///   which TQL reads as `int`.
 /// - `min(x)` and `max(x)` on integer columns. TQL rejects strings, and reads
 ///   no other column type that MySQL compares like TQL.
+///
+/// The query also computes the stages of `aggregation` with MySQL's semantics
+/// (see `pushdown::make_post_aggregate_select`). Strings compare and sort
+/// under the collation of their column there, unlike in the group keys.
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
                           std::span<TableColumn const> columns,
                           std::string_view table,

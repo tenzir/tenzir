@@ -1,0 +1,7 @@
+// `from_sentinelone_data_lake` shows that its summary is complete by the
+// counts of all groups, so the stages after it stay local.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
+summarize event.type, events=count()
+where events >= 10
+sort -events
+head 3

@@ -1,0 +1,15 @@
+---
+error: true
+---
+
+// A summary that the limits of the session would truncate fails instead of
+// passing for a complete one.
+from_clickhouse table="fc_stages",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                user="fc_limited",
+                password="limited",
+                tls=false
+summarize src, n=count()
+sort -n
+head 2

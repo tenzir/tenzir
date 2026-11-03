@@ -1,0 +1,7 @@
+// The `where` after the `sort` moves ahead of it, so `from_microsoft_sql` takes
+// over both, and the limit after them.
+from_microsoft_sql table="events", host="localhost"
+summarize src_ip, events=count()
+sort -events
+where src_ip != null
+head 3

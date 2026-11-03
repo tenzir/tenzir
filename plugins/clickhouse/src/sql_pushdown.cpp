@@ -993,11 +993,6 @@ auto SqlSchema::render_projection(
                      quoted);
 }
 
-auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
-  -> bool {
-  return pushdown::supports_count_min_max(aggregation);
-}
-
 namespace {
 
 /// Spells the parts of a `SELECT` that SQL dialects disagree on in ClickHouse
@@ -1006,6 +1001,11 @@ class ClickHouseQueryDialect final : public pushdown::SqlQueryDialect {
 public:
   auto quote_identifier(std::string_view name) const -> std::string override {
     return quote_sql_identifier(name);
+  }
+
+  auto quote_string(std::string_view text) const
+    -> Option<std::string> override {
+    return quote_sql_string(text);
   }
 };
 
@@ -1071,7 +1071,16 @@ auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
       pushdown::make_aggregate_select(
         plan, schema.model(), ClickHouseQueryDialect{},
         ClickHouseAggregateDialect{schema, target}, std::string{table}, where));
+  TRY(select, pushdown::make_post_aggregate_select(
+                std::move(select), aggregation, ClickHouseQueryDialect{}));
   return pushdown::render_select(select, ClickHouseQueryDialect{});
+}
+
+auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
+  -> bool {
+  return pushdown::supports_count_min_max(aggregation)
+         and pushdown::supports_post_aggregate_stages(aggregation,
+                                                      ClickHouseQueryDialect{});
 }
 
 namespace {
@@ -1133,6 +1142,7 @@ auto make_select_query(std::string_view table, SqlSchema const* schema,
       .from = std::string{table},
       .where = {where.begin(), where.end()},
       .group_by = {},
+      .order_by = {},
       .limit = limit,
     },
     ClickHouseQueryDialect{});

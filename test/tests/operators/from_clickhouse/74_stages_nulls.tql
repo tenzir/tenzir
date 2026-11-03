@@ -1,0 +1,12 @@
+// The source sorts with its own placement of `null`, which decides whether the
+// group without a maximum makes the cut. The `sort` after the `head` orders the
+// result in Tenzir.
+from_clickhouse table="fc_stages",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+summarize src, hi=max(sev)
+sort hi
+head 5
+sort hi, src

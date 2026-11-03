@@ -260,6 +260,10 @@ struct Description {
   Option<std::function<auto(DescribeCtx&, ir::OptimizeAggregation)
                          ->Option<ir::OptimizeAggregation>>>
     rewrite_aggregation;
+  /// Describes the operator as a stage that may follow an aggregation. Set by
+  /// `Describer::aggregation_stage`.
+  Option<std::function<auto(DescribeCtx&)->Option<ir::AggregationStage>>>
+    aggregation_stage;
   // FIXME: Document.
   Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -1446,6 +1450,12 @@ public:
   /// and functions that the source turns out not to support at runtime are
   /// the job of `opt::Aggregation::aggregation->fallback`. Once the operator
   /// emits an aggregation, it is a barrier for later optimization passes.
+  ///
+  /// The optimizer first offers the aggregation with every stage that follows
+  /// it, then with ever fewer, down to none (see
+  /// `ir::OptimizeAggregation::stages`). An operator that accepts stages must
+  /// compute all of them whenever it computes the aggregation, so it decides
+  /// from their syntax alone, which does not change at runtime.
   template <class F>
     requires concepts::invokable_r<bool, F&, const Args&,
                                    const ir::OptimizeAggregation&>
@@ -1476,6 +1486,19 @@ public:
   auto rewrite_aggregation(F rewrite) -> void {
     TENZIR_ASSERT(not desc_.rewrite_aggregation);
     desc_.rewrite_aggregation = std::move(rewrite);
+  }
+
+  /// Describes the operator as a stage that may follow an aggregation, as in
+  /// `ir::Operator::aggregation_stage`, whose contract the callback must meet.
+  /// The optimizer does not call it while the operator has absorbed a filter,
+  /// a limit, or an aggregation, or has unresolved arguments. Diagnostics of
+  /// the callback are discarded, so it declines by returning `None`.
+  template <class F>
+    requires concepts::invokable_r<Option<ir::AggregationStage>, F&,
+                                   DescribeCtx&>
+  auto aggregation_stage(F describe) -> void {
+    TENZIR_ASSERT(not desc_.aggregation_stage);
+    desc_.aggregation_stage = std::move(describe);
   }
 
   /// Overrides the default optimization behavior.

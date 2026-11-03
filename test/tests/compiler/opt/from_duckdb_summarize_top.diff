@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:120..131 from 0
+             `from_duckdb` @ [1]:129..140 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:132..147 from 0
+           located "events.duckdb" @ [1]:141..156 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:155..163 from 0
+             value: located "events" @ [1]:164..172 from 0
            }
          ]
        },
@@ -28,20 +28,20 @@
 -      order: "ordered"
 -    },
 -    summarize {
--      self: [1]:164..167 from 0,
+-      self: [1]:173..176 from 0,
 -      cfg: {
 -        aggregates: [
 +      order: "ordered",
 +      projection: [
 +        {
 +          expr: root_field {
-+            id: `src_ip` @ [1]:168..174 from 0,
++            id: `src_ip` @ [1]:177..183 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src_ip` @ [1]:168..174 from 0,
++              id: `src_ip` @ [1]:177..183 from 0,
 +              has_question_mark: false
 +            }
 +          ]
@@ -52,21 +52,8 @@
            {
 -            dest: {
 -              expr: root_field {
--                id: `count` @ [1]:164..167 from 0,
+-                id: `count` @ [1]:173..176 from 0,
 -                has_question_mark: false
--              },
--              has_this: false,
--              path: [
--                {
--                  id: `count` @ [1]:164..167 from 0,
--                  has_question_mark: false
--                }
--              ]
--            },
--            call: {
--              fn: {
--                path: [
--                  `count` @ [1]:164..167 from 0
 +            output: [
 +              "src_ip"
 +            ],
@@ -88,19 +75,19 @@
 +          ],
 +          operators: [
 +            summarize {
-+              self: [1]:164..167 from 0,
++              self: [1]:173..176 from 0,
 +              cfg: {
 +                aggregates: [
 +                  {
 +                    dest: {
 +                      expr: root_field {
-+                        id: `count` @ [1]:164..167 from 0,
++                        id: `count` @ [1]:173..176 from 0,
 +                        has_question_mark: false
 +                      },
 +                      has_this: false,
 +                      path: [
 +                        {
-+                          id: `count` @ [1]:164..167 from 0,
++                          id: `count` @ [1]:173..176 from 0,
 +                          has_question_mark: false
 +                        }
 +                      ]
@@ -108,7 +95,7 @@
 +                    call: {
 +                      fn: {
 +                        path: [
-+                          `count` @ [1]:164..167 from 0
++                          `count` @ [1]:173..176 from 0
 +                        ],
 +                        ref: std::count/fn
 +                      },
@@ -116,28 +103,21 @@
 +                        
 +                      ],
 +                      method: false,
-+                      location: [1]:164..167 from 0
++                      location: [1]:173..176 from 0
 +                    }
 +                  }
-                 ],
--                ref: std::count/fn
--              },
--              args: [
--                
--              ],
--              method: false,
--              location: [1]:164..167 from 0
++                ],
 +                groups: [
 +                  {
 +                    expr: {
 +                      expr: root_field {
-+                        id: `src_ip` @ [1]:168..174 from 0,
++                        id: `src_ip` @ [1]:177..183 from 0,
 +                        has_question_mark: false
 +                      },
 +                      has_this: false,
 +                      path: [
 +                        {
-+                          id: `src_ip` @ [1]:168..174 from 0,
++                          id: `src_ip` @ [1]:177..183 from 0,
 +                          has_question_mark: false
 +                        }
 +                      ]
@@ -153,20 +133,98 @@
 +                output: "summary",
 +                emit_every: 1
 +              }
++            },
++            sort {
++              args: {
++                op: {
++                  path: [
++                    `sort` @ [1]:173..176 from 0
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  expression unary_expr {
++                    op: "neg",
++                    expr: root_field {
++                      id: `count` @ [1]:173..176 from 0,
++                      has_question_mark: false
++                    },
++                    location: [1]:173..176 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
+               },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `count` @ [1]:173..176 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
++              limit: 5
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:173..176 from 0
+-                ],
+-                ref: std::count/fn
++            GenericIr {
++              desc: "head",
++              store: {
++                op: {
++                  path: [
++                    `head` @ [1]:184..188 from 0
++                  ],
++                  ref: std::head/op
++                },
++                args: [
++                  located 5 @ [1]:189..190 from 0
++                ],
++                named_args: [
++                  
++                ]
+               },
+-              args: [
++              filter: [
+                 
+               ],
+-              method: false,
+-              location: [1]:173..176 from 0
++              order: "ordered"
              }
--          }
++          ],
++          definition_location: [0]:0..0 from 0
++        },
++        stages: [
++          Sort {
++            keys: [
++              {
++                field: [
++                  "count"
++                ],
++                descending: true
++              }
++            ],
++            bounded: true
++          },
++          Limit {
++            count: 5
+           }
 -        ],
 -        groups: [
 -          {
 -            expr: {
 -              expr: root_field {
--                id: `src_ip` @ [1]:168..174 from 0,
+-                id: `src_ip` @ [1]:177..183 from 0,
 -                has_question_mark: false
 -              },
 -              has_this: false,
 -              path: [
 -                {
--                  id: `src_ip` @ [1]:168..174 from 0,
+-                  id: `src_ip` @ [1]:177..183 from 0,
 -                  has_question_mark: false
 -                }
 -              ]
@@ -181,67 +239,46 @@
 -        mode: "reset",
 -        output: "summary",
 -        emit_every: 1
-+          ],
-+          definition_location: [0]:0..0 from 0
-+        }
+-      }
+-    },
+-    sort {
+-      args: {
+-        op: {
+-          path: [
+-            `sort` @ [1]:173..176 from 0
+-          ],
+-          ref: unresolved
+-        },
+-        args: [
+-          expression unary_expr {
+-            op: "neg",
+-            expr: root_field {
+-              id: `count` @ [1]:173..176 from 0,
+-              has_question_mark: false
+-            },
+-            location: [1]:173..176 from 0
+-          }
+-        ],
+-        named_args: [
+-          
+         ]
        }
      },
-     sort {
-       args: {
-         op: {
-           path: [
-             `sort` @ [1]:164..167 from 0
-           ],
-           ref: unresolved
-         },
-         args: [
-           expression unary_expr {
-             op: "neg",
-             expr: root_field {
-               id: `count` @ [1]:164..167 from 0,
-               has_question_mark: false
-             },
-             location: [1]:164..167 from 0
-           }
-         ],
-         named_args: [
-           
-         ]
--      }
-+      },
-+      limit: 5
-     },
      GenericIr {
-       desc: "head",
+-      desc: "head",
++      desc: "to_stdout",
        store: {
          op: {
            path: [
-             `head` @ [1]:175..179 from 0
-           ],
-           ref: std::head/op
-         },
-         args: [
-           located 5 @ [1]:180..181 from 0
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
-+      order: "ordered"
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:181..181 from 0
+-            `head` @ [1]:184..188 from 0
+-          ],
+-          ref: std::head/op
++            `to_stdout` @ [1]:190..190 from 0
 +          ],
 +          ref: std::to_stdout/op
-+        },
-+        args: [
+         },
+         args: [
+-          located 5 @ [1]:189..190 from 0
 +          
          ],
          named_args: [
@@ -254,5 +291,5 @@
        order: "ordered"
      }
    ],
-   definition_location: [1]:120..181 from 0
+   definition_location: [1]:129..190 from 0
  }

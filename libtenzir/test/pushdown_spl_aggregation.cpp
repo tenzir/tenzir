@@ -50,6 +50,7 @@ auto make(std::vector<Column> columns) -> ir::OptimizeAggregation {
     .columns = std::move(columns),
     .schema_name = "tenzir.summarize",
     .fallback = {},
+    .stages = {},
   };
 }
 

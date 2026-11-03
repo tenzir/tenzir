@@ -2227,6 +2227,7 @@ public:
       .columns = std::move(columns),
       .schema_name = "tenzir.summarize",
       .fallback = ir::pipeline{{}, std::move(fallback)},
+      .stages = {},
     };
   }
 

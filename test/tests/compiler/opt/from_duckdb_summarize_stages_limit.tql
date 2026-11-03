@@ -1,0 +1,6 @@
+// A `where` after a `head` drops some of the groups that the limit kept, so
+// the stages end with the limit.
+from_duckdb "events.duckdb", table="events"
+summarize src_ip, events=count()
+head 5
+where events >= 10

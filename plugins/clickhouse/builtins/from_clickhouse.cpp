@@ -1204,6 +1204,20 @@ private:
           // input, whatever the session's settings say.
           query.SetSetting("aggregate_functions_null_for_empty",
                            {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
+          // A query that exceeds a limit of the session must fail rather
+          // than return a partial result, which would pass for a complete
+          // summary. Hydrolix manages these limits itself.
+          if (not hydrolix) {
+            for (auto const* setting :
+                 {"read_overflow_mode", "read_overflow_mode_leaf",
+                  "group_by_overflow_mode", "sort_overflow_mode",
+                  "result_overflow_mode", "timeout_overflow_mode",
+                  "timeout_overflow_mode_leaf"}) {
+              query.SetSetting(setting,
+                               {"throw",
+                                ::clickhouse::QuerySettingsField::IMPORTANT});
+            }
+          }
         }
         if (catch_all) {
           // Keeps literal dotted keys apart from nested paths, as the
@@ -1386,9 +1400,13 @@ public:
         return {};
       });
     d.optimization(&FromHydrolixArgs::optimization);
+    // Hydrolix restricts the queries that it answers, which has not been
+    // verified for the derived table that computes the stages after an
+    // aggregation, so they stay in the pipeline.
     d.aggregation([](FromHydrolixArgs const& args,
                      ir::OptimizeAggregation const& aggregation) -> bool {
       return nova_enabled() and args.table and not args.sql
+             and aggregation.stages.empty()
              and supports_aggregate_functions(aggregation);
     });
     return d.without_optimize();

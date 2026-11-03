@@ -1,0 +1,8 @@
+// `top` and the `head` after it run in the source's query.
+from_clickhouse table="fc_stages",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+top src
+head 2

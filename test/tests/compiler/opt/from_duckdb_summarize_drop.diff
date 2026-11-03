@@ -271,7 +271,10 @@
 +            }
 +          ],
 +          definition_location: [0]:0..0 from 0
-+        }
++        },
++        stages: [
++          
++        ]
 +      }
      },
      GenericIr {
@@ -281,10 +284,9 @@
          op: {
            path: [
 -            `drop` @ [1]:182..186 from 0
--          ],
--          ref: std::drop/op
 +            `to_stdout` @ [1]:258..258 from 0
-+          ],
+           ],
+-          ref: std::drop/op
 +          ref: std::to_stdout/op
          },
          args: [

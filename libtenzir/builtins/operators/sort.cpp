@@ -112,6 +112,38 @@ public:
     };
   }
 
+  auto aggregation_stage(ir::OptimizeCtx const&) const
+    -> Option<ir::AggregationStage> override {
+    // Only keys that read a field directly describe the order, since a
+    // source names fields but not expressions.
+    auto args = args_.get();
+    if (args.exprs.empty()) {
+      return None{};
+    }
+    auto sort
+      = ir::AggregationStage::Sort{.keys = {}, .bounded = limit_.is_some()};
+    for (auto const& expr : args.exprs) {
+      auto const* unary = try_as<ast::unary_expr>(expr);
+      auto descending = unary and unary->op == ast::unary_op::neg;
+      auto path = ast::field_path::try_from(descending ? unary->expr : expr);
+      if (not path or path->path().empty()) {
+        return None{};
+      }
+      auto field = std::vector<std::string>{};
+      for (auto const& segment : path->path()) {
+        if (segment.has_question_mark) {
+          return None{};
+        }
+        field.push_back(segment.id.name);
+      }
+      sort.keys.push_back({
+        .field = std::move(field),
+        .descending = descending,
+      });
+    }
+    return ir::AggregationStage{std::move(sort)};
+  }
+
   friend auto inspect(auto& f, SortIr& x) -> bool {
     return f.object(x).fields(f.field("args", x.args_),
                               f.field("limit", x.limit_));

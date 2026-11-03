@@ -68,6 +68,14 @@ INSERT INTO bignum_keyed VALUES
     ('123456789012345678901234567890123456789012345678902', 'bigger');
 CREATE TABLE names (name VARCHAR);
 INSERT INTO names VALUES ('a'), ('b');
+CREATE TABLE hits (src VARCHAR, sev INTEGER);
+INSERT INTO hits VALUES
+    ('a', 1), ('a', 2), ('a', 3), ('a', 4), ('a', 5), ('a', 6),
+    ('b', 1), ('b', 1), ('b', 2), ('b', 2), ('b', NULL),
+    ('d', 3), ('d', 3), ('d', 3), ('d', 3),
+    (NULL, 1), (NULL, 2), (NULL, 3),
+    ('c', NULL), ('c', NULL),
+    ('É', 9);
 """
 
 

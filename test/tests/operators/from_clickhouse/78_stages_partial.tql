@@ -1,0 +1,11 @@
+// A filter that the source cannot spell stays in Tenzir, and so does the limit
+// after it, which counts the groups that the filter keeps.
+from_clickhouse table="fc_stages",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+summarize src, n=count()
+where n >= 2 and src.capitalize() != "B"
+sort -n
+head 2

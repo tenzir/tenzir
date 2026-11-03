@@ -1,0 +1,5 @@
+// `top` lowers to `summarize` and `sort`, so `from_mysql` takes over the
+// counts, their order, and the limit.
+from_mysql table="events", host="localhost"
+top src_ip
+head 5

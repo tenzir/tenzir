@@ -1484,7 +1484,11 @@ public:
     // then. Only the Nova operator implements the aggregation.
     d.aggregation([](FromSplunkArgs const& args,
                      ir::OptimizeAggregation const& aggregation) -> bool {
-      if (not nova_enabled() or args.options) {
+      // The result is exact only if it holds every group, which the search
+      // counts, so the stages after the aggregation, which drop groups, stay
+      // local.
+      if (not nova_enabled() or args.options
+          or not aggregation.stages.empty()) {
         return false;
       }
       auto search = aggregation_base_search(args);

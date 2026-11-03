@@ -281,8 +281,10 @@ auto make_table_plan(SqlSchema const& schema, SqlTarget target,
 auto make_table_query(pushdown::TablePlan const& plan, std::string_view table,
                       Option<uint64_t> limit) -> std::string;
 
-/// Whether `make_aggregate_query` supports every function of `aggregation`.
-/// Whether it supports their inputs depends on the table's schema.
+/// Whether `make_aggregate_query` supports every function of `aggregation`,
+/// and every stage after it, as `pushdown::supports_post_aggregate_stages`
+/// decides. Whether it supports the inputs of the functions depends on the
+/// table's schema.
 auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
   -> bool;
 
@@ -308,7 +310,9 @@ auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
 ///   combinator so that an aggregation without group keys over no rows yields
 ///   `NULL` instead of the type's default value.
 ///
-/// The query renders the group keys and inputs for `target`.
+/// The query renders the group keys and inputs for `target`, and computes the
+/// stages of `aggregation` with ClickHouse's semantics (see
+/// `pushdown::make_post_aggregate_select`).
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
                           SqlSchema const& schema, std::string_view table,
                           std::span<const std::string> where, SqlTarget target)

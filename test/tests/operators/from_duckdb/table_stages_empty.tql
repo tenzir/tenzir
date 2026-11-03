@@ -1,0 +1,6 @@
+// A filter on the result may drop every group, also the single one of an
+// aggregation without group keys.
+from_duckdb env("DUCKDB_SEED"), table="hits"
+summarize n=count()
+where n > 100
+head 1

@@ -1,0 +1,8 @@
+// The source filters the groups, sorts them with a tie breaker, and keeps the
+// first ones, all in its query.
+from_duckdb env("DUCKDB_SEED"), table="hits"
+where sev >= 1
+summarize src, events=count()
+where events >= 2
+sort -events, src
+head 4

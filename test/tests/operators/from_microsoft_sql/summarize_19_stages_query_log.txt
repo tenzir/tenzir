@@ -1,0 +1,18 @@
+{
+  query: "SELECT * FROM (SELECT MIN([src]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1] FROM [hits] GROUP BY CONVERT(varchar(max), CAST(CAST([src] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max)) AS varbinary(max)), 2) COLLATE Latin1_General_BIN2) AS [__tenzir_aggregate] WHERE ([__tenzir_aggregate_1] >= 2)",
+}
+{
+  query: "SELECT TOP (1) * FROM (SELECT COUNT_BIG(*) AS [__tenzir_aggregate_0] FROM [hits]) AS [__tenzir_aggregate] WHERE ([__tenzir_aggregate_0] > 100)",
+}
+{
+  query: "SELECT TOP (2) * FROM (SELECT MIN([src]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1] FROM [hits] GROUP BY CONVERT(varchar(max), CAST(CAST([src] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max)) AS varbinary(max)), 2) COLLATE Latin1_General_BIN2) AS [__tenzir_aggregate] ORDER BY [__tenzir_aggregate_1] ASC",
+}
+{
+  query: "SELECT TOP (2) * FROM (SELECT MIN([src]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1] FROM [hits] GROUP BY CONVERT(varchar(max), CAST(CAST([src] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max)) AS varbinary(max)), 2) COLLATE Latin1_General_BIN2) AS [__tenzir_aggregate] ORDER BY [__tenzir_aggregate_1] DESC",
+}
+{
+  query: "SELECT TOP (4) * FROM (SELECT MIN([src]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1] FROM [hits] WHERE [sev] >= 1 GROUP BY CONVERT(varchar(max), CAST(CAST([src] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max)) AS varbinary(max)), 2) COLLATE Latin1_General_BIN2) AS [__tenzir_aggregate] WHERE ([__tenzir_aggregate_1] >= 2) ORDER BY [__tenzir_aggregate_1] DESC, [__tenzir_aggregate_0] ASC",
+}
+{
+  query: "SELECT TOP (5) * FROM (SELECT MIN([src]) AS [__tenzir_aggregate_0], MAX([sev]) AS [__tenzir_aggregate_1] FROM [hits] GROUP BY CONVERT(varchar(max), CAST(CAST([src] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max)) AS varbinary(max)), 2) COLLATE Latin1_General_BIN2) AS [__tenzir_aggregate] ORDER BY [__tenzir_aggregate_1] ASC",
+}

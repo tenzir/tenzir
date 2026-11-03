@@ -1,0 +1,11 @@
+// A filter on the result may drop the single group of an aggregation without
+// group keys.
+from_microsoft_sql table="hits",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+summarize n=count()
+where n > 100
+head 1

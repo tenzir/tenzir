@@ -283,7 +283,10 @@
 -          }
 +          ],
 +          definition_location: [0]:0..0 from 0
-+        }
++        },
++        stages: [
++          
++        ]
 +      }
 +    },
 +    GenericIr {

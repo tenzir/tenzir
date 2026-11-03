@@ -229,7 +229,10 @@
 +            }
 +          ],
 +          definition_location: [0]:0..0 from 0
-+        }
++        },
++        stages: [
++          
++        ]
 +      }
      },
 -    SetIr {
@@ -244,15 +247,7 @@
 -            has_question_mark: false
 -          },
 -          location: [1]:182..198 from 0
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:262..262 from 0
-+          ],
-+          ref: std::to_stdout/op
-         },
+-        },
 -        {
 -          left: root_field {
 -            id: `note` @ [1]:200..204 from 0,
@@ -261,6 +256,15 @@
 -          right: constant string "unused" @ [1]:207..215 from 0,
 -          location: [1]:200..215 from 0
 -        }
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:262..262 from 0
++          ],
++          ref: std::to_stdout/op
++        },
 +        args: [
 +          
 +        ],

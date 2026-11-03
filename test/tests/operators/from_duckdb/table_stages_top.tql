@@ -1,0 +1,4 @@
+// `top` and the `head` after it run in the source's query.
+from_duckdb env("DUCKDB_SEED"), table="hits"
+top src
+head 2

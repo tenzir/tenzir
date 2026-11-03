@@ -8,6 +8,10 @@
 }
 {
   table_schema: "main",
+  table_name: "hits",
+}
+{
+  table_schema: "main",
   table_name: "huge_keyed",
 }
 {

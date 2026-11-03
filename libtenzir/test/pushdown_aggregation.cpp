@@ -39,6 +39,7 @@ TEST("local aggregation requires a pipeline without checkpoints") {
     .columns = {},
     .schema_name = "tenzir.summarize",
     .fallback = {},
+    .stages = {},
   };
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh, test::builtin_registry());
@@ -67,6 +68,7 @@ TEST("count, min, and max are the supported functions") {
       .columns = std::move(columns),
       .schema_name = "tenzir.summarize",
       .fallback = {},
+      .stages = {},
     });
   };
   auto key = Column{.output = {"k"}, .function = None{}, .input = Path{"k"}};
@@ -94,6 +96,7 @@ TEST("classification names the result columns") {
       .columns = std::move(columns),
       .schema_name = "tenzir.summarize",
       .fallback = {},
+      .stages = {},
     });
   };
   auto plan = classify({
@@ -147,6 +150,7 @@ TEST("classification may count the events of each group") {
       = {Column{.output = {"k"}, .function = None{}, .input = Path{"k"}}},
       .schema_name = "tenzir.summarize",
       .fallback = {},
+      .stages = {},
     },
     {.count_events = true});
   REQUIRE(plan);

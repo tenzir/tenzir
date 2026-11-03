@@ -1,0 +1,12 @@
+// A filter that the source cannot spell stays in Tenzir, and so does the limit
+// after it, which counts the groups that the filter keeps.
+from_microsoft_sql table="hits",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+summarize src, n=count()
+where n >= 2 and src.capitalize() != "B"
+sort -n
+head 2

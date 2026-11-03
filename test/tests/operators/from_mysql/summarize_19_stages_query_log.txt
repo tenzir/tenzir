@@ -1,0 +1,18 @@
+{
+  query: "SELECT * FROM (SELECT ANY_VALUE(`src`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1` FROM `hits` WHERE `sev` >= 1 GROUP BY CAST(`src` AS BINARY)) AS `__tenzir_aggregate` WHERE (`__tenzir_aggregate_1` >= 2) ORDER BY `__tenzir_aggregate_1` DESC, `__tenzir_aggregate_0` ASC LIMIT 4",
+}
+{
+  query: "SELECT * FROM (SELECT CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_0` FROM `hits`) AS `__tenzir_aggregate` WHERE (`__tenzir_aggregate_0` > 100) LIMIT 1",
+}
+{
+  query: "SELECT * FROM (SELECT ANY_VALUE(`src`) AS `__tenzir_aggregate_0`, MAX(`sev`) AS `__tenzir_aggregate_1` FROM `hits` GROUP BY CAST(`src` AS BINARY)) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_1` ASC LIMIT 5",
+}
+{
+  query: "SELECT * FROM (SELECT ANY_VALUE(`src`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1` FROM `hits` GROUP BY CAST(`src` AS BINARY)) AS `__tenzir_aggregate` WHERE (`__tenzir_aggregate_1` >= 2)",
+}
+{
+  query: "SELECT * FROM (SELECT ANY_VALUE(`src`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1` FROM `hits` GROUP BY CAST(`src` AS BINARY)) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_1` ASC LIMIT 2",
+}
+{
+  query: "SELECT * FROM (SELECT ANY_VALUE(`src`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1` FROM `hits` GROUP BY CAST(`src` AS BINARY)) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_1` DESC LIMIT 2",
+}

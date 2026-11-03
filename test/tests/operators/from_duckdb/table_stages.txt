@@ -1,0 +1,16 @@
+{
+  src: "a",
+  events: 6,
+}
+{
+  src: "b",
+  events: 4,
+}
+{
+  src: "d",
+  events: 4,
+}
+{
+  src: null,
+  events: 3,
+}

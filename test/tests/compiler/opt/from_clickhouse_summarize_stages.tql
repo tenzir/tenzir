@@ -1,0 +1,8 @@
+// `from_clickhouse` takes over the `summarize` and the `where`, `sort`, and
+// `head` after it, which leave the pipeline. Their copies trail the fallback.
+from_clickhouse table="events", host="localhost"
+where severity >= 3
+summarize src_ip, events=count()
+where events >= 10
+sort -events, src_ip
+head 20

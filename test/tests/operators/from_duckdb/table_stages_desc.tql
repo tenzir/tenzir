@@ -1,0 +1,6 @@
+// A descending sort runs in the query, with the source's own placement of
+// `null`.
+from_duckdb env("DUCKDB_SEED"), table="hits"
+summarize src, n=count()
+sort -src
+head 7

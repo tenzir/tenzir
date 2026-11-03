@@ -1,4 +1,6 @@
 // `top` counts the values in the query, and sorts the counts locally.
+// A sort by a computed key stays in Tenzir, which orders deterministically,
+// while the database would order text under its collation.
 from_mysql table="agg",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),
@@ -6,4 +8,4 @@ from_mysql table="agg",
            password=env("MYSQL_PASSWORD"),
            database=env("MYSQL_DATABASE")
 top s
-sort -count, s
+sort -count, s.string()

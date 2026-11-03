@@ -16,6 +16,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant.hpp"
 
 #include <concepts>
 #include <expected>
@@ -121,6 +122,65 @@ class PlanBuilder;
 
 struct OptimizeAggregation;
 
+/// An operator that applies to the result of an aggregation without changing
+/// any event: it drops events, orders them, or keeps the first ones. A source
+/// that computes the aggregation may take over such a stage, too, and compute
+/// it with the semantics of its target.
+struct AggregationStage {
+  /// `where predicate`.
+  struct Filter {
+    ast::expression predicate;
+
+    friend auto inspect(auto& f, Filter& x) -> bool {
+      return f.object(x).fields(f.field("predicate", x.predicate));
+    }
+  };
+
+  /// A key of a `sort`, a plain field path, possibly under `-`.
+  struct SortKey {
+    /// The field to sort by, as path segments.
+    std::vector<std::string> field;
+    bool descending = false;
+
+    friend auto inspect(auto& f, SortKey& x) -> bool {
+      return f.object(x).fields(f.field("field", x.field),
+                                f.field("descending", x.descending));
+    }
+  };
+
+  /// `sort keys...`, a stable sort that places `null` after all other values
+  /// in either direction.
+  struct Sort {
+    std::vector<SortKey> keys;
+    /// Whether the operator keeps only its first events, as a `sort` that
+    /// absorbed the limit of a following `head` does. A filter after it no
+    /// longer commutes with it.
+    bool bounded = false;
+
+    friend auto inspect(auto& f, Sort& x) -> bool {
+      return f.object(x).fields(f.field("keys", x.keys),
+                                f.field("bounded", x.bounded));
+    }
+  };
+
+  /// `head count`.
+  struct Limit {
+    uint64_t count = 0;
+
+    friend auto inspect(auto& f, Limit& x) -> bool {
+      return f.object(x).fields(f.field("count", x.count));
+    }
+  };
+
+  using Kind = variant<Filter, Sort, Limit>;
+
+  Kind kind;
+
+  friend auto inspect(auto& f, AggregationStage& x) -> bool {
+    return f.apply(x.kind);
+  }
+};
+
 /// Port for pushing events.
 /// Contains the node (index into Plan::operators), logical output port index on
 /// that node, and the element type.
@@ -197,7 +257,10 @@ public:
   /// emits the result of the aggregation, in which case the optimizer removes
   /// the aggregating operator and the operators between the two. Their copies
   /// lead `aggregation.fallback`, in the order in which they run. The default
-  /// declines.
+  /// declines. The optimizer offers the aggregation with the longest prefix of
+  /// the stages after it first, and then with ever shorter ones. On success,
+  /// it also removes the operators of the stages in `aggregation.stages`,
+  /// whose copies trail `aggregation.fallback`.
   ///
   /// This runs after the optimization walk, so an implementation knows the
   /// filters and limits it absorbed. It must decline unless it can produce
@@ -235,6 +298,18 @@ public:
   virtual auto rewrite_aggregation(OptimizeAggregation aggregation,
                                    OptimizeCtx const& octx) const
     -> Option<OptimizeAggregation>;
+
+  /// Return the stage that this operator applies to its input, if it may
+  /// follow an aggregation as one, which lets the source that computes the
+  /// aggregation compute the stage, too. The default returns `None`.
+  ///
+  /// Returning a stage asserts that the operator keeps, orders, or drops
+  /// events as the stage describes, without changing them or having side
+  /// effects. A source that takes over the stage removes the operator and
+  /// computes the stage with the semantics of its target. This runs after the
+  /// optimization walk and must not modify the operator.
+  virtual auto aggregation_stage(OptimizeCtx const& octx) const
+    -> Option<AggregationStage>;
 
   /// Return the executable matching this operator.
   ///
@@ -407,10 +482,20 @@ struct OptimizeAggregation {
   /// compute it runs these on the events that it would otherwise emit.
   pipeline fallback;
 
+  /// The stages that follow the aggregation, in order, which the operator
+  /// computes, too. The optimizer removed their operators, whose copies trail
+  /// `fallback`. A source computes all stages with the aggregation, with the
+  /// semantics of its target, or neither of them, by running `fallback`.
+  std::vector<AggregationStage> stages;
+
+  /// Substitutes the fallback and the predicates of the stages.
+  auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
+
   friend auto inspect(auto& f, OptimizeAggregation& x) -> bool {
     return f.object(x).fields(f.field("columns", x.columns),
                               f.field("schema_name", x.schema_name),
-                              f.field("fallback", x.fallback));
+                              f.field("fallback", x.fallback),
+                              f.field("stages", x.stages));
   }
 };
 
