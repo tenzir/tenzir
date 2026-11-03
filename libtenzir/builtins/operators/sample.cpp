@@ -185,7 +185,20 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        // `sample` picks events by their position, the number of events per
+        // period, and the wall clock, but never by their fields, so the
+        // projection passes through. A filter or a limit would change the
+        // counts and positions, and thus which events it picks. Reading fewer
+        // fields may change how fast events arrive, which already varies
+        // between runs.
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

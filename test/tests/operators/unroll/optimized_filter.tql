@@ -1,0 +1,12 @@
+// Lists that are empty, null, or missing produce no events, so the fallible
+// filter must not run for them before `unroll`: a negative stride fails for
+// strings. The infallible filter may run before `unroll`.
+from {xs: [], s: "ab", y: 1},
+     {xs: null, s: "ab", y: 1},
+     {s: "ab", y: 1},
+     {xs: [1, 2], s: [1, 2], y: 1},
+     {xs: [3], s: [1, 2], y: 2},
+     {xs: {a: 1, b: 2}, s: [3, 4], y: 1}
+unroll xs?
+where s.slice(stride=-1) == [2, 1]
+where y == 1

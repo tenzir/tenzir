@@ -1,0 +1,9 @@
+warning: dropping input due to rate limit
+ --> tests/operators/throttle/drop_after_sort.tql:6:34
+  |
+6 | throttle rate=1, window=1d, drop=true
+  |                                  ~~~~
+  |
+{
+  id: 1,
+}

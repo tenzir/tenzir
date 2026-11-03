@@ -1,0 +1,5 @@
+export
+lag value=v, into=prev
+where prev > 1
+select id
+head 3

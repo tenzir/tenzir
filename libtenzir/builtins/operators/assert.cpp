@@ -215,9 +215,34 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<AssertArgs, Assert, AssertNova>{};
     d.parallelizable();
-    d.positional("invariant", &AssertArgs::invariant, "bool");
-    d.named("message", &AssertArgs::message, "string");
-    return d.invariant_order();
+    auto invariant = d.positional("invariant", &AssertArgs::invariant, "bool");
+    auto message = d.named("message", &AssertArgs::message, "string");
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // A filter upstream would hide the assertion failures of the events
+        // that it drops, so it stays behind. `assert` drops the events that
+        // fail, so a limit on its outputs does not bound its inputs. The
+        // projection passes through, extended by the invariant and the
+        // message.
+        auto projection = std::move(req.projection);
+        if (auto expr = ctx.get(invariant)) {
+          ir::add_refs_to_projection(projection, *expr);
+        } else {
+          projection = None{};
+        }
+        if (ctx.get_location(message)) {
+          if (auto expr = ctx.get(message)) {
+            ir::add_refs_to_projection(projection, *expr);
+          } else {
+            projection = None{};
+          }
+        }
+        return {
+          .order = req.order,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

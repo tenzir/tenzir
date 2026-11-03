@@ -1,0 +1,4 @@
+export
+ai_prompt model="fixture-model", data=message
+where ai.prompt.text != null and id == 1
+head 2

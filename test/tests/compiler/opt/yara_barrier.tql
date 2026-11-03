@@ -1,0 +1,6 @@
+from_file "/dev/null" {
+  yara rules="rule x { condition: true }"
+}
+where x == 1
+select y
+head 2

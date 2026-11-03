@@ -1,0 +1,4 @@
+export
+deduplicate key, count_field=n
+where n > 1
+select id

@@ -1,0 +1,4 @@
+// `taste` keeps the first events, so the sort before it must stay.
+from {x: 2}, {x: 1}
+sort x
+taste 1

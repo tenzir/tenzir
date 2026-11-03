@@ -1,0 +1,18 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['{"id":1,"message":"one"}', '{"id":3,"message":"three"}']
+---
+
+// The filter does not read the result, so it runs before the requests.
+from {id: 0, message: "skip"}, {id: 1, message: "one"},
+     {id: 2, message: "skip"}, {id: 3, message: "three"},
+     {id: 4, message: "skip"}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={id: id, message: message}
+where id == 1 or id == 3
+select id, text=ai.prompt.text

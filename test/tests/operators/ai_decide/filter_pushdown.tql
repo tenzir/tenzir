@@ -1,0 +1,18 @@
+---
+fixtures: [system_one]
+timeout: 60
+assertions:
+  fixtures:
+    system_one:
+      count: 1
+---
+
+// The filter does not read the result, so it runs before the request.
+from {id: 1, cmd: "ls"}, {id: 2, cmd: "danger: rm -rf /"}
+ai_decide "How risky is this command?",
+          scale=["Routine", "Unusual", "Dangerous"],
+          state={cmd: cmd},
+          model="fixture-decider",
+          endpoint=env("SYSTEM_ONE_FIXTURE_ENDPOINT")
+where id == 2
+select id, score=ai.decide.answer.score

@@ -1,0 +1,243 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
++        binary_expr {
++          left: root_field {
++            id: `id` @ [1]:70..72 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:76..77 from 0,
++          location: [1]:70..77 from 0
++        }
++      ],
++      order: "ordered",
++      limit: 2,
++      projection: [
++        {
++          expr: root_field {
++            id: `id` @ [1]:85..87 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `id` @ [1]:85..87 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `ai` @ [0]:0..0 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `prompt` @ [0]:0..0 from 0,
++            location: [0]:0..0 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `ai` @ [0]:0..0 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `prompt` @ [0]:0..0 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `message` @ [1]:55..62 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `message` @ [1]:55..62 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "ai_prompt",
+       store: {
+         op: {
+           path: [
+             `ai_prompt` @ [1]:7..16 from 0
+           ],
+           ref: std::ai_prompt/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "fixture-model" @ [1]:23..38 from 0
+           },
+           {
+             index: 3,
+             value: expression record {
+               begin: [1]:45..46 from 0,
+               items: [
+                 field {
+                   name: `message` @ [1]:46..53 from 0,
+                   expr: root_field {
+                     id: `message` @ [1]:55..62 from 0,
+                     has_question_mark: false
+                   }
+                 }
+               ],
+               end: [1]:62..63 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:64..69 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `id` @ [1]:70..72 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:76..77 from 0,
+-          location: [1]:70..77 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:85..87 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:85..87 from 0,
+             has_question_mark: false
+           },
+           location: [1]:85..87 from 0
+         },
+         {
+           left: root_field {
+             id: `text` @ [1]:89..93 from 0,
+             has_question_mark: false
+           },
+           right: field_access {
+             left: field_access {
+               left: root_field {
+                 id: `ai` @ [1]:94..96 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `prompt` @ [1]:97..103 from 0,
+               location: [1]:94..103 from 0
+             },
+             has_question_mark: false,
+             name: `text` @ [1]:104..108 from 0,
+             location: [1]:94..108 from 0
+           },
+           location: [1]:89..108 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:109..113 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:114..115 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:115..115 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..115 from 0
+ }

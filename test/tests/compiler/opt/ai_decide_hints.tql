@@ -1,0 +1,9 @@
+export
+ai_decide "How risky is this command?",
+          scale=["Routine", "Dangerous"],
+          state={cmd: cmd},
+          model="fixture-decider",
+          endpoint="http://localhost:1"
+where id == 1
+select id, score=ai.decide.answer.score
+head 2

@@ -134,7 +134,17 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        // `assert_throughput` counts events but never reads their fields, so
+        // the projection passes through. A filter or a limit upstream would
+        // change the counts.
+        return {
+          .order = req.order,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

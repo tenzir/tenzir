@@ -1,0 +1,5 @@
+export
+python "self.y = 1"
+where x == 1
+select y
+head 2

@@ -52,19 +52,15 @@ auto ir::split_conjunction(ast::expression predicate) -> OptimizeFilter {
   return result;
 }
 
-auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
-                                    const ast::ExprRefs& touched)
+auto ir::split_filter(
+  ir::OptimizeFilter filter,
+  std::function<auto(ast::expression const&)->bool> const& movable)
   -> ir::split_filter_result {
   auto result = ir::split_filter_result{};
-  if (touched.let_ids.empty() and touched.field_paths.empty()) {
-    result.independent = std::move(filter);
-    return result;
-  }
   for (auto& expr : filter) {
-    auto refs = ast::collect_refs(expr);
     // A predicate behind one that stays must not move past it if it could fail
     // for the events that the other one drops.
-    if (not refs or refs->overlaps(touched)
+    if (not movable(expr)
         or (not result.dependent.empty() and not is_infallible(expr))) {
       result.dependent.push_back(std::move(expr));
     } else {
@@ -72,6 +68,18 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
     }
   }
   return result;
+}
+
+auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
+                                    const ast::ExprRefs& touched)
+  -> ir::split_filter_result {
+  if (touched.let_ids.empty() and touched.field_paths.empty()) {
+    return {.independent = std::move(filter), .dependent = {}};
+  }
+  return split_filter(std::move(filter), [&](ast::expression const& expr) {
+    auto refs = ast::collect_refs(expr);
+    return refs and not refs->overlaps(touched);
+  });
 }
 
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
@@ -173,6 +181,23 @@ auto ir::add_to_projection(Option<OptimizeProjection>& projection,
   };
   if (std::ranges::none_of(*projection, equal)) {
     projection->push_back(path);
+  }
+}
+
+auto ir::project_assignment(Option<OptimizeProjection>& projection,
+                            ast::field_path const& target) -> void {
+  if (target.path().empty()) {
+    projection = OptimizeProjection{};
+    return;
+  }
+  if (not projection) {
+    return;
+  }
+  std::erase_if(*projection, [&](ast::field_path const& path) {
+    return is_field_path_prefix(target, path);
+  });
+  if (target.path().size() > 1) {
+    add_to_projection(projection, target);
   }
 }
 

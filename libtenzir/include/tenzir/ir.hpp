@@ -19,6 +19,7 @@
 
 #include <concepts>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <string_view>
 #include <type_traits>
@@ -72,6 +73,9 @@ struct OptimizeRequest {
   /// - It may emit other warnings. A moved predicate may warn for values that
   ///   the operators it passes handle silently, or warn again for a condition
   ///   that both it and the operator evaluate.
+  /// - It may run earlier. A predicate whose value depends on when it runs,
+  ///   such as `now() < deadline`, may therefore keep other events, just as
+  ///   when a source evaluates it in a query instead of on arrival.
   OptimizeFilter filter;
 
   /// The ordering guarantee that downstream requires from this operator.
@@ -474,12 +478,22 @@ struct split_filter_result {
 /// `split_filter_by_dependents`.
 auto split_conjunction(ast::expression predicate) -> OptimizeFilter;
 
-/// Splits a filter chain into independent and dependent parts.
-/// A filter expression is dependent if its references overlap with `touched`.
-/// If refs of a filter cannot be determined (ambiguous), it is conservatively
-/// placed into the dependent set. So is a filter behind a dependent one that
-/// could fail, as for `is_infallible`, because moving it upstream would
-/// evaluate it for the events that the dependent filter drops.
+/// Splits a filter chain into the predicates that move upstream past an
+/// operator, which become independent, and those that stay behind it, which
+/// become dependent. Both keep their order.
+///
+/// A predicate moves if `movable` accepts it, which states whether it keeps
+/// the same events in front of the operator. A predicate behind one that stays
+/// moves only if it also cannot fail, as for `is_infallible`, because moving
+/// it would evaluate it for the events that the other one drops.
+auto split_filter(
+  ir::OptimizeFilter filter,
+  std::function<auto(ast::expression const&)->bool> const& movable)
+  -> split_filter_result;
+
+/// Splits a filter chain into independent and dependent parts, as in
+/// `split_filter`. A predicate is dependent if its references overlap with
+/// `touched`, or if they cannot be determined because they are ambiguous.
 auto split_filter_by_dependents(ir::OptimizeFilter filter,
                                 const ast::ExprRefs& touched)
   -> split_filter_result;
@@ -582,6 +596,17 @@ auto add_to_projection(Option<OptimizeProjection>& projection,
 /// the references are ambiguous or include `this`.
 auto add_refs_to_projection(Option<OptimizeProjection>& projection,
                             const ast::expression& expr) -> void;
+
+/// Turns the fields that downstream needs from an operator that assigns
+/// `target` on every event, without reading its previous value, into the
+/// fields that upstream must provide for it. Upstream need not provide
+/// anything below `target`. A nested assignment still observes the parent of
+/// `target` and warns if it must replace a value that is not a record, so
+/// `target` stays in the projection to keep that warning. Assigning `this`
+/// replaces the whole event, so upstream need not provide any field. Add the
+/// references of the assigned value afterwards.
+auto project_assignment(Option<OptimizeProjection>& projection,
+                        ast::field_path const& target) -> void;
 
 /// Unions `other` into `projection`. `None` absorbs everything.
 auto merge_projection(Option<OptimizeProjection>& projection,

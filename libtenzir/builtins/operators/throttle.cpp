@@ -494,8 +494,8 @@ public:
       = Describer<ThrottleArgs, Throttle<table_slice>, Throttle<nova::Events>>{};
     auto rate = d.named("rate", &ThrottleArgs::rate);
     auto window = d.named_optional("window", &ThrottleArgs::window);
-    d.named_optional("weight", &ThrottleArgs::weight, "int");
-    d.named("drop", &ThrottleArgs::drop);
+    auto weight = d.named_optional("weight", &ThrottleArgs::weight, "int");
+    auto drop = d.named("drop", &ThrottleArgs::drop);
     d.validate([rate, window](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(rate)) {
         if (value->inner == 0) {
@@ -513,7 +513,42 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.optimize([=](DescribeCtx& ctx,
+                          ir::OptimizeRequest req) -> Optimization {
+      // Every event consumes rate budget, so a filter cannot move upstream.
+      // Without `drop`, `throttle` forwards events 1:1 and in order, so
+      // without a filter, the first N outputs are the first N inputs, paced
+      // the same way, and the output order is the input order. With `drop`,
+      // it keeps the first events of every window, so later events may
+      // survive in place of dropped ones, and which ones survive depends on
+      // the input order. The projection passes through, extended by the
+      // weight.
+      auto projection = std::move(req.projection);
+      if (ctx.get_location(weight)) {
+        if (auto expr = ctx.get(weight)) {
+          ir::add_refs_to_projection(projection, *expr);
+        } else {
+          projection = None{};
+        }
+      }
+      // The flag stores its location only if it is `true`, so read it as a
+      // `bool`. An unresolved value counts as `true`.
+      auto drops = false;
+      if (ctx.get_location(drop)) {
+        drops = ctx.get(Argument<ThrottleArgs, bool>{drop.type(), drop.index()})
+                  .value_or(true);
+      }
+      auto limit = Option<uint64_t>{};
+      if (req.filter.empty() and not drops) {
+        limit = req.limit;
+      }
+      return {
+        .order = drops ? EventOrder::ordered : req.order,
+        .filter_self = std::move(req.filter),
+        .limit_upstream = limit,
+        .projection_upstream = std::move(projection),
+      };
+    });
   }
 };
 
