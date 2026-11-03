@@ -1,9 +1,12 @@
 {
   src_ip: 10.0.0.1,
-  dns: {
-    rrname: "example.com",
-  },
+  dest_port: null,
+  rrname: "example.com",
+  rcode: null,
 }
 {
-  event_type: "dns",
+  src_ip: null,
+  dest_port: 53,
+  rrname: null,
+  rcode: "NOERROR",
 }

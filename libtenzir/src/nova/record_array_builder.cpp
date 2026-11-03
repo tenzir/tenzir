@@ -12,7 +12,13 @@
 namespace tenzir::nova {
 
 struct ArrayBuilder<Record>::Storage {
-  using Slot = MaskedArrayBuilder<ArrayBuilder<Data>>;
+  struct Field {
+    MaskedArrayBuilder<ArrayBuilder<Data>> builder;
+    /// The ID of the row that the field last joined. A field can be in the
+    /// open row without a value, so the builder's size alone does not tell
+    /// whether the open row already lists it.
+    uint64_t row_id = 0;
+  };
 
   storage::DataOwner<storage::Index[]>::Builder shape_index_builder;
   ShapeTable shape_table;
@@ -35,11 +41,7 @@ struct ArrayBuilder<Record>::Storage {
   /// catches up in `finish()`. Rows without a given field therefore cost
   /// nothing per field until that field is next written, when the absent rows
   /// are appended in bulk.
-  storage::Vector<Slot> field_builders;
-  /// The ID of the row that each field last joined, parallel to
-  /// `field_builders`. A field can be in the open row without a value, so its
-  /// size alone does not tell whether the open row already lists it.
-  storage::Vector<uint64_t> field_row_ids;
+  storage::Vector<Field> fields;
   /// The ID of the open row. IDs increase with every opened row and are never
   /// reused, unlike row indices after `take_last`.
   uint64_t row_id = 0;
@@ -87,7 +89,7 @@ auto ArrayBuilder<Record>::RecordBuilder::take_field(std::string_view name,
   previous = None{};
   auto& storage = *parent_->storage_;
   const auto field_index = join_row(name);
-  auto& builder = storage.field_builders[static_cast<std::size_t>(field_index)];
+  auto& builder = storage.fields[static_cast<std::size_t>(field_index)].builder;
   const auto finished_rows = storage.shape_index_builder.size();
   if (builder.size() > finished_rows) {
     previous = builder.take_last();
@@ -117,15 +119,14 @@ auto ArrayBuilder<Record>::RecordBuilder::join_row(std::string_view name)
   } else {
     // Only a genuinely new field pays for the owning key string.
     const auto [inserted, did_insert] = storage.names.try_emplace(
-      storage::String<>{name}, storage.field_builders.size());
+      storage::String<>{name}, storage.fields.size());
     TENZIR_ASSERT(did_insert);
     field_index = static_cast<storage::Index>(inserted->second);
     stored_name = inserted->first;
-    storage.field_builders.emplace_back();
-    storage.field_row_ids.push_back(0);
+    storage.fields.emplace_back();
     storage.field_names.push_back(stored_name);
   }
-  auto& row_id = storage.field_row_ids[static_cast<std::size_t>(field_index)];
+  auto& row_id = storage.fields[static_cast<std::size_t>(field_index)].row_id;
   if (row_id != storage.row_id) {
     row_id = storage.row_id;
     storage.current_row_indices.push_back(field_index);
@@ -141,7 +142,7 @@ auto ArrayBuilder<Record>::RecordBuilder::open_record_field(
   if (it == storage.names.end()) {
     return None{};
   }
-  auto& builder = storage.field_builders[it->second];
+  auto& builder = storage.fields[it->second].builder;
   if (builder.size() <= storage.shape_index_builder.size()) {
     return None{};
   }
@@ -155,7 +156,7 @@ auto ArrayBuilder<Record>::RecordBuilder::open_list_record_field(
   if (it == storage.names.end()) {
     return None{};
   }
-  auto& builder = storage.field_builders[it->second];
+  auto& builder = storage.fields[it->second].builder;
   if (builder.size() <= storage.shape_index_builder.size()) {
     return None{};
   }
@@ -179,7 +180,7 @@ auto ArrayBuilder<Record>::finish_last_row() -> void {
   // only now keeps the row's own writes from replacing it.
   const auto rows = storage.shape_index_builder.size();
   for (const auto index : storage.reserved_fields) {
-    auto& builder = storage.field_builders[static_cast<std::size_t>(index)];
+    auto& builder = storage.fields[static_cast<std::size_t>(index)].builder;
     if (builder.size() > rows) {
       continue;
     }
@@ -227,9 +228,9 @@ auto ArrayBuilder<Record>::pop_skipped(storage::Index count) -> void {
 auto ArrayBuilder<Record>::pop_padded_fields() -> void {
   // Fields are padded lazily, so give back the rows that they cover.
   const auto rows = storage_->shape_index_builder.size();
-  for (auto& field : storage_->field_builders) {
-    if (field.size() > rows) {
-      field.pop_absent(field.size() - rows);
+  for (auto& field : storage_->fields) {
+    if (field.builder.size() > rows) {
+      field.builder.pop_absent(field.builder.size() - rows);
     }
   }
 }
@@ -249,7 +250,7 @@ auto ArrayBuilder<Record>::take_last() -> Data {
   auto result = Record{};
   for (const auto field : storage.shape_table.fields(shape)) {
     const auto index = static_cast<std::size_t>(field);
-    auto& builder = storage.field_builders[index];
+    auto& builder = storage.fields[index].builder;
     // A requested field that never received a value has no entry for the
     // removed row and reads as null, like in `finish()`.
     result.emplace(std::string{storage.field_names[index]},
@@ -267,14 +268,15 @@ auto ArrayBuilder<Record>::finish() -> Array<Record> {
   finish_last_row();
   const auto rows = storage_->shape_index_builder.size();
   auto arrays = Array<Record>::MaskedArrays{};
-  arrays.reserve(storage_->field_builders.size());
-  for (auto& field : storage_->field_builders) {
-    TENZIR_ASSERT_LEQ(field.size(), rows);
-    if (const auto missing = rows - field.size(); missing > 0) {
-      field.skip_n(missing);
+  arrays.reserve(storage_->fields.size());
+  for (auto& field : storage_->fields) {
+    auto& builder = field.builder;
+    TENZIR_ASSERT_LEQ(builder.size(), rows);
+    if (const auto missing = rows - builder.size(); missing > 0) {
+      builder.skip_n(missing);
     }
-    TENZIR_ASSERT_EQ(field.size(), rows);
-    arrays.push_back(field.finish());
+    TENZIR_ASSERT_EQ(builder.size(), rows);
+    arrays.push_back(builder.finish());
   }
   TENZIR_ASSERT_EQ(storage_->shape_index_builder.size(), rows);
   return Array<Record>{storage::SparseStorage<storage::Index>{
