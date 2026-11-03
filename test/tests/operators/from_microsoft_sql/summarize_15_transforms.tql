@@ -3,6 +3,8 @@
 // the query over the table's columns, and the outputs keep the new names. The
 // result equals that of `summarize_16_transforms_local.tql`, which runs the
 // same operators locally.
+// A sort by a computed key stays in Tenzir, which orders deterministically,
+// while the database would order text under its collation.
 from_microsoft_sql table="agg",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),
@@ -14,4 +16,4 @@ drop junk
 where ident > 1 or value == null
 stamp = when
 summarize key, rows=count(), latest.ts=max(stamp), lo=min(value)
-sort key
+sort key.string()

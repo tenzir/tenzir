@@ -244,8 +244,8 @@ public:
     auto model = d.named("model", &PromptArgs::model);
     d.named("endpoint", &PromptArgs::endpoint, "string");
     d.named("system", &PromptArgs::system);
-    d.named("data", &PromptArgs::data, "any");
-    d.named_optional("into", &PromptArgs::into);
+    auto data = d.named("data", &PromptArgs::data, "any");
+    auto into = d.named_optional("into", &PromptArgs::into);
     d.named("api_key", &PromptArgs::api_key, "string");
     auto temperature = d.named("temperature", &PromptArgs::temperature);
     d.named("max_tokens", &PromptArgs::max_tokens);
@@ -267,7 +267,49 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto into_path = ai::default_into("prompt");
+        if (ctx.get_location(into)) {
+          auto value = ctx.get(into);
+          if (not value) {
+            return {
+              .order = EventOrder::ordered,
+              .filter_self = std::move(req.filter),
+            };
+          }
+          into_path = std::move(*value);
+        }
+        // The result field is produced here; all other fields pass through.
+        auto projection = std::move(req.projection);
+        ir::project_assignment(projection, into_path);
+        // The request reads `data`, or else the whole event.
+        if (ctx.get_location(data)) {
+          if (auto expr = ctx.get(data)) {
+            ir::add_refs_to_projection(projection, *expr);
+          } else {
+            projection = None{};
+          }
+        } else {
+          projection = None{};
+        }
+        auto touched = ast::ExprRefs{.field_paths = {into_path}};
+        auto [upstream, self]
+          = ir::split_filter_by_dependents(std::move(req.filter), touched);
+        // `ai_prompt` is 1:1, so the first N outputs stem from exactly the
+        // first N inputs and a carried limit passes through when no predicate
+        // stays behind. Skipped requests are acceptable: effects may change
+        // under optimization.
+        auto limit = self.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(upstream),
+          .filter_self = std::move(self),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+          .produced = {std::move(into_path)},
+        };
+      });
   }
 };
 

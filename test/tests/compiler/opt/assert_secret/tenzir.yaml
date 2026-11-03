@@ -1,0 +1,2 @@
+tenzir:
+  enable-assert-secret-operator: true

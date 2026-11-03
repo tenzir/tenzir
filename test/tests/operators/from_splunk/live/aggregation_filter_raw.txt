@@ -1,0 +1,8 @@
+{
+  k: "even",
+  events: 1,
+}
+{
+  k: "odd",
+  events: 2,
+}

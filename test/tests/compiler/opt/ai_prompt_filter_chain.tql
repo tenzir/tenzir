@@ -1,0 +1,6 @@
+export
+ai_prompt model="fixture-model", data=message
+where now() < deadline
+where ai.prompt.text != null
+where s.slice(stride=-1) == ""
+where id == 1

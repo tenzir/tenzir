@@ -2,6 +2,8 @@
 // `summarize` go into the query. Text groups by its bytes, as in TQL. The
 // result equals that of `summarize_11_local.tql`, which aggregates the same
 // rows locally.
+// A sort by a computed key stays in Tenzir, which orders deterministically,
+// while the database would order text under its collation.
 from_mysql table="agg",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),
@@ -10,4 +12,4 @@ from_mysql table="agg",
            database=env("MYSQL_DATABASE")
 where id > 1 or n == null
 summarize s, rows=count(), values=count(n), lo=min(n), hi.id=max(id)
-sort s
+sort s.string()

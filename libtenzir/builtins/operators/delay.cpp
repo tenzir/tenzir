@@ -184,7 +184,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<DelayArgs, Delay, DelayNova>{};
-    d.positional("by", &DelayArgs::expr, "time");
+    auto by = d.positional("by", &DelayArgs::expr, "time");
     auto speed = d.named_optional("speed", &DelayArgs::speed);
     d.named("start", &DelayArgs::start);
     d.validate([speed](DescribeCtx& ctx) -> Empty {
@@ -196,7 +196,27 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // `delay` paces every event by its timestamp, and the first one
+        // anchors the replay, so a filter cannot move upstream. It forwards
+        // events 1:1 and in order, so without a filter, the first N outputs
+        // are the first N inputs, paced the same way. The projection passes
+        // through, extended by the timestamp.
+        auto projection = std::move(req.projection);
+        if (auto expr = ctx.get(by)) {
+          ir::add_refs_to_projection(projection, *expr);
+        } else {
+          projection = None{};
+        }
+        auto limit = req.filter.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

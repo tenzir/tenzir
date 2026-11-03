@@ -623,9 +623,48 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<UnrollArgs, Unroll, UnrollNova>{};
     d.parallelizable();
-    d.positional("field", &UnrollArgs::field);
+    auto field = d.positional("field", &UnrollArgs::field);
     d.optimization(&UnrollArgs::optimization);
-    return d.without_optimize();
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto path = ctx.get(field);
+        if (not path) {
+          return {
+            .order = EventOrder::ordered,
+            .filter_self = std::move(req.filter),
+          };
+        }
+        // Every output event copies its input event, except that the unrolled
+        // field holds one list element or record field. Upstream must produce
+        // the whole field, from which any part of an element may come.
+        auto projection = std::move(req.projection);
+        if (projection) {
+          std::erase_if(*projection, [&](ast::field_path const& other) {
+            return ir::is_field_path_prefix(*path, other);
+          });
+        }
+        ir::add_to_projection(projection, *path);
+        // A predicate that does not read the field has the same value for an
+        // input event and all of its outputs, so it keeps the same outputs
+        // upstream. An input event with an empty, null, or missing field has
+        // no outputs, so upstream evaluates the predicate for events that
+        // downstream never sees. It may move only if it cannot fail then.
+        auto touched = ast::ExprRefs{.field_paths = {*path}};
+        auto [upstream, self] = ir::split_filter(
+          std::move(req.filter), [&](ast::expression const& expr) {
+            auto refs = ast::collect_refs(expr);
+            return refs and not refs->overlaps(touched)
+                   and ir::is_infallible(expr);
+          });
+        // An input event may have any number of outputs, so a limit on the
+        // outputs does not bound the inputs.
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(upstream),
+          .filter_self = std::move(self),
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

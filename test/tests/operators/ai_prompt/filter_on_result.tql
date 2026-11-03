@@ -1,0 +1,19 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+assertions:
+  fixtures:
+    openai_responses:
+      inputs: ['{"id":0,"message":"zero"}', '{"id":1,"message":"one"}', '{"id":2,"message":"two"}']
+---
+
+// A filter on the result stays behind, so every event gets a request, and the
+// limit cannot pass either.
+from {id: 0, message: "zero"}, {id: 1, message: "one"},
+     {id: 2, message: "two"}
+ai_prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={id: id, message: message}
+where ai.prompt.text != "id=0 message=zero"
+select id, text=ai.prompt.text
+head 1

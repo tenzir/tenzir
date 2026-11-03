@@ -1,0 +1,14 @@
+// Filters with an exact spelling go into a `where` stage before the summary,
+// which Splunk then computes.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where source == "tenzir-docs-auth" and action != "logout"
+where outcome in ["success", "failure"] and user != null
+summarize user, events=count(), outcomes=count(outcome)
+sort user

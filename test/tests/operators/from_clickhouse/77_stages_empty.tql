@@ -1,0 +1,10 @@
+// A filter on the result may drop the single group of an aggregation without
+// group keys.
+from_clickhouse table="fc_stages",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+summarize n=count()
+where n > 100
+head 1

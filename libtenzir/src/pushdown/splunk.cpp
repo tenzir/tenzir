@@ -17,6 +17,7 @@
 #include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/union_array.hpp"
 #include "tenzir/pushdown/aggregation.hpp"
+#include "tenzir/pushdown/translate.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/try.hpp"
@@ -30,6 +31,8 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <ranges>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -274,7 +277,8 @@ auto render_comparison(Binary const& x) -> Option<std::string> {
 }
 
 /// Spells `field in [literals]` with `IN`, which holds where `field=value`
-/// holds for some element.
+/// holds for some element. Each element compares by its own kind, as in TQL,
+/// also in a list that mixes kinds.
 auto render_in(In const& x) -> Option<std::string> {
   if (x.list.empty()) {
     return None{};
@@ -717,6 +721,475 @@ auto eval_input(std::vector<std::string> const& path) -> Option<std::string> {
     return None{};
   }
   return fmt::format("'{}'", name);
+}
+
+/// The values that type inference may turn into a number, as an `eval`
+/// string: those with an ASCII digit, and spellings of infinity and NaN, which
+/// `from_splunk` infers as `double`. Other values stay strings or become
+/// booleans or times such as `now`, which TQL never finds equal to or ordered
+/// with a number.
+constexpr auto spl_number_pattern
+  = std::string_view{R"("[0-9]|[iI][nN][fF]|[nN][aA][nN]")"};
+
+/// The column that flags a result that passes a filter only because the
+/// filter cannot compare a number with one of its values exactly, as
+/// `SplFilter` describes.
+constexpr auto spl_filter_check_name = std::string_view{"tenzir_filter_check"};
+
+/// Spells a number that compares exactly with every integer that
+/// `spl_integer_pattern` matches, as TQL compares it: an integer, which
+/// translation bounds to ±2^53, or a `double` with at most 15 significant
+/// digits. Splunk parses such a `double` into the value that Tenzir holds, or,
+/// if it rounds differently, into one on the same side of every such integer.
+auto exact_number(Literal const& literal) -> Option<std::string> {
+  if (not is<int64_t>(literal.value) and not is<uint64_t>(literal.value)
+      and not is<double>(literal.value)) {
+    return None{};
+  }
+  TRY(auto text, render_number(literal));
+  auto digits = text | std::views::filter([](char c) {
+                  return c >= '0' and c <= '9';
+                })
+                | std::views::drop_while([](char c) {
+                    return c == '0';
+                  });
+  if (std::ranges::distance(digits) > 15) {
+    return None{};
+  }
+  return text;
+}
+
+/// The `eval` operator of a comparison.
+auto eval_operator(BinaryOp op) -> Option<std::string_view> {
+  switch (op) {
+    case BinaryOp::eq:
+      return "==";
+    case BinaryOp::lt:
+      return "<";
+    case BinaryOp::leq:
+      return "<=";
+    case BinaryOp::gt:
+      return ">";
+    case BinaryOp::geq:
+      return ">=";
+    default:
+      return None{};
+  }
+}
+
+/// Spells the predicates of `translate_dynamic_predicate` as expressions of a
+/// `where` stage that keep and drop the results that TQL keeps and drops after
+/// the type inference of `from_splunk`. Live probes back every spelling:
+///
+/// - A string compares byte by byte with `==` in `eval`, also with `*`,
+///   whitespace, the empty string, and non-ASCII text. Type inference keeps a
+///   value as a string exactly if it does not infer the literal as another
+///   type, so only such literals qualify, and with `raw` every literal does.
+/// - A boolean is the value `true` or `false`, the only spellings that type
+///   inference turns into one.
+/// - A number compares exactly with integers of up to 15 digits, which type
+///   inference reads as `int64`, also with leading zeros. Other values that
+///   type inference may turn into a number, such as `5.0`, `+5`, `1e3`, or
+///   `inf`, compare differently in Splunk, so their comparison is uncertain.
+///   Every other value, such as `abc` or `-`, compares with no number in TQL.
+/// - A membership holds where the test of one of its literals holds. TQL
+///   compares each element of a list by its own type, so a list may mix
+///   strings, booleans, and numbers.
+/// - `mvcount(f)==1` keeps fields with several values from comparing equal,
+///   which `eval` does if any value matches, while TQL compares a list unequal
+///   to every literal.
+/// - `isnull` and `isnotnull` agree with TQL's `== null` and `!= null`, since
+///   Splunk returns every value as a string, `null` included, and type
+///   inference turns no string into `null`.
+///
+/// A spelling decides the uncertain comparisons by its `Bound`. Since `and`
+/// and `or` are monotone, the upper bound keeps every result that TQL keeps,
+/// the lower bound keeps only results that TQL keeps, and both keep exactly
+/// the results that TQL keeps unless a result has an uncertain comparison.
+class SplFilter {
+public:
+  /// How a spelling decides an uncertain comparison.
+  enum class Bound {
+    /// As failing to keep the result, if it drops the result otherwise.
+    lower,
+    /// As keeping the result, if it keeps the result otherwise.
+    upper,
+  };
+
+  SplFilter(bool raw, Bound bound) : raw_{raw}, bound_{bound} {
+  }
+
+  /// Spells `expr`, or returns `None` if some part of it has no exact
+  /// spelling.
+  auto render(Expr const& expr) -> Option<std::string> {
+    return match(
+      expr,
+      [&](And const& x) -> Option<std::string> {
+        return render_junction(x.operands, "AND");
+      },
+      [&](Or const& x) -> Option<std::string> {
+        if (auto negation = render_negation(x)) {
+          return negation;
+        }
+        return render_junction(x.operands, "OR");
+      },
+      [&](IsNull const& x) -> Option<std::string> {
+        TRY(auto field, render_column(*x.expr));
+        return fmt::format("{}({})", x.negated ? "isnotnull" : "isnull", field);
+      },
+      [&](Binary const& x) -> Option<std::string> {
+        TRY(auto field, render_column(*x.left));
+        auto const* literal = try_as<Literal>(*x.right);
+        if (not literal) {
+          return None{};
+        }
+        auto literals = std::array{literal};
+        TRY(auto test, render_test(field, x.op, literals));
+        return render_match(field, test);
+      },
+      [&](In const& x) -> Option<std::string> {
+        TRY(auto field, render_column(*x.expr));
+        TRY(auto literals, as_literals(x.list));
+        TRY(auto test, render_test(field, BinaryOp::eq, literals));
+        return render_match(field, test);
+      },
+      [](auto const&) -> Option<std::string> {
+        return None{};
+      });
+  }
+
+  /// Whether a spelled predicate compares a number, so that the bounds may
+  /// differ.
+  auto compares_numbers() const -> bool {
+    return compares_numbers_;
+  }
+
+private:
+  /// A spelling of whether the single value of a field relates to a literal.
+  struct Test {
+    std::string text;
+    /// Whether some literals are numbers, which the test matches only with
+    /// integers of up to 15 digits.
+    bool numeric = false;
+  };
+
+  /// Spells a top-level field for `eval`, as `eval_input` does.
+  static auto render_column(Expr const& expr) -> Option<std::string> {
+    auto const* column = try_as<Column>(expr);
+    if (not column) {
+      return None{};
+    }
+    return eval_input(column->path);
+  }
+
+  static auto as_literals(std::span<Expr const> list)
+    -> Option<std::vector<Literal const*>> {
+    auto result = std::vector<Literal const*>{};
+    for (auto const& element : list) {
+      auto const* literal = try_as<Literal>(element);
+      if (not literal) {
+        return None{};
+      }
+      result.push_back(literal);
+    }
+    return result;
+  }
+
+  /// Spells whether the single value of `field` makes its comparison with a
+  /// number uncertain.
+  static auto uncertain(std::string_view field) -> std::string {
+    return fmt::format("(NOT match({0}, {1}) AND match({0}, {2}))", field,
+                       spl_integer_pattern, spl_number_pattern);
+  }
+
+  /// Spells whether the single value of `field` relates to one of `literals`
+  /// by `op`. Each literal compares by its own type, as in TQL, so that a
+  /// list may mix numbers, strings, and booleans.
+  auto render_test(std::string const& field, BinaryOp op,
+                   std::span<Literal const* const> literals) -> Option<Test> {
+    TRY(auto symbol, eval_operator(op));
+    auto numbers = std::vector<std::string>{};
+    auto others = std::vector<std::string>{};
+    for (auto const* literal : literals) {
+      auto numeric = false;
+      auto test = match(
+        literal->value,
+        [&](std::string const& x) -> Option<std::string> {
+          if (op != BinaryOp::eq) {
+            return None{};
+          }
+          // A Splunk value spelled like a literal of another type becomes
+          // that type, which differs from the string in TQL.
+          if (not raw_) {
+            if (auto inferred = detail::data_builder::best_effort_parser(x);
+                inferred and not is<std::string>(*inferred)) {
+              return None{};
+            }
+          }
+          // `eval` escapes `"` and `\` with a backslash, as `search` does.
+          TRY(auto value, quote_value(x));
+          return fmt::format("{}=={}", field, value);
+        },
+        [&](bool x) -> Option<std::string> {
+          // Without inference, the string `"true"` differs from the boolean.
+          if (raw_ or op != BinaryOp::eq) {
+            return None{};
+          }
+          return fmt::format(R"({}=="{}")", field, x);
+        },
+        [&](auto const&) -> Option<std::string> {
+          // Without inference, the string `"5"` differs from the number.
+          if (raw_) {
+            return None{};
+          }
+          TRY(auto number, exact_number(*literal));
+          numeric = true;
+          return fmt::format("tonumber({}){}{}", field, symbol, number);
+        });
+      if (not test) {
+        return None{};
+      }
+      (numeric ? numbers : others).push_back(std::move(*test));
+    }
+    auto any = [](std::vector<std::string>& tests) {
+      return tests.size() == 1 ? std::move(tests.front())
+                               : fmt::format("({})", fmt::join(tests, " OR "));
+    };
+    if (numbers.empty()) {
+      if (others.empty()) {
+        return None{};
+      }
+      return Test{.text = any(others)};
+    }
+    compares_numbers_ = true;
+    auto integers = fmt::format("match({}, {}) AND {}", field,
+                                spl_integer_pattern, any(numbers));
+    if (others.empty()) {
+      return Test{.text = std::move(integers), .numeric = true};
+    }
+    // The integer pattern guards only the comparisons with numbers, while the
+    // strings and booleans keep their own tests.
+    others.insert(others.begin(), fmt::format("({})", integers));
+    return Test{
+      .text = fmt::format("({})", fmt::join(others, " OR ")),
+      .numeric = true,
+    };
+  }
+
+  /// Spells whether `field` has a single value for which `test` holds.
+  auto render_match(std::string const& field, Test const& test) const
+    -> std::string {
+    if (test.numeric and bound_ == Bound::upper) {
+      return fmt::format("(mvcount({0})==1 AND (({1}) OR {2}))", field,
+                         test.text, uncertain(field));
+    }
+    return fmt::format("(mvcount({})==1 AND {})", field, test.text);
+  }
+
+  /// Spells `Or{IsNull{x}, Binary{neq, x, literal}}` and
+  /// `Or{IsNull{x}, Not{In{x, literals}}}`, the negations of
+  /// `PrefilterOptions`, which keep a missing field and a field with several
+  /// values, as TQL does, or returns `None` for another shape.
+  auto render_negation(Or const& x) -> Option<std::string> {
+    if (x.operands.size() != 2) {
+      return None{};
+    }
+    auto const* null_check = try_as<IsNull>(x.operands[0]);
+    if (not null_check or null_check->negated) {
+      return None{};
+    }
+    auto const* column = try_as<Column>(*null_check->expr);
+    if (not column) {
+      return None{};
+    }
+    auto is_subject = [&](Expr const& y) {
+      auto const* other = try_as<Column>(y);
+      return other and other->path == column->path;
+    };
+    auto literals = std::vector<Literal const*>{};
+    if (auto const* y = try_as<Binary>(x.operands[1])) {
+      auto const* literal = try_as<Literal>(*y->right);
+      if (y->op != BinaryOp::neq or not is_subject(*y->left) or not literal) {
+        return None{};
+      }
+      literals.push_back(literal);
+    } else if (auto const* y = try_as<Not>(x.operands[1])) {
+      auto const* set = try_as<In>(*y->expr);
+      if (not set or not is_subject(*set->expr)) {
+        return None{};
+      }
+      TRY(literals, as_literals(set->list));
+    } else {
+      return None{};
+    }
+    TRY(auto field, eval_input(column->path));
+    TRY(auto test, render_test(field, BinaryOp::eq, literals));
+    // The negation drops the results for which this holds.
+    auto drops = std::move(test.text);
+    if (test.numeric and bound_ == Bound::lower) {
+      drops = fmt::format("({}) OR {}", drops, uncertain(field));
+    }
+    return fmt::format("(isnull({0}) OR mvcount({0})>1 OR if({1}, false(), "
+                       "true()))",
+                       field, drops);
+  }
+
+  auto render_junction(std::span<Expr const> operands, std::string_view keyword)
+    -> Option<std::string> {
+    auto parts = std::vector<std::string>{};
+    for (auto const& operand : operands) {
+      TRY(auto part, render(operand));
+      parts.push_back(std::move(part));
+    }
+    return fmt::format("({})", fmt::join(parts, fmt::format(" {} ", keyword)));
+  }
+
+  bool raw_ = false;
+  Bound bound_ = Bound::lower;
+  bool compares_numbers_ = false;
+};
+
+/// The stages that keep the results of a search that pass a filter.
+struct SplFilterStages {
+  /// The `where` stage, which keeps every result that TQL keeps, and also
+  /// those for which a comparison of a number is uncertain.
+  std::string where;
+  /// The `eval` stage that assigns `spl_filter_check_name` to every result
+  /// that `where` keeps: `0` if TQL keeps the result, and `1` if it may not.
+  /// An aggregation of the results then holds no meaning. Empty if the filter
+  /// compares no numbers, so that `where` keeps exactly the results that TQL
+  /// keeps.
+  std::string check;
+};
+
+/// Spells `filter` as the stages of `SplFilterStages`, or returns `None` if a
+/// predicate has no exact spelling.
+auto spl_filter_stages(ir::OptimizeFilter const& filter, bool raw,
+                       registry const& reg) -> Option<SplFilterStages> {
+  auto columns = dynamic_columns(filter);
+  auto lower = SplFilter{raw, SplFilter::Bound::lower};
+  auto upper = SplFilter{raw, SplFilter::Bound::upper};
+  auto lower_predicates = std::vector<std::string>{};
+  auto upper_predicates = std::vector<std::string>{};
+  for (auto const& expr : filter) {
+    TRY(auto translated,
+        translate_dynamic_predicate(expr, columns, reg, {.negations = true}));
+    TRY(auto lower_predicate, lower.render(translated));
+    TRY(auto upper_predicate, upper.render(translated));
+    lower_predicates.push_back(std::move(lower_predicate));
+    upper_predicates.push_back(std::move(upper_predicate));
+  }
+  auto result = SplFilterStages{
+    .where = fmt::format("\n| where {}", fmt::join(upper_predicates, " AND ")),
+    .check = {},
+  };
+  // The lower bound may be `null` rather than `false` for a missing field,
+  // which flags the result as well.
+  if (upper.compares_numbers()) {
+    result.check
+      = fmt::format("\n| eval {}=if({}, 0, 1)", spl_filter_check_name,
+                    fmt::join(lower_predicates, " AND "));
+  }
+  if (result.where.size() + result.check.size() > appendix_budget) {
+    return None{};
+  }
+  return result;
+}
+
+/// Whether stages that compute an aggregation may follow `search`. The source
+/// sends the search again without the stages if their result might differ
+/// from `summarize`, which would repeat a side effect.
+auto takes_aggregation_stages(std::string_view search) -> bool {
+  auto stages = spl_stages(search);
+  return stages.accepted and stages.limitable and not stages.formatted
+         and stages.keeps_fields;
+}
+
+/// Spells the stages after the filter stages that compute `aggregation` with
+/// `stats`, as `plan_spl_aggregation` describes, or returns `None` if Splunk
+/// cannot compute a column as `summarize` does. `checked` tells whether the
+/// filter stages assign `spl_filter_check_name`, whose maximum `stats` then
+/// computes for each group.
+auto spl_aggregation_stages(ir::OptimizeAggregation const& aggregation,
+                            bool raw, bool checked) -> Option<std::string> {
+  TRY(auto plan, classify(aggregation));
+  auto evals = std::vector<std::string>{};
+  // The count of results gives `stats` a function also for a summary of
+  // group keys only.
+  auto functions
+    = std::vector<std::string>{fmt::format("count as {}", spl_count_name)};
+  if (checked) {
+    functions.push_back(fmt::format("max({0}) as {0}", spl_filter_check_name));
+  }
+  auto keys = std::vector<std::string>{};
+  for (auto i = size_t{0}; i < plan.columns.size(); ++i) {
+    auto name = spl_aggregate_name(i);
+    // Adds `min(input)` or `max(input)` over the integers of `input`.
+    auto extremum
+      = [&](std::string_view function, std::vector<std::string> const& input) {
+          // With `raw`, `summarize` sees strings, which `min` and `max` reject.
+          auto field = eval_input(input);
+          if (raw or not field) {
+            return false;
+          }
+          auto integer = fmt::format("mvcount({0})==1 AND match({0}, {1})",
+                                     *field, spl_integer_pattern);
+          auto check = spl_check_name(i);
+          evals.push_back(fmt::format("{}=if({}, tonumber({}), null())", name,
+                                      integer, *field));
+          evals.push_back(fmt::format("{}=if(isnull({}) OR ({}), 0, 1)", check,
+                                      *field, integer));
+          functions.push_back(fmt::format("{1}({0}) as {0}", name, function));
+          functions.push_back(fmt::format("max({0}) as {0}", check));
+          return true;
+        };
+    auto added = match(
+      plan.columns[i].kind,
+      [&](AggregationPlan::Key const& key) {
+        auto field = eval_input(key.input);
+        if (not field) {
+          return false;
+        }
+        evals.push_back(
+          fmt::format(R"({0}=case(isnull({1}), "n", mvcount({1})!=1, "m", )"
+                      R"(match({1}, "\x00"), "z", true(), "v" . {1}))",
+                      name, *field));
+        keys.push_back(std::move(name));
+        return true;
+      },
+      [&](AggregationPlan::Count const& count) {
+        if (not count.input) {
+          return true;
+        }
+        auto field = eval_input(*count.input);
+        if (not field) {
+          return false;
+        }
+        evals.push_back(
+          fmt::format("{}=if(isnull({}), null(), 1)", name, *field));
+        functions.push_back(fmt::format("count({0}) as {0}", name));
+        return true;
+      },
+      [&](AggregationPlan::Min const& min) {
+        return extremum("min", min.input);
+      },
+      [&](AggregationPlan::Max const& max) {
+        return extremum("max", max.input);
+      });
+    if (not added) {
+      return None{};
+    }
+  }
+  auto result = std::string{};
+  if (not evals.empty()) {
+    result += fmt::format("\n| eval {}", fmt::join(evals, ", "));
+  }
+  result += fmt::format("\n| stats {}", fmt::join(functions, ", "));
+  if (not keys.empty()) {
+    result += fmt::format(" by {}", fmt::join(keys, ", "));
+  }
+  result += fmt::format("\n| appendpipe [stats count as {}]", spl_groups_name);
+  return result;
 }
 
 /// Parses a count that Splunk renders as decimal digits.
@@ -1237,96 +1710,45 @@ auto plan_spl_indexes(std::span<std::string const> indexes,
                                               None{}, reg));
 }
 
+auto can_plan_spl_aggregation(std::string_view search,
+                              ir::OptimizeAggregation const& aggregation,
+                              bool raw) -> bool {
+  return takes_aggregation_stages(search)
+         and spl_aggregation_stages(aggregation, raw, false).is_some();
+}
+
 auto plan_spl_aggregation(std::string_view search,
-                          ir::OptimizeAggregation const& aggregation, bool raw)
-  -> Option<std::string> {
-  // The source sends the search again without the stages if their result
-  // might differ from `summarize`, which would repeat a side effect.
-  auto stages = spl_stages(search);
-  if (not stages.accepted or not stages.limitable or stages.formatted
-      or not stages.keeps_fields) {
+                          ir::OptimizeFilter const& filter,
+                          Option<ir::OptimizeProjection> const& projection,
+                          ir::OptimizeAggregation const& aggregation, bool raw,
+                          registry const& reg) -> Option<SplAggregation> {
+  if (not takes_aggregation_stages(search)) {
     return None{};
   }
-  TRY(auto plan, classify(aggregation));
-  auto evals = std::vector<std::string>{};
-  // The count of results gives `stats` a function also for a summary of
-  // group keys only.
-  auto functions
-    = std::vector<std::string>{fmt::format("count as {}", spl_count_name)};
-  auto keys = std::vector<std::string>{};
-  for (auto i = size_t{0}; i < plan.columns.size(); ++i) {
-    auto name = spl_aggregate_name(i);
-    // Adds `min(input)` or `max(input)` over the integers of `input`.
-    auto extremum
-      = [&](std::string_view function, std::vector<std::string> const& input) {
-          // With `raw`, `summarize` sees strings, which `min` and `max` reject.
-          auto field = eval_input(input);
-          if (raw or not field) {
-            return false;
-          }
-          auto integer = fmt::format("mvcount({0})==1 AND match({0}, {1})",
-                                     *field, spl_integer_pattern);
-          auto check = spl_check_name(i);
-          evals.push_back(fmt::format("{}=if({}, tonumber({}), null())", name,
-                                      integer, *field));
-          evals.push_back(fmt::format("{}=if(isnull({}) OR ({}), 0, 1)", check,
-                                      *field, integer));
-          functions.push_back(fmt::format("{1}({0}) as {0}", name, function));
-          functions.push_back(fmt::format("max({0}) as {0}", check));
-          return true;
-        };
-    auto added = match(
-      plan.columns[i].kind,
-      [&](AggregationPlan::Key const& key) {
-        auto field = eval_input(key.input);
-        if (not field) {
-          return false;
-        }
-        evals.push_back(
-          fmt::format(R"({0}=case(isnull({1}), "n", mvcount({1})!=1, "m", )"
-                      R"(match({1}, "\x00"), "z", true(), "v" . {1}))",
-                      name, *field));
-        keys.push_back(std::move(name));
-        return true;
-      },
-      [&](AggregationPlan::Count const& count) {
-        if (not count.input) {
-          return true;
-        }
-        auto field = eval_input(*count.input);
-        if (not field) {
-          return false;
-        }
-        evals.push_back(
-          fmt::format("{}=if(isnull({}), null(), 1)", name, *field));
-        functions.push_back(fmt::format("count({0}) as {0}", name));
-        return true;
-      },
-      [&](AggregationPlan::Min const& min) {
-        return extremum("min", min.input);
-      },
-      [&](AggregationPlan::Max const& max) {
-        return extremum("max", max.input);
-      });
-    if (not added) {
-      return None{};
-    }
+  auto filter_stages = SplFilterStages{};
+  if (not filter.empty()) {
+    TRY(filter_stages, spl_filter_stages(filter, raw, reg));
   }
-  auto result = std::string{search};
-  if (not evals.empty()) {
-    result += fmt::format("\n| eval {}", fmt::join(evals, ", "));
+  auto checked = not filter_stages.check.empty();
+  TRY(auto stages, spl_aggregation_stages(aggregation, raw, checked));
+  auto filtered = fmt::format("{}{}", search, filter_stages.where);
+  // The source evaluates the filter on the results of the fallback, which
+  // must keep the fields that it reads.
+  auto retained = projection;
+  for (auto const& expr : filter) {
+    ir::add_refs_to_projection(retained, expr);
   }
-  result += fmt::format("\n| stats {}", fmt::join(functions, ", "));
-  if (not keys.empty()) {
-    result += fmt::format(" by {}", fmt::join(keys, ", "));
-  }
-  result += fmt::format("\n| appendpipe [stats count as {}]", spl_groups_name);
-  return result;
+  auto fallback = plan_spl_search(filtered, {}, retained, None{}, not raw, reg);
+  return SplAggregation{
+    .search = fmt::format("{}{}{}", filtered, filter_stages.check, stages),
+    .fallback = std::move(fallback.query),
+    .checked = checked,
+  };
 }
 
 auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
                             ir::OptimizeAggregation const& aggregation,
-                            bool raw, diagnostic_handler& dh)
+                            bool raw, bool checked, diagnostic_handler& dh)
   -> Result<std::vector<nova::Events>, std::string> {
   auto plan = classify(aggregation);
   TENZIR_ASSERT(plan);
@@ -1336,8 +1758,12 @@ auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
   auto values = std::vector<Option<std::string_view>>(columns.size());
   auto checks = std::vector<Option<std::string_view>>(columns.size());
   auto results = Option<std::string_view>{};
+  auto filter_check = Option<std::string_view>{};
   auto cells = std::unordered_map<std::string, Ref<Option<std::string_view>>>{};
   cells.emplace(spl_count_name, results);
+  if (checked) {
+    cells.emplace(spl_filter_check_name, filter_check);
+  }
   for (auto i = size_t{0}; i < columns.size(); ++i) {
     match(
       columns[i].kind,
@@ -1373,6 +1799,14 @@ auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
     }
     if (*count == 0 and grouped) {
       return Err{std::string{"a group contains no results"}};
+    }
+    // `stats` computes no check for a summary without results.
+    if (checked and not filter_check and *count != 0) {
+      return Err{std::string{"a group misses the check of the filter"}};
+    }
+    if (filter_check and *filter_check != "0") {
+      return Err{std::string{"a filter compares a number with a value other "
+                             "than an integer"}};
     }
     auto event = builder->event();
     for (auto i = size_t{0}; i < columns.size(); ++i) {
@@ -1449,6 +1883,7 @@ auto decode_spl_aggregation(std::span<nova::Array<nova::Record> const> rows,
       std::ranges::fill(values, None{});
       std::ranges::fill(checks, None{});
       results = None{};
+      filter_check = None{};
       auto fields = size_t{0};
       for (auto const& [name, value] : array.get(index)) {
         ++fields;

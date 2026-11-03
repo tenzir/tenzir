@@ -1,0 +1,248 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `now` @ [1]:59..62 from 0
++              ],
++              ref: std::now/fn
++            },
++            args: [
++              
++            ],
++            method: false,
++            location: [1]:59..64 from 0
++          },
++          op: "lt",
++          right: root_field {
++            id: `deadline` @ [1]:67..75 from 0,
++            has_question_mark: false
++          },
++          location: [1]:59..75 from 0
++        },
++        binary_expr {
++          left: root_field {
++            id: `id` @ [1]:142..144 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:148..149 from 0,
++          location: [1]:142..149 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "ai_prompt",
+       store: {
+         op: {
+           path: [
+             `ai_prompt` @ [1]:7..16 from 0
+           ],
+           ref: std::ai_prompt/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "fixture-model" @ [1]:23..38 from 0
+           },
+           {
+             index: 3,
+             value: expression root_field {
+               id: `message` @ [1]:45..52 from 0,
+               has_question_mark: false
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:53..58 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: function_call {
+-            fn: {
+-              path: [
+-                `now` @ [1]:59..62 from 0
+-              ],
+-              ref: std::now/fn
+-            },
+-            args: [
+-              
+-            ],
+-            method: false,
+-            location: [1]:59..64 from 0
+-          },
+-          op: "lt",
+-          right: root_field {
+-            id: `deadline` @ [1]:67..75 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:59..75 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:76..81 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: field_access {
+             left: field_access {
+               left: root_field {
+                 id: `ai` @ [1]:82..84 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `prompt` @ [1]:85..91 from 0,
+               location: [1]:82..91 from 0
+             },
+             has_question_mark: false,
+             name: `text` @ [1]:92..96 from 0,
+             location: [1]:82..96 from 0
+           },
+           op: "neq",
+           right: constant none_t {} @ [1]:100..104 from 0,
+           location: [1]:82..104 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:105..110 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `slice` @ [1]:113..118 from 0
+               ],
+               ref: std::slice/fn
+             },
+             args: [
+               root_field {
+                 id: `s` @ [1]:111..112 from 0,
+                 has_question_mark: false
+               },
+               assignment {
+                 left: root_field {
+                   id: `stride` @ [1]:119..125 from 0,
+                   has_question_mark: false
+                 },
+-                right: unary_expr {
+-                  op: "neg",
+-                  expr: constant int64 1 @ [1]:127..128 from 0,
+-                  location: [1]:126..128 from 0
+-                },
++                right: constant int64 -1 @ [1]:126..128 from 0,
+                 location: [1]:119..128 from 0
+               }
+             ],
+             method: true,
+             location: [1]:111..129 from 0
+           },
+           op: "eq",
+           right: constant string "" @ [1]:133..135 from 0,
+           location: [1]:111..135 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:136..141 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:149..149 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `id` @ [1]:142..144 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:148..149 from 0,
+-          location: [1]:142..149 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..149 from 0
+ }

@@ -28,6 +28,8 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <caf/actor_system_config.hpp>
+#include <caf/settings.hpp>
 #include <folly/Demangle.h>
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
@@ -710,9 +712,13 @@ private:
       }
       co_return {};
     }
+    auto store = exec_ctx_.secret_store();
+    auto& secret_cache = store ? store->cache() : SecretCache::instance();
     auto all_cached = true;
+    auto cache_generation = uint64_t{};
     {
-      auto cache = co_await SecretCache::instance().shared_lock();
+      auto cache = co_await secret_cache.shared_lock();
+      cache_generation = cache->generation();
       for (auto& [k, v] : requested_secrets) {
         if (auto s = cache->lookup(k)) {
           v.value = s;
@@ -722,11 +728,29 @@ private:
       }
     }
     if (not all_cached) {
-      auto node = co_await fetch_node(sys_, *dh_);
-      if (not node or not *node) {
-        co_return failure::promise();
+      auto node = Option<node_actor>{};
+      if (not store) {
+        auto fetched = co_await fetch_node(sys_, *dh_);
+        if (not fetched or not *fetched) {
+          co_return failure::promise();
+        }
+        node = std::move(*fetched);
       }
-      // All futures for requests we send to the node
+      auto request = [&](std::string name, std::string public_key)
+        -> Task<caf::expected<secret_resolution_result>> {
+        if (store) {
+          if (auto local = resolve_config_secret(caf::content(sys_.config()),
+                                                 name, public_key)) {
+            co_return std::move(*local);
+          }
+          co_return co_await store->resolve(std::move(name),
+                                            std::move(public_key));
+        }
+        co_return co_await async_mail(atom::resolve_v, std::move(name),
+                                      std::move(public_key))
+          .request(*node);
+      };
+      // All futures for requests we send to the store or the node.
       auto tasks = std::vector<Task<caf::expected<secret_resolution_result>>>{};
       // Key pairs used for the request encryption per request
       struct name_and_key {
@@ -741,8 +765,7 @@ private:
         auto key_pair = ecc::generate_keypair();
         TENZIR_ASSERT(key_pair);
         auto public_key = key_pair->public_key;
-        tasks.push_back(
-          async_mail(atom::resolve_v, name, public_key).request(*node));
+        tasks.push_back(request(name, public_key));
         names_and_keys.emplace_back(name, std::move(*key_pair));
       }
       const auto results
@@ -750,7 +773,7 @@ private:
       // We use a bool here to be able to validate all secrets instead of early
       // exiting.
       auto success = true;
-      auto cache = co_await SecretCache::instance().unique_lock();
+      auto cache = co_await secret_cache.unique_lock();
       for (auto&& [expected, name_and_key] :
            std::views::zip(results, names_and_keys)) {
         auto& [name, key] = name_and_key;
@@ -774,7 +797,11 @@ private:
               success = false;
               return;
             }
-            cache->insert(name, *decrypted);
+            // A reconnect may have invalidated the cache while this request
+            // was in flight. Its answer must not repopulate the cleared cache.
+            if (cache->generation() == cache_generation) {
+              cache->insert(name, *decrypted);
+            }
             out.value = std::move(*decrypted);
           },
           [&](const secret_resolution_error& e) {

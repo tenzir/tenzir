@@ -1,0 +1,10 @@
+warning: assertion failed: 2
+ --> tests/operators/assert/filter_after.tql:3:8
+  |
+3 | assert x > 0, message=y
+  |        ~~~~~
+  |
+{
+  x: 1,
+  y: 1,
+}

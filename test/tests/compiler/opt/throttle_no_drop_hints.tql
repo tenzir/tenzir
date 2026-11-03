@@ -1,0 +1,4 @@
+export
+throttle rate=10, drop=false
+select y
+head 2

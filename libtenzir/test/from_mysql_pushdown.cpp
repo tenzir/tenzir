@@ -174,7 +174,8 @@ auto aggregation_of(std::vector<ir::OptimizeAggregation::Column> columns)
   -> ir::OptimizeAggregation {
   return {.columns = std::move(columns),
           .schema_name = "tenzir.summarize",
-          .fallback = {}};
+          .fallback = {},
+          .stages = {}};
 }
 
 } // namespace
@@ -448,4 +449,47 @@ TEST("aggregations group text by its bytes") {
   CHECK(supports_aggregate_functions(aggregation_of({count})));
   CHECK(not supports_aggregate_functions(
     aggregation_of({call({"s"}, "sum", V{"i"})})));
+}
+
+TEST("aggregations filter, sort, and limit results") {
+  auto columns = make_columns();
+  auto query = [&](std::vector<ir::OptimizeAggregation::Column> x,
+                   std::vector<ir::AggregationStage> stages) {
+    auto aggregation = aggregation_of(std::move(x));
+    aggregation.stages = std::move(stages);
+    return make_aggregate_query(aggregation, columns, "tbl", {});
+  };
+  auto filter = [](std::string_view predicate) {
+    return ir::AggregationStage{ir::AggregationStage::Filter{parse(predicate)}};
+  };
+  auto sort = [](std::vector<std::string> field, bool descending) {
+    return ir::AggregationStage{ir::AggregationStage::Sort{
+      .keys = {{.field = std::move(field), .descending = descending}},
+      .bounded = true,
+    }};
+  };
+  auto limit = [](uint64_t count) {
+    return ir::AggregationStage{ir::AggregationStage::Limit{count}};
+  };
+  auto const base = std::string{
+    "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS "
+    "SIGNED) AS `__tenzir_aggregate_1` FROM `tbl` GROUP BY CAST(`s` AS "
+    "BINARY)"};
+  auto const columns_s = std::vector{key({"src"}, {"s"}), call({"n"}, "count")};
+  // MySQL computes the stages with its own semantics, so text compares and
+  // sorts under the collation of its column.
+  CHECK_EQUAL(
+    query(columns_s,
+          {filter("n >= 10 and src != \"a\""), sort({"src"}, true), limit(20)}),
+    fmt::format("SELECT * FROM ({}) AS `__tenzir_aggregate` WHERE "
+                "((`__tenzir_aggregate_1` >= 10) AND (`__tenzir_aggregate_0` "
+                "<> 'a')) ORDER BY `__tenzir_aggregate_0` DESC LIMIT 20",
+                base));
+  // A backslash means different things depending on the SQL mode.
+  CHECK(not query(columns_s, {filter(R"(src == "a\\b")")}));
+  CHECK(not supports_aggregate_functions([&] {
+    auto aggregation = aggregation_of(columns_s);
+    aggregation.stages = {filter(R"(src == "a\\b")")};
+    return aggregation;
+  }()));
 }

@@ -52,19 +52,15 @@ auto ir::split_conjunction(ast::expression predicate) -> OptimizeFilter {
   return result;
 }
 
-auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
-                                    const ast::ExprRefs& touched)
+auto ir::split_filter(
+  ir::OptimizeFilter filter,
+  std::function<auto(ast::expression const&)->bool> const& movable)
   -> ir::split_filter_result {
   auto result = ir::split_filter_result{};
-  if (touched.let_ids.empty() and touched.field_paths.empty()) {
-    result.independent = std::move(filter);
-    return result;
-  }
   for (auto& expr : filter) {
-    auto refs = ast::collect_refs(expr);
     // A predicate behind one that stays must not move past it if it could fail
     // for the events that the other one drops.
-    if (not refs or refs->overlaps(touched)
+    if (not movable(expr)
         or (not result.dependent.empty() and not is_infallible(expr))) {
       result.dependent.push_back(std::move(expr));
     } else {
@@ -72,6 +68,18 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
     }
   }
   return result;
+}
+
+auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
+                                    const ast::ExprRefs& touched)
+  -> ir::split_filter_result {
+  if (touched.let_ids.empty() and touched.field_paths.empty()) {
+    return {.independent = std::move(filter), .dependent = {}};
+  }
+  return split_filter(std::move(filter), [&](ast::expression const& expr) {
+    auto refs = ast::collect_refs(expr);
+    return refs and not refs->overlaps(touched);
+  });
 }
 
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
@@ -173,6 +181,23 @@ auto ir::add_to_projection(Option<OptimizeProjection>& projection,
   };
   if (std::ranges::none_of(*projection, equal)) {
     projection->push_back(path);
+  }
+}
+
+auto ir::project_assignment(Option<OptimizeProjection>& projection,
+                            ast::field_path const& target) -> void {
+  if (target.path().empty()) {
+    projection = OptimizeProjection{};
+    return;
+  }
+  if (not projection) {
+    return;
+  }
+  std::erase_if(*projection, [&](ast::field_path const& path) {
+    return is_field_path_prefix(target, path);
+  });
+  if (target.path().size() > 1) {
+    add_to_projection(projection, target);
   }
 }
 
@@ -558,6 +583,79 @@ auto ir::pipeline::infer_type(element_type_tag input, base_ctx ctx) const
   return frontier;
 }
 
+namespace {
+
+/// Collects the stages of the operators at the front of `ops` for as long as
+/// a source can compute them in sequence: predicates and at most one sort,
+/// optionally followed by a limit, after which nothing follows. A predicate
+/// after a sort that keeps only its first events would no longer commute with
+/// it, so it ends the stages, too.
+auto aggregation_stages(std::span<Box<ir::Operator> const> ops,
+                        ir::OptimizeCtx const& octx)
+  -> std::vector<ir::AggregationStage> {
+  auto result = std::vector<ir::AggregationStage>{};
+  auto sorted = false;
+  auto bounded = false;
+  for (auto const& op : ops) {
+    auto stage = op->aggregation_stage(octx);
+    if (not stage) {
+      break;
+    }
+    auto proceed = match(
+      stage->kind,
+      [&](ir::AggregationStage::Filter const&) {
+        return not bounded;
+      },
+      [&](ir::AggregationStage::Sort const& sort) {
+        if (sorted) {
+          return false;
+        }
+        sorted = true;
+        bounded = sort.bounded;
+        return true;
+      },
+      [&](ir::AggregationStage::Limit const&) {
+        return true;
+      });
+    if (not proceed) {
+      break;
+    }
+    auto const limit = is<ir::AggregationStage::Limit>(stage->kind);
+    result.push_back(std::move(*stage));
+    if (limit) {
+      break;
+    }
+  }
+  return result;
+}
+
+/// Offers `aggregation` to `op` with the longest prefix of `stages` first,
+/// whose operators are `stage_ops`, and returns the number of stages that
+/// `op` took over, or `None` if it declined. The fallback of each candidate
+/// replays the operators of its stages after the aggregation.
+auto absorb_with_stages(ir::Operator& op,
+                        ir::OptimizeAggregation const& aggregation,
+                        std::span<ir::AggregationStage const> stages,
+                        std::span<Box<ir::Operator> const> stage_ops)
+  -> Option<size_t> {
+  TENZIR_ASSERT(stage_ops.size() >= stages.size());
+  for (auto n = stages.size() + 1; n > 0; --n) {
+    auto const count = n - 1;
+    auto candidate = aggregation;
+    candidate.stages.assign(
+      stages.begin(), stages.begin() + detail::narrow<std::ptrdiff_t>(count));
+    for (auto const& stage_op : stage_ops.first(count)) {
+      candidate.fallback.operators.push_back(stage_op->copy());
+    }
+    if (op.absorb_aggregation(candidate)) {
+      return count;
+    }
+  }
+  return None{};
+}
+
+} // namespace
+
 auto ir::pipeline::optimize(OptimizeRequest req,
                             const OptimizeCtx& octx) && -> OptimizeResult {
   auto replacement = pipeline{std::move(lets), {}};
@@ -591,11 +689,18 @@ auto ir::pipeline::optimize(OptimizeRequest req,
   auto& ops = replacement.operators;
   for (auto j = size_t{1}; j < ops.size(); ++j) {
     auto aggregation = ops[j]->aggregation();
+    // The source may also take over the stages that follow the aggregation,
+    // as many as it accepts, which then leave the pipeline, too.
+    auto stages = aggregation
+                    ? aggregation_stages(std::span{ops}.subspan(j + 1), octx)
+                    : std::vector<AggregationStage>{};
     for (auto k = j; aggregation and k > 0;) {
       --k;
-      if (ops[k]->absorb_aggregation(*aggregation)) {
+      if (auto absorbed = absorb_with_stages(*ops[k], *aggregation, stages,
+                                             std::span{ops}.subspan(j + 1))) {
         ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(k + 1),
-                  ops.begin() + detail::narrow<std::ptrdiff_t>(j + 1));
+                  ops.begin()
+                    + detail::narrow<std::ptrdiff_t>(j + 1 + *absorbed));
         j = k;
         break;
       }
@@ -637,6 +742,23 @@ auto ir::Operator::absorb_aggregation(OptimizeAggregation const& aggregation)
   -> bool {
   TENZIR_UNUSED(aggregation);
   return false;
+}
+
+auto ir::Operator::aggregation_stage(OptimizeCtx const& octx) const
+  -> Option<AggregationStage> {
+  TENZIR_UNUSED(octx);
+  return None{};
+}
+
+auto ir::OptimizeAggregation::substitute(substitute_ctx ctx, bool instantiate)
+  -> failure_or<void> {
+  TRY(fallback.substitute(ctx, instantiate));
+  for (auto& stage : stages) {
+    if (auto* filter = try_as<AggregationStage::Filter>(stage.kind)) {
+      TRY(filter->predicate.substitute(ctx));
+    }
+  }
+  return {};
 }
 
 auto ir::Operator::rewrite_aggregation(OptimizeAggregation aggregation,

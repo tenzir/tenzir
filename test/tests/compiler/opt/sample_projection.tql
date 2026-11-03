@@ -1,0 +1,5 @@
+export
+sample
+where x == 1
+select y
+head 2

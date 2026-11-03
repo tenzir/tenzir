@@ -1,0 +1,5 @@
+export
+assert x > 0, message=m
+where y == 1
+select z
+head 2

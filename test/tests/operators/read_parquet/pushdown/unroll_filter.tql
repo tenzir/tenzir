@@ -1,0 +1,9 @@
+// `unroll` forwards a filter that does not read the unrolled field, so the
+// reader skips the corrupted second row group.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-lookahead" {
+  read_parquet
+}
+xs = [id]
+unroll xs
+where id < 2
+select xs

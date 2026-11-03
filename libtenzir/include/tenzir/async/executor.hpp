@@ -34,6 +34,8 @@ namespace ir {
 struct Plan;
 } // namespace ir
 
+class SecretStore;
+
 struct PostCommit {};
 
 /// Request a graceful shutdown of the operator.
@@ -170,6 +172,12 @@ public:
   /// Returns the (immutable) checkpoint settings of the pipeline.
   virtual auto checkpoint_settings() const -> Option<CheckpointSettings const&>
     = 0;
+
+  /// An explicitly supplied secret backend. Without one, lookups use the node.
+  /// The backend must outlive this context and all of its operators.
+  virtual auto secret_store() const -> Option<SecretStore&> {
+    return None{};
+  }
 
   /// Returns the registry that the pipeline was compiled against. Operators
   /// resolve and compile anything they create at runtime against it.

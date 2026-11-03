@@ -1,0 +1,80 @@
+{
+  x: false,
+  in_ints: false,
+  in_true: false,
+  not_in_ints: true,
+  not_in_true: true,
+  mixed: false,
+  in_field: false,
+  not_in_field: true,
+}
+{
+  x: true,
+  in_ints: false,
+  in_true: true,
+  not_in_ints: true,
+  not_in_true: false,
+  mixed: false,
+  in_field: false,
+  not_in_field: true,
+}
+{
+  x: 0,
+  in_ints: true,
+  in_true: false,
+  not_in_ints: false,
+  not_in_true: true,
+  mixed: false,
+  in_field: false,
+  not_in_field: true,
+}
+{
+  x: 1,
+  in_ints: false,
+  in_true: false,
+  not_in_ints: true,
+  not_in_true: true,
+  mixed: true,
+  in_field: true,
+  not_in_field: false,
+}
+{
+  x: 1.0,
+  in_ints: false,
+  in_true: false,
+  not_in_ints: true,
+  not_in_true: true,
+  mixed: true,
+  in_field: false,
+  not_in_field: true,
+}
+{
+  x: 5,
+  in_ints: true,
+  in_true: false,
+  not_in_ints: false,
+  not_in_true: true,
+  mixed: false,
+  in_field: true,
+  not_in_field: false,
+}
+{
+  x: "a",
+  in_ints: false,
+  in_true: false,
+  not_in_ints: true,
+  not_in_true: true,
+  mixed: true,
+  in_field: true,
+  not_in_field: false,
+}
+{
+  x: null,
+  in_ints: false,
+  in_true: false,
+  not_in_ints: true,
+  not_in_true: true,
+  mixed: false,
+  in_field: true,
+  not_in_field: false,
+}

@@ -85,7 +85,8 @@ struct FromSplunkArgs {
   // operators. Prefilters, a projection, and a limit go into the search as
   // trailing stages (see `pushdown::plan_spl_search`), and the operator applies
   // all of them locally. An aggregation goes into the search as `stats` stages
-  // (see `pushdown::plan_spl_aggregation`), or runs locally.
+  // after exact spellings of the filters (see
+  // `pushdown::plan_spl_aggregation`), or runs locally.
   OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
     optimization;
 };
@@ -394,29 +395,37 @@ auto plan_search(FromSplunkArgs const& args, registry const& reg)
   return std::move(plan->query);
 }
 
-/// The search that computes `aggregation` in Splunk, or `None` if Splunk
-/// cannot compute it as `summarize` does.
-auto plan_aggregate_search(FromSplunkArgs const& args,
-                           ir::OptimizeAggregation const& aggregation)
+/// The search to which the operator appends the stages of an aggregation: the
+/// user's search or one for the indexes, or `None` if an index name has no
+/// spelling.
+auto aggregation_base_search(FromSplunkArgs const& args)
   -> Option<std::string> {
-  // A pushed filter only preselects candidates, which Splunk would aggregate
-  // before Tenzir evaluates the filter. Options may change how Splunk runs the
-  // search in ways that the aggregation does not account for.
-  if (not args.optimization.filter.empty() or args.options) {
+  if (args.search) {
+    return pushdown::spl_search_command(args.search->inner);
+  }
+  auto names = args.index ? index_names(args.index->inner) : None{};
+  if (not names or names->empty()) {
     return None{};
   }
-  auto search = std::string{};
-  if (args.search) {
-    search = pushdown::spl_search_command(args.search->inner);
-  } else {
-    auto names = args.index ? index_names(args.index->inner) : None{};
-    if (not names or names->empty()) {
-      return None{};
-    }
-    TRY(search, pushdown::spl_index_search(*names));
+  return pushdown::spl_index_search(*names);
+}
+
+/// The searches that compute `aggregation` in Splunk, or `None` if Splunk
+/// cannot compute it as `summarize` does, for example because a filter has no
+/// exact spelling.
+auto plan_aggregate_search(FromSplunkArgs const& args,
+                           ir::OptimizeAggregation const& aggregation,
+                           registry const& reg)
+  -> Option<pushdown::SplAggregation> {
+  // Options may change how Splunk runs the search in ways that the
+  // aggregation does not account for. The plan already rules them out.
+  if (args.options) {
+    return None{};
   }
-  return pushdown::plan_spl_aggregation(search, aggregation,
-                                        args.raw.is_some());
+  TRY(auto search, aggregation_base_search(args));
+  return pushdown::plan_spl_aggregation(search, args.optimization.filter,
+                                        args.optimization.projection,
+                                        aggregation, args.raw.is_some(), reg);
 }
 
 /// The form body of a search request. `now`, in epoch seconds, anchors the
@@ -1085,7 +1094,7 @@ public:
     headers_ = std::move(resolved_headers);
     config_ = std::move(*config);
     if (auto const& aggregation = args_.optimization.aggregation) {
-      if (auto search = plan_aggregate_search(args_, *aggregation)) {
+      if (auto plan = plan_aggregate_search(args_, *aggregation, ctx.reg())) {
         aggregating_remotely_ = true;
         // If the result of the aggregation might differ from `summarize`, the
         // operator sends the search again without it. Both requests resolve
@@ -1095,9 +1104,11 @@ public:
         now_ = std::chrono::floor<std::chrono::seconds>(
                  time::clock::now().time_since_epoch())
                  .count();
-        launch(std::move(*search), ctx);
+        aggregation_plan_ = std::move(plan);
+        launch(aggregation_plan_->search, ctx);
         co_return;
       }
+      // A filter without an exact spelling keeps the aggregation local.
       if (not co_await aggregate_locally(ctx)) {
         done_ = true;
         co_return;
@@ -1373,10 +1384,13 @@ private:
   }
 
   /// Emits the result of the aggregation in Splunk, or sends the search
-  /// without it and aggregates its results locally if the result might differ
-  /// from what `summarize` computes.
+  /// without it, but with the same filters, and aggregates its results
+  /// locally if the result might differ from what `summarize` computes.
   auto finish_aggregation(Push<nova::Events>& push, OpCtx& ctx) -> Task<void> {
     aggregating_remotely_ = false;
+    TENZIR_ASSERT(aggregation_plan_);
+    auto plan = std::move(*aggregation_plan_);
+    aggregation_plan_ = None{};
     auto rows = std::exchange(aggregation_rows_, {});
     auto const& aggregation = *args_.optimization.aggregation;
     auto dh = collecting_diagnostic_handler{};
@@ -1384,14 +1398,15 @@ private:
                     ? Result<std::vector<nova::Events>, std::string>{Err{
                         std::move(*aggregation_error_)}}
                     : pushdown::decode_spl_aggregation(rows, aggregation,
-                                                       args_.raw.is_some(), dh);
+                                                       args_.raw.is_some(),
+                                                       plan.checked, dh);
     if (result.is_err()) {
       TENZIR_DEBUG("from_splunk aggregates locally: {}", result.unwrap_err());
       if (not co_await aggregate_locally(ctx)) {
         done_ = true;
         co_return;
       }
-      launch(plan_search(args_, ctx.reg()), ctx);
+      launch(std::move(plan.fallback), ctx);
       co_return;
     }
     std::move(dh).forward_to(ctx.dh());
@@ -1417,6 +1432,9 @@ private:
   Option<int64_t> now_;
   /// Whether the current search computes the aggregation in Splunk.
   bool aggregating_remotely_ = false;
+  /// The searches of the aggregation in Splunk, until the operator receives
+  /// the result.
+  Option<pushdown::SplAggregation> aggregation_plan_;
   /// Why the result of the aggregation in Splunk may be incomplete.
   Option<std::string> aggregation_error_;
   /// The rows of the result of the aggregation in Splunk.
@@ -1459,14 +1477,24 @@ public:
     d.operator_location(&FromSplunkArgs::operator_location);
     d.optimization(&FromSplunkArgs::optimization);
     // Splunk can compute a summary of the results of a search in `stats`
-    // stages, unless a filter applies to them, since a pushed filter only
-    // preselects candidates. The operator checks the result, and aggregates
-    // locally if it might differ from `summarize`. Only the Nova operator
-    // implements the aggregation.
+    // stages, after a `where` stage with the filters that apply to them if
+    // each has an exact spelling. Translating the filters needs the registry,
+    // so the operator decides on them at runtime, as on every other reason
+    // why the result might differ from `summarize`, and aggregates locally
+    // then. Only the Nova operator implements the aggregation.
     d.aggregation([](FromSplunkArgs const& args,
                      ir::OptimizeAggregation const& aggregation) -> bool {
-      return nova_enabled()
-             and plan_aggregate_search(args, aggregation).is_some();
+      // The result is exact only if it holds every group, which the search
+      // counts, so the stages after the aggregation, which drop groups, stay
+      // local.
+      if (not nova_enabled() or args.options
+          or not aggregation.stages.empty()) {
+        return false;
+      }
+      auto search = aggregation_base_search(args);
+      return search
+             and pushdown::can_plan_spl_aggregation(*search, aggregation,
+                                                    args.raw.is_some());
     });
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Fail fast so that one invalid argument yields one diagnostic.

@@ -1,0 +1,7 @@
+// `reorder` forwards the projection plus its timestamp, so the corrupted
+// unselected column is never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+reorder on=2026-01-01 + (8 - id) * 1s, tolerance=1h
+select id

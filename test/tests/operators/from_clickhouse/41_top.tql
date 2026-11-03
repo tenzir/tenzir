@@ -1,4 +1,4 @@
-// `top` counts the values in the query, and sorts the counts locally.
+// `top` counts the values in the query, which orders the counts, too.
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

@@ -284,6 +284,66 @@ TEST("dynamic columns only contribute monotone prefilters") {
   CHECK(is<ip>(as<ast::constant>(as<ast::binary_expr>(expr).right).value));
 }
 
+TEST("dynamic predicates translate without widening") {
+  auto columns = ColumnModel{};
+  columns.add({"x"}, {DynamicType{}, true});
+  columns.add({"y"}, {DynamicType{}, true});
+  auto translate = [&](std::string_view source, bool negations = true) {
+    return translate_dynamic_predicate(parse(source), columns,
+                                       test::builtin_registry(),
+                                       {.negations = negations});
+  };
+  for (auto source :
+       {"x == 42", "x < -42", "x >= 1.5", "42 == x", "x == true", "x",
+        "x == \"text\"", "x == null", "x != null", "x in [\"a\", \"b\"]",
+        "x in [5, 7]", "x == 2024-01-01", "x == 1 and y == 2",
+        "x == 1 or y == null", "x != 42", "not (x == \"a\")",
+        "not (\"a\" == x)", "not (x in [5, 7])"}) {
+    CHECK(translate(source));
+  }
+  // Like `==`, TQL's `in` compares each element of a list by its own type, so
+  // that lists with booleans, with `0` or `1`, and of several types translate
+  // with their literals as they are.
+  for (auto source :
+       {"x in [0, 5]", "not (x in [1, 5])", "x in [true]", "not (x in [false])",
+        "x in [5, 1.0]", "x in [\"a\", 5]", "not (x in [\"a\", 5, true])"}) {
+    CHECK(translate(source));
+  }
+  auto mixed = translate(R"(x in ["a", 5, true])");
+  REQUIRE(mixed);
+  REQUIRE(is<In>(*mixed));
+  auto const& elements = as<In>(*mixed).list;
+  REQUIRE_EQUAL(elements.size(), 3u);
+  CHECK(is<std::string>(as<Literal>(elements[0]).value));
+  CHECK(is<int64_t>(as<Literal>(elements[1]).value));
+  CHECK(is<bool>(as<Literal>(elements[2]).value));
+  // Prefilters widen these, or have none.
+  for (auto source :
+       {"x in []", "x in [1, null]", "x < \"b\"", "x > true",
+        "x == 9007199254740993", "x != 9007199254740992", "x != 2024-01-01",
+        "x.starts_with(\"a\")", "x.to_lower() == \"a\"", "\"s\" in x",
+        "x == 1.1.1.1", "x.ip() in 10.0.0.0/8",
+        "x == 1 and y.length_bytes() > 0", "x == 1 or y.length_bytes() > 0",
+        "not (x > 1)", "not x", "x == y", "x + 1 == 2"}) {
+    CHECK(not translate(source));
+  }
+  // Negations require the option.
+  CHECK(not translate("x != 42", false));
+  CHECK(not translate("not (x == \"a\")", false));
+  // Null checks become `IsNull`, a bare field a comparison with `true`, and
+  // a negation keeps the null of a missing field explicitly.
+  auto null_check = translate("x == null");
+  REQUIRE(null_check);
+  CHECK(is<IsNull>(*null_check) and not as<IsNull>(*null_check).negated);
+  auto bare = translate("x");
+  REQUIRE(bare);
+  CHECK(is<Binary>(*bare) and as<Binary>(*bare).op == BinaryOp::eq);
+  auto negation = translate("x != 42");
+  REQUIRE(negation);
+  REQUIRE(is<Or>(*negation));
+  CHECK(is<IsNull>(as<Or>(*negation).operands[0]));
+}
+
 TEST("fields translate to the values that TQL sees") {
   auto columns = make_columns();
   auto value = [&](std::vector<std::string> path) -> Option<std::string> {

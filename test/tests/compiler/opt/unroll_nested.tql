@@ -1,0 +1,4 @@
+export
+unroll a.b
+where a.c == 1
+select a.b.x, a.c

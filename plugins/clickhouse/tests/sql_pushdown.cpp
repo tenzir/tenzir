@@ -896,14 +896,42 @@ auto call(std::vector<std::string> output, std::string function,
 
 auto aggregate(std::vector<ir::OptimizeAggregation::Column> columns,
                std::vector<std::string> where = {},
-               SqlTarget target = SqlTarget::clickhouse)
+               SqlTarget target = SqlTarget::clickhouse,
+               std::vector<ir::AggregationStage> stages = {})
   -> Option<std::string> {
   auto aggregation = ir::OptimizeAggregation{
     .columns = std::move(columns),
     .schema_name = "tenzir.summarize",
     .fallback = {},
+    .stages = std::move(stages),
   };
   return make_aggregate_query(aggregation, make_schema(), "tbl", where, target);
+}
+
+/// A `where` after an aggregation.
+auto filter_stage(std::string_view predicate) -> ir::AggregationStage {
+  return {ir::AggregationStage::Filter{parse(predicate)}};
+}
+
+/// A `sort` after an aggregation, with `-` before a descending key.
+auto sort_stage(std::vector<std::string_view> keys) -> ir::AggregationStage {
+  auto result = ir::AggregationStage::Sort{.keys = {}, .bounded = true};
+  for (auto key : keys) {
+    auto descending = key.starts_with('-');
+    if (descending) {
+      key.remove_prefix(1);
+    }
+    result.keys.push_back({
+      .field = {std::string{key}},
+      .descending = descending,
+    });
+  }
+  return {std::move(result)};
+}
+
+/// A `head` after an aggregation.
+auto limit_stage(uint64_t count) -> ir::AggregationStage {
+  return {ir::AggregationStage::Limit{count}};
 }
 
 } // namespace
@@ -969,6 +997,53 @@ TEST("aggregate queries for hydrolix spell time guards on tick counts") {
                 "NULL)"});
 }
 
+TEST("aggregate queries filter, sort, and limit results") {
+  auto columns = std::vector{key({"src"}, {"y"}), call({"events"}, "count")};
+  auto const base = std::string{
+    "SELECT `y` AS `__tenzir_aggregate_0`, toInt64(count()) AS "
+    "`__tenzir_aggregate_1` FROM tbl WHERE `x` >= 3 GROUP BY `y`"};
+  // The example of the issue, with ClickHouse's semantics.
+  CHECK_EQUAL(aggregate(columns, {"`x` >= 3"}, SqlTarget::clickhouse,
+                        {filter_stage("events >= 10"),
+                         sort_stage({"-events", "src"}), limit_stage(20)}),
+              fmt::format("SELECT * FROM ({}) AS `__tenzir_aggregate` WHERE "
+                          "(`__tenzir_aggregate_1` >= 10) ORDER BY "
+                          "`__tenzir_aggregate_1` DESC, `__tenzir_aggregate_0` "
+                          "ASC LIMIT 20",
+                          base));
+  // Strings escape backslashes and quotes.
+  CHECK_EQUAL(aggregate(columns, {"`x` >= 3"}, SqlTarget::clickhouse,
+                        {filter_stage(R"(src != "it's \\ a")")}),
+              fmt::format("SELECT * FROM ({}) AS `__tenzir_aggregate` WHERE "
+                          R"((`__tenzir_aggregate_0` <> 'it\'s \\ a'))",
+                          base));
+  // Enums sort by their values in ClickHouse.
+  CHECK_EQUAL(aggregate({key({"status"}, {"status"}), call({"n"}, "count")}, {},
+                        SqlTarget::clickhouse,
+                        {sort_stage({"status"}), limit_stage(1)}),
+              std::string{"SELECT * FROM (SELECT `status` AS "
+                          "`__tenzir_aggregate_0`, toInt64(count()) AS "
+                          "`__tenzir_aggregate_1` FROM tbl GROUP BY `status`) "
+                          "AS `__tenzir_aggregate` ORDER BY "
+                          "`__tenzir_aggregate_0` ASC LIMIT 1"});
+  // A stage that ClickHouse cannot spell keeps the aggregation local, which
+  // the plan already rules out.
+  CHECK(not aggregate(columns, {"`x` >= 3"}, SqlTarget::clickhouse,
+                      {filter_stage("src.ip() in 10.0.0.0/8")}));
+  CHECK(not supports_aggregate_functions(ir::OptimizeAggregation{
+    .columns = columns,
+    .schema_name = "tenzir.summarize",
+    .fallback = {},
+    .stages = {filter_stage("src.ip() in 10.0.0.0/8")},
+  }));
+  CHECK(supports_aggregate_functions(ir::OptimizeAggregation{
+    .columns = columns,
+    .schema_name = "tenzir.summarize",
+    .fallback = {},
+    .stages = {filter_stage("events >= 10"), limit_stage(20)},
+  }));
+}
+
 TEST("aggregations that stay local") {
   auto count = call({"n"}, "count");
   // `GROUP BY` equates `NaN` with itself and `-0.0` with `0.0`.
@@ -992,6 +1067,7 @@ TEST("aggregations that stay local") {
     .columns = {count},
     .schema_name = "tenzir.summarize",
     .fallback = {},
+    .stages = {},
   };
   CHECK(not make_aggregate_query(aggregation, schema, "tbl", {},
                                  SqlTarget::clickhouse));

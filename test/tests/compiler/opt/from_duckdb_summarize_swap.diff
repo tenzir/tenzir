@@ -39,11 +39,17 @@
 -              
 -            ],
 -            end: [0]:0..0 from 0
+-          },
+-          location: [0]:0..0 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `src_ip` @ [1]:221..227 from 0,
 +          expr: root_field {
 +            id: `src_ip` @ [1]:243..249 from 0,
-+            has_question_mark: false
+             has_question_mark: false
            },
--          location: [0]:0..0 from 0
+-          right: root_field {
 +          has_this: false,
 +          path: [
 +            {
@@ -51,13 +57,8 @@
 +              has_question_mark: false
 +            }
 +          ]
-         },
-         {
--          left: root_field {
--            id: `src_ip` @ [1]:221..227 from 0,
--            has_question_mark: false
--          },
--          right: root_field {
++        },
++        {
 +          expr: root_field {
              id: `dst_ip` @ [1]:228..234 from 0,
              has_question_mark: false
@@ -244,7 +245,10 @@
 -          }
 +          ],
 +          definition_location: [0]:0..0 from 0
-+        }
++        },
++        stages: [
++          
++        ]
 +      }
 +    },
 +    GenericIr {

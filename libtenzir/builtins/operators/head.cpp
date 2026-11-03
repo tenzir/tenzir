@@ -98,6 +98,16 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<HeadArgs, Head, HeadNova>{};
     auto count = d.optional_positional("count", &HeadArgs::count);
+    d.aggregation_stage([=](DescribeCtx& ctx) -> Option<ir::AggregationStage> {
+      auto limit = Option<uint64_t>{HeadArgs{}.count};
+      if (ctx.get_location(count)) {
+        limit = ctx.get(count);
+      }
+      if (not limit) {
+        return None{};
+      }
+      return ir::AggregationStage{ir::AggregationStage::Limit{*limit}};
+    });
     return d.optimize(
       [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
         // `head` is a filter barrier that needs ordered input. It stays in the

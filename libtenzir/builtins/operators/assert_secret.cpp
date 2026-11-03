@@ -104,6 +104,8 @@ public:
         }
         return {};
       });
+    // This testing operator checks a secret when it starts and then reports
+    // that it is done, so it has nothing to gain from hints.
     return d.without_optimize();
   }
 

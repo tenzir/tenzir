@@ -56,8 +56,13 @@ stdenvNoCC.mkDerivation {
         fi
       ''}
         echo "running $1 integration tests"
+        # The root is the writable copy of the engine's tests that the targets
+        # name. Below another root, `tenzir-test` would run a selected
+        # directory with its own `tenzir.yaml` as a separate project, which
+        # runs only some of its tests and reports paths relative to it. Plugin
+        # suites stay separate projects, as they should.
         tenzir-test \
-          --root "${src}/test" \
+          --root "$PWD/test" \
           --summary \
           --report-json - \
           -j $NIX_BUILD_CORES \

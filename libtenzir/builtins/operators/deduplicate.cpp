@@ -633,17 +633,7 @@ public:
         auto produced = std::vector<ast::field_path>{};
         if (ctx.get_location(count_field)) {
           if (auto path = ctx.get(count_field)) {
-            if (projection) {
-              std::erase_if(*projection, [&](const ast::field_path& other) {
-                return ir::is_field_path_prefix(*path, other);
-              });
-              // A nested assignment observes its existing parent and warns
-              // when a scalar must be replaced by an implicit record. Retain
-              // the target so projection cannot hide that diagnostic.
-              if (path->path().size() > 1) {
-                ir::add_to_projection(projection, *path);
-              }
-            }
+            ir::project_assignment(projection, *path);
             produced.push_back(std::move(*path));
           } else {
             projection = None{};

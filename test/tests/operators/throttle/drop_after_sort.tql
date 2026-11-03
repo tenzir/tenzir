@@ -1,0 +1,7 @@
+// With `drop`, `throttle` keeps the first events of a window, so the sort
+// before it must stay even though the sort after it does not need ordered
+// input.
+from {id: 2}, {id: 1}
+sort id
+throttle rate=1, window=1d, drop=true
+sort id

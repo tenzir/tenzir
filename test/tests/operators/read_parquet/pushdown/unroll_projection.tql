@@ -1,0 +1,9 @@
+// `unroll` forwards the projection plus the unrolled field, so the corrupted
+// unselected column is never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+xs = [id, id + 10]
+unroll xs
+select xs
+head 4

@@ -19,6 +19,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 /// Assembly of the `SELECT` that a SQL source sends for a table.
@@ -44,6 +45,9 @@ struct SqlSelect {
   std::vector<std::string> where;
   /// The expressions to group by.
   std::vector<std::string> group_by;
+  /// The terms to order by, each with its direction, as they appear after
+  /// `ORDER BY`.
+  std::vector<std::string> order_by;
   /// The number of rows to return at most.
   Option<uint64_t> limit;
 };
@@ -71,6 +75,23 @@ public:
   /// The largest limit that the target accepts. A target that fails the query
   /// on a larger one overrides this. Defaults to the largest `uint64_t`.
   virtual auto max_limit() const -> uint64_t;
+
+  /// Spells a string literal, or returns `None` if the dialect cannot spell
+  /// `text`. Defaults to single quotes, which doubles a quote inside.
+  virtual auto quote_string(std::string_view text) const -> Option<std::string>;
+
+  /// Spells a finite `double` so that the target reads it as a floating-point
+  /// number, also where its value is integral, as in `2.0`. Defaults to the
+  /// shortest decimal spelling with an exponent, such as `2e0` or `1.5e0`.
+  virtual auto render_double(double value) const -> std::string;
+
+  /// Spells a boolean literal. Defaults to `TRUE` or `FALSE`.
+  virtual auto render_bool(bool value) const -> std::string;
+
+  /// Whether a boolean value may stand where the dialect expects a predicate,
+  /// as in `WHERE flag`, and a predicate where it expects a value, as in
+  /// `(x > 1) = TRUE`. Defaults to `true`.
+  virtual auto boolean_values() const -> bool;
 };
 
 /// Spells `select` in `dialect`.
@@ -186,6 +207,44 @@ auto make_aggregate_select(AggregationPlan const& plan,
                            SqlQueryDialect const& dialect,
                            SqlAggregateDialect const& aggregates,
                            std::string from, std::span<std::string const> where)
+  -> Option<SqlSelect>;
+
+/// Returns whether `make_post_aggregate_select` computes every stage of
+/// `aggregation` in `dialect`. It decides from the syntax of the stages
+/// alone, so that a source can decide whether to take them over before it
+/// knows the types of the columns:
+///
+/// - A filter spells field paths that name an output column of the
+///   aggregation, constants of type `null`, `bool`, `int64`, `uint64`,
+///   finite `double`, and `string`, comparisons, `and`, `or`, `not`,
+///   arithmetic, negation, `== null`, `!= null`, and `in` with a list of
+///   such constants.
+/// - A sort orders by output columns of the aggregation.
+/// - A limit fits into `dialect.max_limit()`.
+auto supports_post_aggregate_stages(ir::OptimizeAggregation const& aggregation,
+                                    SqlQueryDialect const& dialect) -> bool;
+
+/// Extends `aggregate`, a `SELECT` from `make_aggregate_select` that computes
+/// `aggregation`, with the stages of `aggregation`, or returns it as it is if
+/// there are none. Returns `None` if `supports_post_aggregate_stages` does not
+/// hold.
+///
+/// The extended query reads `aggregate` as a derived table, so that every
+/// stage sees the result columns by their aliases, as SQL's `HAVING` and
+/// `ORDER BY` would, but without the rules of dialects for aliases in
+/// expressions:
+///
+/// ```sql
+/// SELECT * FROM (<aggregate>) AS __tenzir_aggregate
+/// WHERE <filters> ORDER BY <sort> LIMIT <limit>
+/// ```
+///
+/// The query computes the stages with the semantics of the target, which
+/// may differ from TQL's in how it compares and orders values, places `NULL`,
+/// and breaks ties.
+auto make_post_aggregate_select(SqlSelect aggregate,
+                                ir::OptimizeAggregation const& aggregation,
+                                SqlQueryDialect const& dialect)
   -> Option<SqlSelect>;
 
 } // namespace tenzir::pushdown

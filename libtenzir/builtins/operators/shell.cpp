@@ -555,6 +555,7 @@ public:
         return None{};
       }
     });
+    // `shell` reads and writes bytes, which event hints do not describe.
     return d.without_optimize();
   }
 };

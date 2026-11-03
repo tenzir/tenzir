@@ -1,0 +1,5 @@
+export
+assert_throughput 1, within=1h
+where x == 1
+select y
+head 2

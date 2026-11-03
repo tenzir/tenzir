@@ -241,7 +241,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReorderArgs, Reorder, ReorderEvents>{};
-    d.named("on", &ReorderArgs::on, "time");
+    auto on = d.named("on", &ReorderArgs::on, "time");
     auto tolerance = d.named("tolerance", &ReorderArgs::tolerance, "duration");
     d.operator_location(&ReorderArgs::operator_location);
     d.validate([tolerance](DescribeCtx& ctx) -> Empty {
@@ -253,7 +253,24 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // Every event advances the watermark, which decides which later
+        // events are late, so a filter cannot move upstream. The output order
+        // differs from the input order, so a limit cannot either. The
+        // projection passes through, extended by the timestamp.
+        auto projection = std::move(req.projection);
+        if (auto expr = ctx.get(on)) {
+          ir::add_refs_to_projection(projection, *expr);
+        } else {
+          projection = None{};
+        }
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .projection_upstream = std::move(projection),
+        };
+      });
   }
 };
 

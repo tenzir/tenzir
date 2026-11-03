@@ -1,0 +1,4 @@
+{
+  id: 1,
+  text: "id=1 message=one",
+}

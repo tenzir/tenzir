@@ -1,0 +1,10 @@
+{
+  user: "alice",
+  events: 1,
+  outcomes: 1,
+}
+{
+  user: "bob",
+  events: 1,
+  outcomes: 1,
+}

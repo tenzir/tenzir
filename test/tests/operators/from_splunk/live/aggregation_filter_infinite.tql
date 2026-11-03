@@ -1,0 +1,15 @@
+// Tenzir reads `1e999` and `Infinity` as infinity, which passes `n > 6`, as do
+// other values that Splunk compares differently, such as `+8`, `1e3`, or
+// integers with 16 digits. The operator summarizes such events in Tenzir,
+// after a second search that keeps them, unlike the prefilter `n>6`.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search=r#"| makeresults count=12 | streamstats count as i | eval n=case(i==1, "1e999", i==2, "inf", i==3, "Infinity", i==4, "+8", i==5, "7.5", i==6, "1e3", i==7, "1234567890123456", i==8, "nan", i==9, "-inf", i==10, "5", i==11, "-1e999", i==12, "9007199254740993"), k=if(i%2==0, "even", "odd")"#,
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where n > 6
+summarize k, events=count()
+sort k

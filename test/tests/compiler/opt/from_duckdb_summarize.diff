@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:151..162 from 0
+             `from_duckdb` @ [1]:167..178 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:163..178 from 0
+           located "events.duckdb" @ [1]:179..194 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:186..194 from 0
+             value: located "events" @ [1]:202..210 from 0
            }
          ]
        },
@@ -30,7 +30,7 @@
 -    where_ir {
 -      op: {
 -        path: [
--          `where` @ [1]:195..200 from 0
+-          `where` @ [1]:211..216 from 0
 -        ],
 -        ref: std::where/op
 -      },
@@ -38,12 +38,12 @@
 -        expression binary_expr {
 +        binary_expr {
            left: root_field {
-             id: `severity` @ [1]:201..209 from 0,
+             id: `severity` @ [1]:217..225 from 0,
              has_question_mark: false
            },
            op: "geq",
-           right: constant int64 3 @ [1]:213..214 from 0,
-           location: [1]:201..214 from 0
+           right: constant int64 3 @ [1]:229..230 from 0,
+           location: [1]:217..230 from 0
          }
        ],
 -      named_args: [
@@ -51,64 +51,50 @@
 -      ]
 -    },
 -    summarize {
--      self: [1]:215..224 from 0,
+-      self: [1]:231..240 from 0,
 -      cfg: {
 -        aggregates: [
 -          {
 -            dest: {
 -              expr: root_field {
--                id: `events` @ [1]:233..239 from 0,
--                has_question_mark: false
--              },
--              has_this: false,
--              path: [
--                {
--                  id: `events` @ [1]:233..239 from 0,
--                  has_question_mark: false
--                }
--              ]
--            },
--            call: {
--              fn: {
--                path: [
--                  `count` @ [1]:240..245 from 0
+-                id: `events` @ [1]:249..255 from 0,
 +      order: "ordered",
 +      projection: [
 +        {
 +          expr: root_field {
-+            id: `src_ip` @ [1]:225..231 from 0,
++            id: `src_ip` @ [1]:241..247 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src_ip` @ [1]:225..231 from 0,
++              id: `src_ip` @ [1]:241..247 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: root_field {
-+            id: `ts` @ [1]:264..266 from 0,
++            id: `ts` @ [1]:280..282 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `ts` @ [1]:264..266 from 0,
++              id: `ts` @ [1]:280..282 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: root_field {
-+            id: `severity` @ [1]:201..209 from 0,
++            id: `severity` @ [1]:217..225 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `severity` @ [1]:201..209 from 0,
++              id: `severity` @ [1]:217..225 from 0,
 +              has_question_mark: false
 +            }
 +          ]
@@ -148,19 +134,19 @@
 +          ],
 +          operators: [
 +            summarize {
-+              self: [1]:215..224 from 0,
++              self: [1]:231..240 from 0,
 +              cfg: {
 +                aggregates: [
 +                  {
 +                    dest: {
 +                      expr: root_field {
-+                        id: `events` @ [1]:233..239 from 0,
++                        id: `events` @ [1]:249..255 from 0,
 +                        has_question_mark: false
 +                      },
 +                      has_this: false,
 +                      path: [
 +                        {
-+                          id: `events` @ [1]:233..239 from 0,
++                          id: `events` @ [1]:249..255 from 0,
 +                          has_question_mark: false
 +                        }
 +                      ]
@@ -168,7 +154,7 @@
 +                    call: {
 +                      fn: {
 +                        path: [
-+                          `count` @ [1]:240..245 from 0
++                          `count` @ [1]:256..261 from 0
 +                        ],
 +                        ref: std::count/fn
 +                      },
@@ -176,28 +162,28 @@
 +                        
 +                      ],
 +                      method: false,
-+                      location: [1]:240..247 from 0
++                      location: [1]:256..263 from 0
 +                    }
 +                  },
 +                  {
 +                    dest: {
 +                      expr: field_access {
 +                        left: root_field {
-+                          id: `first` @ [1]:249..254 from 0,
++                          id: `first` @ [1]:265..270 from 0,
 +                          has_question_mark: false
 +                        },
 +                        has_question_mark: false,
-+                        name: `seen` @ [1]:255..259 from 0,
-+                        location: [1]:249..259 from 0
++                        name: `seen` @ [1]:271..275 from 0,
++                        location: [1]:265..275 from 0
 +                      },
 +                      has_this: false,
 +                      path: [
 +                        {
-+                          id: `first` @ [1]:249..254 from 0,
++                          id: `first` @ [1]:265..270 from 0,
 +                          has_question_mark: false
 +                        },
 +                        {
-+                          id: `seen` @ [1]:255..259 from 0,
++                          id: `seen` @ [1]:271..275 from 0,
 +                          has_question_mark: false
 +                        }
 +                      ]
@@ -205,49 +191,85 @@
 +                    call: {
 +                      fn: {
 +                        path: [
-+                          `min` @ [1]:260..263 from 0
++                          `min` @ [1]:276..279 from 0
 +                        ],
 +                        ref: std::min/fn
 +                      },
 +                      args: [
 +                        root_field {
-+                          id: `ts` @ [1]:264..266 from 0,
++                          id: `ts` @ [1]:280..282 from 0,
 +                          has_question_mark: false
 +                        }
 +                      ],
 +                      method: false,
-+                      location: [1]:260..267 from 0
++                      location: [1]:276..283 from 0
 +                    }
 +                  }
-                 ],
--                ref: std::count/fn
--              },
--              args: [
--                
--              ],
--              method: false,
--              location: [1]:240..247 from 0
--            }
--          },
--          {
--            dest: {
--              expr: field_access {
--                left: root_field {
--                  id: `first` @ [1]:249..254 from 0,
--                  has_question_mark: false
--                },
--                has_question_mark: false,
--                name: `seen` @ [1]:255..259 from 0,
--                location: [1]:249..259 from 0
--              },
++                ],
++                groups: [
++                  {
++                    expr: {
++                      expr: root_field {
++                        id: `src_ip` @ [1]:241..247 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `src_ip` @ [1]:241..247 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    }
++                  }
++                ],
++                indices: [
++                  -1,
++                  0,
++                  1
++                ],
++                emission: "final",
++                mode: "reset",
++                output: "summary",
++                emit_every: 1
++              }
++            },
++            where_ir {
++              op: {
++                path: [
++                  
++                ],
++                ref: unresolved
++              },
++              args: [
++                Incomplete binary_expr {
++                  left: root_field {
++                    id: `events` @ [1]:290..296 from 0,
++                    has_question_mark: false
++                  },
++                  op: "geq",
++                  right: constant int64 10 @ [1]:300..302 from 0,
++                  location: [1]:290..302 from 0
++                }
++              ],
++              named_args: [
++                
++              ]
++            }
++          ],
++          definition_location: [0]:0..0 from 0
++        },
++        stages: [
++          Filter {
++            predicate: binary_expr {
++              left: root_field {
++                id: `events` @ [1]:290..296 from 0,
+                 has_question_mark: false
+               },
 -              has_this: false,
 -              path: [
 -                {
--                  id: `first` @ [1]:249..254 from 0,
--                  has_question_mark: false
--                },
--                {
--                  id: `seen` @ [1]:255..259 from 0,
+-                  id: `events` @ [1]:249..255 from 0,
 -                  has_question_mark: false
 -                }
 -              ]
@@ -255,48 +277,72 @@
 -            call: {
 -              fn: {
 -                path: [
--                  `min` @ [1]:260..263 from 0
-+                groups: [
-+                  {
-+                    expr: {
-+                      expr: root_field {
-+                        id: `src_ip` @ [1]:225..231 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `src_ip` @ [1]:225..231 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    }
-+                  }
-                 ],
+-                  `count` @ [1]:256..261 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:256..263 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: field_access {
+-                left: root_field {
+-                  id: `first` @ [1]:265..270 from 0,
+-                  has_question_mark: false
+-                },
+-                has_question_mark: false,
+-                name: `seen` @ [1]:271..275 from 0,
+-                location: [1]:265..275 from 0
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `first` @ [1]:265..270 from 0,
+-                  has_question_mark: false
+-                },
+-                {
+-                  id: `seen` @ [1]:271..275 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `min` @ [1]:276..279 from 0
+-                ],
 -                ref: std::min/fn
 -              },
 -              args: [
 -                root_field {
--                  id: `ts` @ [1]:264..266 from 0,
+-                  id: `ts` @ [1]:280..282 from 0,
 -                  has_question_mark: false
 -                }
 -              ],
 -              method: false,
--              location: [1]:260..267 from 0
--            }
--          }
+-              location: [1]:276..283 from 0
++              op: "geq",
++              right: constant int64 10 @ [1]:300..302 from 0,
++              location: [1]:290..302 from 0
+             }
+           }
 -        ],
 -        groups: [
 -          {
 -            expr: {
 -              expr: root_field {
--                id: `src_ip` @ [1]:225..231 from 0,
+-                id: `src_ip` @ [1]:241..247 from 0,
 -                has_question_mark: false
 -              },
 -              has_this: false,
 -              path: [
 -                {
--                  id: `src_ip` @ [1]:225..231 from 0,
+-                  id: `src_ip` @ [1]:241..247 from 0,
 -                  has_question_mark: false
 -                }
 -              ]
@@ -312,69 +358,48 @@
 -        mode: "reset",
 -        output: "summary",
 -        emit_every: 1
-+                indices: [
-+                  -1,
-+                  0,
-+                  1
-+                ],
-+                emission: "final",
-+                mode: "reset",
-+                output: "summary",
-+                emit_every: 1
-+              }
-+            }
-+          ],
-+          definition_location: [0]:0..0 from 0
-+        }
++        ]
        }
      },
-     where_ir {
-       op: {
-         path: [
--          `where` @ [1]:268..273 from 0
--        ],
--        ref: std::where/op
-+          
-+        ],
-+        ref: unresolved
-       },
-       args: [
--        expression binary_expr {
-+        Incomplete binary_expr {
-           left: root_field {
-             id: `events` @ [1]:274..280 from 0,
-             has_question_mark: false
-           },
-           op: "geq",
-           right: constant int64 10 @ [1]:284..286 from 0,
-           location: [1]:274..286 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
-+    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:284..289 from 0
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:286..286 from 0
++            `to_stdout` @ [1]:302..302 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        ref: std::where/op
 +        named_args: [
 +          
 +        ]
-+      },
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `events` @ [1]:290..296 from 0,
+-            has_question_mark: false
+-          },
+-          op: "geq",
+-          right: constant int64 10 @ [1]:300..302 from 0,
+-          location: [1]:290..302 from 0
+-        }
 +      filter: [
 +        
-+      ],
+       ],
+-      named_args: [
+-        
+-      ]
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:151..286 from 0
+   definition_location: [1]:167..302 from 0
  }

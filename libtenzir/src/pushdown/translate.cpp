@@ -1031,17 +1031,18 @@ auto translate_comparison(ast::binary_expr const& expr,
 
 // -- Membership ---------------------------------------------------------------
 
-/// Translates `scalar in [literals]`.
+/// Translates `scalar in [literals]`, which holds in TQL where `scalar == x`
+/// holds for some element `x`.
 ///
-/// A TQL list has a single element type, fixed by its first element; a later
-/// element of another type becomes `null` and never matches, even between
-/// `int64` and `double` or `int64` and `uint64`. A target would match it, so
-/// such lists stay local. So does a list with a `null`, which makes TQL and
-/// the IR disagree for `null` rows. For the text-like and temporal types, an
-/// element that no stored value can equal is dropped; when none remains, the
-/// membership is `false` for every row, `null` included, as in TQL.
-/// Dynamic columns use this only as a prefilter: mixed literals may over-match
-/// but cannot under-match, even if the local evaluator drops clashing types.
+/// TQL compares each element by its own type. For a typed column, a list of
+/// several types stays local, even between `int64` and `double` or `int64`
+/// and `uint64`: a target may convert the elements of a set to a common type
+/// before it compares them, which the renderers do not account for. So does
+/// a list with a `null`, which makes TQL and the IR disagree for `null` rows.
+/// For the text-like and temporal types, an element that no stored value can
+/// equal is dropped; when none remains, the membership is `false` for every
+/// row, `null` included, as in TQL. For a dynamic column, the elements keep
+/// their types, and a renderer compares each by its own type.
 auto translate_in_list(Scalar const& scalar, ast::list const& list,
                        registry const& reg) -> Option<Expr> {
   if (list.items.empty()) {
@@ -1507,8 +1508,9 @@ auto adapt_membership(ast::binary_expr& expr, ColumnModel const& columns,
     return;
   }
   if (auto* list = try_as<ast::list>(expr.right)) {
-    // TQL fixes the list's element type from its first element, so only a
-    // list of addresses has a textual counterpart.
+    // Only a list of addresses becomes text. In a list that mixes addresses
+    // with other values, TQL compares each element by its own type, and the
+    // list stays as written.
     auto addresses = std::vector<ip>{};
     for (auto const& item : list->items) {
       auto const* item_expr = try_as<ast::expression>(item);
@@ -1773,6 +1775,116 @@ auto translate_dynamic_atom(ast::expression const& expr,
   return compare(std::move(column->expr), op, to_literal(*literal), true);
 }
 
+/// Translates an atom of `translate_dynamic_predicate`: a comparison or
+/// membership of a dynamic column with literals, a null check, a bare
+/// column, or, with `options.negations`, a negated equality or membership.
+/// Unlike `translate_dynamic_atom`, it never widens: what it cannot translate
+/// as is, it rejects.
+auto translate_dynamic_comparison(ast::expression const& expr,
+                                  ColumnModel const& columns,
+                                  registry const& reg, PrefilterOptions options)
+  -> Option<Expr> {
+  auto dynamic_column = [&](ast::expression const& x) -> Option<Scalar> {
+    auto column = resolve_column(x, columns);
+    if (not column or not is<DynamicType>(column->type)) {
+      return None{};
+    }
+    // A filter drops a row on `false` and `null` alike, and the atoms below
+    // keep the null of a missing field explicitly where TQL keeps the row.
+    column->nullable = false;
+    return column;
+  };
+  if (auto column = dynamic_column(expr)) {
+    return binary(BinaryOp::eq, std::move(column->expr), lit(true));
+  }
+  if (auto const* negation = try_as<ast::unary_expr>(expr)) {
+    auto const* inner = try_as<ast::binary_expr>(negation->expr);
+    if (negation->op != ast::unary_op::not_ or not options.negations
+        or not inner) {
+      return None{};
+    }
+    if (inner->op == ast::binary_op::in) {
+      TRY(auto column, dynamic_column(inner->left));
+      return translate_dynamic_negation(std::move(column), inner->right, true,
+                                        reg);
+    }
+    if (inner->op != ast::binary_op::eq) {
+      return None{};
+    }
+    if (auto column = dynamic_column(inner->left)) {
+      return translate_dynamic_negation(std::move(*column), inner->right, false,
+                                        reg);
+    }
+    TRY(auto column, dynamic_column(inner->right));
+    return translate_dynamic_negation(std::move(column), inner->left, false,
+                                      reg);
+  }
+  auto const* x = try_as<ast::binary_expr>(expr);
+  if (not x) {
+    return None{};
+  }
+  if (x->op == ast::binary_op::in) {
+    auto const* list = try_as<ast::list>(x->right);
+    TRY(auto column, dynamic_column(x->left));
+    if (not list) {
+      return None{};
+    }
+    TRY(auto set, translate_in_list(column, *list, reg));
+    if (not is<In>(set)) {
+      return None{};
+    }
+    return set;
+  }
+  switch (x->op) {
+    case ast::binary_op::eq:
+    case ast::binary_op::neq:
+    case ast::binary_op::lt:
+    case ast::binary_op::leq:
+    case ast::binary_op::gt:
+    case ast::binary_op::geq:
+      break;
+    default:
+      return None{};
+  }
+  auto op = x->op;
+  auto column = dynamic_column(x->left);
+  auto const* value = &x->right;
+  if (not column) {
+    column = dynamic_column(x->right);
+    value = &x->left;
+    op = flip_comparison(op);
+  }
+  if (not column) {
+    return None{};
+  }
+  TRY(auto literal, as_literal(*value, reg));
+  if (is<caf::none_t>(literal.value)) {
+    switch (op) {
+      case ast::binary_op::eq:
+        return is_null(std::move(column->expr));
+      case ast::binary_op::neq:
+        return is_not_null(std::move(column->expr));
+      default:
+        return None{};
+    }
+  }
+  if (op == ast::binary_op::neq) {
+    if (not options.negations) {
+      return None{};
+    }
+    return translate_dynamic_negation(std::move(*column), *value, false, reg);
+  }
+  if (auto const* instant = try_as<time>(literal.value)) {
+    return compare(std::move(column->expr), op, lit(*instant));
+  }
+  if (not dynamic_literal_fits(literal)
+      or (is<bool>(literal.value) and op != ast::binary_op::eq)
+      or (is<std::string>(literal.value) and op != ast::binary_op::eq)) {
+    return None{};
+  }
+  return compare(std::move(column->expr), op, to_literal(literal));
+}
+
 /// Resolves `ip(column)` on a string or dynamic column to `parse_ip`.
 /// A bare dynamic column also admits this prefilter for IP predicates: any
 /// decoded IP has this spelling, while unparsed spellings pass separately.
@@ -1973,6 +2085,27 @@ auto translate_prefilter(ast::expression const& expr,
     default:
       return None{};
   }
+}
+
+auto translate_dynamic_predicate(ast::expression const& expr,
+                                 ColumnModel const& columns,
+                                 registry const& reg, PrefilterOptions options)
+  -> Option<Expr> {
+  auto const* binary = try_as<ast::binary_expr>(expr);
+  if (binary
+      and (binary->op == ast::binary_op::and_
+           or binary->op == ast::binary_op::or_)) {
+    // Both keep the keep-or-drop outcome of their operands, unlike `not`.
+    TRY(auto left,
+        translate_dynamic_predicate(binary->left, columns, reg, options));
+    TRY(auto right,
+        translate_dynamic_predicate(binary->right, columns, reg, options));
+    if (binary->op == ast::binary_op::and_) {
+      return conjunction(std::move(left), std::move(right));
+    }
+    return disjunction(std::move(left), std::move(right));
+  }
+  return translate_dynamic_comparison(expr, columns, reg, options);
 }
 
 auto translate_field(std::span<std::string const> path,

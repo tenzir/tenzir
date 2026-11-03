@@ -1,0 +1,20 @@
+{
+  src: "b",
+  hi: 2,
+}
+{
+  src: "d",
+  hi: 3,
+}
+{
+  src: null,
+  hi: 3,
+}
+{
+  src: "a",
+  hi: 6,
+}
+{
+  src: "c",
+  hi: null,
+}

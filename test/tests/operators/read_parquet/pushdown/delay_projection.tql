@@ -1,0 +1,7 @@
+// `delay` forwards the projection plus its timestamp, so the corrupted
+// unselected column is never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+delay 2000-01-01 + id * 1ns
+select id

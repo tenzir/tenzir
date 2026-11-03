@@ -1,0 +1,4 @@
+export
+unroll xs
+where y == 1
+select xs, z

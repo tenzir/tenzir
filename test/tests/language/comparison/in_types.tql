@@ -1,0 +1,30 @@
+// `x in [a, b]` holds exactly where `x == a or x == b` does: only values of
+// the same type match, numbers compare by value across their types, and
+// `null` matches only `null`.
+from {
+  false_in_ints: false in [0, 5],
+  false_eq_zero: false == 0,
+  zero_in_false: 0 in [false],
+  true_in_one: true in [1],
+  one_in_true: 1 in [true],
+  float_in_true: 1.0 in [true],
+  uint_in_true: uint(1) in [true],
+  true_in_bools: true in [false, true],
+  not_false_in_zero: not (false in [0]),
+  not_in_true: 1 not in [true],
+  int_in_floats: 5 in [5.0],
+  float_in_ints: 5.0 in [5],
+  uint_in_ints: uint(5) in [5],
+  null_in_null: null in [null],
+  null_in_zero: null in [0],
+  zero_in_null: 0 in [null],
+  false_in_null: false in [null],
+  mixed_string: "a" in [1, "a"],
+  mixed_int: 1 in [1, "a"],
+  mixed_float: 1.0 in [1, "a"],
+  mixed_true: true in [1, "a"],
+  mixed_numbers: 2 in [1.5, uint(2)],
+  nested_list: [false] in [[0]],
+  nested_list_found: [false] in [[0], [false]],
+  nested_record: {x: true} in [{x: 1}],
+}

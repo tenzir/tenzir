@@ -1,0 +1,13 @@
+// The source filters the groups, sorts them with a tie breaker, and keeps the
+// first ones, all in its query.
+from_mysql table="hits",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+where sev >= 1
+summarize src, events=count()
+where events >= 2
+sort -events, src
+head 4

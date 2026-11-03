@@ -161,48 +161,33 @@ auto eval_comparison(const ast::binary_expr& x, std::string_view name,
                          comparison_kernel<Op>());
 }
 
-/// Returns whether `list` contains an element equal to `lhs`. A `Null` on the
-/// left-hand side matches only `Null` elements, and `Int`/`UInt` compare by
-/// value across signedness. Elements of other types never match, including
-/// nested lists and records.
-template <fundamental_view_type T>
-auto list_contains(T lhs, const RowView<List>& list) -> bool {
+/// Returns whether `list` contains an element equal to `lhs`, so that
+/// `x in [a, b]` holds exactly where `x == a or x == b` does. As with `==`, a
+/// comparison with a secret is `null`, since its value is unknown until the
+/// pipeline resolves it. The result is then `null` unless another element
+/// matches.
+template <class T>
+auto list_contains(T const& lhs, const RowView<List>& list) -> Option<Bool> {
+  auto const needle = [&] {
+    if constexpr (fundamental_view_type<T>) {
+      return RowView<Data>{RowView<TagForViewType<T>>{lhs}};
+    } else {
+      return RowView<Data>{lhs};
+    }
+  }();
+  auto has_secret = false;
   for (auto element : list) {
-    auto const found = match(element, [&]<class V>(RowView<V> view) -> bool {
-      if constexpr (std::same_as<V, Null>) {
-        return std::same_as<T, Null>;
-      } else if constexpr (std::same_as<V, List> or std::same_as<V, Record>) {
-        return false;
-      } else {
-        using E = std::remove_cvref_t<decltype(*view)>;
-        if constexpr (concepts::one_of<T, Int, UInt, Float>
-                      and concepts::one_of<E, Int, UInt, Float>) {
-          return compare<ast::binary_op::eq>(lhs, *view);
-        } else if constexpr (requires() { lhs == *view; }
-                             and not std::same_as<T, Null>) {
-          return lhs == *view;
-        } else {
-          return false;
-        }
-      }
+    auto const is_secret = match(element, []<class V>(RowView<V> const&) {
+      return std::same_as<V, Secret>;
     });
-    if (found) {
+    if (is_secret) {
+      has_secret = true;
+    } else if (equal(needle, element)) {
       return true;
     }
   }
-  return false;
-}
-
-/// Returns whether `list` contains an element deeply equal to the list or
-/// record `lhs`.
-template <class T>
-  requires concepts::one_of<T, RowView<List>, RowView<Record>>
-auto list_contains(T const& lhs, const RowView<List>& list) -> bool {
-  auto const needle = RowView<Data>{lhs};
-  for (auto element : list) {
-    if (equal(needle, element)) {
-      return true;
-    }
+  if (has_secret) {
+    return None{};
   }
   return false;
 }
@@ -675,6 +660,9 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
     case or_:
       return eval_and_or(x, std::move(frame));
     case in: {
+      // Warns once per evaluation about lists whose result is `null` because
+      // they contain a secret.
+      auto warned_secret = false;
       return apply_kernel<2>(
         frame, "binary operator `in`", {x.left, x.right}, x.get_location(),
         // `in` accepts every `null` combination itself, because `null in
@@ -699,16 +687,24 @@ auto _::EvalRun::eval(const ast::binary_expr& x, EvalFrame frame)
                        Subnet rhs) -> Option<Bool> {
                       return rhs.contains(lhs);
                     },
-                    []<fundamental_view_type T>(
-                      diagnostic_handler&, T lhs,
-                      RowView<List> rhs) -> Option<Bool> {
-                      return list_contains(lhs, rhs);
-                    },
-                    []<class T>(diagnostic_handler&, T const& lhs,
-                                RowView<List> rhs) -> Option<Bool>
-                      requires concepts::one_of<T, RowView<List>, RowView<Record>>
+                    // A secret on the left compares with no element, so `in`
+                    // rejects it as `==` does.
+                    [&]<class T>(diagnostic_handler& dh, T const& lhs,
+                                 RowView<List> rhs) -> Option<Bool>
+                      requires((fundamental_view_type<T>
+                                and not std::same_as<T, SecretView>)
+                               or concepts::one_of<T, RowView<List>,
+                                                   RowView<Record>>)
           {
-            return list_contains(lhs, rhs);
+            auto result = list_contains(lhs, rhs);
+            if (result.is_none() and not std::exchange(warned_secret, true)) {
+              diagnostic::warning("binary operator `in` cannot compare with "
+                                  "a `secret` in the list")
+                .primary(x)
+                .hint("the result is `null` unless another element matches")
+                .emit(dh);
+            }
+            return result;
           },
           });
     }

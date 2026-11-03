@@ -239,6 +239,9 @@ public:
     d.named("cumulative", &MeasureArgs::cumulative);
     d.named("by_schema", &MeasureArgs::by_schema);
     d.named("_exact_definition", &MeasureArgs::definition);
+    // `measure` replaces its input with metrics, so hints on its output do not
+    // apply to its input. The metrics observe the schemas, which a projection
+    // would change, and the batches, which it may change, too.
     return d.without_optimize();
   }
 };

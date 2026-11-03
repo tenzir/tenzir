@@ -1,0 +1,282 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:111..122 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:123..138 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:146..154 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:155..164 from 0,
+-      cfg: {
+-        aggregates: [
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:165..171 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:165..171 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      aggregation: {
++        columns: [
+           {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:173..179 from 0,
+-                has_question_mark: false
++            output: [
++              "src_ip"
++            ],
++            input: [
++              "src_ip"
++            ]
++          },
++          {
++            output: [
++              "events"
++            ],
++            function: "count"
++          }
++        ],
++        schema_name: "tenzir.summarize",
++        fallback: {
++          lets: [
++            
++          ],
++          operators: [
++            summarize {
++              self: [1]:155..164 from 0,
++              cfg: {
++                aggregates: [
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `events` @ [1]:173..179 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `events` @ [1]:173..179 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `count` @ [1]:180..185 from 0
++                        ],
++                        ref: std::count/fn
++                      },
++                      args: [
++                        
++                      ],
++                      method: false,
++                      location: [1]:180..187 from 0
++                    }
++                  }
++                ],
++                groups: [
++                  {
++                    expr: {
++                      expr: root_field {
++                        id: `src_ip` @ [1]:165..171 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `src_ip` @ [1]:165..171 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    }
++                  }
++                ],
++                indices: [
++                  -1,
++                  0
++                ],
++                emission: "final",
++                mode: "reset",
++                output: "summary",
++                emit_every: 1
++              }
++            },
++            GenericIr {
++              desc: "head",
++              store: {
++                op: {
++                  path: [
++                    `head` @ [1]:188..192 from 0
++                  ],
++                  ref: std::head/op
++                },
++                args: [
++                  located 5 @ [1]:193..194 from 0
++                ],
++                named_args: [
++                  
++                ]
+               },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:173..179 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:180..185 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
++              filter: [
+                 
+               ],
+-              method: false,
+-              location: [1]:180..187 from 0
++              order: "ordered"
+             }
++          ],
++          definition_location: [0]:0..0 from 0
++        },
++        stages: [
++          Limit {
++            count: 5
+           }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:165..171 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:165..171 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
++        ]
+       }
+-    },
+-    GenericIr {
+-      desc: "head",
+-      store: {
+-        op: {
+-          path: [
+-            `head` @ [1]:188..192 from 0
+-          ],
+-          ref: std::head/op
+-        },
+-        args: [
+-          located 5 @ [1]:193..194 from 0
+-        ],
+-        named_args: [
+-          
+-        ]
+-      },
+-      filter: [
+-        
+-      ],
+-      order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:195..200 from 0
+-        ],
+-        ref: std::where/op
++          
++        ],
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `events` @ [1]:201..207 from 0,
+             has_question_mark: false
+           },
+           op: "geq",
+           right: constant int64 10 @ [1]:211..213 from 0,
+           location: [1]:201..213 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:213..213 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:111..213 from 0
+ }

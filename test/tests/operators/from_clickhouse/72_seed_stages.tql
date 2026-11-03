@@ -1,0 +1,6 @@
+// The table of the tests of the stages after a summary.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_stages ENGINE = MergeTree ORDER BY tuple() AS SELECT * FROM values('src Nullable(String), sev Nullable(Int64)', ('a', 1), ('a', 2), ('a', 3), ('a', 4), ('a', 5), ('a', 6), ('b', 1), ('b', 1), ('b', 2), ('b', 2), ('b', NULL), ('d', 3), ('d', 3), ('d', 3), ('d', 3), (NULL, 1), (NULL, 2), (NULL, 3), ('c', NULL), ('c', NULL), ('É', 9))",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

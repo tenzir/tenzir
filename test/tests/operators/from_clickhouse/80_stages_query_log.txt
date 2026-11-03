@@ -1,0 +1,18 @@
+{
+  query: "SELECT * FROM (SELECT `src` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1` FROM fc_stages WHERE `sev` >= 1 GROUP BY `src`) AS `__tenzir_aggregate` WHERE (`__tenzir_aggregate_1` >= 2) ORDER BY `__tenzir_aggregate_1` DESC, `__tenzir_aggregate_0` ASC LIMIT 4",
+}
+{
+  query: "SELECT * FROM (SELECT `src` AS `__tenzir_aggregate_0`, maxOrNull(`sev`) AS `__tenzir_aggregate_1` FROM fc_stages GROUP BY `src`) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_1` ASC LIMIT 5",
+}
+{
+  query: "SELECT * FROM (SELECT `src` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1` FROM fc_stages GROUP BY `src`) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_1` DESC LIMIT 2",
+}
+{
+  query: "SELECT * FROM (SELECT `src` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1` FROM fc_stages GROUP BY `src`) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_1` ASC LIMIT 2",
+}
+{
+  query: "SELECT * FROM (SELECT toInt64(count()) AS `__tenzir_aggregate_0` FROM fc_stages) AS `__tenzir_aggregate` WHERE (`__tenzir_aggregate_0` > 100) LIMIT 1",
+}
+{
+  query: "SELECT * FROM (SELECT `src` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1` FROM fc_stages GROUP BY `src`) AS `__tenzir_aggregate` WHERE (`__tenzir_aggregate_1` >= 2)",
+}

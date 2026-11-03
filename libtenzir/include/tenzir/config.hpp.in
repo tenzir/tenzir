@@ -40,6 +40,9 @@ namespace tenzir::version {
 extern const char* version;
 /// Contains a free-form version suffix.
 extern const char* build_metadata;
+/// The tag of the sources the build has, such as `src-<hash>`, which deployment
+/// images are tagged with; empty if unknown. See `scripts/source-tag.sh`.
+extern const char* source_tag;
 
 /// The individual version components.
 extern const uint64_t major;

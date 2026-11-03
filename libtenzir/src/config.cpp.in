@@ -15,6 +15,7 @@ namespace tenzir::version {
 
 const char* version = "@TENZIR_VERSION_FULL@";
 const char* build_metadata = "@TENZIR_VERSION_BUILD_METADATA@";
+const char* source_tag = "@TENZIR_SOURCE_TAG@";
 const uint64_t major = @Tenzir_VERSION_MAJOR@;
 const uint64_t minor = @Tenzir_VERSION_MINOR@;
 const uint64_t patch = @Tenzir_VERSION_PATCH@;

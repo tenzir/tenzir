@@ -113,7 +113,11 @@ public:
       }
       return {};
     });
-    return d.unordered();
+    // `taste` keeps the first events of every schema. A filter or a limit
+    // would change which events come first, and a projection would merge
+    // schemas that differ only in fields that downstream does not read. It
+    // needs ordered input, because the first events depend on the order.
+    return d.without_optimize();
   }
 };
 

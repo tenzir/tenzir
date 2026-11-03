@@ -1,0 +1,179 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_file",
+       store: {
+         op: {
+           path: [
+             `from_file` @ [1]:0..9 from 0
+           ],
+           ref: std::from_file/op
+         },
+         args: [
+           expression constant string "/dev/null" @ [1]:10..21 from 0
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "yara",
+                 store: {
+                   op: {
+                     path: [
+                       `yara` @ [1]:26..30 from 0
+                     ],
+                     ref: std::yara/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     {
+                       index: 1,
+                       value: located string "rule x { condition: true }" @ [1]:37..65 from 0
+                     }
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
++              },
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `x` @ [1]:74..75 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant int64 1 @ [1]:79..80 from 0,
++                    location: [1]:74..80 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
+               }
+             ],
+             definition_location: [1]:26..65 from 0
+           } @ [1]:22..67 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:68..73 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `x` @ [1]:74..75 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:79..80 from 0,
+-          location: [1]:74..80 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `y` @ [1]:88..89 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `y` @ [1]:88..89 from 0,
+             has_question_mark: false
+           },
+           location: [1]:88..89 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:90..94 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:95..96 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:96..96 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..96 from 0
+ }

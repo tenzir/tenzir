@@ -1,0 +1,8 @@
+{
+  src: "a",
+  count: 6,
+}
+{
+  src: "b",
+  count: 5,
+}

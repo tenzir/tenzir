@@ -1,0 +1,249 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
++        binary_expr {
++          left: field_access {
++            left: root_field {
++              id: `a` @ [1]:24..25 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `c` @ [1]:26..27 from 0,
++            location: [1]:24..27 from 0
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:31..32 from 0,
++          location: [1]:24..32 from 0
++        }
++      ],
++      order: "ordered",
++      projection: [
++        {
++          expr: field_access {
++            left: root_field {
++              id: `a` @ [1]:47..48 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `c` @ [1]:49..50 from 0,
++            location: [1]:47..50 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `a` @ [1]:47..48 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `c` @ [1]:49..50 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `a` @ [1]:14..15 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `b` @ [1]:16..17 from 0,
++            location: [1]:14..17 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `a` @ [1]:14..15 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `b` @ [1]:16..17 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "unroll",
+       store: {
+         op: {
+           path: [
+             `unroll` @ [1]:7..13 from 0
+           ],
+           ref: std::unroll/op
+         },
+         args: [
+           field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `a` @ [1]:14..15 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `b` @ [1]:16..17 from 0,
+               location: [1]:14..17 from 0
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `a` @ [1]:14..15 from 0,
+                 has_question_mark: false
+               },
+               {
+                 id: `b` @ [1]:16..17 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:18..23 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `a` @ [1]:24..25 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `c` @ [1]:26..27 from 0,
+-            location: [1]:24..27 from 0
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:31..32 from 0,
+-          location: [1]:24..32 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: field_access {
+             left: field_access {
+               left: root_field {
+                 id: `a` @ [1]:40..41 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `b` @ [1]:42..43 from 0,
+               location: [1]:40..43 from 0
+             },
+             has_question_mark: false,
+             name: `x` @ [1]:44..45 from 0,
+             location: [1]:40..45 from 0
+           },
+           right: field_access {
+             left: field_access {
+               left: root_field {
+                 id: `a` @ [1]:40..41 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `b` @ [1]:42..43 from 0,
+               location: [1]:40..43 from 0
+             },
+             has_question_mark: false,
+             name: `x` @ [1]:44..45 from 0,
+             location: [1]:40..45 from 0
+           },
+           location: [1]:40..45 from 0
+         },
+         {
+           left: field_access {
+             left: root_field {
+               id: `a` @ [1]:47..48 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `c` @ [1]:49..50 from 0,
+             location: [1]:47..50 from 0
+           },
+           right: field_access {
+             left: root_field {
+               id: `a` @ [1]:47..48 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `c` @ [1]:49..50 from 0,
+             location: [1]:47..50 from 0
+           },
+           location: [1]:47..50 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:50..50 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..50 from 0
+ }

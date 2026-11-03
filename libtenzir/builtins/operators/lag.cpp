@@ -367,22 +367,15 @@ public:
     // required for the same reason.
     return d.optimize(
       [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // The `into` field is produced here; all other fields pass through.
         auto projection = std::move(req.projection);
-        if (projection) {
-          // The `into` field is produced here; all other fields pass through.
-          if (auto into_path = ctx.get(into)) {
-            std::erase_if(*projection, [&](const ast::field_path& path) {
-              return ir::is_field_path_prefix(*into_path, path);
-            });
-            // A nested assignment observes its existing parent and warns when
-            // a scalar must be replaced by an implicit record. Retain the
-            // target so projection cannot hide that diagnostic.
-            if (into_path->path().size() > 1) {
-              ir::add_to_projection(projection, *into_path);
-            }
-          } else {
-            projection = None{};
-          }
+        auto into_path = ctx.get(into);
+        auto produced = std::vector<ast::field_path>{};
+        if (into_path) {
+          ir::project_assignment(projection, *into_path);
+          produced.push_back(std::move(*into_path));
+        } else {
+          projection = None{};
         }
         // The lagged value is computed from the input; without an explicit
         // `value`, it is the whole event.
@@ -404,6 +397,7 @@ public:
           .filter_self = std::move(req.filter),
           .limit_upstream = limit,
           .projection_upstream = std::move(projection),
+          .produced = std::move(produced),
         };
       });
   }

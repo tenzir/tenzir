@@ -1,5 +1,7 @@
 // GUIDs group by the lowercase text that TQL sees, and `datetimeoffset` values
 // by their instant, which TQL sees in UTC.
+// A sort by a computed key stays in Tenzir, which orders deterministically,
+// while the database would order text under its collation.
 from_microsoft_sql table="agg",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),
@@ -7,4 +9,4 @@ from_microsoft_sql table="agg",
                    password=env("MSSQL_PASSWORD"),
                    database=env("MSSQL_DATABASE")
 summarize u, ts, rows=count()
-sort u, ts
+sort u.string(), ts

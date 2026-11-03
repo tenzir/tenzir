@@ -1,0 +1,7 @@
+// `assert` forwards the projection plus its invariant, so the corrupted
+// unselected column is never decoded.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_parquet
+}
+assert id < 5
+select id

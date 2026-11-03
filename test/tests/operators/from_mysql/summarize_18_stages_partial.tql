@@ -1,0 +1,12 @@
+// A filter that the source cannot spell stays in Tenzir, and so does the limit
+// after it, which counts the groups that the filter keeps.
+from_mysql table="hits",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+summarize src, n=count()
+where n >= 2 and src.capitalize() != "B"
+sort -n
+head 2

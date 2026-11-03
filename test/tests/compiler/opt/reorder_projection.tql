@@ -1,0 +1,5 @@
+export
+reorder on=ts, tolerance=1s
+where x == 1
+select y
+head 2

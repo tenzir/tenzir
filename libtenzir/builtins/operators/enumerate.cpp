@@ -184,24 +184,16 @@ public:
       [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
         // The output field is produced here; all other fields pass through.
         auto projection = std::move(req.projection);
-        if (projection) {
-          auto out_path = ctx.get(out);
-          if (not out_path and not ctx.get_location(out)) {
-            out_path = EnumerateArgs{}.out;
-          }
-          if (out_path) {
-            std::erase_if(*projection, [&](const ast::field_path& path) {
-              return ir::is_field_path_prefix(*out_path, path);
-            });
-            // A nested assignment observes its existing parent and warns when
-            // a scalar must be replaced by an implicit record. Retain the
-            // target so projection cannot hide that diagnostic.
-            if (out_path->path().size() > 1) {
-              ir::add_to_projection(projection, *out_path);
-            }
-          } else {
-            projection = None{};
-          }
+        auto out_path = ctx.get(out);
+        if (not out_path and not ctx.get_location(out)) {
+          out_path = EnumerateArgs{}.out;
+        }
+        auto produced = std::vector<ast::field_path>{};
+        if (out_path) {
+          ir::project_assignment(projection, *out_path);
+          produced.push_back(std::move(*out_path));
+        } else {
+          projection = None{};
         }
         // Grouping reads its key expression from the input.
         if (ctx.get_location(group)) {
@@ -220,6 +212,7 @@ public:
           .filter_self = std::move(req.filter),
           .limit_upstream = limit,
           .projection_upstream = std::move(projection),
+          .produced = std::move(produced),
         };
       });
   }

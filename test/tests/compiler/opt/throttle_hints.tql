@@ -1,0 +1,4 @@
+export
+throttle rate=10, weight=w
+select y
+head 2

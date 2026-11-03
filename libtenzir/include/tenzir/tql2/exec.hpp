@@ -87,8 +87,8 @@ auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop = nullptr,
               Option<Ref<PipelineObserver>> observer = None{},
-              Option<Ref<SourceMap const>> sources = None{})
-  -> Task<failure_or<void>>;
+              Option<Ref<SourceMap const>> sources = None{},
+              Option<SecretStore&> secrets = None{}) -> Task<failure_or<void>>;
 
 /// Run a `T -> T` chain with caller-provided IO, where `T` is either
 /// `table_slice` or `nova::Events`.

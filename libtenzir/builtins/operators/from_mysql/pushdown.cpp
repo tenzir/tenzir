@@ -42,6 +42,17 @@ public:
   auto quote_identifier(std::string_view name) const -> std::string override {
     return mysql::quote_identifier(name);
   }
+
+  auto quote_string(std::string_view text) const
+    -> Option<std::string> override {
+    // Whether MySQL reads a backslash as an escape depends on the session's
+    // `NO_BACKSLASH_ESCAPES` mode.
+    if (text.find_first_of(std::string_view{"\\\0", 2})
+        != std::string_view::npos) {
+      return None{};
+    }
+    return SqlQueryDialect::quote_string(text);
+  }
 };
 
 /// Spells aggregations over a table in MySQL SQL.
@@ -336,7 +347,9 @@ auto make_table_plan(std::span<TableColumn const> columns,
 
 auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
   -> bool {
-  return pushdown::supports_count_min_max(aggregation);
+  return pushdown::supports_count_min_max(aggregation)
+         and pushdown::supports_post_aggregate_stages(aggregation,
+                                                      MysqlQueryDialect{});
 }
 
 auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
@@ -352,6 +365,8 @@ auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
       pushdown::make_aggregate_select(
         plan, make_column_model(columns), MysqlQueryDialect{},
         MysqlAggregateDialect{columns}, quote_identifier(table), where));
+  TRY(select, pushdown::make_post_aggregate_select(
+                std::move(select), aggregation, MysqlQueryDialect{}));
   return pushdown::render_select(select, MysqlQueryDialect{});
 }
 

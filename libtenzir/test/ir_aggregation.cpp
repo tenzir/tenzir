@@ -22,6 +22,7 @@
 
 #include <fmt/format.h>
 
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -58,6 +59,7 @@ auto make_aggregation() -> ir::OptimizeAggregation {
     },
     .schema_name = "tenzir.summarize",
     .fallback = {},
+    .stages = {},
   };
 }
 
@@ -84,13 +86,25 @@ auto outputs(ir::OptimizeAggregation const& aggregation) -> std::vector<Path> {
 /// or a summary that describes one. Every other operator is a barrier.
 class Mock final : public ir::Operator {
 public:
-  enum class Kind { source, rename, barrier, summary };
+  enum class Kind { source, rename, barrier, summary, stage };
 
   Mock(std::string tag, Kind kind, std::string from = {}, std::string to = {})
     : tag_{std::move(tag)},
       kind_{kind},
       from_{std::move(from)},
       to_{std::move(to)} {
+  }
+
+  /// An operator that describes itself as `stage`.
+  Mock(std::string tag, ir::AggregationStage stage)
+    : tag_{std::move(tag)}, kind_{Kind::stage}, stage_{std::move(stage)} {
+  }
+
+  /// A source that accepts at most `max_stages` stages.
+  static auto source(std::string tag, size_t max_stages) -> Mock {
+    auto result = Mock{std::move(tag), Kind::source};
+    result.max_stages_ = max_stages;
+    return result;
   }
 
   auto name() const -> std::string override {
@@ -129,7 +143,8 @@ public:
 
   auto absorb_aggregation(ir::OptimizeAggregation const& aggregation)
     -> bool override {
-    if (kind_ != Kind::source or absorbed_) {
+    if (kind_ != Kind::source or absorbed_
+        or aggregation.stages.size() > max_stages_) {
       return false;
     }
     absorbed_ = aggregation;
@@ -152,6 +167,11 @@ public:
       });
   }
 
+  auto aggregation_stage(ir::OptimizeCtx const&) const
+    -> Option<ir::AggregationStage> override {
+    return stage_;
+  }
+
   auto absorbed() const -> Option<ir::OptimizeAggregation> const& {
     return absorbed_;
   }
@@ -161,8 +181,47 @@ private:
   Kind kind_;
   std::string from_;
   std::string to_;
+  Option<ir::AggregationStage> stage_;
+  size_t max_stages_ = std::numeric_limits<size_t>::max();
   Option<ir::OptimizeAggregation> absorbed_;
 };
+
+auto filter_mock(std::string tag) -> Mock {
+  return Mock{std::move(tag), ir::AggregationStage{
+                                ir::AggregationStage::Filter{parse("n > 1")}}};
+}
+
+auto sort_mock(std::string tag, bool bounded = false) -> Mock {
+  return Mock{std::move(tag), ir::AggregationStage{ir::AggregationStage::Sort{
+                                .keys = {{.field = {"n"}, .descending = true}},
+                                .bounded = bounded,
+                              }}};
+}
+
+auto limit_mock(std::string tag) -> Mock {
+  return Mock{std::move(tag),
+              ir::AggregationStage{ir::AggregationStage::Limit{3}}};
+}
+
+/// The kinds of the stages of `aggregation`, in order.
+auto stage_kinds(ir::OptimizeAggregation const& aggregation)
+  -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto const& stage : aggregation.stages) {
+    result.push_back(match(
+      stage.kind,
+      [](ir::AggregationStage::Filter const&) {
+        return std::string{"filter"};
+      },
+      [](ir::AggregationStage::Sort const&) {
+        return std::string{"sort"};
+      },
+      [](ir::AggregationStage::Limit const&) {
+        return std::string{"limit"};
+      }));
+  }
+  return result;
+}
 
 auto make_pipeline(std::vector<Mock> ops) -> ir::pipeline {
   auto result = ir::pipeline{};
@@ -446,4 +505,169 @@ TEST("generic operators decline aggregations after absorbing events") {
         "drop y\n"
         "summarize x, n=count()"),
     (std::vector<std::string>{"from_mysql", "head", "drop", "summarize"}));
+}
+
+TEST("optimizer offers the stages after an aggregation") {
+  using enum Mock::Kind;
+  using Strings = std::vector<std::string>;
+  // The source takes over the stages, whose operators leave the pipeline and
+  // trail the fallback.
+  auto pipe = optimized(make_pipeline({
+    Mock{"source", source},
+    Mock{"summary", summary},
+    filter_mock("where"),
+    sort_mock("sort", true),
+    limit_mock("head"),
+    Mock{"after", barrier},
+  }));
+  CHECK_EQUAL(names(pipe), (Strings{"source", "after"}));
+  REQUIRE(absorbed(pipe, 0));
+  CHECK_EQUAL(stage_kinds(*absorbed(pipe, 0)),
+              (Strings{"filter", "sort", "limit"}));
+  CHECK_EQUAL(names(absorbed(pipe, 0)->fallback),
+              (Strings{"summary", "where", "sort", "head"}));
+  // A source that accepts fewer stages gets the longest prefix it accepts.
+  auto fewer = optimized(make_pipeline({
+    Mock::source("source", 1),
+    Mock{"summary", summary},
+    filter_mock("where"),
+    sort_mock("sort"),
+    limit_mock("head"),
+  }));
+  REQUIRE(absorbed(fewer, 0));
+  CHECK_EQUAL(stage_kinds(*absorbed(fewer, 0)), (Strings{"filter"}));
+  CHECK_EQUAL(names(fewer), (Strings{"source", "sort", "head"}));
+  CHECK_EQUAL(names(absorbed(fewer, 0)->fallback),
+              (Strings{"summary", "where"}));
+  auto none = optimized(make_pipeline({
+    Mock::source("source", 0),
+    Mock{"summary", summary},
+    limit_mock("head"),
+  }));
+  REQUIRE(absorbed(none, 0));
+  CHECK(absorbed(none, 0)->stages.empty());
+  CHECK_EQUAL(names(none), (Strings{"source", "head"}));
+  CHECK_EQUAL(names(absorbed(none, 0)->fallback), (Strings{"summary"}));
+}
+
+TEST("optimizer hints only stages that compose") {
+  using enum Mock::Kind;
+  using Strings = std::vector<std::string>;
+  auto stages = [](std::vector<Mock> after) {
+    auto ops
+      = std::vector<Mock>{Mock{"source", source}, Mock{"summary", summary}};
+    ops.append_range(std::move(after));
+    auto pipe = optimized(make_pipeline(std::move(ops)));
+    REQUIRE(absorbed(pipe, 0));
+    return stage_kinds(*absorbed(pipe, 0));
+  };
+  // Nothing follows a limit, which counts the groups before it.
+  CHECK_EQUAL(stages({limit_mock("a"), filter_mock("b")}), (Strings{"limit"}));
+  CHECK_EQUAL(stages({limit_mock("a"), sort_mock("b")}), (Strings{"limit"}));
+  CHECK_EQUAL(stages({limit_mock("a"), limit_mock("b")}), (Strings{"limit"}));
+  // A filter commutes with a sort, unless the sort keeps only its first
+  // events.
+  CHECK_EQUAL(stages({sort_mock("a"), filter_mock("b"), limit_mock("c")}),
+              (Strings{"sort", "filter", "limit"}));
+  CHECK_EQUAL(stages({sort_mock("a", true), filter_mock("b")}),
+              (Strings{"sort"}));
+  // A second sort ends the stages.
+  CHECK_EQUAL(stages({sort_mock("a"), sort_mock("b"), limit_mock("c")}),
+              (Strings{"sort"}));
+  // So does any other operator.
+  CHECK_EQUAL(stages({filter_mock("a"), Mock{"b", barrier}, limit_mock("c")}),
+              (Strings{"filter"}));
+  CHECK_EQUAL(stages({Mock{"a", barrier}, limit_mock("b")}), (Strings{}));
+}
+
+TEST("operators describe the stages after an aggregation") {
+  set_nova_enabled(true);
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh, test::builtin_registry());
+  auto ctx = base_ctx{dh, provider.as_session().reg()};
+  auto run = [&](std::string_view source) {
+    auto pipe = ir::instantiate(compile(ctx, source), ctx);
+    REQUIRE(pipe);
+    return ir::optimize(std::move(*pipe), optimize_ctx());
+  };
+  // Renders the first operator of `pipe`.
+  auto first = [](ir::pipeline const& pipe) {
+    auto single = ir::pipeline{};
+    single.operators.push_back(pipe.operators.front()->copy());
+    return fmt::format("{:?}", single);
+  };
+  auto pipe = run("from_mysql table=\"t\", host=\"h\"\n"
+                  "summarize x, n=count()\n"
+                  "where n > 1\n"
+                  "sort -n, x\n"
+                  "head 3");
+  // The source takes over the stages, and their operators leave.
+  CHECK_EQUAL(names(pipe), (std::vector<std::string>{"from_mysql"}));
+  auto dump = first(pipe);
+  CHECK(dump.contains("Filter"));
+  CHECK(dump.contains("Sort"));
+  CHECK(dump.contains("bounded: true"));
+  CHECK(dump.contains("Limit"));
+  // A copy serializes the stages.
+  auto copied = ir::pipeline{};
+  copied.operators.push_back(pipe.operators.front()->copy());
+  CHECK_EQUAL(first(copied), dump);
+  // `top` sorts by the count, which the source computes with the limit.
+  pipe = run("from_mysql table=\"t\", host=\"h\"\n"
+             "top x\n"
+             "head 3");
+  CHECK_EQUAL(names(pipe), (std::vector<std::string>{"from_mysql"}));
+  // A sort by a computed value is no stage.
+  pipe = run("from_mysql table=\"t\", host=\"h\"\n"
+             "summarize x, n=count()\n"
+             "sort n * 2\n"
+             "head 3");
+  CHECK_EQUAL(names(pipe),
+              (std::vector<std::string>{"from_mysql", "sort", "head"}));
+  // A filter that MySQL cannot spell stays, and so does the limit after it.
+  pipe = run("from_mysql table=\"t\", host=\"h\"\n"
+             "summarize x, n=count()\n"
+             "where x.length() > 1\n"
+             "head 3");
+  CHECK_EQUAL(names(pipe),
+              (std::vector<std::string>{"from_mysql", "where", "head"}));
+  // A limit before the summary keeps it local.
+  pipe = run("from_mysql table=\"t\", host=\"h\"\n"
+             "head 10\n"
+             "summarize x, n=count()\n"
+             "head 3");
+  CHECK_EQUAL(names(pipe), (std::vector<std::string>{"from_mysql", "head",
+                                                     "summarize", "head"}));
+}
+
+TEST("stages after an aggregation that read bindings stay in the pipeline") {
+  set_nova_enabled(true);
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh, test::builtin_registry());
+  auto ctx = base_ctx{dh, provider.as_session().reg()};
+  // As in the subpipeline of `every`, the optimizer runs before the bindings
+  // resolve, and again afterwards. A source spells only constants, so the
+  // filter stays, and so does the limit after it.
+  auto pipe = compile(ctx, "let $t = 42\n"
+                           "from_mysql table=\"t\", host=\"h\"\n"
+                           "summarize x, n=count()\n"
+                           "where n > $t\n"
+                           "head 3");
+  REQUIRE(pipe.substitute(substitute_ctx{ctx, nullptr}, false));
+  // The optimizer sees the operators of the subpipeline, but not its `let`.
+  auto lets = std::move(pipe.lets);
+  pipe.lets.clear();
+  auto optimized = ir::optimize(std::move(pipe), optimize_ctx());
+  optimized.lets = std::move(lets);
+  CHECK_EQUAL(names(optimized),
+              (std::vector<std::string>{"from_mysql", "where", "head"}));
+  auto instantiated = ir::instantiate(std::move(optimized), ctx);
+  REQUIRE(instantiated);
+  auto again = ir::optimize(std::move(*instantiated), optimize_ctx());
+  CHECK_EQUAL(names(again),
+              (std::vector<std::string>{"from_mysql", "where", "head"}));
+  auto rendered = fmt::format("{:?}", again);
+  CHECK(not rendered.contains("dollar_var"));
+  CHECK(rendered.contains("42"));
+  CHECK(std::move(dh).collect().empty());
 }

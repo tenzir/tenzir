@@ -705,6 +705,13 @@ public:
     return std::numeric_limits<size_t>::max();
   }
 
+  auto aggregation_stage(ir::OptimizeCtx const&) const
+    -> Option<ir::AggregationStage> override {
+    return ir::AggregationStage{ir::AggregationStage::Filter{
+      args_.get().predicate,
+    }};
+  }
+
   friend auto inspect(auto& f, where_ir& x) -> bool {
     return f.apply(x.args_);
   }

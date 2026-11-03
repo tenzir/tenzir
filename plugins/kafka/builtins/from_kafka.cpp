@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "kafka/from_kafka.hpp"
+
 #include "kafka/async_consumer.hpp"
 #include "kafka/avro_registry.hpp"
 #include "kafka/eof_tracker.hpp"
@@ -41,6 +43,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -135,12 +138,6 @@ private:
 /// `RuntimeState::sources` stays a vector to leave room for several
 /// subscriptions per instance.
 
-/// Default delay before flushing a partial batch.
-constexpr auto default_batch_timeout = 100ms;
-
-/// Default upper bound for one Kafka notification wait in the source poll loop.
-constexpr auto default_fetch_wait_timeout = 1ms;
-
 /// Maximum adaptive wait floor for source poll timeout backoff.
 constexpr auto fetch_wait_backoff_floor = 16ms;
 
@@ -184,46 +181,6 @@ auto apply_from_kafka_throughput_defaults(record& config) -> void {
     config[key] = value;
   }
 }
-
-/// Parsed arguments for `from_kafka`.
-struct FromKafkaArgs {
-  /// Kafka topic to consume.
-  std::string topic;
-  /// Maximum number of messages to emit before stopping.
-  Option<located<uint64_t>> count;
-  /// Stop after all assigned partitions reach EOF.
-  Option<location> exit;
-  /// Starting position to use for partition assignment.
-  Option<located<data>> offset;
-  /// Target number of messages per source batch.
-  uint64_t batch_size = 10_k;
-  /// Region used for MSK IAM token generation.
-  Option<located<std::string>> aws_region;
-  /// IAM authentication settings for OAUTHBEARER.
-  Option<StartupArgument<nova::Record>> aws_iam;
-  /// Raw librdkafka overrides applied to the consumer config.
-  Option<StartupArgument<nova::Record>> options;
-  /// Controls output ordering guarantees.
-  std::string _optimization = "ordered";
-  /// Preferred build-stage batch size override.
-  uint64_t _worker_batch_size = 0;
-  /// Capacity of the queue between source and build stages.
-  uint64_t _prefetch_batches = 8;
-  /// Byte budget for in-flight source payload.
-  uint64_t _prefetch_bytes = 256_Mi;
-  /// Maximum wait before flushing a partial source batch.
-  duration _batch_timeout = default_batch_timeout;
-  /// Initial broker poll wait before adaptive timeout backoff.
-  duration _fetch_wait_timeout = default_fetch_wait_timeout;
-  Option<StartupArgument<nova::Secret>> schema_registry;
-  Option<StartupArgument<nova::Record>> schema_registry_headers;
-  Option<located<data>> schema_registry_tls;
-  /// Whether the operator should treat the input as json and produce events
-  /// directly
-  bool _json = false;
-  /// Whether to enable _raw mode for _json.
-  bool _raw = false;
-};
 
 /// Enumerates batching behavior for emitting processed Kafka records.
 TENZIR_ENUM(OptimizationMode, ordered, unordered);
@@ -2410,9 +2367,12 @@ private:
   bool done_ = false;
 };
 
-class FromKafkaEvents final : public Operator<void, nova::Events> {
+class FromKafkaEvents final : public KafkaEventsSource {
 public:
   explicit FromKafkaEvents(FromKafkaArgs args) : args_{std::move(args)} {
+    // Avro batches commit under an assignment generation that held batches do
+    // not keep.
+    TENZIR_ASSERT(not args_.hold_offsets or not args_.schema_registry);
   }
   FromKafkaEvents(FromKafkaEvents&& other) noexcept
     : args_{std::move(other.args_)},
@@ -2421,8 +2381,11 @@ public:
       emitted_messages_{other.emitted_messages_},
       pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
       pending_commit_generation_{other.pending_commit_generation_},
+      held_offsets_{std::move(other.held_offsets_)},
+      released_batches_{other.released_batches_},
       consumer_closed_{other.consumer_closed_},
       eof_tracker_{std::move(other.eof_tracker_)},
+      connected_options_{std::move(other.connected_options_)},
       done_{other.done_} {
     runtime_.sources = std::move(other.runtime_.sources);
     runtime_.message_queue = std::move(other.runtime_.message_queue);
@@ -2448,16 +2411,25 @@ public:
     read_bytes_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
-        "from_kafka",
+        MetricsLabel::FixedString::truncate(args_.operator_name),
       },
       MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
     read_events_counter_ = ctx.make_counter(
       MetricsLabel{
         "operator",
-        "from_kafka",
+        MetricsLabel::FixedString::truncate(args_.operator_name),
       },
       MetricsDirection::read, MetricsVisibility::external_,
       MetricsUnit::events);
+    if (args_.connector) {
+      auto connection = co_await args_.connector->connect(ctx);
+      if (not connection) {
+        done_ = true;
+        co_return;
+      }
+      args_.topic = std::move(connection->topic);
+      connected_options_ = std::move(connection->options);
+    }
     auto aws_region = args_.aws_region
                         ? Option<located<std::string>>{*args_.aws_region}
                         : None{};
@@ -2629,7 +2601,10 @@ public:
     if (task_result.end_of_stream) {
       done_ = true;
       request_pipeline_stop();
-      co_await close_source_consumer(ctx.dh());
+      // Otherwise, releasing the last held batch leaves the group.
+      if (held_offsets_.empty()) {
+        co_await close_source_consumer(ctx.dh());
+      }
       co_return;
     }
     TENZIR_ASSERT(task_result.frame);
@@ -2660,9 +2635,13 @@ public:
     for (auto& slice : frame.events) {
       auto const rows = slice.active_count();
       co_await push(std::move(slice));
-      read_events_counter_.add(rows);
+      if (args_.count_events) {
+        read_events_counter_.add(rows);
+      }
     }
-    if (frame.message_count > 0) {
+    if (args_.hold_offsets) {
+      held_offsets_.push_back(std::move(frame.max_offsets));
+    } else if (frame.message_count > 0) {
       if (frame.assignment_generation
           and *frame.assignment_generation
                 != runtime_.sources[0]
@@ -2690,8 +2669,10 @@ public:
       }
     }
     if (frame.message_count > 0) {
-      pending_commit_generation_ = frame.assignment_generation;
-      co_await commit_pending_offsets(&ctx.dh());
+      if (not args_.hold_offsets) {
+        pending_commit_generation_ = frame.assignment_generation;
+        co_await commit_pending_offsets(&ctx.dh());
+      }
       emitted_messages_ += frame.message_count;
     }
     for (auto const& partition : frame.eof_partitions) {
@@ -2712,6 +2693,26 @@ public:
       // Don't set done_ here; let the pipeline drain so the build_loop
       // can finalize and flush any buffered data from the builder.
       request_pipeline_stop();
+    }
+  }
+
+  auto delivered_batches() const -> uint64_t override {
+    return released_batches_ + held_offsets_.size();
+  }
+
+  auto release_batches(uint64_t count, OpCtx& ctx) -> Task<void> override {
+    TENZIR_ASSERT(count <= delivered_batches());
+    if (count <= released_batches_) {
+      co_return;
+    }
+    while (released_batches_ < count) {
+      record_pending_offsets(held_offsets_.front());
+      held_offsets_.pop_front();
+      ++released_batches_;
+    }
+    co_await commit_pending_offsets(&ctx.dh());
+    if (done_ and held_offsets_.empty()) {
+      co_await close_source_consumer(ctx.dh());
     }
   }
 
@@ -3051,6 +3052,8 @@ private:
   struct SourceConsumer {
     consumer_configuration consumer_cfg;
     Box<RdKafka::KafkaConsumer> consumer;
+    // After `consumer`, so that it goes first.
+    std::shared_ptr<void> credentials_watch;
   };
 
   /// Owns one subscribed source (consumer plus async queue wrapper).
@@ -3119,6 +3122,11 @@ private:
     if (auth.options) {
       user_options->inner["sasl.mechanism"] = nova::String{"OAUTHBEARER"};
     }
+    if (connected_options_) {
+      for (auto const& [key, value] : *connected_options_) {
+        user_options->inner[key] = value;
+      }
+    }
     if (not configure_consumer(source_cfg, *user_options, ctx.dh())) {
       co_return None{};
     }
@@ -3134,7 +3142,12 @@ private:
       .consumer_cfg = std::move(source_cfg),
       .consumer = Box<RdKafka::KafkaConsumer>::from_non_null(
         std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}),
+      .credentials_watch = {},
     };
+    if (args_.connector) {
+      source_consumer.credentials_watch
+        = args_.connector->watch(*raw_consumer->c_ptr());
+    }
     if (source_consumer.consumer_cfg.oauth_callback) {
       if (source_consumer.consumer_cfg.oauth_sasl_queue_enabled) {
         // Primary path: once the SASL queue was enabled on the configuration,
@@ -3180,7 +3193,8 @@ private:
   /// Builds one source that lets librdkafka manage the topic subscription.
   auto make_subscription_source(OpCtx& ctx, ResolvedAwsIamAuth const& auth,
                                 int64_t offset) -> Task<bool> {
-    auto config = source_global_defaults();
+    auto config = args_.connector ? record{{"client.id", "tenzir"}}
+                                  : source_global_defaults();
     if (not config.contains("group.id")) {
       config["group.id"] = "tenzir";
     }
@@ -3909,9 +3923,12 @@ private:
     auto builder_dh = BufferingDiagnosticHandler{};
     auto settings = nova::EventBuilder::Settings{};
     settings.default_schema_name = args_.schema_registry ? "tenzir.kafka.avro"
-                                   : args_._json         ? "tenzir.unknown"
-                                                         : "tenzir.kafka";
+                                   : not args_.schema_name.empty()
+                                     ? args_.schema_name
+                                   : args_._json ? "tenzir.unknown"
+                                                 : "tenzir.kafka";
     settings.raw = args_._raw;
+    settings.infer_unparsed_under = args_.infer_under;
     auto builder = nova::EventBuilder::make(std::move(settings), builder_dh);
     if (not builder) {
       runtime_.builder_running.store(false);
@@ -4169,6 +4186,11 @@ private:
       it = pending_commit_offsets_.erase(it);
       ++dropped;
     }
+    for (auto& held : held_offsets_) {
+      std::erase_if(held, [&](auto const& entry) {
+        return not assigned.contains(entry.first);
+      });
+    }
     if (dropped > 0) {
       // Routine during a rebalance, so this is not worth a diagnostic.
       TENZIR_VERBOSE("from_kafka: dropped uncommitted offsets for {} partition "
@@ -4204,12 +4226,18 @@ private:
   TopicPartitionOffsets pending_commit_offsets_;
   // Runtime-only: generations belong to one consumer instance, not snapshots.
   Option<uint64_t> pending_commit_generation_;
+  // The offsets of the batches that `hold_offsets` keeps, oldest first. Left
+  // out of snapshots, so a restored run reads their messages again.
+  std::deque<TopicPartitionOffsets> held_offsets_;
+  uint64_t released_batches_ = 0;
   // Set once the group membership was closed; commits are impossible after.
   bool consumer_closed_ = false;
   // Decides when every partition this instance owns reached its end. Only
   // maintained for `exit=true`, and refreshed lazily: on a rebalance, and when
   // an EOF for a partition outside the known assignment arrives.
   EofTracker eof_tracker_;
+  // What the connector said to connect with, if there is one.
+  Option<nova::Record> connected_options_;
   mutable MetricsCounter read_bytes_counter_;
   mutable MetricsCounter read_events_counter_;
   bool done_ = false;
@@ -4415,6 +4443,10 @@ public:
 };
 
 } // namespace
+
+auto make_from_kafka_events(FromKafkaArgs args) -> Box<KafkaEventsSource> {
+  return Box<KafkaEventsSource>{FromKafkaEvents{std::move(args)}};
+}
 
 } // namespace tenzir::plugins::kafka
 

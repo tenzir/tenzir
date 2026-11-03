@@ -430,26 +430,14 @@ public:
         auto result_path = ctx.get(result).value_or(default_result_field());
         // The result field is produced here; all other fields pass through.
         auto projection = std::move(req.projection);
-        if (projection) {
-          std::erase_if(*projection, [&](const ast::field_path& path) {
-            return ir::is_field_path_prefix(result_path, path);
-          });
-          // A nested assignment observes its existing parent and warns when a
-          // scalar must be replaced by an implicit record. Retain the target
-          // so projection cannot hide that diagnostic.
-          if (result_path.path().size() > 1) {
-            ir::add_to_projection(projection, result_path);
-          }
-        }
+        ir::project_assignment(projection, result_path);
         // The lookup input is computed from the event.
         if (auto expr = ctx.get(field)) {
           ir::add_refs_to_projection(projection, *expr);
         } else {
           projection = None{};
         }
-        auto touched_fields = std::vector<ast::field_path>{};
-        touched_fields.push_back(std::move(result_path));
-        auto touched = ast::ExprRefs{.field_paths = std::move(touched_fields)};
+        auto touched = ast::ExprRefs{.field_paths = {result_path}};
         auto [f_upstream, f_self]
           = ir::split_filter_by_dependents(std::move(req.filter), touched);
         // `dns_lookup` is 1:1, so the first N outputs stem from exactly the
@@ -463,6 +451,7 @@ public:
           .filter_self = std::move(f_self),
           .limit_upstream = limit,
           .projection_upstream = std::move(projection),
+          .produced = {std::move(result_path)},
         };
       });
   }

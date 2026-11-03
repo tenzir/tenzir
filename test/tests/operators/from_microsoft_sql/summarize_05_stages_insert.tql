@@ -1,0 +1,6 @@
+from_microsoft_sql sql="INSERT INTO hits VALUES (N'a', 1), (N'a', 2), (N'a', 3), (N'a', 4), (N'a', 5), (N'a', 6), (N'b', 1), (N'b', 1), (N'b', 2), (N'b', 2), (N'b', NULL), (N'd', 3), (N'd', 3), (N'd', 3), (N'd', 3), (NULL, 1), (NULL, 2), (NULL, 3), (N'c', NULL), (N'c', NULL), (N'É', 9)",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_ADMIN_USER"),
+                   password=env("MSSQL_ADMIN_PASSWORD"),
+                   database=env("MSSQL_DATABASE")

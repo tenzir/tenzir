@@ -1,0 +1,316 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_sentinelone_data_lake",
+       store: {
+         op: {
+           path: [
+             `from_sentinelone_data_lake` @ [1]:134..160 from 0
+           ],
+           ref: std::from_sentinelone_data_lake/op
+         },
+         args: [
+           located "https://example.sentinelone.net" @ [1]:161..194 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:202..205 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:206..215 from 0,
+-      cfg: {
+-        aggregates: [
++      order: "ordered",
++      projection: [
++        {
++          expr: field_access {
++            left: root_field {
++              id: `event` @ [1]:216..221 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `type` @ [1]:222..226 from 0,
++            location: [1]:216..226 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `event` @ [1]:216..221 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `type` @ [1]:222..226 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      aggregation: {
++        columns: [
+           {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:228..234 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:228..234 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:235..240 from 0
++            output: [
++              "event",
++              "type"
++            ],
++            input: [
++              "event",
++              "type"
++            ]
++          },
++          {
++            output: [
++              "events"
++            ],
++            function: "count"
++          }
++        ],
++        schema_name: "tenzir.summarize",
++        fallback: {
++          lets: [
++            
++          ],
++          operators: [
++            summarize {
++              self: [1]:206..215 from 0,
++              cfg: {
++                aggregates: [
++                  {
++                    dest: {
++                      expr: root_field {
++                        id: `events` @ [1]:228..234 from 0,
++                        has_question_mark: false
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `events` @ [1]:228..234 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    },
++                    call: {
++                      fn: {
++                        path: [
++                          `count` @ [1]:235..240 from 0
++                        ],
++                        ref: std::count/fn
++                      },
++                      args: [
++                        
++                      ],
++                      method: false,
++                      location: [1]:235..242 from 0
++                    }
++                  }
+                 ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:235..242 from 0
++                groups: [
++                  {
++                    expr: {
++                      expr: field_access {
++                        left: root_field {
++                          id: `event` @ [1]:216..221 from 0,
++                          has_question_mark: false
++                        },
++                        has_question_mark: false,
++                        name: `type` @ [1]:222..226 from 0,
++                        location: [1]:216..226 from 0
++                      },
++                      has_this: false,
++                      path: [
++                        {
++                          id: `event` @ [1]:216..221 from 0,
++                          has_question_mark: false
++                        },
++                        {
++                          id: `type` @ [1]:222..226 from 0,
++                          has_question_mark: false
++                        }
++                      ]
++                    }
++                  }
++                ],
++                indices: [
++                  -1,
++                  0
++                ],
++                emission: "final",
++                mode: "reset",
++                output: "summary",
++                emit_every: 1
++              }
+             }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: field_access {
+-                left: root_field {
+-                  id: `event` @ [1]:216..221 from 0,
+-                  has_question_mark: false
+-                },
+-                has_question_mark: false,
+-                name: `type` @ [1]:222..226 from 0,
+-                location: [1]:216..226 from 0
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `event` @ [1]:216..221 from 0,
+-                  has_question_mark: false
+-                },
+-                {
+-                  id: `type` @ [1]:222..226 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
++          ],
++          definition_location: [0]:0..0 from 0
++        },
++        stages: [
++          
++        ]
+       }
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:243..248 from 0
+-        ],
+-        ref: std::where/op
++          
++        ],
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `events` @ [1]:249..255 from 0,
+             has_question_mark: false
+           },
+           op: "geq",
+           right: constant int64 10 @ [1]:259..261 from 0,
+           location: [1]:249..261 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     sort {
+       args: {
+         op: {
+           path: [
+             `sort` @ [1]:262..266 from 0
+           ],
+           ref: std::sort/op
+         },
+         args: [
+           expression unary_expr {
+             op: "neg",
+             expr: root_field {
+               id: `events` @ [1]:268..274 from 0,
+               has_question_mark: false
+             },
+             location: [1]:267..274 from 0
+           }
+         ],
+         named_args: [
+           
+         ]
+-      }
++      },
++      limit: 3
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:275..279 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:280..281 from 0
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:281..281 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     }
+   ],
+   definition_location: [1]:134..281 from 0
+ }

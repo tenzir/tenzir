@@ -1363,6 +1363,8 @@ public:
       }
       return {};
     });
+    // `yara` turns bytes into scan results. Hints on the results do not
+    // describe its input.
     return d.without_optimize();
   }
 };

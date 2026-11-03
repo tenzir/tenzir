@@ -188,6 +188,7 @@ TEST("selects render their clauses in order") {
     .from = "t",
     .where = {},
     .group_by = {},
+    .order_by = {},
     .limit = None{},
   };
   CHECK_EQUAL(render_select(select, TestDialect{}), "SELECT * FROM t");
@@ -196,6 +197,7 @@ TEST("selects render their clauses in order") {
     .from = "t",
     .where = {"x > 0", "y < 1"},
     .group_by = {"a", "b"},
+    .order_by = {},
     .limit = 0,
   };
   CHECK_EQUAL(render_select(select, TestDialect{}),

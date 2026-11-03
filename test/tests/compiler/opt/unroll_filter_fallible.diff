@@ -1,0 +1,147 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `y` @ [1]:44..45 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:49..50 from 0,
++          location: [1]:44..50 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "unroll",
+       store: {
+         op: {
+           path: [
+             `unroll` @ [1]:7..13 from 0
+           ],
+           ref: std::unroll/op
+         },
+         args: [
+           field_path {
+             expr: root_field {
+               id: `xs` @ [1]:14..16 from 0,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `xs` @ [1]:14..16 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:17..22 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `length` @ [1]:25..31 from 0
+               ],
+               ref: std::length/fn
+             },
+             args: [
+               root_field {
+                 id: `s` @ [1]:23..24 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: true,
+             location: [1]:23..33 from 0
+           },
+           op: "gt",
+           right: constant int64 1 @ [1]:36..37 from 0,
+           location: [1]:23..37 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:38..43 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:50..50 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `y` @ [1]:44..45 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:49..50 from 0,
+-          location: [1]:44..50 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..50 from 0
+ }

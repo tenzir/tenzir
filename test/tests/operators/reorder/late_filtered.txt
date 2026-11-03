@@ -1,0 +1,7 @@
+warning: `reorder` dropped 1 late event(s)
+ --> tests/operators/reorder/late_filtered.tql:5:12
+  |
+5 | reorder on=t, tolerance=0s
+  |            ~
+  |
+  = note: a late event's timestamp precedes an event that was already emitted

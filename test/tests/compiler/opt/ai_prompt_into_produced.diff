@@ -1,0 +1,205 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `id` @ [1]:99..101 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `id` @ [1]:99..101 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `message` @ [1]:45..52 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `message` @ [1]:45..52 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     GenericIr {
+       desc: "ai_prompt",
+       store: {
+         op: {
+           path: [
+             `ai_prompt` @ [1]:7..16 from 0
+           ],
+           ref: std::ai_prompt/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "fixture-model" @ [1]:23..38 from 0
+           },
+           {
+             index: 3,
+             value: expression root_field {
+               id: `message` @ [1]:45..52 from 0,
+               has_question_mark: false
+             }
+           },
+           {
+             index: 4,
+             value: field_path {
+               expr: root_field {
+                 id: `result` @ [1]:59..65 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `result` @ [1]:59..65 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:66..71 from 0
+-        ],
+-        ref: std::where/op
++          
++        ],
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: field_access {
+             left: root_field {
+               id: `result` @ [1]:72..78 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `text` @ [1]:79..83 from 0,
+             location: [1]:72..83 from 0
+           },
+           op: "neq",
+           right: constant none_t {} @ [1]:87..91 from 0,
+           location: [1]:72..91 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:99..101 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:99..101 from 0,
+             has_question_mark: false
+           },
+           location: [1]:99..101 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:102..106 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:107..108 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:108..108 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..108 from 0
+ }

@@ -909,6 +909,9 @@ struct CacheArgsRaw {
   }
 };
 
+// The cache keeps the optimization barrier of `ir::Operator::optimize`. Other
+// pipelines may read what it stores, so the hints of this pipeline must not
+// narrow its input.
 class CacheIr final : public ir::Operator {
 public:
   CacheIr() = default;

@@ -5308,6 +5308,8 @@ public:
       }
       return {};
     });
+    // `sigma` emits a finding for every match instead of its input. The rules
+    // load at runtime, so the fields that they read are unknown here.
     return d.without_optimize();
   }
 };

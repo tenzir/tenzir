@@ -1,0 +1,135 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     cache_ir {
+       op_loc: [1]:7..12 from 0,
+       args: {
+         id: constant string "optimizer" @ [1]:13..24 from 0
+       },
+       default_read_timeout: "10min",
+       args_resolved: {
+         id: "optimizer",
+         read_timeout: "10min" @ [0]:0..0 from 0
+       },
+       mode_resolved: "readwrite"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:25..30 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `x` @ [1]:31..32 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 1 @ [1]:36..37 from 0,
+           location: [1]:31..37 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `y` @ [1]:45..46 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `y` @ [1]:45..46 from 0,
+             has_question_mark: false
+           },
+           location: [1]:45..46 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:47..51 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:52..53 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:53..53 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..53 from 0
+ }

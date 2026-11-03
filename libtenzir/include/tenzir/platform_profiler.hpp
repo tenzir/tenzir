@@ -10,17 +10,12 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
+#include <tenzir/platform_connection.hpp>
 
 #include <span>
 #include <string>
 
 namespace tenzir {
-
-struct PlatformConnection {
-  std::string platform_url;
-  std::string deployment_id;
-  std::string key_file;
-};
 
 /// Per-run state; copies share counters, diagnostics and the bounded sender.
 class PlatformProfiler {

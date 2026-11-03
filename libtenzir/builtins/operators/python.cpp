@@ -1138,6 +1138,8 @@ public:
         return None{};
       }
     });
+    // Python code may read, rewrite, add, or drop any field and any event,
+    // so no hint can pass it.
     return d.without_optimize();
   }
 };

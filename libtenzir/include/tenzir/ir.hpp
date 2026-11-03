@@ -16,9 +16,11 @@
 #include "tenzir/option.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant.hpp"
 
 #include <concepts>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <string_view>
 #include <type_traits>
@@ -72,6 +74,9 @@ struct OptimizeRequest {
   /// - It may emit other warnings. A moved predicate may warn for values that
   ///   the operators it passes handle silently, or warn again for a condition
   ///   that both it and the operator evaluate.
+  /// - It may run earlier. A predicate whose value depends on when it runs,
+  ///   such as `now() < deadline`, may therefore keep other events, just as
+  ///   when a source evaluates it in a query instead of on arrival.
   OptimizeFilter filter;
 
   /// The ordering guarantee that downstream requires from this operator.
@@ -116,6 +121,65 @@ struct OptimizeCtx {
 class PlanBuilder;
 
 struct OptimizeAggregation;
+
+/// An operator that applies to the result of an aggregation without changing
+/// any event: it drops events, orders them, or keeps the first ones. A source
+/// that computes the aggregation may take over such a stage, too, and compute
+/// it with the semantics of its target.
+struct AggregationStage {
+  /// `where predicate`.
+  struct Filter {
+    ast::expression predicate;
+
+    friend auto inspect(auto& f, Filter& x) -> bool {
+      return f.object(x).fields(f.field("predicate", x.predicate));
+    }
+  };
+
+  /// A key of a `sort`, a plain field path, possibly under `-`.
+  struct SortKey {
+    /// The field to sort by, as path segments.
+    std::vector<std::string> field;
+    bool descending = false;
+
+    friend auto inspect(auto& f, SortKey& x) -> bool {
+      return f.object(x).fields(f.field("field", x.field),
+                                f.field("descending", x.descending));
+    }
+  };
+
+  /// `sort keys...`, a stable sort that places `null` after all other values
+  /// in either direction.
+  struct Sort {
+    std::vector<SortKey> keys;
+    /// Whether the operator keeps only its first events, as a `sort` that
+    /// absorbed the limit of a following `head` does. A filter after it no
+    /// longer commutes with it.
+    bool bounded = false;
+
+    friend auto inspect(auto& f, Sort& x) -> bool {
+      return f.object(x).fields(f.field("keys", x.keys),
+                                f.field("bounded", x.bounded));
+    }
+  };
+
+  /// `head count`.
+  struct Limit {
+    uint64_t count = 0;
+
+    friend auto inspect(auto& f, Limit& x) -> bool {
+      return f.object(x).fields(f.field("count", x.count));
+    }
+  };
+
+  using Kind = variant<Filter, Sort, Limit>;
+
+  Kind kind;
+
+  friend auto inspect(auto& f, AggregationStage& x) -> bool {
+    return f.apply(x.kind);
+  }
+};
 
 /// Port for pushing events.
 /// Contains the node (index into Plan::operators), logical output port index on
@@ -193,7 +257,10 @@ public:
   /// emits the result of the aggregation, in which case the optimizer removes
   /// the aggregating operator and the operators between the two. Their copies
   /// lead `aggregation.fallback`, in the order in which they run. The default
-  /// declines.
+  /// declines. The optimizer offers the aggregation with the longest prefix of
+  /// the stages after it first, and then with ever shorter ones. On success,
+  /// it also removes the operators of the stages in `aggregation.stages`,
+  /// whose copies trail `aggregation.fallback`.
   ///
   /// This runs after the optimization walk, so an implementation knows the
   /// filters and limits it absorbed. It must decline unless it can produce
@@ -231,6 +298,18 @@ public:
   virtual auto rewrite_aggregation(OptimizeAggregation aggregation,
                                    OptimizeCtx const& octx) const
     -> Option<OptimizeAggregation>;
+
+  /// Return the stage that this operator applies to its input, if it may
+  /// follow an aggregation as one, which lets the source that computes the
+  /// aggregation compute the stage, too. The default returns `None`.
+  ///
+  /// Returning a stage asserts that the operator keeps, orders, or drops
+  /// events as the stage describes, without changing them or having side
+  /// effects. A source that takes over the stage removes the operator and
+  /// computes the stage with the semantics of its target. This runs after the
+  /// optimization walk and must not modify the operator.
+  virtual auto aggregation_stage(OptimizeCtx const& octx) const
+    -> Option<AggregationStage>;
 
   /// Return the executable matching this operator.
   ///
@@ -403,10 +482,20 @@ struct OptimizeAggregation {
   /// compute it runs these on the events that it would otherwise emit.
   pipeline fallback;
 
+  /// The stages that follow the aggregation, in order, which the operator
+  /// computes, too. The optimizer removed their operators, whose copies trail
+  /// `fallback`. A source computes all stages with the aggregation, with the
+  /// semantics of its target, or neither of them, by running `fallback`.
+  std::vector<AggregationStage> stages;
+
+  /// Substitutes the fallback and the predicates of the stages.
+  auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
+
   friend auto inspect(auto& f, OptimizeAggregation& x) -> bool {
     return f.object(x).fields(f.field("columns", x.columns),
                               f.field("schema_name", x.schema_name),
-                              f.field("fallback", x.fallback));
+                              f.field("fallback", x.fallback),
+                              f.field("stages", x.stages));
   }
 };
 
@@ -474,12 +563,22 @@ struct split_filter_result {
 /// `split_filter_by_dependents`.
 auto split_conjunction(ast::expression predicate) -> OptimizeFilter;
 
-/// Splits a filter chain into independent and dependent parts.
-/// A filter expression is dependent if its references overlap with `touched`.
-/// If refs of a filter cannot be determined (ambiguous), it is conservatively
-/// placed into the dependent set. So is a filter behind a dependent one that
-/// could fail, as for `is_infallible`, because moving it upstream would
-/// evaluate it for the events that the dependent filter drops.
+/// Splits a filter chain into the predicates that move upstream past an
+/// operator, which become independent, and those that stay behind it, which
+/// become dependent. Both keep their order.
+///
+/// A predicate moves if `movable` accepts it, which states whether it keeps
+/// the same events in front of the operator. A predicate behind one that stays
+/// moves only if it also cannot fail, as for `is_infallible`, because moving
+/// it would evaluate it for the events that the other one drops.
+auto split_filter(
+  ir::OptimizeFilter filter,
+  std::function<auto(ast::expression const&)->bool> const& movable)
+  -> split_filter_result;
+
+/// Splits a filter chain into independent and dependent parts, as in
+/// `split_filter`. A predicate is dependent if its references overlap with
+/// `touched`, or if they cannot be determined because they are ambiguous.
 auto split_filter_by_dependents(ir::OptimizeFilter filter,
                                 const ast::ExprRefs& touched)
   -> split_filter_result;
@@ -582,6 +681,17 @@ auto add_to_projection(Option<OptimizeProjection>& projection,
 /// the references are ambiguous or include `this`.
 auto add_refs_to_projection(Option<OptimizeProjection>& projection,
                             const ast::expression& expr) -> void;
+
+/// Turns the fields that downstream needs from an operator that assigns
+/// `target` on every event, without reading its previous value, into the
+/// fields that upstream must provide for it. Upstream need not provide
+/// anything below `target`. A nested assignment still observes the parent of
+/// `target` and warns if it must replace a value that is not a record, so
+/// `target` stays in the projection to keep that warning. Assigning `this`
+/// replaces the whole event, so upstream need not provide any field. Add the
+/// references of the assigned value afterwards.
+auto project_assignment(Option<OptimizeProjection>& projection,
+                        ast::field_path const& target) -> void;
 
 /// Unions `other` into `projection`. `None` absorbs everything.
 auto merge_projection(Option<OptimizeProjection>& projection,

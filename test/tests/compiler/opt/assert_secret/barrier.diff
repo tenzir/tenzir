@@ -1,0 +1,163 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "assert_secret",
+       store: {
+         op: {
+           path: [
+             `assert_secret` @ [1]:7..20 from 0
+           ],
+           ref: std::assert_secret/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression function_call {
+               fn: {
+                 path: [
+                   `secret` @ [1]:28..34 from 0
+                 ],
+                 ref: std::secret/fn
+               },
+               args: [
+                 constant string "a" @ [1]:35..38 from 0
+               ],
+               method: false,
+               location: [1]:28..39 from 0
+             }
+           },
+           {
+             index: 1,
+             value: located string "a" @ [1]:50..53 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:54..59 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `x` @ [1]:60..61 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 1 @ [1]:65..66 from 0,
+           location: [1]:60..66 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `y` @ [1]:74..75 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `y` @ [1]:74..75 from 0,
+             has_question_mark: false
+           },
+           location: [1]:74..75 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:76..80 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 2 @ [1]:81..82 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:82..82 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..82 from 0
+ }

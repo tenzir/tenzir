@@ -1,0 +1,4 @@
+export
+ai_prompt model="fixture-model", data=message, into=this
+select text
+head 2
