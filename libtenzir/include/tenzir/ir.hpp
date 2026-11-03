@@ -122,17 +122,84 @@ class PlanBuilder;
 
 struct OptimizeAggregation;
 
-/// An operator that applies to the result of an aggregation without changing
-/// any event: it drops events, orders them, or keeps the first ones. A source
-/// that computes the aggregation may take over such a stage, too, and compute
-/// it with the semantics of its target.
-struct AggregationStage {
+/// An output column of an aggregation.
+struct AggregateColumn {
+  /// The field of the output event, as path segments.
+  std::vector<std::string> output;
+  /// The name of the aggregation function, or `None` for a group key.
+  Option<std::string> function;
+  /// The field that the column reads, as path segments: the group key, or
+  /// the argument of the function. `None` only for a function without
+  /// arguments, such as `count()`.
+  Option<std::vector<std::string>> input;
+
+  friend auto inspect(auto& f, AggregateColumn& x) -> bool {
+    return f.object(x).fields(f.field("output", x.output),
+                              f.field("function", x.function),
+                              f.field("input", x.input));
+  }
+};
+
+/// A logical stage of a query that a source may take over from the operators
+/// that follow it: it drops events, keeps or renames fields, aggregates,
+/// orders, or keeps the first events.
+///
+/// A source that takes over a stage removes its operator and computes the
+/// stage with the semantics of its target, which may differ from TQL's, for
+/// example in how it compares text or where it sorts `null`. Field paths are
+/// path segments; a segment may contain dots, as in `this["a.b"]`.
+struct QueryStage {
   /// `where predicate`.
   struct Filter {
     ast::expression predicate;
 
     friend auto inspect(auto& f, Filter& x) -> bool {
       return f.object(x).fields(f.field("predicate", x.predicate));
+    }
+  };
+
+  /// A field of a `Select`: the output field and the input field it copies.
+  struct Field {
+    std::vector<std::string> output;
+    std::vector<std::string> input;
+
+    friend auto inspect(auto& f, Field& x) -> bool {
+      return f.object(x).fields(f.field("output", x.output),
+                                f.field("input", x.input));
+    }
+  };
+
+  /// `select fields...`: keeps exactly the listed fields, in order, under
+  /// their output names. Every input refers to the event before the stage. No
+  /// output is a prefix of another. Without fields, the events stay but have
+  /// no fields.
+  struct Select {
+    std::vector<Field> fields;
+
+    friend auto inspect(auto& f, Select& x) -> bool {
+      return f.object(x).fields(f.field("fields", x.fields));
+    }
+  };
+
+  /// `drop fields...`: removes the listed fields and keeps all others.
+  struct Drop {
+    std::vector<std::vector<std::string>> fields;
+
+    friend auto inspect(auto& f, Drop& x) -> bool {
+      return f.object(x).fields(f.field("fields", x.fields));
+    }
+  };
+
+  /// A final `summarize` that reads its input fields directly: one event per
+  /// group, and without group keys exactly one event.
+  struct Aggregate {
+    std::vector<AggregateColumn> columns;
+    /// The schema name of the output events.
+    std::string schema_name;
+
+    friend auto inspect(auto& f, Aggregate& x) -> bool {
+      return f.object(x).fields(f.field("columns", x.columns),
+                                f.field("schema_name", x.schema_name));
     }
   };
 
@@ -148,18 +215,18 @@ struct AggregationStage {
     }
   };
 
-  /// `sort keys...`, a stable sort that places `null` after all other values
-  /// in either direction.
+  /// `sort keys...`.
   struct Sort {
     std::vector<SortKey> keys;
-    /// Whether the operator keeps only its first events, as a `sort` that
-    /// absorbed the limit of a following `head` does. A filter after it no
-    /// longer commutes with it.
-    bool bounded = false;
+    /// The number of events that the operator keeps at most, as a `sort` that
+    /// absorbed the limit of the `head` behind it does. A physical hint: the
+    /// `head` enforces the limit, and the optimizer offers the sort only
+    /// together with a limit after it.
+    Option<uint64_t> bound;
 
     friend auto inspect(auto& f, Sort& x) -> bool {
       return f.object(x).fields(f.field("keys", x.keys),
-                                f.field("bounded", x.bounded));
+                                f.field("bound", x.bound));
     }
   };
 
@@ -172,13 +239,36 @@ struct AggregationStage {
     }
   };
 
-  using Kind = variant<Filter, Sort, Limit>;
+  using Kind = variant<Filter, Select, Drop, Aggregate, Sort, Limit>;
 
   Kind kind;
 
-  friend auto inspect(auto& f, AggregationStage& x) -> bool {
+  friend auto inspect(auto& f, QueryStage& x) -> bool {
     return f.apply(x.kind);
   }
+};
+
+/// The stages that a source took over, in the order in which they apply.
+using QueryPlan = std::vector<QueryStage>;
+
+/// Substitutes the bindings in the predicates of `plan`.
+auto substitute(QueryPlan& plan, substitute_ctx ctx) -> failure_or<void>;
+
+/// The stages behind a source that the optimizer offers it.
+struct QueryChain {
+  /// The stages, in order.
+  std::vector<QueryStage> stages;
+  /// Why the chain ends after `stages`, such as the operator that is no
+  /// stage. Empty if the pipeline ends.
+  std::string end;
+};
+
+/// The part of a `QueryChain` that a source takes over.
+struct Absorption {
+  /// The number of leading stages that the source takes over.
+  size_t prefix = 0;
+  /// Why the source does not take over the stage after the prefix, if any.
+  std::string declined;
 };
 
 /// Port for pushing events.
@@ -299,17 +389,33 @@ public:
                                    OptimizeCtx const& octx) const
     -> Option<OptimizeAggregation>;
 
-  /// Return the stage that this operator applies to its input, if it may
-  /// follow an aggregation as one, which lets the source that computes the
-  /// aggregation compute the stage, too. The default returns `None`.
+  /// Return the stage that this operator applies to its input, if it is one,
+  /// so that a source before it may take it over. The default returns `None`.
   ///
-  /// Returning a stage asserts that the operator keeps, orders, or drops
-  /// events as the stage describes, without changing them or having side
-  /// effects. A source that takes over the stage removes the operator and
-  /// computes the stage with the semantics of its target. This runs after the
-  /// optimization walk and must not modify the operator.
-  virtual auto aggregation_stage(OptimizeCtx const& octx) const
-    -> Option<AggregationStage>;
+  /// The stage must describe the complete current behavior of the operator,
+  /// including anything that it absorbed during the optimization walk, and the
+  /// operator must have no side effects. A source that takes over the stage
+  /// removes the operator and computes the stage with the semantics of its
+  /// target. This runs after the optimization walk and must not modify the
+  /// operator.
+  virtual auto query_stage(OptimizeCtx const& octx) const -> Option<QueryStage>;
+
+  /// Take over a prefix of `chain`, the stages of the operators after this
+  /// one, and return its length. The optimizer removes the operators of the
+  /// prefix. The default takes over nothing.
+  ///
+  /// This runs after the optimization walk, and before aggregations are
+  /// offered through `absorb_aggregation`. An operator decides from the stages
+  /// alone, and must compute every stage of the prefix at runtime, with the
+  /// semantics of its target: there is no local fallback. An operator that
+  /// took over stages declines later chains.
+  virtual auto absorb(QueryChain const& chain, OptimizeCtx const& octx)
+    -> Absorption;
+
+  /// Return whether the optimizer offers this operator the chain of stages
+  /// behind it through `absorb`. The default returns `false`, so that the
+  /// optimizer collects chains only for the operators that take them.
+  virtual auto takes_query_stages() const -> bool;
 
   /// Return the executable matching this operator.
   ///
@@ -454,22 +560,7 @@ struct pipeline {
 /// the source. A source that cannot compute every column with the semantics of
 /// TQL must decline, or run `fallback` itself.
 struct OptimizeAggregation {
-  struct Column {
-    /// The field of the output event, as path segments.
-    std::vector<std::string> output;
-    /// The name of the aggregation function, or `None` for a group key.
-    Option<std::string> function;
-    /// The field that the column reads, as path segments: the group key, or
-    /// the argument of the function. `None` only for a function without
-    /// arguments, such as `count()`.
-    Option<std::vector<std::string>> input;
-
-    friend auto inspect(auto& f, Column& x) -> bool {
-      return f.object(x).fields(f.field("output", x.output),
-                                f.field("function", x.function),
-                                f.field("input", x.input));
-    }
-  };
+  using Column = AggregateColumn;
 
   /// The output columns, in the order of the output fields.
   std::vector<Column> columns;
@@ -486,7 +577,8 @@ struct OptimizeAggregation {
   /// computes, too. The optimizer removed their operators, whose copies trail
   /// `fallback`. A source computes all stages with the aggregation, with the
   /// semantics of its target, or neither of them, by running `fallback`.
-  std::vector<AggregationStage> stages;
+  /// Only `Filter`, `Sort`, and `Limit` stages occur here.
+  std::vector<QueryStage> stages;
 
   /// Substitutes the fallback and the predicates of the stages.
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
@@ -1093,6 +1185,12 @@ public:
   auto rewrite_aggregation(OptimizeAggregation aggregation,
                            OptimizeCtx const& octx) const
     -> Option<OptimizeAggregation> override;
+
+  /// Describes the assignments as a `Select` stage if they have the shape
+  /// that `select` produces from plain fields: `this = {}`, then assignments
+  /// of plain input fields to distinct, non-overlapping plain output fields.
+  auto query_stage(OptimizeCtx const& octx) const
+    -> Option<QueryStage> override;
 
   auto infer_type(element_type_tag input, base_ctx ctx) const
     -> failure_or<element_type_tag> override;

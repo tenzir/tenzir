@@ -1,0 +1,23 @@
+{
+  s: "one,two",
+  missing: [
+    "one,two",
+  ],
+  missing_regex: [
+    "one,two",
+  ],
+  constant: [
+    "one,two",
+  ],
+  constant_regex: [
+    "one,two",
+  ],
+  matched: [
+    "one",
+    "two",
+  ],
+  matched_regex: [
+    "one",
+    "two",
+  ],
+}

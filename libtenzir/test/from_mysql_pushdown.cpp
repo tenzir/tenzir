@@ -454,22 +454,22 @@ TEST("aggregations group text by its bytes") {
 TEST("aggregations filter, sort, and limit results") {
   auto columns = make_columns();
   auto query = [&](std::vector<ir::OptimizeAggregation::Column> x,
-                   std::vector<ir::AggregationStage> stages) {
+                   std::vector<ir::QueryStage> stages) {
     auto aggregation = aggregation_of(std::move(x));
     aggregation.stages = std::move(stages);
     return make_aggregate_query(aggregation, columns, "tbl", {});
   };
   auto filter = [](std::string_view predicate) {
-    return ir::AggregationStage{ir::AggregationStage::Filter{parse(predicate)}};
+    return ir::QueryStage{ir::QueryStage::Filter{parse(predicate)}};
   };
   auto sort = [](std::vector<std::string> field, bool descending) {
-    return ir::AggregationStage{ir::AggregationStage::Sort{
+    return ir::QueryStage{ir::QueryStage::Sort{
       .keys = {{.field = std::move(field), .descending = descending}},
-      .bounded = true,
+      .bound = None{},
     }};
   };
   auto limit = [](uint64_t count) {
-    return ir::AggregationStage{ir::AggregationStage::Limit{count}};
+    return ir::QueryStage{ir::QueryStage::Limit{count}};
   };
   auto const base = std::string{
     "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS "

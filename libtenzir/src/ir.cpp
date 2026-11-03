@@ -29,6 +29,8 @@
 #include "tenzir/tql2/user_defined_operator.hpp"
 #include "tenzir/type.hpp"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <ranges>
 #include <span>
@@ -586,41 +588,44 @@ auto ir::pipeline::infer_type(element_type_tag input, base_ctx ctx) const
 namespace {
 
 /// Collects the stages of the operators at the front of `ops` for as long as
-/// a source can compute them in sequence: predicates and at most one sort,
-/// optionally followed by a limit, after which nothing follows. A predicate
-/// after a sort that keeps only its first events would no longer commute with
-/// it, so it ends the stages, too.
+/// a source can compute them after an aggregation: predicates and at most one
+/// sort, optionally followed by a limit, after which nothing follows. A
+/// predicate after a sort that keeps only its first events would no longer
+/// commute with it, so it ends the stages, too.
 auto aggregation_stages(std::span<Box<ir::Operator> const> ops,
                         ir::OptimizeCtx const& octx)
-  -> std::vector<ir::AggregationStage> {
-  auto result = std::vector<ir::AggregationStage>{};
+  -> std::vector<ir::QueryStage> {
+  auto result = std::vector<ir::QueryStage>{};
   auto sorted = false;
   auto bounded = false;
   for (auto const& op : ops) {
-    auto stage = op->aggregation_stage(octx);
+    auto stage = op->query_stage(octx);
     if (not stage) {
       break;
     }
     auto proceed = match(
       stage->kind,
-      [&](ir::AggregationStage::Filter const&) {
+      [&](ir::QueryStage::Filter const&) {
         return not bounded;
       },
-      [&](ir::AggregationStage::Sort const& sort) {
+      [&](ir::QueryStage::Sort const& sort) {
         if (sorted) {
           return false;
         }
         sorted = true;
-        bounded = sort.bounded;
+        bounded = sort.bound.has_value();
         return true;
       },
-      [&](ir::AggregationStage::Limit const&) {
+      [&](ir::QueryStage::Limit const&) {
         return true;
+      },
+      [](auto const&) {
+        return false;
       });
     if (not proceed) {
       break;
     }
-    auto const limit = is<ir::AggregationStage::Limit>(stage->kind);
+    auto const limit = is<ir::QueryStage::Limit>(stage->kind);
     result.push_back(std::move(*stage));
     if (limit) {
       break;
@@ -629,13 +634,92 @@ auto aggregation_stages(std::span<Box<ir::Operator> const> ops,
   return result;
 }
 
+/// A stage of a chain, and the index of the last operator that it stands for.
+/// It stands for the operators from the one after the previous stage.
+struct ChainStage {
+  ir::QueryStage stage;
+  size_t last;
+};
+
+/// Returns an `Aggregate` stage for the operators at the front of `ops`, if
+/// they end with an aggregation and each one before it can rewrite it over
+/// its input, such as `drop` or renames.
+auto fold_aggregation(std::span<Box<ir::Operator> const> ops,
+                      ir::OptimizeCtx const& octx) -> Option<ChainStage> {
+  for (auto j = size_t{0}; j < ops.size(); ++j) {
+    auto aggregation = ops[j]->aggregation();
+    if (not aggregation) {
+      continue;
+    }
+    for (auto m = j; aggregation and m > 0; --m) {
+      aggregation
+        = ops[m - 1]->rewrite_aggregation(std::move(*aggregation), octx);
+    }
+    if (not aggregation) {
+      return None{};
+    }
+    return ChainStage{
+      .stage = {ir::QueryStage::Aggregate{
+        .columns = std::move(aggregation->columns),
+        .schema_name = std::move(aggregation->schema_name),
+      }},
+      .last = j,
+    };
+  }
+  return None{};
+}
+
+/// Collects the chain of stages behind a source, whose following operators
+/// are `ops`. The chain holds at most one aggregation, and a sort that keeps
+/// only its first events comes only together with the limit behind it.
+auto collect_chain(std::span<Box<ir::Operator> const> ops,
+                   ir::OptimizeCtx const& octx)
+  -> std::pair<std::vector<ChainStage>, std::string> {
+  auto result = std::vector<ChainStage>{};
+  auto aggregated = false;
+  auto i = size_t{0};
+  while (i < ops.size()) {
+    auto entry = aggregated ? Option<ChainStage>{}
+                            : fold_aggregation(ops.subspan(i), octx);
+    if (entry) {
+      entry->last += i;
+    } else {
+      auto stage = ops[i]->query_stage(octx);
+      if (not stage) {
+        return {std::move(result),
+                fmt::format("`{}` is no stage", ops[i]->display_name())};
+      }
+      entry = ChainStage{.stage = std::move(*stage), .last = i};
+    }
+    if (auto const* sort = try_as<ir::QueryStage::Sort>(entry->stage.kind);
+        sort and sort->bound) {
+      auto next = entry->last + 1 < ops.size()
+                    ? ops[entry->last + 1]->query_stage(octx)
+                    : Option<ir::QueryStage>{};
+      if (not next or not is<ir::QueryStage::Limit>(next->kind)) {
+        return {std::move(result), "`sort` keeps only its first events, but "
+                                   "no limit follows it"};
+      }
+    }
+    if (is<ir::QueryStage::Aggregate>(entry->stage.kind)) {
+      if (aggregated) {
+        return {std::move(result), "a second aggregation"};
+      }
+      aggregated = true;
+    }
+    i = entry->last + 1;
+    result.push_back(std::move(*entry));
+  }
+  return {std::move(result), std::string{}};
+}
+
 /// Offers `aggregation` to `op` with the longest prefix of `stages` first,
 /// whose operators are `stage_ops`, and returns the number of stages that
 /// `op` took over, or `None` if it declined. The fallback of each candidate
 /// replays the operators of its stages after the aggregation.
 auto absorb_with_stages(ir::Operator& op,
                         ir::OptimizeAggregation const& aggregation,
-                        std::span<ir::AggregationStage const> stages,
+                        std::span<ir::QueryStage const> stages,
                         std::span<Box<ir::Operator> const> stage_ops)
   -> Option<size_t> {
   TENZIR_ASSERT(stage_ops.size() >= stages.size());
@@ -681,19 +765,40 @@ auto ir::pipeline::optimize(OptimizeRequest req,
       std::move_iterator{opt.replacement.operators.begin()},
       std::move_iterator{opt.replacement.operators.end()});
   }
+  // Let a source take over the stages that follow it, such as filters,
+  // projections, an aggregation, sorts, and limits. This runs after the walk,
+  // so that the stages see the predicates as the walk left them, and before
+  // aggregations are offered to the other sources below.
+  auto& ops = replacement.operators;
+  for (auto k = size_t{0}; k + 1 < ops.size(); ++k) {
+    if (not ops[k]->takes_query_stages()) {
+      continue;
+    }
+    auto [entries, end] = collect_chain(std::span{ops}.subspan(k + 1), octx);
+    auto chain = QueryChain{.stages = {}, .end = std::move(end)};
+    for (auto const& entry : entries) {
+      chain.stages.push_back(entry.stage);
+    }
+    auto absorption = ops[k]->absorb(chain, octx);
+    TENZIR_ASSERT(absorption.prefix <= entries.size());
+    if (absorption.prefix > 0) {
+      auto const last = k + 1 + entries[absorption.prefix - 1].last;
+      ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(k + 1),
+                ops.begin() + detail::narrow<std::ptrdiff_t>(last + 1));
+    }
+  }
   // Let an operator compute an aggregation that follows it, either directly
   // or behind operators that can rewrite the aggregation over their input,
   // such as renames. This runs after the walk, when every operator has
   // absorbed what it can, so that predicates kept between the operators
   // prevent the fusion. The fallback replays the skipped operators.
-  auto& ops = replacement.operators;
   for (auto j = size_t{1}; j < ops.size(); ++j) {
     auto aggregation = ops[j]->aggregation();
     // The source may also take over the stages that follow the aggregation,
     // as many as it accepts, which then leave the pipeline, too.
     auto stages = aggregation
                     ? aggregation_stages(std::span{ops}.subspan(j + 1), octx)
-                    : std::vector<AggregationStage>{};
+                    : std::vector<QueryStage>{};
     for (auto k = j; aggregation and k > 0;) {
       --k;
       if (auto absorbed = absorb_with_stages(*ops[k], *aggregation, stages,
@@ -744,20 +849,35 @@ auto ir::Operator::absorb_aggregation(OptimizeAggregation const& aggregation)
   return false;
 }
 
-auto ir::Operator::aggregation_stage(OptimizeCtx const& octx) const
-  -> Option<AggregationStage> {
+auto ir::Operator::query_stage(OptimizeCtx const& octx) const
+  -> Option<QueryStage> {
   TENZIR_UNUSED(octx);
   return None{};
+}
+
+auto ir::Operator::takes_query_stages() const -> bool {
+  return false;
+}
+
+auto ir::Operator::absorb(QueryChain const& chain, OptimizeCtx const& octx)
+  -> Absorption {
+  TENZIR_UNUSED(chain, octx);
+  return {};
+}
+
+auto ir::substitute(QueryPlan& plan, substitute_ctx ctx) -> failure_or<void> {
+  for (auto& stage : plan) {
+    if (auto* filter = try_as<QueryStage::Filter>(stage.kind)) {
+      TRY(filter->predicate.substitute(ctx));
+    }
+  }
+  return {};
 }
 
 auto ir::OptimizeAggregation::substitute(substitute_ctx ctx, bool instantiate)
   -> failure_or<void> {
   TRY(fallback.substitute(ctx, instantiate));
-  for (auto& stage : stages) {
-    if (auto* filter = try_as<AggregationStage::Filter>(stage.kind)) {
-      TRY(filter->predicate.substitute(ctx));
-    }
-  }
+  TRY(ir::substitute(stages, ctx));
   return {};
 }
 

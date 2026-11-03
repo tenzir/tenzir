@@ -8,12 +8,16 @@
 
 #pragma once
 
+#include "tenzir/ip.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/column_model.hpp"
 #include "tenzir/pushdown/expr.hpp"
+#include "tenzir/pushdown/layout.hpp"
 #include "tenzir/pushdown/renderer.hpp"
 #include "tenzir/pushdown/translate.hpp"
+#include "tenzir/subnet.hpp"
+#include "tenzir/time.hpp"
 
 #include <cstdint>
 #include <span>
@@ -92,6 +96,42 @@ public:
   /// as in `WHERE flag`, and a predicate where it expects a value, as in
   /// `(x > 1) = TRUE`. Defaults to `true`.
   virtual auto boolean_values() const -> bool;
+
+  // -- Plans ------------------------------------------------------------------
+  //
+  // The hooks below let `render_plan` spell stages. Each defaults to vetoing,
+  // except where noted, so that a dialect opts in to what it spells.
+
+  /// Spells the field at `path` of a relation whose columns the plan does not
+  /// list, such as a table. Defaults to quoting a single segment, and vetoes
+  /// nested fields.
+  virtual auto bind_field(std::span<std::string const> path) const
+    -> Option<std::string>;
+
+  /// Spells a time, a duration, an IP address, or a subnet literal.
+  virtual auto render_time(time value) const -> Option<std::string>;
+  virtual auto render_duration(duration value) const -> Option<std::string>;
+  virtual auto render_ip(ip value) const -> Option<std::string>;
+  virtual auto render_subnet(subnet value) const -> Option<std::string>;
+
+  /// Spells a call of the TQL function `name` on its rendered arguments, with
+  /// the receiver of a method call first.
+  virtual auto
+  render_call(std::string_view name, std::span<std::string const> args) const
+    -> Option<std::string>;
+
+  /// Spells a call of the TQL aggregation function `name` on the rendered
+  /// value of its argument, if any. Defaults to `COUNT`, `MIN`, and `MAX`.
+  /// Only functions whose result does not depend on the order of their input
+  /// qualify, since a plan does not order the input of an aggregation.
+  virtual auto
+  render_aggregate(std::string_view name, Option<std::string> const& arg) const
+    -> Option<std::string>;
+
+  /// Spells a selection of every column but the listed top-level ones, such
+  /// as `* EXCLUDE (a, b)`.
+  virtual auto render_exclude(std::span<std::string const> columns) const
+    -> Option<std::string>;
 };
 
 /// Spells `select` in `dialect`.
@@ -209,18 +249,58 @@ auto make_aggregate_select(AggregationPlan const& plan,
                            std::string from, std::span<std::string const> where)
   -> Option<SqlSelect>;
 
-/// Returns whether `make_post_aggregate_select` computes every stage of
-/// `aggregation` in `dialect`. It decides from the syntax of the stages
-/// alone, so that a source can decide whether to take them over before it
-/// knows the types of the columns:
+/// The fields of a relation that a plan names, each with the column that
+/// holds it.
+using SqlFields = LayoutFields;
+
+/// A relation that a plan reads.
+struct SqlRelation {
+  /// The relation, as it appears after `FROM`.
+  std::string from;
+  /// The fields of the relation with their columns, or `None` if the plan
+  /// names its fields through `SqlQueryDialect::bind_field`, as for a table.
+  Option<SqlFields> fields;
+};
+
+/// How the result columns of a plan become events, as `apply_layout` arranges
+/// them.
+using SqlLayout = Layout;
+
+/// The `SELECT` that computes a plan, and how its result becomes events.
+struct SqlPlan {
+  SqlSelect select;
+  SqlLayout layout;
+  /// The names of the columns that the query introduces, all starting with
+  /// `__tenzir_`. The source must decline the plan if one of them names a
+  /// column of the relation, compared as the target compares identifiers,
+  /// such as without regard to case in DuckDB.
+  std::vector<std::string> aliases;
+};
+
+/// Assembles a `SELECT` that computes `plan` over `relation` with the
+/// semantics of the target, or returns `None` if `dialect` cannot spell some
+/// stage. It decides from the syntax of the stages and the fields of the
+/// relation alone, so that a source can decide what to take over before it
+/// knows the types of the columns.
 ///
-/// - A filter spells field paths that name an output column of the
-///   aggregation, constants of type `null`, `bool`, `int64`, `uint64`,
-///   finite `double`, and `string`, comparisons, `and`, `or`, `not`,
-///   arithmetic, negation, `== null`, `!= null`, and `in` with a list of
-///   such constants.
-/// - A sort orders by output columns of the aggregation.
-/// - A limit fits into `dialect.max_limit()`.
+/// Each stage joins the current `SELECT` where SQL's order of clauses allows
+/// it, and wraps the query in a derived table where not, such as for a filter
+/// after an aggregation or a sort after a limit. An order that a sort
+/// establishes survives the wrapping: the derived table keeps the sort keys in
+/// hidden columns, and the outer query orders by them.
+///
+/// Filters spell field paths of the input, constants of type `null`, `bool`,
+/// `int64`, `uint64`, finite `double`, and `string`, and, where the dialect
+/// spells them, times, durations, IP addresses, and subnets, together with
+/// comparisons, `and`, `or`, `not`, arithmetic, negation, `== null`,
+/// `!= null`, `in` with a list of constants, and calls that the dialect
+/// spells. Sorts order by fields. Limits fit into `dialect.max_limit()`.
+auto render_plan(SqlRelation relation, std::span<ir::QueryStage const> plan,
+                 SqlQueryDialect const& dialect) -> Option<SqlPlan>;
+
+/// Returns whether `make_post_aggregate_select` computes every stage of
+/// `aggregation` in `dialect`, as `render_plan` decides over the result
+/// columns of the aggregation.
 auto supports_post_aggregate_stages(ir::OptimizeAggregation const& aggregation,
                                     SqlQueryDialect const& dialect) -> bool;
 
@@ -230,18 +310,12 @@ auto supports_post_aggregate_stages(ir::OptimizeAggregation const& aggregation,
 /// hold.
 ///
 /// The extended query reads `aggregate` as a derived table, so that every
-/// stage sees the result columns by their aliases, as SQL's `HAVING` and
-/// `ORDER BY` would, but without the rules of dialects for aliases in
-/// expressions:
+/// stage sees the result columns by their aliases:
 ///
 /// ```sql
 /// SELECT * FROM (<aggregate>) AS __tenzir_aggregate
 /// WHERE <filters> ORDER BY <sort> LIMIT <limit>
 /// ```
-///
-/// The query computes the stages with the semantics of the target, which
-/// may differ from TQL's in how it compares and orders values, places `NULL`,
-/// and breaks ties.
 auto make_post_aggregate_select(SqlSelect aggregate,
                                 ir::OptimizeAggregation const& aggregation,
                                 SqlQueryDialect const& dialect)

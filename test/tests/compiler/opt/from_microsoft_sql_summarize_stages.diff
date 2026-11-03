@@ -246,7 +246,7 @@
 +                descending: true
 +              }
 +            ],
-+            bounded: true
++            bound: 3
 +          },
 +          Limit {
 +            count: 3

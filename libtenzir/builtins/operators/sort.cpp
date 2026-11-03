@@ -112,16 +112,15 @@ public:
     };
   }
 
-  auto aggregation_stage(ir::OptimizeCtx const&) const
-    -> Option<ir::AggregationStage> override {
+  auto query_stage(ir::OptimizeCtx const&) const
+    -> Option<ir::QueryStage> override {
     // Only keys that read a field directly describe the order, since a
     // source names fields but not expressions.
     auto args = args_.get();
     if (args.exprs.empty()) {
       return None{};
     }
-    auto sort
-      = ir::AggregationStage::Sort{.keys = {}, .bounded = limit_.is_some()};
+    auto sort = ir::QueryStage::Sort{.keys = {}, .bound = limit_};
     for (auto const& expr : args.exprs) {
       auto const* unary = try_as<ast::unary_expr>(expr);
       auto descending = unary and unary->op == ast::unary_op::neg;
@@ -141,7 +140,7 @@ public:
         .descending = descending,
       });
     }
-    return ir::AggregationStage{std::move(sort)};
+    return ir::QueryStage{std::move(sort)};
   }
 
   friend auto inspect(auto& f, SortIr& x) -> bool {

@@ -897,8 +897,7 @@ auto call(std::vector<std::string> output, std::string function,
 auto aggregate(std::vector<ir::OptimizeAggregation::Column> columns,
                std::vector<std::string> where = {},
                SqlTarget target = SqlTarget::clickhouse,
-               std::vector<ir::AggregationStage> stages = {})
-  -> Option<std::string> {
+               std::vector<ir::QueryStage> stages = {}) -> Option<std::string> {
   auto aggregation = ir::OptimizeAggregation{
     .columns = std::move(columns),
     .schema_name = "tenzir.summarize",
@@ -909,13 +908,13 @@ auto aggregate(std::vector<ir::OptimizeAggregation::Column> columns,
 }
 
 /// A `where` after an aggregation.
-auto filter_stage(std::string_view predicate) -> ir::AggregationStage {
-  return {ir::AggregationStage::Filter{parse(predicate)}};
+auto filter_stage(std::string_view predicate) -> ir::QueryStage {
+  return {ir::QueryStage::Filter{parse(predicate)}};
 }
 
 /// A `sort` after an aggregation, with `-` before a descending key.
-auto sort_stage(std::vector<std::string_view> keys) -> ir::AggregationStage {
-  auto result = ir::AggregationStage::Sort{.keys = {}, .bounded = true};
+auto sort_stage(std::vector<std::string_view> keys) -> ir::QueryStage {
+  auto result = ir::QueryStage::Sort{.keys = {}, .bound = None{}};
   for (auto key : keys) {
     auto descending = key.starts_with('-');
     if (descending) {
@@ -930,8 +929,8 @@ auto sort_stage(std::vector<std::string_view> keys) -> ir::AggregationStage {
 }
 
 /// A `head` after an aggregation.
-auto limit_stage(uint64_t count) -> ir::AggregationStage {
-  return {ir::AggregationStage::Limit{count}};
+auto limit_stage(uint64_t count) -> ir::QueryStage {
+  return {ir::QueryStage::Limit{count}};
 }
 
 } // namespace

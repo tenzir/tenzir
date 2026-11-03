@@ -6,6 +6,7 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/nova/eval_util.hpp"
+#include "tenzir/pushdown/layout.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/try.hpp"
 
@@ -84,30 +85,16 @@ auto classify(ir::OptimizeAggregation const& aggregation,
 auto nest_aggregation(nova::Events events,
                       ir::OptimizeAggregation const& aggregation,
                       diagnostic_handler& dh) -> nova::Events {
-  auto const length = events.length();
-  auto result = nova::Array<nova::Record>::make_empty(length);
-  for (auto i = std::size_t{0}; i < aggregation.columns.size(); ++i) {
-    auto value = events.data.field(aggregation_column(i));
-    // A reader may drop a column that it cannot decode, which it warns
-    // about. The field is then missing, as for a missing input field.
-    if (not value) {
-      continue;
-    }
-    auto path = std::vector<ast::field_path::segment>{};
-    for (auto const& name : aggregation.columns[i].output) {
-      path.push_back({
-        .id = ast::identifier{name, location::unknown},
-        .has_question_mark = false,
-      });
-    }
-    result = nova::assign_nested_field(std::move(result), path,
-                                       std::move(*value), dh);
-  }
-  return nova::Events{
-    std::move(result),
-    std::move(events.mask),
-    nova::Events::Meta::make_empty(length, aggregation.schema_name),
+  auto layout = Layout{
+    .fields = LayoutFields{},
+    .hidden = {},
+    .schema_name = aggregation.schema_name,
   };
+  for (auto i = std::size_t{0}; i < aggregation.columns.size(); ++i) {
+    layout.fields->emplace_back(aggregation.columns[i].output,
+                                aggregation_column(i));
+  }
+  return apply_layout(std::move(events), layout, dh);
 }
 
 auto can_aggregate_locally(ir::OptimizeAggregation const& aggregation,

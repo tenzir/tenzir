@@ -2231,6 +2231,15 @@ public:
     };
   }
 
+  auto query_stage(ir::OptimizeCtx const&) const
+    -> Option<ir::QueryStage> override {
+    TRY(auto aggregation, this->aggregation());
+    return ir::QueryStage{ir::QueryStage::Aggregate{
+      .columns = std::move(aggregation.columns),
+      .schema_name = std::move(aggregation.schema_name),
+    }};
+  }
+
   auto max_parallelism() const -> size_t override {
     // Without group-by keys, there is a single global aggregation state that
     // all rows must reach. Replicating the operator would yield one partial

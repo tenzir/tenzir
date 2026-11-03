@@ -98,7 +98,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<HeadArgs, Head, HeadNova>{};
     auto count = d.optional_positional("count", &HeadArgs::count);
-    d.aggregation_stage([=](DescribeCtx& ctx) -> Option<ir::AggregationStage> {
+    d.query_stage([=](DescribeCtx& ctx) -> Option<ir::QueryStage> {
       auto limit = Option<uint64_t>{HeadArgs{}.count};
       if (ctx.get_location(count)) {
         limit = ctx.get(count);
@@ -106,7 +106,7 @@ public:
       if (not limit) {
         return None{};
       }
-      return ir::AggregationStage{ir::AggregationStage::Limit{*limit}};
+      return ir::QueryStage{ir::QueryStage::Limit{*limit}};
     });
     return d.optimize(
       [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {

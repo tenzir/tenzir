@@ -96,7 +96,7 @@ public:
   }
 
   /// An operator that describes itself as `stage`.
-  Mock(std::string tag, ir::AggregationStage stage)
+  Mock(std::string tag, ir::QueryStage stage)
     : tag_{std::move(tag)}, kind_{Kind::stage}, stage_{std::move(stage)} {
   }
 
@@ -167,8 +167,8 @@ public:
       });
   }
 
-  auto aggregation_stage(ir::OptimizeCtx const&) const
-    -> Option<ir::AggregationStage> override {
+  auto query_stage(ir::OptimizeCtx const&) const
+    -> Option<ir::QueryStage> override {
     return stage_;
   }
 
@@ -181,26 +181,50 @@ private:
   Kind kind_;
   std::string from_;
   std::string to_;
-  Option<ir::AggregationStage> stage_;
+  Option<ir::QueryStage> stage_;
   size_t max_stages_ = std::numeric_limits<size_t>::max();
   Option<ir::OptimizeAggregation> absorbed_;
 };
 
 auto filter_mock(std::string tag) -> Mock {
-  return Mock{std::move(tag), ir::AggregationStage{
-                                ir::AggregationStage::Filter{parse("n > 1")}}};
+  return Mock{std::move(tag),
+              ir::QueryStage{ir::QueryStage::Filter{parse("n > 1")}}};
 }
 
 auto sort_mock(std::string tag, bool bounded = false) -> Mock {
-  return Mock{std::move(tag), ir::AggregationStage{ir::AggregationStage::Sort{
-                                .keys = {{.field = {"n"}, .descending = true}},
-                                .bounded = bounded,
-                              }}};
+  return Mock{std::move(tag),
+              ir::QueryStage{ir::QueryStage::Sort{
+                .keys = {{.field = {"n"}, .descending = true}},
+                .bound = bounded ? Option<uint64_t>{3} : Option<uint64_t>{},
+              }}};
 }
 
 auto limit_mock(std::string tag) -> Mock {
-  return Mock{std::move(tag),
-              ir::AggregationStage{ir::AggregationStage::Limit{3}}};
+  return Mock{std::move(tag), ir::QueryStage{ir::QueryStage::Limit{3}}};
+}
+
+/// The kind of `stage`, in lowercase.
+auto stage_kind(ir::QueryStage const& stage) -> std::string {
+  return match(
+    stage.kind,
+    [](ir::QueryStage::Filter const&) {
+      return std::string{"filter"};
+    },
+    [](ir::QueryStage::Select const&) {
+      return std::string{"select"};
+    },
+    [](ir::QueryStage::Drop const&) {
+      return std::string{"drop"};
+    },
+    [](ir::QueryStage::Aggregate const&) {
+      return std::string{"aggregate"};
+    },
+    [](ir::QueryStage::Sort const&) {
+      return std::string{"sort"};
+    },
+    [](ir::QueryStage::Limit const&) {
+      return std::string{"limit"};
+    });
 }
 
 /// The kinds of the stages of `aggregation`, in order.
@@ -208,17 +232,7 @@ auto stage_kinds(ir::OptimizeAggregation const& aggregation)
   -> std::vector<std::string> {
   auto result = std::vector<std::string>{};
   for (auto const& stage : aggregation.stages) {
-    result.push_back(match(
-      stage.kind,
-      [](ir::AggregationStage::Filter const&) {
-        return std::string{"filter"};
-      },
-      [](ir::AggregationStage::Sort const&) {
-        return std::string{"sort"};
-      },
-      [](ir::AggregationStage::Limit const&) {
-        return std::string{"limit"};
-      }));
+    result.push_back(stage_kind(stage));
   }
   return result;
 }
@@ -566,11 +580,17 @@ TEST("optimizer hints only stages that compose") {
   CHECK_EQUAL(stages({limit_mock("a"), sort_mock("b")}), (Strings{"limit"}));
   CHECK_EQUAL(stages({limit_mock("a"), limit_mock("b")}), (Strings{"limit"}));
   // A filter commutes with a sort, unless the sort keeps only its first
-  // events.
+  // events. Such a sort also goes without the limit behind it, as when an
+  // operator that is no stage separates them.
   CHECK_EQUAL(stages({sort_mock("a"), filter_mock("b"), limit_mock("c")}),
               (Strings{"sort", "filter", "limit"}));
   CHECK_EQUAL(stages({sort_mock("a", true), filter_mock("b")}),
               (Strings{"sort"}));
+  CHECK_EQUAL(
+    stages({sort_mock("a", true), Mock{"b", barrier}, limit_mock("c")}),
+    (Strings{"sort"}));
+  CHECK_EQUAL(stages({sort_mock("a", true), limit_mock("b")}),
+              (Strings{"sort", "limit"}));
   // A second sort ends the stages.
   CHECK_EQUAL(stages({sort_mock("a"), sort_mock("b"), limit_mock("c")}),
               (Strings{"sort"}));
@@ -606,7 +626,7 @@ TEST("operators describe the stages after an aggregation") {
   auto dump = first(pipe);
   CHECK(dump.contains("Filter"));
   CHECK(dump.contains("Sort"));
-  CHECK(dump.contains("bounded: true"));
+  CHECK(dump.contains("bound: 3"));
   CHECK(dump.contains("Limit"));
   // A copy serializes the stages.
   auto copied = ir::pipeline{};
@@ -631,6 +651,15 @@ TEST("operators describe the stages after an aggregation") {
              "head 3");
   CHECK_EQUAL(names(pipe),
               (std::vector<std::string>{"from_mysql", "where", "head"}));
+  // A sort that keeps only its first events still goes along without the
+  // limit, as before, when an operator that is no stage separates them.
+  pipe = run("from_mysql table=\"t\", host=\"h\"\n"
+             "summarize x, n=count()\n"
+             "sort x\n"
+             "y = 1\n"
+             "head 1");
+  CHECK_EQUAL(names(pipe),
+              (std::vector<std::string>{"from_mysql", "set", "head"}));
   // A limit before the summary keeps it local.
   pipe = run("from_mysql table=\"t\", host=\"h\"\n"
              "head 10\n"

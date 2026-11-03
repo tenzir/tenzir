@@ -11,6 +11,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova_flag.hpp"
@@ -575,9 +576,10 @@ auto select_spawn(const std::vector<AnySpawn>& spawns, element_type_tag input,
 
 } // namespace
 
-auto ArgumentStore::materialize(
-  const Description& desc, ir::OptimizeRequest consumed,
-  Option<ir::OptimizeAggregation> aggregation) const -> Any {
+auto ArgumentStore::materialize(const Description& desc,
+                                ir::OptimizeRequest consumed,
+                                Option<ir::OptimizeAggregation> aggregation,
+                                Option<ir::QueryPlan> plan) const -> Any {
   auto args = desc.make_args();
   for (auto [idx, arg] : detail::enumerate(args_)) {
     // For variadic arguments, all args >= variadic_index map to variadic_index.
@@ -628,6 +630,11 @@ auto ArgumentStore::materialize(
     (*desc.set_aggregation)(args, std::move(aggregation));
   } else {
     TENZIR_ASSERT(not aggregation);
+  }
+  if (desc.set_plan) {
+    (*desc.set_plan)(args, std::move(plan));
+  } else {
+    TENZIR_ASSERT(not plan);
   }
   return args;
 }
@@ -735,7 +742,7 @@ public:
                                 .limit = limit_,
                                 .projection = projection_,
                               },
-                              aggregation_);
+                              aggregation_, plan_);
   }
 
   auto describe_ctx(diagnostic_handler& dh, registry const& reg) const
@@ -791,15 +798,19 @@ public:
     if (aggregation_) {
       TRY(aggregation_->substitute(ctx, instantiate));
     }
+    if (plan_) {
+      TRY(ir::substitute(*plan_, ctx));
+    }
     return {};
   }
 
   auto optimize(ir::OptimizeRequest req,
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     TENZIR_ASSERT(desc_->optimizer);
-    if (aggregation_) {
-      // The operator emits an aggregation, to which the filters, limits, and
-      // projections that it absorbs would apply in the wrong order.
+    if (aggregation_ or plan_) {
+      // The operator emits an aggregation, or computes stages that followed
+      // it, to which the filters, limits, and projections that it absorbs
+      // would apply in the wrong order.
       return std::move(*this).ir::Operator::optimize(std::move(req), octx);
     }
     auto filter = std::move(req.filter);
@@ -936,7 +947,7 @@ public:
     // enclosing subpipeline, do not tell yet whether the operator accepts;
     // the optimizer asks again once the subpipeline is instantiated.
     if (not desc_->set_aggregation or not desc_->accepts_aggregation
-        or aggregation_ or limit_ or not store_.is_resolved(*desc_)) {
+        or aggregation_ or plan_ or limit_ or not store_.is_resolved(*desc_)) {
       return false;
     }
     if (not(*desc_->accepts_aggregation)(materialize_args(), aggregation)) {
@@ -951,7 +962,7 @@ public:
     -> Option<ir::OptimizeAggregation> override {
     // Filters and limits that the operator absorbed drop events.
     if (not desc_->rewrite_aggregation or not filter_.empty() or limit_
-        or aggregation_ or not store_.is_resolved(*desc_)) {
+        or aggregation_ or plan_ or not store_.is_resolved(*desc_)) {
       return None{};
     }
     auto noop_dh = null_diagnostic_handler{};
@@ -959,17 +970,52 @@ public:
     return (*desc_->rewrite_aggregation)(ctx, std::move(aggregation));
   }
 
-  auto aggregation_stage(ir::OptimizeCtx const& octx) const
-    -> Option<ir::AggregationStage> override {
-    // An operator that absorbed a filter, a limit, or an aggregation does
-    // more than its arguments show.
-    if (not desc_->aggregation_stage or not filter_.empty() or limit_
-        or aggregation_ or not store_.is_resolved(*desc_)) {
+  auto query_stage(ir::OptimizeCtx const& octx) const
+    -> Option<ir::QueryStage> override {
+    // An operator that absorbed a filter, a limit, an aggregation, or stages
+    // does more than its arguments show.
+    if (not desc_->query_stage or not filter_.empty() or limit_ or aggregation_
+        or plan_ or not store_.is_resolved(*desc_)) {
       return None{};
     }
     auto noop_dh = null_diagnostic_handler{};
     auto ctx = describe_ctx(noop_dh, octx.reg.get());
-    return (*desc_->aggregation_stage)(ctx);
+    return (*desc_->query_stage)(ctx);
+  }
+
+  auto takes_query_stages() const -> bool override {
+    // Without a binding for `opt::Plan`, the operator could not receive the
+    // stages that it takes over.
+    return desc_->accepts_plan and desc_->set_plan and not plan_
+           and not aggregation_;
+  }
+
+  auto absorb(ir::QueryChain const& chain, ir::OptimizeCtx const& octx)
+    -> ir::Absorption override {
+    TENZIR_UNUSED(octx);
+    TENZIR_ASSERT(desc_->accepts_plan and desc_->set_plan);
+    // Unresolved arguments, such as a `let` of an enclosing subpipeline, do
+    // not tell yet what the operator takes over; the optimizer asks again
+    // once the subpipeline is instantiated.
+    if (not store_.is_resolved(*desc_)) {
+      declined_ = "unresolved arguments";
+      return {.prefix = 0, .declined = "unresolved arguments"};
+    }
+    auto absorption = (*desc_->accepts_plan)(materialize_args(), chain);
+    TENZIR_ASSERT(absorption.prefix <= chain.stages.size());
+    auto declined = absorption.prefix < chain.stages.size()
+                      ? std::move(absorption.declined)
+                      : chain.end;
+    declined_ = declined.empty() ? Option<std::string>{}
+                                 : Option<std::string>{declined};
+    absorption.declined = std::move(declined);
+    if (absorption.prefix > 0) {
+      plan_
+        = ir::QueryPlan{chain.stages.begin(),
+                        chain.stages.begin()
+                          + detail::narrow<std::ptrdiff_t>(absorption.prefix)};
+    }
+    return absorption;
   }
 
   auto main_location() const -> location override {
@@ -982,7 +1028,8 @@ private:
       f.field("desc", x.desc_), f.field("store", x.store_),
       f.field("filter", x.filter_), f.field("order", x.order_),
       f.field("limit", x.limit_), f.field("projection", x.projection_),
-      f.field("aggregation", x.aggregation_));
+      f.field("aggregation", x.aggregation_), f.field("plan", x.plan_),
+      f.field("declined", x.declined_));
   }
 
   /// The parsed arguments of the invocation.
@@ -1006,6 +1053,12 @@ private:
   /// The aggregation that the operator emits instead of its events, which it
   /// took over from the operator after it.
   Option<ir::OptimizeAggregation> aggregation_;
+
+  /// The stages that the operator took over from the operators after it.
+  Option<ir::QueryPlan> plan_;
+
+  /// Why the operator took over no further stages, for the explain output.
+  Option<std::string> declined_;
 
   /// The object describing the available parameters.
   SharedDescription desc_;
