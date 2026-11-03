@@ -36,6 +36,13 @@ struct ArrayBuilder<Record>::Storage {
   /// nothing per field until that field is next written, when the absent rows
   /// are appended in bulk.
   storage::Vector<Slot> field_builders;
+  /// The ID of the row that each field last joined, parallel to
+  /// `field_builders`. A field can be in the open row without a value, so its
+  /// size alone does not tell whether the open row already lists it.
+  storage::Vector<uint64_t> field_row_ids;
+  /// The ID of the open row. IDs increase with every opened row and are never
+  /// reused, unlike row indices after `take_last`.
+  uint64_t row_id = 0;
   bool row_open = false;
 };
 
@@ -53,6 +60,7 @@ ArrayBuilder<Record>::~ArrayBuilder() = default;
 auto ArrayBuilder<Record>::record() -> RecordBuilder {
   finish_last_row();
   storage_->row_open = true;
+  ++storage_->row_id;
   return RecordBuilder{this};
 }
 
@@ -62,10 +70,38 @@ auto ArrayBuilder<Record>::RecordBuilder::field(std::string_view name)
   return take_field(name, previous);
 }
 
+auto ArrayBuilder<Record>::RecordBuilder::reserve_field(std::string_view name)
+  -> void {
+  auto& storage = *parent_->storage_;
+  const auto field_index = join_row(name);
+  auto& builder = storage.field_builders[static_cast<std::size_t>(field_index)];
+  // Pad the field only up to the open row, which stays without a value.
+  if (const auto missing = storage.shape_index_builder.size() - builder.size();
+      missing > 0) {
+    builder.skip_n(missing);
+  }
+}
+
 auto ArrayBuilder<Record>::RecordBuilder::take_field(std::string_view name,
                                                      Option<Data>& previous)
   -> FieldBuilder {
   previous = None{};
+  auto& storage = *parent_->storage_;
+  const auto field_index = join_row(name);
+  auto& builder = storage.field_builders[static_cast<std::size_t>(field_index)];
+  const auto finished_rows = storage.shape_index_builder.size();
+  if (builder.size() > finished_rows) {
+    previous = builder.take_last();
+    return FieldBuilder{&builder};
+  }
+  if (const auto missing = finished_rows - builder.size(); missing > 0) {
+    builder.skip_n(missing);
+  }
+  return FieldBuilder{&builder};
+}
+
+auto ArrayBuilder<Record>::RecordBuilder::join_row(std::string_view name)
+  -> storage::Index {
   auto& storage = *parent_->storage_;
   const auto position = storage.current_row_indices.size();
   auto field_index = storage::Index{-1};
@@ -87,20 +123,16 @@ auto ArrayBuilder<Record>::RecordBuilder::take_field(std::string_view name,
     field_index = static_cast<storage::Index>(inserted->second);
     stored_name = inserted->first;
     storage.field_builders.emplace_back();
+    storage.field_row_ids.push_back(0);
     storage.field_names.push_back(stored_name);
   }
-  auto& builder = storage.field_builders[static_cast<std::size_t>(field_index)];
-  const auto finished_rows = storage.shape_index_builder.size();
-  if (builder.size() > finished_rows) {
-    previous = builder.take_last();
-    return FieldBuilder{&builder};
+  auto& row_id = storage.field_row_ids[static_cast<std::size_t>(field_index)];
+  if (row_id != storage.row_id) {
+    row_id = storage.row_id;
+    storage.current_row_indices.push_back(field_index);
+    storage.current_row_names.push_back(stored_name);
   }
-  if (const auto missing = finished_rows - builder.size(); missing > 0) {
-    builder.skip_n(missing);
-  }
-  storage.current_row_indices.push_back(field_index);
-  storage.current_row_names.push_back(stored_name);
-  return FieldBuilder{&builder};
+  return field_index;
 }
 
 auto ArrayBuilder<Record>::RecordBuilder::open_record_field(
