@@ -1,0 +1,6 @@
+// Keep publishing until the node fixture stops so subscriber startup timing
+// cannot exhaust the input. Each batch has multiple rows sharing string bytes.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000041", definition: "every 10ms {\n  from {s: \"one,two\"}\n  repeat 2\n  batch 2\n}\npublish \"split-strings-input\""}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000042", definition: "subscribe \"split-strings-input\"\nmissing = \"one,two\".split(\"missing\")\nmissing_regex = \"one,two\".split_regex(\"missing\")\nmatched = s.split(\",\")\nmatched_regex = s.split_regex(\",\")\npublish \"split-strings-output\""}
+discard

@@ -1,0 +1,17 @@
+{
+  s: "one,two",
+  missing: [
+    "one,two",
+  ],
+  missing_regex: [
+    "one,two",
+  ],
+  matched: [
+    "one",
+    "two",
+  ],
+  matched_regex: [
+    "one",
+    "two",
+  ],
+}

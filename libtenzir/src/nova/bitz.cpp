@@ -1008,7 +1008,6 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       auto const& storage = as<Primary>(array.storage());
       return storage.length() >= array.length() ? &storage : nullptr;
     }();
-    auto byte_count = std::uint32_t{0};
     auto payload = storage::Span{0, 0};
     auto contiguous = dense != nullptr;
     if (contiguous and array.length() > 0) {
@@ -1029,9 +1028,10 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
         return writer.limit_error(
           "string or blob data exceeds the Bitz size limit");
       }
-      byte_count = static_cast<std::uint32_t>(payload.end - payload.begin);
     }
     if (contiguous) {
+      auto const byte_count
+        = static_cast<std::uint32_t>(payload.end - payload.begin);
       // Offsets in blocks rather than one call per row. The first offset is
       // always zero and the last is the total, which the frame repeats after
       // them.
@@ -1065,6 +1065,7 @@ auto write_concrete(Writer& writer, SelectedArray<Tag> const& array,
       }
       return {};
     }
+    auto byte_count = std::uint32_t{0};
     writer.integer(byte_count);
     for (auto i = storage::Index{0}; i < array.length(); ++i) {
       if (visible.get(i)) {

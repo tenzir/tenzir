@@ -1,0 +1,3 @@
+suite: publish-split-strings
+fixtures: [node]
+timeout: 15
