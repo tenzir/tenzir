@@ -54,11 +54,15 @@ private:
   using BuilderVariant = data_type_list::wrap<ArrayBuilder>::wrap<
     MaskedArrayBuilder>::apply<variant>;
 
-  /// Alternatives are padded lazily: an alternative's builder only catches up
+  /// Alternatives are aligned lazily: an alternative's builder only catches up
   /// to `length()` right before it receives a value, and all of them catch up
   /// in `finish()`. Rows that carry no value for an alternative therefore cost
   /// nothing until the next value of that alternative, at which point they are
-  /// appended in bulk. An alternative never ends in padding.
+  /// appended in bulk. Likewise, removing rows with `take_last` or
+  /// `pop_skipped` can leave an alternative with absent rows beyond
+  /// `length()`, which it only drops when it is next aligned. Removing them
+  /// eagerly would cost the padding again for every removal, which makes a
+  /// row that overwrites a value quadratic in the number of rows.
   template <data_type T>
   auto switch_builder() -> ArrayBuilder<T>& {
     constexpr auto type_index = data_type_list::unique_index_of<T>;
@@ -70,16 +74,20 @@ private:
     }
     auto& builder = std::get<MaskedArrayBuilder<ArrayBuilder<T>>>(
       builders_[static_cast<std::size_t>(vector_index)]);
-    catch_up(builder);
+    align(builder);
     alternative_index_builder_.emplace_back(vector_index);
     return builder.value();
   }
 
-  /// Pads `builder` with absent rows until it is `length()` rows long.
+  /// Makes `builder` exactly `length()` rows long, either by padding it with
+  /// absent rows or by dropping the absent rows that lie beyond `length()`.
   template <typename Builder>
-  auto catch_up(Builder& builder) -> void {
-    if (const auto missing = length() - builder.size(); missing > 0) {
-      builder.skip_n(missing);
+  auto align(Builder& builder) -> void {
+    const auto size = builder.size();
+    if (size < length()) {
+      builder.skip_n(length() - size);
+    } else if (size > length()) {
+      builder.pop_absent(size - length());
     }
   }
 

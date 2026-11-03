@@ -3213,6 +3213,76 @@ TEST("a union stays aligned when rows of other alternatives are taken") {
   CHECK_EQUAL(materialize_legacy(array.get(3)), (tenzir::data{caf::none}));
 }
 
+TEST("a union drops absent rows beyond its length when finished") {
+  auto builder = ArrayBuilder<Data>{};
+  builder.data(std::int64_t{1});
+  builder.data(std::int64_t{2});
+  builder.data(std::string_view{"x"});
+  builder.skip();
+  builder.pop_skipped(1);
+  // The string alternative keeps the absent rows in front of the taken value,
+  // one of which lies beyond the union's length after the second removal.
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{String{"x"}}));
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{Int{2}}));
+  // `finish` drops that row, so it cannot shift the string alternative.
+  builder.null();
+  auto array = builder.finish();
+  REQUIRE_EQUAL(array.length(), 2);
+  CHECK_EQUAL(materialize_legacy(array.get(0)),
+              (tenzir::data{std::int64_t{1}}));
+  CHECK_EQUAL(materialize_legacy(array.get(1)), (tenzir::data{caf::none}));
+}
+
+TEST("a union stays aligned after taking a value behind long padding") {
+  auto builder = ArrayBuilder<Data>{};
+  for (auto i = 0; i < 300; ++i) {
+    builder.data(std::int64_t{i});
+  }
+  builder.data(std::string_view{"x"});
+  CHECK(materialize_legacy(builder.take_last())
+        == materialize_legacy(Data{String{"x"}}));
+  for (auto i = 0; i < 200; ++i) {
+    CHECK(materialize_legacy(builder.take_last())
+          == materialize_legacy(Data{Int{299 - i}}));
+  }
+  builder.data(std::string_view{"y"});
+  builder.data(std::int64_t{-1});
+  auto array = builder.finish();
+  REQUIRE_EQUAL(array.length(), 102);
+  CHECK_EQUAL(materialize_legacy(array.get(99)),
+              (tenzir::data{std::int64_t{99}}));
+  CHECK_EQUAL(materialize_legacy(array.get(100)),
+              (tenzir::data{std::string{"y"}}));
+  CHECK_EQUAL(materialize_legacy(array.get(101)),
+              (tenzir::data{std::int64_t{-1}}));
+}
+
+TEST("overwriting a field in every row takes time linear in the rows") {
+  // Each row first writes null and then overwrites it, so the null
+  // alternative only ever holds padding. Removing that padding on every
+  // overwrite made this quadratic: on the order of 10^10 steps for these
+  // rows, which takes minutes. Linear work finishes in milliseconds, so the
+  // bound only fails for superlinear work, even on slow builds.
+  constexpr auto rows = 200'000;
+  auto builder = ArrayBuilder<Record>{};
+  const auto start = std::chrono::steady_clock::now();
+  for (auto i = 0; i < rows; ++i) {
+    auto row = builder.record();
+    row.field("a").null();
+    row.field("a").data(std::int64_t{i});
+  }
+  auto array = builder.finish();
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  CHECK_LESS(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count(),
+             20);
+  REQUIRE_EQUAL(array.length(), rows);
+  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{std::int64_t{0}}));
+  CHECK_EQUAL(field_value(array, "a", rows - 1),
+              (tenzir::data{std::int64_t{rows - 1}}));
+}
+
 TEST("take_last pops a list whose elements alternate between types") {
   auto lists = ArrayBuilder<List>{};
   auto list = lists.list();

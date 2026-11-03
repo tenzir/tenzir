@@ -60,9 +60,7 @@ auto ArrayBuilder<Bool>::skip_n(storage::Index count) -> void {
 
 auto ArrayBuilder<Bool>::pop_skipped(storage::Index count) -> void {
   TENZIR_ASSERT_LEQ(count, data_builder.size());
-  for (auto i = storage::Index{0}; i < count; ++i) {
-    data_builder.pop_back();
-  }
+  data_builder.truncate(data_builder.size() - count);
 }
 
 auto ArrayBuilder<Bool>::length() const -> storage::Index {
