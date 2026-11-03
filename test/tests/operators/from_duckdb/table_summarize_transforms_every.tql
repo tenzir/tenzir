@@ -1,8 +1,7 @@
-// A `set` that reads a binding of the subpipeline keeps the summary local
-// until `every` instantiates the subpipeline, because an unresolved binding
-// could fail. DuckDB then takes over the summary behind the assignment, but
-// does not group by the `DOUBLE` column, so the operator aggregates locally
-// and replays the assignment with the bound value.
+// A `set` that reads a binding of the subpipeline keeps the summary in the
+// pipeline until `every` instantiates the subpipeline, because an unresolved
+// binding could fail. Once it does, `from_duckdb` takes over the stages that
+// DuckDB spells, and the summary groups by the `DOUBLE` column either way.
 every 1h {
   let $tag = "seen"
   from_duckdb env("DUCKDB_SEED"), table="events"

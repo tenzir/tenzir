@@ -1,20 +1,20 @@
 warning: cannot access field of non-record type
- --> tests/operators/from_duckdb/table_summarize_transforms_local.tql:5:34
+ --> tests/operators/from_duckdb/table_summarize_transforms_local.tql:6:34
   |
-5 | select key=ok, id, when=ts, port=meta.port, name
+6 | select key=ok, id, when=ts, port=meta.port, name
   |                                  ~~~~ not a record
   ⋮
-5 | select key=ok, id, when=ts, port=meta.port, name
+6 | select key=ok, id, when=ts, port=meta.port, name
   |                                       ----
   |
 
 warning: record does not have field
- --> tests/operators/from_duckdb/table_summarize_transforms_local.tql:5:34
+ --> tests/operators/from_duckdb/table_summarize_transforms_local.tql:6:34
   |
-5 | select key=ok, id, when=ts, port=meta.port, name
+6 | select key=ok, id, when=ts, port=meta.port, name
   |                                  ~~~~
   ⋮
-5 | select key=ok, id, when=ts, port=meta.port, name
+6 | select key=ok, id, when=ts, port=meta.port, name
   |                                       ---- field does not exist
   |
   = hint: append `?` to suppress this warning

@@ -1,8 +1,7 @@
-// DuckDB does not group by a `DOUBLE` column, which the operator finds only
-// once it reads the table's columns. It then aggregates its rows locally, with
-// the `select` and the assignment before the summary. Without them, the
-// summary would read fields that the rows do not have. The `select` warns
-// about the field of the null struct `meta`.
+// DuckDB groups by a `DOUBLE` column and computes the summary behind the
+// `select` and the assignment, with the result of
+// `table_summarize_transforms_fallback_local.tql`. DuckDB reads the field of
+// the null struct `meta` as `NULL`, so nothing warns about it.
 from_duckdb env("DUCKDB_SEED"), table="events"
 select key=score, id, port=meta.port
 first_id = id

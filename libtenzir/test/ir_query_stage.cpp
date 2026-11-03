@@ -436,6 +436,8 @@ TEST("queries in logs lose their string literals") {
     .bracket_identifiers = false,
     .identifier_backslash_escapes = false,
     .hash_comments = false,
+    .escape_strings = false,
+    .dollar_quoted_strings = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT 'a\\'b', 'secret'", escapes),
               std::string{"SELECT '***', '***'"});
@@ -446,6 +448,8 @@ TEST("queries in logs lose their string literals") {
     .bracket_identifiers = false,
     .identifier_backslash_escapes = false,
     .hash_comments = false,
+    .escape_strings = false,
+    .dollar_quoted_strings = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT \"secret\" FROM `t`", mysql),
               std::string{"SELECT \"***\" FROM `t`"});
@@ -457,6 +461,8 @@ TEST("queries in logs lose their string literals") {
     .bracket_identifiers = true,
     .identifier_backslash_escapes = false,
     .hash_comments = false,
+    .escape_strings = false,
+    .dollar_quoted_strings = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT [a'b] FROM t", brackets),
               std::string{"SELECT [a'b] FROM t"});
@@ -473,6 +479,8 @@ TEST("queries in logs lose their string literals") {
     .bracket_identifiers = false,
     .identifier_backslash_escapes = false,
     .hash_comments = true,
+    .escape_strings = false,
+    .dollar_quoted_strings = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT 1 # it's\n, 'secret'", hashes),
               std::string{"SELECT 1 # ***\n, '***'"});
@@ -489,6 +497,8 @@ TEST("queries in logs lose their string literals") {
     .bracket_identifiers = false,
     .identifier_backslash_escapes = true,
     .hash_comments = false,
+    .escape_strings = false,
+    .dollar_quoted_strings = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT `with\\`tick`, 'secret'",
                                      clickhouse),
@@ -496,4 +506,24 @@ TEST("queries in logs lose their string literals") {
   // An unterminated literal is redacted to the end.
   CHECK_EQUAL(pushdown::redact_query("SELECT 'unterminated"),
               std::string{"SELECT '***'"});
+  // DuckDB also writes escape strings and dollar-quoted strings.
+  auto const duckdb = pushdown::SqlLexicon{
+    .backslash_escapes = false,
+    .double_quoted_strings = false,
+    .bracket_identifiers = false,
+    .identifier_backslash_escapes = false,
+    .hash_comments = false,
+    .escape_strings = true,
+    .dollar_quoted_strings = true,
+  };
+  CHECK_EQUAL(pushdown::redact_query("SELECT E'a\\'secret', 'b\\', "
+                                     "$$it's$$, $tag$x $$ y$tag$, $1, a$b$",
+                                     duckdb),
+              std::string{"SELECT E'***', '***', $$***$$, $tag$***$tag$, $1, "
+                          "a$b$"});
+  CHECK_EQUAL(pushdown::redact_query("SELECT $$unterminated", duckdb),
+              std::string{"SELECT $$***$$"});
+  // Without the syntaxes, `E` is an identifier, and `$` is a character.
+  CHECK_EQUAL(pushdown::redact_query("SELECT E'a\\'secret'"),
+              std::string{"SELECT E'***'secret'***'"});
 }

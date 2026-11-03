@@ -1,0 +1,6 @@
+// The query takes the `drop`, which keeps every column but `catalog_name`,
+// although the pipeline needs no column, so the projection would keep only
+// the first one, `catalog_name`.
+from_duckdb ":memory:", table="information_schema.schemata"
+drop catalog_name
+select

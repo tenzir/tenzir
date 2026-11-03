@@ -1,0 +1,7 @@
+// The query takes the sort, the limit, and the filter behind it, and keeps the
+// order of the sort across the derived table.
+from_duckdb env("DUCKDB_SEED"), table="events"
+sort -id
+head 2
+where name != null
+select id, name

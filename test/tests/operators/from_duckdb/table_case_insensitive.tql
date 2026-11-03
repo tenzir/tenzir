@@ -1,0 +1,5 @@
+// The query takes the filter on `SCHEMA_NAME`, which DuckDB resolves to the
+// column `schema_name`, so the projection keeps that column.
+from_duckdb ":memory:", table="information_schema.schemata"
+where SCHEMA_NAME == "main"
+select schema_owner

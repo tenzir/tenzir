@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:78..89 from 0
+             `from_duckdb` @ [1]:139..150 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:90..105 from 0
+           located "events.duckdb" @ [1]:151..166 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:113..121 from 0
+             value: located "events" @ [1]:174..182 from 0
            }
          ]
        },
@@ -30,13 +30,13 @@
 +      projection: [
 +        {
 +          expr: root_field {
-+            id: `meta` @ [1]:146..150 from 0,
++            id: `meta` @ [1]:207..211 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `meta` @ [1]:146..150 from 0,
++              id: `meta` @ [1]:207..211 from 0,
 +              has_question_mark: false
 +            }
 +          ]
@@ -44,33 +44,34 @@
 +        {
 +          expr: field_access {
 +            left: root_field {
-+              id: `meta` @ [1]:127..131 from 0,
++              id: `meta` @ [1]:188..192 from 0,
 +              has_question_mark: false
 +            },
 +            has_question_mark: false,
-+            name: `raw` @ [1]:132..135 from 0,
-+            location: [1]:127..135 from 0
++            name: `raw` @ [1]:193..196 from 0,
++            location: [1]:188..196 from 0
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `meta` @ [1]:127..131 from 0,
++              id: `meta` @ [1]:188..192 from 0,
 +              has_question_mark: false
 +            },
 +            {
-+              id: `raw` @ [1]:132..135 from 0,
++              id: `raw` @ [1]:193..196 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        }
-+      ]
++      ],
++      declined: "DuckDB cannot spell the stage"
      },
      GenericIr {
        desc: "drop",
        store: {
          op: {
            path: [
-             `drop` @ [1]:122..126 from 0
+             `drop` @ [1]:183..187 from 0
            ],
            ref: std::drop/op
          },
@@ -78,21 +79,21 @@
            field_path {
              expr: field_access {
                left: root_field {
-                 id: `meta` @ [1]:127..131 from 0,
+                 id: `meta` @ [1]:188..192 from 0,
                  has_question_mark: false
                },
                has_question_mark: false,
-               name: `raw` @ [1]:132..135 from 0,
-               location: [1]:127..135 from 0
+               name: `raw` @ [1]:193..196 from 0,
+               location: [1]:188..196 from 0
              },
              has_this: false,
              path: [
                {
-                 id: `meta` @ [1]:127..131 from 0,
+                 id: `meta` @ [1]:188..192 from 0,
                  has_question_mark: false
                },
                {
-                 id: `raw` @ [1]:132..135 from 0,
+                 id: `raw` @ [1]:193..196 from 0,
                  has_question_mark: false
                }
              ]
@@ -108,19 +109,19 @@
        order: "ordered"
      },
      summarize {
-       self: [1]:136..145 from 0,
+       self: [1]:197..206 from 0,
        cfg: {
          aggregates: [
            {
              dest: {
                expr: root_field {
-                 id: `events` @ [1]:152..158 from 0,
+                 id: `events` @ [1]:213..219 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `events` @ [1]:152..158 from 0,
+                   id: `events` @ [1]:213..219 from 0,
                    has_question_mark: false
                  }
                ]
@@ -128,7 +129,7 @@
              call: {
                fn: {
                  path: [
-                   `count` @ [1]:159..164 from 0
+                   `count` @ [1]:220..225 from 0
                  ],
                  ref: std::count/fn
                },
@@ -136,7 +137,7 @@
                  
                ],
                method: false,
-               location: [1]:159..166 from 0
+               location: [1]:220..227 from 0
              }
            }
          ],
@@ -144,13 +145,13 @@
            {
              expr: {
                expr: root_field {
-                 id: `meta` @ [1]:146..150 from 0,
+                 id: `meta` @ [1]:207..211 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `meta` @ [1]:146..150 from 0,
+                   id: `meta` @ [1]:207..211 from 0,
                    has_question_mark: false
                  }
                ]
@@ -172,7 +173,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:166..166 from 0
++            `to_stdout` @ [1]:227..227 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
@@ -189,5 +190,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:78..166 from 0
+   definition_location: [1]:139..227 from 0
  }

@@ -25,7 +25,9 @@
        filter: [
          
        ],
-       order: "ordered"
+-      order: "ordered"
++      order: "ordered",
++      declined: "`summarize` is no stage"
      },
      summarize {
        self: [1]:114..123 from 0,

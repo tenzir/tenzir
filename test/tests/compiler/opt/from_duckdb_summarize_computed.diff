@@ -54,7 +54,8 @@
 +            }
 +          ]
 +        }
-+      ]
++      ],
++      declined: "`set` is no stage"
      },
      SetIr {
        assignments: [

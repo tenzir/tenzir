@@ -36,6 +36,34 @@ auto skip_quoted(std::string_view query, size_t begin, char close,
   return query.size();
 }
 
+auto is_identifier_start(char c) -> bool {
+  return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_';
+}
+
+auto is_identifier_char(char c) -> bool {
+  return is_identifier_start(c) or (c >= '0' and c <= '9');
+}
+
+/// Returns the delimiter of the dollar-quoted string at `begin`, such as `$$`
+/// or `$tag$`, or an empty view if none starts there. A `$` followed by a
+/// digit is a parameter instead.
+auto dollar_delimiter(std::string_view query, size_t begin)
+  -> std::string_view {
+  if (query[begin] != '$') {
+    return {};
+  }
+  auto i = begin + 1;
+  if (i < query.size() and is_identifier_start(query[i])) {
+    while (i < query.size() and is_identifier_char(query[i])) {
+      ++i;
+    }
+  }
+  if (i < query.size() and query[i] == '$') {
+    return query.substr(begin, i + 1 - begin);
+  }
+  return {};
+}
+
 } // namespace
 
 auto redact_query(std::string_view query, SqlLexicon lexicon) -> std::string {
@@ -70,6 +98,26 @@ auto redact_query(std::string_view query, SqlLexicon lexicon) -> std::string {
         }
       }
       result += "/* *** */";
+      continue;
+    }
+    if (lexicon.dollar_quoted_strings
+        and (i == 0 or not is_identifier_char(query[i - 1]))) {
+      if (auto delimiter = dollar_delimiter(query, i); not delimiter.empty()) {
+        auto const end = query.find(delimiter, i + delimiter.size());
+        result += delimiter;
+        result += "***";
+        result += delimiter;
+        i = end == std::string_view::npos ? query.size()
+                                          : end + delimiter.size();
+        continue;
+      }
+    }
+    if (lexicon.escape_strings and (c == 'E' or c == 'e') and rest.size() > 1
+        and rest[1] == '\''
+        and (i == 0 or not is_identifier_char(query[i - 1]))) {
+      i = skip_quoted(query, i + 2, '\'', true);
+      result += c;
+      result += "'***'";
       continue;
     }
     auto const string

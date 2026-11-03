@@ -1,0 +1,4 @@
+// The query takes the `select`, which renames fields and reads a field of a
+// struct column. DuckDB reads the field of the null struct `meta` as `NULL`.
+from_duckdb env("DUCKDB_SEED"), table="events"
+select key=id, host=meta.host

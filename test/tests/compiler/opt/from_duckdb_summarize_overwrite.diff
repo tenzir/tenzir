@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:102..113 from 0
+             `from_duckdb` @ [1]:177..188 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:114..129 from 0
+           located "events.duckdb" @ [1]:189..204 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:137..145 from 0
+             value: located "events" @ [1]:212..220 from 0
            }
          ]
        },
@@ -26,96 +26,113 @@
          
        ],
 -      order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
 +      order: "ordered",
 +      projection: [
-+        {
+         {
+-          left: this_ [0]:0..0 from 0,
+-          right: record {
+-            begin: [0]:0..0 from 0,
+-            items: [
+-              
+-            ],
+-            end: [0]:0..0 from 0
+-          },
+-          location: [0]:0..0 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `src_ip` @ [1]:228..234 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `src_ip` @ [1]:228..234 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:228..234 from 0
+-        },
+-        {
+-          left: root_field {
 +          expr: root_field {
-+            id: `severity` @ [1]:161..169 from 0,
-+            has_question_mark: false
-+          },
+             id: `severity` @ [1]:236..244 from 0,
+             has_question_mark: false
+           },
+-          right: root_field {
+-            id: `severity` @ [1]:236..244 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:236..244 from 0
 +          has_this: false,
 +          path: [
 +            {
-+              id: `severity` @ [1]:161..169 from 0,
++              id: `severity` @ [1]:236..244 from 0,
 +              has_question_mark: false
 +            }
 +          ]
-+        }
-+      ]
-     },
-     SetIr {
-       assignments: [
-         {
-           left: this_ [0]:0..0 from 0,
-           right: record {
-             begin: [0]:0..0 from 0,
-             items: [
-               
-             ],
-             end: [0]:0..0 from 0
-           },
-           location: [0]:0..0 from 0
-         },
-         {
-           left: root_field {
-             id: `src_ip` @ [1]:153..159 from 0,
-             has_question_mark: false
-           },
-           right: root_field {
-             id: `src_ip` @ [1]:153..159 from 0,
-             has_question_mark: false
-           },
-           location: [1]:153..159 from 0
-         },
-         {
-           left: root_field {
-             id: `severity` @ [1]:161..169 from 0,
-             has_question_mark: false
-           },
-           right: root_field {
-             id: `severity` @ [1]:161..169 from 0,
-             has_question_mark: false
-           },
-           location: [1]:161..169 from 0
          }
        ],
-       order: "ordered"
+-      order: "ordered"
++      plan: [
++        Select {
++          fields: [
++            {
++              output: [
++                "src_ip"
++              ],
++              input: [
++                "src_ip"
++              ]
++            },
++            {
++              output: [
++                "severity"
++              ],
++              input: [
++                "severity"
++              ]
++            }
++          ]
++        }
++      ],
++      declined: "`set` is no stage"
      },
      SetIr {
        assignments: [
          {
            left: root_field {
-             id: `severity` @ [1]:170..178 from 0,
+             id: `severity` @ [1]:245..253 from 0,
              has_question_mark: false
            },
            right: binary_expr {
              left: root_field {
-               id: `severity` @ [1]:181..189 from 0,
+               id: `severity` @ [1]:256..264 from 0,
                has_question_mark: false
              },
              op: "add",
-             right: constant int64 1 @ [1]:192..193 from 0,
-             location: [1]:181..193 from 0
+             right: constant int64 1 @ [1]:267..268 from 0,
+             location: [1]:256..268 from 0
            },
-           location: [1]:170..193 from 0
+           location: [1]:245..268 from 0
          }
        ],
        order: "ordered"
      },
      summarize {
-       self: [1]:194..203 from 0,
+       self: [1]:269..278 from 0,
        cfg: {
          aggregates: [
            {
              dest: {
                expr: root_field {
-                 id: `events` @ [1]:214..220 from 0,
+                 id: `events` @ [1]:289..295 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `events` @ [1]:214..220 from 0,
+                   id: `events` @ [1]:289..295 from 0,
                    has_question_mark: false
                  }
                ]
@@ -123,7 +140,7 @@
              call: {
                fn: {
                  path: [
-                   `count` @ [1]:221..226 from 0
+                   `count` @ [1]:296..301 from 0
                  ],
                  ref: std::count/fn
                },
@@ -131,7 +148,7 @@
                  
                ],
                method: false,
-               location: [1]:221..228 from 0
+               location: [1]:296..303 from 0
              }
            }
          ],
@@ -139,13 +156,13 @@
            {
              expr: {
                expr: root_field {
-                 id: `severity` @ [1]:204..212 from 0,
+                 id: `severity` @ [1]:279..287 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `severity` @ [1]:204..212 from 0,
+                   id: `severity` @ [1]:279..287 from 0,
                    has_question_mark: false
                  }
                ]
@@ -167,7 +184,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:228..228 from 0
++            `to_stdout` @ [1]:303..303 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
@@ -184,5 +201,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:102..228 from 0
+   definition_location: [1]:177..303 from 0
  }

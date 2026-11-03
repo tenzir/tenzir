@@ -1,4 +1,5 @@
-// The `summarize` reads a record that the `drop` changes, so it stays local.
+// The `summarize` reads a record that the `drop` changes. DuckDB cannot drop a
+// field of a struct column, so both stay in the pipeline.
 from_duckdb "events.duckdb", table="events"
 drop meta.raw
 summarize meta, events=count()

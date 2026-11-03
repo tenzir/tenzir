@@ -1,0 +1,5 @@
+// The query takes the comparisons with times, which DuckDB casts to the type
+// of each column: `TIMESTAMP`, `TIMESTAMP_NS`, and `DATE`.
+from_duckdb env("DUCKDB_SEED"), table="events"
+where ts > 2024-01-01T12:00:00 or ts_ns >= 2024-01-03 or day == 2024-01-01
+select id

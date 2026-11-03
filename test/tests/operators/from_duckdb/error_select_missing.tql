@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// The query takes the `select`, and DuckDB rejects the column that the table
+// lacks. The query fails, since the `select` left the pipeline.
+from_duckdb env("DUCKDB_SEED"), table="events"
+select id, missing

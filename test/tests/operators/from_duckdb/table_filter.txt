@@ -1,8 +1,4 @@
 {
-  id: 2,
-  name: null,
-}
-{
   id: 3,
   name: "gamma",
 }

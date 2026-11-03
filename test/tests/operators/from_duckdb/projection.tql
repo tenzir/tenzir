@@ -1,4 +1,4 @@
-// The downstream `select` reaches the query as a projection; unknown fields
-// are left to `select`.
-from_duckdb env("DUCKDB_SEED"), table="events"
+// With `pushdown=false`, the downstream `select` stays in the pipeline and
+// reaches the query as a projection; it handles unknown fields itself.
+from_duckdb env("DUCKDB_SEED"), table="events", pushdown=false
 select id, meta.host, missing

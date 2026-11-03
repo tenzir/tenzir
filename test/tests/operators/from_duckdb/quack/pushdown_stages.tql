@@ -1,0 +1,7 @@
+// The server runs the filter, the summary, the sort, and the limit, and the
+// result keeps the order of the sort.
+from_duckdb env("QUACK_URI"), token=env("QUACK_TOKEN"), table="many"
+where n >= 49990
+summarize n, count=count()
+sort -n
+head 3

@@ -8,51 +8,57 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:135..146 from 0
+             `from_duckdb` @ [1]:184..195 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:147..162 from 0
+           located "events.duckdb" @ [1]:196..211 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:170..178 from 0
+             value: located "events" @ [1]:219..227 from 0
            }
          ]
        },
        filter: [
--        
-+        binary_expr {
-+          left: root_field {
-+            id: `src_ip` @ [1]:204..210 from 0,
-+            has_question_mark: false
-+          },
-+          op: "eq",
-+          right: constant ip 203.0.113.7 @ [1]:214..225 from 0,
-+          location: [1]:204..225 from 0
-+        }
+         
        ],
-       order: "ordered"
+-      order: "ordered"
++      order: "ordered",
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `src_ip` @ [1]:253..259 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant ip 203.0.113.7 @ [1]:263..274 from 0,
++            location: [1]:253..274 from 0
++          }
++        }
++      ],
++      declined: "`set` is no stage"
      },
      SetIr {
        assignments: [
          {
            left: root_field {
-             id: `ts` @ [1]:179..181 from 0,
+             id: `ts` @ [1]:228..230 from 0,
              has_question_mark: false
            },
            right: binary_expr {
              left: root_field {
-               id: `ts` @ [1]:184..186 from 0,
+               id: `ts` @ [1]:233..235 from 0,
                has_question_mark: false
              },
              op: "else_",
              right: function_call {
                fn: {
                  path: [
-                   `now` @ [1]:192..195 from 0
+                   `now` @ [1]:241..244 from 0
                  ],
                  ref: std::now/fn
                },
@@ -60,11 +66,11 @@
                  
                ],
                method: false,
-               location: [1]:192..197 from 0
+               location: [1]:241..246 from 0
              },
-             location: [1]:184..197 from 0
+             location: [1]:233..246 from 0
            },
-           location: [1]:179..197 from 0
+           location: [1]:228..246 from 0
          }
        ],
        order: "ordered"
@@ -72,7 +78,7 @@
      where_ir {
        op: {
          path: [
--          `where` @ [1]:198..203 from 0
+-          `where` @ [1]:247..252 from 0
 +          
          ],
 -        ref: std::where/op
@@ -82,31 +88,31 @@
 -        expression binary_expr {
 -          left: binary_expr {
 -            left: root_field {
--              id: `src_ip` @ [1]:204..210 from 0,
+-              id: `src_ip` @ [1]:253..259 from 0,
 -              has_question_mark: false
 -            },
 -            op: "eq",
--            right: constant ip 203.0.113.7 @ [1]:214..225 from 0,
--            location: [1]:204..225 from 0
+-            right: constant ip 203.0.113.7 @ [1]:263..274 from 0,
+-            location: [1]:253..274 from 0
 +        Incomplete binary_expr {
 +          left: root_field {
-+            id: `ts` @ [1]:230..232 from 0,
++            id: `ts` @ [1]:279..281 from 0,
 +            has_question_mark: false
            },
 -          op: "and_",
 -          right: binary_expr {
 -            left: root_field {
--              id: `ts` @ [1]:230..232 from 0,
+-              id: `ts` @ [1]:279..281 from 0,
 -              has_question_mark: false
 -            },
 -            op: "gt",
--            right: constant time 2024-01-01T00:00:00Z @ [1]:235..245 from 0,
--            location: [1]:230..245 from 0
+-            right: constant time 2024-01-01T00:00:00Z @ [1]:284..294 from 0,
+-            location: [1]:279..294 from 0
 -          },
--          location: [1]:204..245 from 0
+-          location: [1]:253..294 from 0
 +          op: "gt",
-+          right: constant time 2024-01-01T00:00:00Z @ [1]:235..245 from 0,
-+          location: [1]:230..245 from 0
++          right: constant time 2024-01-01T00:00:00Z @ [1]:284..294 from 0,
++          location: [1]:279..294 from 0
          }
        ],
        named_args: [
@@ -118,7 +124,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:245..245 from 0
++            `to_stdout` @ [1]:294..294 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
@@ -135,5 +141,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:135..245 from 0
+   definition_location: [1]:184..294 from 0
  }

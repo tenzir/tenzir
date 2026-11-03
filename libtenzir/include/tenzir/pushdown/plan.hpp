@@ -54,13 +54,20 @@ struct SqlLexicon {
   bool identifier_backslash_escapes = false;
   /// Whether `#` starts a comment until the end of the line, as in MySQL.
   bool hash_comments = false;
+  /// Whether `E'...'` delimits a string literal in which a backslash escapes
+  /// the next character, as in DuckDB and PostgreSQL.
+  bool escape_strings = false;
+  /// Whether `$tag$...$tag$` delimits a string literal, with an optional
+  /// identifier as `tag`, as in DuckDB and PostgreSQL.
+  bool dollar_quoted_strings = false;
 };
 
 /// Returns `query` with the contents of its string literals and comments
 /// replaced by `***`, for logs. Single quotes delimit a literal, which spells a
 /// quote inside doubled, or after a backslash where `lexicon` says so. `--`
 /// and `/*` start comments, and block comments nest. Quoted identifiers stay
-/// as they are. An unterminated literal or comment is redacted to the end.
+/// as they are. `lexicon` adds the string syntaxes of the dialect. An
+/// unterminated literal or comment is redacted to the end.
 auto redact_query(std::string_view query, SqlLexicon lexicon = {})
   -> std::string;
 
