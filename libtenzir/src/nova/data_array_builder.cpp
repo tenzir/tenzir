@@ -77,10 +77,14 @@ auto UnionArrayBuilder::take_last() -> Data {
   alternative_index_builder_.pop_back();
   return match(builders_[static_cast<std::size_t>(alternative)],
                [&](auto& builder) {
-                 // The alternative was aligned when it received the value in
-                 // the last row, so that value is its last row. The absent
-                 // rows in front of it stay until the next alignment.
-                 TENZIR_ASSERT_EQ(builder.size(), length() + 1);
+                 // The value of the removed row sits at index `length()` of
+                 // the alternative. Rows beyond it are absent: they padded
+                 // values of other alternatives that are gone, for example
+                 // when taking rows of alternating types one after another.
+                 // The absent rows in front of the value stay until the next
+                 // alignment.
+                 TENZIR_ASSERT_GT(builder.size(), length());
+                 builder.pop_absent(builder.size() - (length() + 1));
                  return builder.take_last();
                });
 }
