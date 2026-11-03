@@ -1,0 +1,6 @@
+// Schema fields that the input lacks read as null, including fields of nested
+// schema records.
+from_stdin {
+  read_json schema="suricata.dns"
+}
+select src_ip, dest_port, rrname=dns.rrname, rcode=dns.rcode

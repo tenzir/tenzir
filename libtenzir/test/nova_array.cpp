@@ -3284,6 +3284,22 @@ TEST("record builder keeps the last value of a repeated key") {
               (std::vector<std::string>{"a", "b", "c"}));
 }
 
+TEST("record builder lists a requested field once") {
+  auto builder = ArrayBuilder<Record>{};
+  auto row = builder.record();
+  std::ignore = row.field("a");
+  row.field("b").data(std::int64_t{1});
+  row.field("a").data(std::int64_t{2});
+  builder.record().field("b").data(std::int64_t{3});
+  auto array = builder.finish();
+  REQUIRE_EQUAL(array.length(), 2);
+  CHECK_EQUAL(record_field_names(array.get(0)),
+              (std::vector<std::string>{"a", "b"}));
+  CHECK_EQUAL(field_value(array, "a", 0), (tenzir::data{std::int64_t{2}}));
+  CHECK_EQUAL(record_field_names(array.get(1)),
+              (std::vector<std::string>{"b"}));
+}
+
 TEST("Arrow schema metadata roundtrips independently of import time") {
   for (auto internal : {false, true}) {
     auto metadata = ArrowMetadata{"schema.test", internal};

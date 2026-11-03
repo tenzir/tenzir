@@ -1,0 +1,12 @@
+{
+  src_ip: 10.0.0.1,
+  dest_port: null,
+  rrname: "example.com",
+  rcode: null,
+}
+{
+  src_ip: null,
+  dest_port: 53,
+  rrname: null,
+  rcode: "NOERROR",
+}
