@@ -1,5 +1,0 @@
-id: healthy_test
-name: Healthy runtime package
-operators:
-  good:
-    definition: where true
