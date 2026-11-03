@@ -1,0 +1,7 @@
+{"id":"healthy_test","install_status":"installed"}
+{"id":"recover_test","install_status":"installed"}
+{"id":"recover_test/run","unstoppable":true}
+{"id":"healthy_test","install_status":"installed"}
+{"id":"recover_test","install_status":"zombie"}
+{"pipelines":0}
+{"id":"healthy_test","install_status":"installed"}
