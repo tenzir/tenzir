@@ -1,0 +1,10 @@
+created: 2026-11-04
+title: Faster DuckDB, ClickHouse, and Splunk queries
+intro: >-
+  This release hands more of each pipeline to DuckDB, ClickHouse, MySQL, Microsoft
+  SQL Server, and Splunk, so they return only the data that the pipeline keeps. It
+  also fixes several performance problems in parsing and filtering, and makes list
+  membership, OCSF derivation, and context lookups behave consistently.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.20.1
