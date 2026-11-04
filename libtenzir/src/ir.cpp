@@ -29,9 +29,12 @@
 #include "tenzir/tql2/user_defined_operator.hpp"
 #include "tenzir/type.hpp"
 
+#include <caf/binary_serializer.hpp>
+#include <caf/byte_buffer.hpp>
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <map>
 #include <ranges>
 #include <span>
 #include <utility>
@@ -84,32 +87,118 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   });
 }
 
+namespace {
+
+/// Identifies the value that a replacement computes. Replacements for
+/// different members of the same assigned value compute the same value, so the
+/// members do not count, unless `members` is set.
+auto computation_key(ast::expression const& replacement, bool members = false)
+  -> caf::byte_buffer {
+  auto const* base = &replacement;
+  while (not members) {
+    if (auto const* access = try_as<ast::field_access>(*base)) {
+      base = &access->left;
+    } else if (auto const* index = try_as<ast::index_expr>(*base)) {
+      base = &index->expr;
+    } else {
+      break;
+    }
+  }
+  auto buffer = caf::byte_buffer{};
+  auto f = caf::binary_serializer{buffer};
+  auto copy = *base;
+  auto const success = f.apply(copy);
+  TENZIR_ASSERT(success);
+  return buffer;
+}
+
+} // namespace
+
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
                                       registry const& reg,
                                       ast::FieldSubstitution const& fields,
                                       ast::MetaSubstitution const& meta)
   -> split_filter_result {
+  // Returns the simplified predicate with a placeholder field in place of every
+  // expensive replacement. Its expensive parts are those that the predicate has
+  // without copying any, after the substitution of the other replacements,
+  // which may make some of its own parts constant.
+  auto const without_expensive = [&](ast::expression const& expr) {
+    auto const placeholder = ast::FieldSubstitution{
+      [&](ast::field_path const& field) -> Option<ast::expression> {
+        auto replacement = fields(field);
+        if (replacement and not is_cheap(*replacement, reg)) {
+          return ast::root_field{
+            ast::identifier{"__expensive", replacement->get_location()},
+            false,
+          };
+        }
+        return replacement;
+      }};
+    auto substituted = ast::substitute_refs(expr, reg, placeholder, meta);
+    TENZIR_ASSERT(substituted);
+    return simplify_predicate(std::move(*substituted), reg);
+  };
+  // A replacement that is not plain stands for a value that the operator
+  // computes, which a moved predicate computes once more. That is acceptable
+  // for a cheap value that the moved predicates read once in total, but
+  // copying it several times multiplies the work. A predicate that copies
+  // expensive parts, such as parsers, may repeat arbitrarily expensive work.
+  // The simplifier may describe an expensive call by its arguments, such as a
+  // field of `ocsf_cast(this)` by the input, in which case the predicate moves
+  // if it reads that field once.
   auto result = split_filter_result{};
+  // The reads of computed values by the predicates that moved.
+  auto reads = std::map<caf::byte_buffer, size_t>{};
   for (auto& expr : filter) {
-    auto substituted = ast::substitute_refs(expr, reg, fields, meta);
+    auto computed = std::map<caf::byte_buffer, size_t>{};
+    auto expensive = false;
+    auto const counting = ast::FieldSubstitution{
+      [&](ast::field_path const& field) -> Option<ast::expression> {
+        auto replacement = fields(field);
+        if (replacement and not is_plain(*replacement)) {
+          // The simplifier may describe a member of an expensive value by a
+          // cheap computation of only that member, such as `ocsf_cast(this).a`
+          // by `_ocsf_cast_field(…)`, so each member counts on its own.
+          auto const cheap = is_cheap(*replacement, reg);
+          expensive = expensive or not cheap;
+          ++computed[computation_key(*replacement, not cheap)];
+        }
+        return replacement;
+      }};
+    auto substituted = ast::substitute_refs(expr, reg, counting, meta);
     if (not substituted) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    auto simplified = simplify_predicate(std::move(*substituted), reg);
+    auto predicate = simplify_predicate(std::move(*substituted), reg);
+    auto const copied = std::ranges::any_of(computed, [&](auto const& entry) {
+      auto const it = reads.find(entry.first);
+      return entry.second + (it == reads.end() ? 0 : it->second) > 1;
+    });
+    if (copied
+        or (expensive
+            and count_expensive(predicate, reg)
+                  > count_expensive(without_expensive(expr), reg))) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
     // A predicate that grows past the bound stays behind the operator.
-    auto const size = expression_size(simplified);
+    auto const size = expression_size(predicate);
     if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
     // As in `split_filter_by_dependents`, a predicate must not move past one
     // that stays if it could fail for the events that the other one drops.
-    if (not result.dependent.empty() and not is_infallible(simplified)) {
+    if (not result.dependent.empty() and not is_infallible(predicate)) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    result.independent.push_back(std::move(simplified));
+    for (auto const& [key, count] : computed) {
+      reads[key] += count;
+    }
+    result.independent.push_back(std::move(predicate));
   }
   return result;
 }

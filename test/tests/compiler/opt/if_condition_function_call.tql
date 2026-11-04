@@ -1,0 +1,9 @@
+// The branch filters of an `if` whose condition calls an expensive function,
+// such as a parser, stay inside the branches, because moving them in front
+// would evaluate the condition once more.
+export
+if line.parse_syslog().app_name == "sshd" {
+  where x == 1
+} else {
+  where x == 2
+}

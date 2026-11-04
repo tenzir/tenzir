@@ -313,9 +313,12 @@ public:
     // Each branch filter applies to the events that the condition routes to
     // its branch, so `then_filter if condition else else_filter` keeps the
     // same events in front of `if`, provided that the condition yields the
-    // same value when `if` evaluates it again.
+    // same value when `if` evaluates it again. Evaluating it again must also
+    // be cheap, because a condition that calls an expensive function, such as
+    // a parser, could otherwise double the work of the pipeline.
     auto lifted = Option<ir::OptimizeFilter>{};
-    if (types_known and ir::is_repeatable(args_.condition, octx.reg)) {
+    if (types_known and ir::is_repeatable(args_.condition, octx.reg)
+        and ir::is_cheap(args_.condition, octx.reg)) {
       auto branches = std::vector<ir::RoutedBranch>{};
       branches.push_back({args_.condition, cons_filter});
       branches.push_back({None{}, alt_filter});

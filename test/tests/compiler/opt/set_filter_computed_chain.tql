@@ -1,0 +1,7 @@
+// Assignments that read a computed value twice cannot multiply its copies: the
+// predicate moves in front of `b`, where it reads `a` twice, and stays there.
+export
+a = x + y
+b = a + a
+c = b + b
+where c == 1

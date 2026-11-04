@@ -1,0 +1,245 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:181..187 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `x` @ [1]:192..193 from 0,
++              has_question_mark: false
++            },
++            op: "add",
++            right: constant int64 1 @ [1]:196..197 from 0,
++            location: [1]:192..197 from 0
++          },
++          op: "gt",
++          right: constant int64 5 @ [1]:208..209 from 0,
++          location: [1]:204..209 from 0
++        },
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `y` @ [1]:214..215 from 0,
++              has_question_mark: false
++            },
++            op: "add",
++            right: constant int64 1 @ [1]:218..219 from 0,
++            location: [1]:214..219 from 0
++          },
++          op: "gt",
++          right: constant int64 1 @ [1]:230..231 from 0,
++          location: [1]:226..231 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `a` @ [1]:188..189 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `x` @ [1]:192..193 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: constant int64 1 @ [1]:196..197 from 0,
+             location: [1]:192..197 from 0
+           },
+           location: [1]:188..197 from 0
+         }
+       ],
+       order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:198..203 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `a` @ [1]:204..205 from 0,
+-            has_question_mark: false
+-          },
+-          op: "gt",
+-          right: constant int64 5 @ [1]:208..209 from 0,
+-          location: [1]:204..209 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `b` @ [1]:210..211 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `y` @ [1]:214..215 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: constant int64 1 @ [1]:218..219 from 0,
+             location: [1]:214..219 from 0
+           },
+           location: [1]:210..219 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:220..225 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `b` @ [1]:226..227 from 0,
+-              has_question_mark: false
+-            },
+-            op: "gt",
+-            right: constant int64 1 @ [1]:230..231 from 0,
+-            location: [1]:226..231 from 0
++        Incomplete binary_expr {
++          left: root_field {
++            id: `b` @ [1]:236..237 from 0,
++            has_question_mark: false
+           },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `b` @ [1]:236..237 from 0,
+-              has_question_mark: false
+-            },
+-            op: "lt",
+-            right: constant int64 10 @ [1]:240..242 from 0,
+-            location: [1]:236..242 from 0
+-          },
+-          location: [1]:226..242 from 0
++          op: "lt",
++          right: constant int64 10 @ [1]:240..242 from 0,
++          location: [1]:236..242 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `c` @ [1]:243..244 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `z` @ [1]:247..248 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: constant int64 1 @ [1]:251..252 from 0,
+             location: [1]:247..252 from 0
+           },
+           location: [1]:243..252 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:253..258 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: binary_expr {
+             left: root_field {
+               id: `c` @ [1]:259..260 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: constant int64 1 @ [1]:264..265 from 0,
+             location: [1]:259..265 from 0
+           },
+           op: "or_",
+           right: binary_expr {
+             left: root_field {
+               id: `c` @ [1]:269..270 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: constant int64 2 @ [1]:274..275 from 0,
+             location: [1]:269..275 from 0
+           },
+           location: [1]:259..275 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:275..275 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:181..275 from 0
+ }

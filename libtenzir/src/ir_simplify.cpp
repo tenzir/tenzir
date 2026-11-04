@@ -912,6 +912,48 @@ public:
   size_t size = 0;
 };
 
+/// Finds the parts of an expression whose evaluation costs more than reading
+/// fields and combining them with operators.
+class CostFinder final : public ast::visitor<CostFinder> {
+public:
+  explicit CostFinder(registry const& reg) : reg_{reg} {
+  }
+
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::function_call& x) -> void {
+    if (not x.fn.ref.resolved() or not reg_.get(x).is_cheap()) {
+      ++expensive;
+    }
+    enter(x);
+  }
+
+  auto visit(ast::lambda_expr& x) -> void {
+    ++expensive;
+    enter(x);
+  }
+
+  auto visit(ast::pipeline_expr&) -> void {
+    ++expensive;
+  }
+
+  /// A format string stringifies its values, which may be nested, and builds a
+  /// new string.
+  auto visit(ast::format_expr& x) -> void {
+    ++expensive;
+    enter(x);
+  }
+
+  /// The number of expensive parts, including those nested in others.
+  size_t expensive = 0;
+
+private:
+  registry const& reg_;
+};
+
 /// Replaces package `let` references by their cached values where the
 /// evaluator accepts them. The simplifier keeps the references, but a
 /// condition that only reads them is constant.
@@ -996,6 +1038,43 @@ auto ir::expression_size(ast::expression const& expr) -> size_t {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   counter.visit(const_cast<ast::expression&>(expr));
   return counter.size;
+}
+
+auto ir::is_plain(ast::expression const& expr) -> bool {
+  return expr.match(
+    [](ast::constant const&) {
+      return true;
+    },
+    [](ast::meta const&) {
+      return true;
+    },
+    [](ast::this_ const&) {
+      return true;
+    },
+    [](ast::root_field const&) {
+      return true;
+    },
+    [](ast::field_access const& x) {
+      return is_plain(x.left);
+    },
+    [](ast::index_expr const& x) {
+      return is_plain(x.expr) and is<ast::constant>(x.index);
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
+auto ir::count_expensive(ast::expression const& expr, registry const& reg)
+  -> size_t {
+  auto finder = CostFinder{reg};
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+  finder.visit(const_cast<ast::expression&>(expr));
+  return finder.expensive;
+}
+
+auto ir::is_cheap(ast::expression const& expr, registry const& reg) -> bool {
+  return count_expensive(expr, reg) == 0;
 }
 
 auto ir::is_infallible(ast::expression const& expr) -> bool {

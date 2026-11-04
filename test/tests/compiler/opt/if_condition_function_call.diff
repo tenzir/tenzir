@@ -1,0 +1,144 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:197..203 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     If {
+       condition: binary_expr {
+         left: field_access {
+           left: function_call {
+             fn: {
+               path: [
+                 `parse_syslog` @ [1]:212..224 from 0
+               ],
+               ref: std::parse_syslog/fn
+             },
+             args: [
+               root_field {
+                 id: `line` @ [1]:207..211 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: true,
+             location: [1]:207..226 from 0
+           },
+           has_question_mark: false,
+           name: `app_name` @ [1]:227..235 from 0,
+           location: [1]:207..235 from 0
+         },
+         op: "eq",
+         right: constant string "sshd" @ [1]:239..245 from 0,
+         location: [1]:207..245 from 0
+       },
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           where_ir {
+             op: {
+               path: [
+-                `where` @ [1]:250..255 from 0
++                
+               ],
+-              ref: std::where/op
++              ref: unresolved
+             },
+             args: [
+-              expression binary_expr {
++              Incomplete binary_expr {
+                 left: root_field {
+                   id: `x` @ [1]:256..257 from 0,
+                   has_question_mark: false
+                 },
+                 op: "eq",
+                 right: constant int64 1 @ [1]:261..262 from 0,
+                 location: [1]:256..262 from 0
+               }
+             ],
+             named_args: [
+               
+             ]
+           }
+         ],
+         definition_location: [1]:250..262 from 0
+       },
+       alternative: {
+         lets: [
+           
+         ],
+         operators: [
+           where_ir {
+             op: {
+               path: [
+-                `where` @ [1]:274..279 from 0
++                
+               ],
+-              ref: std::where/op
++              ref: unresolved
+             },
+             args: [
+-              expression binary_expr {
++              Incomplete binary_expr {
+                 left: root_field {
+                   id: `x` @ [1]:280..281 from 0,
+                   has_question_mark: false
+                 },
+                 op: "eq",
+                 right: constant int64 2 @ [1]:285..286 from 0,
+                 location: [1]:280..286 from 0
+               }
+             ],
+             named_args: [
+               
+             ]
+           }
+         ],
+         definition_location: [1]:274..286 from 0
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:286..286 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:197..286 from 0
+ }
