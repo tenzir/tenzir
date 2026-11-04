@@ -927,20 +927,20 @@ public:
   auto visit(ast::function_call& x) -> void {
     if (not x.fn.ref.resolved() or not reg_.get(x).is_cheap()) {
       ++expensive;
-      return;
     }
     enter(x);
   }
 
-  auto visit(ast::lambda_expr&) -> void {
+  auto visit(ast::lambda_expr& x) -> void {
     ++expensive;
+    enter(x);
   }
 
   auto visit(ast::pipeline_expr&) -> void {
     ++expensive;
   }
 
-  /// The number of expensive parts, not counting those nested in others.
+  /// The number of expensive parts, including those nested in others.
   size_t expensive = 0;
 
 private:

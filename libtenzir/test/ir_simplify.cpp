@@ -471,6 +471,11 @@ TEST("substitution does not copy expensive function calls") {
                                                 test::builtin_registry(), call);
   CHECK(split.independent.empty());
   CHECK_EQUAL(render_chain(split.dependent), render_filter({"x == 1"}));
+  // This holds below an expensive call that the predicate makes already.
+  split = ir::split_filter_by_substitution(
+    parse_chain({"x.replace(\"a\", \"b\") == \"c\""}),
+    test::builtin_registry(), call);
+  CHECK(split.independent.empty());
   // A cheap function call counts as a computed value.
   auto const conversion
     = [](ast::field_path const&) -> Option<ast::expression> {
@@ -487,7 +492,7 @@ TEST("substitution does not copy expensive function calls") {
 }
 
 TEST("substitution copies a computed value at most once") {
-  // `x` and `w` are computed, the others are plain.
+  // `x` and `w` are computed, `p` is expensive, and the others are plain.
   auto const computed
     = [](ast::field_path const& field) -> Option<ast::expression> {
     auto const name = field.path().front().id.name;
@@ -497,6 +502,9 @@ TEST("substitution copies a computed value at most once") {
     if (name == "w") {
       return parse(fmt::format("(y + 2).{}", field.path().back().id.name));
     }
+    if (name == "p") {
+      return parse("y.parse_json()");
+    }
     return field.inner();
   };
   auto split = ir::split_filter_by_substitution(
@@ -504,13 +512,20 @@ TEST("substitution copies a computed value at most once") {
   CHECK_EQUAL(render_chain(split.independent),
               render_filter({"y + 1 == 1", "z == 2"}));
   CHECK(split.dependent.empty());
-  // The chain reads `x` twice, even though each predicate reads it once.
+  // Only the first predicate that reads `x` moves.
   split = ir::split_filter_by_substitution(
     parse_chain({"x > 1", "x < 10", "z == 2"}), test::builtin_registry(),
     computed);
-  CHECK_EQUAL(render_chain(split.independent), render_filter({"z == 2"}));
+  CHECK_EQUAL(render_chain(split.independent),
+              render_filter({"y + 1 > 1", "z == 2"}));
+  CHECK_EQUAL(render_chain(split.dependent), render_filter({"x < 10"}));
+  // A predicate that stays for another reason does not count as a read.
+  split = ir::split_filter_by_substitution(
+    parse_chain({"p == 1", "x.int() == 1", "x == 2"}), test::builtin_registry(),
+    computed);
+  CHECK_EQUAL(render_chain(split.independent), render_filter({"y + 1 == 2"}));
   CHECK_EQUAL(render_chain(split.dependent),
-              render_filter({"x > 1", "x < 10"}));
+              render_filter({"p == 1", "x.int() == 1"}));
   split = ir::split_filter_by_substitution(parse_chain({"x == 1 or x == 2"}),
                                            test::builtin_registry(), computed);
   CHECK(split.independent.empty());

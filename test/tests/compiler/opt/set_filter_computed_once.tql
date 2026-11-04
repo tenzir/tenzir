@@ -1,6 +1,6 @@
 // A predicate may compute a value without function calls once more in front
-// of its assignment, but not several times, so predicates that together read
-// the value more than once stay behind it.
+// of its assignment, but not several times, so only the first predicate that
+// reads the value moves.
 export
 a = x + 1
 where a > 5

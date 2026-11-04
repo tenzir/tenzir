@@ -760,7 +760,7 @@ auto is_plain(ast::expression const& expr) -> bool;
 auto is_cheap(ast::expression const& expr, registry const& reg) -> bool;
 
 /// Returns the number of expensive parts of `expr`, such as calls of expensive
-/// functions, not counting those within others. See `is_cheap`.
+/// functions, including those within others. See `is_cheap`.
 auto count_expensive(ast::expression const& expr, registry const& reg)
   -> size_t;
 

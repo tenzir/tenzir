@@ -120,56 +120,40 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
   -> split_filter_result {
   // A replacement that is not plain stands for a value that the operator
   // computes, which a moved predicate computes once more. That is acceptable
-  // for a cheap value that the whole chain reads once, but copying it several
-  // times multiplies the work. A predicate that ends up with more expensive
-  // parts, such as parsers, than it had may repeat arbitrarily expensive work.
-  // The simplifier may describe an expensive call by its arguments, such as a
-  // field of `ocsf_cast(this)` by the input, in which case it moves.
-  auto simplified = std::vector<Option<ast::expression>>{};
-  auto computations = std::vector<std::vector<caf::byte_buffer>>{};
+  // for a cheap value that the moved predicates read once in total, but
+  // copying it several times multiplies the work. A predicate that ends up
+  // with more expensive parts, such as parsers, than it had may repeat
+  // arbitrarily expensive work. The simplifier may describe an expensive call
+  // by its arguments, such as a field of `ocsf_cast(this)` by the input, in
+  // which case the predicate moves.
+  auto result = split_filter_result{};
+  // The reads of computed values by the predicates that moved.
   auto reads = std::map<caf::byte_buffer, size_t>{};
-  simplified.reserve(filter.size());
-  computations.reserve(filter.size());
-  for (auto const& expr : filter) {
-    auto computed = std::vector<caf::byte_buffer>{};
+  for (auto& expr : filter) {
+    auto computed = std::map<caf::byte_buffer, size_t>{};
     auto const counting = ast::FieldSubstitution{
       [&](ast::field_path const& field) -> Option<ast::expression> {
         auto replacement = fields(field);
         if (replacement and not is_plain(*replacement)
             and is_cheap(*replacement, reg)) {
-          computed.push_back(computation_key(*replacement));
+          ++computed[computation_key(*replacement)];
         }
         return replacement;
       }};
-    auto result = Option<ast::expression>{};
-    if (auto substituted = ast::substitute_refs(expr, reg, counting, meta)) {
-      auto predicate = simplify_predicate(std::move(*substituted), reg);
-      if (count_expensive(predicate, reg) <= count_expensive(expr, reg)) {
-        result = std::move(predicate);
-      }
-    }
-    if (result) {
-      for (auto const& key : computed) {
-        ++reads[key];
-      }
-    } else {
-      computed.clear();
-    }
-    simplified.push_back(std::move(result));
-    computations.push_back(std::move(computed));
-  }
-  auto result = split_filter_result{};
-  for (auto i = size_t{0}; i < filter.size(); ++i) {
-    auto& expr = filter[i];
-    auto const copied
-      = std::ranges::any_of(computations[i], [&](caf::byte_buffer const& key) {
-          return reads.at(key) > 1;
-        });
-    if (not simplified[i] or copied) {
+    auto substituted = ast::substitute_refs(expr, reg, counting, meta);
+    if (not substituted) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    auto& predicate = *simplified[i];
+    auto predicate = simplify_predicate(std::move(*substituted), reg);
+    auto const copied = std::ranges::any_of(computed, [&](auto const& entry) {
+      auto const it = reads.find(entry.first);
+      return entry.second + (it == reads.end() ? 0 : it->second) > 1;
+    });
+    if (copied or count_expensive(predicate, reg) > count_expensive(expr, reg)) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
     // A predicate that grows past the bound stays behind the operator.
     auto const size = expression_size(predicate);
     if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
@@ -181,6 +165,9 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
     if (not result.dependent.empty() and not is_infallible(predicate)) {
       result.dependent.push_back(std::move(expr));
       continue;
+    }
+    for (auto const& [key, count] : computed) {
+      reads[key] += count;
     }
     result.independent.push_back(std::move(predicate));
   }
