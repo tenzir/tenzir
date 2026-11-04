@@ -940,6 +940,13 @@ public:
     ++expensive;
   }
 
+  /// A format string stringifies its values, which may be nested, and builds a
+  /// new string.
+  auto visit(ast::format_expr& x) -> void {
+    ++expensive;
+    enter(x);
+  }
+
   /// The number of expensive parts, including those nested in others.
   size_t expensive = 0;
 

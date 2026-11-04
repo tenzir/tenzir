@@ -489,6 +489,13 @@ TEST("substitution does not copy expensive function calls") {
     parse_chain({"y.foo == 1 and x.parse_json() == [1]"}),
     test::builtin_registry(), mixed);
   CHECK(split.independent.empty());
+  // A format string is expensive as well.
+  auto const format = [](ast::field_path const&) -> Option<ast::expression> {
+    return parse(R"(f"{y}")");
+  };
+  split = ir::split_filter_by_substitution(parse_chain({R"(x == "a")"}),
+                                           test::builtin_registry(), format);
+  CHECK(split.independent.empty());
   // A cheap function call counts as a computed value.
   auto const conversion
     = [](ast::field_path const&) -> Option<ast::expression> {
