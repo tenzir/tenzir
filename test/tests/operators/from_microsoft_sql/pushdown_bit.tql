@@ -1,4 +1,5 @@
-// A `bit` column is a predicate of its own.
+// T-SQL has no boolean values, so a `bit` column is no predicate, and the filter
+// stays in Tenzir.
 from_microsoft_sql table="users",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

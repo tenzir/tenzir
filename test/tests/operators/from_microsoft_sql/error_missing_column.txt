@@ -1,0 +1,6 @@
+error: Microsoft SQL Server error 207: Invalid column name 'missing'.
+ --> tests/operators/from_microsoft_sql/error_missing_column.tql:8:1
+  |
+8 | from_microsoft_sql table="dbo.users",
+  | ^^^^^^^^^^^^^^^^^^
+  |

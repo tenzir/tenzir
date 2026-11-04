@@ -1,0 +1,14 @@
+// The query compares times as instants in UTC with every temporal type,
+// including a `datetimeoffset` stored with an offset of two hours.
+from_microsoft_sql table="dbo.full_types",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+where date_val == 2024-05-06
+where smalldatetime_val == 2024-05-06T07:08:00
+where datetime2_val == 2024-05-06T07:08:09.1234567
+where datetimeoffset_val == 2024-05-06T05:08:09
+where nullable_datetime_val < 2024-05-06T07:08:09.124
+select id

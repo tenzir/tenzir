@@ -1,7 +1,6 @@
-// The stages after the summaries of the earlier tests ran in SQL Server, as far
-// as it computes them as TQL does. The binary collation orders the queries by
-// code point.
-from_microsoft_sql sql="SELECT t.text AS query FROM sys.dm_exec_cached_plans AS p CROSS APPLY sys.dm_exec_sql_text(p.plan_handle) AS t WHERE t.text LIKE 'SELECT%FROM [[]hits]%' AND t.text LIKE '%[_][_]tenzir[_]aggregate%' AND t.text NOT LIKE '%dm_exec%' ORDER BY t.text COLLATE Latin1_General_BIN2",
+// The stages after the summaries of the earlier tests ran in SQL Server. The
+// binary collation orders the queries by code point.
+from_microsoft_sql sql="SELECT t.text AS query FROM sys.dm_exec_cached_plans AS p CROSS APPLY sys.dm_exec_sql_text(p.plan_handle) AS t WHERE t.text LIKE 'SELECT%FROM [[]hits]%' AND t.text LIKE '%[_][_]tenzir[_]%' AND t.text NOT LIKE '%dm_exec%' ORDER BY t.text COLLATE Latin1_General_BIN2",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),
                    user=env("MSSQL_ADMIN_USER"),

@@ -1,6 +1,6 @@
-// The filter, projection, and limit go into the query. Text compares by bytes,
-// as in TQL, not under SQL Server's case-insensitive collation, which would
-// match `Alice` and make it the first row.
+// The filter, projection, and limit go into the query. SQL Server compares text
+// under the collation of its column, which ignores case, so `alice` matches
+// `Alice`, the first row.
 from_microsoft_sql table="users",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

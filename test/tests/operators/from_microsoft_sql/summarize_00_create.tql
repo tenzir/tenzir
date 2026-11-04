@@ -1,5 +1,5 @@
 // Creates the table of the summarize tests. Its text differs only in case or
-// trailing spaces, which SQL Server's collations would put into one group.
+// trailing spaces, which SQL Server's default collation puts into one group.
 from_microsoft_sql sql="CREATE TABLE agg (id INT, s VARCHAR(20), u UNIQUEIDENTIFIER, n BIGINT, f FLOAT, ts DATETIMEOFFSET(3))",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

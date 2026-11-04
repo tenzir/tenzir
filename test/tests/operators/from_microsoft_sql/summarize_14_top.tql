@@ -1,6 +1,5 @@
-// `top` counts the values in the query, and sorts the counts locally.
-// A sort by a computed key stays in Tenzir, which orders deterministically,
-// while the database would order text under its collation.
+// `top` counts the values in the query, which groups text under the collation
+// of its column, and sorts the counts in the pipeline.
 from_microsoft_sql table="agg",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

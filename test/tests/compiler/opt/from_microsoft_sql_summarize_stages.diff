@@ -46,6 +46,7 @@
 -                {
 -                  id: `events` @ [1]:191..197 from 0,
 -                  has_question_mark: false
+-                }
 +      order: "ordered",
 +      projection: [
 +        {
@@ -62,109 +63,15 @@
 +          ]
 +        }
 +      ],
-+      aggregation: {
-+        columns: [
-+          {
-+            output: [
-+              "src_ip"
-+            ],
-+            input: [
-+              "src_ip"
-+            ]
-+          },
-+          {
-+            output: [
-+              "events"
-+            ],
-+            function: "count"
-+          }
-+        ],
-+        schema_name: "tenzir.summarize",
-+        fallback: {
-+          lets: [
-+            
-+          ],
-+          operators: [
-+            summarize {
-+              self: [1]:173..182 from 0,
-+              cfg: {
-+                aggregates: [
-+                  {
-+                    dest: {
-+                      expr: root_field {
-+                        id: `events` @ [1]:191..197 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `events` @ [1]:191..197 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    },
-+                    call: {
-+                      fn: {
-+                        path: [
-+                          `count` @ [1]:198..203 from 0
-+                        ],
-+                        ref: std::count/fn
-+                      },
-+                      args: [
-+                        
-+                      ],
-+                      method: false,
-+                      location: [1]:198..205 from 0
-+                    }
-+                  }
-+                ],
-+                groups: [
-+                  {
-+                    expr: {
-+                      expr: root_field {
-+                        id: `src_ip` @ [1]:183..189 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `src_ip` @ [1]:183..189 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    }
-+                  }
-+                ],
-+                indices: [
-+                  -1,
-+                  0
-+                ],
-+                emission: "final",
-+                mode: "reset",
-+                output: "summary",
-+                emit_every: 1
-+              }
-+            },
-+            where_ir {
-+              op: {
-+                path: [
-+                  
-+                ],
-+                ref: unresolved
-+              },
-+              args: [
-+                Incomplete binary_expr {
-+                  left: root_field {
-+                    id: `src_ip` @ [1]:225..231 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "neq",
-+                  right: constant none_t {} @ [1]:235..239 from 0,
-+                  location: [1]:225..239 from 0
-                 }
++      plan: [
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src_ip"
 +              ],
-+              named_args: [
-+                
++              input: [
++                "src_ip"
                ]
              },
 -            call: {
@@ -175,82 +82,16 @@
 -                ref: std::count/fn
 -              },
 -              args: [
-+            sort {
-+              args: {
-+                op: {
-+                  path: [
-+                    `sort` @ [1]:206..210 from 0
-+                  ],
-+                  ref: std::sort/op
-+                },
-+                args: [
-+                  expression unary_expr {
-+                    op: "neg",
-+                    expr: root_field {
-+                      id: `events` @ [1]:212..218 from 0,
-+                      has_question_mark: false
-+                    },
-+                    location: [1]:211..218 from 0
-+                  }
-+                ],
-+                named_args: [
-+                  
-+                ]
-+              },
-+              limit: 3
-+            },
-+            GenericIr {
-+              desc: "head",
-+              store: {
-+                op: {
-+                  path: [
-+                    `head` @ [1]:240..244 from 0
-+                  ],
-+                  ref: std::head/op
-+                },
-+                args: [
-+                  located 3 @ [1]:245..246 from 0
-+                ],
-+                named_args: [
-+                  
-+                ]
-+              },
-+              filter: [
-                 
+-                
++            {
++              output: [
++                "events"
                ],
 -              method: false,
 -              location: [1]:198..205 from 0
-+              order: "ordered"
++              function: "count"
              }
-+          ],
-+          definition_location: [0]:0..0 from 0
-+        },
-+        stages: [
-+          Filter {
-+            predicate: binary_expr {
-+              left: root_field {
-+                id: `src_ip` @ [1]:225..231 from 0,
-+                has_question_mark: false
-+              },
-+              op: "neq",
-+              right: constant none_t {} @ [1]:235..239 from 0,
-+              location: [1]:225..239 from 0
-+            }
-+          },
-+          Sort {
-+            keys: [
-+              {
-+                field: [
-+                  "events"
-+                ],
-+                descending: true
-+              }
-+            ],
-+            bound: 3
-+          },
-+          Limit {
-+            count: 3
-           }
+-          }
 -        ],
 -        groups: [
 -          {
@@ -284,24 +125,32 @@
 -        op: {
 -          path: [
 -            `sort` @ [1]:206..210 from 0
--          ],
+           ],
 -          ref: std::sort/op
--        },
++          schema_name: "tenzir.summarize"
+         },
 -        args: [
 -          expression unary_expr {
 -            op: "neg",
 -            expr: root_field {
 -              id: `events` @ [1]:212..218 from 0,
--              has_question_mark: false
--            },
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `src_ip` @ [1]:225..231 from 0,
+               has_question_mark: false
+             },
 -            location: [1]:211..218 from 0
--          }
++            op: "neq",
++            right: constant none_t {} @ [1]:235..239 from 0,
++            location: [1]:225..239 from 0
+           }
 -        ],
 -        named_args: [
 -          
-         ]
-       }
-     },
+-        ]
+-      }
+-    },
 -    where_ir {
 -      op: {
 -        path: [
@@ -318,12 +167,27 @@
 -          op: "neq",
 -          right: constant none_t {} @ [1]:235..239 from 0,
 -          location: [1]:225..239 from 0
--        }
--      ],
++        },
++        Sort {
++          keys: [
++            {
++              field: [
++                "events"
++              ],
++              descending: true
++            }
++          ],
++          bound: 3
++        },
++        Limit {
++          count: 3
+         }
+       ],
 -      named_args: [
 -        
 -      ]
--    },
++      declined: "`to_stdout` is no stage"
+     },
      GenericIr {
 -      desc: "head",
 +      desc: "to_stdout",
@@ -331,10 +195,9 @@
          op: {
            path: [
 -            `head` @ [1]:240..244 from 0
--          ],
--          ref: std::head/op
 +            `to_stdout` @ [1]:246..246 from 0
-+          ],
+           ],
+-          ref: std::head/op
 +          ref: std::to_stdout/op
          },
          args: [

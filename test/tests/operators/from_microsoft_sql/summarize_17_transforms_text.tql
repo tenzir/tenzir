@@ -1,7 +1,5 @@
-// SQL Server computes `max` only for numbers and times, which the operator
-// finds only once it reads the table's columns. It then aggregates locally,
-// after the rename, so that the keys and `last` read the renamed fields. TQL's
-// `max` does not take text either, so it warns and yields `null` for `hi`.
+// SQL Server computes the summary behind a rename, including `max` of text,
+// which TQL's `max` does not take, and sorts the groups with `NULL` first.
 from_microsoft_sql table="agg",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

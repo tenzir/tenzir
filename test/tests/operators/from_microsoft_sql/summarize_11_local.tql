@@ -1,6 +1,5 @@
-// A predicate that SQL Server cannot evaluate keeps all rows but stays local,
-// so the operator aggregates locally, with the result of
-// `summarize_10_pushed.tql`.
+// A predicate that SQL Server cannot spell keeps the summary in the pipeline,
+// which groups text by its bytes, unlike `summarize_10_pushed.tql`.
 from_microsoft_sql table="agg",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

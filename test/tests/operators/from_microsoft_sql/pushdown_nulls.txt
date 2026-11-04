@@ -2,7 +2,3 @@
   name: "Bob",
   email: "bob@example.com",
 }
-{
-  name: "Charlie",
-  email: null,
-}

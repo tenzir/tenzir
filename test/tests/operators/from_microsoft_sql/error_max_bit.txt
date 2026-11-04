@@ -1,0 +1,6 @@
+error: Microsoft SQL Server error 8117: Operand data type bit is invalid for max operator.
+ --> tests/operators/from_microsoft_sql/error_max_bit.tql:8:1
+  |
+8 | from_microsoft_sql table="dbo.types",
+  | ^^^^^^^^^^^^^^^^^^
+  |

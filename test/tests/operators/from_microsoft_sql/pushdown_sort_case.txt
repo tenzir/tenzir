@@ -1,0 +1,13 @@
+warning: event does not have field
+ --> tests/operators/from_microsoft_sql/pushdown_sort_case.tql:9:12
+  |
+9 | sort -age, AGE
+  |            ~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  name: "Charlie",
+}
+{
+  name: "Alice",
+}

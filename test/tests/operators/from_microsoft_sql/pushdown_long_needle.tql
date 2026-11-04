@@ -1,5 +1,5 @@
-// `CHARINDEX` takes needles of up to 8,000 bytes, so a longer one stays with
-// the operator instead of failing the query.
+// Substring search stays in Tenzir, also with a needle that `CHARINDEX` would
+// not take.
 from_microsoft_sql table="users",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),

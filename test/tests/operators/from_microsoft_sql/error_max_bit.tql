@@ -1,0 +1,14 @@
+---
+error: true
+---
+
+// The query takes the summary before the operator knows the types of the
+// columns, and SQL Server rejects `max` of a `bit` column, so the query fails.
+// `pushdown=false` keeps the summary in Tenzir.
+from_microsoft_sql table="dbo.types",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+summarize hi=max(bit_val)

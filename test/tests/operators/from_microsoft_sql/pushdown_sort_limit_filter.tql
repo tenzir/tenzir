@@ -1,0 +1,12 @@
+// A filter after a sorted limit needs a derived table, which keeps its order
+// only because `TOP` decides which rows it keeps.
+from_microsoft_sql table="dbo.users",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+sort -age
+head 2
+where name != "Charlie"
+select name, age

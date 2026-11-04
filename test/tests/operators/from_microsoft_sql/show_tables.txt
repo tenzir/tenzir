@@ -1,6 +1,16 @@
 {
   table_schema: "dbo",
+  table_name: "bounded",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
   table_name: "full_types",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
+  table_name: "hidden",
   table_type: "BASE TABLE",
 }
 {

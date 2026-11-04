@@ -8,7 +8,7 @@
        store: {
          op: {
            path: [
-             `from_microsoft_sql` @ [1]:73..91 from 0
+             `from_microsoft_sql` @ [1]:77..95 from 0
            ],
            ref: std::from_microsoft_sql/op
          },
@@ -18,109 +18,133 @@
          named_args: [
            {
              index: 0,
-             value: located "users" @ [1]:98..105 from 0
+             value: located "users" @ [1]:102..109 from 0
            },
            {
              index: 4,
-             value: located "localhost" @ [1]:112..123 from 0
+             value: located "localhost" @ [1]:116..127 from 0
            }
          ]
        },
        filter: [
--        
--      ],
+         
+       ],
 -      order: "ordered"
 -    },
 -    where_ir {
 -      op: {
 -        path: [
--          `where` @ [1]:124..129 from 0
+-          `where` @ [1]:128..133 from 0
 -        ],
 -        ref: std::where/op
 -      },
 -      args: [
 -        expression binary_expr {
-+        binary_expr {
-           left: root_field {
-             id: `age` @ [1]:130..133 from 0,
-             has_question_mark: false
-           },
-           op: "gt",
-           right: constant int64 30 @ [1]:136..138 from 0,
-           location: [1]:130..138 from 0
-         }
-       ],
--      named_args: [
--        
+-          left: root_field {
 +      order: "ordered",
-+      limit: 2,
 +      projection: [
 +        {
 +          expr: root_field {
-+            id: `name` @ [1]:146..150 from 0,
++            id: `name` @ [1]:150..154 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `name` @ [1]:146..150 from 0,
++              id: `name` @ [1]:150..154 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: root_field {
-+            id: `age` @ [1]:130..133 from 0,
-+            has_question_mark: false
-+          },
+             id: `age` @ [1]:134..137 from 0,
+             has_question_mark: false
+           },
+-          op: "gt",
+-          right: constant int64 30 @ [1]:140..142 from 0,
+-          location: [1]:134..142 from 0
 +          has_this: false,
 +          path: [
 +            {
-+              id: `age` @ [1]:130..133 from 0,
++              id: `age` @ [1]:134..137 from 0,
 +              has_question_mark: false
 +            }
 +          ]
-+        }
-       ]
-     },
-     SetIr {
-       assignments: [
-         {
-           left: this_ [0]:0..0 from 0,
-           right: record {
-             begin: [0]:0..0 from 0,
-             items: [
-               
-             ],
-             end: [0]:0..0 from 0
-           },
-           location: [0]:0..0 from 0
-         },
-         {
-           left: root_field {
-             id: `name` @ [1]:146..150 from 0,
-             has_question_mark: false
-           },
-           right: root_field {
-             id: `name` @ [1]:146..150 from 0,
-             has_question_mark: false
-           },
-           location: [1]:146..150 from 0
          }
        ],
-       order: "ordered"
+-      named_args: [
+-        
+-      ]
+-    },
+-    SetIr {
+-      assignments: [
+-        {
+-          left: this_ [0]:0..0 from 0,
+-          right: record {
+-            begin: [0]:0..0 from 0,
+-            items: [
+-              
+-            ],
+-            end: [0]:0..0 from 0
+-          },
+-          location: [0]:0..0 from 0
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `age` @ [1]:134..137 from 0,
++              has_question_mark: false
++            },
++            op: "gt",
++            right: constant int64 30 @ [1]:140..142 from 0,
++            location: [1]:134..142 from 0
++          }
+         },
+-        {
+-          left: root_field {
+-            id: `name` @ [1]:150..154 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `name` @ [1]:150..154 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:150..154 from 0
++        Select {
++          fields: [
++            {
++              output: [
++                "name"
++              ],
++              input: [
++                "name"
++              ]
++            }
++          ]
++        },
++        Limit {
++          count: 2
+         }
+       ],
+-      order: "ordered"
++      declined: "`to_stdout` is no stage"
      },
      GenericIr {
-       desc: "head",
+-      desc: "head",
++      desc: "to_stdout",
        store: {
          op: {
            path: [
-             `head` @ [1]:151..155 from 0
+-            `head` @ [1]:155..159 from 0
++            `to_stdout` @ [1]:161..161 from 0
            ],
-           ref: std::head/op
+-          ref: std::head/op
++          ref: std::to_stdout/op
          },
          args: [
-           located 2 @ [1]:156..157 from 0
+-          located 2 @ [1]:160..161 from 0
++          
          ],
          named_args: [
            
@@ -130,28 +154,7 @@
          
        ],
        order: "ordered"
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:157..157 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
-+      order: "ordered"
      }
    ],
-   definition_location: [1]:73..157 from 0
+   definition_location: [1]:77..161 from 0
  }

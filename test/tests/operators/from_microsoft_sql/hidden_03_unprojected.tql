@@ -1,0 +1,11 @@
+// Without a projection, the filter after the limit still reads the hidden
+// column, which the result then leaves out, as `SELECT *` does.
+from_microsoft_sql table="hidden",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+sort id
+head 3
+where valid_from > 2000-01-01

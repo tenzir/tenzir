@@ -1,5 +1,5 @@
-// A predicate that SQL Server cannot evaluate keeps all rows but stays local,
-// so the operators run locally, with the result of
+// A predicate that SQL Server cannot spell keeps the operators in the
+// pipeline, which groups text by its bytes, unlike
 // `summarize_15_transforms.tql`.
 from_microsoft_sql table="agg",
                    host=env("MSSQL_HOST"),

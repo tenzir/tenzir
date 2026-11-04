@@ -1,21 +1,24 @@
 {
-  query: "SELECT * FROM [agg] WHERE ([id] > 1 OR [n] IS NULL)",
+  query: "SELECT * FROM (SELECT [s] AS [__tenzir_column_0], COUNT_BIG(*) AS [__tenzir_column_1], MAX([s]) AS [__tenzir_column_2], MAX([id]) AS [__tenzir_column_3] FROM (SELECT [id], [s] FROM [agg]) AS [__tenzir_table] GROUP BY [s]) AS [__tenzir_level_4] ORDER BY [__tenzir_column_0] ASC",
 }
 {
-  query: "SELECT COUNT_BIG(*) AS [__tenzir_aggregate_0], MIN([n]) AS [__tenzir_aggregate_1] FROM [agg] WHERE [id] > 100",
+  query: "SELECT * FROM (SELECT [s], [n], [ts], [id] FROM [agg]) AS [__tenzir_table] WHERE (([id] > 1) OR ([n] IS NULL))",
 }
 {
-  query: "SELECT MIN(LOWER(CAST([u] AS char(36)))) AS [__tenzir_aggregate_0], [ts] AS [__tenzir_aggregate_1], COUNT_BIG(*) AS [__tenzir_aggregate_2] FROM [agg] GROUP BY CONVERT(varchar(max), CAST(LOWER(CAST([u] AS char(36))) AS varbinary(max)), 2) COLLATE Latin1_General_BIN2, [ts]",
+  query: "SELECT COUNT_BIG(*) AS [__tenzir_column_0], MIN([n]) AS [__tenzir_column_1] FROM (SELECT [n], [id] FROM [agg]) AS [__tenzir_table] WHERE ([id] > 100)",
 }
 {
-  query: "SELECT MIN([s]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1] FROM [agg] GROUP BY CONVERT(varchar(max), CAST([s] AS varbinary(max)), 2) COLLATE Latin1_General_BIN2",
+  query: "SELECT [f], [ts], [n], [id], [s] FROM [agg]",
 }
 {
-  query: "SELECT MIN([s]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1], COUNT_BIG([n]) AS [__tenzir_aggregate_2], MIN([n]) AS [__tenzir_aggregate_3], MAX([ts]) AS [__tenzir_aggregate_4] FROM [agg] WHERE ([id] > 1 OR [n] IS NULL) GROUP BY CONVERT(varchar(max), CAST([s] AS varbinary(max)), 2) COLLATE Latin1_General_BIN2",
+  query: "SELECT [s] AS [__tenzir_column_0], COUNT_BIG(*) AS [__tenzir_column_1] FROM (SELECT [s] FROM [agg]) AS [__tenzir_table] GROUP BY [s]",
 }
 {
-  query: "SELECT MIN([s]) AS [__tenzir_aggregate_0], COUNT_BIG(*) AS [__tenzir_aggregate_1], MAX([ts]) AS [__tenzir_aggregate_2], MIN([n]) AS [__tenzir_aggregate_3] FROM [agg] WHERE ([id] > 1 OR [n] IS NULL) GROUP BY CONVERT(varchar(max), CAST([s] AS varbinary(max)), 2) COLLATE Latin1_General_BIN2",
+  query: "SELECT [s] AS [__tenzir_column_0], COUNT_BIG(*) AS [__tenzir_column_1], COUNT_BIG([n]) AS [__tenzir_column_2], MIN([n]) AS [__tenzir_column_3], MAX([ts]) AS [__tenzir_column_4] FROM (SELECT [s], [n], [ts], [id] FROM [agg]) AS [__tenzir_table] WHERE (([id] > 1) OR ([n] IS NULL)) GROUP BY [s]",
 }
 {
-  query: "SELECT [id], [s] FROM [agg]",
+  query: "SELECT [s] AS [__tenzir_column_0], COUNT_BIG(*) AS [__tenzir_column_1], MAX([ts]) AS [__tenzir_column_2], MIN([n]) AS [__tenzir_column_3] FROM (SELECT [f], [ts], [n], [id], [s] FROM [agg]) AS [__tenzir_table] WHERE (([id] > 1) OR ([n] IS NULL)) GROUP BY [s]",
+}
+{
+  query: "SELECT [u] AS [__tenzir_column_0], [ts] AS [__tenzir_column_1], COUNT_BIG(*) AS [__tenzir_column_2] FROM (SELECT [u], [ts] FROM [agg]) AS [__tenzir_table] GROUP BY [u], [ts]",
 }
